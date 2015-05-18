@@ -34,24 +34,14 @@ from metaswitch.clearwater.config_manager.plugin_base import \
     ConfigPluginBase
 from metaswitch.clearwater.config_manager.plugin_utils import \
     run_command
+from sprout_json_plugin import SproutJsonPlugin
 import logging
 
 _log = logging.getLogger("sprout_bgcf_json_plugin")
 
-class SproutBGCFJsonPlugin(ConfigPluginBase):
-    def key(self):
-        return "/configuration/bgcf_json"
-
-    def file(self):
-        return "/etc/clearwater/bgcf.json"
-
-    def on_config_changed(self, value):
-        _log.info("Updating BGCF routing rules")
-
-        with open("/etc/clearwater/bgcf.json", "w") as ofile:
-            ofile.write(value);
-
-        run_command("service sprout reload");
+class SproutBGCFJsonPlugin(SproutJsonPlugin):
+    def __init__(self):
+        super(SproutBGCFJsonPlugin, self).__init__("/etc/clearwater/bgcf.json", "/configuration/bgcf_json")
 
 def load_as_plugin(ip):
     return SproutBGCFJsonPlugin()

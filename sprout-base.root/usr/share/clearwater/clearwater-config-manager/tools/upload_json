@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Project Clearwater - IMS in the Cloud
 # Copyright (C) 2015  Metaswitch Networks Ltd
 #
@@ -30,18 +32,39 @@
 # under which the OpenSSL Project distributes the OpenSSL toolkit software,
 # as those licenses appear in the file LICENSE-OPENSSL.
 
-from metaswitch.clearwater.config_manager.plugin_base import \
-    ConfigPluginBase
-from metaswitch.clearwater.config_manager.plugin_utils import \
-    run_command
-from sprout_json_plugin import SproutJsonPlugin
-import logging
+FILENAME=$1
+KEY=$2
 
-_log = logging.getLogger("sprout_scscf_json_plugin")
+function usage() {
+  echo "Usage: upload_json [filename] [key]"
+}
 
-class SproutSCSCFJsonPlugin(SproutJsonPlugin):
-    def __init__(self):
-        super(SproutSCSCFJsonPlugin, self).__init__("/etc/clearwater/s-cscf.json", "/configuration/scscf_json")
+if [[ $1 == "" || $2 == "" ]]
+then
+  usage
+  exit 2
+fi
 
-def load_as_plugin(ip):
-    return SproutSCSCFJsonPlugin()
+# Check we can contact `etcd`
+. /etc/clearwater/config
+nc -z $local_ip 4000
+if [[ $? != 0 ]]
+then
+  echo "The Clearwater Configuration store (etcd) is not running"
+  echo "Please start it before uploading configuration"
+  exit 2
+fi
+
+# Populate the file with defaults if not already present
+if [[ ! -f $FILENAME ]]
+then
+  cat > $FILENAME << EOF
+{ "routes": [] }
+EOF
+fi
+
+# Upload the file to etcd
+curl -X PUT \
+     http://$local_ip:4000/v2/keys$KEY \
+     --data-urlencode \
+     value@$FILENAME > /dev/null

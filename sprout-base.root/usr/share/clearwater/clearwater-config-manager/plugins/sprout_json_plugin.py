@@ -34,14 +34,25 @@ from metaswitch.clearwater.config_manager.plugin_base import \
     ConfigPluginBase
 from metaswitch.clearwater.config_manager.plugin_utils import \
     run_command
-from sprout_json_plugin import SproutJsonPlugin
 import logging
 
-_log = logging.getLogger("sprout_scscf_json_plugin")
+_log = logging.getLogger("sprout_json_plugin")
 
-class SproutSCSCFJsonPlugin(SproutJsonPlugin):
-    def __init__(self):
-        super(SproutSCSCFJsonPlugin, self).__init__("/etc/clearwater/s-cscf.json", "/configuration/scscf_json")
+class SproutJsonPlugin(ConfigPluginBase):
+    def __init__(self, file, key):
+        self._file = file
+        self._key = key
 
-def load_as_plugin(ip):
-    return SproutSCSCFJsonPlugin()
+    def key(self):
+        return self._key
+
+    def file(self):
+        return self._file
+
+    def on_config_changed(self, value):
+        _log.info("Updating {}".format(self._file))
+
+        with open(self._file, "w") as ofile:
+            ofile.write(value);
+
+        run_command("service sprout reload");

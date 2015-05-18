@@ -34,24 +34,14 @@ from metaswitch.clearwater.config_manager.plugin_base import \
     ConfigPluginBase
 from metaswitch.clearwater.config_manager.plugin_utils import \
     run_command
+from sprout_json_plugin import SproutJsonPlugin
 import logging
 
 _log = logging.getLogger("sprout_enum_json_plugin")
 
-class SproutENUMJsonPlugin(ConfigPluginBase):
-    def key(self):
-        return "/configuration/enum_json"
-
-    def file(self):
-        return "/etc/clearwater/enum.json"
-
-    def on_config_changed(self, value):
-        _log.info("Updating ENUM mapping rules")
-
-        with open("/etc/clearwater/enum.json", "w") as ofile:
-            ofile.write(value);
-
-        run_command("service sprout reload");
+class SproutENUMJsonPlugin(SproutJsonPlugin):
+    def __init__(self):
+        super(SproutENUMJsonPlugin, self).__init__("/etc/clearwater/enum.json", "/configuration/enum_json")
 
 def load_as_plugin(ip):
     return SproutENUMJsonPlugin()

@@ -33,27 +33,6 @@
 # as those licenses appear in the file LICENSE-OPENSSL.
 
 FILENAME=/etc/clearwater/enum.json
+KEY=/configuration/enum_json
 
-# Check we can contact `etcd`
-. /etc/clearwater/config
-nc -z $local_ip 4000
-if [[ $? != 0 ]]
-then
-  echo "The Clearwater Configuration store (etcd) is not running"
-  echo "Please start it before uploading configuration"
-  exit 2
-fi
-
-# Populate the file with defaults if not already present
-if [[ ! -f $FILENAME ]]
-then
-  cat > $FILENAME << EOF
-{ "number_blocks": [] }
-EOF
-fi
-
-# Upload the file to etcd
-curl -X PUT \
-     http://$local_ip:4000/v2/keys/configuration/enum_json \
-     --data-urlencode \
-     value@$FILENAME > /dev/null
+/usr/share/clearwater/clearwater-config-manager/tools/upload_json $FILENAME $KEY
