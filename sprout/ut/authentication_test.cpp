@@ -99,7 +99,7 @@ public:
     SipTest::TearDownTestCase();
   }
 
-  AuthenticationTest() : SipTest(&mod_auth)
+  AuthenticationTest() : SipTest(&mod_authentication)
   {
   }
 

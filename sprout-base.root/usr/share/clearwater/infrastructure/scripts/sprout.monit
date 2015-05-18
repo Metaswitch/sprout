@@ -39,7 +39,8 @@ cat > /etc/monit/conf.d/sprout.monit <<EOF
 # Check the Sprout process.
 
 # Monitor the service's PID file and memory use.
-check process sprout with pidfile /var/run/sprout.pid
+check process sprout_process with pidfile /var/run/sprout.pid
+  group sprout
 
   # The start, stop and restart commands are linked to alarms
   start program = "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 1000.3; /etc/init.d/sprout start'"
@@ -58,13 +59,15 @@ check process sprout with pidfile /var/run/sprout.pid
 # Check the SIP/HTTP interfaces. These depend on the Sprout process (and so won't run
 # unless the Sprout process is running)
 check program poll_sprout_sip with path "/usr/share/clearwater/bin/poll_sprout_sip.sh"
-  depends on sprout
+  group sprout
+  depends on sprout_process
 
   # Aborting generates a core file and triggers diagnostic collection.
   if status != 0 for 2 cycles then exec "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 1000.3; /etc/init.d/sprout abort'"
 
 check program poll_sprout_http with path "/usr/share/clearwater/bin/poll_sprout_http.sh"
-  depends on sprout
+  group sprout
+  depends on sprout_process
 
   # Aborting generates a core file and triggers diagnostic collection.
   if status != 0 for 2 cycles then exec "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 1000.3; /etc/init.d/sprout abort'"
