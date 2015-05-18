@@ -44,11 +44,12 @@ _log = logging.getLogger("sprout_memcached_plugin")
 
 
 class SproutMemcachedPlugin(SynchroniserPluginBase):
-    def __init__(self, _ip):
+    def __init__(self, _ip, local_site, _remote_site):
         issue_alarm(constants.RAISE_MEMCACHED_NOT_YET_CLUSTERED)
+        self._key = "/clearwater/{}/sprout/clustering/memcached".format(local_site)
 
     def key(self):
-        return "/sprout/clustering/memcached"
+        return self._key
 
     def files(self):
         return ["/etc/clearwater/cluster_settings"]
@@ -73,5 +74,5 @@ class SproutMemcachedPlugin(SynchroniserPluginBase):
         pass
 
 
-def load_as_plugin(ip):
-    return SproutMemcachedPlugin(ip)
+def load_as_plugin(ip, local_site, remote_site):
+    return SproutMemcachedPlugin(ip, local_site, remote_site)
