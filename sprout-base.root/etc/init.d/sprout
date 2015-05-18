@@ -260,9 +260,12 @@ get_daemon_args()
           then
             DAEMON_ARGS="$DAEMON_ARGS --scscf-uri=$scscf_uri"
           else
-            [ -z "$sprout_hostname" ] || DAEMON_ARGS="$DAEMON_ARGS --scscf-uri=sip:$sprout_hostname:$scscf;transport=TCP"
+            if [ -n "$sprout_hostname" ]
+            then
+              sprout_ipv46=$(python /usr/share/clearwater/bin/bracket_ipv6_address.py $sprout_hostname)
+              DAEMON_ARGS="$DAEMON_ARGS --scscf-uri=sip:$sprout_ipv46:$scscf;transport=TCP"
+            fi
           fi
-
         fi
 
         if [ -n "$icscf" ] && [ ! $icscf = 0 ]
