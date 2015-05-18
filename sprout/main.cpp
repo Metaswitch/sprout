@@ -1658,9 +1658,8 @@ int main(int argc, char* argv[])
 
         if (!(((MemcachedStore*)remote_data_store)->has_servers()))
         {
-          LOG_ERROR("Remote cluster settings file '%s' does not contain a valid set of servers",
-                    opt.remote_store_servers.c_str());
-          return 1;
+          LOG_WARNING("Remote cluster settings file '%s' does not contain a valid set of servers",
+                      opt.remote_store_servers.c_str());
         };
       }
     }
