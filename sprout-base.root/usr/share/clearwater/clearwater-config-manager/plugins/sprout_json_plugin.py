@@ -49,10 +49,12 @@ class SproutJsonPlugin(ConfigPluginBase):
     def file(self):
         return self._file
 
-    def on_config_changed(self, value):
+    def on_config_changed(self, value, alarm):
         _log.info("Updating {}".format(self._file))
 
         with open(self._file, "w") as ofile:
             ofile.write(value);
 
-        run_command("service sprout reload");
+        run_command("service sprout reload")
+
+        alarm.update_file(self._file)

@@ -34,8 +34,12 @@ from metaswitch.clearwater.config_manager.plugin_base import \
     ConfigPluginBase
 from metaswitch.clearwater.config_manager.plugin_utils import \
     run_command
-from sprout_json_plugin import SproutJsonPlugin
 import logging
+import sys
+import os
+
+sys.path.append(os.path.dirname(__file__))
+from sprout_json_plugin import SproutJsonPlugin
 
 _log = logging.getLogger("sprout_bgcf_json_plugin")
 
@@ -43,5 +47,5 @@ class SproutBGCFJsonPlugin(SproutJsonPlugin):
     def __init__(self):
         super(SproutBGCFJsonPlugin, self).__init__("/etc/clearwater/bgcf.json", "/configuration/bgcf_json")
 
-def load_as_plugin(ip):
+def load_as_plugin():
     return SproutBGCFJsonPlugin()
