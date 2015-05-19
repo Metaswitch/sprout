@@ -97,7 +97,6 @@ RegStore::~RegStore()
   delete _connector;
 }
 
-
 /// Retrieve the registration data for a given SIP Address of Record, creating
 /// an empty record if no data exists for the AoR.
 ///

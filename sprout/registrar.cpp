@@ -714,7 +714,7 @@ void process_register_request(pjsip_rx_data* rdata)
 
     // If we have a remote store, try to store this there too.  We don't worry
     // about failures in this case.
-    if (remote_store != NULL)
+    if ((remote_store != NULL) && remote_store->has_servers())
     {
       int tmp_expiry = 0;
       bool ignored;
