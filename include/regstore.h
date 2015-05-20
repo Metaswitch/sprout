@@ -304,7 +304,7 @@ public:
     std::string serialize_aor(AoR* aor_data);
     AoR* deserialize_aor(const std::string& aor_id, const std::string& s);
 
-    bool underlying_store_has_servers() { return _data_store->has_servers(); }
+    bool underlying_store_has_servers() { return (_data_store != NULL) && _data_store->has_servers(); }
 
     Store* _data_store;
 
