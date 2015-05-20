@@ -893,14 +893,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     }
   }
 
-  // If the upstream proxy port is not set, default it to the trusted port.
-  // We couldn't do this earlier because the trusted port might be set after
-  // the upstream proxy.
-  if (options->upstream_proxy_port == 0)
-  {
-    options->upstream_proxy_port = options->pcscf_trusted_port;
-  }
-
   return PJ_SUCCESS;
 }
 
