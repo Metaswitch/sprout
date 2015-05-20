@@ -57,7 +57,7 @@ class SproutMemcachedPlugin(SynchroniserPluginBase):
     def on_cluster_changing(self, cluster_view):
         write_memcached_cluster_settings("/etc/clearwater/cluster_settings",
                                          cluster_view)
-        run_command("service sprout reload")
+        run_command("/usr/share/clearwater/bin/reload_memcached_users")
 
     def on_joining_cluster(self, cluster_view):
         self.on_cluster_changing(cluster_view)
