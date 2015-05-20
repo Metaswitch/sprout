@@ -82,4 +82,5 @@ class SproutRemoteMemcachedPlugin(SynchroniserPluginBase):
 
 
 def load_as_plugin(ip, local_site, remote_site):
-    return SproutRemoteMemcachedPlugin(ip, local_site, remote_site)
+    if remote_site != "":
+        return SproutRemoteMemcachedPlugin(ip, local_site, remote_site)
