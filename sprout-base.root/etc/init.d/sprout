@@ -218,10 +218,8 @@ get_daemon_args()
                      --http-port=9888
                      --analytics=$log_directory
                      --log-file=$log_directory
-                     --log-level=$log_level"
-
-        # Add alias host names if any are defined.
-        [ -z $alias_list ] || DAEMON_ARGS="$DAEMON_ARGS --alias=$alias_list"
+                     --log-level=$log_level
+                     --alias=$public_ip,$public_hostname,$alias_list"
 
         if [ -n "$reg_max_expires" ]
         then
