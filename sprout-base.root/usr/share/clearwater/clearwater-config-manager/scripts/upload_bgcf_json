@@ -35,4 +35,4 @@
 FILENAME=/etc/clearwater/bgcf.json
 KEY=/configuration/bgcf_json
 
-/usr/share/clearwater/clearwater-config-manager/tools/upload_json $FILENAME $KEY
+/usr/share/clearwater/clearwater-config-manager/scripts/upload_json $FILENAME $KEY

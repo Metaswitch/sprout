@@ -61,7 +61,7 @@ class SproutRemoteMemcachedPlugin(SynchroniserPluginBase):
         if self._remote_site != "":
             write_memcached_cluster_settings("/etc/clearwater/remote_cluster_settings",
                                              cluster_view)
-            run_command("service sprout reload")
+            run_command("/usr/share/clearwater/bin/reload_memcached_users")
 
     def on_joining_cluster(self, cluster_view):
         # We should never join the remote cluster, because it's the *remote*
@@ -82,4 +82,5 @@ class SproutRemoteMemcachedPlugin(SynchroniserPluginBase):
 
 
 def load_as_plugin(ip, local_site, remote_site):
-    return SproutRemoteMemcachedPlugin(ip, local_site, remote_site)
+    if remote_site != "":
+        return SproutRemoteMemcachedPlugin(ip, local_site, remote_site)
