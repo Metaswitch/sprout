@@ -78,7 +78,8 @@ static bool reg_store_access_common(RegStore::AoR** aor_data,
   if ((*aor_data)->bindings().empty())
   {
     if ((*previous_aor_data == NULL) &&
-        (remote_store != NULL))
+        (remote_store != NULL) &&
+        (remote_store->has_servers()))
     {
       *previous_aor_data = remote_store->get_aor_data(aor_id, trail);
       previous_aor_data_alloced = true;
@@ -248,7 +249,7 @@ void RegistrationTimeoutTask::handle_response()
   {
     // If we have a remote store, try to store this there too.  We don't worry
     // about failures in this case.
-    if (_cfg->_remote_store != NULL)
+    if ((_cfg->_remote_store != NULL) && (_cfg->_remote_store->has_servers()))
     {
       bool ignored;
       RegStore::AoR* remote_aor_data = set_aor_data(_cfg->_remote_store, _aor_id, aor_data, NULL, false, ignored);

@@ -203,6 +203,7 @@ void SCSCFSproutlet::get_bindings(const std::string& aor,
   // If we didn't get bindings from the local store and we have a remote
   // store, try the remote.
   if ((_remote_store != NULL) &&
+      (_remote_store->has_servers()) &&
       ((*aor_data == NULL) ||
        ((*aor_data)->bindings().empty())))
   {
