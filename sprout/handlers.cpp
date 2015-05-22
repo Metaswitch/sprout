@@ -533,7 +533,7 @@ RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
   // If we allocated the AoR, tidy up.
   if (previous_aor_data_alloced)
   {
-    delete previous_aor_data;
+    delete previous_aor_data; //LCOV_EXCL_LINE
   }
 
   return aor_data;
