@@ -131,6 +131,7 @@ struct options
   int                                  exception_max_ttl;
   int                                  sip_blacklist_duration;
   int                                  http_blacklist_duration;
+  int                                  sip_tcp_connect_timeout;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
