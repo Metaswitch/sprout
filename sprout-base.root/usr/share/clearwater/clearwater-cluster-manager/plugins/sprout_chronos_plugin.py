@@ -83,4 +83,6 @@ class SproutChronosPlugin(SynchroniserPluginBase):
 
 
 def load_as_plugin(local_server, local_site, remote_site):
-    return SproutChronosPlugin(local_server, local_site, remote_site)
+    is_icscf = (run_command('. /etc/clearwater/config; [[ "$scscf" == 0 ]]') == 0)
+    if not is_icscf:
+        return SproutChronosPlugin(local_server, local_site, remote_site)
