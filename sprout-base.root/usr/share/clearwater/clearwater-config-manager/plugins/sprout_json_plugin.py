@@ -30,10 +30,8 @@
 # under which the OpenSSL Project distributes the OpenSSL toolkit software,
 # as those licenses appear in the file LICENSE-OPENSSL.
 
-from metaswitch.clearwater.config_manager.plugin_base import \
-    ConfigPluginBase
-from metaswitch.clearwater.config_manager.plugin_utils import \
-    run_command
+from metaswitch.clearwater.config_manager.plugin_base import {ConfigPluginBase, FileStatus}
+from metaswitch.clearwater.config_manager.plugin_utils import run_command
 import logging
 
 _log = logging.getLogger("sprout_json_plugin")
@@ -48,6 +46,17 @@ class SproutJsonPlugin(ConfigPluginBase):
 
     def file(self):
         return self._file
+
+    def status(self, value):
+        try:
+            with open(self._file, "r") as ifile:
+                current = ifile.read
+                if current == value:
+                    return FileStatus.UP_TO_DATE
+                else:
+                    return FileStatus.OUT_OF_SYNC
+        except IOError:
+            return FileStatus.MISSING
 
     def on_config_changed(self, value, alarm):
         _log.info("Updating {}".format(self._file))

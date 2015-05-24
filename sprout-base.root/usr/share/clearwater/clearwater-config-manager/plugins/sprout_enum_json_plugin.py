@@ -45,7 +45,7 @@ _log = logging.getLogger("sprout_enum_json_plugin")
 
 class SproutENUMJsonPlugin(SproutJsonPlugin):
     def __init__(self):
-        super(SproutENUMJsonPlugin, self).__init__("/etc/clearwater/enum.json", "/configuration/enum_json")
+        super(SproutENUMJsonPlugin, self).__init__("/etc/clearwater/enum.json", "enum_json")
 
 def load_as_plugin():
     return SproutENUMJsonPlugin()

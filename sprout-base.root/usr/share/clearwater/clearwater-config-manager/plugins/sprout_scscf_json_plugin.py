@@ -45,7 +45,7 @@ _log = logging.getLogger("sprout_scscf_json_plugin")
 
 class SproutSCSCFJsonPlugin(SproutJsonPlugin):
     def __init__(self):
-        super(SproutSCSCFJsonPlugin, self).__init__("/etc/clearwater/s-cscf.json", "/configuration/scscf_json")
+        super(SproutSCSCFJsonPlugin, self).__init__("/etc/clearwater/s-cscf.json", "scscf_json")
 
 def load_as_plugin():
     return SproutSCSCFJsonPlugin()
