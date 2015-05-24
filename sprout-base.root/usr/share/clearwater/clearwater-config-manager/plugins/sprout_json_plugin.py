@@ -50,7 +50,7 @@ class SproutJsonPlugin(ConfigPluginBase):
     def status(self, value):
         try:
             with open(self._file, "r") as ifile:
-                current = ifile.read
+                current = ifile.read()
                 if current == value:
                     return FileStatus.UP_TO_DATE
                 else:
