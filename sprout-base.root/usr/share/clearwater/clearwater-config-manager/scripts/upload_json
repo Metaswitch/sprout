@@ -32,7 +32,7 @@
 # under which the OpenSSL Project distributes the OpenSSL toolkit software,
 # as those licenses appear in the file LICENSE-OPENSSL.
 
-PATH=/etc/clearwater
+CONFPATH=/etc/clearwater
 FILENAME=$1
 KEY=$2
 
@@ -57,13 +57,13 @@ then
 fi
 
 # Populate the file with defaults if not already present
-if [[ ! -f $PATH/$FILENAME ]]
+if [[ ! -f $CONFPATH/$FILENAME ]]
 then
-  cp $PATH/sample/$FILENAME $PATH/$FILENAME
+  cp $CONFPATH/sample/$FILENAME $CONFPATH/$FILENAME
 fi
 
 # Upload the file to etcd
 curl -X PUT \
-     http://$local_ip:4000/v2/keys/clearwater/$local_site_name/$KEY \
+     http://$local_ip:4000/v2/keys/clearwater/$local_site_name/configuration/$KEY \
      --data-urlencode \
-     value@$PATH/$FILENAME > /dev/null
+     value@$CONFPATH/$FILENAME > /dev/null
