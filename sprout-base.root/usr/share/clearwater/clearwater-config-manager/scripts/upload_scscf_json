@@ -32,7 +32,7 @@
 # under which the OpenSSL Project distributes the OpenSSL toolkit software,
 # as those licenses appear in the file LICENSE-OPENSSL.
 
-FILENAME=/etc/clearwater/s-cscf.json
-KEY=/configuration/scscf_json
+FILENAME=s-cscf.json
+KEY=scscf_json
 
 /usr/share/clearwater/clearwater-config-manager/scripts/upload_json $FILENAME $KEY

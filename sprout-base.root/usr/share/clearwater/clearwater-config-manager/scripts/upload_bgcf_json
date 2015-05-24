@@ -32,7 +32,7 @@
 # under which the OpenSSL Project distributes the OpenSSL toolkit software,
 # as those licenses appear in the file LICENSE-OPENSSL.
 
-FILENAME=/etc/clearwater/bgcf.json
-KEY=/configuration/bgcf_json
+FILENAME=bgcf.json
+KEY=bgcf_json
 
 /usr/share/clearwater/clearwater-config-manager/scripts/upload_json $FILENAME $KEY

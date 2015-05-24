@@ -32,7 +32,7 @@
 # under which the OpenSSL Project distributes the OpenSSL toolkit software,
 # as those licenses appear in the file LICENSE-OPENSSL.
 
-FILENAME=/etc/clearwater/enum.json
-KEY=/configuration/enum_json
+FILENAME=enum.json
+KEY=enum_json
 
 /usr/share/clearwater/clearwater-config-manager/scripts/upload_json $FILENAME $KEY

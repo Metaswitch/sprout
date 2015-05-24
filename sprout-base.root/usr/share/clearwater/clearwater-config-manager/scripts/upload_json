@@ -32,11 +32,12 @@
 # under which the OpenSSL Project distributes the OpenSSL toolkit software,
 # as those licenses appear in the file LICENSE-OPENSSL.
 
+PATH=/etc/clearwater
 FILENAME=$1
 KEY=$2
 
 function usage() {
-  echo "Usage: upload_json [filename] [key]"
+  echo "Usage: upload_json <filename> <key>"
 }
 
 if [[ $1 == "" || $2 == "" ]]
@@ -56,15 +57,13 @@ then
 fi
 
 # Populate the file with defaults if not already present
-if [[ ! -f $FILENAME ]]
+if [[ ! -f $PATH/$FILENAME ]]
 then
-  cat > $FILENAME << EOF
-{ "routes": [] }
-EOF
+  cp $PATH/sample/$FILENAME $PATH/$FILENAME
 fi
 
 # Upload the file to etcd
 curl -X PUT \
-     http://$local_ip:4000/v2/keys$KEY \
+     http://$local_ip:4000/v2/keys/clearwater/$local_site_name/$KEY \
      --data-urlencode \
-     value@$FILENAME > /dev/null
+     value@$PATH/$FILENAME > /dev/null
