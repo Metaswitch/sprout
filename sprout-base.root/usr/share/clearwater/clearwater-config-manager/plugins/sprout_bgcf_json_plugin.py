@@ -32,7 +32,7 @@
 
 from metaswitch.clearwater.config_manager.plugin_base import \
     ConfigPluginBase
-from metaswitch.clearwater.config_manager.plugin_utils import \
+from metaswitch.clearwater.etcd_shared.plugin_utils import \
     run_command
 import logging
 import sys
