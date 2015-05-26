@@ -1524,9 +1524,9 @@ int main(int argc, char* argv[])
                                        hss_comm_monitor);
   }
 
-  if (opt.scscf_enabled)
+  if ((opt.scscf_enabled) || (opt.icscf_enabled))
   {
-    // Create ENUM service required for S-CSCF.
+    // Create ENUM service required for I/S-CSCF.
     if (!opt.enum_servers.empty())
     {
       enum_service = new DNSEnumService(opt.enum_servers,
