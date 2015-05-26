@@ -8,7 +8,7 @@ it works, and then walks through the design and implementation of this
 interface in Sprout.
 
 For specification details, see the
-[Application Server Guide in the wiki](https://github.com/Metaswitch/clearwater-docs/wiki/Application-Server-Guide).
+[Application Server Guide](http://clearwater.readthedocs.org/en/latest/Application_Server_Guide/index.html).
 
 Contents
 --------
@@ -190,7 +190,7 @@ function. It is invoked when the URI `sip:mmtel.<domain>` appears in
 the iFCs.
 
 The internal MMTEL AS is invoked synchronously by function call,
-rather than asychronously by SIP message passing. This complicates the
+rather than asynchronously by SIP message passing. This complicates the
 Sprout internals.
 
 When acting as an originating application server, the MMTEL AS either
