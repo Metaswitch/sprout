@@ -172,8 +172,9 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
     // If we don't have any subscriptions, try the backup AoR and/or store.
     if ((*aor_data)->subscriptions().empty())
     {
-      if ((backup_aor == NULL) &&
-          (backup_store != NULL))
+      if ((backup_aor == NULL)   &&
+          (backup_store != NULL) &&
+          (backup_store->has_servers()))
       {
         backup_aor = backup_store->get_aor_data(aor, trail);
         backup_aor_alloced = (backup_aor != NULL);
