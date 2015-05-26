@@ -255,8 +255,9 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
     // If we don't have any bindings, try the backup AoR and/or store.
     if (aor_data->bindings().empty())
     {
-      if ((backup_aor == NULL) &&
-          (backup_store != NULL))
+      if ((backup_aor == NULL)   &&
+          (backup_store != NULL) &&
+          (backup_store->has_servers()))
       {
         backup_aor = backup_store->get_aor_data(aor, trail);
         backup_aor_alloced = (backup_aor != NULL);
