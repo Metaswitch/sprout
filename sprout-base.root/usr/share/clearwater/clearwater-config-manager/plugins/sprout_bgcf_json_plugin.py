@@ -44,8 +44,8 @@ from sprout_json_plugin import SproutJsonPlugin
 _log = logging.getLogger("sprout_bgcf_json_plugin")
 
 class SproutBGCFJsonPlugin(SproutJsonPlugin):
-    def __init__(self):
+    def __init__(self, _params):
         super(SproutBGCFJsonPlugin, self).__init__("/etc/clearwater/bgcf.json", "bgcf_json")
 
-def load_as_plugin():
-    return SproutBGCFJsonPlugin()
+def load_as_plugin(params):
+    return SproutBGCFJsonPlugin(params)

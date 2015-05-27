@@ -44,9 +44,9 @@ _log = logging.getLogger("sprout_remote_memcached_plugin")
 
 
 class SproutRemoteMemcachedPlugin(SynchroniserPluginBase):
-    def __init__(self, _ip, local_site, remote_site):
-        self._key = "/clearwater/{}/sprout/clustering/memcached".format(remote_site)
-        self._remote_site = remote_site
+    def __init__(self, params):
+        self._key = "/clearwater/{}/sprout/clustering/memcached".format(params.remote_site)
+        self._remote_site = params.remote_site
 
     def key(self):
         return self._key
@@ -81,7 +81,7 @@ class SproutRemoteMemcachedPlugin(SynchroniserPluginBase):
         pass
 
 
-def load_as_plugin(ip, local_site, remote_site):
+def load_as_plugin(params):
     is_icscf_only = (run_command('. /etc/clearwater/config; [ "x$scscf" = "x0" ]') == 0)
-    if not (is_icscf_only or remote_site == ""):
-        return SproutRemoteMemcachedPlugin(ip, local_site, remote_site)
+    if not (is_icscf_only or params.remote_site == ""):
+        return SproutRemoteMemcachedPlugin(params)
