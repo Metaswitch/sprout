@@ -82,7 +82,7 @@ The stateful proxy is the largest and most complex component within Sprout, part
 The stateful proxy actually registers as two modules with PJSIP.
 
 - The first module, termed the proxy module, registers for receiving requests and responses at the UA layer with a priority slight higher than the registrar.  This module handles all requests, setting up the necessary transactions, and any responses which do not correspond to an active transaction (for example, 200 OK retransmissions).
-- The second module is a special kind of PJSIP module, termed a transaction user module.  It does not get invoked for received and sent messages, instead it gets invoked by the transaction layer for events on the transaction, including sent/received messages, timer expiries and transport failures.
+- The second module is a special kind of PJSIP module, termed a transaction user module.  It does not get invoked for received and sent messages, instead it gets invoked by the transaction layer for events on the transaction, including sent/received messages, timer expires and transport failures.
 
 The function of the stateful proxy can be divided into [common processing](#commonproc), and [Bono](#bonoproc) and [Sprout](#sproutproc) specific processing.
 

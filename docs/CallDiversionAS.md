@@ -1,6 +1,6 @@
 # Call Diversion AS
 
-The Call Diversion AS is based on the call diversion function in the [MMTEL TAS](https://github.com/Metaswitch/clearwater-docs/wiki/Clearwater-Call-Diversion-Support).
+The Call Diversion AS is based on the call diversion function in the [MMTEL TAS](http://clearwater.readthedocs.org/en/latest/Clearwater_Call_Diversion_Support/index.html).
 
 However, the MMTEL TAS requires an XDMS (XML Database Management Server).  Since the call diversion configuration is fixed, this just adds unnecessary complexity.
 
