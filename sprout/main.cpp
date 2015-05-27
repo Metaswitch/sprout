@@ -645,12 +645,12 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case 'u':
       options->enforce_user_phone = true;
-      LOG_INFO("ENUM lookups only done on SIP URIs containing user=phone");
+      LOG_INFO("ENUM lookups are only done on SIP URIs if they contain user=phone");
       break;
 
     case 'g':
       options->enforce_global_only_lookups = true;
-      LOG_INFO("ENUM lookups only done on URIs containing a global number");
+      LOG_INFO("ENUM lookups are only done on URIs if they contain a global number");
       break;
 
     case 'e':
@@ -1524,11 +1524,12 @@ int main(int argc, char* argv[])
                                        hss_comm_monitor);
   }
 
-  if (opt.scscf_enabled)
+  if ((opt.scscf_enabled) || (opt.icscf_enabled))
   {
-    // Create ENUM service required for S-CSCF.
+    // Create ENUM service required for I/S-CSCF.
     if (!opt.enum_servers.empty())
     {
+      LOG_STATUS("Setting up the ENUM server(s)");
       enum_service = new DNSEnumService(opt.enum_servers,
                                         opt.enum_suffix,
                                         new DNSResolverFactory(),
@@ -1536,6 +1537,7 @@ int main(int argc, char* argv[])
     }
     else if (!opt.enum_file.empty())
     {
+      LOG_STATUS("Reading from an ENUM file");
       enum_service = new JSONEnumService(opt.enum_file);
     }
   }
