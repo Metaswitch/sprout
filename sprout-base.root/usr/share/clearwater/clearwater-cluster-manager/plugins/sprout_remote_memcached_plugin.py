@@ -83,9 +83,9 @@ class SproutRemoteMemcachedPlugin(SynchroniserPluginBase):
 
 
 def load_as_plugin(ip, local_site, remote_site):
-    is_icscf_only = (subprocess.check_output('. /etc/clearwater/config && echo $scscf',
+    is_icscf_only = (subprocess.check_output('. /etc/clearwater/config && echo -n $scscf',
                                              shell=True,
-                                             stderr=subprocess.STDOUT) == "0\n")
+                                             stderr=subprocess.STDOUT) == "0")
     if not (is_icscf_only or remote_site == ""):
         _log.info("Loading the Sprout remote Memcached plugin")
         return SproutRemoteMemcachedPlugin(ip, local_site, remote_site)
