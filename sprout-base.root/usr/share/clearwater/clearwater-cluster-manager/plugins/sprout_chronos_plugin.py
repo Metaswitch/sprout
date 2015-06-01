@@ -45,9 +45,9 @@ _log = logging.getLogger("sprout_chronos_plugin")
 
 
 class SproutChronosPlugin(SynchroniserPluginBase):
-    def __init__(self, local_server, local_site, _remote_site):
-        self.local_server = local_server
-        self._key = "/clearwater/{}/sprout/clustering/chronos".format(local_site)
+    def __init__(self, params):
+        self.local_server = params.ip
+        self._key = "/clearwater/{}/sprout/clustering/chronos".format(params.local_site)
         _log.debug("Raising not-clustered alarm")
         issue_alarm(constants.RAISE_CHRONOS_NOT_YET_CLUSTERED)
 
@@ -83,10 +83,10 @@ class SproutChronosPlugin(SynchroniserPluginBase):
         pass
 
 
-def load_as_plugin(local_server, local_site, remote_site):
+def load_as_plugin(params):
     is_icscf_only = (subprocess.check_output('. /etc/clearwater/config && echo -n $scscf',
                                              shell=True,
                                              stderr=subprocess.STDOUT) == "0")
     if not is_icscf_only:
         _log.info("Loading the Sprout Chronos plugin")
-        return SproutChronosPlugin(local_server, local_site, remote_site)
+        return SproutChronosPlugin(params)
