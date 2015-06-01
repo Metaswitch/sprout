@@ -38,6 +38,7 @@ from metaswitch.clearwater.cluster_manager.plugin_utils import \
     write_chronos_cluster_settings, run_command
 from metaswitch.clearwater.cluster_manager.alarms import issue_alarm
 from metaswitch.clearwater.cluster_manager import constants
+import subprocess
 import logging
 
 _log = logging.getLogger("sprout_chronos_plugin")
@@ -83,6 +84,9 @@ class SproutChronosPlugin(SynchroniserPluginBase):
 
 
 def load_as_plugin(params):
-    is_icscf_only = (run_command('. /etc/clearwater/config; [ "x$scscf" = "x0" ]') == 0)
+    is_icscf_only = (subprocess.check_output('. /etc/clearwater/config && echo -n $scscf',
+                                             shell=True,
+                                             stderr=subprocess.STDOUT) == "0")
     if not is_icscf_only:
+        _log.info("Loading the Sprout Chronos plugin")
         return SproutChronosPlugin(params)

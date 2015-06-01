@@ -37,6 +37,7 @@ from metaswitch.clearwater.cluster_manager.plugin_utils import \
     run_command, write_memcached_cluster_settings
 from metaswitch.clearwater.cluster_manager.alarms import issue_alarm
 from metaswitch.clearwater.cluster_manager import constants
+import subprocess
 import logging
 import os
 
@@ -82,6 +83,9 @@ class SproutRemoteMemcachedPlugin(SynchroniserPluginBase):
 
 
 def load_as_plugin(params):
-    is_icscf_only = (run_command('. /etc/clearwater/config; [ "x$scscf" = "x0" ]') == 0)
-    if not (is_icscf_only or params.remote_site == ""):
+    is_icscf_only = (subprocess.check_output('. /etc/clearwater/config && echo -n $scscf',
+                                             shell=True,
+                                             stderr=subprocess.STDOUT) == "0")
+    if not (is_icscf_only or remote_site == ""):
+        _log.info("Loading the Sprout remote Memcached plugin")
         return SproutRemoteMemcachedPlugin(params)
