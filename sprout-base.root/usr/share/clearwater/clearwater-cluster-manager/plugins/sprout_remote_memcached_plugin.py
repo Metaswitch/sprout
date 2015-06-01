@@ -86,6 +86,6 @@ def load_as_plugin(params):
     is_icscf_only = (subprocess.check_output('. /etc/clearwater/config && echo -n $scscf',
                                              shell=True,
                                              stderr=subprocess.STDOUT) == "0")
-    if not (is_icscf_only or remote_site == ""):
+    if not (is_icscf_only or params.remote_site == ""):
         _log.info("Loading the Sprout remote Memcached plugin")
         return SproutRemoteMemcachedPlugin(params)
