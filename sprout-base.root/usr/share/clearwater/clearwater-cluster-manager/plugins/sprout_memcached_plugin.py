@@ -75,7 +75,6 @@ class SproutMemcachedPlugin(SynchroniserPluginBase):
         pass
 
 
-<<<<<<< HEAD
 def load_as_plugin(params):
     is_icscf_only = (subprocess.check_output('. /etc/clearwater/config && echo -n $scscf',
                                              shell=True,
