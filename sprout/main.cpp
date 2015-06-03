@@ -99,6 +99,7 @@ extern "C" {
 #include "common_sip_processing.h"
 #include "thread_dispatcher.h"
 #include "exception_handler.h"
+#include "scscfsproutlet.h"
 
 enum OptionTypes
 {
@@ -1227,8 +1228,8 @@ int main(int argc, char* argv[])
   opt.exception_max_ttl = 600;
   opt.sip_blacklist_duration = SIPResolver::DEFAULT_BLACKLIST_DURATION;
   opt.http_blacklist_duration = HttpResolver::DEFAULT_BLACKLIST_DURATION;
-  opt.session_continue_timeout_ms = 2000;
-  opt.session_terminated_timeout_ms = 4000;
+  opt.session_continue_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_CONTINUE_TIMEOUT;
+  opt.session_terminated_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_TERMINATED_TIMEOUT;
 
   boost::filesystem::path p = argv[0];
   // Copy the filename to a string so that we can be sure of its lifespan -

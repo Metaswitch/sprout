@@ -71,6 +71,9 @@ class SCSCFSproutletTsx;
 class SCSCFSproutlet : public Sproutlet
 {
 public:
+  static const int DEFAULT_SESSION_CONTINUE_TIMEOUT = 2000;
+  static const int DEFAULT_SESSION_TERMINATED_TIMEOUT = 4000;
+
   SCSCFSproutlet(const std::string& scscf_cluster_uri,
                  const std::string& scscf_node_uri,
                  const std::string& icscf_uri,
