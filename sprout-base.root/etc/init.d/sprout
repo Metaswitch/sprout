@@ -118,7 +118,7 @@ get_settings()
         if [ ! -f /etc/clearwater/remote_cluster_settings ]
         then
           echo "servers=" > /etc/clearwater/remote_cluster_settings
-        fi  
+        fi
 
         # Set up defaults for user settings then pull in any overrides.
         # Sprout uses blocking look-up services, so must run multi-threaded.
@@ -178,6 +178,8 @@ get_daemon_args()
         [ -z "$min_token_rate" ] || min_token_rate_arg="--min-token-rate=$min_token_rate"
         [ -z "$exception_max_ttl" ] || exception_max_ttl_arg="--exception-max-ttl=$exception_max_ttl"
         [ -z "$signaling_namespace" ] || namespace_prefix="ip netns exec $signaling_namespace"
+        [ -z "$session_continue_timeout_ms" ] || session_continue_timeout_arg="--session-continue-timeout=$session_continue_timeout_ms"
+        [ -z "$session_terminated_timeout_ms" ] || session_terminated_timeout_arg="--session-terminated-timeout=$session_continue_timeout_ms"
 
         DAEMON_ARGS="
                      --domain=$home_domain
@@ -210,6 +212,8 @@ get_daemon_args()
                      $override_npdi_arg
                      $alarms_enabled_arg
                      $exception_max_ttl_arg
+                     $session_continue_timeout_arg
+                     $session_terminated_timeout_arg
                      --http-address=$local_ip
                      --http-port=9888
                      --analytics=$log_directory

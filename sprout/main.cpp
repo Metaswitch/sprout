@@ -121,7 +121,9 @@ enum OptionTypes
   OPT_EXCEPTION_MAX_TTL,
   OPT_MAX_SESSION_EXPIRES,
   OPT_SIP_BLACKLIST_DURATION,
-  OPT_HTTP_BLACKLIST_DURATION
+  OPT_HTTP_BLACKLIST_DURATION,
+  OPT_SESSION_CONTINUE_TIMEOUT_MS,
+  OPT_SESSION_TERMINATED_TIMEOUT_MS,
 };
 
 
@@ -186,6 +188,8 @@ const static struct pj_getopt_option long_opt[] =
   { "exception-max-ttl",            required_argument, 0, OPT_EXCEPTION_MAX_TTL},
   { "sip-blacklist-duration",       required_argument, 0, OPT_SIP_BLACKLIST_DURATION},
   { "http-blacklist-duration",      required_argument, 0, OPT_HTTP_BLACKLIST_DURATION},
+  { "session-continue-timeout",     required_argument, 0, OPT_SESSION_CONTINUE_TIMEOUT_MS},
+  { "session-terminated-timeout",   required_argument, 0, OPT_SESSION_TERMINATED_TIMEOUT_MS},
   { NULL,                           0,                 0, 0}
 };
 
@@ -324,6 +328,14 @@ static void usage(void)
        "                            The amount of time to blacklist a SIP peer when it is unresponsive.\n"
        "     --http-blacklist-duration <secs>\n"
        "                            The amount of time to blacklist an HTTP peer when it is unresponsive.\n"
+       "     --session-continue-timeout\n"
+       "                            If an Application Server with default handling of 'continue session'\n"
+       "                            and is unresponsive, this is the time that sprout will wait (in ms)\n"
+       "                            before bypassing the AS and moving onto the next AS in the chain.\n"
+       "     --session-terminated-timeout\n"
+       "                            If an Application Server with default handling of 'terminate session'\n"
+       "                            and is unresponsive, this is the time that sprout will wait (in ms)\n"
+       "                            before terminating the session.\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
@@ -883,6 +895,18 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
                options->http_blacklist_duration);
       break;
 
+    case OPT_SESSION_CONTINUE_TIMEOUT_MS:
+      options->session_continue_timeout_ms = atoi(pj_optarg);
+      LOG_INFO("Session continue timeout set to %dms",
+               options->session_continue_timeout_ms);
+      break;
+
+    case OPT_SESSION_TERMINATED_TIMEOUT_MS:
+      options->session_terminated_timeout_ms = atoi(pj_optarg);
+      LOG_INFO("Session terminated timeout set to %dms",
+               options->session_terminated_timeout_ms);
+      break;
+
     case 'h':
       usage();
       return -1;
@@ -1203,6 +1227,8 @@ int main(int argc, char* argv[])
   opt.exception_max_ttl = 600;
   opt.sip_blacklist_duration = SIPResolver::DEFAULT_BLACKLIST_DURATION;
   opt.http_blacklist_duration = HttpResolver::DEFAULT_BLACKLIST_DURATION;
+  opt.session_continue_timeout_ms = 2000;
+  opt.session_terminated_timeout_ms = 4000;
 
   boost::filesystem::path p = argv[0];
   // Copy the filename to a string so that we can be sure of its lifespan -

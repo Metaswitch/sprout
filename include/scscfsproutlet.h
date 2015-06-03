@@ -83,7 +83,9 @@ public:
                  ACRFactory* acr_factory,
                  bool user_phone,
                  bool global_only_lookups,
-                 bool override_npdi);
+                 bool override_npdi,
+                 int session_continue_timeout,
+                 int session_terminated_timeout);
   ~SCSCFSproutlet();
 
   bool init();
@@ -185,6 +187,10 @@ private:
   bool _user_phone;
   bool _override_npdi;
 
+  /// Timeouts related to default handling of unresponsive application servers.
+  int _session_continue_timeout_ms;
+  int _session_terminated_timeout_ms;
+
   /// String versions of the cluster URIs
   std::string _scscf_cluster_uri_str;
   std::string _scscf_node_uri_str;
@@ -212,7 +218,7 @@ private:
   /// (from the ODI token) and the session case (based on the presence of
   /// the 'orig' param), and sets those as member variables.
   void retrieve_odi_and_sesscase(pjsip_msg* req);
-  
+
   /// Determines the served user for the request.
   pjsip_status_code determine_served_user(pjsip_msg* req);
 

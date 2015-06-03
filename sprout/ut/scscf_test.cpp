@@ -360,7 +360,9 @@ public:
                                           _acr_factory,
                                           false,
                                           false,
-                                          false);
+                                          false,
+                                          2000,
+                                          4000);
     _scscf_sproutlet->init();
 
     // Create the BGCF Sproutlet.
@@ -1526,9 +1528,9 @@ TEST_F(SCSCFTest, TestGRUUFailure)
   doSlowFailureFlow(msg, 480);
 }
 
-// Various ENUM tests - these use the test_stateful_proxy_enum.json file 
-// TODO - these want tidying up (maybe make the enum service a mock? at least make it so 
-// there are separate number ranges used in each test).  
+// Various ENUM tests - these use the test_stateful_proxy_enum.json file
+// TODO - these want tidying up (maybe make the enum service a mock? at least make it so
+// there are separate number ranges used in each test).
 TEST_F(SCSCFTest, TestEnumExternalSuccessFromFromHeader)
 {
   SCOPED_TRACE("");
@@ -1688,7 +1690,7 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPData)
 }
 
 // Test where the request URI represents a number and has NP data. The ENUM
-// lookup returns a URI representing a number, and override_npdi is on, 
+// lookup returns a URI representing a number, and override_npdi is on,
 // so the request URI is rewritten
 TEST_F(SCSCFTest, TestEnumReqURIwithNPDataOverride)
 {
@@ -1706,13 +1708,13 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPDataOverride)
 }
 
 // Test where the request URI represents a number and has NP data. The ENUM
-// lookup returns a URI that doesn't represent a number so the request URI 
+// lookup returns a URI that doesn't represent a number so the request URI
 // is rewritten
 TEST_F(SCSCFTest, TestEnumReqURIwithNPDataToSIP)
 {
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  
+
   set_enforce_user_phone(true);
   Message msg;
   msg._to = "+15108580301;npdi";
@@ -1725,7 +1727,7 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPDataToSIP)
 }
 
 // Test where the BGCF receives a SIP request URI represents a number and has NP data.
-// The ENUM lookup returns a rn which the BGCF routes on. 
+// The ENUM lookup returns a rn which the BGCF routes on.
 TEST_F(SCSCFTest, TestEnumNPBGCFSIP)
 {
   SCOPED_TRACE("");
@@ -6308,7 +6310,7 @@ TEST_F(SCSCFTest, TestNoSecondPAIHdrTerm)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
 }
 
-// Test that the Session-Expires header is correctly altered by the Min-SE 
+// Test that the Session-Expires header is correctly altered by the Min-SE
 // header
 TEST_F(SCSCFTest, TestMinSEOverride)
 {
