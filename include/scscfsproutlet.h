@@ -96,9 +96,13 @@ public:
                         const std::string& alias,
                         pjsip_msg* req);
 
+  // Methods used to change the values of internal configuration during unit
+  // test.
   void set_enforce_user_phone(bool v) { _user_phone = v; }
   void set_global_only_lookups(bool v) { _global_only_lookups = v; }
   void set_override_npdi(bool v) { _override_npdi = v; }
+  void set_session_continue_timeout(int timeout) { _session_continue_timeout_ms = timeout; }
+  void set_session_terminated_timeout(int timeout) { _session_terminated_timeout_ms = timeout; }
 
   inline bool should_require_user_phone() const
   {

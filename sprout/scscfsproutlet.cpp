@@ -1139,9 +1139,12 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
                    _scscf->_session_continue_timeout_ms :
                    _scscf->_session_terminated_timeout_ms);
 
-    if (!schedule_timer(NULL, _liveness_timer, timeout))
+    if (timeout != 0)
     {
-      LOG_WARNING("Failed to start liveness timer");
+      if (!schedule_timer(NULL, _liveness_timer, timeout))
+      {
+        LOG_WARNING("Failed to start liveness timer");
+      }
     }
   }
   else
