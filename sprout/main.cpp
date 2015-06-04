@@ -125,6 +125,7 @@ enum OptionTypes
   OPT_HTTP_BLACKLIST_DURATION,
   OPT_SESSION_CONTINUE_TIMEOUT_MS,
   OPT_SESSION_TERMINATED_TIMEOUT_MS,
+  OPT_STATELESS_PROXIES,
 };
 
 
@@ -191,6 +192,7 @@ const static struct pj_getopt_option long_opt[] =
   { "http-blacklist-duration",      required_argument, 0, OPT_HTTP_BLACKLIST_DURATION},
   { "session-continue-timeout",     required_argument, 0, OPT_SESSION_CONTINUE_TIMEOUT_MS},
   { "session-terminated-timeout",   required_argument, 0, OPT_SESSION_TERMINATED_TIMEOUT_MS},
+  { "stateless-proxies",            required_argument, 0, OPT_STATELESS_PROXIES},
   { NULL,                           0,                 0, 0}
 };
 
@@ -337,6 +339,12 @@ static void usage(void)
        "                            If an Application Server with default handling of 'terminate session'\n"
        "                            and is unresponsive, this is the time that sprout will wait (in ms)\n"
        "                            before terminating the session.\n"
+       "     --stateless-proxies\n"
+       "                            A comma separated list of domain names that are considered to be SIP\n"
+       "                            stateless proxies. This field should reflect how the servers are identified\n"
+       "                            in SIP (for example if a cluster of nodes is identified by the name\n"
+       "                            'cluster.example.com', this value should be used instead of the hostnames\n"
+       "                            or IP addresses of individual servers\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
@@ -406,6 +414,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
   int opt_ind;
   int reg_max_expires;
   int sub_max_expires;
+  std::vector<std::string> stateless_proxies;
 
   pj_optind = 0;
   while ((c = pj_getopt_long(argc, argv, pj_options_description.c_str(), long_opt, &opt_ind)) != -1)
@@ -908,6 +917,14 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
                options->session_terminated_timeout_ms);
       break;
 
+    case OPT_STATELESS_PROXIES:
+      Utils::split_string(std::string(pj_optarg), ',', stateless_proxies, 0, false);
+      options->stateless_proxies.insert(stateless_proxies.begin(),
+                                        stateless_proxies.end());
+      LOG_INFO("%d stateless proxies are configured",
+               options->stateless_proxies.size());
+      break;
+
     case 'h':
       usage();
       return -1;
@@ -1230,6 +1247,7 @@ int main(int argc, char* argv[])
   opt.http_blacklist_duration = HttpResolver::DEFAULT_BLACKLIST_DURATION;
   opt.session_continue_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_CONTINUE_TIMEOUT;
   opt.session_terminated_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_TERMINATED_TIMEOUT;
+  opt.stateless_proxies.clear();
 
   boost::filesystem::path p = argv[0];
   // Copy the filename to a string so that we can be sure of its lifespan -

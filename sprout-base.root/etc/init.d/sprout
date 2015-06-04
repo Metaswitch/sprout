@@ -180,6 +180,7 @@ get_daemon_args()
         [ -z "$signaling_namespace" ] || namespace_prefix="ip netns exec $signaling_namespace"
         [ -z "$session_continue_timeout_ms" ] || session_continue_timeout_arg="--session-continue-timeout=$session_continue_timeout_ms"
         [ -z "$session_terminated_timeout_ms" ] || session_terminated_timeout_arg="--session-terminated-timeout=$session_continue_timeout_ms"
+        [ -z "$stateless_proxies" ] || stateless_proxies_arg="--stateless-proxies=$stateless_proxies"
 
         DAEMON_ARGS="
                      --domain=$home_domain
@@ -214,6 +215,7 @@ get_daemon_args()
                      $exception_max_ttl_arg
                      $session_continue_timeout_arg
                      $session_terminated_timeout_arg
+                     $stateless_proxies_arg
                      --http-address=$local_ip
                      --http-port=9888
                      --analytics=$log_directory
