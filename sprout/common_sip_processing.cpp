@@ -79,6 +79,8 @@ static HealthChecker* health_checker = NULL;
 static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata);
 static pj_status_t process_on_tx_msg(pjsip_tx_data* tdata);
 
+static SAS::TrailId DONT_LOG_TO_SAS = 0xFFFFFFFF;
+
 // Module handling common processing for all SIP messages - logging,
 // overload control, and rejection of bad requests.
 
@@ -205,6 +207,14 @@ static void sas_log_rx_msg(pjsip_rx_data* rdata)
       trail = get_trail(tsx);
     }
   }
+  else if ((rdata->msg_info.msg->line.req.method.id == PJSIP_OPTIONS_METHOD) &&
+           PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri) &&
+           strstr(rdata->msg_info.msg_buf, "poll-sip"))
+  {
+    // This is an OPTIONS poll from monit. Don't log it to SAS, and set the trail ID to a sentinel value so we don't log the response either.
+    set_trail(rdata, DONT_LOG_TO_SAS);
+    return;
+  }
 
   if (trail == 0)
   {
@@ -231,7 +241,11 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
   // For outgoing messages always use the trail identified in the module data
   SAS::TrailId trail = get_trail(tdata);
 
-  if (trail != 0)
+  if (trail == DONT_LOG_TO_SAS)
+  {
+    return;
+  }
+  else if (trail != 0)
   {
     // Log the message event.
     SAS::Event event(trail, SASEvent::TX_SIP_MSG, 0);
