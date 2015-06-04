@@ -1213,7 +1213,7 @@ int main(int argc, char* argv[])
   opt.exception_max_ttl = 600;
   opt.sip_blacklist_duration = SIPResolver::DEFAULT_BLACKLIST_DURATION;
   opt.http_blacklist_duration = HttpResolver::DEFAULT_BLACKLIST_DURATION;
-  opt.sip_tcp_connect_timeout = 1000;
+  opt.sip_tcp_connect_timeout = 2000;
 
   boost::filesystem::path p = argv[0];
   // Copy the filename to a string so that we can be sure of its lifespan -
