@@ -121,7 +121,8 @@ enum OptionTypes
   OPT_EXCEPTION_MAX_TTL,
   OPT_MAX_SESSION_EXPIRES,
   OPT_SIP_BLACKLIST_DURATION,
-  OPT_HTTP_BLACKLIST_DURATION
+  OPT_HTTP_BLACKLIST_DURATION,
+  OPT_SAS_COMPRESSION_ENABLED
 };
 
 
@@ -186,6 +187,7 @@ const static struct pj_getopt_option long_opt[] =
   { "exception-max-ttl",            required_argument, 0, OPT_EXCEPTION_MAX_TTL},
   { "sip-blacklist-duration",       required_argument, 0, OPT_SIP_BLACKLIST_DURATION},
   { "http-blacklist-duration",      required_argument, 0, OPT_HTTP_BLACKLIST_DURATION},
+  { "sas-compression-enabled",      no_argument,       0, OPT_SAS_COMPRESSION_ENABLED},
   { NULL,                           0,                 0, 0}
 };
 
@@ -851,6 +853,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case OPT_ALARMS_ENABLED:
       options->alarms_enabled = PJ_TRUE;
       LOG_INFO("SNMP alarms are enabled");
+      break;
+
+    case OPT_SAS_COMPRESSION_ENABLED:
+      SAS::compression_enabled = true;
+      LOG_INFO("SAS compression enabled");
       break;
 
     case OPT_DNS_SERVER:

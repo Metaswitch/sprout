@@ -118,7 +118,8 @@ LDFLAGS += -lmemcached \
            -levent_pthreads \
            -lcurl \
            -lsas \
-           -lboost_filesystem
+           -lboost_filesystem \
+	   -lz
 
 # Explicitly link some pjsip modules. Some plugins require symbols in them
 # (which sprout-base doesn't), and the plugins are dynamically linked at run
