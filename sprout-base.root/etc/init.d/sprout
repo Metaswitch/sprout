@@ -215,6 +215,7 @@ get_daemon_args()
                      --analytics=$log_directory
                      --log-file=$log_directory
                      --log-level=$log_level
+                     --memcached-write-format=binary
                      --alias=$public_ip,$public_hostname,$alias_list"
 
         if [ -n "$reg_max_expires" ]
