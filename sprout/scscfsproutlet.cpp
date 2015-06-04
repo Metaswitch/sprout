@@ -1651,7 +1651,7 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
     {
       // The AS either timed out or returned a 5xx error, and default
       // handling is set to continue.
-      LOG_DEBUG("Trigger default_handling=CONTINUE processing");
+      LOG_DEBUG("Trigger default_handling=CONTINUED processing");
       SAS::Event bypass_as(trail(), SASEvent::BYPASS_AS, 0);
       SAS::report_event(bypass_as);
 
@@ -1668,6 +1668,7 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
     }
     else
     {
+      LOG_DEBUG("Trigger default_handling=TERMINATED processing");
       SAS::Event as_failed(trail(), SASEvent::AS_FAILED, 0);
       SAS::report_event(as_failed);
 
