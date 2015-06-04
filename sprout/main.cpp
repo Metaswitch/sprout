@@ -121,7 +121,8 @@ enum OptionTypes
   OPT_EXCEPTION_MAX_TTL,
   OPT_MAX_SESSION_EXPIRES,
   OPT_SIP_BLACKLIST_DURATION,
-  OPT_HTTP_BLACKLIST_DURATION
+  OPT_HTTP_BLACKLIST_DURATION,
+  OPT_SIP_TCP_CONNECT_TIMEOUT
 };
 
 
@@ -186,6 +187,7 @@ const static struct pj_getopt_option long_opt[] =
   { "exception-max-ttl",            required_argument, 0, OPT_EXCEPTION_MAX_TTL},
   { "sip-blacklist-duration",       required_argument, 0, OPT_SIP_BLACKLIST_DURATION},
   { "http-blacklist-duration",      required_argument, 0, OPT_HTTP_BLACKLIST_DURATION},
+  { "sip-tcp-connect-timeout",      required_argument, 0, OPT_SIP_TCP_CONNECT_TIMEOUT},
   { NULL,                           0,                 0, 0}
 };
 
@@ -324,6 +326,8 @@ static void usage(void)
        "                            The amount of time to blacklist a SIP peer when it is unresponsive.\n"
        "     --http-blacklist-duration <secs>\n"
        "                            The amount of time to blacklist an HTTP peer when it is unresponsive.\n"
+       "     --sip-tcp-connect-timeout <milliseconds>\n"
+       "                            The amount of time to wait for a SIP TCP connection to establish.\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
@@ -883,6 +887,12 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
                options->http_blacklist_duration);
       break;
 
+    case OPT_SIP_TCP_CONNECT_TIMEOUT:
+      options->sip_tcp_connect_timeout = atoi(pj_optarg);
+      LOG_INFO("SIP TCP connect timeout set to %d",
+               options->sip_tcp_connect_timeout);
+      break;
+
     case 'h':
       usage();
       return -1;
@@ -1203,6 +1213,7 @@ int main(int argc, char* argv[])
   opt.exception_max_ttl = 600;
   opt.sip_blacklist_duration = SIPResolver::DEFAULT_BLACKLIST_DURATION;
   opt.http_blacklist_duration = HttpResolver::DEFAULT_BLACKLIST_DURATION;
+  opt.sip_tcp_connect_timeout = 2000;
 
   boost::filesystem::path p = argv[0];
   // Copy the filename to a string so that we can be sure of its lifespan -
@@ -1464,6 +1475,7 @@ int main(int argc, char* argv[])
                       opt.record_routing_model,
                       opt.default_session_expires,
                       opt.max_session_expires,
+                      opt.sip_tcp_connect_timeout,
                       quiescing_mgr,
                       opt.billing_cdf);
 
