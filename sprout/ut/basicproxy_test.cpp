@@ -2633,7 +2633,7 @@ TEST_F(BasicProxyTest, DnsResolutionFailure)
 }
 
 
-TEST_F(BasicProxyTest, DISABLED_RetryOnTimeout)
+TEST_F(BasicProxyTest, RetryOnTimeout)
 {
   // Tests retrying to an alternate server on a transaction timeout.
   // Currently disabled because PJSIP has no support for running a short
@@ -2703,7 +2703,7 @@ TEST_F(BasicProxyTest, DISABLED_RetryOnTimeout)
   free_txdata();
 
   // This server doesn't respond, so advance time to trigger the timeout.
-  cwtest_advance_time_ms(6000);
+  cwtest_advance_time_ms(31000);
   poll();
 
   // Check that the request has been redirected to another server.
