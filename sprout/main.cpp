@@ -1803,7 +1803,8 @@ int main(int argc, char* argv[])
                                          std::string(stack_data.scscf_uri.ptr,
                                                      stack_data.scscf_uri.slen),
                                          host_aliases,
-                                         sproutlets);
+                                         sproutlets,
+                                         opt.stateless_proxies);
     if (sproutlet_proxy == NULL)
     {
       CL_SPROUT_S_CSCF_INIT_FAIL.log();

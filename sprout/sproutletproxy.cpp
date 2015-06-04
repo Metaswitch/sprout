@@ -63,8 +63,13 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
                                int priority,
                                const std::string& root_uri,
                                const std::unordered_set<std::string>& host_aliases,
-                               const std::list<Sproutlet*>& sproutlets) :
-  BasicProxy(endpt, "mod-sproutlet-controller", priority, false),
+                               const std::list<Sproutlet*>& sproutlets,
+                               const std::set<std::string> stateless_proxies) :
+  BasicProxy(endpt,
+             "mod-sproutlet-controller",
+             priority,
+             false,
+             stateless_proxies),
   _root_uri(NULL),
   _host_aliases(host_aliases),
   _sproutlets(sproutlets)

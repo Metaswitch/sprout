@@ -68,7 +68,8 @@ public:
   BasicProxy(pjsip_endpoint* endpt,
              std::string name,
              int priority,
-             bool delay_trying);
+             bool delay_trying,
+             const std::set<std::string>& stateless_proxies);
   virtual ~BasicProxy();
 
   virtual pj_bool_t on_rx_request(pjsip_rx_data* rdata);

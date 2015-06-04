@@ -63,11 +63,13 @@ extern "C" {
 BasicProxy::BasicProxy(pjsip_endpoint* endpt,
                        std::string name,
                        int priority,
-                       bool delay_trying) :
+                       bool delay_trying,
+                       const std::set<std::string>& stateless_proxies) :
   _mod_proxy(this, endpt, name, priority, PJMODULE_MASK_PROXY),
   _mod_tu(this, endpt, name + "-tu", priority, PJMODULE_MASK_TU),
   _delay_trying(delay_trying),
-  _endpt(endpt)
+  _endpt(endpt),
+  _stateless_proxies(stateless_proxies)
 {
 }
 

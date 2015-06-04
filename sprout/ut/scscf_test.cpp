@@ -390,7 +390,8 @@ public:
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "sip:homedomain:5058",
                                 aliases,
-                                sproutlets);
+                                sproutlets,
+                                std::set<std::string>());
 
     // Schedule timers.
     SipTest::poll();

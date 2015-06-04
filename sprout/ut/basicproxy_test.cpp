@@ -122,7 +122,7 @@ public:
   };
 
   BasicProxyUT(pjsip_endpoint* endpt, int priority) :
-    BasicProxy(endpt, "UTProxy", priority, false)
+    BasicProxy(endpt, "UTProxy", priority, false, std::set<std::string>())
   {
   }
 

@@ -43,6 +43,7 @@
 #define CFGOPTIONS_H__
 
 #include <string>
+#include <set>
 
 #include "hssconnection.h"
 #include "regstore.h"
@@ -133,6 +134,7 @@ struct options
   int                                  http_blacklist_duration;
   int                                  session_continue_timeout_ms;
   int                                  session_terminated_timeout_ms;
+  std::set<std::string>                stateless_proxies;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be

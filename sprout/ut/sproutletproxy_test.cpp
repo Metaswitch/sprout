@@ -476,7 +476,8 @@ public:
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "sip:proxy1.homedomain",
                                 host_aliases,
-                                _sproutlets);
+                                _sproutlets,
+                                std::set<std::string>());
 
     // Schedule timers.
     SipTest::poll();
