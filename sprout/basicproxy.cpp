@@ -1523,7 +1523,8 @@ BasicProxy::UACTsx::UACTsx(BasicProxy* proxy,
   _timer_c(),
   _trail(0),
   _pending_destroy(false),
-  _context_count(0)
+  _context_count(0),
+  _stateless_proxy(false)
 {
   // Don't put any initialization that can fail here, implement in init()
   // instead.
@@ -1631,6 +1632,16 @@ pj_status_t BasicProxy::UACTsx::init(pjsip_tx_data* tdata)
     // servers (IP address/port/transport tuples).
     PJUtils::resolve_next_hop(tdata, 0, _servers, trail());
   }
+
+  // Work out whether this UAC transaction is to a stateless proxy.
+  pjsip_sip_uri* next_hop_uri = (pjsip_sip_uri*)PJUtils::next_hop(tdata->msg);
+  std::string next_hop = std::string(next_hop_uri->host.ptr,
+                                     next_hop_uri->host.slen);
+  _stateless_proxy = (_proxy->_stateless_proxies.find(next_hop) !=
+                      _proxy->_stateless_proxies.end());
+  LOG_DEBUG("Next hop %s %s a stateless proxy",
+            next_hop.c_str(),
+            _stateless_proxy ? "is" : "is not");
 
   return PJ_SUCCESS;
 }
@@ -1825,13 +1836,30 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
       // Check to see if the destination server has failed so we can blacklist
       // it and retry to an alternative if possible.
       if ((_tsx->state == PJSIP_TSX_STATE_TERMINATED) &&
-          ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
-           (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR)))
+          (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR))
       {
-        // Either failed to connect to the selected server, or failed or get
-        // a response, so blacklist it.
-        LOG_DEBUG("Failed to connected to server or timed-out, so add to blacklist");
+        // Failed to connect to the selected server, or failed so blacklist it.
+        LOG_DEBUG("Failed to connected to server so add to blacklist");
         PJUtils::blacklist_server(_servers[_current_server]);
+
+        // Attempt a retry.
+        retrying = retry_request();
+      }
+      else if ((_tsx->state == PJSIP_TSX_STATE_TERMINATED) &&
+               (event->body.tsx_state.type == PJSIP_EVENT_TIMER))
+      {
+        // SIP transaction timed out.
+        LOG_DEBUG("Request to server timed-out");
+
+        if (!_stateless_proxy)
+        {
+          // The next hop is NOT a stateful proxy so if it hasn't responded then
+          // it should be blacklisted.  We don't blacklist stateless proxies to
+          // avoid blacklisting them due to an unresponsive server further
+          // downstream.
+          LOG_DEBUG("Next hop is NOT a stateless-proxy - blacklist");
+          PJUtils::blacklist_server(_servers[_current_server]);
+        }
 
         // Attempt a retry.
         retrying = retry_request();

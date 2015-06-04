@@ -53,6 +53,7 @@ extern "C" {
 #include <utility>
 #include <vector>
 #include <list>
+#include <set>
 
 #include "stack.h"
 #include "pjmodule.h"
@@ -361,6 +362,9 @@ protected:
     bool _pending_destroy;
     int _context_count;
 
+    // Whether this UAC transaction is to a stateless proxy.
+    bool _stateless_proxy;
+
     friend class UASTsx;
 
     static const int TIMER_C = 3;
@@ -399,9 +403,27 @@ protected:
   /// The pjsip endpoint this proxy is associated with.
   pjsip_endpoint* _endpt;
 
-  friend class UASTsx;
-  friend class UACTsx;
+  /// Set of next hops that are considered stateless proxies.  A stateless proxy
+  /// does not generate 100 trying responses itself, and does not perform
+  /// retries if devices further downstream fail.
+  ///
+  /// Normally if a next hop is unresponsive it is temporarily blacklisted.
+  /// However for a stateless proxy it may be that the device downstream of it
+  /// is the one that is actually being unresponsive, so blacklisting the
+  /// stateless proxy is incorrect (and in the case of a pool of proxies
+  /// fronting a pool of downstream servers, one downstream server failing could
+  /// cause the entire pool to be blacklisted).  Therefore downstream proxies
+  /// are only blacklisted in the event of a transport error, not by a SIP
+  /// transaction timeout.
+  ///
+  /// When determining whether a next hop is a stateless proxy, the SIP-level
+  /// identifier of the next hop is used. For example if there are two servers
+  /// acting as a stateless proxy pool identified by the domain-name
+  /// pool.example.com, then the `_stateless_proxies` set should contain the
+  /// entry "pool.example.com", not one entry for each server.
+  std::set<std::string> _stateless_proxies;
 
+  friend class UASTsx; friend class UACTsx;
 };
 
 #endif
