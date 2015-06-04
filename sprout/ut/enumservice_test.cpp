@@ -368,11 +368,23 @@ TEST_F(DNSEnumServiceTest, ResolverOkCommMonMockTest)
   ET("1234", "sip:1234@ut.cw-ngv.com").test(enum_);
 }
 
+TEST_F(DNSEnumServiceTest, ResolverNotFoundCommMonMockTest)
+{
+  // If we request a nonexistent number, and the ENUM server tells us it doesn't exist,
+  // we shouldn't treat that as a communications error.
+  MockCommunicationMonitor cm_;
+  EXPECT_CALL(cm_, inform_success(_));
+  DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory(), &cm_);
+  ET("1234", "").test(enum_);
+}
+
 TEST_F(DNSEnumServiceTest, ResolverErrorCommMonMockTest)
 {
+  // If we request a number, and the ENUM server fails to respond,
+  // we should treat that as a communications error.
   MockCommunicationMonitor cm_;
   EXPECT_CALL(cm_, inform_failure(_));
-  DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory(), &cm_);
+  DNSEnumService enum_(_servers, ".e164.arpa", new BrokenDNSResolverFactory(), &cm_);
   ET("1234", "").test(enum_);
 }
 

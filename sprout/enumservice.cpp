@@ -338,6 +338,7 @@ std::string DNSEnumService::lookup_uri_from_user(const std::string& user, SAS::T
   // the maximum number of queries.
   bool complete = false;
   bool failed = false;
+  bool server_failed = false;
   int dns_queries = 0;
   while ((!complete) &&
          (!failed) &&
@@ -383,11 +384,19 @@ std::string DNSEnumService::lookup_uri_from_user(const std::string& user, SAS::T
       // this a failure.
       failed = failed || (rule == rules.end());
     }
-    else
+    else if (status == ARES_ENOTFOUND)
     {
-      // Our DNS query failed.  Give up.
+      // Our DNS query failed, so give up, but this is not an ENUM server issue -
+      // we just tried to look up an unknown name.
       failed = true;
     }
+    else
+    {
+      // Our DNS query failed. Give up, and track an ENUM server failure.
+      failed = true;
+      server_failed = true;
+    }
+
 
     // Free off the NAPTR reply if we have one.
     if (naptr_reply != NULL)
@@ -422,7 +431,7 @@ std::string DNSEnumService::lookup_uri_from_user(const std::string& user, SAS::T
   // an associated alarm). 
   if (_comm_monitor)
   {
-    if (failed)
+    if (server_failed)
     {
       _comm_monitor->inform_failure();
     }

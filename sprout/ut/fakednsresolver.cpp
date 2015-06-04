@@ -80,3 +80,19 @@ DNSResolver* FakeDNSResolverFactory::new_resolver(const std::vector<struct IP46A
   EXPECT_TRUE(servers[0].compare(_expected_server) == 0);
   return new FakeDNSResolver(servers);
 }
+
+int BrokenDNSResolver::perform_naptr_query(const std::string& domain, struct ares_naptr_reply*& naptr_reply, SAS::TrailId trail)
+{
+  return ARES_ESERVFAIL;
+}
+
+
+void BrokenDNSResolver::free_naptr_reply(struct ares_naptr_reply* naptr_reply) const
+{
+}
+
+
+DNSResolver* BrokenDNSResolverFactory::new_resolver(const std::vector<struct IP46Address>& servers) const
+{
+  return new BrokenDNSResolver(servers);
+}
