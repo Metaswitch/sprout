@@ -456,7 +456,7 @@ static const PDLog CL_SPROUT_SCSCF_FILE_MISSING
   PDLOG_ERR,
   "The file listing S-CSCFs is not present.",
   "Sprout is configured as an I-CSCF, but the /etc/clearwater/s-cscf.json file (defining which S-CSCFs to use) does not exist.",
-  "This prevents the I-CSCF from selecting an S-CSCF.",
+  "The Sprout I-CSCF will not be able to select an S-CSCF.",
   "If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd. If you are managing /etc/clearwater/s-cscf.json manually, follow the documentation to create it."
 );
 
@@ -466,7 +466,7 @@ static const PDLog CL_SPROUT_SCSCF_FILE_EMPTY
   PDLOG_ERR,
   "The file listing S-CSCFs is empty.",
   "Sprout is configured as an I-CSCF, but the /etc/clearwater/s-cscf.json file (defining which S-CSCFs to use) is empty.",
-  "This prevents the I-CSCF from selecting an S-CSCF.",
+  "The Sprout I-CSCF will not be able to select an S-CSCF.",
   "If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd. If you are managing /etc/clearwater/s-cscf.json manually, follow the documentation to create it."
 );
 
@@ -476,7 +476,7 @@ static const PDLog CL_SPROUT_SCSCF_FILE_INVALID
   PDLOG_ERR,
   "The file listing S-CSCFs is invalid.",
   "Sprout is configured as an I-CSCF, but the /etc/clearwater/s-cscf.json file (defining which S-CSCFs to use) is invalid due to invalid JSON or missing elements.",
-  "This prevents the I-CSCF from selecting an S-CSCF.",
+  "The Sprout I-CSCF will not be able to select an S-CSCF.",
   "Follow the documentation to create this file correctly."
 );
 
