@@ -3533,10 +3533,14 @@ TEST_F(BasicProxyTest, InviteTimerCExpiryCancelTimeout)
 }
 
 
+// Check that a target is blacklisted if a transaction to it times out.
 TEST_F(BasicProxyTest, BlacklistOnTimeout)
 {
   pjsip_tx_data* tdata;
 
+  // Set up SRV records so that proxy-x has a higher priority than proxy-y,
+  // meaning x will always be chosen in preference to y unless x is
+  // blacklisted.
   std::vector<DnsRRecord*> srv_records;
   srv_records.push_back(new DnsSrvRecord("_sip._tcp.proxy.awaydomain",
                                          36000000,
@@ -3656,10 +3660,18 @@ TEST_F(BasicProxyTest, BlacklistOnTimeout)
 }
 
 
+// Check that a stateless proxy is NOT blacklisted if a transaction to it times
+// out.
 TEST_F(BasicProxyTest, StatelessProxyNoBlacklistOnTimeout)
 {
   pjsip_tx_data* tdata;
 
+  // Set up SRV records so that proxy-x has a higher priority than proxy-y,
+  // meaning x will always be chosen in preference to y unless x is
+  // blacklisted.
+  //
+  // Note that "stateless-proxy.awaydomain" is configured in the test fixture
+  // as being a stateless proxy.
   std::vector<DnsRRecord*> srv_records;
   srv_records.push_back(new DnsSrvRecord("_sip._tcp.stateless-proxy.awaydomain",
                                          36000000,
