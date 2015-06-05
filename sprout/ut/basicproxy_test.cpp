@@ -3645,7 +3645,7 @@ TEST_F(BasicProxyTest, BlacklistOnTimeout)
   EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
   EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
   server1 = str_pj(tdata->tp_info.transport->remote_name.host);
-  EXPECT_EQ(server1, "10.10.10.100");
+  EXPECT_EQ(server1, "10.10.10.101");
 
   // Send a 200 OK response.
   inject_msg(respond_to_current_txdata(200));
