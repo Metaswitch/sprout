@@ -101,6 +101,7 @@ struct stack_data_struct
   int default_session_expires;
   int max_session_expires;
   int sip_tcp_connect_timeout;
+  int sip_tcp_send_timeout;
 };
 
 extern struct stack_data_struct stack_data;
@@ -157,6 +158,7 @@ extern pj_status_t init_stack(const std::string& sas_system_name,
                               const int default_session_expires,
                               const int max_session_expires,
                               const int sip_tcp_connect_timeout,
+                              const int sip_tcp_send_timeout,
                               QuiescingManager *quiescing_mgr,
                               const std::string& cdf_domain);
 extern pj_status_t start_pjsip_threads();
