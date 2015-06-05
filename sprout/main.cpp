@@ -337,14 +337,14 @@ static void usage(void)
        "                            The amount of time to wait for a SIP TCP connection to establish.\n"
        "     --session-continue-timeout\n"
        "                            If an Application Server with default handling of 'continue session'\n"
-       "                            and is unresponsive, this is the time that sprout will wait (in ms)\n"
+       "                            is unresponsive, this is the time that sprout will wait (in ms)\n"
        "                            before bypassing the AS and moving onto the next AS in the chain.\n"
        "     --session-terminated-timeout\n"
        "                            If an Application Server with default handling of 'terminate session'\n"
-       "                            and is unresponsive, this is the time that sprout will wait (in ms)\n"
+       "                            is unresponsive, this is the time that sprout will wait (in ms)\n"
        "                            before terminating the session.\n"
        "     --stateless-proxies\n"
-       "                            A comma separated list of domain names that are considered to be SIP\n"
+       "                            A comma separated list of domain names that are treated as SIP\n"
        "                            stateless proxies. This field should reflect how the servers are identified\n"
        "                            in SIP (for example if a cluster of nodes is identified by the name\n"
        "                            'cluster.example.com', this value should be used instead of the hostnames\n"
@@ -418,7 +418,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
   int opt_ind;
   int reg_max_expires;
   int sub_max_expires;
-  std::vector<std::string> stateless_proxies;
 
   pj_optind = 0;
   while ((c = pj_getopt_long(argc, argv, pj_options_description.c_str(), long_opt, &opt_ind)) != -1)
@@ -928,11 +927,14 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       break;
 
     case OPT_STATELESS_PROXIES:
-      Utils::split_string(std::string(pj_optarg), ',', stateless_proxies, 0, false);
-      options->stateless_proxies.insert(stateless_proxies.begin(),
-                                        stateless_proxies.end());
-      LOG_INFO("%d stateless proxies are configured",
-               options->stateless_proxies.size());
+      {
+        std::vector<std::string> stateless_proxies;
+        Utils::split_string(std::string(pj_optarg), ',', stateless_proxies, 0, false);
+        options->stateless_proxies.insert(stateless_proxies.begin(),
+                                          stateless_proxies.end());
+        LOG_INFO("%d stateless proxies are configured",
+                 options->stateless_proxies.size());
+      }
       break;
 
     case 'h':

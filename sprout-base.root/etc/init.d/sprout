@@ -178,9 +178,6 @@ get_daemon_args()
         [ -z "$min_token_rate" ] || min_token_rate_arg="--min-token-rate=$min_token_rate"
         [ -z "$exception_max_ttl" ] || exception_max_ttl_arg="--exception-max-ttl=$exception_max_ttl"
         [ -z "$signaling_namespace" ] || namespace_prefix="ip netns exec $signaling_namespace"
-        [ -z "$session_continue_timeout_ms" ] || session_continue_timeout_arg="--session-continue-timeout=$session_continue_timeout_ms"
-        [ -z "$session_terminated_timeout_ms" ] || session_terminated_timeout_arg="--session-terminated-timeout=$session_continue_timeout_ms"
-        [ -z "$stateless_proxies" ] || stateless_proxies_arg="--stateless-proxies=$stateless_proxies"
 
         DAEMON_ARGS="
                      --domain=$home_domain
@@ -213,9 +210,6 @@ get_daemon_args()
                      $override_npdi_arg
                      $alarms_enabled_arg
                      $exception_max_ttl_arg
-                     $session_continue_timeout_arg
-                     $session_terminated_timeout_arg
-                     $stateless_proxies_arg
                      --http-address=$local_ip
                      --http-port=9888
                      --analytics=$log_directory
@@ -278,6 +272,9 @@ get_daemon_args()
         [ "$sip_blacklist_duration" = "" ]  || DAEMON_ARGS="$DAEMON_ARGS --sip-blacklist-duration=$sip_blacklist_duration"
         [ "$http_blacklist_duration" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --http-blacklist-duration=$http_blacklist_duration"
         [ "$sip_tcp_connect_timeout" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --sip-tcp-connect-timeout=$sip_tcp_connect_timeout"
+        [ "$session_continue_timeout_ms" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --session-continue-timeout=$session_continue_timeout_ms"
+        [ "$session_terminated_timeout_ms" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --session-terminated-timeout=$session_continue_timeout_ms"
+        [ "$stateless_proxies" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --stateless-proxies=$stateless_proxies"
 }
 
 #

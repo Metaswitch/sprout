@@ -87,8 +87,8 @@ public:
                  bool user_phone,
                  bool global_only_lookups,
                  bool override_npdi,
-                 int session_continue_timeout,
-                 int session_terminated_timeout);
+                 int session_continue_timeout = DEFAULT_SESSION_CONTINUE_TIMEOUT,
+                 int session_terminated_timeout = DEFAULT_SESSION_TERMINATED_TIMEOUT);
   ~SCSCFSproutlet();
 
   bool init();
