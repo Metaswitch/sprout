@@ -59,7 +59,7 @@ class SproutRemoteMemcachedPlugin(SynchroniserPluginBase):
         return ["/etc/clearwater/remote_cluster_settings"]
 
     def cluster_description(self):
-        return "remote memcached cluster"
+        return "remote Sprout memcached cluster"
 
     def on_cluster_changing(self, cluster_view):
         if self._remote_site != "":
