@@ -69,3 +69,24 @@ public:
   static struct IP46Address _expected_server;
 
 };
+
+/// Fake DNSResolver which returns error responses.
+class BrokenDNSResolver : public DNSResolver
+{
+public:
+  inline BrokenDNSResolver(const std::vector<struct IP46Address>& servers) : DNSResolver(servers) {};
+  virtual int perform_naptr_query(const std::string& domain, struct ares_naptr_reply*& naptr_reply, SAS::TrailId trail);
+  virtual void free_naptr_reply(struct ares_naptr_reply* naptr_reply) const;
+};
+
+/// Fake DNSResolverFactory that checks parameters and then creates a
+/// BrokenDNSResolver.
+class BrokenDNSResolverFactory : public DNSResolverFactory
+{
+public:
+  virtual DNSResolver* new_resolver(const std::vector<struct IP46Address>& server) const;
+
+  // The server for which we expect to create resolvers.
+  static struct IP46Address _expected_server;
+
+};
