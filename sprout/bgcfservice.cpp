@@ -46,6 +46,7 @@
 #include "sas.h"
 #include "sproutsasevent.h"
 #include "pjutils.h"
+#include "sprout_pd_definitions.h"
 
 BgcfService::BgcfService(std::string configuration) :
   _configuration(configuration),
@@ -65,6 +66,7 @@ void BgcfService::update_routes()
   {
     LOG_STATUS("No BGCF configuration (file %s does not exist)",
                _configuration.c_str());
+    CL_SPROUT_BGCF_FILE_MISSING.log();
     return;
   }
 
@@ -80,6 +82,7 @@ void BgcfService::update_routes()
     // LCOV_EXCL_START
     LOG_ERROR("Failed to read BGCF configuration data from %s", 
               _configuration.c_str());
+    CL_SPROUT_BGCF_FILE_EMPTY.log();
     return;
     // LCOV_EXCL_STOP
   }
@@ -93,6 +96,7 @@ void BgcfService::update_routes()
     LOG_ERROR("Failed to read BGCF configuration data: %s\nError: %s",
               bgcf_str.c_str(),
               rapidjson::GetParseError_En(doc.GetParseError()));
+    CL_SPROUT_BGCF_FILE_INVALID.log();
     return;
   }
 
@@ -153,6 +157,7 @@ void BgcfService::update_routes()
       else
       {
         LOG_WARNING("Badly formed BGCF route entry");
+        CL_SPROUT_BGCF_FILE_INVALID.log();
       }
     }
 
@@ -162,6 +167,7 @@ void BgcfService::update_routes()
   catch (JsonFormatError err)
   {
     LOG_ERROR("Badly formed BGCF configuration file - missing routes object");
+    CL_SPROUT_BGCF_FILE_INVALID.log();
   }
 }
 

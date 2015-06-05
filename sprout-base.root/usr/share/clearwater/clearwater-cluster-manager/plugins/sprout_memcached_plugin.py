@@ -36,6 +36,7 @@ from metaswitch.clearwater.cluster_manager.plugin_base import \
 from metaswitch.clearwater.cluster_manager.plugin_utils import \
     run_command, write_memcached_cluster_settings
 from metaswitch.clearwater.cluster_manager.alarms import issue_alarm
+from metaswitch.clearwater.cluster_manager import pdlogs
 from metaswitch.clearwater.cluster_manager import constants
 import logging
 import subprocess
@@ -47,6 +48,7 @@ _log = logging.getLogger("sprout_memcached_plugin")
 class SproutMemcachedPlugin(SynchroniserPluginBase):
     def __init__(self, params):
         issue_alarm(constants.RAISE_MEMCACHED_NOT_YET_CLUSTERED)
+        pdlogs.NOT_YET_CLUSTERED_ALARM.log(cluster_desc=self.cluster_description())
         self._key = "/clearwater/{}/sprout/clustering/memcached".format(params.local_site)
 
     def key(self):
@@ -54,6 +56,9 @@ class SproutMemcachedPlugin(SynchroniserPluginBase):
 
     def files(self):
         return ["/etc/clearwater/cluster_settings"]
+
+    def cluster_description(self):
+        return "local memcached cluster"
 
     def on_cluster_changing(self, cluster_view):
         write_memcached_cluster_settings("/etc/clearwater/cluster_settings",

@@ -37,6 +37,7 @@ from metaswitch.clearwater.cluster_manager.plugin_base import \
 from metaswitch.clearwater.cluster_manager.plugin_utils import \
     write_chronos_cluster_settings, run_command
 from metaswitch.clearwater.cluster_manager.alarms import issue_alarm
+from metaswitch.clearwater.cluster_manager import pdlogs
 from metaswitch.clearwater.cluster_manager import constants
 import subprocess
 import logging
@@ -50,12 +51,16 @@ class SproutChronosPlugin(SynchroniserPluginBase):
         self._key = "/clearwater/{}/sprout/clustering/chronos".format(params.local_site)
         _log.debug("Raising not-clustered alarm")
         issue_alarm(constants.RAISE_CHRONOS_NOT_YET_CLUSTERED)
+        pdlogs.NOT_YET_CLUSTERED_ALARM.log(cluster_desc=self.cluster_description())
 
     def key(self):
         return self._key
 
     def files(self):
         return ["/etc/chronos/chronos_cluster.conf"]
+
+    def cluster_description(self):
+        return "local chronos cluster"
 
     def on_cluster_changing(self, cluster_view):
         _log.debug("Sprout's Chronos cluster is changing")
