@@ -71,7 +71,7 @@ class SCSCFSproutletTsx;
 class SCSCFSproutlet : public Sproutlet
 {
 public:
-  static const int DEFAULT_SESSION_CONTINUE_TIMEOUT = 2000;
+  static const int DEFAULT_SESSION_CONTINUED_TIMEOUT = 2000;
   static const int DEFAULT_SESSION_TERMINATED_TIMEOUT = 4000;
 
   SCSCFSproutlet(const std::string& scscf_cluster_uri,
@@ -87,7 +87,7 @@ public:
                  bool user_phone,
                  bool global_only_lookups,
                  bool override_npdi,
-                 int session_continue_timeout = DEFAULT_SESSION_CONTINUE_TIMEOUT,
+                 int session_continued_timeout = DEFAULT_SESSION_CONTINUED_TIMEOUT,
                  int session_terminated_timeout = DEFAULT_SESSION_TERMINATED_TIMEOUT);
   ~SCSCFSproutlet();
 
@@ -101,7 +101,7 @@ public:
   void set_enforce_user_phone(bool v) { _user_phone = v; }
   void set_global_only_lookups(bool v) { _global_only_lookups = v; }
   void set_override_npdi(bool v) { _override_npdi = v; }
-  void set_session_continue_timeout(int timeout) { _session_continue_timeout_ms = timeout; }
+  void set_session_continued_timeout(int timeout) { _session_continued_timeout_ms = timeout; }
   void set_session_terminated_timeout(int timeout) { _session_terminated_timeout_ms = timeout; }
 
   inline bool should_require_user_phone() const
@@ -195,7 +195,7 @@ private:
   bool _override_npdi;
 
   /// Timeouts related to default handling of unresponsive application servers.
-  int _session_continue_timeout_ms;
+  int _session_continued_timeout_ms;
   int _session_terminated_timeout_ms;
 
   /// String versions of the cluster URIs

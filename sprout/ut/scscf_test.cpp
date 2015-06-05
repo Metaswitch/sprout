@@ -461,7 +461,7 @@ public:
     _scscf_sproutlet->set_global_only_lookups(false);
     _scscf_sproutlet->set_enforce_user_phone(false);
     _scscf_sproutlet->set_override_npdi(false);
-    _scscf_sproutlet->set_session_continue_timeout(3000);
+    _scscf_sproutlet->set_session_continued_timeout(3000);
     _scscf_sproutlet->set_session_terminated_timeout(6000);
   }
 
@@ -3455,7 +3455,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeout)
 TEST_F(SCSCFTest, DefaultHandlingContinueDisabled)
 {
   // Set the session continue timer to 0 to disable it.
-  _scscf_sproutlet->set_session_continue_timeout(0);
+  _scscf_sproutlet->set_session_continued_timeout(0);
 
   // Register an endpoint to act as the callee.
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");

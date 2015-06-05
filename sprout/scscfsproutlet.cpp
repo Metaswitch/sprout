@@ -63,7 +63,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
                                bool user_phone,
                                bool global_only_lookups,
                                bool override_npdi,
-                               int session_continue_timeout_ms,
+                               int session_continued_timeout_ms,
                                int session_terminated_timeout_ms) :
   Sproutlet("scscf", port),
   _scscf_cluster_uri(NULL),
@@ -78,7 +78,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
   _global_only_lookups(global_only_lookups),
   _user_phone(user_phone),
   _override_npdi(override_npdi),
-  _session_continue_timeout_ms(session_continue_timeout_ms),
+  _session_continued_timeout_ms(session_continued_timeout_ms),
   _session_terminated_timeout_ms(session_terminated_timeout_ms),
   _scscf_cluster_uri_str(scscf_cluster_uri),
   _scscf_node_uri_str(scscf_node_uri),
@@ -1136,7 +1136,7 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
 
     // Start the liveness timer for the AS.
     int timeout = (_as_chain_link.continue_session() ?
-                   _scscf->_session_continue_timeout_ms :
+                   _scscf->_session_continued_timeout_ms :
                    _scscf->_session_terminated_timeout_ms);
 
     if (timeout != 0)
