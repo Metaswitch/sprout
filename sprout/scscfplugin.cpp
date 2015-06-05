@@ -122,7 +122,9 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           scscf_acr_factory,
                                           opt.enforce_user_phone,
                                           opt.enforce_global_only_lookups,
-                                          opt.override_npdi);
+                                          opt.override_npdi,
+                                          opt.session_continued_timeout_ms,
+                                          opt.session_terminated_timeout_ms);
     plugin_loaded = _scscf_sproutlet->init();
 
     sproutlets.push_back(_scscf_sproutlet);

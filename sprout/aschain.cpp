@@ -43,9 +43,6 @@
 #include "aschain.h"
 #include "ifchandler.h"
 
-const int AsChainLink::AS_TIMEOUT_CONTINUE;
-const int AsChainLink::AS_TIMEOUT_TERMINATE;
-
 /// Create an AsChain.
 //
 // Ownership of `ifcs` passes to this object.
@@ -185,7 +182,7 @@ void AsChainLink::on_initial_request(pjsip_msg* msg,
     SAS::associate_trails(_as_chain->trail(), msg_trail);
   }
 
-  while (!complete()) 
+  while (!complete())
   {
     const Ifc& ifc = (_as_chain->_ifcs)[_index];
     if (ifc.filter_matches(_as_chain->session_case(),

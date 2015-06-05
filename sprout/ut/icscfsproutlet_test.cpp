@@ -91,7 +91,8 @@ public:
                                       PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                       "sip:homedomain:" + std::to_string(stack_data.icscf_port),
                                       std::unordered_set<std::string>(),
-                                      sproutlets);
+                                      sproutlets,
+                                      std::set<std::string>());
 
     // Schedule timers.
     SipTest::poll();
@@ -2184,7 +2185,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteNoUnregisteredServices)
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 5003}");
 
-  // Inject a INVITE request 
+  // Inject a INVITE request
   Message msg1;
   msg1._method = "INVITE";
   msg1._via = tp->to_string(false);
@@ -2541,7 +2542,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnumBgcf)
 }
 
 // Test the case where the I-CSCF does an ENUM lookup which returns
-// NP data. The requ URI should be rewritten to include the NP data, 
+// NP data. The requ URI should be rewritten to include the NP data,
 // and the request should be forwarded to the BGCF
 TEST_F(ICSCFSproutletTest, RouteTermInviteEnumNP)
 {
@@ -2574,7 +2575,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnumNP)
   ReqMatcher r1("INVITE");
   r1.matches(tdata->msg);
 
-  // Check the RequestURI has been altered 
+  // Check the RequestURI has been altered
   ASSERT_EQ("tel:+1690100001;npdi;rn=16901", str_uri(tdata->msg->line.req.uri));
 
   // Send a 200 OK response.

@@ -99,6 +99,7 @@ extern "C" {
 #include "common_sip_processing.h"
 #include "thread_dispatcher.h"
 #include "exception_handler.h"
+#include "scscfsproutlet.h"
 
 enum OptionTypes
 {
@@ -123,7 +124,10 @@ enum OptionTypes
   OPT_SIP_BLACKLIST_DURATION,
   OPT_HTTP_BLACKLIST_DURATION,
   OPT_SIP_TCP_CONNECT_TIMEOUT,
-  OPT_SIP_TCP_SEND_TIMEOUT
+  OPT_SIP_TCP_SEND_TIMEOUT,
+  OPT_SESSION_CONTINUED_TIMEOUT_MS,
+  OPT_SESSION_TERMINATED_TIMEOUT_MS,
+  OPT_STATELESS_PROXIES
 };
 
 
@@ -190,6 +194,9 @@ const static struct pj_getopt_option long_opt[] =
   { "http-blacklist-duration",      required_argument, 0, OPT_HTTP_BLACKLIST_DURATION},
   { "sip-tcp-connect-timeout",      required_argument, 0, OPT_SIP_TCP_CONNECT_TIMEOUT},
   { "sip-tcp-send-timeout",         required_argument, 0, OPT_SIP_TCP_SEND_TIMEOUT},
+  { "session-continued-timeout",    required_argument, 0, OPT_SESSION_CONTINUED_TIMEOUT_MS},
+  { "session-terminated-timeout",   required_argument, 0, OPT_SESSION_TERMINATED_TIMEOUT_MS},
+  { "stateless-proxies",            required_argument, 0, OPT_STATELESS_PROXIES},
   { NULL,                           0,                 0, 0}
 };
 
@@ -333,6 +340,20 @@ static void usage(void)
        "     --sip-tcp-send-timeout <milliseconds>\n"
        "                            The amount of time to wait for data sent on a SIP TCP connection to be\n"
        "                            acknowledged by the peer.\n"
+       "     --session-continued-timeout <milliseconds>\n"
+       "                            If an Application Server with default handling of 'continue session'\n"
+       "                            is unresponsive, this is the time that sprout will wait (in ms)\n"
+       "                            before bypassing the AS and moving onto the next AS in the chain.\n"
+       "     --session-terminated-timeout <milliseconds>\n"
+       "                            If an Application Server with default handling of 'terminate session'\n"
+       "                            is unresponsive, this is the time that sprout will wait (in ms)\n"
+       "                            before terminating the session.\n"
+       "     --stateless-proxies <comma-separated-list>\n"
+       "                            A comma separated list of domain names that are treated as SIP\n"
+       "                            stateless proxies. This field should reflect how the servers are identified\n"
+       "                            in SIP (for example if a cluster of nodes is identified by the name\n"
+       "                            'cluster.example.com', this value should be used instead of the hostnames\n"
+       "                            or IP addresses of individual servers\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
@@ -904,6 +925,29 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
                options->sip_tcp_send_timeout);
       break;
 
+    case OPT_SESSION_CONTINUED_TIMEOUT_MS:
+      options->session_continued_timeout_ms = atoi(pj_optarg);
+      LOG_INFO("Session continue timeout set to %dms",
+               options->session_continued_timeout_ms);
+      break;
+
+    case OPT_SESSION_TERMINATED_TIMEOUT_MS:
+      options->session_terminated_timeout_ms = atoi(pj_optarg);
+      LOG_INFO("Session terminated timeout set to %dms",
+               options->session_terminated_timeout_ms);
+      break;
+
+    case OPT_STATELESS_PROXIES:
+      {
+        std::vector<std::string> stateless_proxies;
+        Utils::split_string(std::string(pj_optarg), ',', stateless_proxies, 0, false);
+        options->stateless_proxies.insert(stateless_proxies.begin(),
+                                          stateless_proxies.end());
+        LOG_INFO("%d stateless proxies are configured",
+                 options->stateless_proxies.size());
+      }
+      break;
+
     case 'h':
       usage();
       return -1;
@@ -1226,6 +1270,9 @@ int main(int argc, char* argv[])
   opt.http_blacklist_duration = HttpResolver::DEFAULT_BLACKLIST_DURATION;
   opt.sip_tcp_connect_timeout = 2000;
   opt.sip_tcp_send_timeout = 2000;
+  opt.session_continued_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_CONTINUED_TIMEOUT;
+  opt.session_terminated_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_TERMINATED_TIMEOUT;
+  opt.stateless_proxies.clear();
 
   boost::filesystem::path p = argv[0];
   // Copy the filename to a string so that we can be sure of its lifespan -
@@ -1801,7 +1848,8 @@ int main(int argc, char* argv[])
                                          std::string(stack_data.scscf_uri.ptr,
                                                      stack_data.scscf_uri.slen),
                                          host_aliases,
-                                         sproutlets);
+                                         sproutlets,
+                                         opt.stateless_proxies);
     if (sproutlet_proxy == NULL)
     {
       CL_SPROUT_S_CSCF_INIT_FAIL.log();
