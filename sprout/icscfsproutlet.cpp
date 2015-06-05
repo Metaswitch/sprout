@@ -502,7 +502,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
       if ((!pj_strcmp(&sip_uri->user_param, &STR_USER_PHONE)) &&
           (PJUtils::is_user_numeric(sip_uri->user)) &&
-          (PJUtils::is_user_global(sip_uri->user)) &&
+          (!_icscf->are_global_only_lookups_enforced() || PJUtils::is_user_global(sip_uri->user)) &&
           (!PJUtils::is_uri_gruu(uri)))
       {
         LOG_DEBUG("Change request URI from SIP URI to tel URI");
@@ -552,7 +552,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     if ((!_icscf->should_require_user_phone()) &&
         (PJSIP_URI_SCHEME_IS_SIP(uri)) &&
         (PJUtils::is_user_numeric(((pjsip_sip_uri*)uri)->user)) &&
-        (PJUtils::is_user_global(((pjsip_sip_uri*)uri)->user)) &&
+        (!_icscf->are_global_only_lookups_enforced() || PJUtils::is_user_global(((pjsip_sip_uri*)uri)->user)) &&
         (!PJUtils::is_uri_gruu(uri)))
     {
       LOG_DEBUG("enforce_user_phone set to false, try using a tel URI");
