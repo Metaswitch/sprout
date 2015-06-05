@@ -2353,7 +2353,7 @@ TEST_F(SCSCFTest, SimpleISCMainline)
 TEST_F(SCSCFTest, URINotIncludedInUserData)
 {
   register_uri(_store, _hss_connection, "6505551000", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("tel:8886505551234", "call", "REGISTERED",
+  _hss_connection->set_impu_result("tel:8886505551234", "call", "UNREGISTERED",
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
@@ -2395,9 +2395,9 @@ TEST_F(SCSCFTest, URINotIncludedInUserData)
   RespMatcher(100).matches(out);
   free_txdata();
 
-  // Message is rejected with 404
+  // Message is rejected with a 4xx-class response
   out = current_txdata()->msg;
-  RespMatcher(400).matches(out);
+  RespMatcher(480).matches(out);
   free_txdata();
 }
 

@@ -1043,7 +1043,7 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
   {
     // No more application servers to invoke, so perform end of terminating
     // request processing.
-    LOG_INFO("Completed applying originating services");
+    LOG_INFO("Completed applying terminating services");
 
     if (stack_data.record_route_on_completion_of_terminating)
     {
@@ -1224,7 +1224,9 @@ void SCSCFSproutletTsx::route_to_target(pjsip_msg* req)
              ((pjsip_sip_uri*)req_uri)->maddr_param.ptr);
     send_request(req);
   }
-  else if ((!PJUtils::is_home_domain(req_uri)) &&
+  else if (PJSIP_URI_SCHEME_IS_SIP(req_uri) &&
+           (!PJUtils::is_home_domain(req_uri)) &&
+           (!PJUtils::is_home_domain(req_uri)) &&
            (!PJUtils::is_uri_local(req_uri)))
   {
     // The Request-URI indicates an non-home domain, so forward the request
@@ -1233,23 +1235,12 @@ void SCSCFSproutletTsx::route_to_target(pjsip_msg* req)
              PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req_uri).c_str());
     send_request(req);
   }
-  else if (PJSIP_URI_SCHEME_IS_SIP(req_uri))
+  else
   {
     // The Request-URI contains a home domain, so route to any UE bindings
     // in the registration store.
     LOG_INFO("Route request to registered UE bindings");
     route_to_ue_bindings(req);
-  }
-  else
-  {
-    // The RequestURI contains a Tel URI???
-    LOG_INFO("Rejecting request with Tel: URI");
-    SAS::Event bad_uri(trail(), SASEvent::CANNOT_ROUTE_TO_TEL_URI, 0);
-    SAS::report_event(bad_uri);
-
-    pjsip_msg* rsp = create_response(req, PJSIP_SC_NOT_FOUND);
-    send_response(rsp);
-    free_msg(req);
   }
 }
 
@@ -1259,7 +1250,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
 {
   // Get the public user identity corresponding to the RequestURI.
   pjsip_uri* req_uri = req->line.req.uri;
-  std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)req_uri);
+  std::string public_id = PJUtils::public_id_from_uri(req_uri);
 
   // Add a P-Called-Party-ID header containing the public user identity,
   // replacing any existing header.
@@ -1284,7 +1275,9 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
     std::vector<std::string> uris;
     bool success = get_associated_uris(public_id, uris);
 
-    if (success && (uris.size() > 0))
+    if (success &&
+        (uris.size() > 0) &&
+        (std::find(uris.begin(), uris.end(), public_id) != uris.end()))
     {
       // Take the first associated URI as the AOR.
       aor = uris.front();
