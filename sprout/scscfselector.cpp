@@ -63,9 +63,9 @@ void SCSCFSelector::update_scscf()
   if ((stat(_configuration.c_str(), &s) != 0) &&
       (errno == ENOENT))
   {
-    CL_SPROUT_BAD_S_CSCF_JSON.log();
     LOG_STATUS("No S-CSCF configuration data (file %s does not exist)",
                _configuration.c_str());
+    CL_SPROUT_SCSCF_FILE_MISSING.log();
     return;
   }
 
@@ -81,6 +81,7 @@ void SCSCFSelector::update_scscf()
     // LCOV_EXCL_START
     LOG_ERROR("Failed to read S-CSCF configuration data from %s",
               _configuration.c_str());
+    CL_SPROUT_SCSCF_FILE_EMPTY.log();
     return;
     // LCOV_EXCL_STOP
   }
@@ -94,6 +95,7 @@ void SCSCFSelector::update_scscf()
     LOG_ERROR("Failed to read S-CSCF configuration data: %s\nError: %s",
               scscf_str.c_str(),
               rapidjson::GetParseError_En(doc.GetParseError()));
+    CL_SPROUT_SCSCF_FILE_INVALID.log();
     return;
   }
 
@@ -142,6 +144,7 @@ void SCSCFSelector::update_scscf()
         // Badly formed number block.
         LOG_WARNING("Badly formed S-CSCF entry (hit error at %s:%d)",
                     err._file, err._line);
+        CL_SPROUT_SCSCF_FILE_INVALID.log();
       }
     }
 
@@ -150,6 +153,7 @@ void SCSCFSelector::update_scscf()
   catch (JsonFormatError err)
   {
     LOG_ERROR("Badly formed S-CSCF configuration file - missing s-cscfs object");
+    CL_SPROUT_SCSCF_FILE_INVALID.log();
   }
 }
 

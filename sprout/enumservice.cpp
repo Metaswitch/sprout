@@ -49,6 +49,7 @@
 #include "utils.h"
 #include "log.h"
 #include "sproutsasevent.h"
+#include "sprout_pd_definitions.h"
 
 
 const boost::regex EnumService::CHARS_TO_STRIP_FROM_UAS = boost::regex("([^0-9+]|(?<=.)[^0-9])");
@@ -98,6 +99,7 @@ JSONEnumService::JSONEnumService(std::string configuration)
   {
     LOG_STATUS("No ENUM configuration (file %s does not exist)",
                configuration.c_str());
+    CL_SPROUT_ENUM_FILE_MISSING.log(configuration.c_str());
     return;
   }
 
@@ -113,6 +115,7 @@ JSONEnumService::JSONEnumService(std::string configuration)
     // LCOV_EXCL_START
     LOG_ERROR("Failed to read ENUM configuration data from %s",
               configuration.c_str());
+    CL_SPROUT_ENUM_FILE_EMPTY.log(configuration.c_str());
     return;
     // LCOV_EXCL_STOP
   }
@@ -126,6 +129,7 @@ JSONEnumService::JSONEnumService(std::string configuration)
     LOG_ERROR("Failed to read ENUM configuration data: %s\nError: %s",
               enum_str.c_str(),
               rapidjson::GetParseError_En(doc.GetParseError()));
+    CL_SPROUT_ENUM_FILE_INVALID.log(configuration.c_str());
     return;
   }
 
@@ -169,12 +173,14 @@ JSONEnumService::JSONEnumService(std::string configuration)
         // Badly formed number block.
         LOG_WARNING("Badly formed ENUM number block (hit error at %s:%d)",
                     err._file, err._line);
+        CL_SPROUT_ENUM_FILE_INVALID.log(configuration.c_str());
       }
     }
   }
   catch (JsonFormatError err)
   {
     LOG_ERROR("Badly formed ENUM configuration data - missing number_blocks object");
+    CL_SPROUT_ENUM_FILE_INVALID.log(configuration.c_str());
   }
 }
 
