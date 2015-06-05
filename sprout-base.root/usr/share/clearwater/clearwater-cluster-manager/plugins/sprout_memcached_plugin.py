@@ -58,7 +58,7 @@ class SproutMemcachedPlugin(SynchroniserPluginBase):
         return ["/etc/clearwater/cluster_settings"]
 
     def cluster_description(self):
-        return "local memcached cluster"
+        return "local Sprout memcached cluster"
 
     def on_cluster_changing(self, cluster_view):
         write_memcached_cluster_settings("/etc/clearwater/cluster_settings",
