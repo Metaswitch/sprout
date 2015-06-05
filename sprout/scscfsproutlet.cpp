@@ -1287,7 +1287,8 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       // Failed to get the associated URIs from Homestead.  We'll try to
       // do the registration look-up with the specified target URI - this may
       // fail, but we'll never misroute the call.
-      LOG_WARNING("Invalid Homestead response - a user is registered but has no list of associated URIs");
+      LOG_WARNING("Invalid Homestead response - a user is registered but has no list of "
+                  "associated URIs, or is not in its own list of associated URIs");
       aor = public_id;
     }
 
