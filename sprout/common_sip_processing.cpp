@@ -208,10 +208,10 @@ static void sas_log_rx_msg(pjsip_rx_data* rdata)
     }
   }
   else if ((rdata->msg_info.msg->line.req.method.id == PJSIP_OPTIONS_METHOD) &&
-           PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri) &&
-           strstr(rdata->msg_info.msg_buf, "poll-sip"))
+           PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri))
   {
-    // This is an OPTIONS poll from monit. Don't log it to SAS, and set the trail ID to a sentinel value so we don't log the response either.
+    // This is an OPTIONS poll directed at this node. Don't log it to SAS, and set the trail ID to a sentinel value so we don't log the response either.
+    LOG_DEBUG("Skipping SAS logging for OPTIONS request");
     set_trail(rdata, DONT_LOG_TO_SAS);
     return;
   }
@@ -220,7 +220,12 @@ static void sas_log_rx_msg(pjsip_rx_data* rdata)
   {
     // The message doesn't correlate to an existing trail, so create a new
     // one.
-    trail = SAS::new_trail(1u);
+
+    // If SAS::new_trail returns 0 or DONT_LOG_TO_SAS, keep going.
+    while ((trail == 0) || (trail == DONT_LOG_TO_SAS))
+    {
+      trail = SAS::new_trail(1u);
+    }
   }
 
   // Store the trail in the message as it gets passed up the stack.
@@ -243,6 +248,7 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
 
   if (trail == DONT_LOG_TO_SAS)
   {
+    LOG_DEBUG("Skipping SAS logging for OPTIONS response");
     return;
   }
   else if (trail != 0)
