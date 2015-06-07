@@ -1226,7 +1226,6 @@ void SCSCFSproutletTsx::route_to_target(pjsip_msg* req)
   }
   else if (PJSIP_URI_SCHEME_IS_SIP(req_uri) &&
            (!PJUtils::is_home_domain(req_uri)) &&
-           (!PJUtils::is_home_domain(req_uri)) &&
            (!PJUtils::is_uri_local(req_uri)))
   {
     // The Request-URI indicates an non-home domain, so forward the request
@@ -1237,8 +1236,8 @@ void SCSCFSproutletTsx::route_to_target(pjsip_msg* req)
   }
   else
   {
-    // The Request-URI contains a home domain, so route to any UE bindings
-    // in the registration store.
+    // The Request-URI is a SIP URI local to us, or a tel: URI that would only have reached this
+    // point if it was owned by us, so look it up in the registration store.
     LOG_INFO("Route request to registered UE bindings");
     route_to_ue_bindings(req);
   }
