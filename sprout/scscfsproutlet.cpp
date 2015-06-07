@@ -923,7 +923,7 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
      ((PJUtils::is_home_domain(uri)) ||
       (PJUtils::is_uri_local(uri))))
   {
-    user = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
+    user = PJUtils::public_id_from_uri(uri);
   }
   else if (PJSIP_URI_SCHEME_IS_TEL(uri))
   {
