@@ -272,12 +272,6 @@ public:
     return _as_chain->_odi_tokens[_index + 1];
   }
 
-  /// Returns the appropriate AS timeout to use for this link.
-  int as_timeout() const
-  {
-    return (_default_handling == SESSION_CONTINUED) ? AS_TIMEOUT_CONTINUE : AS_TIMEOUT_TERMINATE;
-  }
-
   /// Returns whether or not processing of the AS chain should continue on
   /// a timeout or 5xx error from the AS.
   bool continue_session() const
@@ -339,11 +333,6 @@ private:
 
   /// The configured Default Handling configured on the relevant iFC.
   DefaultHandling _default_handling;
-
-  /// Application server timeouts (in seconds).
-  static const int AS_TIMEOUT_CONTINUE = 2;
-  static const int AS_TIMEOUT_TERMINATE = 4;
-
 };
 
 
