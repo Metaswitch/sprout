@@ -47,8 +47,8 @@ then
 fi
 
 # Check we can contact `etcd`
-local_site_name=site1
 . /etc/clearwater/config
+[ ! -z $local_site_name ] || local_site_name=site1
 nc -z $local_ip 4000
 if [[ $? != 0 ]]
 then

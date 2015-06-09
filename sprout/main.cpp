@@ -123,8 +123,9 @@ enum OptionTypes
   OPT_MAX_SESSION_EXPIRES,
   OPT_SIP_BLACKLIST_DURATION,
   OPT_HTTP_BLACKLIST_DURATION,
-  OPT_SIP_TCP_CONNECT_TIMEOUT
+  OPT_SIP_TCP_CONNECT_TIMEOUT,
   OPT_SESSION_CONTINUE_TIMEOUT_MS,
+  OPT_SIP_TCP_SEND_TIMEOUT,
   OPT_SESSION_TERMINATED_TIMEOUT_MS,
   OPT_SAS_COMPRESSION_DISABLED
 };
@@ -193,7 +194,9 @@ const static struct pj_getopt_option long_opt[] =
   { "http-blacklist-duration",      required_argument, 0, OPT_HTTP_BLACKLIST_DURATION},
   { "sip-tcp-connect-timeout",      required_argument, 0, OPT_SIP_TCP_CONNECT_TIMEOUT},
   { "session-continue-timeout",     required_argument, 0, OPT_SESSION_CONTINUE_TIMEOUT_MS},
+  { "sip-tcp-send-timeout",         required_argument, 0, OPT_SIP_TCP_SEND_TIMEOUT},
   { "session-terminated-timeout",   required_argument, 0, OPT_SESSION_TERMINATED_TIMEOUT_MS},
+  { "sas-compression-disabled",     no_argument,       0, OPT_SAS_COMPRESSION_DISABLED},
   { NULL,                           0,                 0, 0}
 };
 
@@ -337,6 +340,9 @@ static void usage(void)
        "     --session-continue-timeout\n"
        "                            If an Application Server with default handling of 'continue session'\n"
        "                            and is unresponsive, this is the time that sprout will wait (in ms)\n"
+       "     --sip-tcp-send-timeout <milliseconds>\n"
+       "                            The amount of time to wait for data sent on a SIP TCP connection to be\n"
+       "                            acknowledged by the peer.\n"
        "                            before bypassing the AS and moving onto the next AS in the chain.\n"
        "     --session-terminated-timeout\n"
        "                            If an Application Server with default handling of 'terminate session'\n"
@@ -919,6 +925,14 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case OPT_SESSION_TERMINATED_TIMEOUT_MS:
       options->session_terminated_timeout_ms = atoi(pj_optarg);
+      break;
+
+    case OPT_SIP_TCP_SEND_TIMEOUT:
+      options->sip_tcp_send_timeout = atoi(pj_optarg);
+      LOG_INFO("SIP TCP send timeout set to %d",
+               options->sip_tcp_send_timeout);
+      break;
+
       LOG_INFO("Session terminated timeout set to %dms",
                options->session_terminated_timeout_ms);
       break;
@@ -1245,6 +1259,8 @@ int main(int argc, char* argv[])
   opt.http_blacklist_duration = HttpResolver::DEFAULT_BLACKLIST_DURATION;
   opt.sip_tcp_connect_timeout = 1000;
   opt.session_continue_timeout_ms = 2000;
+  opt.sip_tcp_connect_timeout = 2000;
+  opt.sip_tcp_send_timeout = 2000;
   opt.session_terminated_timeout_ms = 4000;
 
   boost::filesystem::path p = argv[0];
@@ -1508,6 +1524,7 @@ int main(int argc, char* argv[])
                       opt.default_session_expires,
                       opt.max_session_expires,
                       opt.sip_tcp_connect_timeout,
+                      opt.sip_tcp_send_timeout,
                       quiescing_mgr,
                       opt.billing_cdf);
 

@@ -223,7 +223,6 @@ get_daemon_args()
                      --log-level=$log_level
                      --memcached-write-format=binary
                      --alias=$public_ip,$public_hostname,$alias_list
-                     --alias=$public_ip,$public_hostname,$alias_list
                      $sas_compression_disabled_arg"
 
         if [ -n "$reg_max_expires" ]
@@ -282,6 +281,7 @@ get_daemon_args()
         [ "$http_blacklist_duration" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --http-blacklist-duration=$http_blacklist_duration"
         [ "$sip_tcp_connect_timeout" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --sip-tcp-connect-timeout=$sip_tcp_connect_timeout"
         [ "$session_continue_timeout_ms" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --session-continue-timeout=$session_continue_timeout_ms"
+        [ "$sip_tcp_send_timeout" = "" ]    || DAEMON_ARGS="$DAEMON_ARGS --sip-tcp-send-timeout=$sip_tcp_send_timeout"
         [ "$session_terminated_timeout_ms" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --session-terminated-timeout=$session_continue_timeout_ms"
         [ "$stateless_proxies" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --stateless-proxies=$stateless_proxies"
 }
