@@ -58,15 +58,18 @@ class SproutletProxy : public BasicProxy
 public:
   /// Constructor.
   ///
-  /// @param  endpt         - The pjsip endpoint to associate with.
-  /// @param  priority      - The pjsip priority to load at.
-  /// @param  host_aliases  - The IP addresses/domains that refer to this proxy.
-  /// @param  sproutlets    - Sproutlets to load in this proxy.
+  /// @param  endpt             - The pjsip endpoint to associate with.
+  /// @param  priority          - The pjsip priority to load at.
+  /// @param  host_aliases      - The IP addresses/domains that refer to this proxy.
+  /// @param  sproutlets        - Sproutlets to load in this proxy.
+  /// @param  stateless_proxies - A set of next-hops that are considered to be
+  ///                             stateless proxies.
   SproutletProxy(pjsip_endpoint* endpt,
                  int priority,
                  const std::string& root_uri,
                  const std::unordered_set<std::string>& host_aliases,
-                 const std::list<Sproutlet*>& sproutlets);
+                 const std::list<Sproutlet*>& sproutlets,
+                 const std::set<std::string> stateless_proxies);
 
   /// Destructor.
   virtual ~SproutletProxy();

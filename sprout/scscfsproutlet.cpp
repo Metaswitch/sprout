@@ -62,7 +62,9 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
                                ACRFactory* acr_factory,
                                bool user_phone,
                                bool global_only_lookups,
-                               bool override_npdi) :
+                               bool override_npdi,
+                               int session_continue_timeout_ms,
+                               int session_terminated_timeout_ms) :
   Sproutlet("scscf", port),
   _scscf_cluster_uri(NULL),
   _scscf_node_uri(NULL),
@@ -76,6 +78,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
   _global_only_lookups(global_only_lookups),
   _user_phone(user_phone),
   _override_npdi(override_npdi),
+  _session_continue_timeout_ms(session_continue_timeout_ms),
+  _session_terminated_timeout_ms(session_terminated_timeout_ms),
   _scscf_cluster_uri_str(scscf_cluster_uri),
   _scscf_node_uri_str(scscf_node_uri),
   _icscf_uri_str(icscf_uri),
@@ -406,8 +410,8 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   pjsip_status_code status_code = PJSIP_SC_OK;
 
   // Try to add a Session-Expires header
-  if (!PJUtils::add_update_session_expires(req, 
-                                           get_pool(req), 
+  if (!PJUtils::add_update_session_expires(req,
+                                           get_pool(req),
                                            trail()))
   {
     // Session expires header is invalid, so reject the request
@@ -482,8 +486,8 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
   LOG_INFO("S-CSCF received in-dialog request");
 
   // Try to add a Session-Expires header
-  if (!PJUtils::add_update_session_expires(req, 
-                                           get_pool(req), 
+  if (!PJUtils::add_update_session_expires(req,
+                                           get_pool(req),
                                            trail()))
   {
     // Session expires header is invalid, so reject the request
@@ -721,7 +725,7 @@ void SCSCFSproutletTsx::retrieve_odi_and_sesscase(pjsip_msg* req)
         LOG_DEBUG("No ODI token, or invalid ODI token, on request, and no P-Charging-Vector header (so can't log ICID for correlation)");
       }
     }
-    
+
     LOG_DEBUG("Got our Route header, session case %s, OD=%s",
               _session_case->to_string().c_str(),
               _as_chain_link.to_string().c_str());
@@ -734,7 +738,7 @@ void SCSCFSproutletTsx::retrieve_odi_and_sesscase(pjsip_msg* req)
     LOG_DEBUG("No S-CSCF Route header, so treat as terminating request");
     _session_case = &SessionCase::Terminating;
   }
-  
+
 }
 
 pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
@@ -1131,9 +1135,16 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     send_request(req);
 
     // Start the liveness timer for the AS.
-    if (!schedule_timer(NULL, _liveness_timer, _as_chain_link.as_timeout() * 1000))
+    int timeout = (_as_chain_link.continue_session() ?
+                   _scscf->_session_continue_timeout_ms :
+                   _scscf->_session_terminated_timeout_ms);
+
+    if (!schedule_timer(NULL, _liveness_timer, timeout))
     {
-      LOG_WARNING("Failed to start liveness timer");
+      if (!schedule_timer(NULL, _liveness_timer, timeout))
+      {
+        LOG_WARNING("Failed to start liveness timer");
+      }
     }
   }
   else
@@ -1643,7 +1654,7 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
     {
       // The AS either timed out or returned a 5xx error, and default
       // handling is set to continue.
-      LOG_DEBUG("Trigger default_handling=CONTINUE processing");
+      LOG_DEBUG("Trigger default_handling=CONTINUED processing");
       SAS::Event bypass_as(trail(), SASEvent::BYPASS_AS, 0);
       SAS::report_event(bypass_as);
 
@@ -1660,6 +1671,7 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
     }
     else
     {
+      LOG_DEBUG("Trigger default_handling=TERMINATED processing");
       SAS::Event as_failed(trail(), SASEvent::AS_FAILED, 0);
       SAS::report_event(as_failed);
 

@@ -43,6 +43,7 @@
 #define CFGOPTIONS_H__
 
 #include <string>
+#include <set>
 
 #include "hssconnection.h"
 #include "regstore.h"
@@ -132,6 +133,8 @@ struct options
   int                                  sip_blacklist_duration;
   int                                  http_blacklist_duration;
   int                                  sip_tcp_connect_timeout;
+  int                                  session_continue_timeout_ms;
+  int                                  session_terminated_timeout_ms;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
