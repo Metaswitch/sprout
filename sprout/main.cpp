@@ -125,6 +125,7 @@ enum OptionTypes
   OPT_HTTP_BLACKLIST_DURATION,
   OPT_SESSION_CONTINUE_TIMEOUT_MS,
   OPT_SESSION_TERMINATED_TIMEOUT_MS,
+  OPT_SAS_COMPRESSION_DISABLED
 };
 
 
@@ -191,6 +192,7 @@ const static struct pj_getopt_option long_opt[] =
   { "http-blacklist-duration",      required_argument, 0, OPT_HTTP_BLACKLIST_DURATION},
   { "session-continue-timeout",     required_argument, 0, OPT_SESSION_CONTINUE_TIMEOUT_MS},
   { "session-terminated-timeout",   required_argument, 0, OPT_SESSION_TERMINATED_TIMEOUT_MS},
+  { "sas-compression-disabled",     no_argument,       0, OPT_SAS_COMPRESSION_DISABLED},
   { NULL,                           0,                 0, 0}
 };
 
