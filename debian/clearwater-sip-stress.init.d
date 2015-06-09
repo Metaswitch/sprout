@@ -82,6 +82,10 @@ do_start()
         #   1 if some daemons were already running (and any others have been started)
         #   2 if some daemons could not be started (some may have been started)
         RC=0
+
+        # Restart clearwater-infrastructure to pick up any config changes first.
+        service clearwater-infrastructure restart
+
         for index in $(ls -1 /usr/share/clearwater/sip-stress/users.csv.* | sed -e 's/^.*\.//g') ; do
                 start-stop-daemon --start --quiet --pidfile $PIDFILE.$index --exec $DAEMON --test > /dev/null &&
                 start-stop-daemon --start --quiet --background --make-pidfile --pidfile $PIDFILE.$index --exec $DAEMON -- $index
