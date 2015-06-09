@@ -1084,6 +1084,21 @@ static void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event)
           // More servers to try, so allocate a new branch ID and transaction.
           LOG_DEBUG("Attempt to resend request to next destination server");
           pjsip_tx_data* tdata = sss->tdata;
+
+          // In congestion cases, the old tdata might still be held by PJSIP's
+          // transport layer waiting to be sent.  Therefore it's not safe to re-send
+          // the same tdata, so we should clone it first.
+          // LCOV_EXCL_START - No congestion in UTs
+          if (tdata->is_pending)
+          {
+            pjsip_tx_data* old_tdata = tdata;
+            tdata = PJUtils::clone_tdata(tdata);
+
+            // We no longer care about the old tdata.
+            pjsip_tx_data_dec_ref(old_tdata);
+          }
+          // LCOV_EXCL_STOP
+
           pjsip_transaction* retry_tsx;
           PJUtils::generate_new_branch_id(tdata);
           pj_status_t status = pjsip_tsx_create_uac(&mod_sprout_util,
