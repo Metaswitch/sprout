@@ -100,9 +100,9 @@ get_settings()
         alias_list=""
         default_session_expires=600
         signaling_dns_server=127.0.0.1
+        chronos_hostname=127.0.0.1:7253
         . /etc/clearwater/config
-        [ -n "$chronos_hostname" ] || chronos_hostname=$local_ip:7253
-
+        
         # Set up a default cluster_settings file if it does not exist.  The local
         # IP address needs to be surrounded by square brackets if it is IPv6.
         if [ ! -f /etc/clearwater/cluster_settings ]
