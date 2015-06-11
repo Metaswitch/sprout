@@ -59,3 +59,12 @@
    fun:__libc_sigaction
    fun:vped_dispatch_thread
 }
+
+{
+   NetSNMPLeak1
+   Memcheck:Leak
+   fun:calloc
+   fun:netsnmp_container_table_handler_get
+   fun:netsnmp_container_table_register
+}
+

@@ -86,7 +86,9 @@ TARGET_SOURCES := logger.cpp \
                   communicationmonitor.cpp \
                   thread_dispatcher.cpp \
                   common_sip_processing.cpp \
-                  exception_handler.cpp
+                  exception_handler.cpp \
+                  snmp_table.cpp \
+                  snmp_latency_table.cpp \
 
 TARGET_SOURCES_TEST := test_main.cpp \
                        fakecurl.cpp \
@@ -146,7 +148,8 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        alarm_test.cpp \
                        communicationmonitor_test.cpp \
                        common_sip_processing_test.cpp \
-                       pjutils_test.cpp
+                       pjutils_test.cpp \
+                       snmp_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
@@ -224,7 +227,10 @@ LDFLAGS += -lmemcached \
            -lzmq \
            -levhtp \
            -levent \
-           -levent_pthreads
+           -levent_pthreads \
+           -lnetsnmp \
+           -lnetsnmphelpers \
+           -lnetsnmpagent 
 
 # Test build fakes out cURL
 LDFLAGS_BUILD += -lcurl -lsas
