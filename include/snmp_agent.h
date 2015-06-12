@@ -40,6 +40,7 @@
 #ifndef SNMP_AGENT_H
 #define SNMP_AGENT_H
 
-void* snmp_thread(void* data);
+void snmp_setup(const char* name);
+void snmp_close(const char* name);
 
 #endif

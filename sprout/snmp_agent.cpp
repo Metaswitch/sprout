@@ -40,19 +40,25 @@
 
 #include "snmp_agent.h"
 #include "snmp_latency_table.h"
-#include <vector>
-#include <map>
-#include <string>
-#include <atomic>
-
     
 static oid test_oid[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 1 };
-static oid test_oid2[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 100 };
+
+static pthread_t snmp_thread_var;
 
 void* snmp_thread(void* data)
 {
+  ManagedSNMPTable<SNMPLatencyTable, SNMPLatencyRowGroup, int> TBL("hello", test_oid, OID_LENGTH(test_oid));
+  TBL.get(0);
+  while (1) {
+    agent_check_and_process(1);
+  }
+  return NULL;
+};
+
+void snmp_setup(const char* name)
+{
   netsnmp_ds_set_boolean(NETSNMP_DS_APPLICATION_ID, NETSNMP_DS_AGENT_ROLE, 1);
-  int rc = init_agent("sprout");
+  int rc = init_agent(name);
   if (rc != 0)
   {
     LOG_WARNING("SNMP AgentX initialization failed");
@@ -61,20 +67,16 @@ void* snmp_thread(void* data)
   {
   LOG_STATUS("AgentX agent initialised");
   }
-  init_snmp("sprout");
+  init_snmp(name);
   netsnmp_container_init_list();
-  ManagedSNMPTable<SNMPLatencyTable, SNMPLatencyRowGroup, int> TBL("hello", test_oid, OID_LENGTH(test_oid));
-  TBL.get(0);
-  long int value = 42;
-  netsnmp_register_long_instance("rkdTest",
-                                 test_oid2,
-                                 OID_LENGTH(test_oid2),
-                                 &value,
-                                 NULL);
-  while (1) {
-    agent_check_and_process(1);
-    LOG_STATUS("Got a request");
-  }
+  int ret = pthread_create(&snmp_thread_var, NULL, snmp_thread, NULL);
+}
+
+
+void snmp_close(const char* name)
+{
+  pthread_cancel(snmp_thread_var);
+  shutdown_agent();
+  snmp_shutdown(name);
   netsnmp_container_free_list();
-  return NULL;
-};
+}

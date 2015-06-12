@@ -38,57 +38,60 @@
 #include <net-snmp/net-snmp-includes.h>
 #include <net-snmp/agent/net-snmp-agent-includes.h>
 
-#include "snmp_table.h"
-#include <vector>
 #include <map>
-#include <string>
-#include <atomic>
 
+#include "snmp_table.h"
 #include "log.h"
 
+// General handler function, which extracts the SNMPRowGroup from the request, calls its
+// get_columns() method, and plumbs the answer back into net-snmp.
 int netsnmp_table_handler_fn(netsnmp_mib_handler *handler,
                              netsnmp_handler_registration *reginfo,
                              netsnmp_agent_request_info *reqinfo,
                              netsnmp_request_info *requests)
 {
-  std::map<netsnmp_tdata_row*, ColumnData> columns_cache;
-  while (requests)
+  std::map<netsnmp_tdata_row*, ColumnData> cache;
+  LOG_DEBUG("Starting handling batch of SNMP requests");
+  for (; requests != NULL; requests = requests->next)
   {
-    LOG_STATUS("Handling request %p!", requests);
+    LOG_DEBUG("Handling SNMP request");
     if (requests->processed)
     {
-      requests = requests->next;
       continue;
     }
 
-    netsnmp_tdata_row *row = netsnmp_tdata_extract_row(requests);
-    netsnmp_table_request_info *table_info = netsnmp_extract_table_info(requests);
+    netsnmp_tdata_row* row = netsnmp_tdata_extract_row(requests);
+    netsnmp_table_request_info* table_info = netsnmp_extract_table_info(requests);
+
     if (!row || !table_info || !row->data)
     {
+      LOG_WARNING("Request for nonexistent row");
       return SNMP_ERR_NOSUCHNAME;
     }
 
     SNMPRowGroup* data = static_cast<SNMPRowGroup*>(row->data);
-    if (columns_cache.find(row) == columns_cache.end())
+
+    // We need to get information a row at a time, and remember it - this avoids us reading column
+    // 1, and having the data change before we query column 2
+    if (cache.find(row) == cache.end())
     {
       ColumnData cd = data->get_columns(row);
-      columns_cache[row] = cd;
+      cache[row] = cd;
     }
-    LOG_STATUS("Got %d columns for %p\n", columns_cache[row].size(), row);
+    LOG_DEBUG("Got %d columns for row %p\n", cache[row].size(), row);
 
-    if (columns_cache[row][table_info->colnum].size != 0)
+    if (cache[row][table_info->colnum].size != 0)
     {
       snmp_set_var_typed_value(requests->requestvb,
-                               columns_cache[row][table_info->colnum].type,
-                               columns_cache[row][table_info->colnum].value,
-                               columns_cache[row][table_info->colnum].size);
+                               cache[row][table_info->colnum].type,
+                               cache[row][table_info->colnum].value,
+                               cache[row][table_info->colnum].size);
     }
     else
     {
-      LOG_STATUS("No value for row %p column %d", row, table_info->colnum);
+      LOG_WARNING("No value for row %p column %d", row, table_info->colnum);
     }
-    requests = requests->next;
   }
-  LOG_STATUS("Handled all requests!");
+  LOG_DEBUG("Finished handling batch of SNMP requests");
   return SNMP_ERR_NOERROR;
 }
