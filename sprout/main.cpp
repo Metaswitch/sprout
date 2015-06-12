@@ -100,6 +100,7 @@ extern "C" {
 #include "thread_dispatcher.h"
 #include "exception_handler.h"
 #include "scscfsproutlet.h"
+#include "snmp_agent.h"
 
 enum OptionTypes
 {
@@ -1947,8 +1948,10 @@ int main(int argc, char* argv[])
     }
   }
 
+  snmp_setup("sprout");
   // Wait here until the quit semaphore is signaled.
   sem_wait(&term_sem);
+  snmp_close("sprout");
 
   CL_SPROUT_ENDED.log();
   if (opt.scscf_enabled)
