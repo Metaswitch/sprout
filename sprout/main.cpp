@@ -100,6 +100,7 @@ extern "C" {
 #include "thread_dispatcher.h"
 #include "exception_handler.h"
 #include "scscfsproutlet.h"
+#include "snmp_latency_table.h"
 #include "snmp_agent.h"
 
 enum OptionTypes
@@ -1455,6 +1456,15 @@ int main(int argc, char* argv[])
   seed = (unsigned int)now.sec ^ (unsigned int)now.msec ^ getpid();
   srand(seed);
 
+  if (opt.pcscf_enabled)
+  {
+    snmp_setup("bono");
+  }
+  else
+  {
+    snmp_setup("sprout");
+  }
+
   if ((opt.icscf_enabled || opt.scscf_enabled) && opt.alarms_enabled)
   {
     // Create Sprout's alarm objects.
@@ -1862,18 +1872,33 @@ int main(int argc, char* argv[])
     }
   }
 
-  Accumulator* latency_accumulator =
-      new StatisticAccumulator("latency_us",
-                               stack_data.stats_aggregator);
-  Accumulator* queue_size_accumulator =
-      new StatisticAccumulator("queue_size",
-                               stack_data.stats_aggregator);
+  ManagedSNMPLatencyTable* latency_table;
+  ManagedSNMPAccumulatorTable* queue_size_table;
+  if (opt.pcscf_enabled)
+  {
+    latency_table = new ManagedSNMPLatencyTable("bono_latency",
+                                                BONO_LATENCY_OID,
+                                                OID_LENGTH(BONO_LATENCY_OID));
+    queue_size_table = new ManagedSNMPLatencyTable("bono_queue_size",
+                                                   BONO_QUEUE_SIZE_OID,
+                                                   OID_LENGTH(BONO_QUEUE_SIZE_OID));
+  }
+  else
+  {
+    latency_table = new ManagedSNMPLatencyTable("sprout_latency",
+                                                SPROUT_LATENCY_OID,
+                                                OID_LENGTH(SPROUT_LATENCY_OID));
+    queue_size_table = new ManagedSNMPLatencyTable("sprout_queue_size",
+                                                   SPROUT_QUEUE_SIZE_OID,
+                                                   OID_LENGTH(SPROUT_QUEUE_SIZE_OID));
+  }
+  
   Counter* requests_counter =
-      new StatisticCounter("incoming_requests",
-                           stack_data.stats_aggregator);
+    new StatisticCounter("incoming_requests",
+                         stack_data.stats_aggregator);
   Counter* overload_counter =
-      new StatisticCounter("rejected_overload",
-                           stack_data.stats_aggregator);
+    new StatisticCounter("rejected_overload",
+                         stack_data.stats_aggregator);
 
   init_common_sip_processing(load_monitor,
                              requests_counter,
@@ -1881,8 +1906,8 @@ int main(int argc, char* argv[])
                              health_checker);
 
   init_thread_dispatcher(opt.worker_threads,
-                         latency_accumulator,
-                         queue_size_accumulator,
+                         latency_table,
+                         queue_size_table,
                          load_monitor,
                          exception_handler);
 
@@ -1948,10 +1973,9 @@ int main(int argc, char* argv[])
     }
   }
 
-  snmp_setup("sprout");
   // Wait here until the quit semaphore is signaled.
   sem_wait(&term_sem);
-  snmp_close("sprout");
+  snmp_terminate("sprout");
 
   CL_SPROUT_ENDED.log();
   if (opt.scscf_enabled)
@@ -2049,8 +2073,8 @@ int main(int argc, char* argv[])
     delete remote_vbucket_alarm;
   }
 
-  delete latency_accumulator;
-  delete queue_size_accumulator;
+  delete latency_table;
+  delete queue_size_table;
   delete requests_counter;
   delete overload_counter;
 

@@ -72,12 +72,12 @@ TEST_F(SNMPLatencyTableTest, BasicTest)
 TEST_F(SNMPLatencyTableTest, LatencyUpdateTest)
 {
   netsnmp_container_init_list();
-  ManagedSNMPTable<SNMPLatencyTable, SNMPLatencyRowGroup, int>* tbl =
-  new ManagedSNMPTable<SNMPLatencyTable, SNMPLatencyRowGroup, int>("hello2",
-                                                                   test_oid,
-                                                                   OID_LENGTH(test_oid));
+  ManagedSNMPLatencyTable* tbl = new ManagedSNMPLatencyTable("hello2",
+                                                             test_oid,
+                                                             OID_LENGTH(test_oid));
+  tbl->accumulate(100);
+  
   SNMPLatencyRowGroup* row = tbl->get(0);
-  row->accumulate_latency(100);
   ASSERT_NE(row->fiveseconds_writing->hwm, 0);
   ASSERT_EQ(row->fiveseconds_reading->hwm, 0);
   delete(tbl);

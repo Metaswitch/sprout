@@ -34,19 +34,20 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#include <net-snmp/net-snmp-config.h>
-#include <net-snmp/net-snmp-includes.h>
-#include <net-snmp/agent/net-snmp-agent-includes.h>
-
 #include <vector>
 #include <map>
 #include <string>
 #include <atomic>
 
-#include "log.h"
+#include "snmp_includes.h"
 
 #ifndef SNMP_TABLE_H
 #define SNMP_TABLE_H
+
+oid BONO_LATENCY_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 1 };
+oid BONO_QUEUE_SIZE_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 1 };
+oid SPROUT_LATENCY_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 1 };
+oid SPROUT_QUEUE_SIZE_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 1 };
 
 int netsnmp_table_handler_fn(netsnmp_mib_handler *handler,
                              netsnmp_handler_registration *reginfo,
@@ -58,7 +59,6 @@ class SNMPValue
 public:
   SNMPValue(): type(0), size(0), value(NULL)
   {
-    LOG_STATUS("Empty SNMPValue %p constructed", this);
   };
   SNMPValue(int type_p, const u_char* value_p, int size_p) :
     type(type_p),
@@ -92,7 +92,6 @@ public:
    size(old.size),
    value(old.value)
    {
-     LOG_STATUS("SNMPValue %p claimed value %p (%p) from %p in move constructor", this, value, old.value, &old);
      old.value = NULL;
   };
 

@@ -134,7 +134,7 @@ void SNMPLatencyRowGroup::update_time()
   tick = new_tick;
 }
 
-void SNMPLatencyRowGroup::accumulate_latency(uint32_t latency)
+void SNMPLatencyRowGroup::accumulate(uint32_t latency)
 {
   update_time();
   update_internal(fiveseconds_writing, latency);

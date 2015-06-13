@@ -40,15 +40,12 @@
 
 #include "snmp_agent.h"
 #include "snmp_latency_table.h"
+#include "log.h"
     
-static oid test_oid[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 1 };
-
 static pthread_t snmp_thread_var;
 
 void* snmp_thread(void* data)
 {
-  ManagedSNMPTable<SNMPLatencyTable, SNMPLatencyRowGroup, int> TBL("hello", test_oid, OID_LENGTH(test_oid));
-  TBL.get(0);
   while (1) {
     agent_check_and_process(1);
   }
@@ -75,7 +72,7 @@ int snmp_setup(const char* name)
 }
 
 
-void snmp_close(const char* name)
+void snmp_terminate(const char* name)
 {
   pthread_cancel(snmp_thread_var);
   shutdown_agent();

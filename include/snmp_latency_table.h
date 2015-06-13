@@ -34,26 +34,27 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#include <net-snmp/net-snmp-config.h>
-#include <net-snmp/net-snmp-includes.h>
-#include <net-snmp/agent/net-snmp-agent-includes.h>
-
 #include "snmp_table.h"
 #include <vector>
 #include <map>
 #include <string>
 #include <atomic>
+#include "snmp_includes.h"
+#include "logger.h"
 
 #ifndef SNMP_LATENCY_TABLE_H
 #define SNMP_LATENCY_TABLE_H
+
+class ManagedSNMPLatencyTable;
 
 class SNMPLatencyRowGroup : public SNMPRowGroup
 {
 public:
   SNMPLatencyRowGroup(int ignored);
   ColumnData get_columns(netsnmp_tdata_row* row);
-  void accumulate_latency(uint32_t latency);
+  void accumulate(uint32_t sample);
 
+private:
   netsnmp_tdata_row* five_second_row;
   netsnmp_tdata_row* five_minute_row;
 
@@ -79,7 +80,6 @@ public:
   LatencyValues fiveminutes_even;
   LatencyValues fiveminutes_odd;
   
-private:
   void update_internal(LatencyValues* val, uint32_t latency);
   void zero_struct(LatencyValues& s);
   void update_time();
@@ -102,5 +102,26 @@ public:
     register_tbl();
   }
 };
+
+class ManagedSNMPLatencyTable: public ManagedSNMPTable<SNMPLatencyTable, SNMPLatencyRowGroup, int>
+{
+public:
+  ManagedSNMPLatencyTable(std::string name,
+                          oid* tbl_oid,
+                          int oidlen) :
+    ManagedSNMPTable<SNMPLatencyTable, SNMPLatencyRowGroup, int>(name, tbl_oid, oidlen)
+  {
+    // There's only one row group in this table, so force it to be added.
+    get(0);
+  }
+  
+  void accumulate(uint32_t sample)
+  {
+    SNMPLatencyRowGroup* group = get(0);
+    group->accumulate(sample);
+  }
+};
+
+typedef ManagedSNMPLatencyTable ManagedSNMPAccumulatorTable;
 
 #endif
