@@ -45,13 +45,18 @@
 #ifndef SNMP_LATENCY_TABLE_H
 #define SNMP_LATENCY_TABLE_H
 
-class ManagedSNMPLatencyTable;
-
+// A group of rows for a latency or accumulator table, containing:
+// - a row for the previous five seconds, with count of samples, average size, variance,
+// low-water-mark and high-water-mark
+// - a row for the previous five minutes, with count of samples, average size, variance,
+// low-water-mark and high-water-mark
 class SNMPLatencyRowGroup : public SNMPRowGroup
 {
 public:
   SNMPLatencyRowGroup(int ignored);
   ColumnData get_columns(netsnmp_tdata_row* row);
+
+  // Add a sample to the statistics
   void accumulate(uint32_t sample);
 
 private:
@@ -70,6 +75,9 @@ private:
 
   uint32_t tick;
 
+  // Double-buffering - keep two sets of LatencyValues, one which we're currently updating, and one
+  // which represents the previous period which we just read from. Switch the reading/writing
+  // pointers between the two every five seconds.
   LatencyValues* fiveseconds_writing;
   LatencyValues* fiveseconds_reading;
   LatencyValues fiveseconds_even;
@@ -83,6 +91,8 @@ private:
   void update_internal(LatencyValues* val, uint32_t latency);
   void zero_struct(LatencyValues& s);
   void update_time();
+
+  // Make copy/move constructors private to avoid unexpected behaviour
   SNMPLatencyRowGroup(const SNMPLatencyRowGroup&);
   SNMPLatencyRowGroup(const SNMPLatencyRowGroup&&);
 };
@@ -94,10 +104,11 @@ public:
             oid* tbl_oid,
             int oidlen) : SNMPTable(name, tbl_oid, oidlen)
   {
+    // Index off an integer (1 for 5s, 2 for 5m)
     netsnmp_tdata_add_index(_table, ASN_INTEGER);
     netsnmp_table_helper_add_index(_table_info, ASN_INTEGER);
 
-    _table_info->min_column = 1;
+    _table_info->min_column = 2;
     _table_info->max_column = 6;
     register_tbl();
   }
@@ -117,6 +128,7 @@ public:
   
   void accumulate(uint32_t sample)
   {
+    // Pass samples through to the underlying row group
     SNMPLatencyRowGroup* group = get(0);
     group->accumulate(sample);
   }

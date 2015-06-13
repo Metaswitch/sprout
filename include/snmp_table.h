@@ -37,7 +37,6 @@
 #include <vector>
 #include <map>
 #include <string>
-#include <atomic>
 
 #include "snmp_includes.h"
 #include "log.h"
@@ -50,12 +49,26 @@ int netsnmp_table_handler_fn(netsnmp_mib_handler *handler,
                              netsnmp_agent_request_info *reqinfo,
                              netsnmp_request_info *requests);
 
+// Wraps a typed SNMP value (raw bytes with a type and size) for ease-of-use.
 class SNMPValue
 {
 public:
-  SNMPValue(): type(0), size(0), value(NULL)
+  // Utility constructor for ASN_UNSIGNEDs
+  static SNMPValue uint(uint32_t val)
   {
+    return SNMPValue(ASN_UNSIGNED, (u_char*)&val, sizeof(uint32_t));
   };
+
+  // Utility constructor for ASN_INTEGERS
+  static SNMPValue integer(int val)
+  {
+    return SNMPValue(ASN_INTEGER, (u_char*)&val, sizeof(int32_t));
+  };
+
+
+  SNMPValue(): type(0), size(0), value(NULL) {};
+
+  // Constructor - copy the raw bytes to avoid lifetime issues
   SNMPValue(int type_p, const u_char* value_p, int size_p) :
     type(type_p),
     size(size_p),
@@ -72,17 +85,8 @@ public:
   int type;
   int size;
   u_char* value;
-
-  static SNMPValue uint(uint32_t val)
-  {
-    return SNMPValue(ASN_UNSIGNED, (u_char*)&val, sizeof(uint32_t));
-  };
-
-  static SNMPValue integer(int val)
-  {
-    return SNMPValue(ASN_INTEGER, (u_char*)&val, sizeof(int32_t));
-  };
-
+  
+  // Move constructor
   SNMPValue(SNMPValue&& old):
    type(old.type),
    size(old.size),
@@ -91,6 +95,7 @@ public:
      old.value = NULL;
   };
 
+  // Copy constructor
   SNMPValue(const SNMPValue& old):
    type(old.type),
    size(old.size),
@@ -99,6 +104,7 @@ public:
     memcpy(value, old.value, size);
   };
 
+  // Assignment operator
   SNMPValue& operator=(const SNMPValue& other)
   {
     if (this != &other)
@@ -117,8 +123,11 @@ public:
 
 };
 
+// A ColumnData is the information for a particular row, implemented as a map of column number to
+// its value.
 typedef std::map<int, SNMPValue> ColumnData;
 
+// Abstract SNMPRowGroup class.
 class SNMPRowGroup
 {
 public:
@@ -133,14 +142,14 @@ public:
     }
  
   }
-  virtual ColumnData get_columns(netsnmp_tdata_row* row) { return ColumnData(); };
+  virtual ColumnData get_columns(netsnmp_tdata_row* row) = 0;
 
   std::vector<netsnmp_tdata_row*> get_raw_rows() { return _rows; };
   std::vector<netsnmp_tdata_row*> _rows;
 
 };
 
-
+// Generic SNMPTable class wrapping a netsnmp_tdata.
 template<class T> class SNMPTable
 {
 public:
@@ -164,6 +173,8 @@ public:
     SNMP_FREE(_table_info);
   }
 
+  // Registers an SNMP handler for this table. Subclasses should call this in their constructor
+  // after setting appropriate indexes.
   void register_tbl()
   {
     CW_LOG_INFO("Registering SNMP table %s", _name.c_str());
@@ -179,10 +190,10 @@ public:
   }
 
 
-
-  void add(T* row)
+  // Add the rows represented by a SNMPRowGroup into the underlying table.
+  void add(T* row_group)
   {
-    std::vector<netsnmp_tdata_row*> rows = row->get_raw_rows();
+    std::vector<netsnmp_tdata_row*> rows = row_group->get_raw_rows();
     for (std::vector<netsnmp_tdata_row*>::iterator ii = rows.begin();
          ii != rows.end();
          ii++)
@@ -191,10 +202,10 @@ public:
     }
   };
 
-
-  void remove(T* row)
+  // Remove the rows represented by a SNMPRowGroup from the underlying table.
+  void remove(T* row_group)
   {
-    std::vector<netsnmp_tdata_row*> rows = row->get_raw_rows();
+    std::vector<netsnmp_tdata_row*> rows = row_group->get_raw_rows();
     for (std::vector<netsnmp_tdata_row*>::iterator ii = rows.begin();
          ii != rows.end();
          ii++)
@@ -212,6 +223,7 @@ public:
   netsnmp_tdata* _table;
 };
 
+// Generic ManagedSNMPTable, wrapping an SNMPTable and managing the ownership of rows.
 template<class T1, class T2, class T3> class ManagedSNMPTable
 {
 public:
@@ -232,17 +244,29 @@ public:
     }
   }
 
-  T2* get(T3 val)
+  // Returns the row keyed off `key`, creating it if it does not already exist.
+  T2* get(T3 key)
   {
-    std::pair<T3, T2*> new_entry(val, new T2(val));
-    _map.insert(new_entry);
+    if (_map.find(key) == _map.end())
+    {
+      T2* row = new T2(key);
+      std::pair<T3, T2*> new_entry(key, row);
+      _map.insert(new_entry);
 
-    tbl.add(new_entry.second);
+      tbl.add(row);
+    }
 
     return _map.at(val);
   }
 
-  void remove(T3) { };
+  // Deletes the row keyed off `key`.
+  void remove(T3 key)
+  {
+    T2* row = _map.at(val);
+    _map.erase(val);
+    tbl.remove(row);
+    delete row;
+  };
 
   T1 tbl;
   std::map<T3, T2*> _map;

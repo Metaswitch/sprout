@@ -44,9 +44,11 @@
 #include <string>
 #include <atomic>
 
-SNMPLatencyRowGroup::SNMPLatencyRowGroup(int ignored): SNMPRowGroup()
+SNMPLatencyRowGroup::SNMPLatencyRowGroup(int ignored):
+  SNMPRowGroup(),
+  tick(0)
 {
-  tick = 0;
+  // Set up the data structures containing latency values.
   fiveseconds_even.idx = fiveseconds_odd.idx = 1;
   fiveminutes_even.idx = fiveminutes_odd.idx = 2;
   zero_struct(fiveseconds_even);
@@ -54,20 +56,26 @@ SNMPLatencyRowGroup::SNMPLatencyRowGroup(int ignored): SNMPRowGroup()
   zero_struct(fiveminutes_even);
   zero_struct(fiveminutes_odd);
 
+  // Create the underlying netsnmp row objects
   five_second_row = netsnmp_tdata_create_row();
-  netsnmp_tdata_row_add_index(five_second_row, ASN_INTEGER, &fiveseconds_even.idx, sizeof(int));
+  netsnmp_tdata_row_add_index(five_second_row,
+                              ASN_INTEGER,
+                              &fiveseconds_even.idx,
+                              sizeof(int));
   five_second_row->data = static_cast<SNMPRowGroup*>(this);
   _rows.push_back(five_second_row);
 
   five_minute_row = netsnmp_tdata_create_row();
-  netsnmp_tdata_row_add_index(five_minute_row, ASN_INTEGER, &fiveminutes_even.idx, sizeof(int));
+  netsnmp_tdata_row_add_index(five_minute_row,
+                              ASN_INTEGER,
+                              &fiveminutes_even.idx,
+                              sizeof(int));
   five_minute_row->data = static_cast<SNMPRowGroup*>(this);
   _rows.push_back(five_minute_row);
 }
 
 ColumnData SNMPLatencyRowGroup::get_columns(netsnmp_tdata_row* row)
 {
-  ColumnData ret;
   LatencyValues* values;
   update_time();
 
@@ -86,8 +94,9 @@ ColumnData SNMPLatencyRowGroup::get_columns(netsnmp_tdata_row* row)
   uint32_t count = values->count.load();
   uint32_t avg = sum/std::max(count, 1u);
   uint32_t variance = (sumsq/std::max(count, 1u)) - avg;
-  CW_LOG_INFO("Count was %d, sum was %d, sum of squares was %d, avg was %d, variance was %d", count, sum, sumsq, avg, variance);
-
+  
+  // Construct and return a ColumnData with the appropriate values
+  ColumnData ret;
   ret[1] = SNMPValue::integer(values->idx);
   ret[2] = SNMPValue::uint(count);
   ret[3] = SNMPValue::uint(avg);
@@ -110,6 +119,9 @@ void SNMPLatencyRowGroup::update_time()
 {
   struct timespec now;
   clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+
+  // The 'tick' signifies how many five-second windows have passed - if it's odd, we should read
+  // from fiveseconds_odd and fiveseconds_even. If it's even, vice-versa.
   uint32_t new_tick = (now.tv_sec / 5);
 
   if (new_tick > tick)

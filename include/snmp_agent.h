@@ -40,7 +40,10 @@
 #ifndef CW_SNMP_AGENT_H
 #define CW_SNMP_AGENT_H
 
+// Starts the SNMP agent thread
 int snmp_setup(const char* name);
+
+// Terminates the SNMP agent thread
 void snmp_terminate(const char* name);
 
 #endif
