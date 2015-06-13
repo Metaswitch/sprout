@@ -78,8 +78,7 @@ TARGET_SOURCES := logger.cpp \
                   common_sip_processing.cpp \
                   exception_handler.cpp \
                   snmp_agent.cpp \
-                  snmp_table.cpp \
-                  snmp_latency_table.cpp
+                  snmp_table.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -124,7 +123,9 @@ LDFLAGS += -lmemcached \
            -lboost_filesystem \
            -lnetsnmp \
            -lnetsnmphelpers \
-           -lnetsnmpagent
+           -lnetsnmpagent \
+           -latomic
+
 #LDFLAGS += $(shell net-snmp-config --libs)
 
 # Explicitly link some pjsip modules. Some plugins require symbols in them

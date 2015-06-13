@@ -70,24 +70,24 @@ void SNMPLatencyRowGroup::init()
 ColumnData SNMPLatencyRowGroup::get_columns(netsnmp_tdata_row* row)
 {
   ColumnData ret;
-  LatencyValues* values;
+  LatencyValues values;
   if (row == five_second_row)
   {
-    values = &fiveseconds;
+    values = fiveseconds_a.load();
   }
   else
   {
-    values = &fiveminutes;
+    values = fiveminutes_a.load();
   }
 
   LOG_STATUS("Created 0 SNMPValues");
-  ret[1] = SNMPValue::integer(values->idx);
+  ret[1] = SNMPValue::integer(values.idx);
   LOG_STATUS("Created 1 SNMPValues - data is %p", ret[1].value);
-  ret[2] = SNMPValue::uint(values->count);
-  ret[3] = SNMPValue::uint(values->average);
-  ret[4] = SNMPValue::uint(values->variance);
-  ret[5] = SNMPValue::uint(values->lwm);
-  ret[6] = SNMPValue::uint(values->hwm);
+  ret[2] = SNMPValue::uint(values.count);
+  ret[3] = SNMPValue::uint(values.average);
+  ret[4] = SNMPValue::uint(values.variance);
+  ret[5] = SNMPValue::uint(values.lwm);
+  ret[6] = SNMPValue::uint(values.hwm);
   LOG_STATUS("Created all SNMPValues");
   return ret;
 }
@@ -98,22 +98,29 @@ void SNMPLatencyRowGroup::recalculate_values()
 
 void SNMPLatencyRowGroup::accumulate_latency(uint32_t latency)
 {
-  update_internal(&fiveseconds, latency);
-  update_internal(&fiveminutes, latency);
+  update_internal(fiveseconds_a, latency);
+  update_internal(fiveminutes_a, latency);
 }
 
-void SNMPLatencyRowGroup::update_internal(LatencyValues* val, uint32_t latency)
+void SNMPLatencyRowGroup::update_internal(std::atomic<LatencyValues>& val, uint32_t latency)
 {
-  val->count++;
-  val->sum += latency;
-  val->sqsum += latency^2;
-  if (latency > val->hwm)
-  {
-    val->hwm = latency;
+  LatencyValues orig, updated;
+  do {
+    orig = val.load();
+    updated = orig;
+    updated.count++;
+    updated.sum += latency;
+    updated.sqsum += latency^2;
+    if (latency > updated.hwm)
+    {
+      updated.hwm = latency;
+    }
+    if (latency < updated.lwm)
+    {
+      updated.lwm = latency;
+
+    }
   }
-  if (latency < val->lwm)
-  {
-    val->lwm = latency;
-  }
-  
+  while (!val.compare_exchange_weak(updated, orig));
+
 };
