@@ -53,6 +53,9 @@ void SNMPLatencyRowGroup::init()
   five_second_index = 1;
   five_minute_index = 2;
 
+  fiveseconds = {1, 0, 0, 0, 0, 0};
+  fiveminutes = {1, 0, 0, 0, 0, 0};
+
   five_second_row = netsnmp_tdata_create_row();
   netsnmp_tdata_row_add_index(five_second_row, ASN_INTEGER, &five_second_index, sizeof(int));
   five_second_row->data = static_cast<SNMPRowGroup*>(this);
@@ -77,19 +80,20 @@ ColumnData SNMPLatencyRowGroup::get_columns(netsnmp_tdata_row* row)
     values = &fiveminutes;
   }
 
-  ret[1] = SNMPValue::integer(&(values->idx));
-  ret[2] = SNMPValue::uint(&(values->count));
-  ret[3] = SNMPValue::uint(&(values->average));
-  ret[4] = SNMPValue::uint(&(values->variance));
-  ret[5] = SNMPValue::uint(&(values->lwm));
-  ret[6] = SNMPValue::uint(&(values->hwm));
+  LOG_STATUS("Created 0 SNMPValues");
+  ret[1] = SNMPValue::integer(values->idx);
+  LOG_STATUS("Created 1 SNMPValues - data is %p", ret[1].value);
+  ret[2] = SNMPValue::uint(values->count);
+  ret[3] = SNMPValue::uint(values->average);
+  ret[4] = SNMPValue::uint(values->variance);
+  ret[5] = SNMPValue::uint(values->lwm);
+  ret[6] = SNMPValue::uint(values->hwm);
+  LOG_STATUS("Created all SNMPValues");
   return ret;
 }
 
 void SNMPLatencyRowGroup::recalculate_values()
 {
-  fiveseconds = {1, 0, 0, 0, 0, 0};
-  fiveminutes = {1, 0, 0, 0, 0, 0};
 }
 
 void SNMPLatencyRowGroup::accumulate_latency(uint32_t latency)

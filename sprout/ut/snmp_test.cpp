@@ -61,7 +61,9 @@ TEST_F(SNMPLatencyTableTest, BasicTest)
                                                                    OID_LENGTH(test_oid));
   SNMPLatencyRowGroup* row = tbl->get(0);
   SNMPLatencyRowGroup* reconstructed_row = (SNMPLatencyRowGroup*)(row->five_second_row->data);
+  LOG_STATUS("Calling get_columns");
   ColumnData c = reconstructed_row->get_columns(row->five_second_row);
+  LOG_STATUS("Value in column 1 is %p with data %p", &(c[1]), c[1].value);
   delete tbl; tbl = NULL;
   row = NULL;
   reconstructed_row = NULL;

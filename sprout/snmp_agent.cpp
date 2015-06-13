@@ -55,21 +55,23 @@ void* snmp_thread(void* data)
   return NULL;
 };
 
-void snmp_setup(const char* name)
+int snmp_setup(const char* name)
 {
   netsnmp_ds_set_boolean(NETSNMP_DS_APPLICATION_ID, NETSNMP_DS_AGENT_ROLE, 1);
+  netsnmp_container_init_list();
   int rc = init_agent(name);
   if (rc != 0)
   {
     LOG_WARNING("SNMP AgentX initialization failed");
+    return -1;
   }
   else
   {
   LOG_STATUS("AgentX agent initialised");
   }
   init_snmp(name);
-  netsnmp_container_init_list();
   int ret = pthread_create(&snmp_thread_var, NULL, snmp_thread, NULL);
+  return ret;
 }
 
 
