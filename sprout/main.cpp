@@ -213,6 +213,11 @@ QuiescingManager* quiescing_mgr;
 const static int QUIESCE_SIGNAL = SIGQUIT;
 const static int UNQUIESCE_SIGNAL = SIGUSR1;
 
+static oid BONO_LATENCY_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 2, 2 };
+static oid BONO_QUEUE_SIZE_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 2, 6 };
+static oid SPROUT_LATENCY_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 1 };
+static oid SPROUT_QUEUE_SIZE_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 8 };
+
 static void usage(void)
 {
   puts("Options:\n"

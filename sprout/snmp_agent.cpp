@@ -59,12 +59,12 @@ int snmp_setup(const char* name)
   int rc = init_agent(name);
   if (rc != 0)
   {
-    LOG_WARNING("SNMP AgentX initialization failed");
+    CW_LOG_WARNING("SNMP AgentX initialization failed");
     return -1;
   }
   else
   {
-  LOG_STATUS("AgentX agent initialised");
+  CW_LOG_STATUS("AgentX agent initialised");
   }
   init_snmp(name);
   int ret = pthread_create(&snmp_thread_var, NULL, snmp_thread, NULL);

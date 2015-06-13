@@ -40,14 +40,10 @@
 #include <atomic>
 
 #include "snmp_includes.h"
+#include "log.h"
 
 #ifndef SNMP_TABLE_H
 #define SNMP_TABLE_H
-
-oid BONO_LATENCY_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 1 };
-oid BONO_QUEUE_SIZE_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 1 };
-oid SPROUT_LATENCY_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 1 };
-oid SPROUT_QUEUE_SIZE_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 1 };
 
 int netsnmp_table_handler_fn(netsnmp_mib_handler *handler,
                              netsnmp_handler_registration *reginfo,
@@ -170,6 +166,7 @@ public:
 
   void register_tbl()
   {
+    CW_LOG_INFO("Registering SNMP table %s", _name.c_str());
     _handler_reg = netsnmp_create_handler_registration(_name.c_str(),
                                                        netsnmp_table_handler_fn,
                                                        _tbl_oid,

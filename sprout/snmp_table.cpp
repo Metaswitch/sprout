@@ -51,10 +51,10 @@ int netsnmp_table_handler_fn(netsnmp_mib_handler *handler,
                              netsnmp_request_info *requests)
 {
   std::map<netsnmp_tdata_row*, ColumnData> cache;
-  LOG_DEBUG("Starting handling batch of SNMP requests");
+  CW_LOG_INFO("Starting handling batch of SNMP requests");
   for (; requests != NULL; requests = requests->next)
   {
-    LOG_DEBUG("Handling SNMP request");
+    CW_LOG_INFO("Handling SNMP request");
     if (requests->processed)
     {
       continue;
@@ -65,7 +65,7 @@ int netsnmp_table_handler_fn(netsnmp_mib_handler *handler,
 
     if (!row || !table_info || !row->data)
     {
-      LOG_WARNING("Request for nonexistent row");
+      CW_LOG_WARNING("Request for nonexistent row");
       return SNMP_ERR_NOSUCHNAME;
     }
 
@@ -78,7 +78,7 @@ int netsnmp_table_handler_fn(netsnmp_mib_handler *handler,
       ColumnData cd = data->get_columns(row);
       cache[row] = cd;
     }
-    LOG_DEBUG("Got %d columns for row %p\n", cache[row].size(), row);
+    CW_LOG_DEBUG("Got %d columns for row %p\n", cache[row].size(), row);
 
     if (cache[row][table_info->colnum].size != 0)
     {
@@ -89,9 +89,9 @@ int netsnmp_table_handler_fn(netsnmp_mib_handler *handler,
     }
     else
     {
-      LOG_WARNING("No value for row %p column %d", row, table_info->colnum);
+      CW_LOG_WARNING("No value for row %p column %d", row, table_info->colnum);
     }
   }
-  LOG_DEBUG("Finished handling batch of SNMP requests");
+  CW_LOG_DEBUG("Finished handling batch of SNMP requests");
   return SNMP_ERR_NOERROR;
 }

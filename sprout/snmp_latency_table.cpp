@@ -86,6 +86,7 @@ ColumnData SNMPLatencyRowGroup::get_columns(netsnmp_tdata_row* row)
   uint32_t count = values->count.load();
   uint32_t avg = sum/std::max(count, 1u);
   uint32_t variance = (sumsq/std::max(count, 1u)) - avg;
+  CW_LOG_INFO("Count was %d, sum was %d, sum of squares was %d, avg was %d, variance was %d", count, sum, sumsq, avg, variance);
 
   ret[1] = SNMPValue::integer(values->idx);
   ret[2] = SNMPValue::uint(count);
@@ -145,7 +146,7 @@ void SNMPLatencyRowGroup::update_internal(LatencyValues* val, uint32_t latency)
 {
   val->count++;
   val->sum.fetch_add(latency);
-  val->sqsum.fetch_add(latency^2);
+  val->sqsum.fetch_add(latency*latency);
   uint32_t hwm_seen, lwm_seen;
   do
   {
@@ -159,7 +160,7 @@ void SNMPLatencyRowGroup::update_internal(LatencyValues* val, uint32_t latency)
   do
   {
     lwm_seen = val->lwm.load();
-    if (latency >= lwm_seen)
+    if ((lwm_seen > 0) && (latency >= lwm_seen))
     {
       break;
     }

@@ -78,7 +78,8 @@ TARGET_SOURCES := logger.cpp \
                   common_sip_processing.cpp \
                   exception_handler.cpp \
                   snmp_agent.cpp \
-                  snmp_table.cpp
+                  snmp_table.cpp \
+                  snmp_latency_table.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
