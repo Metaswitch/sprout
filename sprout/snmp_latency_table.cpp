@@ -46,23 +46,21 @@
 
 SNMPLatencyRowGroup::SNMPLatencyRowGroup(int ignored): SNMPRowGroup()
 {
-}
-
-void SNMPLatencyRowGroup::init()
-{
-  five_second_index = 1;
-  five_minute_index = 2;
-
-  fiveseconds = {1, 0, 0, 0, 0, 0};
-  fiveminutes = {1, 0, 0, 0, 0, 0};
+  tick = 0;
+  fiveseconds_even.idx = fiveseconds_odd.idx = 1;
+  fiveminutes_even.idx = fiveminutes_odd.idx = 2;
+  zero_struct(fiveseconds_even);
+  zero_struct(fiveseconds_odd);
+  zero_struct(fiveminutes_even);
+  zero_struct(fiveminutes_odd);
 
   five_second_row = netsnmp_tdata_create_row();
-  netsnmp_tdata_row_add_index(five_second_row, ASN_INTEGER, &five_second_index, sizeof(int));
+  netsnmp_tdata_row_add_index(five_second_row, ASN_INTEGER, &fiveseconds_even.idx, sizeof(int));
   five_second_row->data = static_cast<SNMPRowGroup*>(this);
   _rows.push_back(five_second_row);
 
   five_minute_row = netsnmp_tdata_create_row();
-  netsnmp_tdata_row_add_index(five_minute_row, ASN_INTEGER, &five_minute_index, sizeof(int));
+  netsnmp_tdata_row_add_index(five_minute_row, ASN_INTEGER, &fiveminutes_even.idx, sizeof(int));
   five_minute_row->data = static_cast<SNMPRowGroup*>(this);
   _rows.push_back(five_minute_row);
 }
@@ -70,57 +68,101 @@ void SNMPLatencyRowGroup::init()
 ColumnData SNMPLatencyRowGroup::get_columns(netsnmp_tdata_row* row)
 {
   ColumnData ret;
-  LatencyValues values;
+  LatencyValues* values;
+  update_time();
+
+  // Read from the row that's not currently being updated.
   if (row == five_second_row)
   {
-    values = fiveseconds_a.load();
+    values = fiveseconds_reading;
   }
   else
   {
-    values = fiveminutes_a.load();
+    values = fiveminutes_reading;
   }
 
-  LOG_STATUS("Created 0 SNMPValues");
-  ret[1] = SNMPValue::integer(values.idx);
-  LOG_STATUS("Created 1 SNMPValues - data is %p", ret[1].value);
-  ret[2] = SNMPValue::uint(values.count);
-  ret[3] = SNMPValue::uint(values.average);
-  ret[4] = SNMPValue::uint(values.variance);
-  ret[5] = SNMPValue::uint(values.lwm);
-  ret[6] = SNMPValue::uint(values.hwm);
-  LOG_STATUS("Created all SNMPValues");
+  uint32_t sum = values->sum.load();
+  uint32_t sumsq = values->sqsum.load();
+  uint32_t count = values->count.load();
+  uint32_t avg = sum/std::max(count, 1u);
+  uint32_t variance = (sumsq/std::max(count, 1u)) - avg;
+
+  ret[1] = SNMPValue::integer(values->idx);
+  ret[2] = SNMPValue::uint(count);
+  ret[3] = SNMPValue::uint(avg);
+  ret[4] = SNMPValue::uint(variance);
+  ret[5] = SNMPValue::uint(values->lwm.load());
+  ret[6] = SNMPValue::uint(values->hwm.load());
   return ret;
 }
 
-void SNMPLatencyRowGroup::recalculate_values()
+void SNMPLatencyRowGroup::zero_struct(LatencyValues& s)
 {
+  s.count.store(0);
+  s.sum.store(0);
+  s.sqsum.store(0);
+  s.hwm.store(0);
+  s.lwm.store(0);
+}
+
+void SNMPLatencyRowGroup::update_time()
+{
+  struct timespec now;
+  clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+  uint32_t new_tick = (now.tv_sec / 5);
+
+  if (new_tick > tick)
+  {
+    if ((new_tick % 2) == 0)
+    {
+      fiveseconds_reading = &fiveseconds_even;
+      fiveseconds_writing = &fiveseconds_odd;
+      fiveminutes_reading = &fiveminutes_even;
+      fiveminutes_writing = &fiveminutes_odd;
+    }
+    else
+    {
+      fiveseconds_reading = &fiveseconds_odd;
+      fiveseconds_writing = &fiveseconds_even;
+      fiveminutes_reading = &fiveminutes_odd;
+      fiveminutes_writing = &fiveminutes_even;
+    }
+    zero_struct(*fiveseconds_writing);
+    zero_struct(*fiveminutes_writing);
+  }
+
+  tick = new_tick;
 }
 
 void SNMPLatencyRowGroup::accumulate_latency(uint32_t latency)
 {
-  update_internal(fiveseconds_a, latency);
-  update_internal(fiveminutes_a, latency);
+  update_time();
+  update_internal(fiveseconds_writing, latency);
+  update_internal(fiveminutes_writing, latency);
 }
 
-void SNMPLatencyRowGroup::update_internal(std::atomic<LatencyValues>& val, uint32_t latency)
+void SNMPLatencyRowGroup::update_internal(LatencyValues* val, uint32_t latency)
 {
-  LatencyValues orig, updated;
-  do {
-    orig = val.load();
-    updated = orig;
-    updated.count++;
-    updated.sum += latency;
-    updated.sqsum += latency^2;
-    if (latency > updated.hwm)
+  val->count++;
+  val->sum.fetch_add(latency);
+  val->sqsum.fetch_add(latency^2);
+  uint32_t hwm_seen, lwm_seen;
+  do
+  {
+    hwm_seen = val->hwm.load();
+    if (latency <= hwm_seen)
     {
-      updated.hwm = latency;
+      break;
     }
-    if (latency < updated.lwm)
-    {
-      updated.lwm = latency;
+  } while (!val->hwm.compare_exchange_weak(hwm_seen, latency));
 
+  do
+  {
+    lwm_seen = val->lwm.load();
+    if (latency >= lwm_seen)
+    {
+      break;
     }
-  }
-  while (!val.compare_exchange_weak(updated, orig));
+  } while (!val->lwm.compare_exchange_weak(lwm_seen, latency));
 
 };

@@ -123,8 +123,7 @@ LDFLAGS += -lmemcached \
            -lboost_filesystem \
            -lnetsnmp \
            -lnetsnmphelpers \
-           -lnetsnmpagent \
-           -latomic
+           -lnetsnmpagent
 
 #LDFLAGS += $(shell net-snmp-config --libs)
 

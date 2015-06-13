@@ -53,7 +53,6 @@ class SNMPLatencyTableTest : public BaseTest
 
 TEST_F(SNMPLatencyTableTest, BasicTest)
 {
-  init_snmp("");
   netsnmp_container_init_list();
   ManagedSNMPTable<SNMPLatencyTable, SNMPLatencyRowGroup, int>* tbl =
   new ManagedSNMPTable<SNMPLatencyTable, SNMPLatencyRowGroup, int>("h",
@@ -68,12 +67,10 @@ TEST_F(SNMPLatencyTableTest, BasicTest)
   row = NULL;
   reconstructed_row = NULL;
   netsnmp_container_free_list();
-  snmp_shutdown("");
 }
 
 TEST_F(SNMPLatencyTableTest, LatencyUpdateTest)
 {
-  init_snmp("");
   netsnmp_container_init_list();
   ManagedSNMPTable<SNMPLatencyTable, SNMPLatencyRowGroup, int>* tbl =
   new ManagedSNMPTable<SNMPLatencyTable, SNMPLatencyRowGroup, int>("hello2",
@@ -81,8 +78,8 @@ TEST_F(SNMPLatencyTableTest, LatencyUpdateTest)
                                                                    OID_LENGTH(test_oid));
   SNMPLatencyRowGroup* row = tbl->get(0);
   row->accumulate_latency(100);
-  ASSERT_NE(row->fiveseconds.hwm, 0);
+  ASSERT_NE(row->fiveseconds_writing->hwm, 0);
+  ASSERT_EQ(row->fiveseconds_reading->hwm, 0);
   delete(tbl);
   netsnmp_container_free_list();
-  snmp_shutdown("");
 }
