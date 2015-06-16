@@ -3117,3 +3117,26 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteBadServerName)
 
   delete tp;
 }
+
+// Test the case where the I-CSCF receives an ACK. This is not valid and should be dropped.
+TEST_F(ICSCFSproutletTest, RouteOutOfDialogAck)
+{
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.icscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject an ACK request to a local URI
+  Message msg1;
+  msg1._method = "ACK";
+  msg1._requri = "sip:3196914123@homedomain;transport=UDP";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expect it to just be dropped
+  ASSERT_EQ(0, txdata_count());
+  free_txdata(); 
+  delete tp; 
+}
+
+

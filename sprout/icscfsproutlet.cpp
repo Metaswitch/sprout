@@ -117,9 +117,15 @@ SproutletTsx* ICSCFSproutlet::get_tsx(SproutletTsxHelper* helper,
   {
     return (SproutletTsx*)new ICSCFSproutletRegTsx(helper, this);
   }
-  else
+  else if (req->line.req.method.id != PJSIP_ACK_METHOD)
   {
     return (SproutletTsx*)new ICSCFSproutletTsx(helper, this);
+  }
+  else
+  {
+    // ACKs are never "initial requests" (as used by TS 24.229), so never perform
+    // I-CSCF processing - just forward them as-is, or fail them.
+    return NULL;
   }
 }
 

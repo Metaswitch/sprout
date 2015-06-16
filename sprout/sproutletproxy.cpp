@@ -787,28 +787,52 @@ void SproutletProxy::UASTsx::schedule_requests()
       }
       else
       {
-        // No local Sproutlet, proxy the request.
         LOG_DEBUG("No local sproutlet matches request");
-        size_t index;
-
-        pj_status_t status = allocate_uac(req.req, index);
-
-        if (status == PJ_SUCCESS)
+        
+        // Check whether:
+        // - there are no Route headers
+        // - the Request-URI points to us
+        // - no Sproutlet has changed the Request-URI during processing
+        //
+        // If all these things are true, then forwarding this on would cause a loop, so we should
+        // drop it.
+        pjsip_uri* original_uri = _req->msg->line.req.uri;
+        pjsip_uri* next_hop = PJUtils::next_hop(req.req->msg);
+        if (next_hop == req.req->msg->line.req.uri &&
+            (PJUtils::is_uri_local(next_hop) ||
+             PJUtils::is_home_domain(next_hop)) &&
+            (PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI,
+                                    original_uri) ==
+             PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI,
+                                    req.req->msg->line.req.uri)))
         {
-          // Successfully set up UAC transaction, so set up the mappings and
-          // send the request.
-          if (req.req->msg->line.req.method.id != PJSIP_ACK_METHOD)
-          {
-            _dmap_uac[req.upstream] = _uac_tsx[index];
-            _umap[(void*)_uac_tsx[index]] = req.upstream;
-          }
-
-          // Send the request.
-          _uac_tsx[index]->send_request();
+          LOG_WARNING("No local sproutlet accepted request, the URI has not been changed, and the next route is local"
+                      " - dropping message to avoid loops");
         }
         else
         {
-          // @TODO
+          // Proxy the request.
+          size_t index;
+
+          pj_status_t status = allocate_uac(req.req, index);
+
+          if (status == PJ_SUCCESS)
+          {
+            // Successfully set up UAC transaction, so set up the mappings and
+            // send the request.
+            if (req.req->msg->line.req.method.id != PJSIP_ACK_METHOD)
+            {
+              _dmap_uac[req.upstream] = _uac_tsx[index];
+              _umap[(void*)_uac_tsx[index]] = req.upstream;
+            }
+
+            // Send the request.
+            _uac_tsx[index]->send_request();
+          }
+          else
+          {
+            // @TODO
+          }
         }
       }
     }

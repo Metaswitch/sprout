@@ -1652,7 +1652,7 @@ TEST_F(SCSCFTest, TestEnumLocalSIPURINumber)
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  // ENUM fails and wr route to the BGCF, but there are no routes so the call
+  // ENUM fails and we route to the BGCF, but there are no routes so the call
   // is rejected.
   doSlowFailureFlow(msg, 404, "", "No route to target");
 }
@@ -1682,11 +1682,14 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPData)
 
   Message msg;
   msg._to = "+15108580301;npdi";
+  msg._requri = "sip:+15108580301;npdi@homedomain;user=phone";
   msg._route = "Route: <sip:homedomain;orig>";
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
-  list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580301;npdi@homedomain.*"), hdrs, false);
+  // ENUM fails and we route to the BGCF, but there are no routes so the call
+  // is rejected. (This is unfortunately the same behaviour as we'd get if a rewrite was done, so
+  // we're relying on code coverage metrics to confirm that this function works.) 
+  doSlowFailureFlow(msg, 404, "", "No route to target");
 }
 
 // Test where the request URI represents a number and has NP data. The ENUM
