@@ -2637,12 +2637,11 @@ TEST_F(BasicProxyTest, DnsResolutionFailure)
 }
 
 
-TEST_F(BasicProxyTest, RetryOnTimeout)
+TEST_F(BasicProxyTest, DontRetryOnTimeout)
 {
-  // Tests retrying to an alternate server on a transaction timeout.
-  // Currently disabled because PJSIP has no support for running a short
-  // timer on a transaction.  We need to add support for Timer C, so should
-  // reenable this test when that is implemented.
+  // Tests a server timing out a transaction and _not_ retrying.
+  // Long-term, we should retry, but we need to shorten the transaction
+  // timeout for this to make sense - 32s without alerting is too long!
 
   pjsip_tx_data* tdata;
 
@@ -2710,38 +2709,11 @@ TEST_F(BasicProxyTest, RetryOnTimeout)
   cwtest_advance_time_ms(33000);
   poll();
 
-  // Check that the request has been redirected to another server.
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  ReqMatcher("INVITE").matches(tdata->msg);
-
-  // Check that it was sent to one of the server addresses.
-  EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
-  EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
-  string server2 = str_pj(tdata->tp_info.transport->remote_name.host);
-  EXPECT_STRNE(server2.c_str(), server1.c_str()) << "Request retried to same server";
-  if ((server2 != "10.10.10.100") &&
-      (server2 != "10.10.10.101") &&
-      (server2 != "10.10.10.102") &&
-      (server2 != "10.10.10.103"))
-  {
-    ADD_FAILURE_AT(__FILE__, __LINE__) << "Unexpected server address " << server2;
-  }
-
-  // Check the RequestURI, Route and Record-Route headers.
-  EXPECT_EQ("sip:bob@awaydomain", str_uri(tdata->msg->line.req.uri));
-  EXPECT_EQ("Route: <sip:proxy-x.awaydomain;transport=TCP;lr>",
-            get_headers(tdata->msg, "Route"));
-  EXPECT_EQ("", get_headers(tdata->msg, "Record-Route"));
-
-  // Send a 200 OK response.
-  inject_msg(respond_to_current_txdata(200));
-
-  // Check the response is forwarded back to the source.
+  // Check a 408 timeout response is forwarded back to the source.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   tp->expect_target(tdata);
-  RespMatcher(200).matches(tdata->msg);
+  RespMatcher(408).matches(tdata->msg);
   free_txdata();
 
   delete tp;
@@ -3602,25 +3574,11 @@ TEST_F(BasicProxyTest, BlacklistOnTimeout)
   cwtest_advance_time_ms(33000);
   poll();
 
-  // Check that the request has been redirected to another server.
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  ReqMatcher("INVITE").matches(tdata->msg);
-
-  // Check that it was sent to the second server.
-  EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
-  EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
-  string server2 = str_pj(tdata->tp_info.transport->remote_name.host);
-  EXPECT_EQ(server2, "10.10.10.101");
-
-  // Send a 200 OK response.
-  inject_msg(respond_to_current_txdata(200));
-
-  // Check the response is forwarded back to the source.
+  // Check a 408 Timeout response is forwarded back to the source.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   tp->expect_target(tdata);
-  RespMatcher(200).matches(tdata->msg);
+  RespMatcher(408).matches(tdata->msg);
   free_txdata();
 
   // Now inject another INVITE.
@@ -3733,25 +3691,11 @@ TEST_F(BasicProxyTest, StatelessProxyNoBlacklistOnTimeout)
   cwtest_advance_time_ms(33000);
   poll();
 
-  // Check that the request has been redirected to another server.
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  ReqMatcher("INVITE").matches(tdata->msg);
-
-  // Check that it was sent to the second server.
-  EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
-  EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
-  string server2 = str_pj(tdata->tp_info.transport->remote_name.host);
-  EXPECT_EQ(server2, "10.10.10.101");
-
-  // Send a 200 OK response.
-  inject_msg(respond_to_current_txdata(200));
-
-  // Check the response is forwarded back to the source.
+  // Check a 408 Timeout response is forwarded back to the source.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   tp->expect_target(tdata);
-  RespMatcher(200).matches(tdata->msg);
+  RespMatcher(408).matches(tdata->msg);
   free_txdata();
 
   // Now inject another INVITE.
