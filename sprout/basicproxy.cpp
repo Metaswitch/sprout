@@ -1863,8 +1863,11 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
           PJUtils::blacklist_server(_servers[_current_server]);
         }
 
-        // Attempt a retry.
-        retrying = retry_request();
+        // Don't retry - if we've waited for a SIP transaction to time out,
+        // the upstream transaction has probably failed anyway.  Not retrying
+        // also avoids us sending an INVITE with a chasing CANCEL when an AS
+        // is unresponsive (see
+        // https://github.com/Metaswitch/sprout/issues/1095).
       }
       else if ((_tsx->state == PJSIP_TSX_STATE_COMPLETED) &&
                (_tsx->status_code == PJSIP_SC_SERVICE_UNAVAILABLE))
