@@ -285,7 +285,7 @@ public:
 
   void match(pjsip_msg* msg)
   {
-    pj_str_t name_str = { const_cast<char*>(_header.data()), _header.length() };
+    pj_str_t name_str = { const_cast<char*>(_header.data()), (unsigned int)_header.length() };
     pjsip_hdr* hdr = NULL;
     list<string> values;
 
@@ -1715,7 +1715,7 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPDataToSIP)
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
-  _scscf_sproutlet->set_enforce_user_phone(true);
+  set_enforce_user_phone(true);
   Message msg;
   msg._to = "+15108580301;npdi";
   msg._requri = "sip:+15108580301;npdi@homedomain;user=phone";
@@ -1908,17 +1908,17 @@ TEST_F(SCSCFTest, TestForkedFlow)
   // Receive and respond to CANCEL for target 0
   SCOPED_TRACE("");
   out = current_txdata()->msg;
-  ReqMatcher c0("CANCEL");
-  c0.matches(out);
-  EXPECT_THAT(c0.uri(), StrEq(_uris[0]));
+  ReqMatcher c2("CANCEL");
+  c2.matches(out);
+  EXPECT_THAT(c2.uri(), StrEq(_uris[2]));
   inject_msg(respond_to_current_txdata(200));
 
   // Receive and respond to CANCEL for target 2
   SCOPED_TRACE("");
   out = current_txdata()->msg;
-  ReqMatcher c2("CANCEL");
-  c2.matches(out);
-  EXPECT_THAT(c2.uri(), StrEq(_uris[2]));
+  ReqMatcher c0("CANCEL");
+  c0.matches(out);
+  EXPECT_THAT(c0.uri(), StrEq(_uris[0]));
   inject_msg(respond_to_current_txdata(200));
 
   // Send 487 response from target 0
