@@ -3136,6 +3136,8 @@ TEST_F(ICSCFSproutletTest, RouteOutOfDialogAck)
   // Expect it to just be dropped
   ASSERT_EQ(0, txdata_count());
   free_txdata(); 
+
+  // Allow the transaction to time out so we don't leak PJSIP memory.
   cwtest_advance_time_ms(33000L);
   poll();
   delete tp;   
