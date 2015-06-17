@@ -167,7 +167,8 @@ ICSCFSproutletRegTsx::ICSCFSproutletRegTsx(SproutletTsxHelper* helper,
                                            ICSCFSproutlet* icscf) :
   SproutletTsx(helper),
   _icscf(icscf),
-  _acr(NULL)
+  _acr(NULL),
+  _router(NULL)
 {
 }
 
@@ -432,6 +433,7 @@ ICSCFSproutletTsx::ICSCFSproutletTsx(SproutletTsxHelper* helper,
   SproutletTsx(helper),
   _icscf(icscf),
   _acr(NULL),
+  _router(NULL),
   _routed_to_bgcf(false)
 {
 }
@@ -456,6 +458,22 @@ ICSCFSproutletTsx::~ICSCFSproutletTsx()
 void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 {
   pj_pool_t* pool = get_pool(req);
+
+  pjsip_uri* next_hop = PJUtils::next_hop(req);
+  if (req->line.req.method.id == PJSIP_ACK_METHOD &&
+      next_hop == req->line.req.uri &&
+      (PJUtils::is_uri_local(next_hop) ||
+       PJUtils::is_home_domain(next_hop)))
+  {
+    // Ignore ACK messages with no Route headers and a local Request-URI, as:
+    // - the I-CSCF should not be handling these
+    // - we've seen ACKs matching this descrption being generated at overload and looping repeatedly
+    //
+    // This is a fairly targeted fix for https://github.com/Metaswitch/sprout/issues/1091.
+    // TODO: remove this code when #1091 is fixed by other means.
+    free_msg(req);
+    return;
+  }
 
   // Create an ACR for this transaction.
   _acr = _icscf->get_acr(trail());
