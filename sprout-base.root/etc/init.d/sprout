@@ -101,6 +101,7 @@ get_settings()
         default_session_expires=600
         signaling_dns_server=127.0.0.1
         . /etc/clearwater/config
+	sas_compression_disabled=Y
         [ -n "$chronos_hostname" ] || chronos_hostname=$local_ip:7253
 
         # Set up a default cluster_settings file if it does not exist.  The local
