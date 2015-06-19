@@ -164,7 +164,7 @@ void DNSResolver::send_naptr_query(const std::string& domain, SAS::TrailId trail
   _domain = domain;
 
   // Send the query.
-  LOG_DEBUG("Sending DNS NAPTR query for %s", domain.c_str());
+  TRC_DEBUG("Sending DNS NAPTR query for %s", domain.c_str());
   _req_pending = true;
   ares_query(_channel,
              domain.c_str(),
@@ -268,13 +268,13 @@ void DNSResolver::ares_callback(int status,
     _status = ares_parse_naptr_reply(abuf, alen, &_naptr_reply);
     if (_status != ARES_SUCCESS)
     {
-      LOG_WARNING("Unparseable DNS ENUM response from host %s: %s", _domain.c_str(), ares_strerror(status));
+      TRC_WARNING("Unparseable DNS ENUM response from host %s: %s", _domain.c_str(), ares_strerror(status));
     }
   }
   else
   {
     // Log that we've failed.
-    LOG_WARNING("DNS ENUM query failed for host %s: %s", _domain.c_str(), ares_strerror(status));
+    TRC_WARNING("DNS ENUM query failed for host %s: %s", _domain.c_str(), ares_strerror(status));
     SAS::Event event(_trail, SASEvent::RX_ENUM_ERR, 0);
     event.add_static_param(status);
     event.add_var_param(_domain);

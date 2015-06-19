@@ -60,7 +60,7 @@ PluginLoader::~PluginLoader()
 /// Load the plug-ins, returning the resulting list of Sproutlets.
 bool PluginLoader::load(std::list<Sproutlet*>& sproutlets)
 {
-  LOG_STATUS("Loading plug-ins from %s", _path.c_str());
+  TRC_STATUS("Loading plug-ins from %s", _path.c_str());
   bool plugins_loaded = true;
 
   DIR* d = opendir(_path.c_str());
@@ -80,7 +80,7 @@ bool PluginLoader::load(std::list<Sproutlet*>& sproutlets)
         p.name.append(de->d_name);
         p.handle = NULL;
         p.plugin = NULL;
-        LOG_STATUS("Attempt to load plug-in %s", p.name.c_str());
+        TRC_STATUS("Attempt to load plug-in %s", p.name.c_str());
 
         dlerror();
         p.handle = dlopen(p.name.c_str(), RTLD_NOW);
@@ -98,7 +98,7 @@ bool PluginLoader::load(std::list<Sproutlet*>& sproutlets)
               // There was an error loading one of the plugins. Return an error
               // now so that Sprout is killed, rather than running with 
               // unexpected plugins.
-              LOG_ERROR("Failed to successfully load plug-in %s", p.name.c_str());
+              TRC_ERROR("Failed to successfully load plug-in %s", p.name.c_str());
               break;
             }
 
@@ -107,19 +107,19 @@ bool PluginLoader::load(std::list<Sproutlet*>& sproutlets)
                  ++i)
             {
               Sproutlet* s = *i;
-              LOG_DEBUG("Sproutlet %s using API version %d",
+              TRC_DEBUG("Sproutlet %s using API version %d",
                          s->service_name().c_str(), s->api_version());
               if (api_supported(s->api_version()))
               {
                 // The API version required by the sproutlet is supported.
                 sproutlets.push_back(s);
-                LOG_STATUS("Loaded sproutlet %s using API version %d",
+                TRC_STATUS("Loaded sproutlet %s using API version %d",
                            s->service_name().c_str(), s->api_version());
               }
               else
               {
                 // The API version required by the sproutlet is not supported.
-                LOG_ERROR("Sproutlet %s requires unsupported API version %d",
+                TRC_ERROR("Sproutlet %s requires unsupported API version %d",
                           s->service_name().c_str(), s->api_version());
               }
             }
@@ -133,7 +133,7 @@ bool PluginLoader::load(std::list<Sproutlet*>& sproutlets)
         }
         else
         {
-          LOG_ERROR("Error loading Sproutlet plug-in %s - %s",
+          TRC_ERROR("Error loading Sproutlet plug-in %s - %s",
                     p.name.c_str(), dlerror());
           if (p.handle != NULL)
           {
@@ -145,7 +145,7 @@ bool PluginLoader::load(std::list<Sproutlet*>& sproutlets)
     closedir(d);
   }
 
-  LOG_STATUS("Finished loading plug-ins");
+  TRC_STATUS("Finished loading plug-ins");
   return plugins_loaded;
 }
 

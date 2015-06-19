@@ -69,7 +69,7 @@ Store::Status AvStore::set_av(const std::string& impi,
   av->Accept(writer);
   std::string data = buffer.GetString();
 
-  LOG_DEBUG("Set AV for %s\n%s", key.c_str(), data.c_str());
+  TRC_DEBUG("Set AV for %s\n%s", key.c_str(), data.c_str());
   Store::Status status = _data_store->set_data("av", key, data, cas, AV_EXPIRY, trail);
 
   if (status == Store::Status::OK)
@@ -81,7 +81,7 @@ Store::Status AvStore::set_av(const std::string& impi,
   else
   {
     // LCOV_EXCL_START
-    LOG_ERROR("Failed to write Authentication Vector for private_id %s", impi.c_str());
+    TRC_ERROR("Failed to write Authentication Vector for private_id %s", impi.c_str());
     SAS::Event event(trail, SASEvent::AVSTORE_SET_FAILURE, 0);
     event.add_var_param(impi);
     SAS::report_event(event);
@@ -103,13 +103,13 @@ rapidjson::Document* AvStore::get_av(const std::string& impi,
 
   if (status == Store::Status::OK)
   {
-    LOG_DEBUG("Retrieved AV for %s\n%s", key.c_str(), data.c_str());
+    TRC_DEBUG("Retrieved AV for %s\n%s", key.c_str(), data.c_str());
     av = new rapidjson::Document;
     av->Parse<0>(data.c_str());
 
     if (av->HasParseError())
     {
-      LOG_INFO("Failed to parse AV: %s\nError: %s",
+      TRC_INFO("Failed to parse AV: %s\nError: %s",
                data.c_str(),
                rapidjson::GetParseError_En(av->GetParseError()));
       delete av;
@@ -134,11 +134,11 @@ void correlate_branch_from_av(rapidjson::Document* av, SAS::TrailId trail)
 {
   if (!(*av).HasMember("branch"))
   {
-    LOG_WARNING("Could not raise branch correlation marker because the stored authentication vector is missing 'branch' field");
+    TRC_WARNING("Could not raise branch correlation marker because the stored authentication vector is missing 'branch' field");
   }
   else if (!(*av)["branch"].IsString())
   {
-    LOG_WARNING("Could not raise branch correlation marker because the stored authentication vector has a non-string 'branch' field");
+    TRC_WARNING("Could not raise branch correlation marker because the stored authentication vector has a non-string 'branch' field");
   }
   else
   {
@@ -146,7 +146,7 @@ void correlate_branch_from_av(rapidjson::Document* av, SAS::TrailId trail)
 
     if (branch == "")
     {
-      LOG_WARNING("Could not raise branch correlation marker because the stored authentication vector has an empty 'branch' field");
+      TRC_WARNING("Could not raise branch correlation marker because the stored authentication vector has an empty 'branch' field");
     }
     else
     {

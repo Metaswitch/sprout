@@ -130,7 +130,7 @@ long FakeHSSConnection::get_json_object(const std::string& path,
 
   if (i != _results.end())
   {
-    LOG_DEBUG("Found HSS data for %s\n%s", path.c_str(), i->second.c_str());
+    TRC_DEBUG("Found HSS data for %s\n%s", path.c_str(), i->second.c_str());
     object = new rapidjson::Document;
     object->Parse<0>(i->second.c_str());
 
@@ -141,7 +141,7 @@ long FakeHSSConnection::get_json_object(const std::string& path,
     else
     {
       // report to the user the failure and their locations in the document.
-      LOG_ERROR("Failed to parse Homestead response:\n %s\n %s.\n Error offset: %d\n",
+      TRC_ERROR("Failed to parse Homestead response:\n %s\n %s.\n Error offset: %d\n",
                 path.c_str(),
                 i->second.c_str(),
                 object->GetErrorOffset());
@@ -151,7 +151,7 @@ long FakeHSSConnection::get_json_object(const std::string& path,
   }
   else
   {
-    LOG_DEBUG("Failed to find JSON result for URL %s", path.c_str());
+    TRC_DEBUG("Failed to find JSON result for URL %s", path.c_str());
   }
 
   std::map<std::string, long>::const_iterator i2 = _rcs.find(path);
@@ -195,7 +195,7 @@ long FakeHSSConnection::get_xml_object(const std::string& path,
              path.c_str(),
              i->second.c_str(),
              err.what());
-      LOG_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n",
+      TRC_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n",
                 path.c_str(),
                 i->second.c_str(),
                 err.what());
@@ -205,7 +205,7 @@ long FakeHSSConnection::get_xml_object(const std::string& path,
   }
   else
   {
-    LOG_ERROR("Failed to find XML result for URL %s", path.c_str());
+    TRC_ERROR("Failed to find XML result for URL %s", path.c_str());
   }
 
   std::map<std::string, long>::const_iterator i2 = _rcs.find(path);

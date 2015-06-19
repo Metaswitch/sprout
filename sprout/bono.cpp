@@ -246,7 +246,7 @@ static NodeRole acr_node_role(pjsip_msg *req);
 // responses/requests will be handled by UA[SC]Transaction methods.
 static pj_bool_t proxy_on_rx_request(pjsip_rx_data *rdata)
 {
-  LOG_DEBUG("Proxy RX request");
+  TRC_DEBUG("Proxy RX request");
 
   if (rdata->msg_info.msg->line.req.method.id != PJSIP_CANCEL_METHOD)
   {
@@ -282,7 +282,7 @@ static pj_bool_t proxy_on_rx_response(pjsip_rx_data *rdata)
     status = PJUtils::create_response_fwd(stack_data.endpt, rdata, 0, &tdata);
     if (status != PJ_SUCCESS)
     {
-      LOG_ERROR("Error creating response, %s",
+      TRC_ERROR("Error creating response, %s",
                 PJUtils::pj_status_to_string(status).c_str());
       return PJ_TRUE;
     }
@@ -336,7 +336,7 @@ static pj_bool_t proxy_on_rx_response(pjsip_rx_data *rdata)
                                        NULL, NULL);
     if (status != PJ_SUCCESS)
     {
-      LOG_ERROR("Error forwarding response, %s",
+      TRC_ERROR("Error forwarding response, %s",
                 PJUtils::pj_status_to_string(status).c_str());
       return PJ_TRUE;
     }
@@ -349,7 +349,7 @@ static pj_bool_t proxy_on_rx_response(pjsip_rx_data *rdata)
 // Callback to be called to handle transaction state changed.
 static void tu_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
 {
-  LOG_DEBUG("%s - tu_on_tsx_state %s, %s %s state=%s",
+  TRC_DEBUG("%s - tu_on_tsx_state %s, %s %s state=%s",
             tsx->obj_name,
             pjsip_role_name(tsx->role),
             pjsip_event_str(event->type),
@@ -404,7 +404,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
   tdata = PJUtils::clone_msg(stack_data.endpt, rdata);
   if (tdata == NULL)
   {
-    LOG_ERROR("Failed to clone request to forward");
+    TRC_ERROR("Failed to clone request to forward");
     reject_request(rdata, PJSIP_SC_INTERNAL_SERVER_ERROR);
     return;
   }
@@ -434,7 +434,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
 
   if (status != PJ_SUCCESS)
   {
-    LOG_ERROR("Error processing route, %s",
+    TRC_ERROR("Error processing route, %s",
               PJUtils::pj_status_to_string(status).c_str());
 
     delete target; target = NULL;
@@ -447,7 +447,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   // We now know various details of this transaction:
-  LOG_DEBUG("Trust mode %s, serving state %s",
+  TRC_DEBUG("Trust mode %s, serving state %s",
             trust->to_string().c_str(),
             serving_state.to_string().c_str());
 
@@ -461,7 +461,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
     // Report a SIP call ID marker on the trail to make sure it gets
     // associated with the INVITE transaction at SAS.  There's no need to
     // report the branch IDs as they won't be used for correlation.
-    LOG_DEBUG("Statelessly forwarding ACK");
+    TRC_DEBUG("Statelessly forwarding ACK");
     PJUtils::mark_sas_call_branch_ids(get_trail(rdata), rdata->msg_info.cid, NULL);
 
     trust->process_request(tdata);
@@ -487,7 +487,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
       // double routing.
       if (target->upstream_route)
       {
-        LOG_DEBUG("Stripping loose routes from proxied message");
+        TRC_DEBUG("Stripping loose routes from proxied message");
 
         // Tight loop to strip all route headers.
         while (pjsip_msg_find_remove_hdr(tdata->msg,
@@ -530,7 +530,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
 
     if (status != PJ_SUCCESS)
     {
-      LOG_ERROR("Error forwarding request, %s",
+      TRC_ERROR("Error forwarding request, %s",
                 PJUtils::pj_status_to_string(status).c_str());
     }
 
@@ -554,7 +554,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
 
   if (status != PJ_SUCCESS)
   {
-    LOG_ERROR("Failed to create UAS transaction, %s",
+    TRC_ERROR("Failed to create UAS transaction, %s",
               PJUtils::pj_status_to_string(status).c_str());
 
     // Delete the request since we're not forwarding it
@@ -627,7 +627,7 @@ void process_cancel_request(pjsip_rx_data* rdata)
   // Send CANCEL to cancel the UAC transactions.
   // The UAS INVITE transaction will get final response when
   // we receive final response from the UAC INVITE transaction.
-  LOG_DEBUG("%s - Cancel for UAS transaction", invite_uas->obj_name);
+  TRC_DEBUG("%s - Cancel for UAS transaction", invite_uas->obj_name);
   UASTransaction *uas_data = UASTransaction::get_from_tsx(invite_uas);
   uas_data->cancel_pending_uac_tsx(0, false);
 
@@ -721,7 +721,7 @@ static void reject_request(pjsip_rx_data* rdata, int status_code)
   if (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD)
   {
     // Not an ACK, so we should send a response.
-    LOG_INFO("Reject %.*s request with %d status code",
+    TRC_INFO("Reject %.*s request with %d status code",
              rdata->msg_info.msg->line.req.method.name.slen,
              rdata->msg_info.msg->line.req.method.name.ptr, status_code);
     pjsip_tx_data* tdata;
@@ -759,23 +759,23 @@ static SIPPeerType determine_source(pjsip_transport* transport, pj_sockaddr addr
 {
   if (transport == NULL)
   {
-    LOG_DEBUG("determine_source called with a NULL pjsip_transport");
+    TRC_DEBUG("determine_source called with a NULL pjsip_transport");
     return SIP_PEER_UNKNOWN;
   }
   if (transport->local_name.port == stack_data.pcscf_trusted_port)
   {
     // Request received on trusted port.
-    LOG_DEBUG("Request received on trusted port %d", transport->local_name.port);
+    TRC_DEBUG("Request received on trusted port %d", transport->local_name.port);
     return SIP_PEER_TRUSTED_PORT;
   }
 
-  LOG_DEBUG("Request received on non-trusted port %d", transport->local_name.port);
+  TRC_DEBUG("Request received on non-trusted port %d", transport->local_name.port);
 
   // Request received on untrusted port, so see if it came over a trunk.
   if ((ibcf) &&
       (ibcf_trusted_peer(addr)))
   {
-    LOG_DEBUG("Request received on configured SIP trunk");
+    TRC_DEBUG("Request received on configured SIP trunk");
     return SIP_PEER_CONFIGURED_TRUNK;
   }
 
@@ -804,7 +804,7 @@ static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
       pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
       if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)).length() > 0)
       {
-        LOG_DEBUG("Request received on authenticated client flow.");
+        TRC_DEBUG("Request received on authenticated client flow.");
         trusted = PJ_TRUE;
       }
       src_flow->dec_ref();
@@ -828,7 +828,7 @@ void proxy_handle_double_rr(pjsip_tx_data* tdata)
     // that look like a spiral, only ones that look like the result of
     // double Record-Routing, and we only do that if the transport and/or port
     // are different.
-    LOG_DEBUG("Top two route headers added by this node, checking transports and ports");
+    TRC_DEBUG("Top two route headers added by this node, checking transports and ports");
     pjsip_sip_uri* uri1 = (pjsip_sip_uri*)r1->name_addr.uri;
     pjsip_sip_uri* uri2 = (pjsip_sip_uri*)r2->name_addr.uri;
     if ((uri1->port != uri2->port) ||
@@ -836,15 +836,15 @@ void proxy_handle_double_rr(pjsip_tx_data* tdata)
     {
       // Possible double record routing.  If one of the route headers doesn't
       // have a flow token it can safely be removed.
-      LOG_DEBUG("Host names are the same and transports are different");
+      TRC_DEBUG("Host names are the same and transports are different");
       if (uri1->user.slen == 0)
       {
-        LOG_DEBUG("Remove top route header");
+        TRC_DEBUG("Remove top route header");
         pj_list_erase(r1);
       }
       else if (uri2->user.slen == 0)
       {
-        LOG_DEBUG("Remove second route header");
+        TRC_DEBUG("Remove second route header");
         pj_list_erase(r2);
       }
     }
@@ -912,13 +912,13 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   if (src_flow != NULL)
   {
     // See if we have a service route for the served user of the request.
-    LOG_DEBUG("Request received on authentication flow - check for Service-Route");
+    TRC_DEBUG("Request received on authentication flow - check for Service-Route");
     pjsip_uri* served_user = PJUtils::orig_served_user(tdata->msg);
     if (served_user != NULL)
     {
       std::string user = PJUtils::public_id_from_uri(served_user);
       service_route = src_flow->service_route(user);
-      LOG_VERBOSE("Found Service-Route for served user %s - %s",
+      TRC_VERBOSE("Found Service-Route for served user %s - %s",
                   user.c_str(), service_route.c_str());
     }
   }
@@ -961,7 +961,7 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
     if (orig_param ||
         (*trust == &TrustBoundary::INBOUND_EDGE_CLIENT))
     {
-      LOG_DEBUG("Mark originating");
+      TRC_DEBUG("Mark originating");
       pjsip_param *orig_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
       pj_strdup(tdata->pool, &orig_param->name, &STR_ORIG);
       pj_strdup2(tdata->pool, &orig_param->value, "");
@@ -981,7 +981,7 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
     }
   }
 
-  LOG_INFO("Route request to upstream proxy %s",
+  TRC_INFO("Route request to upstream proxy %s",
            PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)upstream_uri).c_str());
 
   target_p->paths.push_back((pjsip_uri*)upstream_uri);
@@ -1002,7 +1002,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
   Flow* tgt_flow = NULL;
   SIPPeerType source_type = determine_source(rdata->tp_info.transport,
                                              rdata->pkt_info.src_addr);
-  LOG_DEBUG("Perform access proxy routing for %.*s request",
+  TRC_DEBUG("Perform access proxy routing for %.*s request",
             tdata->msg->line.req.method.name.slen, tdata->msg->line.req.method.name.ptr);
 
   if (tdata->msg->line.req.method.id == PJSIP_REGISTER_METHOD)
@@ -1022,25 +1022,25 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
 
     if (!allow_emergency_reg && is_emergency_reg)
     {
-      LOG_DEBUG("Rejecting emergency REGISTER request");
+      TRC_DEBUG("Rejecting emergency REGISTER request");
       return PJSIP_SC_SERVICE_UNAVAILABLE;
     }
 
     if (source_type == SIP_PEER_TRUSTED_PORT)
     {
-      LOG_WARNING("Rejecting REGISTER request received from within the trust domain");
+      TRC_WARNING("Rejecting REGISTER request received from within the trust domain");
       return PJSIP_SC_METHOD_NOT_ALLOWED;
     }
 
     if (source_type == SIP_PEER_CONFIGURED_TRUNK)
     {
-      LOG_WARNING("Rejecting REGISTER request received over SIP trunk");
+      TRC_WARNING("Rejecting REGISTER request received over SIP trunk");
       return PJSIP_SC_METHOD_NOT_ALLOWED;
     }
 
     // The REGISTER came from outside the trust domain and not over a SIP
     // trunk, so we must act as the access proxy for the node.
-    LOG_DEBUG("Message requires outbound support");
+    TRC_DEBUG("Message requires outbound support");
 
     // Find or create a flow object to represent this flow.
     src_flow = flow_table->find_create_flow(rdata->tp_info.transport,
@@ -1048,17 +1048,17 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
 
     if (src_flow == NULL)
     {
-      LOG_ERROR("Failed to create flow data record");
+      TRC_ERROR("Failed to create flow data record");
       return PJSIP_SC_INTERNAL_SERVER_ERROR; // LCOV_EXCL_LINE find_create_flow failure cases are all excluded already
     }
 
-    LOG_DEBUG("Found or created flow data record, token = %s", src_flow->token().c_str());
+    TRC_DEBUG("Found or created flow data record, token = %s", src_flow->token().c_str());
 
     // Reject the REGISTER with a 305 if Bono is trying to quiesce and
     // there are no active dialogs on this flow.
     if (src_flow->should_quiesce())
     {
-      LOG_DEBUG("REGISTER request received on a quiescing flow - responding with 305");
+      TRC_DEBUG("REGISTER request received on a quiescing flow - responding with 305");
       src_flow->dec_ref();
       return PJSIP_SC_USE_PROXY;
     }
@@ -1140,10 +1140,10 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
     {
       // Message received on untrusted port, so see if it came over a trunk
       // or on a known client flow.
-      LOG_DEBUG("Message received on non-trusted port %d", rdata->tp_info.transport->local_name.port);
+      TRC_DEBUG("Message received on non-trusted port %d", rdata->tp_info.transport->local_name.port);
       if (source_type == SIP_PEER_CONFIGURED_TRUNK)
       {
-        LOG_DEBUG("Message received on configured SIP trunk");
+        TRC_DEBUG("Message received on configured SIP trunk");
         trusted = true;
         *trust = &TrustBoundary::INBOUND_TRUNK;
 
@@ -1165,7 +1165,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
           //
           // We are slightly overloading TrustBoundary here - how to
           // improve this is FFS.
-          LOG_WARNING("Request for originating handling but not from known client");
+          TRC_WARNING("Request for originating handling but not from known client");
           return PJSIP_SC_FORBIDDEN;
         }
       }
@@ -1176,7 +1176,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
         if (src_flow != NULL)
         {
           // Message on a known client flow.
-          LOG_DEBUG("Message received on known client flow");
+          TRC_DEBUG("Message received on known client flow");
 
           // Get all the preferred identities from the message and remove
           // the P-Preferred-Identity headers.
@@ -1186,7 +1186,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
           if (identities.size() > 2)
           {
             // Cannot have more than two preferred identities.
-            LOG_DEBUG("Request has more than two P-Preferred-Identitys, rejecting");
+            TRC_DEBUG("Request has more than two P-Preferred-Identitys, rejecting");
             src_flow->dec_ref();
             return PJSIP_SC_FORBIDDEN;
           }
@@ -1194,7 +1194,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
           {
             // No identities specified, so check there is valid default identity
             // and use it for the P-Asserted-Identity.
-            LOG_DEBUG("Request has no P-Preferred-Identity headers, so check for default identity on flow");
+            TRC_DEBUG("Request has no P-Preferred-Identity headers, so check for default identity on flow");
             std::string aid = src_flow->default_identity();
 
             if (aid.length() > 0)
@@ -1207,12 +1207,12 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
           else if (identities.size() == 1)
           {
             // Only one preferred identity specified.
-            LOG_DEBUG("Request has one P-Preferred-Identity");
+            TRC_DEBUG("Request has one P-Preferred-Identity");
             if ((!PJSIP_URI_SCHEME_IS_SIP(identities[0])) &&
                 (!PJSIP_URI_SCHEME_IS_TEL(identities[0])))
             {
               // Preferred identity must be sip, sips or tel URI.
-              LOG_DEBUG("Invalid URI scheme in P-Preferred-Identity, rejecting");
+              TRC_DEBUG("Invalid URI scheme in P-Preferred-Identity, rejecting");
               src_flow->dec_ref();
               return PJSIP_SC_FORBIDDEN;
             }
@@ -1231,7 +1231,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
           else if (identities.size() == 2)
           {
             // Two preferred identities specified.
-            LOG_DEBUG("Request has two P-Preferred-Identitys");
+            TRC_DEBUG("Request has two P-Preferred-Identitys");
             if (!(((PJSIP_URI_SCHEME_IS_SIP(identities[0])) &&
                    (PJSIP_URI_SCHEME_IS_TEL(identities[1]))) ||
                   ((PJSIP_URI_SCHEME_IS_TEL(identities[0])) &&
@@ -1239,7 +1239,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
             {
               // One identity must be sip or sips URI and the other must be
               // tel URI
-              LOG_DEBUG("Invalid combination of URI schemes in P-Preferred-Identitys, rejecting");
+              TRC_DEBUG("Invalid combination of URI schemes in P-Preferred-Identitys, rejecting");
               src_flow->dec_ref();
               return PJSIP_SC_FORBIDDEN;
             }
@@ -1263,7 +1263,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
           {
             // Initial requests (ones without a To tag) always go upstream
             // to Sprout
-            LOG_DEBUG("Routing initial request from client to upstream Sprout");
+            TRC_DEBUG("Routing initial request from client to upstream Sprout");
             proxy_route_upstream(rdata, tdata, src_flow, trust, target);
           }
         }
@@ -1272,7 +1272,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
     else
     {
       // Message received on a trusted port.
-      LOG_DEBUG("Message received on trusted port");
+      TRC_DEBUG("Message received on trusted port");
       trusted = true;
 
       // See if the message is destined for a client.
@@ -1283,7 +1283,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
         // The user part is present, it should hold our token, so validate the
         // token.
         pjsip_sip_uri* sip_path_uri = (pjsip_sip_uri*)route_hdr->name_addr.uri;
-        LOG_DEBUG("Flow identifier in Route header = %.*s", sip_path_uri->user.slen, sip_path_uri->user.ptr);
+        TRC_DEBUG("Flow identifier in Route header = %.*s", sip_path_uri->user.slen, sip_path_uri->user.ptr);
         tgt_flow = flow_table->find_flow(PJUtils::pj_str_to_string(&sip_path_uri->user));
 
         if (tgt_flow == NULL)
@@ -1294,13 +1294,13 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
           // if the token was invalid (as opposed to for a flow
           // that we don't have).  The authentication module
           // should handle that.
-          LOG_ERROR("Route header flow identifier failed to correlate");
+          TRC_ERROR("Route header flow identifier failed to correlate");
           return SIP_STATUS_FLOW_FAILED;
         }
 
         // This must be a request for a client, so make sure it is routed
         // over the appropriate flow.
-        LOG_DEBUG("Inbound request for client with flow identifier in Route header");
+        TRC_DEBUG("Inbound request for client with flow identifier in Route header");
         *target = new Target();
         (*target)->uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool, tdata->msg->line.req.uri);
         (*target)->transport = tgt_flow->transport();
@@ -1317,7 +1317,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
     if (!trusted)
     {
       // Request is not from a trusted source, so reject or discard it.
-      LOG_INFO("Rejecting request from untrusted source");
+      TRC_INFO("Rejecting request from untrusted source");
       if (src_flow != NULL)
       {
         src_flow->dec_ref();
@@ -1331,7 +1331,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
 
     if (*target == NULL)
     {
-      LOG_DEBUG("No target found yet");
+      TRC_DEBUG("No target found yet");
     
       // Check if we have any Route headers.  If so, we'll follow them.  If not,
       // we get to choose where to route to, so route upstream to sprout.
@@ -1360,17 +1360,17 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
       {
         
         // Check if the message is destined for a SIP trunk
-        LOG_DEBUG("Check whether destination %.*s is a SIP trunk",
+        TRC_DEBUG("Check whether destination %.*s is a SIP trunk",
                   ((pjsip_sip_uri*)next_hop)->host.slen, ((pjsip_sip_uri*)next_hop)->host.ptr);
         pj_sockaddr dest;
         if (pj_sockaddr_parse(pj_AF_UNSPEC(), 0, &((pjsip_sip_uri*)next_hop)->host, &dest) == PJ_SUCCESS)
         {
           // Target host name is an IP address, so check against the IBCF trusted
           // peers.
-          LOG_DEBUG("Parsed destination as an IP address, so check against trusted peers list");
+          TRC_DEBUG("Parsed destination as an IP address, so check against trusted peers list");
           if (ibcf_trusted_peer(dest))
           {
-            LOG_DEBUG("Destination is a SIP trunk");
+            TRC_DEBUG("Destination is a SIP trunk");
             *trust = &TrustBoundary::OUTBOUND_TRUNK;
             pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, NULL);
           }
@@ -1379,12 +1379,12 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
     }
 
     // Add suitable Record-Route header(s).
-    LOG_DEBUG("Add record route header(s)");
+    TRC_DEBUG("Add record route header(s)");
     if (src_flow != NULL)
     {
       // Message is from a client, so add separate Record-Route headers for
       // the ingress and egress hops.
-      LOG_DEBUG("Message received from client - double Record-Route");
+      TRC_DEBUG("Message received from client - double Record-Route");
       PJUtils::add_record_route(tdata, src_flow->transport()->type_name, src_flow->transport()->local_name.port, src_flow->token().c_str(), stack_data.public_host);
       PJUtils::add_record_route(tdata, "TCP", stack_data.pcscf_trusted_port, NULL, stack_data.local_host);
     }
@@ -1392,7 +1392,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
     {
       // Message is destined for a client, so add separate Record-Route headers
       // for the ingress and egress hops.
-      LOG_DEBUG("Message destined for client - double Record-Route");
+      TRC_DEBUG("Message destined for client - double Record-Route");
       PJUtils::add_record_route(tdata, "TCP", stack_data.pcscf_trusted_port, NULL, stack_data.local_host);
       PJUtils::add_record_route(tdata, tgt_flow->transport()->type_name, tgt_flow->transport()->local_name.port, tgt_flow->token().c_str(), stack_data.public_host);
     }
@@ -1509,7 +1509,7 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
   // We remove consecutive Route headers that point to us so we don't spiral.'
   if (PJUtils::is_top_route_local(tdata->msg, &hroute))
   {
-    LOG_DEBUG("Top Route header is local - erasing");
+    TRC_DEBUG("Top Route header is local - erasing");
     pj_list_erase(hroute);
   }
 
@@ -1598,7 +1598,7 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
         // registrar is misbehaving, but we defensively assume a short expiry
         // time as this is more secure.
         int max_expires = PJUtils::max_expires(rdata->msg_info.msg, 300);
-        LOG_DEBUG("Maximum contact expiry is %d", max_expires);
+        TRC_DEBUG("Maximum contact expiry is %d", max_expires);
 
         // Find the Service-Route header so we can record this with each
         // authorized identity.
@@ -1624,7 +1624,7 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
         if (p_assoc_uri != NULL)
         {
           // Use P-Associated-URIs list as list of authenticated URIs.
-          LOG_DEBUG("Found P-Associated-URI header");
+          TRC_DEBUG("Found P-Associated-URI header");
           bool is_default = true;
           while (p_assoc_uri != NULL)
           {
@@ -1642,7 +1642,7 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
         else
         {
           // Use URI in To header as authenticated URIs.
-          LOG_DEBUG("No P-Associated-URI, use URI in To header.");
+          TRC_DEBUG("No P-Associated-URI, use URI in To header.");
           flow_data->set_identity(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri,
                                   service_route,
                                   true,
@@ -1658,7 +1658,7 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
         // This can happen if, for example, the connection to the client
         // failed, but it is unusual, so log at info level rather than as an
         // error or warning.
-        LOG_INFO("Failed to correlate REGISTER response Path token %s to a flow", flow_token.c_str());
+        TRC_INFO("Failed to correlate REGISTER response Path token %s to a flow", flow_token.c_str());
       }
     }
   }
@@ -1689,8 +1689,8 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
   _icscf_acr(NULL),
   _bgcf_acr(NULL)
 {
-  LOG_DEBUG("UASTransaction constructor (%p)", this);
-  LOG_DEBUG("ACR (%p)", acr);
+  TRC_DEBUG("UASTransaction constructor (%p)", this);
+  TRC_DEBUG("ACR (%p)", acr);
 
   for (int ii = 0; ii < MAX_FORKING; ++ii)
   {
@@ -1734,7 +1734,7 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
 /// exit, it will have been released (and possibly destroyed).
 UASTransaction::~UASTransaction()
 {
-  LOG_DEBUG("UASTransaction destructor (%p)", this);
+  TRC_DEBUG("UASTransaction destructor (%p)", this);
 
   pj_assert(_context_count == 0);
 
@@ -1754,7 +1754,7 @@ UASTransaction::~UASTransaction()
   pthread_mutex_destroy(&_trying_timer_lock);
 
   // Disconnect all UAC transactions from the UAS transaction.
-  LOG_DEBUG("Disconnect UAC transactions from UAS transaction");
+  TRC_DEBUG("Disconnect UAC transactions from UAS transaction");
   for (int ii = 0; ii < _num_targets; ++ii)
   {
     UACTransaction* uac_data = _uac_data[ii];
@@ -1768,7 +1768,7 @@ UASTransaction::~UASTransaction()
   {
     // I-CSCF ACR has been created for this transaction, so send the message
     // and delete the ACR.
-    LOG_DEBUG("I-CSCF ACR = %p", _icscf_acr);
+    TRC_DEBUG("I-CSCF ACR = %p", _icscf_acr);
     _icscf_acr->send_message();
 
     if (_downstream_acr == _icscf_acr)
@@ -1786,7 +1786,7 @@ UASTransaction::~UASTransaction()
   {
     // BGCF ACR has been created for this transaction, so send the message
     // and delete the ACR.
-    LOG_DEBUG("BGCF ACR = %p", _bgcf_acr);
+    TRC_DEBUG("BGCF ACR = %p", _bgcf_acr);
     _bgcf_acr->send_message();
 
     if (_downstream_acr == _bgcf_acr)
@@ -1800,7 +1800,7 @@ UASTransaction::~UASTransaction()
     _bgcf_acr = NULL;
   }
 
-  LOG_DEBUG("Upstream ACR = %p, Downstream ACR = %p", _upstream_acr, _downstream_acr);
+  TRC_DEBUG("Upstream ACR = %p, Downstream ACR = %p", _upstream_acr, _downstream_acr);
 
   // This transaction is still in control of the ACR, so send it now.
   if (_downstream_acr != _upstream_acr)
@@ -1825,7 +1825,7 @@ UASTransaction::~UASTransaction()
 
   if (_req != NULL)
   {
-    LOG_DEBUG("Free original request (%p)", _req);
+    TRC_DEBUG("Free original request (%p)", _req);
     pjsip_tx_data_dec_ref(_req);
     _req = NULL;
   }
@@ -1833,7 +1833,7 @@ UASTransaction::~UASTransaction()
   if (_best_rsp != NULL)
   {
     // The pre-built response hasn't been used, so free it.
-    LOG_DEBUG("Free un-used best response");
+    TRC_DEBUG("Free un-used best response");
     pjsip_tx_data_dec_ref(_best_rsp);
     _best_rsp = NULL;
   }
@@ -1841,7 +1841,7 @@ UASTransaction::~UASTransaction()
   pj_grp_lock_release(_lock);
   pj_grp_lock_dec_ref(_lock);
 
-  LOG_DEBUG("UASTransaction destructor completed");
+  TRC_DEBUG("UASTransaction destructor completed");
 }
 
 // Creates a PJSIP transaction and a corresponding UASTransaction.  On
@@ -1944,7 +1944,7 @@ void UASTransaction::handle_outgoing_non_cancel(Target* target)
   if (status != PJ_SUCCESS)
   {
     // Send 500/Internal Server Error to UAS transaction */
-    LOG_ERROR("Failed to allocate UAC transaction for UAS transaction");
+    TRC_ERROR("Failed to allocate UAC transaction for UAS transaction");
     send_response(PJSIP_SC_INTERNAL_SERVER_ERROR);
     return;
   }
@@ -1976,7 +1976,7 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
     status = PJUtils::create_response_fwd(stack_data.endpt, rdata, 0, &tdata);
     if (status != PJ_SUCCESS)
     {
-      LOG_ERROR("Error creating response, %s",
+      TRC_ERROR("Error creating response, %s",
                 PJUtils::pj_status_to_string(status).c_str());
       exit_context();
       return;
@@ -2014,7 +2014,7 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
           (status_code < 199))
       {
         // Forward all provisional responses.
-        LOG_DEBUG("%s - Forward 1xx response", uac_data->name());
+        TRC_DEBUG("%s - Forward 1xx response", uac_data->name());
 
         // Pass the response to the upstream ACR for reporting.
         _upstream_acr->tx_response(tdata->msg);
@@ -2035,7 +2035,7 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
       else if (status_code == 200)
       {
         // 200 OK.
-        LOG_DEBUG("%s - Forward 200 OK response", name());
+        TRC_DEBUG("%s - Forward 200 OK response", name());
 
         // Forward response with the UAS transaction
         pjsip_tsx_send_msg(_tsx, tdata);
@@ -2050,7 +2050,7 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
           // manually for INVITE 200 OK response, otherwise the
           // transaction layer will wait for an ACK.  This will also
           // cause all other pending UAC transactions to be cancelled.
-          LOG_DEBUG("%s - Terminate UAS INVITE transaction (forking case)", name());
+          TRC_DEBUG("%s - Terminate UAS INVITE transaction (forking case)", name());
           pjsip_tsx_terminate(_tsx, 200);
         }
       }
@@ -2058,11 +2058,11 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
       {
         // Final, non-OK response.  Is this the "best" response
         // received so far?
-        LOG_DEBUG("%s - 3xx/4xx/5xx/6xx response", uac_data->name());
+        TRC_DEBUG("%s - 3xx/4xx/5xx/6xx response", uac_data->name());
         if ((_best_rsp == NULL) ||
             (compare_sip_sc(status_code, _best_rsp->msg->line.status.code) > 0))
         {
-          LOG_DEBUG("%s - Best 3xx/4xx/5xx/6xx response so far", uac_data->name());
+          TRC_DEBUG("%s - Best 3xx/4xx/5xx/6xx response so far", uac_data->name());
 
           if (_best_rsp != NULL)
           {
@@ -2085,7 +2085,7 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
           // Received responses on every UAC transaction, so check terminating
           // call services and then send the best response on the UAS
           // transaction.
-          LOG_DEBUG("%s - All UAC responded", name());
+          TRC_DEBUG("%s - All UAC responded", name());
           handle_final_response();
         }
       }
@@ -2097,14 +2097,14 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
       if (rdata->msg_info.msg->line.status.code < 200)
       {
         // Forward provisional response with the UAS transaction.
-        LOG_DEBUG("%s - Forward provisional response on UAS transaction", uac_data->name());
+        TRC_DEBUG("%s - Forward provisional response on UAS transaction", uac_data->name());
         pjsip_tsx_send_msg(_tsx, tdata);
       }
       else
       {
         // Forward final response.  Disconnect the UAC data from
         // the UAS data so no further events get passed between the two.
-        LOG_DEBUG("%s - Final response, so disconnect UAS and UAC transactions", uac_data->name());
+        TRC_DEBUG("%s - Final response, so disconnect UAS and UAC transactions", uac_data->name());
         if (_best_rsp != NULL)
         {
           pjsip_tx_data_dec_ref(_best_rsp);
@@ -2132,13 +2132,13 @@ void UASTransaction::on_client_not_responding(UACTransaction* uac_data)
       // UAC transaction has timed out or hit a transport error.  If
       // we've not received a response from on any other UAC
       // transactions then keep this as the best response.
-      LOG_DEBUG("%s - Forked request", uac_data->name());
+      TRC_DEBUG("%s - Forked request", uac_data->name());
 
       if (--_pending_targets == 0)
       {
         // Received responses on every UAC transaction, so
         // send the best response on the UAS transaction.
-        LOG_DEBUG("%s - No more pending responses, so send response on UAC tsx", name());
+        TRC_DEBUG("%s - No more pending responses, so send response on UAC tsx", name());
         handle_final_response();
       }
     }
@@ -2146,14 +2146,14 @@ void UASTransaction::on_client_not_responding(UACTransaction* uac_data)
     {
       // UAC transaction has timed out or hit a transport error for
       // non-forked request.  Send a 408 on the UAS transaction.
-      LOG_DEBUG("%s - Not forked request", uac_data->name());
+      TRC_DEBUG("%s - Not forked request", uac_data->name());
       --_pending_targets;
       handle_final_response();
     }
 
     // Disconnect the UAC data from the UAS data so no further
     // events get passed between the two.
-    LOG_DEBUG("%s - Disconnect UAS tsx from UAC tsx", uac_data->name());
+    TRC_DEBUG("%s - Disconnect UAS tsx from UAC tsx", uac_data->name());
     dissociate(uac_data);
 
     exit_context();
@@ -2186,7 +2186,7 @@ void UASTransaction::on_tsx_state(pjsip_event* event)
 
   if (_tsx->state == PJSIP_TSX_STATE_DESTROYED)
   {
-    LOG_DEBUG("%s - UAS tsx destroyed", _tsx->obj_name);
+    TRC_DEBUG("%s - UAS tsx destroyed", _tsx->obj_name);
     if (method() == PJSIP_INVITE_METHOD)
     {
       // INVITE transaction has been terminated.  If there are any
@@ -2235,7 +2235,7 @@ pj_status_t UASTransaction::handle_final_response()
       // manually for INVITE 200 OK response, otherwise the
       // transaction layer will wait for an ACK).  This will also
       // cause all other pending UAC transactions to be cancelled.
-      LOG_DEBUG("%s - Terminate UAS INVITE transaction (non-forking case)",
+      TRC_DEBUG("%s - Terminate UAS INVITE transaction (non-forking case)",
           _tsx->obj_name);
       pjsip_tsx_terminate(_tsx, 200);
     }
@@ -2328,7 +2328,7 @@ void UASTransaction::log_on_tsx_start(const pjsip_rx_data* rdata)
   _analytics.cid = (rdata->msg_info.cid != NULL) ? (pjsip_cid_hdr*)pjsip_hdr_clone(_tsx->pool, rdata->msg_info.cid) : NULL;
 
   // Report SAS markers for the transaction.
-  LOG_DEBUG("Report SAS start marker - trail (%llx)", trail());
+  TRC_DEBUG("Report SAS start marker - trail (%llx)", trail());
   SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
 
@@ -2352,7 +2352,7 @@ void UASTransaction::log_on_tsx_start(const pjsip_rx_data* rdata)
 void UASTransaction::log_on_tsx_complete()
 {
   // Report SAS markers for the transaction.
-  LOG_DEBUG("Report SAS end marker - trail (%llx)", trail());
+  TRC_DEBUG("Report SAS end marker - trail (%llx)", trail());
   SAS::Marker end_marker(trail(), MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
 
@@ -2417,7 +2417,7 @@ pj_status_t UASTransaction::init_uac_transactions(TargetList& targets)
          ++it)
     {
       // First UAC transaction can use existing tdata, others must clone.
-      LOG_DEBUG("Allocating transaction and data for target %d", ii);
+      TRC_DEBUG("Allocating transaction and data for target %d", ii);
       uac_tdata = PJUtils::clone_tdata(_req);
       PJUtils::add_top_via(uac_tdata);
 
@@ -2430,7 +2430,7 @@ pj_status_t UASTransaction::init_uac_transactions(TargetList& targets)
       if (uac_tdata == NULL)
       {
         status = PJ_ENOMEM;
-        LOG_ERROR("Failed to clone request for forked transaction, %s",
+        TRC_ERROR("Failed to clone request for forked transaction, %s",
                   PJUtils::pj_status_to_string(status).c_str());
         break;
       }
@@ -2438,13 +2438,13 @@ pj_status_t UASTransaction::init_uac_transactions(TargetList& targets)
       status = pjsip_tsx_create_uac2(&mod_tu, uac_tdata, _lock, &uac_tsx);
       if (status != PJ_SUCCESS)
       {
-        LOG_ERROR("Failed to create UAC transaction, %s",
+        TRC_ERROR("Failed to create UAC transaction, %s",
                   PJUtils::pj_status_to_string(status).c_str());
         break;
       }
 
       // Add the trail from the UAS transaction to the UAC transaction.
-      LOG_DEBUG("Adding trail identifier %ld to UAC transaction", trail());
+      TRC_DEBUG("Adding trail identifier %ld to UAC transaction", trail());
       set_trail(uac_tsx, trail());
 
       // Attach data to the UAC transaction.
@@ -2463,7 +2463,7 @@ pj_status_t UASTransaction::init_uac_transactions(TargetList& targets)
            it != targets.end();
            ++it)
       {
-        LOG_DEBUG("Updating request URI and route for target %d", ii);
+        TRC_DEBUG("Updating request URI and route for target %d", ii);
         uac_data = _uac_data[ii];
         uac_data->set_target(*it);
         ++ii;
@@ -2515,13 +2515,13 @@ void UASTransaction::cancel_pending_uac_tsx(int st_code, bool dissociate_uac)
   int ii;
   UACTransaction *uac_data;
 
-  LOG_DEBUG("%s - Cancel %d pending UAC transactions",
+  TRC_DEBUG("%s - Cancel %d pending UAC transactions",
             name(), _pending_targets);
 
   for (ii = 0; ii < _num_targets; ++ii)
   {
     uac_data = _uac_data[ii];
-    LOG_DEBUG("%s - Check target %d, UAC data = %p, UAC tsx = %p",
+    TRC_DEBUG("%s - Check target %d, UAC data = %p, UAC tsx = %p",
               name(),
               ii,
               uac_data,
@@ -2554,7 +2554,7 @@ void UASTransaction::cancel_pending_uac_tsx(int st_code, bool dissociate_uac)
 // This must be called before destroying either transaction.
 void UASTransaction::dissociate(UACTransaction* uac_data)
 {
-  LOG_DEBUG("Dissociate UAC transaction %p (%d)", uac_data, uac_data->_target);
+  TRC_DEBUG("Dissociate UAC transaction %p (%d)", uac_data, uac_data->_target);
   uac_data->_uas_data = NULL;
   _uac_data[uac_data->_target] = NULL;
 }
@@ -2674,14 +2674,14 @@ void set_target_on_tdata(const struct Target& target, pjsip_tx_data* tdata)
   // double routing.
   if (target.upstream_route)
   {
-    LOG_DEBUG("Stripping loose routes from proxied message");
+    TRC_DEBUG("Stripping loose routes from proxied message");
 
     // Tight loop to strip all route headers.
     while (pjsip_msg_find_remove_hdr(tdata->msg,
                                      PJSIP_H_ROUTE,
                                      NULL) != NULL)
     {
-      LOG_DEBUG("Stripped a Route header from proxied message");
+      TRC_DEBUG("Stripped a Route header from proxied message");
     };
   }
 
@@ -2695,7 +2695,7 @@ void set_target_on_tdata(const struct Target& target, pjsip_tx_data* tdata)
     // will just return the URI.
     pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_get_uri(*pit);
 
-    LOG_DEBUG("Adding a Route header to sip:%.*s%s%.*s:%d;transport=%.*s",
+    TRC_DEBUG("Adding a Route header to sip:%.*s%s%.*s:%d;transport=%.*s",
               uri->user.slen, uri->user.ptr,
               (uri->user.slen != 0) ? "@" : "",
               uri->host.slen, uri->host.ptr,
@@ -2720,7 +2720,7 @@ void UACTransaction::set_target(const struct Target& target)
   if (target.from_store)
   {
     // This target came from the registration store, store the lookup keys.
-    LOG_DEBUG("Target came from store, storing AoR = %s, binding_id = %s",
+    TRC_DEBUG("Target came from store, storing AoR = %s, binding_id = %s",
               target.aor.c_str(), target.binding_id.c_str());
     _from_store = PJ_TRUE;
     pj_strdup2(_tsx->pool, &_aor, target.aor.c_str());
@@ -2749,7 +2749,7 @@ void UACTransaction::set_target(const struct Target& target)
   else
   {
     // Resolve the next hop destination for this request to a set of servers.
-    LOG_DEBUG("Resolve next hop destination");
+    TRC_DEBUG("Resolve next hop destination");
     PJUtils::resolve_next_hop(_tdata, 0, _servers, trail());
   }
 
@@ -2767,7 +2767,7 @@ void UACTransaction::send_request()
   {
     // The transport has already been selected for this request, so
     // add it to the transaction otherwise it will get overwritten.
-    LOG_DEBUG("Transport %s (%s) pre-selected for transaction",
+    TRC_DEBUG("Transport %s (%s) pre-selected for transaction",
               _tdata->tp_sel.u.transport->obj_name,
               _tdata->tp_sel.u.transport->info);
     pjsip_tsx_set_transport(_tsx, &_tdata->tp_sel);
@@ -2787,7 +2787,7 @@ void UACTransaction::send_request()
 
   if (status == PJ_SUCCESS)
   {
-    LOG_DEBUG("Sending request for %s", PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, _tdata->msg->line.req.uri).c_str());
+    TRC_DEBUG("Sending request for %s", PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, _tdata->msg->line.req.uri).c_str());
     _uas_data->_downstream_acr->tx_request(_tdata->msg);
     status = pjsip_tsx_send_msg(_tsx, _tdata);
   }
@@ -2797,7 +2797,7 @@ void UACTransaction::send_request()
     // Failed to send the request.  This is an unexpected error rather than
     // an indication that the selected destination is down, so we do not
     // attempt a retry and do not blacklist the selected destination.
-    LOG_DEBUG("Failed to send request (%d %s)",
+    TRC_DEBUG("Failed to send request (%d %s)",
               status, PJUtils::pj_status_to_string(status).c_str());
     pjsip_tx_data_dec_ref(_tdata);
 
@@ -2830,7 +2830,7 @@ void UACTransaction::cancel_pending_tsx(int st_code)
   enter_context();
   if (_tsx != NULL)
   {
-    LOG_DEBUG("Found transaction %s status=%d", name(), _tsx->status_code);
+    TRC_DEBUG("Found transaction %s status=%d", name(), _tsx->status_code);
     if (_tsx->status_code < 200)
     {
       pjsip_tx_data *cancel;
@@ -2847,7 +2847,7 @@ void UACTransaction::cancel_pending_tsx(int st_code)
       }
       if (trail() == 0)
       {
-        LOG_ERROR("Sending CANCEL request with no SAS trail");
+        TRC_ERROR("Sending CANCEL request with no SAS trail");
       }
 
       set_trail(cancel, trail());
@@ -2865,7 +2865,7 @@ void UACTransaction::cancel_pending_tsx(int st_code)
       // Send CANCEL request using stateful sender.  The CANCEL should
       // always chase the INVITE transaction, so don't retry any alternate
       // targets.
-      LOG_DEBUG("Sending CANCEL request");
+      TRC_DEBUG("Sending CANCEL request");
       pj_status_t status = PJUtils::send_request(cancel, 1);
 
       // We used to deregister the user here if we had
@@ -2876,7 +2876,7 @@ void UACTransaction::cancel_pending_tsx(int st_code)
 
       if (status != PJ_SUCCESS)
       {
-        LOG_ERROR("Error sending CANCEL, %s", PJUtils::pj_status_to_string(status).c_str());
+        TRC_ERROR("Error sending CANCEL, %s", PJUtils::pj_status_to_string(status).c_str());
       }
     }
   }
@@ -2894,7 +2894,7 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
 
   // Handle incoming responses (provided the UAS transaction hasn't
   // terminated or been cancelled.
-  LOG_DEBUG("%s - uac_data = %p, uas_data = %p", name(), this, _uas_data);
+  TRC_DEBUG("%s - uac_data = %p, uas_data = %p", name(), this, _uas_data);
 
   // Check that the event is on the current UAC transaction (we may have
   // created a new one for a retry) and is still connected to the UAS
@@ -2913,7 +2913,7 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
       {
         // Either failed to connect to the selected server, or failed or get
         // a response, so blacklist it.
-        LOG_DEBUG("Failed to connected to server, so add to blacklist");
+        TRC_DEBUG("Failed to connected to server, so add to blacklist");
         PJUtils::blacklist_server(_servers[_current_server]);
 
         // Attempt a retry.
@@ -2933,7 +2933,7 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
     {
       if (event->body.tsx_state.type == PJSIP_EVENT_RX_MSG)
       {
-        LOG_DEBUG("%s - RX_MSG on active UAC transaction", name());
+        TRC_DEBUG("%s - RX_MSG on active UAC transaction", name());
         if (_liveness_timer.id == LIVENESS_TIMER)
         {
           // The liveness timer is running on this transaction, so cancel it.
@@ -2954,18 +2954,18 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
       {
         // UAC transaction has terminated while still connected to the UAS
         // transaction.
-        LOG_DEBUG("%s - UAC tsx terminated while still connected to UAS tsx",
+        TRC_DEBUG("%s - UAC tsx terminated while still connected to UAS tsx",
                   _tsx->obj_name);
         if (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR)
         {
-          LOG_DEBUG("Timeout or transport error");
+          TRC_DEBUG("Timeout or transport error");
           SAS::Event sas_event(trail(), SASEvent::TRANSPORT_FAILURE, 0);
           SAS::report_event(sas_event);
           _uas_data->on_client_not_responding(this);
         }
         else if (event->body.tsx_state.type == PJSIP_EVENT_TIMER)
         {
-          LOG_DEBUG("Timeout error");
+          TRC_DEBUG("Timeout error");
           SAS::Event sas_event(trail(), SASEvent::TIMEOUT_FAILURE, 0);
           SAS::report_event(sas_event);
           _uas_data->on_client_not_responding(this);
@@ -2981,7 +2981,7 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
   if ((event->body.tsx_state.tsx == _tsx) &&
       (_tsx->state == PJSIP_TSX_STATE_DESTROYED))
   {
-    LOG_DEBUG("%s - UAC tsx destroyed", _tsx->obj_name);
+    TRC_DEBUG("%s - UAC tsx destroyed", _tsx->obj_name);
     _tsx->mod_data[mod_tu.id] = NULL;
     _tsx = NULL;
     _pending_destroy = true;
@@ -3005,7 +3005,7 @@ bool UACTransaction::retry_request()
     // retry and connect it to this object.  We'll leave the old transaction
     // connected to this object while PJSIP closes it down, but ignore any
     // future events from it.
-    LOG_DEBUG("Attempt to retry request to alternate server");
+    TRC_DEBUG("Attempt to retry request to alternate server");
     pjsip_transaction* retry_tsx;
     PJUtils::generate_new_branch_id(_tdata);
     pj_status_t status = pjsip_tsx_create_uac2(&mod_tu,
@@ -3017,7 +3017,7 @@ bool UACTransaction::retry_request()
     {
       // Set up the PJSIP transaction user module data to refer to the associated
       // UACTsx object
-      LOG_DEBUG("Created transaction for retry, so send request");
+      TRC_DEBUG("Created transaction for retry, so send request");
       pjsip_transaction* original_tsx = _tsx;
       _tsx = retry_tsx;
       original_tsx->mod_data[mod_tu.id] = NULL;
@@ -3237,7 +3237,7 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
   ibcf = enable_ibcf;
   if (ibcf)
   {
-    LOG_STATUS("Create list of trusted hosts");
+    TRC_STATUS("Create list of trusted hosts");
     std::list<std::string> hosts;
     Utils::split_string(ibcf_trusted_hosts, ',', hosts, 0, true);
     for (std::list<std::string>::const_iterator i = hosts.begin();
@@ -3250,11 +3250,11 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
       pj_status_t status = pj_sockaddr_parse(pj_AF_UNSPEC(), 0, &host, &sockaddr);
       if (status != PJ_SUCCESS)
       {
-        LOG_ERROR("Badly formatted trusted host %.*s", host.slen, host.ptr);
+        TRC_ERROR("Badly formatted trusted host %.*s", host.slen, host.ptr);
         return status;
       }
       char buf[100];
-      LOG_STATUS("Adding host %s to list", pj_sockaddr_print(&sockaddr, buf, sizeof(buf), 1));
+      TRC_STATUS("Adding host %s to list", pj_sockaddr_print(&sockaddr, buf, sizeof(buf), 1));
       trusted_hosts.insert(std::make_pair(sockaddr, true));
     }
   }

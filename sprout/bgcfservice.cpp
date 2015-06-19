@@ -60,17 +60,17 @@ void BgcfService::update_routes()
 {
   // Check whether the file exists.
   struct stat s;
-  LOG_DEBUG("stat(%s) returns %d", _configuration.c_str(), stat(_configuration.c_str(), &s));
+  TRC_DEBUG("stat(%s) returns %d", _configuration.c_str(), stat(_configuration.c_str(), &s));
   if ((stat(_configuration.c_str(), &s) != 0) &&
       (errno == ENOENT))
   {
-    LOG_STATUS("No BGCF configuration (file %s does not exist)",
+    TRC_STATUS("No BGCF configuration (file %s does not exist)",
                _configuration.c_str());
     CL_SPROUT_BGCF_FILE_MISSING.log();
     return;
   }
 
-  LOG_STATUS("Loading BGCF configuration from %s", _configuration.c_str());
+  TRC_STATUS("Loading BGCF configuration from %s", _configuration.c_str());
 
   // Read from the file
   std::ifstream fs(_configuration.c_str());
@@ -80,7 +80,7 @@ void BgcfService::update_routes()
   if (bgcf_str == "")
   {
     // LCOV_EXCL_START
-    LOG_ERROR("Failed to read BGCF configuration data from %s", 
+    TRC_ERROR("Failed to read BGCF configuration data from %s", 
               _configuration.c_str());
     CL_SPROUT_BGCF_FILE_EMPTY.log();
     return;
@@ -93,7 +93,7 @@ void BgcfService::update_routes()
 
   if (doc.HasParseError())
   {
-    LOG_ERROR("Failed to read BGCF configuration data: %s\nError: %s",
+    TRC_ERROR("Failed to read BGCF configuration data: %s\nError: %s",
               bgcf_str.c_str(),
               rapidjson::GetParseError_En(doc.GetParseError()));
     CL_SPROUT_BGCF_FILE_INVALID.log();
@@ -131,7 +131,7 @@ void BgcfService::update_routes()
             ++route_it)
         {
           std::string route_uri = (*route_it).GetString();
-          LOG_DEBUG("  %s", route_uri.c_str());
+          TRC_DEBUG("  %s", route_uri.c_str());
           route_vec.push_back(route_uri);
         }
 
@@ -152,11 +152,11 @@ void BgcfService::update_routes()
 
         route_vec.clear();
 
-        LOG_DEBUG("Add route for %s", routing_value.c_str());
+        TRC_DEBUG("Add route for %s", routing_value.c_str());
       }
       else
       {
-        LOG_WARNING("Badly formed BGCF route entry");
+        TRC_WARNING("Badly formed BGCF route entry");
         CL_SPROUT_BGCF_FILE_INVALID.log();
       }
     }
@@ -166,7 +166,7 @@ void BgcfService::update_routes()
   }
   catch (JsonFormatError err)
   {
-    LOG_ERROR("Badly formed BGCF configuration file - missing routes object");
+    TRC_ERROR("Badly formed BGCF configuration file - missing routes object");
     CL_SPROUT_BGCF_FILE_INVALID.log();
   }
 }
@@ -182,14 +182,14 @@ std::vector<std::string> BgcfService::get_route_from_domain(
                                                 const std::string &domain,
                                                 SAS::TrailId trail) const
 {
-  LOG_DEBUG("Getting route for URI domain %s via BGCF lookup", domain.c_str());
+  TRC_DEBUG("Getting route for URI domain %s via BGCF lookup", domain.c_str());
 
   // First try the specified domain.
   std::map<std::string, std::vector<std::string>>::const_iterator i = 
                                                     _domain_routes.find(domain);
   if (i != _domain_routes.end())
   {
-    LOG_INFO("Found route to domain %s", domain.c_str());
+    TRC_INFO("Found route to domain %s", domain.c_str());
 
     SAS::Event event(trail, SASEvent::BGCF_FOUND_ROUTE_DOMAIN, 0);
     event.add_var_param(domain);
@@ -210,7 +210,7 @@ std::vector<std::string> BgcfService::get_route_from_domain(
   i = _domain_routes.find("*");
   if (i != _domain_routes.end())
   {
-    LOG_INFO("Found default route");
+    TRC_INFO("Found default route");
 
     SAS::Event event(trail, SASEvent::BGCF_DEFAULT_ROUTE_DOMAIN, 0);
     event.add_var_param(domain);
@@ -254,7 +254,7 @@ std::vector<std::string> BgcfService::get_route_from_number(
                                                           len) == 0)
     {
       // Found a match, so return it
-      LOG_DEBUG("Match found. Number: %s, prefix: %s",
+      TRC_DEBUG("Match found. Number: %s, prefix: %s",
                 number.c_str(), (*it).first.c_str());
 
       SAS::Event event(trail, SASEvent::BGCF_FOUND_ROUTE_NUMBER, 0);

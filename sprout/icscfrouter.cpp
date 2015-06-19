@@ -112,7 +112,7 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool, pjsip_sip_uri*& scscf_sip_uri)
       // The HSS returned a S-CSCF name and it's not one we have tried
       // already.
       scscf = _hss_rsp.scscf;
-      LOG_DEBUG("SCSCF specified by HSS: %s", scscf.c_str());
+      TRC_DEBUG("SCSCF specified by HSS: %s", scscf.c_str());
     }
     else if (_queried_caps)
     {
@@ -121,7 +121,7 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool, pjsip_sip_uri*& scscf_sip_uri)
                                          _hss_rsp.optional_caps,
                                          _attempted_scscfs,
                                          _trail);
-      LOG_DEBUG("SCSCF selected: %s", scscf.c_str());
+      TRC_DEBUG("SCSCF selected: %s", scscf.c_str());
     }
 
     if (!scscf.empty())
@@ -160,7 +160,7 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool, pjsip_sip_uri*& scscf_sip_uri)
         if ((PJUtils::is_uri_local(scscf_uri) || PJUtils::is_home_domain(scscf_uri)) &&
             (sip_uri->port == _port))
         {
-          LOG_WARNING("SCSCF URI %s points back to ICSCF", scscf.c_str());
+          TRC_WARNING("SCSCF URI %s points back to ICSCF", scscf.c_str());
           status_code = PJSIP_SC_LOOP_DETECTED;
           SAS::Event event(_trail, SASEvent::SCSCF_ICSCF_LOOP_DETECTED, 0);
           SAS::report_event(event);
@@ -172,7 +172,7 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool, pjsip_sip_uri*& scscf_sip_uri)
       }
       else
       {
-        LOG_WARNING("Invalid SCSCF URI %s", scscf.c_str());
+        TRC_WARNING("Invalid SCSCF URI %s", scscf.c_str());
         status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
       }
     }
@@ -234,7 +234,7 @@ int ICSCFRouter::parse_hss_response(rapidjson::Document*& rsp, bool queried_caps
           ((*rsp)["scscf"].IsString()))
       {
         // Response specifies a S-CSCF, so select this as the target.
-        LOG_DEBUG("HSS returned S-CSCF %s as target", (*rsp)["scscf"].GetString());
+        TRC_DEBUG("HSS returned S-CSCF %s as target", (*rsp)["scscf"].GetString());
         _hss_rsp.scscf = (*rsp)["scscf"].GetString();
       }
 
@@ -246,7 +246,7 @@ int ICSCFRouter::parse_hss_response(rapidjson::Document*& rsp, bool queried_caps
         // Response specifies capabilities - we might have explicitly 
         // queried capabilities or implicitly because there was no 
         // server assigned.
-        LOG_DEBUG("HSS returned capabilities");
+        TRC_DEBUG("HSS returned capabilities");
         queried_caps = true;
   
         if ((!parse_capabilities((*rsp)["mandatory-capabilities"], 
@@ -255,7 +255,7 @@ int ICSCFRouter::parse_hss_response(rapidjson::Document*& rsp, bool queried_caps
                                  _hss_rsp.optional_caps)))
         {
           // Failed to parse capabilities, so reject with 480 response.
-          LOG_INFO("Malformed required capabilities returned by HSS\n");
+          TRC_INFO("Malformed required capabilities returned by HSS\n");
           status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
         }
       }
@@ -340,7 +340,7 @@ int ICSCFUARouter::hss_query()
   // capabilities this time.
   std::string auth_type = (_hss_rsp.scscf.empty()) ? _auth_type : "CAPAB";
 
-  LOG_DEBUG("Perform UAR - impi %s, impu %s, vn %s, auth_type %s",
+  TRC_DEBUG("Perform UAR - impi %s, impu %s, vn %s, auth_type %s",
             _impi.c_str(), _impu.c_str(),
             _visited_network.c_str(), auth_type.c_str());
 
@@ -414,7 +414,7 @@ int ICSCFLIRouter::hss_query()
   // capabilities this time.
   std::string auth_type = (_hss_rsp.scscf.empty()) ? "" : "CAPAB";
 
-  LOG_DEBUG("Perform LIR - impu %s, originating %s, auth_type %s",
+  TRC_DEBUG("Perform LIR - impu %s, originating %s, auth_type %s",
             _impu.c_str(),
             (_originating) ? "true" : "false",
             (auth_type != "") ? auth_type.c_str() : "None");

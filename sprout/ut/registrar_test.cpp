@@ -229,7 +229,7 @@ string Message::get()
 
   string ret(buf, n);
 
-  LOG_DEBUG("REGISTER message\n%s", ret.c_str());
+  TRC_DEBUG("REGISTER message\n%s", ret.c_str());
   return ret;
 }
 

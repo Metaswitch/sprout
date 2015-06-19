@@ -46,12 +46,12 @@ const pj_time_val ACR::unspec = {-1,0};
 
 ACR::ACR()
 {
-  LOG_DEBUG("Created ACR (%p)", this);
+  TRC_DEBUG("Created ACR (%p)", this);
 }
 
 ACR::~ACR()
 {
-  LOG_DEBUG("Destroyed ACR (%p)", this);
+  TRC_DEBUG("Destroyed ACR (%p)", this);
 }
 
 void ACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
@@ -80,7 +80,7 @@ void ACR::server_capabilities(const ServerCapabilities& caps)
 
 void ACR::send_message(pj_time_val timestamp)
 {
-  LOG_DEBUG("Sending Null ACR (%p)", this);
+  TRC_DEBUG("Sending Null ACR (%p)", this);
 }
 
 std::string ACR::get_message(pj_time_val timestamp)
@@ -167,7 +167,7 @@ RalfACR::RalfACR(HttpConnection* ralf,
   _req_timestamp.sec = 0;
   _rsp_timestamp.sec = 0;
 
-  LOG_DEBUG("Created %s Ralf ACR",
+  TRC_DEBUG("Created %s Ralf ACR",
             ACR::node_name(_node_functionality).c_str(), this);
 }
 
@@ -207,7 +207,7 @@ void RalfACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
     if ((_node_functionality == PCSCF) ||
         (_node_functionality == SCSCF))
     {
-      LOG_DEBUG("Set record type for P/S-CSCF");
+      TRC_DEBUG("Set record type for P/S-CSCF");
       if ((_method == "REGISTER") ||
           (_method == "SUBSCRIBE") ||
           (_method == "NOTIFY") ||
@@ -215,39 +215,39 @@ void RalfACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
           (_method == "MESSAGE"))
       {
         // Non-dialog message, must be an EVENT record.
-        LOG_DEBUG("Non-dialog message => EVENT_RECORD");
+        TRC_DEBUG("Non-dialog message => EVENT_RECORD");
         _record_type = EVENT_RECORD;
       }
       else if (_method == "BYE")
       {
         // BYE request must be a STOP record.
-        LOG_DEBUG("BYE => STOP_RECORD");
+        TRC_DEBUG("BYE => STOP_RECORD");
         _record_type = STOP_RECORD;
       }
       else if ((to_hdr != NULL) &&
                (to_hdr->tag.slen > 0))
       {
         // Any other requests with a To tag are INTERIMs.
-        LOG_DEBUG("In-dialog %s request => INTERIM_RECORD", _method.c_str());
+        TRC_DEBUG("In-dialog %s request => INTERIM_RECORD", _method.c_str());
         _record_type = INTERIM_RECORD;
       }
       else if (_method == "INVITE")
       {
         // INVITE with no To tag is a START.
-        LOG_DEBUG("Dialog-initiating INVITE => START_RECORD");
+        TRC_DEBUG("Dialog-initiating INVITE => START_RECORD");
         _record_type = START_RECORD;
       }
       else
       {
         // Anything else is an EVENT.
-        LOG_DEBUG("EVENT_RECORD");
+        TRC_DEBUG("EVENT_RECORD");
         _record_type = EVENT_RECORD;
       }
     }
     else
     {
       // All other node types only generate EVENTs.
-      LOG_DEBUG("Set record type for I-CSCF, BGCF, IBCF, AS to EVENT_RECORD");
+      TRC_DEBUG("Set record type for I-CSCF, BGCF, IBCF, AS to EVENT_RECORD");
       _record_type = EVENT_RECORD;
     }
 
@@ -571,7 +571,7 @@ void RalfACR::tx_response(pjsip_msg* rsp, pj_time_val timestamp)
       (_status_code >= 300))
   {
     // Failed to start the session, so convert to an EVENT record.
-    LOG_DEBUG("Failed to start session, change record type to EVENT_RECORD");
+    TRC_DEBUG("Failed to start session, change record type to EVENT_RECORD");
     _record_type = EVENT_RECORD;
   }
 }
@@ -582,7 +582,7 @@ void RalfACR::as_info(const std::string& uri,
                       bool timeout)
 {
   // Add an entry to the _as_information list.
-  LOG_DEBUG("Storing AS information for AS %s", uri.c_str());
+  TRC_DEBUG("Storing AS information for AS %s", uri.c_str());
   ASInformation as_info;
   as_info.uri = uri;
   as_info.redirect_uri = redirect_uri;
@@ -611,7 +611,7 @@ void RalfACR::as_info(const std::string& uri,
 void RalfACR::server_capabilities(const ServerCapabilities& caps)
 {
   // Store the server capabilities.
-  LOG_DEBUG("Storing Server-Capabilities");
+  TRC_DEBUG("Storing Server-Capabilities");
   _server_caps = caps;
 }
 
@@ -625,7 +625,7 @@ void RalfACR::send_message(pj_time_val timestamp)
       (_record_type == STOP_RECORD))
   {
     // Encode and send the request using the Ralf HTTP connection.
-    LOG_VERBOSE("Sending %s Ralf ACR (%p)",
+    TRC_VERBOSE("Sending %s Ralf ACR (%p)",
                 ACR::node_name(_node_functionality).c_str(), this);
     std::string path = "/call-id/" + Utils::url_escape(_user_session_id);
     std::map<std::string, std::string> headers;
@@ -636,7 +636,7 @@ void RalfACR::send_message(pj_time_val timestamp)
 
     if (rc != HTTP_OK)
     {
-      LOG_WARNING("Failed to send Ralf ACR message (%p), rc = %ld", this, rc);
+      TRC_WARNING("Failed to send Ralf ACR message (%p), rc = %ld", this, rc);
     }
   }
   else
@@ -644,7 +644,7 @@ void RalfACR::send_message(pj_time_val timestamp)
     // There's no CCF or ECF to send to, and we need one.  Drop the ACR.  This
     // is a software or configuration fault - we shouldn't be trying to supply
     // an ACR without a CCF.
-    LOG_INFO("No CCF or ECF to send ACR for session %s to - dropping!",
+    TRC_INFO("No CCF or ECF to send ACR for session %s to - dropping!",
              _user_session_id.c_str());
     SAS::Event event(_trail, SASEvent::NO_CCFS_FOR_ACR, 0);
     SAS::report_event(event);
@@ -653,7 +653,7 @@ void RalfACR::send_message(pj_time_val timestamp)
 
 std::string RalfACR::get_message(pj_time_val timestamp)
 {
-  LOG_DEBUG("Building message");
+  TRC_DEBUG("Building message");
 
   if (timestamp.sec == -1)
   {
@@ -670,7 +670,7 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   if ((_record_type == START_RECORD) ||
       (_record_type == EVENT_RECORD))
   {
-    LOG_DEBUG("Adding peers meta-data, %d ccfs, %d ecfs", _ccfs.size(), _ecfs.size());
+    TRC_DEBUG("Adding peers meta-data, %d ccfs, %d ecfs", _ccfs.size(), _ecfs.size());
 
     writer.String("peers");
     writer.StartObject();
@@ -709,12 +709,12 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   }
 
   // Build the event data.
-  LOG_DEBUG("Building event");
+  TRC_DEBUG("Building event");
   writer.String("event");
   writer.StartObject();
 
   // Add top-level fields.
-  LOG_DEBUG("Adding Account-Record-Type AVP %d", _record_type);
+  TRC_DEBUG("Adding Account-Record-Type AVP %d", _record_type);
   writer.String("Accounting-Record-Type");
   writer.Int(_record_type);
 
@@ -734,7 +734,7 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   writer.Int(timestamp.sec);
 
   // Add Service-Information AVP group.
-  LOG_DEBUG("Adding Service-Information AVP group");
+  TRC_DEBUG("Adding Service-Information AVP group");
   writer.String("Service-Information");
   writer.StartObject();
 
@@ -744,7 +744,7 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   {
     // Add Subscription-Id AVPs on P-CSCF/S-CSCF/IBCF ACRs (should be omitted
     // on I-CSCF and BGCF).
-    LOG_DEBUG("Adding %d Subscription-Id AVPs", _subscription_ids.size());
+    TRC_DEBUG("Adding %d Subscription-Id AVPs", _subscription_ids.size());
 
     if (_subscription_ids.size() > 0)
     {
@@ -770,12 +770,12 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   }
 
   // Add IMS-Information AVP group.
-  LOG_DEBUG("Adding IMS-Information AVP group");
+  TRC_DEBUG("Adding IMS-Information AVP group");
   writer.String("IMS-Information");
   writer.StartObject();
 
   // Add Event-Type AVP group.
-  LOG_DEBUG("Adding Event-Type AVP group");
+  TRC_DEBUG("Adding Event-Type AVP group");
   writer.String("Event-Type");
   writer.StartObject();
   {
@@ -804,7 +804,7 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   writer.String(_user_session_id.c_str());
 
   // Add the Calling-Party-Address AVPs.
-  LOG_DEBUG("Adding %d Calling-Party-Address AVPs", _calling_party_addresses.size());
+  TRC_DEBUG("Adding %d Calling-Party-Address AVPs", _calling_party_addresses.size());
 
   if (_calling_party_addresses.size() > 0)
   {
@@ -824,7 +824,7 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   // Add the Called-Party-Address AVP.
   if (!_called_party_address.empty())
   {
-    LOG_DEBUG("Adding Called-Party-Address AVP");
+    TRC_DEBUG("Adding Called-Party-Address AVP");
     writer.String("Called-Party-Address");
     writer.String(_called_party_address.c_str());
   }
@@ -835,7 +835,7 @@ std::string RalfACR::get_message(pj_time_val timestamp)
     // from the called party address.
     if (_requested_party_address != _called_party_address)
     {
-      LOG_DEBUG("Adding Requested-Party-Address AVP");
+      TRC_DEBUG("Adding Requested-Party-Address AVP");
       writer.String("Requested-Party-Address");
       writer.String(_requested_party_address.c_str());
     }
@@ -845,7 +845,7 @@ std::string RalfACR::get_message(pj_time_val timestamp)
       (_node_functionality == SCSCF))
   {
     // Add the Called-Asserted-Identity AVPs.
-    LOG_DEBUG("Adding %d Called-Asserted-Identity AVPs", _called_asserted_ids.size());
+    TRC_DEBUG("Adding %d Called-Asserted-Identity AVPs", _called_asserted_ids.size());
 
     if (_called_asserted_ids.size() > 0)
     {
@@ -866,7 +866,7 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   if (_node_functionality != BGCF)
   {
     // Add the Associated-URI AVPs.
-    LOG_DEBUG("Adding %d Associated-URI AVPs", _associated_uris.size());
+    TRC_DEBUG("Adding %d Associated-URI AVPs", _associated_uris.size());
 
     if (_associated_uris.size() > 0)
     {
@@ -885,7 +885,7 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   }
 
   // Add the Time-Stamps AVP group.
-  LOG_DEBUG("Adding Time-Stamps AVP group");
+  TRC_DEBUG("Adding Time-Stamps AVP group");
   writer.String("Time-Stamps");
   writer.StartObject();
   {
@@ -910,7 +910,7 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   if (_node_functionality == SCSCF)
   {
     // Add the Application-Server-Information AVPs.
-    LOG_DEBUG("Adding %d Application-Server-Information AVP groups", _as_information.size());
+    TRC_DEBUG("Adding %d Application-Server-Information AVP groups", _as_information.size());
 
     if (_as_information.size() > 0)
     {
@@ -953,7 +953,7 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   // header this seems inconsistent, so we only add a single IOI AVP group.
   if ((!_orig_ioi.empty()) || (!_term_ioi.empty()))
   {
-    LOG_DEBUG("Adding Inter-Operator-Identifier AVP group");
+    TRC_DEBUG("Adding Inter-Operator-Identifier AVP group");
     writer.String("Inter-Operator-Identifier");
     writer.StartArray();
     writer.StartObject();
@@ -975,7 +975,7 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   }
 
   // Add Transit-IOI-List AVPs.
-  LOG_DEBUG("Adding %d Transit-IOI-List AVPs", _transit_iois.size());
+  TRC_DEBUG("Adding %d Transit-IOI-List AVPs", _transit_iois.size());
 
   if (_transit_iois.size() > 0)
   {
@@ -998,7 +998,7 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   // Add the Server-Capabilities AVP if I-CSCF.
   if (_node_functionality == ICSCF)
   {
-    LOG_DEBUG("Adding Server-Capabilities AVP group");
+    TRC_DEBUG("Adding Server-Capabilities AVP group");
     writer.String("Server-Capabilities");
     writer.StartObject();
     {
@@ -1051,7 +1051,7 @@ std::string RalfACR::get_message(pj_time_val timestamp)
     if ((_record_type == START_RECORD) ||
         (_record_type == EVENT_RECORD))
     {
-      LOG_DEBUG("Adding %d Early-Media-Description AVPs", _early_media.size());
+      TRC_DEBUG("Adding %d Early-Media-Description AVPs", _early_media.size());
       if (_early_media.size() > 0)
       {
         writer.String("Early-Media-Description");
@@ -1074,12 +1074,12 @@ std::string RalfACR::get_message(pj_time_val timestamp)
         (_record_type == INTERIM_RECORD))
     {
       // Add SDP related AVPs to Start and Interim ACRs.
-      LOG_DEBUG("Adding Media AVPs");
+      TRC_DEBUG("Adding Media AVPs");
       encode_sdp_description(&writer, _media);
     }
 
     // Add Message-Body AVPs.
-    LOG_DEBUG("Adding %d Message-Body AVPs", _msg_bodies.size());
+    TRC_DEBUG("Adding %d Message-Body AVPs", _msg_bodies.size());
 
     if (_msg_bodies.size() > 0)
     {
@@ -1117,7 +1117,7 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   if (_record_type == STOP_RECORD)
   {
     // Cause code is always zero for STOP requests.
-    LOG_DEBUG("Adding Cause-Code(0) AVP to ACR[Stop]");
+    TRC_DEBUG("Adding Cause-Code(0) AVP to ACR[Stop]");
     writer.String("Cause-Code");
     writer.Int(0);
   }
@@ -1163,13 +1163,13 @@ std::string RalfACR::get_message(pj_time_val timestamp)
     // session setup (2) or Internal error (3) cause codes - in all of these
     // cases we have to send a SIP response with a valid 4xx/5xx/6xx status
     // code, so we use that status code.
-    LOG_DEBUG("Adding Cause-Code(%d) AVP to ACR[Interim]", cause_code);
+    TRC_DEBUG("Adding Cause-Code(%d) AVP to ACR[Interim]", cause_code);
     writer.String("Cause-Code");
     writer.Int(cause_code);
   }
 
   // Add Reason-Header AVPs.
-  LOG_DEBUG("Adding %d Reason-Header AVPs", _reasons.size());
+  TRC_DEBUG("Adding %d Reason-Header AVPs", _reasons.size());
 
   if (_reasons.size() > 0)
   {
@@ -1187,7 +1187,7 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   }
 
   // Add Access-Network-Information AVPs
-  LOG_DEBUG("Adding %d Access-Network-Information AVPs", _access_network_info.size());
+  TRC_DEBUG("Adding %d Access-Network-Information AVPs", _access_network_info.size());
 
   if (_access_network_info.size() > 0)
   {
@@ -1205,14 +1205,14 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   }
 
   // Add From-Address AVP.
-  LOG_DEBUG("Adding From-Address AVP");
+  TRC_DEBUG("Adding From-Address AVP");
   writer.String("From-Address");
   writer.String(_from_address.c_str());
 
   // Add IMS-Visited-Network-Identifier AVP if set.
   if (!_visited_network_id.empty())
   {
-    LOG_DEBUG("Adding IMS-Visited-Network-Identifier AVP");
+    TRC_DEBUG("Adding IMS-Visited-Network-Identifier AVP");
     writer.String("IMS-Visited-Network-Identifier");
     writer.String(_visited_network_id.c_str());
   }
@@ -1220,14 +1220,14 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   // Add Route-Header-Received and Route-Header-Transmitted AVPs if set.
   if (!_route_hdr_received.empty())
   {
-    LOG_DEBUG("Adding Route-Header-Received AVP");
+    TRC_DEBUG("Adding Route-Header-Received AVP");
     writer.String("Route-Header-Received");
     writer.String(_route_hdr_received.c_str());
   }
 
   if (!_route_hdr_transmitted.empty())
   {
-    LOG_DEBUG("Adding Route-Header-Transmitted AVP");
+    TRC_DEBUG("Adding Route-Header-Transmitted AVP");
     writer.String("Route-Header-Transmitted");
     writer.String(_route_hdr_transmitted.c_str());
   }
@@ -1235,7 +1235,7 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   // Add the Instance-Id AVP if set.
   if (!_instance_id.empty())
   {
-    LOG_DEBUG("Adding Instance-Id AVP");
+    TRC_DEBUG("Adding Instance-Id AVP");
     writer.String("Instance-Id");
     writer.String(_instance_id.c_str());
   }
@@ -1272,7 +1272,7 @@ void RalfACR::encode_sdp_description(
   // First add the SDP-Session-Description AVPs.  We take these from the
   // answer if there is one, and from the offer otherwise (rather than
   // repeating them).
-  LOG_DEBUG("Adding SDP-Session-Description AVPs");
+  TRC_DEBUG("Adding SDP-Session-Description AVPs");
   std::vector<std::string>& session_sdp = (answer.empty()) ? offer : answer;
 
   if (session_sdp.size() > 0)
@@ -1298,14 +1298,14 @@ void RalfACR::encode_sdp_description(
     writer->String("SDP-Media-Component");
     writer->StartArray();
 
-    LOG_DEBUG("Adding media AVPs for offer");
+    TRC_DEBUG("Adding media AVPs for offer");
     encode_media_components(writer,
                             offer,
                             SDP_OFFER,
                             media.offer.initiator_flag,
                             media.offer.initiator_party);
 
-    LOG_DEBUG("Adding media AVPs for answer");
+    TRC_DEBUG("Adding media AVPs for answer");
     encode_media_components(writer,
                             answer,
                             SDP_ANSWER,
@@ -1433,7 +1433,7 @@ void RalfACR::store_charging_addresses(pjsip_msg* msg)
     if (p_cfa_hdr != NULL)
     {
       // Clear out any existing entries.
-      LOG_DEBUG("Found a P-Charging-Function-Address header");
+      TRC_DEBUG("Found a P-Charging-Function-Address header");
       _ccfs.clear();
       _ecfs.clear();
 
@@ -1452,7 +1452,7 @@ void RalfACR::store_charging_addresses(pjsip_msg* msg)
       {
         _ecfs.push_back(PJUtils::pj_str_to_string(&p->value));
       }
-      LOG_DEBUG("%d ccfs and %d ecfs", _ccfs.size(), _ecfs.size());
+      TRC_DEBUG("%d ccfs and %d ecfs", _ccfs.size(), _ecfs.size());
     }
   }
 }
@@ -1468,7 +1468,7 @@ void RalfACR::store_subscription_ids(pjsip_msg* msg)
     pa_id = (pjsip_routing_hdr*)
         pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSERTED_IDENTITY, pa_id->next);
   }
-  LOG_DEBUG("Stored %d subscription identifiers", _subscription_ids.size());
+  TRC_DEBUG("Stored %d subscription identifiers", _subscription_ids.size());
 }
 
 RalfACR::SubscriptionId RalfACR::uri_to_subscription_id(pjsip_uri* uri)
@@ -1479,14 +1479,14 @@ RalfACR::SubscriptionId RalfACR::uri_to_subscription_id(pjsip_uri* uri)
     // SIP URI
     id.type = END_USER_SIP_URI;
     id.id = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, uri);
-    LOG_DEBUG("Found SIP URI subscription identifier %s", id.id.c_str());
+    TRC_DEBUG("Found SIP URI subscription identifier %s", id.id.c_str());
   }
   else
   {
     // TEL URI
     id.type = END_USER_E164;
     id.id = PJUtils::pj_str_to_string(&((pjsip_tel_uri*)uri)->number);
-    LOG_DEBUG("Found E.164 subscription identifier %s", id.id.c_str());
+    TRC_DEBUG("Found E.164 subscription identifier %s", id.id.c_str());
   }
   return id;
 }
@@ -1527,7 +1527,7 @@ void RalfACR::store_called_asserted_ids(pjsip_msg* msg)
 
 void RalfACR::store_associated_uris(pjsip_msg* msg)
 {
-  LOG_DEBUG("Store associated URIs");
+  TRC_DEBUG("Store associated URIs");
   pjsip_routing_hdr* pau = (pjsip_routing_hdr*)
                   pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSOCIATED_URI, NULL);
   while (pau != NULL)
@@ -1546,7 +1546,7 @@ void RalfACR::store_charging_info(pjsip_msg* msg)
                              pjsip_msg_find_hdr_by_name(msg, &STR_P_C_V, NULL);
   if (pcv_hdr != NULL)
   {
-    LOG_DEBUG("Found P-Charging-Vector header, store information");
+    TRC_DEBUG("Found P-Charging-Vector header, store information");
     _icid = PJUtils::pj_str_to_string(&pcv_hdr->icid);
     _orig_ioi = PJUtils::pj_str_to_string(&pcv_hdr->orig_ioi);
     _term_ioi = PJUtils::pj_str_to_string(&pcv_hdr->term_ioi);
@@ -1724,7 +1724,7 @@ RalfACRFactory::RalfACRFactory(HttpConnection* ralf,
   _ralf(ralf),
   _node_functionality(node_functionality)
 {
-  LOG_DEBUG("Created RalfACR factory for node type %s",
+  TRC_DEBUG("Created RalfACR factory for node type %s",
             ACR::node_name(_node_functionality).c_str());
 }
 
@@ -1738,7 +1738,7 @@ ACR* RalfACRFactory::get_acr(SAS::TrailId trail,
                              Initiator initiator,
                              NodeRole role)
 {
-  LOG_DEBUG("Create RalfACR for node type %s with role %s",
+  TRC_DEBUG("Create RalfACR for node type %s with role %s",
             ACR::node_name(_node_functionality).c_str(),
             ACR::node_role_str(role).c_str());
 

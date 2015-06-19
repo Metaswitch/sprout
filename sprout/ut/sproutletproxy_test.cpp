@@ -374,7 +374,7 @@ public:
     {
       // This is a final response, so build and send an ACK for this
       // response, irrespective of the status code.
-      LOG_DEBUG("Process INVITE final response");
+      TRC_DEBUG("Process INVITE final response");
       pjsip_msg* ack = original_request();
       pjsip_method_set(&ack->line.req.method, PJSIP_ACK_METHOD);
 
@@ -384,7 +384,7 @@ public:
            hdr = next)
       {
         next = hdr->next;
-        LOG_DEBUG("%.*s header", hdr->name.slen, hdr->name.ptr);
+        TRC_DEBUG("%.*s header", hdr->name.slen, hdr->name.ptr);
 
         switch (hdr->type)
         {
@@ -393,30 +393,30 @@ public:
           case PJSIP_H_REQUIRE:
           case PJSIP_H_ROUTE:
             // Leave header in the ACK.
-            LOG_DEBUG("Leave header in ACK");
+            TRC_DEBUG("Leave header in ACK");
             break;
 
           case PJSIP_H_TO:
             // Leave header in the ACK, but copy tag from the response.
             if (PJSIP_MSG_TO_HDR(rsp) != NULL)
             {
-              LOG_DEBUG("Copy To tag from response");
+              TRC_DEBUG("Copy To tag from response");
               pj_strdup(get_pool(ack),
                         &(((pjsip_to_hdr*)hdr)->tag),
                         &(PJSIP_MSG_TO_HDR(rsp)->tag));
             }
-            LOG_DEBUG("Leave header in ACK");
+            TRC_DEBUG("Leave header in ACK");
             break;
 
           case PJSIP_H_CSEQ:
             // Update the method to ACK.
-            LOG_DEBUG("Update method in CSeq");
+            TRC_DEBUG("Update method in CSeq");
             pjsip_method_set(&((pjsip_cseq_hdr*)hdr)->method, PJSIP_ACK_METHOD);
             break;
 
           default:
             // Remove header from the ACK.
-            LOG_DEBUG("Remove header");
+            TRC_DEBUG("Remove header");
             pj_list_erase(hdr);
             break;
         }

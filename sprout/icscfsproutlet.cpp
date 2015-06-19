@@ -99,7 +99,7 @@ bool ICSCFSproutlet::init()
 
   if (_bgcf_uri == NULL)
   {
-    LOG_ERROR("Invalid BGCF URI %s", _bgcf_uri_str.c_str()); //LCOV_EXCL_LINE
+    TRC_ERROR("Invalid BGCF URI %s", _bgcf_uri_str.c_str()); //LCOV_EXCL_LINE
     init_success = false;
   }
 
@@ -150,7 +150,7 @@ std::string ICSCFSproutlet::enum_translate_tel_uri(pjsip_tel_uri* uri,
   }
   else
   {
-    LOG_DEBUG("ENUM isn't enabled");
+    TRC_DEBUG("ENUM isn't enabled");
     SAS::Event event(trail, SASEvent::ENUM_NOT_ENABLED, 0);
     SAS::report_event(event);
   }
@@ -192,7 +192,7 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
   _acr = _icscf->get_acr(trail());
   _acr->rx_request(req);
 
-  LOG_DEBUG("I-CSCF initialize transaction for REGISTER request");
+  TRC_DEBUG("I-CSCF initialize transaction for REGISTER request");
 
   // Extract relevant fields from the message
   std::string impu;
@@ -244,7 +244,7 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
   {
     // Use the domain of the IMPU as the visited network.
     visited_network = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)to_uri)->host);
-    LOG_WARNING("No P-Visited-Network-ID in REGISTER - using %s as a default",
+    TRC_WARNING("No P-Visited-Network-ID in REGISTER - using %s as a default",
                 visited_network.c_str());
   }
 
@@ -278,7 +278,7 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
 
   if (status_code == PJSIP_SC_OK)
   {
-    LOG_DEBUG("Found SCSCF for REGISTER");
+    TRC_DEBUG("Found SCSCF for REGISTER");
     req->line.req.uri = (pjsip_uri*)scscf_sip_uri;
     send_request(req);
   }
@@ -326,7 +326,7 @@ void ICSCFSproutletRegTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
   // Authorization header are immaterial).
   pjsip_status_code rsp_status = (pjsip_status_code)rsp->line.status.code;
   const ForkState& fork_status = fork_state(fork_id);
-  LOG_DEBUG("Check retry conditions for REGISTER, status = %d, S-CSCF %sresponsive",
+  TRC_DEBUG("Check retry conditions for REGISTER, status = %d, S-CSCF %sresponsive",
             rsp_status,
             (fork_status.error_state != NONE) ? "not " : "");
   if ((PJSIP_IS_STATUS_IN_CLASS(rsp_status, 300)) ||
@@ -334,7 +334,7 @@ void ICSCFSproutletRegTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
       (rsp_status == PJSIP_SC_TEMPORARILY_UNAVAILABLE))
   {
     // Indeed it is, first log to SAS.
-    LOG_DEBUG("Attempt retry to alternate S-CSCF for REGISTER request");
+    TRC_DEBUG("Attempt retry to alternate S-CSCF for REGISTER request");
     std::string st_code = std::to_string(rsp_status);
     SAS::Event event(trail(), SASEvent::SCSCF_RETRY, 0);
     std::string method = "REGISTER";
@@ -349,7 +349,7 @@ void ICSCFSproutletRegTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
     if (status_code == PJSIP_SC_OK)
     {
-      LOG_DEBUG("Found SCSCF for REGISTER");
+      TRC_DEBUG("Found SCSCF for REGISTER");
 
       req->line.req.uri = (pjsip_uri*)scscf_sip_uri;
       send_request(req);
@@ -461,7 +461,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   _acr = _icscf->get_acr(trail());
   _acr->rx_request(req);
 
-  LOG_DEBUG("I-CSCF initialize transaction for non-REGISTER request");
+  TRC_DEBUG("I-CSCF initialize transaction for non-REGISTER request");
 
   // Before we clone the request for retries, remove the P-Profile-Key header
   // if present.
@@ -476,7 +476,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
                         &STR_ORIG) != NULL))
   {
     // Originating request.
-    LOG_DEBUG("Originating request");
+    TRC_DEBUG("Originating request");
     _originating = true;
     impu = PJUtils::public_id_from_uri(PJUtils::orig_served_user(req));
 
@@ -489,7 +489,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   else
   {
     // Terminating request.
-    LOG_DEBUG("Terminating request");
+    TRC_DEBUG("Terminating request");
     _originating = false;
     pjsip_uri* uri = PJUtils::term_served_user(req);
 
@@ -505,7 +505,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
           (!_icscf->are_global_only_lookups_enforced() || PJUtils::is_user_global(sip_uri->user)) &&
           (!PJUtils::is_uri_gruu(uri)))
       {
-        LOG_DEBUG("Change request URI from SIP URI to tel URI");
+        TRC_DEBUG("Change request URI from SIP URI to tel URI");
         req->line.req.uri =
           PJUtils::translate_sip_uri_to_tel_uri(sip_uri, pool);
       }
@@ -538,7 +538,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
   if ((!_originating) && (scscf_not_found(status_code)))
   {
-    LOG_DEBUG("Couldn't find an S-CSCF, attempt to translate the URI");
+    TRC_DEBUG("Couldn't find an S-CSCF, attempt to translate the URI");
     pjsip_uri* uri = PJUtils::term_served_user(req);
 
     // For terminating processing, if the HSS indicates that the user does not
@@ -555,7 +555,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
         (!_icscf->are_global_only_lookups_enforced() || PJUtils::is_user_global(((pjsip_sip_uri*)uri)->user)) &&
         (!PJUtils::is_uri_gruu(uri)))
     {
-      LOG_DEBUG("enforce_user_phone set to false, try using a tel URI");
+      TRC_DEBUG("enforce_user_phone set to false, try using a tel URI");
       uri = PJUtils::translate_sip_uri_to_tel_uri((pjsip_sip_uri*)uri, pool);
       req->line.req.uri = uri;
 
@@ -603,13 +603,13 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
               }
               else
               {
-                LOG_DEBUG("Request URI already has existing NP information");
+                TRC_DEBUG("Request URI already has existing NP information");
 
                 // The existing URI had NP data. Only overwrite the URI if
                 // we're configured to do so.
                 if (_icscf->should_override_npdi())
                 {
-                  LOG_DEBUG("Override existing NP information");
+                  TRC_DEBUG("Override existing NP information");
                   req->line.req.uri = req_uri;
                 }
 
@@ -621,21 +621,21 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
             {
               // The ENUM lookup has returned NP data. Rewrite the request
               // URI and route the request to the BGCF
-              LOG_DEBUG("Update request URI to %s", new_uri.c_str());
+              TRC_DEBUG("Update request URI to %s", new_uri.c_str());
               req->line.req.uri = req_uri;
               route_to_bgcf(req);
               return;
             }
             else
             {
-              LOG_DEBUG("Update request URI to %s", new_uri.c_str());
+              TRC_DEBUG("Update request URI to %s", new_uri.c_str());
               req->line.req.uri = req_uri;
               ((ICSCFLIRouter *)_router)->change_impu(new_uri);
             }
           }
           else
           {
-            LOG_WARNING("Badly formed URI %s from ENUM translation",
+            TRC_WARNING("Badly formed URI %s from ENUM translation",
                         new_uri.c_str());
             SAS::Event event(trail(), SASEvent::ENUM_INVALID, 0);
             event.add_var_param(new_uri);
@@ -669,7 +669,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
   if (status_code == PJSIP_SC_OK)
   {
-    LOG_DEBUG("Found SCSCF for non-REGISTER");
+    TRC_DEBUG("Found SCSCF for non-REGISTER");
 
     if (_originating)
     {
@@ -736,13 +736,13 @@ void ICSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
   // Note also that we can never retry once we've routed to the BGCF.
   pjsip_status_code rsp_status = (pjsip_status_code)rsp->line.status.code;
   const ForkState& fork_status = fork_state(fork_id);
-  LOG_DEBUG("Check retry conditions for non-REGISTER, S-CSCF %sresponsive",
+  TRC_DEBUG("Check retry conditions for non-REGISTER, S-CSCF %sresponsive",
             (fork_status.error_state != NONE) ? "not " : "");
   if ((!_routed_to_bgcf) &&
       (fork_status.error_state != NONE))
   {
     // Indeed it it, first log to SAS.
-    LOG_DEBUG("Attempt retry to alternate S-CSCF for non-REGISTER request");
+    TRC_DEBUG("Attempt retry to alternate S-CSCF for non-REGISTER request");
     std::string st_code = std::to_string(rsp_status);
     SAS::Event event(trail(), SASEvent::SCSCF_RETRY, 0);
     std::string method = "non-REGISTER";
@@ -758,7 +758,7 @@ void ICSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
     if (status_code == PJSIP_SC_OK)
     {
-      LOG_DEBUG("Found SCSCF for non-REGISTER");
+      TRC_DEBUG("Found SCSCF for non-REGISTER");
 
       if (_originating)
       {
@@ -820,7 +820,7 @@ void ICSCFSproutletTsx::on_cancel(int status_code, pjsip_msg* cancel_req)
 /// Route the request to the BGCF.
 void ICSCFSproutletTsx::route_to_bgcf(pjsip_msg* req)
 {
-  LOG_INFO("Routing to BGCF %s",
+  TRC_INFO("Routing to BGCF %s",
            PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                   _icscf->bgcf_uri()).c_str());
   PJUtils::add_route_header(req,
