@@ -121,13 +121,13 @@ private:
   void inc_ref()
   {
     ++_refs;
-    LOG_DEBUG("AsChain inc ref %p -> %d", this, _refs.load());
+    TRC_DEBUG("AsChain inc ref %p -> %d", this, _refs.load());
   }
 
   void dec_ref()
   {
     int count = --_refs;
-    LOG_DEBUG("AsChain dec ref %p -> %d", this, count);
+    TRC_DEBUG("AsChain dec ref %p -> %d", this, count);
     pj_assert(count >= 0);
     if (count == 0)
     {

@@ -125,7 +125,7 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
     std::string served_user_uri_string = "<"+served_user+">";
     const pj_str_t served_user_uri = pj_str(const_cast<char *>(served_user_uri_string.c_str()));
 
-    LOG_INFO("Generating a fake REGISTER to send to IfcHandler using AOR %s", served_user.c_str());
+    TRC_INFO("Generating a fake REGISTER to send to IfcHandler using AOR %s", served_user.c_str());
 
     SAS::Event event(trail, SASEvent::REGISTER_AS_START, 0);
     event.add_var_param(served_user);
@@ -156,7 +156,7 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
     }
     else
     {
-      LOG_DEBUG("Unable to create third party registration for %s",
+      TRC_DEBUG("Unable to create third party registration for %s",
                 served_user.c_str());
       SAS::Event event(trail, SASEvent::DEREGISTER_AS_FAILED, 0);
       event.add_var_param(served_user);
@@ -168,7 +168,7 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
     ifcs.interpret(SessionCase::Originating, true, is_initial_registration, received_register->msg_info.msg, as_list, trail);
   }
 
-  LOG_INFO("Found %d Application Servers", as_list.size());
+  TRC_INFO("Found %d Application Servers", as_list.size());
 
   // Loop through the as_list
   for (std::vector<AsInvocation>::iterator as_iter = as_list.begin();
@@ -189,7 +189,7 @@ static void send_register_cb(void* token, pjsip_event *event)
        (PJSIP_IS_STATUS_IN_CLASS(tsx->status_code, 500))))
   {
     std::string error_msg = "Third-party REGISTER transaction failed with code " + std::to_string(tsx->status_code);
-    LOG_INFO(error_msg.c_str());
+    TRC_INFO(error_msg.c_str());
 
     SAS::Event event(tsxdata->trail, SASEvent::REGISTER_AS_FAILED, 0);
     event.add_var_param(error_msg);
@@ -232,7 +232,7 @@ void send_register_to_as(pjsip_rx_data *received_register,
   if (status != PJ_SUCCESS)
   {
     //LCOV_EXCL_START
-    LOG_DEBUG("Failed to build third-party REGISTER request for server %s",
+    TRC_DEBUG("Failed to build third-party REGISTER request for server %s",
               as.server_name.c_str());
     return;
     //LCOV_EXCL_STOP
@@ -346,7 +346,7 @@ void send_register_to_as(pjsip_rx_data *received_register,
 
 void notify_application_servers()
 {
-  LOG_DEBUG("In dummy notify_application_servers function");
+  TRC_DEBUG("In dummy notify_application_servers function");
   // TODO: implement as part of reg events package
 }
 
@@ -368,7 +368,7 @@ static bool expire_bindings(RegStore *store, const std::string& aor, const std::
     {
       // We only use this when doing some network-initiated deregistrations;
       // when the user deregisters all bindings another code path clears them
-      LOG_INFO("Clearing all bindings!");
+      TRC_INFO("Clearing all bindings!");
       aor_data->clear(false);
     }
     else
@@ -398,13 +398,13 @@ void RegistrationUtils::remove_bindings(RegStore* store,
                                         const std::string& dereg_type,
                                         SAS::TrailId trail)
 {
-  LOG_INFO("Remove binding(s) %s from IMPU %s", binding_id.c_str(), aor.c_str());
+  TRC_INFO("Remove binding(s) %s from IMPU %s", binding_id.c_str(), aor.c_str());
 
   if (expire_bindings(store, aor, binding_id, trail))
   {
     // All bindings have been expired, so do deregistration processing for the
     // IMPU.
-    LOG_INFO("All bindings for %s expired, so deregister at HSS and ASs", aor.c_str());
+    TRC_INFO("All bindings for %s expired, so deregister at HSS and ASs", aor.c_str());
     std::vector<std::string> uris;
     std::map<std::string, Ifcs> ifc_map;
     HTTPCode http_code = hss->update_registration_state(aor,

@@ -107,7 +107,7 @@ HTTPCode FakeChronosConnection::get_result(std::string identity)
   }
   else
   {
-    LOG_DEBUG("Failed to find Chronos result for %s", identity.c_str());
+    TRC_DEBUG("Failed to find Chronos result for %s", identity.c_str());
     return HTTP_BAD_REQUEST;
   }
 }

@@ -175,7 +175,7 @@ public:
     std::map<std::string, std::list<TestTarget> >::const_iterator i = _test_targets.find(aor);
     if (i == _test_targets.end())
     {
-      LOG_DEBUG("Failed to find test targets for AOR %s", aor.c_str());
+      TRC_DEBUG("Failed to find test targets for AOR %s", aor.c_str());
       return std::list<TestTarget>();
     }
 
@@ -207,10 +207,10 @@ private:
       {
         // No targets set up by default function, so see if any have been
         // manually configured in the test case
-        LOG_DEBUG("Check for test targets");
+        TRC_DEBUG("Check for test targets");
         std::string aor = PJUtils::aor_from_uri((pjsip_sip_uri*)_req->msg->line.req.uri);
         std::list<BasicProxyUT::TestTarget> test_targets = ((BasicProxyUT*)_proxy)->find_test_targets(aor);
-        LOG_DEBUG("Found %d targets for %s", test_targets.size(), aor.c_str());
+        TRC_DEBUG("Found %d targets for %s", test_targets.size(), aor.c_str());
 
         // Add the targets to the transaction.
         while (!test_targets.empty())

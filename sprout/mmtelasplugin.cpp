@@ -84,7 +84,7 @@ bool MMTELASPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
   if (opt.xdm_server != "")
   {
     // Create a connection to the XDMS.
-    LOG_STATUS("Creating connection to XDMS %s", opt.xdm_server.c_str());
+    TRC_STATUS("Creating connection to XDMS %s", opt.xdm_server.c_str());
     _xdm_connection = new XDMConnection(opt.xdm_server,
                                         http_resolver,
                                         load_monitor,

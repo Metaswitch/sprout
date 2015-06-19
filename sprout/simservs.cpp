@@ -72,7 +72,7 @@ simservs::simservs(std::string xml) : _oip_enabled(false),
   }
   catch (parse_error err)
   {
-    LOG_ERROR("Parse error in simservs document: %s\n\n%s", err.what(), xml.c_str());
+    TRC_ERROR("Parse error in simservs document: %s\n\n%s", err.what(), xml.c_str());
     doc.clear();
   }
 
@@ -91,13 +91,13 @@ simservs::simservs(std::string xml) : _oip_enabled(false),
   while (current_node)
   {
     std::string current_node_name = current_node->name();
-    LOG_DEBUG("Processing simservs node: '%s'", current_node_name.c_str());
+    TRC_DEBUG("Processing simservs node: '%s'", current_node_name.c_str());
     if (current_node_name == "originating-identity-presentation")
     {
       if (check_active(current_node))
       {
         _oip_enabled = true;
-        LOG_DEBUG("OIP enabled");
+        TRC_DEBUG("OIP enabled");
       }
     }
     else if (current_node_name ==
@@ -107,7 +107,7 @@ simservs::simservs(std::string xml) : _oip_enabled(false),
       if (check_active(current_node))
       {
         _oir_enabled = true;
-        LOG_DEBUG("OIR enabled");
+        TRC_DEBUG("OIR enabled");
 
         // Check if the OIR rules are allowing or disallowing presentation
         xml_node<> *oir_def_behaviour = current_node->first_node("default-behaviour");
@@ -124,7 +124,7 @@ simservs::simservs(std::string xml) : _oip_enabled(false),
       if (check_active(current_node))
       {
         _cdiv_enabled = true;
-        LOG_DEBUG("CDIV enabled");
+        TRC_DEBUG("CDIV enabled");
 
         // Get the NoReplyTimer value, if it exists
         xml_node<>* no_reply_timer = current_node->first_node("NoReplyTimer");
@@ -151,7 +151,7 @@ simservs::simservs(std::string xml) : _oip_enabled(false),
       if (check_active(current_node))
       {
         _inbound_cb_enabled = true;
-        LOG_DEBUG("Inbound Call Barring enabled");
+        TRC_DEBUG("Inbound Call Barring enabled");
 
         // Extract the rules in use
         xml_node<>* ruleset = current_node->first_node("ruleset");
@@ -167,7 +167,7 @@ simservs::simservs(std::string xml) : _oip_enabled(false),
       }
       else
       {
-        LOG_DEBUG("Inbound Call Barring enabled");
+        TRC_DEBUG("Inbound Call Barring enabled");
       }
     }
     else if (current_node_name == "outgoing-communication-barring")
@@ -175,7 +175,7 @@ simservs::simservs(std::string xml) : _oip_enabled(false),
       if (check_active(current_node))
       {
         _outbound_cb_enabled = true;
-        LOG_DEBUG("Outbound Call Barring enabled");
+        TRC_DEBUG("Outbound Call Barring enabled");
 
         // Extract the rules in use
         xml_node<>* ruleset = current_node->first_node("ruleset");
@@ -191,7 +191,7 @@ simservs::simservs(std::string xml) : _oip_enabled(false),
       }
       else
       {
-        LOG_DEBUG("Outbound Call Barring disabled");
+        TRC_DEBUG("Outbound Call Barring disabled");
       }
     }
 
@@ -326,25 +326,25 @@ simservs::Rule::Rule(xml_node<>* rule) : _conditions(0)
          condition = condition->next_sibling())
     {
       std::string condition_name = condition->name();
-      LOG_DEBUG("Processing condition: %s", condition_name.c_str());
+      TRC_DEBUG("Processing condition: %s", condition_name.c_str());
       if (condition_name == "busy")
       {
-        LOG_DEBUG("Adding condition: Busy");
+        TRC_DEBUG("Adding condition: Busy");
         _conditions |= CONDITION_BUSY;
       }
       else if (condition_name == "not-registered")
       {
-        LOG_DEBUG("Adding condition: Not Registered");
+        TRC_DEBUG("Adding condition: Not Registered");
         _conditions |= CONDITION_NOT_REGISTERED;
       }
       else if (condition_name == "no-answer")
       {
-        LOG_DEBUG("Adding condition: No Answer");
+        TRC_DEBUG("Adding condition: No Answer");
         _conditions |= CONDITION_NO_ANSWER;
       }
       else if (condition_name == "not-reachable")
       {
-        LOG_DEBUG("Adding condition: Not Reachable");
+        TRC_DEBUG("Adding condition: Not Reachable");
         _conditions |= CONDITION_NOT_REACHABLE;
       }
       else if (condition_name == "media")
@@ -352,37 +352,37 @@ simservs::Rule::Rule(xml_node<>* rule) : _conditions(0)
         std::string media_type = (std::string)condition->value();
         if (media_type == "audio")
         {
-          LOG_DEBUG("Adding condition: Audio");
+          TRC_DEBUG("Adding condition: Audio");
           _conditions |= CONDITION_MEDIA_AUDIO;
         }
         else if (media_type == "video")
         {
-          LOG_DEBUG("Adding condition: Video");
+          TRC_DEBUG("Adding condition: Video");
           _conditions |= CONDITION_MEDIA_VIDEO;
         }
         else
         {
-          LOG_WARNING("Unsupported conditional media type %s", media_type.c_str());
+          TRC_WARNING("Unsupported conditional media type %s", media_type.c_str());
         }
       }
       else if (condition_name == "roaming")
       {
-        LOG_DEBUG("Adding condition: Roaming");
+        TRC_DEBUG("Adding condition: Roaming");
         _conditions |= CONDITION_ROAMING;
       }
       else if (condition_name == "international")
       {
-        LOG_DEBUG("Adding condition: International");
+        TRC_DEBUG("Adding condition: International");
         _conditions |= CONDITION_INTERNATIONAL;
       }
       else if (condition_name == "international-exHC")
       {
-        LOG_DEBUG("Adding condition: International-exHC");
+        TRC_DEBUG("Adding condition: International-exHC");
         _conditions |= CONDITION_INTERNATIONAL_EXHC;
       }
       else
       {
-        LOG_WARNING("Unsupported conditional %s", condition_name.c_str());
+        TRC_WARNING("Unsupported conditional %s", condition_name.c_str());
       }
     }
   }

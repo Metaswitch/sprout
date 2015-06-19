@@ -63,7 +63,7 @@ ConnectionTracker::~ConnectionTracker()
        it != _connection_listeners.end();
        ++it)
   {
-    LOG_DEBUG("Stop listening on connection %p", it->first);
+    TRC_DEBUG("Stop listening on connection %p", it->first);
     pjsip_transport_remove_state_listener(it->first,
                                           it->second,
                                           (void *)this);
@@ -88,7 +88,7 @@ void ConnectionTracker::connection_state_update(pjsip_transport *tp,
 
   if (state == PJSIP_TP_STATE_DESTROYED)
   {
-    LOG_DEBUG("Connection %p has been destroyed", tp);
+    TRC_DEBUG("Connection %p has been destroyed", tp);
 
     pthread_mutex_lock(&_lock);
 
@@ -97,7 +97,7 @@ void ConnectionTracker::connection_state_update(pjsip_transport *tp,
     // If we're quiescing and there are no more active connections, then
     // quiescing is complete.
     if (_quiescing && _connection_listeners.empty()) {
-      LOG_DEBUG("Connection quiescing complete");
+      TRC_DEBUG("Connection quiescing complete");
       quiesce_complete = PJ_TRUE;
     }
 
@@ -154,7 +154,7 @@ void ConnectionTracker::quiesce()
 {
   pj_bool_t quiesce_complete = PJ_FALSE;
 
-  LOG_DEBUG("Start quiescing connections");
+  TRC_DEBUG("Start quiescing connections");
 
   pthread_mutex_lock(&_lock);
 
@@ -166,7 +166,7 @@ void ConnectionTracker::quiesce()
   if (_connection_listeners.empty())
   {
     // There are no active connections, so quiescing is already complete.
-    LOG_DEBUG("Connection quiescing complete");
+    TRC_DEBUG("Connection quiescing complete");
     quiesce_complete = PJ_TRUE;
   }
   else
@@ -179,7 +179,7 @@ void ConnectionTracker::quiesce()
          it != _connection_listeners.end();
          ++it)
     {
-      LOG_DEBUG("Shutdown connection %p", it->first);
+      TRC_DEBUG("Shutdown connection %p", it->first);
       pjsip_transport_shutdown(it->first);
     }
   }
@@ -196,7 +196,7 @@ void ConnectionTracker::quiesce()
 
 void ConnectionTracker::unquiesce()
 {
-  LOG_DEBUG("Unquiesce connections");
+  TRC_DEBUG("Unquiesce connections");
 
   pthread_mutex_lock(&_lock);
 
