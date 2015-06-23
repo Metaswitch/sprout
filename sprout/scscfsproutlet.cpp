@@ -817,7 +817,9 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         status_code = PJSIP_SC_NOT_FOUND;
         SAS::Event no_ifcs(trail(), SASEvent::IFC_GET_FAILURE, 0);
         SAS::report_event(no_ifcs);
-        delete acr;
+
+        // No AsChain, store ACR locally.
+        _acr = acr;
       }
     }
     else
