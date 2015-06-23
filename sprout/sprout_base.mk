@@ -118,6 +118,7 @@ LDFLAGS += -lmemcached \
            -levent_pthreads \
            -lcurl \
            -lsas \
+           -lz \
            -lboost_filesystem
 
 # Explicitly link some pjsip modules. Some plugins require symbols in them

@@ -227,7 +227,7 @@ LDFLAGS += -lmemcached \
            -levent_pthreads
 
 # Test build fakes out cURL
-LDFLAGS_BUILD += -lcurl -lsas
+LDFLAGS_BUILD += -lcurl -lsas -lz
 
 # Include memento if desired
 #LDFLAGS += -lmemento -lthrift -lcassandra
