@@ -382,11 +382,13 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
 SCSCFSproutletTsx::~SCSCFSproutletTsx()
 {
   TRC_DEBUG("S-CSCF Transaction (%p) destroyed", this);
-  if ((_acr != NULL) &&
-      (!_as_chain_link.is_set()))
+  if (!_as_chain_link.is_set())
   {
-    _acr->send_message();
-    delete _acr;
+    ACR* acr = get_acr();
+    if (acr)
+    {
+      acr->send_message();
+    }
   }
 
   if (_as_chain_link.is_set())
@@ -397,6 +399,12 @@ SCSCFSproutletTsx::~SCSCFSproutletTsx()
   if (_liveness_timer != 0)
   {
     cancel_timer(_liveness_timer);
+  }
+
+  // If the ACR was stored locally, destroy it now.
+  if (_acr)
+  {
+    delete _acr;
   }
 
   _target_bindings.clear();
@@ -429,7 +437,11 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
   // Pass the received request to the ACR.
   // @TODO - request timestamp???
-  _acr->rx_request(req);
+  ACR* acr = get_acr();
+  if (acr)
+  {
+    acr->rx_request(req);
+  }
 
   if (status_code != PJSIP_SC_OK)
   {
@@ -512,11 +524,12 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
 
 void SCSCFSproutletTsx::on_tx_request(pjsip_msg* req)
 {
-  if (_acr != NULL)
+  ACR* acr = get_acr();
+  if (acr)
   {
     // Pass the transmitted request to the ACR to update the accounting
     // information.
-    _acr->tx_request(req);
+    acr->tx_request(req);
   }
 }
 
@@ -527,9 +540,10 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
   // Pass the received response to the ACR.
   // @TODO - timestamp from response???
-  if (_acr != NULL)
+  ACR* acr = get_acr();
+  if (acr != NULL)
   {
-    _acr->rx_response(rsp);
+    acr->rx_response(rsp);
   }
 
   if (_liveness_timer != 0)
@@ -620,11 +634,12 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
 void SCSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
 {
-  if (_acr != NULL)
+  ACR* acr = get_acr();
+  if (acr != NULL)
   {
     // Pass the transmitted response to the ACR to update the accounting
     // information.
-    _acr->tx_response(rsp);
+    acr->tx_response(rsp);
   }
 }
 
@@ -645,13 +660,13 @@ void SCSCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
     {
       role = NODE_ROLE_TERMINATING;
     }
-    ACR* acr = _scscf->get_acr(trail(), CALLING_PARTY, role);
+    ACR* cancel_acr = _scscf->get_acr(trail(), CALLING_PARTY, role);
 
     // @TODO - timestamp from request.
-    acr->rx_request(cancel_req);
-    acr->send_message();
+    cancel_acr->rx_request(cancel_req);
+    cancel_acr->send_message();
 
-    delete acr;
+    delete cancel_acr;
   }
 }
 
@@ -779,16 +794,16 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       }
 
       // Create a new ACR for this request.
-      _acr = _scscf->get_acr(trail(),
-                             CALLING_PARTY,
-                             NODE_ROLE_ORIGINATING);
+      ACR* acr = _scscf->get_acr(trail(),
+                                 CALLING_PARTY,
+                                 NODE_ROLE_ORIGINATING);
 
       Ifcs ifcs;
       if (lookup_ifcs(served_user, ifcs))
       {
         TRC_DEBUG("Creating originating CDIV AS chain");
         _as_chain_link.release();
-        _as_chain_link = create_as_chain(ifcs, served_user);
+        _as_chain_link = create_as_chain(ifcs, served_user, acr);
 
         if (stack_data.record_route_on_diversion)
         {
@@ -802,14 +817,11 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         status_code = PJSIP_SC_NOT_FOUND;
         SAS::Event no_ifcs(trail(), SASEvent::IFC_GET_FAILURE, 0);
         SAS::report_event(no_ifcs);
+        delete acr;
       }
     }
     else
     {
-      // Continuing the existing chain, so get the ACR from the chain.
-      _acr = _as_chain_link.acr();
-      TRC_DEBUG("Retrieved ACR %p for existing AS chain", _acr);
-
       if (stack_data.record_route_on_every_hop)
       {
         TRC_DEBUG("Add service to dialog - AS hop");
@@ -830,10 +842,10 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
     std::string served_user = served_user_from_msg(req);
 
     // Create a new ACR for this request.
-    _acr = _scscf->get_acr(trail(),
-                           CALLING_PARTY,
-                           _session_case->is_originating() ?
-                                NODE_ROLE_ORIGINATING : NODE_ROLE_TERMINATING);
+    ACR* acr = _scscf->get_acr(trail(),
+                               CALLING_PARTY,
+                               _session_case->is_originating() ?
+                                 NODE_ROLE_ORIGINATING : NODE_ROLE_TERMINATING);
 
     if (!served_user.empty())
     {
@@ -845,7 +857,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       if (lookup_ifcs(served_user, ifcs))
       {
         TRC_DEBUG("Successfully looked up iFCs");
-        _as_chain_link = create_as_chain(ifcs, served_user);
+        _as_chain_link = create_as_chain(ifcs, served_user, acr);
       }
       else
       {
@@ -853,6 +865,9 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         status_code = PJSIP_SC_NOT_FOUND;
         SAS::Event no_ifcs(trail(), SASEvent::IFC_GET_FAILURE, 1);
         SAS::report_event(no_ifcs);
+
+        // No IFC, so no AsChain, store the ACR locally.
+        _acr = acr;
       }
 
       if (_session_case->is_terminating())
@@ -871,6 +886,10 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
           add_record_route(req, NODE_ROLE_ORIGINATING);
         }
       }
+    }
+    else
+    {
+      delete acr;
     }
   }
 
@@ -944,7 +963,8 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
 
 /// Factory method: create AsChain by looking up iFCs.
 AsChainLink SCSCFSproutletTsx::create_as_chain(Ifcs ifcs,
-                                               std::string served_user)
+                                               std::string served_user,
+                                               ACR*& acr)
 {
   if (served_user.empty())
   {
@@ -958,7 +978,8 @@ AsChainLink SCSCFSproutletTsx::create_as_chain(Ifcs ifcs,
                                                  is_registered,
                                                  trail(),
                                                  ifcs,
-                                                 _acr);
+                                                 acr);
+  acr = NULL;
   TRC_DEBUG("S-CSCF sproutlet transaction %p linked to AsChain %s",
             this, ret.to_string().c_str());
   return ret;
@@ -1788,3 +1809,14 @@ void SCSCFSproutletTsx::sas_log_start_of_sesion_case(pjsip_msg* req,
   SAS::report_event(event);
 }
 
+ACR* SCSCFSproutletTsx::get_acr()
+{
+  if (_as_chain_link.is_set())
+  {
+    return _as_chain_link.acr();
+  }
+  else
+  {
+    return _acr;
+  }
+}

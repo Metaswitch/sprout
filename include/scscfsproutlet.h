@@ -234,7 +234,7 @@ private:
 
   /// Creates an AS chain for this service role and links this service hop to
   /// it.
-  AsChainLink create_as_chain(Ifcs ifcs, std::string served_user);
+  AsChainLink create_as_chain(Ifcs ifcs, std::string served_user, ACR*& acr);
 
   /// Apply originating services for this request.
   void apply_originating_services(pjsip_msg* req);
@@ -303,6 +303,11 @@ private:
   void sas_log_start_of_sesion_case(pjsip_msg* req,
                                     const SessionCase* session_case,
                                     const std::string& served_user);
+
+  /// Fetch the ACR for the current transaction, ACRs should always be retrived
+  /// through this API, not by inspecting _acr directly.  May return NULL
+  /// in some cases.
+  ACR* get_acr();
 
   /// Pointer to the parent SCSCFSproutlet object - used for various operations
   /// that require access to global configuration or services.
