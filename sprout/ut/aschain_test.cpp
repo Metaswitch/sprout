@@ -175,7 +175,7 @@ TEST_F(AsChainTest, AsInvocation)
   EXPECT_EQ(server_name, "");
 
   // Invoke external AS on originating side.
-  LOG_DEBUG("ODI %s", as_chain_link2.to_string().c_str());
+  TRC_DEBUG("ODI %s", as_chain_link2.to_string().c_str());
   as_chain_link2.on_initial_request(tdata->msg, server_name, 1u);
   EXPECT_EQ(server_name, "sip:pancommunicon.cw-ngv.com");
 }

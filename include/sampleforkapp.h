@@ -17,7 +17,7 @@ public:
 
   void on_initial_request(pjsip_msg* req)
   {
-    LOG_DEBUG("SampleForkAS - process request %p", req);
+    TRC_DEBUG("SampleForkAS - process request %p", req);
 
     // Add the app to the dialog.
     add_to_dialog("fred");
@@ -27,18 +27,18 @@ public:
 
     if (PJSIP_URI_SCHEME_IS_SIP(clone->line.req.uri))
     {
-      LOG_DEBUG("Forking request to external number");
+      TRC_DEBUG("Forking request to external number");
       pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)clone->line.req.uri;
       pj_strdup2(get_pool(clone), &sip_uri->user, "011442083627241");
       send_request(clone);
     }
     else
     {
-      LOG_DEBUG("Not SIP URI, so don't fork");
+      TRC_DEBUG("Not SIP URI, so don't fork");
       free_msg(clone);
     }
 
-    LOG_DEBUG("Forwarding original request");
+    TRC_DEBUG("Forwarding original request");
     send_request(req);
   }
 };

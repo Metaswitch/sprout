@@ -693,7 +693,7 @@ void SipTest::poll()
   do
   {
     pj_status_t status = pjsip_endpt_handle_events2(stack_data.endpt, &delay, &count);
-    LOG_INFO("Poll found %d events, status %d\n", (int)count, (int)status);
+    TRC_INFO("Poll found %d events, status %d\n", (int)count, (int)status);
   }
   while (count != 0);
 }
@@ -757,7 +757,7 @@ void SipTest::terminate_all_tsxs(int status_code)
   // until there are no unterminated transactions left in the list.  This is
   // because it is possible for terminating one transaction to kick off a
   // retry.
-  LOG_DEBUG("Terminate outstanding transactions");
+  TRC_DEBUG("Terminate outstanding transactions");
   mod_tsx_layer_t* mod_tsx_layer = (mod_tsx_layer_t*)pjsip_tsx_layer_instance();
   pj_hash_table_t* htable = mod_tsx_layer->htable;
 

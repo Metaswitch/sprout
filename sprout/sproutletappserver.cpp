@@ -68,12 +68,12 @@ SproutletAppServerTsxHelper::~SproutletAppServerTsxHelper()
 /// sent by the app server.
 void SproutletAppServerTsxHelper::store_onward_route(pjsip_msg* req)
 {
-  LOG_DEBUG("Store onward route-set for request");
+  TRC_DEBUG("Store onward route-set for request");
   pjsip_route_hdr* hroute = (pjsip_route_hdr*)
                                 pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
   while (hroute != NULL)
   {
-    LOG_DEBUG("Store header: %s",
+    TRC_DEBUG("Store header: %s",
               PJUtils::hdr_to_string((pjsip_hdr*)hroute).c_str());
     pj_list_push_back(&_route_set, pjsip_hdr_clone(_pool, hroute));
     hroute = (pjsip_route_hdr*)
@@ -84,7 +84,7 @@ void SproutletAppServerTsxHelper::store_onward_route(pjsip_msg* req)
 /// Stores the dialog_id from the top Route header, if it is present.
 void SproutletAppServerTsxHelper::store_dialog_id(pjsip_msg* req)
 {
-  LOG_DEBUG("Store dialog_id if it present");
+  TRC_DEBUG("Store dialog_id if it present");
   const pjsip_route_hdr* hroute = route_hdr();
   if (hroute != NULL)
   {
@@ -94,7 +94,7 @@ void SproutletAppServerTsxHelper::store_dialog_id(pjsip_msg* req)
     if (dialog_id_param != NULL)
     {
       std::string dialog_id = PJUtils::pj_str_to_string(&dialog_id_param->value);
-      LOG_DEBUG("Store dialog_id: %s", dialog_id.c_str());
+      TRC_DEBUG("Store dialog_id: %s", dialog_id.c_str());
       add_to_dialog(dialog_id);
     }
   }
@@ -199,7 +199,7 @@ int SproutletAppServerTsxHelper::send_request(pjsip_msg*& req)
   pjsip_route_hdr* hroute = _route_set.next;
   while ((hroute != NULL) && (hroute != &_route_set))
   {
-    LOG_DEBUG("Restore header: %s",
+    TRC_DEBUG("Restore header: %s",
               PJUtils::hdr_to_string((pjsip_hdr*)hroute).c_str());
     pjsip_msg_add_hdr(req, (pjsip_hdr*)pjsip_hdr_clone(pool, hroute));
     hroute = hroute->next;

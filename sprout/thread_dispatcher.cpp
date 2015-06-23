@@ -136,7 +136,7 @@ static int worker_thread(void* p)
   rp.start_mod = &mod_thread_dispatcher;
   rp.idx_after_start = 1;
 
-  LOG_DEBUG("Worker thread started");
+  TRC_DEBUG("Worker thread started");
 
   struct rx_msg_qe qe = {0};
 
@@ -146,7 +146,7 @@ static int worker_thread(void* p)
 
     if (rdata)
     {
-      LOG_DEBUG("Worker thread dequeue message %p", rdata);
+      TRC_DEBUG("Worker thread dequeue message %p", rdata);
 
       CW_TRY
       {
@@ -173,24 +173,24 @@ static int worker_thread(void* p)
       }
       CW_END
 
-      LOG_DEBUG("Worker thread completed processing message %p", rdata);
+      TRC_DEBUG("Worker thread completed processing message %p", rdata);
       pjsip_rx_data_free_cloned(rdata);
 
       unsigned long latency_us = 0;
       if (qe.stop_watch.read(latency_us))
       {
-        LOG_DEBUG("Request latency = %ldus", latency_us);
+        TRC_DEBUG("Request latency = %ldus", latency_us);
         latency_accumulator->accumulate(latency_us);
         load_monitor->request_complete(latency_us);
       }
       else
       {
-        LOG_ERROR("Failed to get done timestamp: %s", strerror(errno));
+        TRC_ERROR("Failed to get done timestamp: %s", strerror(errno));
       }
     }
   }
 
-  LOG_DEBUG("Worker thread ended");
+  TRC_DEBUG("Worker thread ended");
 
   return 0;
 }
@@ -204,7 +204,7 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
     // all the worker threads are deadlock, so exit the process so it will be
     // restarted.
     CL_SPROUT_SIP_DEADLOCK.log();
-    LOG_ERROR("Detected worker thread deadlock - exiting");
+    TRC_ERROR("Detected worker thread deadlock - exiting");
     abort();
   }
 
@@ -220,7 +220,7 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   if (status != PJ_SUCCESS)
   {
     // Failed to clone the message, so drop it.
-    LOG_ERROR("Failed to clone incoming message (%s)", PJUtils::pj_status_to_string(status).c_str());
+    TRC_ERROR("Failed to clone incoming message (%s)", PJUtils::pj_status_to_string(status).c_str());
     return PJ_TRUE;
   }
 
@@ -233,7 +233,7 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   // will force back pressure on the particular TCP connection.  Or should we
   // have a queue per transport and round-robin them?
 
-  LOG_DEBUG("Queuing cloned received message %p for worker threads", clone_rdata);
+  TRC_DEBUG("Queuing cloned received message %p for worker threads", clone_rdata);
   qe.rdata = clone_rdata;
 
   // Track the current queue size
@@ -281,7 +281,7 @@ pj_status_t start_worker_threads()
                               NULL, 0, 0, &thread);
     if (status != PJ_SUCCESS)
     {
-      LOG_ERROR("Error creating worker thread, %s",
+      TRC_ERROR("Error creating worker thread, %s",
                 PJUtils::pj_status_to_string(status).c_str());
       return 1;
     }

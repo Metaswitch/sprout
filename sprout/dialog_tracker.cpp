@@ -125,7 +125,7 @@ Flow* DialogTracker::get_client_flow(const pjsip_tx_data* original_request,
     if (route_hdr == NULL) {
       // LCOV_EXCL_START - doesn't happen in UT, and would require a
       // carefully constructed 200 OK message.
-      LOG_ERROR("No Route or Record-Route header found - cannot deduce the flow");
+      TRC_ERROR("No Route or Record-Route header found - cannot deduce the flow");
       return NULL;
       // LCOV_EXCL_STOP
     }

@@ -55,7 +55,7 @@ pj_xml_node* create_reg_node(pj_pool_t *pool,
                              pj_str_t *id,
                              pj_str_t *state)
 {
-  LOG_DEBUG("Create registration node");
+  TRC_DEBUG("Create registration node");
 
   pj_xml_node *reg_node;
   pj_xml_attr *attr;
@@ -79,7 +79,7 @@ pj_xml_node* create_contact_node(pj_pool_t *pool,
                                  pj_str_t *state,
                                  pj_str_t *event)
 {
-  LOG_DEBUG("Create contact node");
+  TRC_DEBUG("Create contact node");
 
   pj_xml_node *contact_node;
   pj_xml_attr *attr;
@@ -108,7 +108,7 @@ pj_xml_node* notify_create_reg_state_xml(
                          NotifyUtils::ContactState contact_state,
                          NotifyUtils::ContactEvent contact_event)
 {
-  LOG_DEBUG("Create the XML body for a SIP NOTIFY");
+  TRC_DEBUG("Create the XML body for a SIP NOTIFY");
 
   pj_xml_node *doc, *reg_node, *contact_node, *uri_node;
   pj_xml_attr *attr;
@@ -206,7 +206,7 @@ pj_xml_node* notify_create_reg_state_xml(
 
     if (gruu.slen != 0)
     {
-      LOG_DEBUG("Create pub-gruu node");
+      TRC_DEBUG("Create pub-gruu node");
 
       pj_xml_node* gruu_node = pj_xml_node_new(pool, &STR_XML_PUB_GRUU);
       attr = pj_xml_attr_new(pool, &STR_URI, &gruu);
@@ -242,7 +242,7 @@ pj_status_t notify_create_body(pjsip_msg_body* body,
                                NotifyUtils::ContactState contact_state,
                                NotifyUtils::ContactEvent contact_event)
 {
-  LOG_DEBUG("Create body of a SIP NOTIFY");
+  TRC_DEBUG("Create body of a SIP NOTIFY");
 
   pj_xml_node *doc;
   doc = notify_create_reg_state_xml(pool,
@@ -257,7 +257,7 @@ pj_status_t notify_create_body(pjsip_msg_body* body,
   if (doc == NULL)
   {
     // LCOV_EXCL_START
-    LOG_DEBUG("Failed to create body");
+    TRC_DEBUG("Failed to create body");
     return PJ_FALSE;
     // LCOV_EXCL_STOP
   }
@@ -288,7 +288,7 @@ pj_status_t create_request_from_subscription(
   pj_cstr(&uri, subscription->_req_uri.c_str());
   pj_cstr(&cid, subscription->_cid.c_str());
 
-  LOG_DEBUG("Create NOTIFY request");
+  TRC_DEBUG("Create NOTIFY request");
   pj_status_t status = pjsip_endpt_create_request(stack_data.endpt,
                                                   pjsip_get_notify_method(),
                                                   &uri,

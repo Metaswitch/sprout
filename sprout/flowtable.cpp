@@ -86,7 +86,7 @@ Flow* FlowTable::find_create_flow(pjsip_transport* transport, const pj_sockaddr*
   FlowKey key(transport->key.type, raddr);
 
   char buf[100];
-  LOG_DEBUG("Find or create flow for transport %s (%d), remote address %s",
+  TRC_DEBUG("Find or create flow for transport %s (%d), remote address %s",
             transport->obj_name, transport->key.type,
             pj_sockaddr_print(raddr, buf, sizeof(buf), 3));
 
@@ -103,7 +103,7 @@ Flow* FlowTable::find_create_flow(pjsip_transport* transport, const pj_sockaddr*
     _tp2flow_map.insert(std::make_pair(key, flow));
     _tk2flow_map.insert(std::make_pair(flow->token(), flow));
 
-    LOG_DEBUG("Added flow record %p", flow);
+    TRC_DEBUG("Added flow record %p", flow);
 
     report_flow_count();
   }
@@ -112,7 +112,7 @@ Flow* FlowTable::find_create_flow(pjsip_transport* transport, const pj_sockaddr*
     // Found a matching flow, so return this one.
     flow = i->second;
 
-    LOG_DEBUG("Found flow record %p", flow);
+    TRC_DEBUG("Found flow record %p", flow);
   }
 
   // Add a reference to the flow.
@@ -132,7 +132,7 @@ Flow* FlowTable::find_flow(pjsip_transport* transport, const pj_sockaddr* raddr)
   FlowKey key(transport->key.type, raddr);
 
   char buf[100];
-  LOG_DEBUG("Find flow for transport %s (%d), remote address %s",
+  TRC_DEBUG("Find flow for transport %s (%d), remote address %s",
             transport->obj_name, transport->key.type,
             pj_sockaddr_print(raddr, buf, sizeof(buf), 3));
 
@@ -148,7 +148,7 @@ Flow* FlowTable::find_flow(pjsip_transport* transport, const pj_sockaddr* raddr)
     // Increment the reference count on the flow.
     flow->inc_ref();
 
-    LOG_DEBUG("Found flow record %p", flow);
+    TRC_DEBUG("Found flow record %p", flow);
   }
 
   pthread_mutex_unlock(&_flow_map_lock);
@@ -162,7 +162,7 @@ Flow* FlowTable::find_flow(const std::string& token)
 {
   Flow* flow = NULL;
 
-  LOG_DEBUG("Find flow for flow token %s", token.c_str());
+  TRC_DEBUG("Find flow for flow token %s", token.c_str());
 
   pthread_mutex_lock(&_flow_map_lock);
 
@@ -175,7 +175,7 @@ Flow* FlowTable::find_flow(const std::string& token)
     // Add a reference to the flow.
     flow->inc_ref();
 
-    LOG_DEBUG("Found flow record %p", flow);
+    TRC_DEBUG("Found flow record %p", flow);
   }
 
   pthread_mutex_unlock(&_flow_map_lock);
@@ -187,12 +187,12 @@ void FlowTable::check_quiescing_state()
 {
   if (_tp2flow_map.empty() && is_quiescing() && (_qm != NULL))
   {
-    LOG_DEBUG("Flow map is empty and we are quiescing - start transaction-based quiescing");
+    TRC_DEBUG("Flow map is empty and we are quiescing - start transaction-based quiescing");
     _qm->flows_gone();
   }
   else
   {
-    LOG_DEBUG("Checked quiescing state: flow_map is %s, is_quiescing() result is %s, _qm (QuiescingManager reference) is %s",
+    TRC_DEBUG("Checked quiescing state: flow_map is %s, is_quiescing() result is %s, _qm (QuiescingManager reference) is %s",
               _tp2flow_map.empty() ? "empty" : "not empty",
               is_quiescing()? "true" : "false",
               (_qm == NULL) ? "NULL" : "not NULL");
@@ -203,7 +203,7 @@ void FlowTable::remove_flow(Flow* flow)
 {
   pthread_mutex_lock(&_flow_map_lock);
 
-  LOG_DEBUG("Remove flow %p", flow);
+  TRC_DEBUG("Remove flow %p", flow);
 
   FlowKey key(flow->transport()->key.type, flow->remote_addr());
 
@@ -230,7 +230,7 @@ void FlowTable::remove_flow(Flow* flow)
 
 void FlowTable::report_flow_count()
 {
-  LOG_DEBUG("Reporting current flow count: %d", _tp2flow_map.size());
+  TRC_DEBUG("Reporting current flow count: %d", _tp2flow_map.size());
   std::vector<std::string> message;
   message.push_back(std::to_string(_tp2flow_map.size()));
   _statistic.report_change(message);
@@ -238,7 +238,7 @@ void FlowTable::report_flow_count()
 
 void FlowTable::quiesce()
 {
-  LOG_DEBUG("FlowTable was kicked to quiesce");
+  TRC_DEBUG("FlowTable was kicked to quiesce");
   _quiescing = true;
   pthread_mutex_lock(&_flow_map_lock);
 
@@ -293,7 +293,7 @@ Flow::Flow(FlowTable* flow_table, pjsip_transport* transport, const pj_sockaddr*
                                        &on_transport_state_changed,
                                        this,
                                        &_tp_state_listener_key);
-    LOG_DEBUG("Added transport listener for flow %p", this);
+    TRC_DEBUG("Added transport listener for flow %p", this);
   }
 
   // Initialize the timer.
@@ -413,7 +413,7 @@ void Flow::set_identity(const pjsip_uri* uri,
   // Render the URI to an AoR suitable to look up in the map.
   std::string aor = PJUtils::public_id_from_uri((pjsip_uri*)pjsip_uri_get_uri(uri));
 
-  LOG_DEBUG("Setting identity %s on flow %p, expires = %d", aor.c_str(), this, expires);
+  TRC_DEBUG("Setting identity %s on flow %p, expires = %d", aor.c_str(), this, expires);
 
   pthread_mutex_lock(&_flow_lock);
 
@@ -459,7 +459,7 @@ void Flow::set_identity(const pjsip_uri* uri,
   }
   else
   {
-    LOG_DEBUG("Deleting identity %s", aor.c_str());
+    TRC_DEBUG("Deleting identity %s", aor.c_str());
     auth_id_map::iterator i = _authorized_ids.find(aor);
 
     if (i != _authorized_ids.end())
@@ -512,7 +512,7 @@ void Flow::expiry_timer()
   {
     if (i->second.expires <= now)
     {
-      LOG_DEBUG("Expiring identity %s", i->first.c_str());
+      TRC_DEBUG("Expiring identity %s", i->first.c_str());
 
       // Check to see whether this was the current default identity we are
       // using for this flow.  We could do the string comparision in all cases
@@ -550,7 +550,7 @@ void Flow::expiry_timer()
     // No active registrations on a non-reliable transport, so restart the
     // timer as an idle timer.
     restart_timer(IDLE_TIMER, IDLE_TIMEOUT);
-    LOG_DEBUG("Started idle timer for flow %p", this);
+    TRC_DEBUG("Started idle timer for flow %p", this);
   }
   else if (min_expires > now)
   {
@@ -599,7 +599,7 @@ void Flow::restart_timer(int id, int timeout)
 void Flow::inc_ref()
 {
   ++_refs;
-  LOG_DEBUG("Dialog count now %d for flow %s", _refs, _default_id.c_str());
+  TRC_DEBUG("Dialog count now %d for flow %s", _refs, _default_id.c_str());
 }
 
 
@@ -616,7 +616,7 @@ void Flow::dec_ref()
   }
   else
   {
-    LOG_DEBUG("Dialog count now %d for flow %s", _refs, _default_id.c_str());
+    TRC_DEBUG("Dialog count now %d for flow %s", _refs, _default_id.c_str());
     pthread_mutex_unlock(&_flow_table->_flow_map_lock);
   }
 }
@@ -625,14 +625,14 @@ void Flow::dec_ref()
 void Flow::increment_dialogs()
 {
   ++_dialogs;
-  LOG_DEBUG("Dialog count now %ld for flow %s", _dialogs.load(), _default_id.c_str());
+  TRC_DEBUG("Dialog count now %ld for flow %s", _dialogs.load(), _default_id.c_str());
 }
 
 // Decrements the dialog count atomically.
 void Flow::decrement_dialogs()
 {
   --_dialogs;
-  LOG_DEBUG("Dialog count now %ld for flow %s", _dialogs.load(), _default_id.c_str());
+  TRC_DEBUG("Dialog count now %ld for flow %s", _dialogs.load(), _default_id.c_str());
 }
 
 // Returns true if we should quiesce the flow by redirecting new
@@ -651,7 +651,7 @@ void Flow::on_transport_state_changed(pjsip_transport *tp,
                                       pjsip_transport_state state,
                                       const pjsip_transport_state_info *info)
 {
-  LOG_DEBUG("Transport state changed for flow %p, state = %d",
+  TRC_DEBUG("Transport state changed for flow %p, state = %d",
             info->user_data, state);
   if (state == PJSIP_TP_STATE_DISCONNECTED)
   {
@@ -665,7 +665,7 @@ void Flow::on_transport_state_changed(pjsip_transport *tp,
 /// Called by PJSIP when the expiry/idle timer expires.
 void Flow::on_timer_expiry(pj_timer_heap_t *th, pj_timer_entry *e)
 {
-  LOG_DEBUG("%s timer expired for flow %p",
+  TRC_DEBUG("%s timer expired for flow %p",
             (e->id == EXPIRY_TIMER) ? "Expiry" : "Idle",
             e->user_data);
   if (e->id == EXPIRY_TIMER)

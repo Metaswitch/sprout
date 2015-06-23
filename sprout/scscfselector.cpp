@@ -63,13 +63,13 @@ void SCSCFSelector::update_scscf()
   if ((stat(_configuration.c_str(), &s) != 0) &&
       (errno == ENOENT))
   {
-    LOG_STATUS("No S-CSCF configuration data (file %s does not exist)",
+    TRC_STATUS("No S-CSCF configuration data (file %s does not exist)",
                _configuration.c_str());
     CL_SPROUT_SCSCF_FILE_MISSING.log();
     return;
   }
 
-  LOG_STATUS("Loading S-CSCF configuration from %s", _configuration.c_str());
+  TRC_STATUS("Loading S-CSCF configuration from %s", _configuration.c_str());
 
   // Read from the file
   std::ifstream fs(_configuration.c_str());
@@ -79,7 +79,7 @@ void SCSCFSelector::update_scscf()
   if (scscf_str == "")
   {
     // LCOV_EXCL_START
-    LOG_ERROR("Failed to read S-CSCF configuration data from %s",
+    TRC_ERROR("Failed to read S-CSCF configuration data from %s",
               _configuration.c_str());
     CL_SPROUT_SCSCF_FILE_EMPTY.log();
     return;
@@ -92,7 +92,7 @@ void SCSCFSelector::update_scscf()
 
   if (doc.HasParseError())
   {
-    LOG_ERROR("Failed to read S-CSCF configuration data: %s\nError: %s",
+    TRC_ERROR("Failed to read S-CSCF configuration data: %s\nError: %s",
               scscf_str.c_str(),
               rapidjson::GetParseError_En(doc.GetParseError()));
     CL_SPROUT_SCSCF_FILE_INVALID.log();
@@ -142,7 +142,7 @@ void SCSCFSelector::update_scscf()
       catch (JsonFormatError err)
       {
         // Badly formed number block.
-        LOG_WARNING("Badly formed S-CSCF entry (hit error at %s:%d)",
+        TRC_WARNING("Badly formed S-CSCF entry (hit error at %s:%d)",
                     err._file, err._line);
         CL_SPROUT_SCSCF_FILE_INVALID.log();
       }
@@ -152,7 +152,7 @@ void SCSCFSelector::update_scscf()
   }
   catch (JsonFormatError err)
   {
-    LOG_ERROR("Badly formed S-CSCF configuration file - missing s-cscfs object");
+    TRC_ERROR("Badly formed S-CSCF configuration file - missing s-cscfs object");
     CL_SPROUT_SCSCF_FILE_INVALID.log();
   }
 }
@@ -175,7 +175,7 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
     SAS::Event event(trail, SASEvent::SCSCF_NONE_CONFIGURED, 0);
     SAS::report_event(event);
 
-    LOG_WARNING("There are no configured S-CSCFs");
+    TRC_WARNING("There are no configured S-CSCFs");
     return std::string();
   }
 
@@ -258,7 +258,7 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
   // If there's only one match, then return its name.
   if (matches.empty())
   {
-    LOG_WARNING("There are no configured S-CSCFs that have the requested mandatory capabilities (%s)",
+    TRC_WARNING("There are no configured S-CSCFs that have the requested mandatory capabilities (%s)",
                 mandatory_str.c_str());
 
     SAS::Event event(trail, SASEvent::SCSCF_NONE_VALID, 0);
@@ -271,7 +271,7 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
   }
   else if (matches.size() == 1)
   {
-    LOG_DEBUG("Selected S-CSCF is %s",  matches[0].server.c_str());
+    TRC_DEBUG("Selected S-CSCF is %s",  matches[0].server.c_str());
 
     SAS::Event event(trail, SASEvent::SCSCF_SELECTED, 0);
     event.add_var_param(matches[0].server);
@@ -302,7 +302,7 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
     accumulator +=  matches[index].weight;
   }
 
-  LOG_DEBUG("Selected S-CSCF is %s",  matches[index].server.c_str());
+  TRC_DEBUG("Selected S-CSCF is %s",  matches[index].server.c_str());
 
   SAS::Event event(trail, SASEvent::SCSCF_SELECTED, 0);
   event.add_var_param(matches[index].server);

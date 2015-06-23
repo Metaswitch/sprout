@@ -107,7 +107,7 @@ static pjsip_module mod_common_processing =
 
 static void local_log_rx_msg(pjsip_rx_data* rdata)
 {
-  LOG_VERBOSE("RX %d bytes %s from %s %s:%d:\n"
+  TRC_VERBOSE("RX %d bytes %s from %s %s:%d:\n"
               "--start msg--\n\n"
               "%.*s\n"
               "--end msg--",
@@ -123,7 +123,7 @@ static void local_log_rx_msg(pjsip_rx_data* rdata)
 
 static void local_log_tx_msg(pjsip_tx_data* tdata)
 {
-  LOG_VERBOSE("TX %d bytes %s to %s %s:%d:\n"
+  TRC_VERBOSE("TX %d bytes %s to %s %s:%d:\n"
               "--start msg--\n\n"
               "%.*s\n"
               "--end msg--",
@@ -245,7 +245,7 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
   }
   else
   {
-    LOG_ERROR("Transmitting message with no SAS trail identifier\n%.*s",
+    TRC_ERROR("Transmitting message with no SAS trail identifier\n%.*s",
               (int)(tdata->buf.cur - tdata->buf.start),
               tdata->buf.start);
   }
@@ -268,7 +268,7 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
     // Discard non-ACK requests if there are no available tokens.
     // Respond statelessly with a 503 Service Unavailable, including a
     // Retry-After header with a zero length timeout.
-    LOG_DEBUG("Rejected request due to overload");
+    TRC_DEBUG("Rejected request due to overload");
 
     pjsip_cid_hdr* cid = (pjsip_cid_hdr*)rdata->msg_info.cid;
 
@@ -326,7 +326,7 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
   if (!pj_list_empty((pj_list_type*)&rdata->msg_info.parse_err))
   {
     SAS::TrailId trail = get_trail(rdata);
-    LOG_DEBUG("Report SAS start marker - trail (%llx)", trail);
+    TRC_DEBUG("Report SAS start marker - trail (%llx)", trail);
     SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
     SAS::report_marker(start_marker);
 
@@ -336,7 +336,7 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
     pjsip_parser_err_report *err = rdata->msg_info.parse_err.next;
     while (err != &rdata->msg_info.parse_err)
     {
-      LOG_VERBOSE("Error parsing header %.*s", (int)err->hname.slen, err->hname.ptr);
+      TRC_VERBOSE("Error parsing header %.*s", (int)err->hname.slen, err->hname.ptr);
       SAS::Event event(trail, SASEvent::UNPARSEABLE_HEADER, 0);
       event.add_var_param((int)err->hname.slen, err->hname.ptr);
       SAS::report_event(event);
@@ -345,7 +345,7 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
 
     if (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG)
     {
-      LOG_WARNING("Rejecting malformed request with a 400 error");
+      TRC_WARNING("Rejecting malformed request with a 400 error");
       PJUtils::respond_stateless(stack_data.endpt,
                                  rdata,
                                  PJSIP_SC_BAD_REQUEST,
@@ -355,7 +355,7 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
     }
     else
     {
-      LOG_WARNING("Dropping malformed response");
+      TRC_WARNING("Dropping malformed response");
     }
 
     // As this message is malformed, return PJ_TRUE to absorb it and
