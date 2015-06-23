@@ -345,7 +345,7 @@ public:
            ChronosConnection* chronos_connection);
 
   /// Destructor.
-  ~RegStore();
+  virtual ~RegStore();
 
   bool has_servers() { return _connector->underlying_store_has_servers(); }
 

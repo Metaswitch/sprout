@@ -1715,7 +1715,7 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPDataToSIP)
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
-  set_enforce_user_phone(true);
+  _scscf_sproutlet->set_enforce_user_phone(true);
   Message msg;
   msg._to = "+15108580301;npdi";
   msg._requri = "sip:+15108580301;npdi@homedomain;user=phone";
