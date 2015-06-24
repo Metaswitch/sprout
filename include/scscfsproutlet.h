@@ -305,8 +305,8 @@ private:
                                     const std::string& served_user);
 
   /// Fetch the ACR for the current transaction, ACRs should always be retrived
-  /// through this API, not by inspecting _acr directly.  May return NULL
-  /// in some cases.
+  /// through this API, not by inspecting _acr directly, since the ACR may be
+  /// owned by the AsChain as a whole.  May return NULL in some cases.
   ACR* get_acr();
 
   /// Pointer to the parent SCSCFSproutlet object - used for various operations
