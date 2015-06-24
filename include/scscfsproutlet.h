@@ -234,7 +234,7 @@ private:
 
   /// Creates an AS chain for this service role and links this service hop to
   /// it.
-  AsChainLink create_as_chain(Ifcs ifcs, std::string served_user);
+  AsChainLink create_as_chain(Ifcs ifcs, std::string served_user, ACR*& acr);
 
   /// Apply originating services for this request.
   void apply_originating_services(pjsip_msg* req);
@@ -303,6 +303,10 @@ private:
   void sas_log_start_of_sesion_case(pjsip_msg* req,
                                     const SessionCase* session_case,
                                     const std::string& served_user);
+  /// Fetch the ACR for the current transaction, ACRs should always be retrived
+  /// through this API, not by inspecting _acr directly, since the ACR may be
+  /// owned by the AsChain as a whole.  May return NULL in some cases.
+  ACR* get_acr();
 
   /// Pointer to the parent SCSCFSproutlet object - used for various operations
   /// that require access to global configuration or services.
@@ -327,8 +331,18 @@ private:
   std::deque<std::string> _ccfs;
   std::deque<std::string> _ecfs;
 
-  /// The ACR allocated for this service hop.
-  ACR* _acr;
+  /// ACRs used where the S-CSCF will only process a single transaction (no
+  /// AsChain is created).  There are two cases where this might be true:
+  ///
+  ///  - An OOD/Session-initializing request that is rejected before the
+  ///    AsChain is created (e.g. subscriber not found).
+  ///  - An in-dialog request, where the S-CSCF will simply forward the
+  ///    request following the route-set.
+  ///
+  /// These fields should not be used to update the ACR information, get_acr()
+  /// should be used instead.
+  ACR* _in_dialog_acr;
+  ACR* _failed_ood_acr;
 
   /// State information when the request is routed to UE bindings.  This is
   /// used in cases where a request fails with a Flow Failed status code
