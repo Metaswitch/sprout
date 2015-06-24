@@ -210,7 +210,11 @@ protected:
     /// Parent proxy object
     SproutletProxy* _sproutlet_proxy;
 
-    /// TODO
+    /// This set holds all the timers created by sproutlet tsxs that are
+    /// children of this UASTsx. They are only freed when the UASTsx is freed
+    /// (they are not freed when a timer pops or is cancelled for example).
+    /// This prevents race conditions (such as a double free caused by one
+    /// thread popping a timer and another thread cancelling it).
     std::set<pj_timer_entry*> _timers;
 
     friend class SproutletWrapper;
