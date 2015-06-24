@@ -394,8 +394,7 @@ bool SproutletProxy::schedule_timer(pj_timer_entry* tentry, int duration)
 void SproutletProxy::cancel_timer(pj_timer_entry* tentry)
 {
   pjsip_endpt_cancel_timer(_endpt, tentry);
-  TRC_DEBUG("Cancelled Sproutlet timer, id = %ld", (TimerID)tentry);
-  LOG_DEBUG("Cancelled Sproutlet timer, id = %ld", id);
+  LOG_DEBUG("Cancelled Sproutlet timer, id = %ld", (TimerID)tentry);
 }
 
 
@@ -813,7 +812,7 @@ bool SproutletProxy::UASTsx::timer_running(TimerID id)
 void SproutletProxy::UASTsx::on_timer_pop(pj_timer_heap_t* th,
                                           pj_timer_entry* tentry)
 {
-  TRC_DEBUG("Sproutlet timer popped, id = %ld", (TimerID)tentry);
+  LOG_DEBUG("Sproutlet timer popped, id = %ld", (TimerID)tentry);
   ((SproutletTimerCallbackData*)tentry->user_data)->uas_tsx->process_timer_pop(tentry);
 }
 
