@@ -369,7 +369,8 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
   _registered(false),
   _uris(),
   _ifcs(),
-  _acr(NULL),
+  _in_dialog_acr(NULL),
+  _failed_ood_acr(NULL),
   _target_aor(),
   _target_bindings(),
   _liveness_timer(0),
@@ -402,9 +403,13 @@ SCSCFSproutletTsx::~SCSCFSproutletTsx()
   }
 
   // If the ACR was stored locally, destroy it now.
-  if (_acr)
+  if (_failed_ood_acr)
   {
-    delete _acr;
+    delete _failed_ood_acr;
+  }
+  if (_in_dialog_acr)
+  {
+    delete _in_dialog_acr;
   }
 
   _target_bindings.clear();
@@ -511,12 +516,12 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
   }
 
   // Create an ACR for this request and pass the request to it.
-  _acr = _scscf->get_acr(trail(),
+  _in_dialog_acr = _scscf->get_acr(trail(),
                          CALLING_PARTY,
                          get_billing_role());
 
   // @TODO - request timestamp???
-  _acr->rx_request(req);
+  get_acr()->rx_request(req);
 
   send_request(req);
 }
@@ -819,7 +824,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         SAS::report_event(no_ifcs);
 
         // No AsChain, store ACR locally.
-        _acr = acr;
+        _failed_ood_acr = acr;
       }
     }
     else
@@ -869,7 +874,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         SAS::report_event(no_ifcs);
 
         // No IFC, so no AsChain, store the ACR locally.
-        _acr = acr;
+        _failed_ood_acr = acr;
       }
 
       if (_session_case->is_terminating())
@@ -1817,8 +1822,12 @@ ACR* SCSCFSproutletTsx::get_acr()
   {
     return _as_chain_link.acr();
   }
+  else if (_in_dialog_acr)
+  {
+    return _in_dialog_acr;
+  }
   else
   {
-    return _acr;
+    return _failed_ood_acr;
   }
 }
