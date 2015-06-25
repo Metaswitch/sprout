@@ -19,6 +19,13 @@ modules/cpp-common/src/saslogger.cpp
 modules/cpp-common/src/ipv6utils.cpp
 modules/cpp-common/src/exception_handler.cpp
 modules/cpp-common/src/utils.cpp
+
+# SNMP code is covered by clearwater-fv-test
+modules/cpp-common/src/snmp_accumulator_table.cpp
+modules/cpp-common/src/snmp_agent.cpp
+modules/cpp-common/src/snmp_counter_table.cpp
+modules/cpp-common/src/snmp_table.cpp
+
 modules/cpp-common/test_utils/mock_sas.cpp
 modules/cpp-common/test_utils/fakecurl.cpp
 modules/cpp-common/test_utils/fakehttpconnection.cpp

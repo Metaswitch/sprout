@@ -56,6 +56,7 @@ extern "C" {
 #include <queue>
 #include <string>
 
+#include "common_sip_processing.h"
 #include "constants.h"
 #include "pjutils.h"
 #include "log.h"
@@ -66,13 +67,11 @@ extern "C" {
 #include "utils.h"
 #include "custom_headers.h"
 #include "utils.h"
-#include "accumulator.h"
 #include "load_monitor.h"
-#include "counter.h"
 #include "health_checker.h"
 
-static Counter* requests_counter = NULL;
-static Counter* overload_counter = NULL;
+static SNMP::CounterTable* requests_counter = NULL;
+static SNMP::CounterTable* overload_counter = NULL;
 static LoadMonitor* load_monitor = NULL;
 static HealthChecker* health_checker = NULL;
 
@@ -386,8 +385,8 @@ static pj_status_t process_on_tx_msg(pjsip_tx_data* tdata)
 
 pj_status_t
 init_common_sip_processing(LoadMonitor* load_monitor_arg,
-                           Counter* requests_counter_arg,
-                           Counter* overload_counter_arg,
+                           SNMP::CounterTable* requests_counter_arg,
+                           SNMP::CounterTable* overload_counter_arg,
                            HealthChecker* health_checker_arg)
 {
   // Register the stack modules.

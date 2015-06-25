@@ -61,7 +61,7 @@ public:
   {
     SipTest::SetUpTestCase();
     qm = NULL;
-    ft = new FlowTable(qm, stack_data.stats_aggregator);
+    ft = new FlowTable(qm, NULL);
     addr.addr.sa_family = PJ_AF_INET;
     dialog_tracker = new DialogTracker(ft);
   }

@@ -61,7 +61,7 @@ class XdmConnectionTest : public BaseTest
 
   XdmConnectionTest() :
     _resolver("10.42.42.42"),
-    _xdm("cyrus", &_resolver, NULL, NULL)
+    _xdm("cyrus", &_resolver, NULL, NULL, NULL)
   {
     fakecurl_responses.clear();
     fakecurl_responses["http://10.42.42.42:80/org.etsi.ngn.simservs/users/gand%2Falf/simservs.xml"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Still</boring>";

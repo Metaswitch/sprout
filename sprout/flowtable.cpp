@@ -51,11 +51,10 @@ extern "C" {
 #include "stack.h"
 #include "flowtable.h"
 
-
-FlowTable::FlowTable(QuiescingManager* qm, LastValueCache* lvc) :
+FlowTable::FlowTable(QuiescingManager* qm, SNMP::U32Scalar* connection_count) :
   _tp2flow_map(),
   _tk2flow_map(),
-  _statistic("client_count", lvc),
+  _conn_count(connection_count),
   _quiescing(false),
   _qm(qm)
 {
@@ -231,9 +230,7 @@ void FlowTable::remove_flow(Flow* flow)
 void FlowTable::report_flow_count()
 {
   TRC_DEBUG("Reporting current flow count: %d", _tp2flow_map.size());
-  std::vector<std::string> message;
-  message.push_back(std::to_string(_tp2flow_map.size()));
-  _statistic.report_change(message);
+  _conn_count->value = _tp2flow_map.size();
 }
 
 void FlowTable::quiesce()

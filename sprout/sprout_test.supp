@@ -8,17 +8,72 @@
    fun:(below main)
 }
 {
-   VPED appears to leak threads.
+   Test leaks UAC transactions. This is a bit of a pain, but not easy to avoid.
    Memcheck:Leak
-   fun:calloc
-   fun:_dl_allocate_tls
-   fun:pthread_create@@GLIBC_2.2.5
-   fun:vped_initialize
+   fun:_Znwm
+   fun:_ZN14UASTransaction21init_uac_transactionsEP13pjsip_tx_dataRSt4listI6targetSaIS3_EE
+   fun:_ZN14UASTransaction26handle_outgoing_non_cancelEP13pjsip_tx_data
+   fun:_ZL19proxy_on_rx_requestP13pjsip_rx_data
+   fun:pjsip_endpt_process_rx_data
+   fun:endpt_on_rx_msg
+   fun:pjsip_tpmgr_receive_packet
+   fun:_ZN7SipTest10inject_msgERKSs
 }
 {
-   VPED passes uninitialized data to the system.
-   Memcheck:Param
-   rt_sigaction(act->sa_mask)
-   fun:__libc_sigaction
-   fun:vped_dispatch_thread
+   Test leaks more UAC transactions. This is a bit of a pain, but not easy to avoid.
+   Memcheck:Leak
+   fun:_Znwm
+   fun:_ZN14UASTransaction6createEP13pjsip_rx_dataP13pjsip_tx_dataPPS_
+   fun:_ZL26handle_incoming_non_cancelP13pjsip_rx_dataPP13pjsip_tx_dataPP14UASTransaction
+   fun:_ZL19proxy_on_rx_requestP13pjsip_rx_data
+   fun:pjsip_endpt_process_rx_data
+   fun:endpt_on_rx_msg
+   fun:pjsip_tpmgr_receive_packet
+   fun:_ZN7SipTest10inject_msgERKSs
+}
+{
+   Test leaks UAS transactions - we only go to terminated, and then when we finally move to destroy UASTransaction::on_tsx_state is not invoked. Not quite sure why this is.
+   Memcheck:Leak
+   fun:_Znwm
+   fun:_ZN14UASTransaction6createEP13pjsip_rx_dataP13pjsip_tx_dataP13TrustBoundaryPPS_
+   fun:_ZL19process_tsx_requestP13pjsip_rx_data
+   fun:_ZL19proxy_on_rx_requestP13pjsip_rx_data
+   fun:pjsip_endpt_process_rx_data
+   fun:endpt_on_rx_msg
+   fun:pjsip_tpmgr_receive_packet
+   fun:_ZN7SipTest10inject_msgERKSsPNS_13TransportFlowE
+   fun:_ZN25IscTest_SimpleAccept_Test8TestBodyEv
+}
+
+{
+   NetSNMPLeak1
+   Memcheck:Leak
+   fun:calloc
+   fun:netsnmp_container_table_handler_get
+   fun:netsnmp_container_table_register
+}
+
+{
+   NetSNMPStillReachable1
+   Memcheck:Leak
+   fun:calloc
+   ...
+   fun:netsnmp_register_handler
+}
+
+{
+   NetSNMPStillReachable2
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:netsnmp_register_handler
+}
+
+{
+   ZMQStillReachable1
+   Memcheck:Leak
+   fun:calloc
+   fun:_dlerror_run
+   fun:dlsym
+   fun:zmq_ctx_new
 }

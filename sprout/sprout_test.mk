@@ -86,7 +86,10 @@ TARGET_SOURCES := logger.cpp \
                   communicationmonitor.cpp \
                   thread_dispatcher.cpp \
                   common_sip_processing.cpp \
-                  exception_handler.cpp
+                  exception_handler.cpp \
+                  snmp_agent.cpp \
+                  snmp_accumulator_table.cpp \
+                  snmp_counter_table.cpp
 
 TARGET_SOURCES_TEST := test_main.cpp \
                        fakecurl.cpp \
@@ -224,7 +227,8 @@ LDFLAGS += -lmemcached \
            -lzmq \
            -levhtp \
            -levent \
-           -levent_pthreads
+           -levent_pthreads \
+           $(shell net-snmp-config --netsnmp-agent-libs)
 
 # Test build fakes out cURL
 LDFLAGS_BUILD += -lcurl -lsas

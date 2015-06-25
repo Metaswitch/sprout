@@ -94,7 +94,7 @@ public:
 
     _health_checker = new HealthChecker();
 
-    init_common_sip_processing(_lm, _requests_counter, _overload_counter, _health_checker);
+    init_common_sip_processing(_lm, NULL, NULL, _health_checker);
   }
 
   ~CommonProcessingTest()
