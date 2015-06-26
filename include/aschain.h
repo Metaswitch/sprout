@@ -118,10 +118,19 @@ private:
           ACR* acr);
   ~AsChain();
 
-  void inc_ref()
+  bool inc_ref()
   {
-    ++_refs;
+    // Increment the reference count if it's non-zero.
+    int refs;
+    do
+    {
+      refs = _refs.load();
+    }
+    while ((refs != 0) &&
+           (_refs.compare_exchange_weak(refs, refs + 1)));
     TRC_DEBUG("AsChain inc ref %p -> %d", this, _refs.load());
+    // If the reference count is non-zero, we successfully incremented it.
+    return (refs != 0);
   }
 
   void dec_ref()
@@ -220,7 +229,10 @@ public:
   {
     if (_as_chain != NULL)
     {
-      _as_chain->inc_ref();
+      // No need to check the return code from inc_ref - it only fails if
+      // its reference count is already 0 and we know that can't be the case
+      // because we already hold one reference.
+      (void)_as_chain->inc_ref();
     }
     return *this;
   }
