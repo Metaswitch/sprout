@@ -127,7 +127,7 @@ private:
       refs = _refs.load();
     }
     while ((refs != 0) &&
-           (_refs.compare_exchange_weak(refs, refs + 1)));
+           (!_refs.compare_exchange_weak(refs, refs + 1)));
     TRC_DEBUG("AsChain inc ref %p -> %d", this, _refs.load());
     // If the reference count is non-zero, we successfully incremented it.
     return (refs != 0);
