@@ -176,7 +176,7 @@ static int worker_thread(void* p)
       TRC_DEBUG("Worker thread completed processing message %p", rdata);
       pjsip_rx_data_free_cloned(rdata);
 
-      unsigned long latency_us;
+      unsigned long latency_us = 0;
       if (qe.stop_watch.read(latency_us))
       {
         TRC_DEBUG("Request latency = %ldus", latency_us);

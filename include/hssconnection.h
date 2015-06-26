@@ -63,7 +63,7 @@ public:
                 LoadMonitor *load_monitor,
                 LastValueCache *stats_aggregator,
                 CommunicationMonitor* comm_monitor);
-  ~HSSConnection();
+  virtual ~HSSConnection();
 
   HTTPCode get_auth_vector(const std::string& private_user_id,
                            const std::string& public_user_id,

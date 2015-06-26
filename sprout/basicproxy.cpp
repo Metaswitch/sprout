@@ -1566,8 +1566,8 @@ BasicProxy::UACTsx::~UACTsx()
   }
 
   if ((_tsx != NULL) &&
-      (_tsx->state != PJSIP_TSX_STATE_TERMINATED) &&
-      (_tsx->state != PJSIP_TSX_STATE_DESTROYED))
+      (_tsx->state != PJSIP_TSX_STATE_TERMINATED) &&          //LCOV_EXCL_LINE
+      (_tsx->state != PJSIP_TSX_STATE_DESTROYED))             //LCOV_EXCL_LINE
   {
     pjsip_tsx_terminate(_tsx, PJSIP_SC_INTERNAL_SERVER_ERROR);//LCOV_EXCL_LINE
   }
