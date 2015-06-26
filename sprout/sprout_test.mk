@@ -123,13 +123,11 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        sessioncase_test.cpp \
                        ifchandler_test.cpp \
                        custom_headers_test.cpp \
-                       accumulator_test.cpp \
                        connection_tracker_test.cpp \
                        quiescing_manager_test.cpp \
                        dialog_tracker_test.cpp \
                        flow_test.cpp \
                        load_monitor_test.cpp \
-                       counter_test.cpp \
                        icscfsproutlet_test.cpp \
                        basicproxy_test.cpp \
                        scscfselector_test.cpp \

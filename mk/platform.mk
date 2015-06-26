@@ -154,4 +154,4 @@ ${BIN_DIR}:
 $(TEST_OUT_DIR):
 	mkdir -p $(TEST_OUT_DIR)
 
-include $(DEPS)
+-include $(DEPS)

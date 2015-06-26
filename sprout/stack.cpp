@@ -66,6 +66,8 @@ extern "C" {
 #include "sproutsasevent.h"
 #include "stack.h"
 #include "utils.h"
+#include "zmq_lvc.h"
+#include "statistic.h"
 #include "custom_headers.h"
 #include "utils.h"
 #include "accumulator.h"
@@ -816,6 +818,22 @@ pj_status_t init_stack(const std::string& system_name,
                stack_data.name[i].ptr);
   }
 
+  // Set up the Last Value Cache, accumulators and counters.
+  std::string process_name;
+  if ((stack_data.pcscf_trusted_port != 0) &&
+      (stack_data.pcscf_untrusted_port != 0))
+  {
+    process_name = "bono";
+  }
+  else
+  {
+    process_name = "sprout";
+  }
+
+  stack_data.stats_aggregator = new LastValueCache(num_known_stats,
+                                                   known_statnames,
+                                                   process_name);
+
   if (quiescing_mgr_arg != NULL)
   {
     quiescing_mgr = quiescing_mgr_arg;
@@ -876,6 +894,8 @@ void stop_stack()
 void destroy_stack(void)
 {
   // Tear down the stack.
+  delete stack_data.stats_aggregator;
+
   delete stack_quiesce_handler;
   stack_quiesce_handler = NULL;
 

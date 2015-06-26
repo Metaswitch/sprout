@@ -1659,9 +1659,8 @@ int main(int argc, char* argv[])
     ralf_connection = new HttpConnection(opt.ralf_server,
                                          false,
                                          http_resolver,
-                                         "connected_ralfs",
+                                         NULL, // No SNMP table for connected Ralfs
                                          load_monitor,
-                                         stack_data.stats_aggregator,
                                          SASEvent::HttpLogLevel::PROTOCOL,
                                          ralf_comm_monitor);
   }

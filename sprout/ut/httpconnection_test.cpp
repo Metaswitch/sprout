@@ -126,11 +126,11 @@ TEST_F(HttpConnectionTest, SimpleIPv6Get)
   HttpConnection http2("[1::1]:80",
                        true,
                        &_resolver,
-                       "connected_homers",
+                       &fake_ip_table,
                        &_lm,
-                       stack_data.stats_aggregator,
                        SASEvent::HttpLogLevel::PROTOCOL,
-                       NULL);
+                       &_cm);
+
   fakecurl_responses["http://[1::1]:80/ipv6get"] = CURLE_OK;
   long ret = http2.send_get("/ipv6get", output, "gandalf", 0);
   EXPECT_EQ(200, ret);
@@ -309,11 +309,10 @@ TEST_F(HttpConnectionTest, ParseHostPort)
   HttpConnection http2("cyrus:1234",
                        true,
                        &_resolver,
-                       "connected_homers",
+                       &fake_ip_table,
                        &_lm,
-                       stack_data.stats_aggregator,
                        SASEvent::HttpLogLevel::PROTOCOL,
-                       NULL);
+                       &_cm);
   fakecurl_responses["http://10.42.42.42:1234/port-1234"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Document</boring>";
 
   string output;
@@ -328,11 +327,10 @@ TEST_F(HttpConnectionTest, ParseHostPortIPv6)
   HttpConnection http2("[1::1]",
                        true,
                        &_resolver,
-                       "connected_homers",
+                       &fake_ip_table,
                        &_lm,
-                       stack_data.stats_aggregator,
                        SASEvent::HttpLogLevel::PROTOCOL,
-                       NULL);
+                       &_cm);
 
   string output;
   long ret = http2.send_get("/blah/blah/blah", output, "gandalf", 0);
