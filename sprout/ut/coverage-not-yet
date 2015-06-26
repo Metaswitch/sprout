@@ -26,6 +26,9 @@ modules/cpp-common/src/snmp_agent.cpp
 modules/cpp-common/src/snmp_counter_table.cpp
 modules/cpp-common/src/snmp_table.cpp
 
+# 0MQ statistics are being phased out
+modules/cpp-common/src/statistic.cpp
+
 modules/cpp-common/test_utils/mock_sas.cpp
 modules/cpp-common/test_utils/fakecurl.cpp
 modules/cpp-common/test_utils/fakehttpconnection.cpp

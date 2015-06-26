@@ -44,8 +44,11 @@
 #include "utils.h"
 #include "siptest.hpp"
 #include "dialog_tracker.hpp"
+#include "snmp_scalar.h"
 
 using namespace std;
+
+static SNMP::U32Scalar fake_connection_count("", NULL, 0);
 
 /// Fixture for IfcHandlerTest
 class DialogTrackerTest : public SipTest
@@ -61,7 +64,7 @@ public:
   {
     SipTest::SetUpTestCase();
     qm = NULL;
-    ft = new FlowTable(qm, NULL);
+    ft = new FlowTable(qm, &fake_connection_count);
     addr.addr.sa_family = PJ_AF_INET;
     dialog_tracker = new DialogTracker(ft);
   }

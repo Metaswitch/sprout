@@ -43,6 +43,7 @@
 #include "statistic.h"
 #include "zmq_lvc.h"
 #include "stack.h"
+#include "snmp_includes.h"
 
 #include "basetest.hpp"
 #include "test_interposer.hpp"
@@ -66,5 +67,5 @@ BaseTest::~BaseTest()
   stack_data.stats_aggregator = NULL;
 
   cwtest_reset_time();
-}
+};
 

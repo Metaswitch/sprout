@@ -54,6 +54,10 @@
 #include "load_monitor.h"
 #include "mock_sas.h"
 #include "mockcommunicationmonitor.h"
+#include "snmp_ip_count_table.h"
+
+static SNMP::IPCountTable fake_ip_table("", NULL, 0);
+
 
 using namespace std;
 using ::testing::MatchesRegex;
@@ -73,9 +77,8 @@ class HttpConnectionTest : public BaseTest
     _http("cyrus",
           true,
           &_resolver,
-          "connected_homers",
+          &fake_ip_table,
           &_lm,
-          stack_data.stats_aggregator,
           SASEvent::HttpLogLevel::PROTOCOL,
           &_cm)
   {
@@ -214,10 +217,6 @@ TEST_F(HttpConnectionTest, ConnectionRecycle)
   EXPECT_EQ(200, ret);
   Request& req2 = fakecurl_requests["http://10.42.42.42:80/down/down/down"];
   EXPECT_TRUE(req2._fresh);
-
-  // Should be a single connection to the hardcoded fakecurl IP.
-  EXPECT_EQ(1u, _http._server_count.size());
-  EXPECT_EQ(1, _http._server_count["10.42.42.42"]);
 }
 
 TEST_F(HttpConnectionTest, SimplePost)

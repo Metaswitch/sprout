@@ -47,9 +47,13 @@
 #include "sproutletproxy.h"
 #include "common_sip_processing.h"
 #include "counter.h"
+#include "snmp_accumulator_table.h"
+#include "snmp_accumulator_table.h"
 
 using namespace std;
 
+
+static SNMP::AccumulatorTable fake_accumulator_table("", NULL, 0);
 class CommonProcessingTest : public SipTest
 {
 public:
@@ -87,14 +91,12 @@ public:
     // Load monitor with one token in the bucket at startup.
     _lm = new LoadMonitor(0, 1, 0, 0);
     
-    _requests_counter = new StatisticCounter("incoming_requests",
-                                             stack_data.stats_aggregator);
-    _overload_counter = new StatisticCounter("rejected_overload",
-                                             stack_data.stats_aggregator);
+    _requests_counter = new SNMP::CounterTable("", NULL, 0);
+    _overload_counter = new SNMP::CounterTable("", NULL, 0);
 
     _health_checker = new HealthChecker();
 
-    init_common_sip_processing(_lm, NULL, NULL, _health_checker);
+    init_common_sip_processing(_lm, _requests_counter, _overload_counter, _health_checker);
   }
 
   ~CommonProcessingTest()
@@ -278,8 +280,8 @@ public:
 protected:
   TransportFlow* _tp;
   LoadMonitor* _lm;
-  StatisticCounter* _requests_counter;
-  StatisticCounter* _overload_counter;
+  SNMP::CounterTable* _requests_counter;
+  SNMP::CounterTable* _overload_counter;
   HealthChecker* _health_checker;
 };
 

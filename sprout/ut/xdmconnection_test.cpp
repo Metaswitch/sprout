@@ -53,6 +53,12 @@
 
 using namespace std;
 
+#include "snmp_accumulator_table.h"
+#include "snmp_ip_count_table.h"
+
+static SNMP::IPCountTable fake_ip_table("", NULL, 0);
+static SNMP::AccumulatorTable fake_accumulator_table("", NULL, 0);
+
 /// Fixture for XdmConnectionTest.
 class XdmConnectionTest : public BaseTest
 {
@@ -61,7 +67,7 @@ class XdmConnectionTest : public BaseTest
 
   XdmConnectionTest() :
     _resolver("10.42.42.42"),
-    _xdm("cyrus", &_resolver, NULL, NULL, NULL)
+    _xdm("cyrus", &_resolver, NULL, &fake_ip_table, &fake_accumulator_table)
   {
     fakecurl_responses.clear();
     fakecurl_responses["http://10.42.42.42:80/org.etsi.ngn.simservs/users/gand%2Falf/simservs.xml"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Still</boring>";

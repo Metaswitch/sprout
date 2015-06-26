@@ -3321,6 +3321,8 @@ void destroy_stateful_proxy()
   delete sprout_ip_tbl; sprout_ip_tbl = NULL;
 
   // Destroy the flow table.
+  delete flow_count;
+  flow_count = NULL;
   delete flow_table;
   flow_table = NULL;
 
