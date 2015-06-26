@@ -154,6 +154,23 @@ static int worker_thread(void* p)
       }
       CW_EXCEPT(exception_handler)
       {
+        // Dump details about the exception.  Be defensive about reading these
+        // as we don't know much about the state we're in.
+        TRC_ERROR("Exception SAS Trail: %llu (maybe)", get_trail(rdata));
+        if (rdata->msg_info.cid != NULL)
+        {
+          TRC_ERROR("Exception Call-Id: %.*s",
+                    ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.slen,
+                    ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.ptr);
+        }
+        if (rdata->msg_info.cseq != NULL)
+        {
+          TRC_ERROR("Exception CSeq: %ld %.*s",
+                    ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->cseq,
+                    ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.slen,
+                    ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.ptr);
+        }
+
         // Make a 500 response to the rdata with a retry-after header of
         // 10 mins
         pjsip_retry_after_hdr* retry_after =
