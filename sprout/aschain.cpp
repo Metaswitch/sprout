@@ -293,12 +293,18 @@ AsChainLink AsChainTable::lookup(const std::string& token)
   {
     // Found the AsChainLink.  Add a reference to the AsChain.
     const AsChainLink& as_chain_link = it->second;
-    as_chain_link._as_chain->inc_ref();
-
-    // Flag that the AS corresponding to the previous link in the chain has
-    // effectively responded.
-    as_chain_link._as_chain->_responsive[as_chain_link._index - 1] = true;
-    pthread_mutex_unlock(&_lock);
-    return as_chain_link;
+    if (as_chain_link._as_chain->inc_ref())
+    {
+      // Flag that the AS corresponding to the previous link in the chain has
+      // effectively responded.
+      as_chain_link._as_chain->_responsive[as_chain_link._index - 1] = true;
+      pthread_mutex_unlock(&_lock);
+      return as_chain_link;
+    } else {
+      // Failed to increment the count - AS chain must be in the process of
+      // being destroyed.  Pretend we didn't find it.
+      pthread_mutex_unlock(&_lock);
+      return AsChainLink(NULL, 0);
+    }
   }
 }
