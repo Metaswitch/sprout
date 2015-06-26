@@ -303,8 +303,10 @@ AsChainLink AsChainTable::lookup(const std::string& token)
     } else {
       // Failed to increment the count - AS chain must be in the process of
       // being destroyed.  Pretend we didn't find it.
+      // LCOV_EXCL_START - Can't hit this window condition in UT.
       pthread_mutex_unlock(&_lock);
       return AsChainLink(NULL, 0);
+      // LCOV_EXCL_STOP
     }
   }
 }
