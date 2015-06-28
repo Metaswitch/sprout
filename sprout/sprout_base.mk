@@ -121,6 +121,7 @@ LDFLAGS += -lmemcached \
            -levent_pthreads \
            -lcurl \
            -lsas \
+           -lz \
            -lboost_filesystem \
            $(shell net-snmp-config --netsnmp-agent-libs)
 

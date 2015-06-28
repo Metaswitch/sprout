@@ -506,7 +506,7 @@ void SipTest::handle_txdata(pjsip_tx_data* tdata)
 /// Extract a named header as a C++ string.
 std::string get_headers(pjsip_msg* msg, std::string name)
 {
-  pj_str_t name_str = { const_cast<char*>(name.data()), name.length() };
+  pj_str_t name_str = { const_cast<char*>(name.data()), (unsigned int)name.length() };
   std::string ret;
   pjsip_hdr* hdr = NULL;
 

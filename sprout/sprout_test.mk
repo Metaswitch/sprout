@@ -231,7 +231,7 @@ LDFLAGS += -lmemcached \
            $(shell net-snmp-config --netsnmp-agent-libs)
 
 # Test build fakes out cURL
-LDFLAGS_BUILD += -lcurl -lsas
+LDFLAGS_BUILD += -lcurl -lsas -lz
 
 # Include memento if desired
 #LDFLAGS += -lmemento -lthrift -lcassandra
