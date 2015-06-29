@@ -59,6 +59,8 @@ extern "C" {
 #include <string>
 #include <boost/filesystem.hpp>
 
+#include "websockets.h"
+#include "memcachedstore.h"
 #include "ipv6utils.h"
 #include "logger.h"
 #include "utils.h"
@@ -70,7 +72,6 @@ extern "C" {
 #include "hssconnection.h"
 #include "xdmconnection.h"
 #include "bono.h"
-#include "websockets.h"
 #include "mmtel.h"
 #include "subscription.h"
 #include "registrar.h"
@@ -84,7 +85,6 @@ extern "C" {
 #include "zmq_lvc.h"
 #include "quiescing_manager.h"
 #include "load_monitor.h"
-#include "memcachedstore.h"
 #include "localstore.h"
 #include "scscfselector.h"
 #include "chronosconnection.h"
