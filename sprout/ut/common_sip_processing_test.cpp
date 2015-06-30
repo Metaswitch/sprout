@@ -53,6 +53,7 @@
 using namespace std;
 
 
+//This can only be statically initialised in UT, because we're stubbing out netsnmp - in production code, net-snmp needs to be initialized before creating any tables
 static SNMP::AccumulatorTable fake_accumulator_table("", NULL, 0);
 class CommonProcessingTest : public SipTest
 {

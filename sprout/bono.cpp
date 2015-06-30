@@ -131,6 +131,7 @@ extern "C" {
 #include "quiescing_manager.h"
 #include "scscfselector.h"
 #include "contact_filtering.h"
+#include "bono_snmp_oids.h"
 
 static RegStore* store;
 static RegStore* remote_store;
@@ -153,9 +154,6 @@ static bool edge_proxy;
 static pjsip_uri* upstream_proxy;
 static ConnectionPool* upstream_conn_pool = NULL;
 
-
-static oid BONO_CONNECTED_CLIENTS_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 2, 1 };
-static oid BONO_CONNECTED_SPROUTS_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 2, 3, 1 };
 static SNMP::IPCountTable* sprout_ip_tbl = NULL;
 static SNMP::U32Scalar* flow_count = NULL;
 

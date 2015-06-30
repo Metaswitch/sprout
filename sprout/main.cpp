@@ -103,6 +103,8 @@ extern "C" {
 #include "snmp_accumulator_table.h"
 #include "snmp_counter_table.h"
 #include "snmp_agent.h"
+#include "sprout_snmp_oids.h"
+#include "bono_snmp_oids.h"
 
 enum OptionTypes
 {
@@ -213,22 +215,6 @@ QuiescingManager* quiescing_mgr;
 
 const static int QUIESCE_SIGNAL = SIGQUIT;
 const static int UNQUIESCE_SIGNAL = SIGUSR1;
-
-static oid BONO_LATENCY_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 2, 2 };
-static oid BONO_QUEUE_SIZE_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 2, 6 };
-static oid BONO_REQUEST_COUNT_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 2, 4 };
-static oid BONO_OVERLOAD_COUNT_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 2, 5 };
-static oid SPROUT_LATENCY_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 1 };
-static oid SPROUT_QUEUE_SIZE_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 8 };
-static oid SPROUT_REQUEST_COUNT_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 6 };
-static oid SPROUT_OVERLOAD_COUNT_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 7 };
-
-static oid SPROUT_HOMESTEAD_COUNT_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 3, 1 };
-static oid SPROUT_HOMESTEAD_LATENCY_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 3, 2 };
-static oid SPROUT_HOMESTEAD_MAR_LATENCY_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 3, 3 };
-static oid SPROUT_HOMESTEAD_SAR_LATENCY_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 3, 4 };
-static oid SPROUT_HOMESTEAD_UAR_LATENCY_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 3, 5 };
-static oid SPROUT_HOMESTEAD_LIR_LATENCY_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 3, 6 };
 
 static void usage(void)
 {

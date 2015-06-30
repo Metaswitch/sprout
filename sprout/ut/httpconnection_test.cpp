@@ -56,6 +56,7 @@
 #include "mockcommunicationmonitor.h"
 #include "snmp_ip_count_table.h"
 
+//This can only be statically initialised in UT, because we're stubbing out netsnmp - in production code, net-snmp needs to be initialized before creating any tables
 static SNMP::IPCountTable fake_ip_table("", NULL, 0);
 
 

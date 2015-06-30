@@ -48,6 +48,7 @@
 
 using namespace std;
 
+//This can only be statically initialised in UT, because we're stubbing out netsnmp - in production code, net-snmp needs to be initialized before creating any tables
 static SNMP::U32Scalar fake_connection_count("", NULL, 0);
 
 /// Fixture for IfcHandlerTest

@@ -79,7 +79,9 @@ TARGET_SOURCES := logger.cpp \
                   exception_handler.cpp \
                   snmp_agent.cpp \
                   snmp_accumulator_table.cpp \
-                  snmp_counter_table.cpp
+                  snmp_counter_table.cpp \
+                  sprout_snmp_oids.cpp \
+                  bono_snmp_oids.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 

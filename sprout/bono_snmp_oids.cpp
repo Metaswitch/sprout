@@ -1,8 +1,8 @@
 /**
- * @file fakexdmconnection.cpp Fake XDM Connection (for testing).
+ * @file bono_snmp_oids.cpp
  *
  * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Copyright (C) 2015 Metaswitch Networks Ltd
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -34,37 +34,11 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///----------------------------------------------------------------------------
+#include "bono_snmp_oids.h"
 
-#include <cstdio>
-
-#include "utils.h"
-#include "fakexdmconnection.hpp"
-
-#include "snmp_accumulator_table.h"
-
-//This can only be statically initialised in UT, because we're stubbing out netsnmp - in production code, net-snmp needs to be initialized before creating any tables
-static SNMP::AccumulatorTable fake_accumulator_table("", NULL, 0);
-
-using namespace std;
-
-FakeXDMConnection::FakeXDMConnection() :
-  XDMConnection(new FakeHttpConnection(), &fake_accumulator_table),
-  _fakehttp((FakeHttpConnection*)_http)
-{
-}
-
-FakeXDMConnection::~FakeXDMConnection()
-{
-}
-
-void FakeXDMConnection::put(const std::string& uri, const std::string& doc)
-{
-  _fakehttp->put("/org.etsi.ngn.simservs/users/" + Utils::url_escape(uri) + "/simservs.xml", doc, "", 0);
-}
-
-void FakeXDMConnection::flush_all()
-{
-  _fakehttp->flush_all();
-}
+oid BONO_LATENCY_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 2, 2 };
+oid BONO_QUEUE_SIZE_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 2, 6 };
+oid BONO_REQUEST_COUNT_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 2, 4 };
+oid BONO_OVERLOAD_COUNT_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 2, 5 };
+oid BONO_CONNECTED_CLIENTS_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 2, 1 };
+oid BONO_CONNECTED_SPROUTS_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 2, 3, 1 };

@@ -1,8 +1,8 @@
 /**
- * @file fakexdmconnection.cpp Fake XDM Connection (for testing).
+ * @file sprout_snmp_oids.h
  *
  * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Copyright (C) 2015 Metaswitch Networks Ltd
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -34,37 +34,21 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///----------------------------------------------------------------------------
+#ifndef SPROUT_SNMP_OIDS_H
+#define SPROUT_SNMP_OIDS_H
 
-#include <cstdio>
+#include "snmp_includes.h"
 
-#include "utils.h"
-#include "fakexdmconnection.hpp"
+extern oid SPROUT_LATENCY_OID[9];
+extern oid SPROUT_QUEUE_SIZE_OID[9];
+extern oid SPROUT_REQUEST_COUNT_OID[9];
+extern oid SPROUT_OVERLOAD_COUNT_OID[9];
 
-#include "snmp_accumulator_table.h"
+extern oid SPROUT_HOMESTEAD_COUNT_OID[10];
+extern oid SPROUT_HOMESTEAD_LATENCY_OID[10];
+extern oid SPROUT_HOMESTEAD_MAR_LATENCY_OID[10];
+extern oid SPROUT_HOMESTEAD_SAR_LATENCY_OID[10];
+extern oid SPROUT_HOMESTEAD_UAR_LATENCY_OID[10];
+extern oid SPROUT_HOMESTEAD_LIR_LATENCY_OID[10];
 
-//This can only be statically initialised in UT, because we're stubbing out netsnmp - in production code, net-snmp needs to be initialized before creating any tables
-static SNMP::AccumulatorTable fake_accumulator_table("", NULL, 0);
-
-using namespace std;
-
-FakeXDMConnection::FakeXDMConnection() :
-  XDMConnection(new FakeHttpConnection(), &fake_accumulator_table),
-  _fakehttp((FakeHttpConnection*)_http)
-{
-}
-
-FakeXDMConnection::~FakeXDMConnection()
-{
-}
-
-void FakeXDMConnection::put(const std::string& uri, const std::string& doc)
-{
-  _fakehttp->put("/org.etsi.ngn.simservs/users/" + Utils::url_escape(uri) + "/simservs.xml", doc, "", 0);
-}
-
-void FakeXDMConnection::flush_all()
-{
-  _fakehttp->flush_all();
-}
+#endif
