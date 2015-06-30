@@ -59,8 +59,6 @@ extern "C" {
 #include <string>
 #include <boost/filesystem.hpp>
 
-#include "memcachedstore.h"
-#include "websockets.h"
 #include "ipv6utils.h"
 #include "logger.h"
 #include "utils.h"
@@ -72,6 +70,9 @@ extern "C" {
 #include "bono.h"
 #include "hssconnection.h"
 #include "xdmconnection.h"
+#include "bono.h"
+#include "websockets.h"
+#include "memcachedstore.h"
 #include "mmtel.h"
 #include "subscription.h"
 #include "registrar.h"
