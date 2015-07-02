@@ -224,10 +224,12 @@ LDFLAGS += -lmemcached \
            -lzmq \
            -levhtp \
            -levent \
-           -levent_pthreads
+           -levent_pthreads \
+           $(shell net-snmp-config --netsnmp-agent-libs)
+
 
 # Test build fakes out cURL
-LDFLAGS_BUILD += -lcurl -lsas
+LDFLAGS_BUILD += -lcurl -lsas -lz
 
 # Include memento if desired
 #LDFLAGS += -lmemento -lthrift -lcassandra

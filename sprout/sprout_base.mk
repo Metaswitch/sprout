@@ -118,7 +118,10 @@ LDFLAGS += -lmemcached \
            -levent_pthreads \
            -lcurl \
            -lsas \
-           -lboost_filesystem
+           -lz \
+           -lboost_filesystem \
+           $(shell net-snmp-config --netsnmp-agent-libs)
+
 
 # Explicitly link some pjsip modules. Some plugins require symbols in them
 # (which sprout-base doesn't), and the plugins are dynamically linked at run
