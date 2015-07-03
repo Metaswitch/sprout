@@ -53,8 +53,8 @@
 using namespace std;
 
 
-//This can only be statically initialised in UT, because we're stubbing out netsnmp - in production code, net-snmp needs to be initialized before creating any tables
-static SNMP::AccumulatorTable fake_accumulator_table("", NULL, 0);
+// This can only be statically initialised in UT, because we're stubbing out netsnmp - in production code, net-snmp needs to be initialized before creating any tables
+static SNMP::AccumulatorTable* fake_accumulator_table = SNMP::AccumulatorTable::create("", "");
 class CommonProcessingTest : public SipTest
 {
 public:
@@ -92,8 +92,8 @@ public:
     // Load monitor with one token in the bucket at startup.
     _lm = new LoadMonitor(0, 1, 0, 0);
     
-    _requests_counter = new SNMP::CounterTable("", NULL, 0);
-    _overload_counter = new SNMP::CounterTable("", NULL, 0);
+    _requests_counter = SNMP::CounterTable::create("", "");
+    _overload_counter = SNMP::CounterTable::create("", "");
 
     _health_checker = new HealthChecker();
 

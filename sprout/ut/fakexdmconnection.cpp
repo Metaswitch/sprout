@@ -44,13 +44,12 @@
 
 #include "snmp_accumulator_table.h"
 
-//This can only be statically initialised in UT, because we're stubbing out netsnmp - in production code, net-snmp needs to be initialized before creating any tables
-static SNMP::AccumulatorTable fake_accumulator_table("", NULL, 0);
-
 using namespace std;
 
+static SNMP::AccumulatorTable* _fake_table = SNMP::AccumulatorTable::create("", "");
+
 FakeXDMConnection::FakeXDMConnection() :
-  XDMConnection(new FakeHttpConnection(), &fake_accumulator_table),
+  XDMConnection(new FakeHttpConnection(), _fake_table),
   _fakehttp((FakeHttpConnection*)_http)
 {
 }

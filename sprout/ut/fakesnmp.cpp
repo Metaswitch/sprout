@@ -34,7 +34,7 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#include "snmp_includes.h"
+#include "snmp_internal/snmp_includes.h"
 
 // Stub out the net-snmp functions we call for UT.
 
@@ -58,7 +58,7 @@ netsnmp_tdata_row* netsnmp_tdata_remove_row(netsnmp_tdata *table,
 
 netsnmp_handler_registration* netsnmp_handler_registration_create(const char *name,
                                                                   netsnmp_mib_handler *handler,
-                                                                  oid * reg_oid,
+                                                                  const oid * reg_oid,
                                                                   size_t reg_oid_len,
                                                                   int modes)
 {
@@ -67,7 +67,7 @@ netsnmp_handler_registration* netsnmp_handler_registration_create(const char *na
 
 netsnmp_handler_registration* netsnmp_create_handler_registration(const char *name,
                                                                   Netsnmp_Node_Handler* handler_access_method,
-                                                                  oid *reg_oid,
+                                                                  const oid *reg_oid,
                                                                   size_t reg_oid_len,
                                                                   int modes)
 {

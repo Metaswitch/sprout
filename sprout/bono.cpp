@@ -131,7 +131,6 @@ extern "C" {
 #include "quiescing_manager.h"
 #include "scscfselector.h"
 #include "contact_filtering.h"
-#include "bono_snmp_oids.h"
 
 static RegStore* store;
 static RegStore* remote_store;
@@ -3218,8 +3217,7 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
   // Create a flow table object to manage the client flow records
   // and handle access proxy quiescing.
   flow_count = new SNMP::U32Scalar("bono_connected_clients",
-                                   BONO_CONNECTED_CLIENTS_OID,
-                                   OID_LENGTH(BONO_CONNECTED_CLIENTS_OID));
+                                   ".1.2.826.0.1.1578918.9.2.1");
   flow_table = new FlowTable(quiescing_manager, flow_count);
   quiescing_manager->register_flows_handler(flow_table);
 
@@ -3232,9 +3230,8 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
     pjsip_host_port pool_target;
     pool_target.host = pj_strdup3(stack_data.pool, upstream_proxy_arg.c_str());
     pool_target.port = upstream_proxy_port;
-    sprout_ip_tbl = new SNMP::IPCountTable("bono_connected_sprouts",
-                                           BONO_CONNECTED_SPROUTS_OID,
-                                           OID_LENGTH(BONO_CONNECTED_SPROUTS_OID));
+    sprout_ip_tbl = SNMP::IPCountTable::create("bono_connected_sprouts",
+                                               ".1.2.826.0.1.1578918.9.2.3.1");
     upstream_conn_pool = new ConnectionPool(&pool_target,
         upstream_proxy_connections,
         upstream_proxy_recycle,

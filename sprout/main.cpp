@@ -103,8 +103,6 @@ extern "C" {
 #include "snmp_accumulator_table.h"
 #include "snmp_counter_table.h"
 #include "snmp_agent.h"
-#include "sprout_snmp_oids.h"
-#include "bono_snmp_oids.h"
 
 enum OptionTypes
 {
@@ -1481,52 +1479,38 @@ int main(int argc, char* argv[])
   SNMP::AccumulatorTable* homestead_lir_latency_table = NULL;
   if (opt.pcscf_enabled)
   {
-    latency_table = new SNMP::AccumulatorTable("bono_latency",
-                                               BONO_LATENCY_OID,
-                                               OID_LENGTH(BONO_LATENCY_OID));
-    queue_size_table = new SNMP::AccumulatorTable("bono_queue_size",
-                                                  BONO_QUEUE_SIZE_OID,
-                                                  OID_LENGTH(BONO_QUEUE_SIZE_OID));
-    requests_counter = new SNMP::CounterTable("bono_incoming_requests",
-                                              BONO_REQUEST_COUNT_OID,
-                                              OID_LENGTH(BONO_REQUEST_COUNT_OID));
-    overload_counter = new SNMP::CounterTable("bono_rejected_overload",
-                                              BONO_OVERLOAD_COUNT_OID,
-                                              OID_LENGTH(BONO_OVERLOAD_COUNT_OID));
+    latency_table = SNMP::AccumulatorTable::create("bono_latency",
+                                                   ".1.2.826.0.1.1578918.9.2.2");
+    queue_size_table = SNMP::AccumulatorTable::create("bono_queue_size",
+                                                      ".1.2.826.0.1.1578918.9.2.6");
+    requests_counter = SNMP::CounterTable::create("bono_incoming_requests",
+                                                  ".1.2.826.0.1.1578918.9.2.4");
+    overload_counter = SNMP::CounterTable::create("bono_rejected_overload",
+                                                  ".1.2.826.0.1.1578918.9.2.5");
   }
   else
   {
-    latency_table = new SNMP::AccumulatorTable("sprout_latency",
-                                               SPROUT_LATENCY_OID,
-                                               OID_LENGTH(SPROUT_LATENCY_OID));
-    queue_size_table = new SNMP::AccumulatorTable("sprout_queue_size",
-                                                  SPROUT_QUEUE_SIZE_OID,
-                                                  OID_LENGTH(SPROUT_QUEUE_SIZE_OID));
-    requests_counter = new SNMP::CounterTable("sprout_incoming_requests",
-                                              SPROUT_REQUEST_COUNT_OID,
-                                              OID_LENGTH(SPROUT_REQUEST_COUNT_OID));
-    overload_counter = new SNMP::CounterTable("sprout_rejected_overload",
-                                              SPROUT_OVERLOAD_COUNT_OID,
-                                              OID_LENGTH(SPROUT_OVERLOAD_COUNT_OID));
-    
-    homestead_cxn_count = new SNMP::IPCountTable("sprout_homestead_cxn_count",
-                                                 SPROUT_HOMESTEAD_COUNT_OID,
-                                                 OID_LENGTH(SPROUT_HOMESTEAD_COUNT_OID));
-    homestead_latency_table = new SNMP::AccumulatorTable("sprout_homestead_latency",
-                                                         SPROUT_HOMESTEAD_LATENCY_OID,
-                                                         OID_LENGTH(SPROUT_HOMESTEAD_LATENCY_OID));
-    homestead_mar_latency_table = new SNMP::AccumulatorTable("sprout_homestead_mar_latency",
-                                                             SPROUT_HOMESTEAD_MAR_LATENCY_OID,
-                                                             OID_LENGTH(SPROUT_HOMESTEAD_MAR_LATENCY_OID));
-    homestead_sar_latency_table = new SNMP::AccumulatorTable("sprout_homestead_sar_latency",
-                                                             SPROUT_HOMESTEAD_SAR_LATENCY_OID,
-                                                             OID_LENGTH(SPROUT_HOMESTEAD_SAR_LATENCY_OID));
-    homestead_uar_latency_table = new SNMP::AccumulatorTable("sprout_homestead_uar_latency",
-                                                             SPROUT_HOMESTEAD_UAR_LATENCY_OID,
-                                                             OID_LENGTH(SPROUT_HOMESTEAD_UAR_LATENCY_OID));
-    homestead_lir_latency_table = new SNMP::AccumulatorTable("sprout_homestead_lir_latency",
-                                                             SPROUT_HOMESTEAD_LIR_LATENCY_OID,
-                                                             OID_LENGTH(SPROUT_HOMESTEAD_LIR_LATENCY_OID));
+    latency_table = SNMP::AccumulatorTable::create("sprout_latency",
+                                                   ".1.2.826.0.1.1578918.9.3.1");
+    queue_size_table = SNMP::AccumulatorTable::create("sprout_queue_size",
+                                                      ".1.2.826.0.1.1578918.9.3.8");
+    requests_counter = SNMP::CounterTable::create("sprout_incoming_requests",
+                                                  ".1.2.826.0.1.1578918.9.3.6");
+    overload_counter = SNMP::CounterTable::create("sprout_rejected_overload",
+                                                  ".1.2.826.0.1.1578918.9.3.7");
+
+    homestead_cxn_count = SNMP::IPCountTable::create("sprout_homestead_cxn_count",
+                                                     ".1.2.826.0.1.1578918.9.3.3.1");
+    homestead_latency_table = SNMP::AccumulatorTable::create("sprout_homestead_latency",
+                                                             ".1.2.826.0.1.1578918.9.3.3.2");
+    homestead_mar_latency_table = SNMP::AccumulatorTable::create("sprout_homestead_mar_latency",
+                                                                 ".1.2.826.0.1.1578918.9.3.3.3");
+    homestead_sar_latency_table = SNMP::AccumulatorTable::create("sprout_homestead_sar_latency",
+                                                                 ".1.2.826.0.1.1578918.9.3.3.4");
+    homestead_uar_latency_table = SNMP::AccumulatorTable::create("sprout_homestead_uar_latency",
+                                                                 ".1.2.826.0.1.1578918.9.3.3.5");
+    homestead_lir_latency_table = SNMP::AccumulatorTable::create("sprout_homestead_lir_latency",
+                                                                 ".1.2.826.0.1.1578918.9.3.3.6");
   }
 
   if ((opt.icscf_enabled || opt.scscf_enabled) && opt.alarms_enabled)

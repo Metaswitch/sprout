@@ -44,9 +44,6 @@
 #include "sproutletappserver.h"
 #include "mmtel.h"
 
-static oid SPROUT_HOMER_COUNT_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 2, 1 };
-static oid SPROUT_HOMER_LATENCY_OID[] = { 1, 2, 826, 0, 1, 1578918, 9, 3, 2, 2 };
-
 class MMTELASPlugin : public SproutletPlugin
 {
 public:
@@ -90,12 +87,10 @@ bool MMTELASPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
   {
     // Create a connection to the XDMS.
     TRC_STATUS("Creating connection to XDMS %s", opt.xdm_server.c_str());
-    _xdm_cxn_count_tbl = new SNMP::IPCountTable("homer-ip-count",
-                                                SPROUT_HOMER_COUNT_OID,
-                                                OID_LENGTH(SPROUT_HOMER_COUNT_OID));
-    _xdm_latency_tbl = new SNMP::AccumulatorTable("homer-latency",
-                                                  SPROUT_HOMER_LATENCY_OID,
-                                                  OID_LENGTH(SPROUT_HOMER_LATENCY_OID));
+    _xdm_cxn_count_tbl = SNMP::IPCountTable::create("homer-ip-count",
+                                                        ".1.2.826.0.1.1578918.9.3.2.1");
+    _xdm_latency_tbl = SNMP::AccumulatorTable::create("homer-latency",
+                                                      ".1.2.826.0.1.1578918.9.3.2.2");
     _xdm_connection = new XDMConnection(opt.xdm_server,
                                         http_resolver,
                                         load_monitor,

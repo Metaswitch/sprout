@@ -80,8 +80,9 @@ TARGET_SOURCES := logger.cpp \
                   snmp_agent.cpp \
                   snmp_accumulator_table.cpp \
                   snmp_counter_table.cpp \
-                  sprout_snmp_oids.cpp \
-                  bono_snmp_oids.cpp
+                  snmp_ip_count_table.cpp \
+                  snmp_row.cpp \
+                  snmp_scalar.cpp \
 
 TARGET_SOURCES_BUILD := main.cpp
 
