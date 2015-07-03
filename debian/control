@@ -25,7 +25,7 @@ Description: Debugging symbols for sprout-libs
 Package: sprout
 Architecture: any
 Depends: sprout-base, sprout-scscf, sprout-icscf, sprout-bgcf, sprout-mmtel-as
-Suggests: sprout-dbg, clearwater-logging, clearwater-snmp-handler-sprout, clearwater-snmp-handler-alarm
+Suggests: sprout-dbg, clearwater-logging, clearwater-snmp-alarm-agent
 Description: sprout, the SIP Router
 
 Package: sprout-dbg
@@ -39,7 +39,7 @@ Description: Debugging symbols for sprout, the SIP Router
 Package: sprout-base
 Architecture: any
 Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-log-cleanup, sprout-libs, clearwater-memcached, libboost-regex1.54.0, libboost-system1.54.0, libboost-thread1.54.0, libzmq3, libevent-pthreads-2.0-5, chronos, clearwater-socket-factory, libboost-filesystem1.54.0, astaire, libsnmp30
-Suggests: sprout-dbg, clearwater-logging, clearwater-snmp-handler-sprout, clearwater-snmp-handler-alarm
+Suggests: sprout-dbg, clearwater-logging
 Replaces: sprout
 Description: sprout-base, the SIP Router basic executable
 
@@ -158,7 +158,7 @@ Description: Debugging symbols for mangelwurzel, the B2BUA and SCC-AS emulator
 Package: bono
 Architecture: any
 Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-log-cleanup, sprout-libs, libboost-regex1.54.0, libboost-system1.54.0, libboost-thread1.54.0, libzmq3, libevent-pthreads-2.0-5, clearwater-socket-factory, libboost-filesystem1.54.0, libsnmp30
-Suggests: restund, bono-dbg, clearwater-logging, clearwater-snmp-handler-bono
+Suggests: restund, bono-dbg, clearwater-logging
 Description: bono, the SIP edge proxy
 
 Package: bono-dbg

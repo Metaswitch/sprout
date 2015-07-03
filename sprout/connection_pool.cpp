@@ -50,14 +50,13 @@ extern "C" {
 #include "pjutils.h"
 #include "connection_pool.h"
 
-
 ConnectionPool::ConnectionPool(pjsip_host_port* target,
                                int num_connections,
                                int recycle_period,
                                pj_pool_t* pool,
                                pjsip_endpoint* endpt,
                                pjsip_tpfactory* tp_factory,
-                               LastValueCache* lvc) :
+                               SNMP::IPCountTable* sprout_count_tbl) :
   _target(*target),
   _num_connections(num_connections),
   _recycle_period(recycle_period),
@@ -68,15 +67,13 @@ ConnectionPool::ConnectionPool(pjsip_host_port* target,
   _recycler(NULL),
   _terminated(false),
   _active_connections(0),
-  _statistic("connected_sprouts", lvc)
+  _sprout_count_tbl(sprout_count_tbl)
 {
   TRC_STATUS("Creating connection pool to %.*s:%d", _target.host.slen, _target.host.ptr, _target.port);
   TRC_STATUS("  connections = %d, recycle time = %d +/- %d seconds", _num_connections, _recycle_period, _recycle_margin);
 
   pthread_mutex_init(&_tp_hash_lock, NULL);
   _tp_hash.resize(_num_connections);
-
-  report_sprout_counts();
 }
 
 
@@ -471,53 +468,18 @@ int ConnectionPool::recycle_thread(void* p)
   return 0;
 }
 
-
-void ConnectionPool::report_sprout_counts()
-{
-  std::map<std::string, int>::iterator it = _host_conn_count.begin();
-  std::vector<std::string> reported_value;
-  for (; it != _host_conn_count.end(); ++it)
-  {
-    std::string host = it->first;
-    std::string connection_count = std::to_string(it->second);
-    TRC_DEBUG("Reporting %s:%s", host.c_str(), connection_count.c_str());
-    reported_value.push_back(host);
-    reported_value.push_back(connection_count);
-  }
-  _statistic.report_change(reported_value);
-}
-
-
 void ConnectionPool::decrement_connection_count(pjsip_transport *trans)
 {
   std::string host = PJUtils::pj_str_to_string(&trans->remote_name.host);
-  assert(_host_conn_count.find(host) != _host_conn_count.end());
-
-  if (_host_conn_count[host] == 1)
+  if (_sprout_count_tbl->get(host)->decrement() == 0)
   {
-    _host_conn_count.erase(host);
+    _sprout_count_tbl->remove(host);
   }
-  else
-  {
-    --_host_conn_count[host];
-  }
-
-  report_sprout_counts();
 }
 
 
 void ConnectionPool::increment_connection_count(pjsip_transport *trans)
 {
-  std::string hostname = PJUtils::pj_str_to_string(&trans->remote_name.host);
-  if (_host_conn_count.find(hostname) == _host_conn_count.end())
-  {
-    // This is the first connection to this remote host, create an entry now.
-    _host_conn_count[hostname] = 1;
-  }
-  else
-  {
-    ++_host_conn_count[hostname];
-  }
-
-  report_sprout_counts();
+  std::string host = PJUtils::pj_str_to_string(&trans->remote_name.host);
+  _sprout_count_tbl->get(host)->increment();
 }

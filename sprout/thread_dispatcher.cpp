@@ -68,13 +68,13 @@ extern "C" {
 #include "statistic.h"
 #include "custom_headers.h"
 #include "utils.h"
-#include "accumulator.h"
 #include "connection_tracker.h"
 #include "quiescing_manager.h"
 #include "load_monitor.h"
 #include "counter.h"
 #include "sprout_pd_definitions.h"
 #include "exception_handler.h"
+#include "snmp_accumulator_table.h"
 
 static std::vector<pj_thread_t*> worker_threads;
 
@@ -93,9 +93,9 @@ eventq<struct rx_msg_qe> rx_msg_q;
 static const int MSG_Q_DEADLOCK_TIME = 4000;
 
 static int num_worker_threads = 1;
-static Accumulator* latency_accumulator = NULL;
+static SNMP::AccumulatorTable* latency_table = NULL;
 static LoadMonitor* load_monitor = NULL;
-static Accumulator* queue_size_accumulator = NULL;
+static SNMP::AccumulatorTable* queue_size_table = NULL;
 static ExceptionHandler* exception_handler = NULL;
 
 static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata);
@@ -197,7 +197,7 @@ static int worker_thread(void* p)
       if (qe.stop_watch.read(latency_us))
       {
         TRC_DEBUG("Request latency = %ldus", latency_us);
-        latency_accumulator->accumulate(latency_us);
+        latency_table->accumulate(latency_us);
         load_monitor->request_complete(latency_us);
       }
       else
@@ -254,7 +254,7 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   qe.rdata = clone_rdata;
 
   // Track the current queue size
-  queue_size_accumulator->accumulate(rx_msg_q.size());
+  queue_size_table->accumulate(rx_msg_q.size());
   rx_msg_q.push(qe);
 
   // return TRUE to flag that we have absorbed the incoming message.
@@ -262,8 +262,8 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
 }
 
 pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
-                                   Accumulator* latency_acc_arg,
-                                   Accumulator* queue_size_acc_arg,
+                                   SNMP::AccumulatorTable* latency_table_arg,
+                                   SNMP::AccumulatorTable* queue_size_table_arg,
                                    LoadMonitor* load_monitor_arg,
                                    ExceptionHandler* exception_handler_arg)
 {
@@ -275,8 +275,8 @@ pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
   rx_msg_q.set_deadlock_threshold(MSG_Q_DEADLOCK_TIME);
 
   num_worker_threads = num_worker_threads_arg;
-  latency_accumulator = latency_acc_arg;
-  queue_size_accumulator = queue_size_acc_arg;
+  latency_table = latency_table_arg;
+  queue_size_table = queue_size_table_arg;
   load_monitor = load_monitor_arg;
   exception_handler = exception_handler_arg;
 

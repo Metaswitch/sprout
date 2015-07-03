@@ -46,7 +46,7 @@ extern "C" {
 #include <string>
 #include <random>
 
-#include "statistic.h"
+#include "snmp_ip_count_table.h"
 
 class ConnectionPool
 {
@@ -57,7 +57,7 @@ public:
                  pj_pool_t* pool,
                  pjsip_endpoint* endpt,
                  pjsip_tpfactory* tp_factory,
-                 LastValueCache* lvc);
+                 SNMP::IPCountTable* sprout_count_tbl);
   ~ConnectionPool();
 
   void init();
@@ -79,7 +79,6 @@ private:
   void quiesce_connections();
   void transport_state_update(pjsip_transport* tp, pjsip_transport_state state);
   void recycle_connections();
-  void report_sprout_counts();
   void increment_connection_count(pjsip_transport *);
   void decrement_connection_count(pjsip_transport *);
 
@@ -122,8 +121,7 @@ private:
   std::map<pjsip_transport*, int> _tp_map;
 
   // Statistics
-  Statistic _statistic;
-  std::map<std::string, int> _host_conn_count;
+  SNMP::IPCountTable* _sprout_count_tbl;
 };
 
 #endif // CONNECTION_POOL_H__

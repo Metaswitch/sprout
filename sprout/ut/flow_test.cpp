@@ -44,8 +44,12 @@
 #include "utils.h"
 #include "siptest.hpp"
 #include "dialog_tracker.hpp"
+#include "snmp_scalar.h"
 
 using namespace std;
+
+//This can only be statically initialised in UT, because we're stubbing out netsnmp - in production code, net-snmp needs to be initialized before creating any tables
+static SNMP::U32Scalar fake_connection_count("", "");
 
 /// Fixture for IfcHandlerTest
 class FlowTest : public SipTest
@@ -60,7 +64,7 @@ public:
   {
     SipTest::SetUpTestCase();
     qm = NULL;
-    ft = new FlowTable(qm, stack_data.stats_aggregator);
+    ft = new FlowTable(qm, &fake_connection_count);
     addr.addr.sa_family = PJ_AF_INET;
   }
 

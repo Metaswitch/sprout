@@ -1,8 +1,8 @@
 /**
- * @file counter_test.cpp UT for statistics counter classes.
+ * @file fakesnmp.cpp Fake SNMP infrastructure (for testing).
  *
  * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Copyright (C) 2015 Metaswitch Networks Ltd
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -34,50 +34,36 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///----------------------------------------------------------------------------
+#include "snmp_internal/snmp_includes.h"
+#include "fakesnmp.hpp"
 
-#include <string>
-#include "gtest/gtest.h"
-
-#include "basetest.hpp"
-#include "counter.h"
-
-using namespace std;
-
-/// Fixture for StatisticCounterTest.
-class StatisticCounterTest : public BaseTest
+namespace SNMP
 {
-  StatisticCounter _counter;
+struct in_addr dummy_addr;
+FakeIPCountRow FAKE_IP_COUNT_ROW;
+FakeIPCountTable FAKE_IP_COUNT_TABLE;
+FakeCounterTable FAKE_COUNTER_TABLE;
+FakeAccumulatorTable FAKE_ACCUMULATOR_TABLE;
 
-  StatisticCounterTest() :
-    _counter("incoming_requests",
-             stack_data.stats_aggregator,
-             999999999999) // make the period large to avoid intermittent failures due to timing
-  {
-  }
+// Alternative implementations is some functions, so we aren't calling real SNMP code in UT
+IPCountTable* IPCountTable::create(std::string name, std::string oid) { return new FakeIPCountTable(); };
+IPCountRow::IPCountRow(struct in_addr addr) {}; 
+IPCountRow::IPCountRow(struct in6_addr addr) {}; 
 
-  virtual ~StatisticCounterTest()
-  {
-  }
-};
-
-TEST_F(StatisticCounterTest, NoSamples)
+ColumnData IPCountRow::get_columns()
 {
-  _counter.refresh(true);
-  EXPECT_EQ(_counter.get_count(), (uint_fast64_t)0);
+  ColumnData ret;
+  return ret;
+}
 }
 
-TEST_F(StatisticCounterTest, OneSample)
+// Fake implementation of scalar registration function, so SNMP::U32Scalar doesn't call real SNMP
+// code
+int netsnmp_register_read_only_ulong_instance(const char *name,
+                                              oid *reg_oid,
+                                              size_t reg_oid_len,
+                                              u_long *it,
+                                              Netsnmp_Node_Handler *subhandler)
 {
-  _counter.increment();
-  _counter.refresh(true);
-  EXPECT_EQ(_counter.get_count(), (uint_fast64_t)1);
-}
-
-TEST_F(StatisticCounterTest, BasicTest)
-{
-  _counter.increment();
-  _counter.refresh(true);
-  // No easy way to read statistics back.
+  return 0; 
 }

@@ -38,7 +38,18 @@
 #include "fakehssconnection.hpp"
 #include "gtest/gtest.h"
 
-FakeHSSConnection::FakeHSSConnection() : HSSConnection("localhost", NULL, NULL, NULL, NULL)
+#include "fakesnmp.hpp"
+
+FakeHSSConnection::FakeHSSConnection() : HSSConnection("localhost",
+                                                       NULL,
+                                                       NULL,
+                                                       &SNMP::FAKE_IP_COUNT_TABLE,
+                                                       &SNMP::FAKE_ACCUMULATOR_TABLE,
+                                                       &SNMP::FAKE_ACCUMULATOR_TABLE,
+                                                       &SNMP::FAKE_ACCUMULATOR_TABLE,
+                                                       &SNMP::FAKE_ACCUMULATOR_TABLE,
+                                                       &SNMP::FAKE_ACCUMULATOR_TABLE,
+                                                       NULL)
 {
 }
 

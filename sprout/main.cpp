@@ -59,8 +59,6 @@ extern "C" {
 #include <string>
 #include <boost/filesystem.hpp>
 
-#include "websockets.h"
-#include "memcachedstore.h"
 #include "ipv6utils.h"
 #include "logger.h"
 #include "utils.h"
@@ -69,9 +67,12 @@ extern "C" {
 #include "analyticslogger.h"
 #include "regstore.h"
 #include "stack.h"
+#include "bono.h"
 #include "hssconnection.h"
 #include "xdmconnection.h"
 #include "bono.h"
+#include "websockets.h"
+#include "memcachedstore.h"
 #include "mmtel.h"
 #include "subscription.h"
 #include "registrar.h"
@@ -82,7 +83,6 @@ extern "C" {
 #include "bgcfservice.h"
 #include "pjutils.h"
 #include "log.h"
-#include "zmq_lvc.h"
 #include "quiescing_manager.h"
 #include "load_monitor.h"
 #include "localstore.h"
@@ -100,6 +100,9 @@ extern "C" {
 #include "thread_dispatcher.h"
 #include "exception_handler.h"
 #include "scscfsproutlet.h"
+#include "snmp_accumulator_table.h"
+#include "snmp_counter_table.h"
+#include "snmp_agent.h"
 
 enum OptionTypes
 {
@@ -1454,6 +1457,62 @@ int main(int argc, char* argv[])
   seed = (unsigned int)now.sec ^ (unsigned int)now.msec ^ getpid();
   srand(seed);
 
+  if (opt.pcscf_enabled)
+  {
+    snmp_setup("bono");
+  }
+  else
+  {
+    snmp_setup("sprout");
+  }
+
+  SNMP::AccumulatorTable* latency_table;
+  SNMP::AccumulatorTable* queue_size_table;
+  SNMP::CounterTable* requests_counter;
+  SNMP::CounterTable* overload_counter;
+  
+  SNMP::IPCountTable* homestead_cxn_count = NULL;
+  SNMP::AccumulatorTable* homestead_latency_table = NULL;
+  SNMP::AccumulatorTable* homestead_mar_latency_table = NULL;
+  SNMP::AccumulatorTable* homestead_sar_latency_table = NULL;
+  SNMP::AccumulatorTable* homestead_uar_latency_table = NULL;
+  SNMP::AccumulatorTable* homestead_lir_latency_table = NULL;
+  if (opt.pcscf_enabled)
+  {
+    latency_table = SNMP::AccumulatorTable::create("bono_latency",
+                                                   ".1.2.826.0.1.1578918.9.2.2");
+    queue_size_table = SNMP::AccumulatorTable::create("bono_queue_size",
+                                                      ".1.2.826.0.1.1578918.9.2.6");
+    requests_counter = SNMP::CounterTable::create("bono_incoming_requests",
+                                                  ".1.2.826.0.1.1578918.9.2.4");
+    overload_counter = SNMP::CounterTable::create("bono_rejected_overload",
+                                                  ".1.2.826.0.1.1578918.9.2.5");
+  }
+  else
+  {
+    latency_table = SNMP::AccumulatorTable::create("sprout_latency",
+                                                   ".1.2.826.0.1.1578918.9.3.1");
+    queue_size_table = SNMP::AccumulatorTable::create("sprout_queue_size",
+                                                      ".1.2.826.0.1.1578918.9.3.8");
+    requests_counter = SNMP::CounterTable::create("sprout_incoming_requests",
+                                                  ".1.2.826.0.1.1578918.9.3.6");
+    overload_counter = SNMP::CounterTable::create("sprout_rejected_overload",
+                                                  ".1.2.826.0.1.1578918.9.3.7");
+
+    homestead_cxn_count = SNMP::IPCountTable::create("sprout_homestead_cxn_count",
+                                                     ".1.2.826.0.1.1578918.9.3.3.1");
+    homestead_latency_table = SNMP::AccumulatorTable::create("sprout_homestead_latency",
+                                                             ".1.2.826.0.1.1578918.9.3.3.2");
+    homestead_mar_latency_table = SNMP::AccumulatorTable::create("sprout_homestead_mar_latency",
+                                                                 ".1.2.826.0.1.1578918.9.3.3.3");
+    homestead_sar_latency_table = SNMP::AccumulatorTable::create("sprout_homestead_sar_latency",
+                                                                 ".1.2.826.0.1.1578918.9.3.3.4");
+    homestead_uar_latency_table = SNMP::AccumulatorTable::create("sprout_homestead_uar_latency",
+                                                                 ".1.2.826.0.1.1578918.9.3.3.5");
+    homestead_lir_latency_table = SNMP::AccumulatorTable::create("sprout_homestead_lir_latency",
+                                                                 ".1.2.826.0.1.1578918.9.3.3.6");
+  }
+
   if ((opt.icscf_enabled || opt.scscf_enabled) && opt.alarms_enabled)
   {
     // Create Sprout's alarm objects.
@@ -1571,9 +1630,8 @@ int main(int argc, char* argv[])
     ralf_connection = new HttpConnection(opt.ralf_server,
                                          false,
                                          http_resolver,
-                                         "connected_ralfs",
+                                         NULL, // No SNMP table for connected Ralfs
                                          load_monitor,
-                                         stack_data.stats_aggregator,
                                          SASEvent::HttpLogLevel::PROTOCOL,
                                          ralf_comm_monitor);
   }
@@ -1592,7 +1650,12 @@ int main(int argc, char* argv[])
     hss_connection = new HSSConnection(opt.hss_server,
                                        http_resolver,
                                        load_monitor,
-                                       stack_data.stats_aggregator,
+                                       homestead_cxn_count,
+                                       homestead_latency_table,
+                                       homestead_mar_latency_table,
+                                       homestead_sar_latency_table,
+                                       homestead_uar_latency_table,
+                                       homestead_lir_latency_table,
                                        hss_comm_monitor);
   }
 
@@ -1861,27 +1924,14 @@ int main(int argc, char* argv[])
     }
   }
 
-  Accumulator* latency_accumulator =
-      new StatisticAccumulator("latency_us",
-                               stack_data.stats_aggregator);
-  Accumulator* queue_size_accumulator =
-      new StatisticAccumulator("queue_size",
-                               stack_data.stats_aggregator);
-  Counter* requests_counter =
-      new StatisticCounter("incoming_requests",
-                           stack_data.stats_aggregator);
-  Counter* overload_counter =
-      new StatisticCounter("rejected_overload",
-                           stack_data.stats_aggregator);
-
   init_common_sip_processing(load_monitor,
                              requests_counter,
                              overload_counter,
                              health_checker);
 
   init_thread_dispatcher(opt.worker_threads,
-                         latency_accumulator,
-                         queue_size_accumulator,
+                         latency_table,
+                         queue_size_table,
                          load_monitor,
                          exception_handler);
 
@@ -1949,6 +1999,7 @@ int main(int argc, char* argv[])
 
   // Wait here until the quit semaphore is signaled.
   sem_wait(&term_sem);
+  snmp_terminate("sprout");
 
   CL_SPROUT_ENDED.log();
   if (opt.scscf_enabled)
@@ -2046,8 +2097,8 @@ int main(int argc, char* argv[])
     delete remote_vbucket_alarm;
   }
 
-  delete latency_accumulator;
-  delete queue_size_accumulator;
+  delete latency_table;
+  delete queue_size_table;
   delete requests_counter;
   delete overload_counter;
 

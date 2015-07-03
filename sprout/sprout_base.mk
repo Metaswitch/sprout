@@ -76,7 +76,13 @@ TARGET_SOURCES := logger.cpp \
                   communicationmonitor.cpp \
                   thread_dispatcher.cpp \
                   common_sip_processing.cpp \
-                  exception_handler.cpp
+                  exception_handler.cpp \
+                  snmp_agent.cpp \
+                  snmp_accumulator_table.cpp \
+                  snmp_counter_table.cpp \
+                  snmp_ip_count_table.cpp \
+                  snmp_row.cpp \
+                  snmp_scalar.cpp \
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -121,7 +127,6 @@ LDFLAGS += -lmemcached \
            -lz \
            -lboost_filesystem \
            $(shell net-snmp-config --netsnmp-agent-libs)
-
 
 # Explicitly link some pjsip modules. Some plugins require symbols in them
 # (which sprout-base doesn't), and the plugins are dynamically linked at run

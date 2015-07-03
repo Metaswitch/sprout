@@ -152,6 +152,10 @@ static ACRFactory* icscf_acr_factory;
 static bool edge_proxy;
 static pjsip_uri* upstream_proxy;
 static ConnectionPool* upstream_conn_pool = NULL;
+
+static SNMP::IPCountTable* sprout_ip_tbl = NULL;
+static SNMP::U32Scalar* flow_count = NULL;
+
 static FlowTable* flow_table;
 static DialogTracker* dialog_tracker;
 static HSSConnection* hss;
@@ -3212,7 +3216,9 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
 
   // Create a flow table object to manage the client flow records
   // and handle access proxy quiescing.
-  flow_table = new FlowTable(quiescing_manager, stack_data.stats_aggregator);
+  flow_count = new SNMP::U32Scalar("bono_connected_clients",
+                                   ".1.2.826.0.1.1578918.9.2.1");
+  flow_table = new FlowTable(quiescing_manager, flow_count);
   quiescing_manager->register_flows_handler(flow_table);
 
   // Create a dialog tracker to count dialogs on each flow
@@ -3224,13 +3230,15 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
     pjsip_host_port pool_target;
     pool_target.host = pj_strdup3(stack_data.pool, upstream_proxy_arg.c_str());
     pool_target.port = upstream_proxy_port;
+    sprout_ip_tbl = SNMP::IPCountTable::create("bono_connected_sprouts",
+                                               ".1.2.826.0.1.1578918.9.2.3.1");
     upstream_conn_pool = new ConnectionPool(&pool_target,
         upstream_proxy_connections,
         upstream_proxy_recycle,
         stack_data.pool,
         stack_data.endpt,
         stack_data.pcscf_trusted_tcp_factory,
-        stack_data.stats_aggregator);
+        sprout_ip_tbl);
     upstream_conn_pool->init();
   }
 
@@ -3305,8 +3313,11 @@ void destroy_stateful_proxy()
   // Destroy the upstream connection pool.  This will quiesce all the TCP
   // connections.
   delete upstream_conn_pool; upstream_conn_pool = NULL;
+  delete sprout_ip_tbl; sprout_ip_tbl = NULL;
 
   // Destroy the flow table.
+  delete flow_count;
+  flow_count = NULL;
   delete flow_table;
   flow_table = NULL;
 

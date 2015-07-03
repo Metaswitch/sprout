@@ -45,7 +45,6 @@
 #include "sproutsasevent.h"
 #include "httpconnection.h"
 #include "hssconnection.h"
-#include "accumulator.h"
 #include "rapidjson/error/en.h"
 
 const std::string HSSConnection::REG = "reg";
@@ -62,21 +61,25 @@ const std::string HSSConnection::STATE_NOT_REGISTERED = "NOT_REGISTERED";
 HSSConnection::HSSConnection(const std::string& server,
                              HttpResolver* resolver,
                              LoadMonitor *load_monitor,
-                             LastValueCache *stats_aggregator,
+                             SNMP::IPCountTable* homestead_count_tbl,
+                             SNMP::AccumulatorTable* homestead_overall_latency_tbl,
+                             SNMP::AccumulatorTable* homestead_mar_latency_tbl,
+                             SNMP::AccumulatorTable* homestead_sar_latency_tbl,
+                             SNMP::AccumulatorTable* homestead_uar_latency_tbl,
+                             SNMP::AccumulatorTable* homestead_lir_latency_tbl,
                              CommunicationMonitor* comm_monitor) :
   _http(new HttpConnection(server,
                            false,
                            resolver,
-                           "connected_homesteads",
+                           homestead_count_tbl,
                            load_monitor,
-                           stats_aggregator,
                            SASEvent::HttpLogLevel::PROTOCOL,
                            comm_monitor)),
-  _latency_stat("hss_latency_us", stats_aggregator),
-  _digest_latency_stat("hss_digest_latency_us", stats_aggregator),
-  _subscription_latency_stat("hss_subscription_latency_us", stats_aggregator),
-  _user_auth_latency_stat("hss_user_auth_latency_us", stats_aggregator),
-  _location_latency_stat("hss_location_latency_us", stats_aggregator)
+  _latency_tbl(homestead_overall_latency_tbl),
+  _mar_latency_tbl(homestead_mar_latency_tbl),
+  _sar_latency_tbl(homestead_sar_latency_tbl),
+  _uar_latency_tbl(homestead_uar_latency_tbl),
+  _lir_latency_tbl(homestead_lir_latency_tbl)
 {
 }
 
@@ -133,8 +136,8 @@ HTTPCode HSSConnection::get_auth_vector(const std::string& private_user_identity
       (rc != HTTP_GATEWAY_TIMEOUT)    &&
       (stopWatch.read(latency_us)))
   {
-    _latency_stat.accumulate(latency_us);
-    _digest_latency_stat.accumulate(latency_us);
+    _latency_tbl->accumulate(latency_us);
+    _mar_latency_tbl->accumulate(latency_us);
   }
 
   if (av == NULL)
@@ -577,8 +580,8 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
       (http_code != HTTP_GATEWAY_TIMEOUT)    &&
       (stopWatch.read(latency_us)))
   {
-    _latency_stat.accumulate(latency_us);
-    _subscription_latency_stat.accumulate(latency_us);
+    _latency_tbl->accumulate(latency_us);
+    _sar_latency_tbl->accumulate(latency_us);
   }
 
   if (http_code != HTTP_OK)
@@ -651,8 +654,8 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
       (http_code != HTTP_GATEWAY_TIMEOUT)    &&
       (stopWatch.read(latency_us)))
   {
-    _latency_stat.accumulate(latency_us);
-    _subscription_latency_stat.accumulate(latency_us);
+    _latency_tbl->accumulate(latency_us);
+    _sar_latency_tbl->accumulate(latency_us);
   }
 
   if (http_code != HTTP_OK)
@@ -720,8 +723,8 @@ HTTPCode HSSConnection::get_user_auth_status(const std::string& private_user_ide
       (rc != HTTP_GATEWAY_TIMEOUT)    &&
       (stopWatch.read(latency_us)))
   {
-    _latency_stat.accumulate(latency_us);
-    _user_auth_latency_stat.accumulate(latency_us);
+    _latency_tbl->accumulate(latency_us);
+    _uar_latency_tbl->accumulate(latency_us);
   }
 
   return rc;
@@ -764,8 +767,8 @@ HTTPCode HSSConnection::get_location_data(const std::string& public_user_identit
       (rc != HTTP_GATEWAY_TIMEOUT)    &&
       (stopWatch.read(latency_us)))
   {
-    _latency_stat.accumulate(latency_us);
-    _location_latency_stat.accumulate(latency_us);
+    _latency_tbl->accumulate(latency_us);
+    _lir_latency_tbl->accumulate(latency_us);
   }
 
   return rc;
