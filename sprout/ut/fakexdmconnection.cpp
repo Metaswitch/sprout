@@ -42,14 +42,12 @@
 #include "utils.h"
 #include "fakexdmconnection.hpp"
 
-#include "snmp_accumulator_table.h"
+#include "fakesnmp.hpp"
 
 using namespace std;
 
-static SNMP::AccumulatorTable* _fake_table = SNMP::AccumulatorTable::create("", "");
-
 FakeXDMConnection::FakeXDMConnection() :
-  XDMConnection(new FakeHttpConnection(), _fake_table),
+  XDMConnection(new FakeHttpConnection(), &SNMP::FAKE_ACCUMULATOR_TABLE),
   _fakehttp((FakeHttpConnection*)_http)
 {
 }

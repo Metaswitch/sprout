@@ -46,11 +46,7 @@
 #include "hssconnection.h"
 #include "basetest.hpp"
 #include "fakecurl.hpp"
-#include "snmp_accumulator_table.h"
-#include "snmp_ip_count_table.h"
-
-static SNMP::AccumulatorTable* fake_accumulator_table = SNMP::AccumulatorTable::create("", "");
-static SNMP::IPCountTable* fake_ip_table = SNMP::IPCountTable::create("", "");
+#include "fakesnmp.hpp"
 
 using namespace std;
 
@@ -67,12 +63,12 @@ class HssConnectionTest : public BaseTest
     _hss("narcissus",
          &_resolver,
          NULL,
-         fake_ip_table,
-         fake_accumulator_table,
-         fake_accumulator_table,
-         fake_accumulator_table,
-         fake_accumulator_table,
-         fake_accumulator_table,
+         &SNMP::FAKE_IP_COUNT_TABLE,
+         &SNMP::FAKE_ACCUMULATOR_TABLE,
+         &SNMP::FAKE_ACCUMULATOR_TABLE,
+         &SNMP::FAKE_ACCUMULATOR_TABLE,
+         &SNMP::FAKE_ACCUMULATOR_TABLE,
+         &SNMP::FAKE_ACCUMULATOR_TABLE,
          &_cm)
     {
     fakecurl_responses.clear();

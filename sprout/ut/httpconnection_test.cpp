@@ -54,10 +54,7 @@
 #include "load_monitor.h"
 #include "mock_sas.h"
 #include "mockcommunicationmonitor.h"
-#include "snmp_ip_count_table.h"
-
-static SNMP::IPCountTable* fake_ip_table = SNMP::IPCountTable::create("", "");
-
+#include "fakesnmp.hpp"
 
 using namespace std;
 using ::testing::MatchesRegex;
@@ -77,7 +74,7 @@ class HttpConnectionTest : public BaseTest
     _http("cyrus",
           true,
           &_resolver,
-          fake_ip_table,
+          &SNMP::FAKE_IP_COUNT_TABLE,
           &_lm,
           SASEvent::HttpLogLevel::PROTOCOL,
           &_cm)
@@ -126,7 +123,7 @@ TEST_F(HttpConnectionTest, SimpleIPv6Get)
   HttpConnection http2("[1::1]:80",
                        true,
                        &_resolver,
-                       fake_ip_table,
+                       &SNMP::FAKE_IP_COUNT_TABLE,
                        &_lm,
                        SASEvent::HttpLogLevel::PROTOCOL,
                        &_cm);
@@ -309,7 +306,7 @@ TEST_F(HttpConnectionTest, ParseHostPort)
   HttpConnection http2("cyrus:1234",
                        true,
                        &_resolver,
-                       fake_ip_table,
+                       &SNMP::FAKE_IP_COUNT_TABLE,
                        &_lm,
                        SASEvent::HttpLogLevel::PROTOCOL,
                        &_cm);
@@ -327,7 +324,7 @@ TEST_F(HttpConnectionTest, ParseHostPortIPv6)
   HttpConnection http2("[1::1]",
                        true,
                        &_resolver,
-                       fake_ip_table,
+                       &SNMP::FAKE_IP_COUNT_TABLE,
                        &_lm,
                        SASEvent::HttpLogLevel::PROTOCOL,
                        &_cm);

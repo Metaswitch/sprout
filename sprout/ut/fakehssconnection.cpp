@@ -38,22 +38,17 @@
 #include "fakehssconnection.hpp"
 #include "gtest/gtest.h"
 
-#include "snmp_accumulator_table.h"
-#include "snmp_ip_count_table.h"
-
-//This can only be statically initialised in UT, because we're stubbing out netsnmp - in production code, net-snmp needs to be initialized before creating any tables
-static SNMP::AccumulatorTable* fake_accumulator_table = SNMP::AccumulatorTable::create("", "");
-static SNMP::IPCountTable* fake_ip_table = SNMP::IPCountTable::create("", "");
+#include "fakesnmp.hpp"
 
 FakeHSSConnection::FakeHSSConnection() : HSSConnection("localhost",
                                                        NULL,
                                                        NULL,
-                                                       fake_ip_table,
-                                                       fake_accumulator_table,
-                                                       fake_accumulator_table,
-                                                       fake_accumulator_table,
-                                                       fake_accumulator_table,
-                                                       fake_accumulator_table,
+                                                       &SNMP::FAKE_IP_COUNT_TABLE,
+                                                       &SNMP::FAKE_ACCUMULATOR_TABLE,
+                                                       &SNMP::FAKE_ACCUMULATOR_TABLE,
+                                                       &SNMP::FAKE_ACCUMULATOR_TABLE,
+                                                       &SNMP::FAKE_ACCUMULATOR_TABLE,
+                                                       &SNMP::FAKE_ACCUMULATOR_TABLE,
                                                        NULL)
 {
 }

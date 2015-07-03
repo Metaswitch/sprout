@@ -35,54 +35,30 @@
  */
 
 #include "snmp_internal/snmp_includes.h"
+#include "fakesnmp.hpp"
 
-// Stub out the net-snmp functions we call for UT.
-
-int netsnmp_tdata_register(netsnmp_handler_registration *reginfo,
-                           netsnmp_tdata *table,
-                           netsnmp_table_registration_info *table_info)
+namespace SNMP
 {
-  return 0;
+struct in_addr dummy_addr;
+FakeIPCountRow FAKE_IP_COUNT_ROW;
+FakeIPCountTable FAKE_IP_COUNT_TABLE;
+FakeCounterTable FAKE_COUNTER_TABLE;
+FakeAccumulatorTable FAKE_ACCUMULATOR_TABLE;
+
+// Alternative implementations is some functions, so we aren't calling real SNMP code in UT
+IPCountTable* IPCountTable::create(std::string name, std::string oid) { return new FakeIPCountTable(); };
+IPCountRow::IPCountRow(struct in_addr addr) {}; 
+IPCountRow::IPCountRow(struct in6_addr addr) {}; 
+
+ColumnData IPCountRow::get_columns()
+{
+  ColumnData ret;
+  return ret;
+}
 }
 
-int netsnmp_tdata_add_row(netsnmp_tdata *table, netsnmp_tdata_row *row)
-{
-  return 0;
-}
-
-netsnmp_tdata_row* netsnmp_tdata_remove_row(netsnmp_tdata *table,
-                                            netsnmp_tdata_row *row)
-{
-  return row;
-}
-
-netsnmp_handler_registration* netsnmp_handler_registration_create(const char *name,
-                                                                  netsnmp_mib_handler *handler,
-                                                                  const oid * reg_oid,
-                                                                  size_t reg_oid_len,
-                                                                  int modes)
-{
-  return NULL;
-}
-
-netsnmp_handler_registration* netsnmp_create_handler_registration(const char *name,
-                                                                  Netsnmp_Node_Handler* handler_access_method,
-                                                                  const oid *reg_oid,
-                                                                  size_t reg_oid_len,
-                                                                  int modes)
-{
-  return NULL;
-}
-
-int netsnmp_unregister_handler(netsnmp_handler_registration *reginfo)
-{
-  return 0;
-}
-
-void snmp_free_varbind( netsnmp_variable_list *variables)
-{
-}
-
+// Fake implementation of scalar registration function, so SNMP::U32Scalar doesn't call real SNMP
+// code
 int netsnmp_register_read_only_ulong_instance(const char *name,
                                               oid *reg_oid,
                                               size_t reg_oid_len,
@@ -90,14 +66,4 @@ int netsnmp_register_read_only_ulong_instance(const char *name,
                                               Netsnmp_Node_Handler *subhandler)
 {
   return 0; 
-}
-
-netsnmp_variable_list *snmp_varlist_add_variable(netsnmp_variable_list** varlist,
-                                                 const oid * name,
-                                                 size_t name_length,
-                                                 u_char type,
-                                                 const u_char * value,
-                                                 size_t len)
-{
-  return NULL;
 }

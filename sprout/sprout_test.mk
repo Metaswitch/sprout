@@ -87,12 +87,8 @@ TARGET_SOURCES := logger.cpp \
                   thread_dispatcher.cpp \
                   common_sip_processing.cpp \
                   exception_handler.cpp \
-                  snmp_agent.cpp \
-                  snmp_accumulator_table.cpp \
-                  snmp_counter_table.cpp \
-                  snmp_ip_count_table.cpp \
-                  snmp_row.cpp \
-                  snmp_scalar.cpp
+                  snmp_scalar.cpp \
+                  snmp_row.cpp
 
 TARGET_SOURCES_TEST := test_main.cpp \
                        fakecurl.cpp \

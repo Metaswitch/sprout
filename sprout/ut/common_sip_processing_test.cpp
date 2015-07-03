@@ -47,14 +47,11 @@
 #include "sproutletproxy.h"
 #include "common_sip_processing.h"
 #include "counter.h"
-#include "snmp_accumulator_table.h"
-#include "snmp_accumulator_table.h"
+#include "fakesnmp.hpp"
 
 using namespace std;
 
 
-// This can only be statically initialised in UT, because we're stubbing out netsnmp - in production code, net-snmp needs to be initialized before creating any tables
-static SNMP::AccumulatorTable* fake_accumulator_table = SNMP::AccumulatorTable::create("", "");
 class CommonProcessingTest : public SipTest
 {
 public:
@@ -92,8 +89,8 @@ public:
     // Load monitor with one token in the bucket at startup.
     _lm = new LoadMonitor(0, 1, 0, 0);
     
-    _requests_counter = SNMP::CounterTable::create("", "");
-    _overload_counter = SNMP::CounterTable::create("", "");
+    _requests_counter = &SNMP::FAKE_COUNTER_TABLE;
+    _overload_counter = &SNMP::FAKE_COUNTER_TABLE;
 
     _health_checker = new HealthChecker();
 
@@ -104,8 +101,6 @@ public:
   {
     delete(_tp);
     delete(_lm);
-    delete(_requests_counter);
-    delete(_overload_counter);
     delete(_health_checker);
     unregister_common_processing_module();
     pjsip_tsx_layer_dump(true);
