@@ -1444,48 +1444,59 @@ bool SCSCFSproutletTsx::uri_translation_and_route(pjsip_msg* req)
       // URI and substitute it in to the request.
       pjsip_uri* new_uri = (pjsip_uri*)PJUtils::uri_from_string(new_uri_str,
                                                                 get_pool(req));
-
-      if (new_uri != NULL)
+      if (new_uri)
       {
-        if (PJUtils::get_npdi(uri))
+        std::string rn;
+
+        bool new_uri_has_np_data = PJUtils::get_rn(new_uri, rn);
+
+        if (!PJUtils::does_uri_represent_number(new_uri,
+                                                _scscf->should_require_user_phone()))
         {
-          if (!PJUtils::does_uri_represent_number(new_uri,
-                                           _scscf->should_require_user_phone()))
+          // Translation to a real SIP URI - this always takes priority.
+          req->line.req.uri = new_uri;
+          SAS::Event event(trail(), SASEvent::SIP_URI_FROM_ENUM);
+          event.add_var_param(new_uri_str);
+          SAS::report_event(event);
+        }
+        else if (new_uri_has_np_data)
+        {
+          if (!PJUtils::get_npdi(uri))
           {
-            // The existing URI had NP data, but the ENUM lookup has returned
-            // a URI that doesn't represent a telephone number. This trumps the
-            // NP data.
+            // No NPDI flag, so use the new data.
             req->line.req.uri = new_uri;
+            SAS::Event event(trail(), SASEvent::NP_DATA_FROM_ENUM);
+            event.add_var_param(new_uri_str);
+            event.add_var_param(rn);
+            SAS::report_event(event);
+          }
+          else if (PJUtils::get_npdi(uri) && _scscf->should_override_npdi())
+          {
+            // Configured to ignore the NPDI flag, so use the new data.
+            req->line.req.uri = new_uri;
+            SAS::Event event(trail(), SASEvent::NP_DATA_FROM_ENUM_IGNORING_NPDI);
+            event.add_var_param(new_uri_str);
+            event.add_var_param(rn);
+            SAS::report_event(event);
           }
           else
           {
-            TRC_DEBUG("Request URI already has existing NP information");
-
-            // The existing URI had NP data. Only overwrite the URI if
-            // we're configured to do so.
-            if (_scscf->should_override_npdi())
-            {
-              TRC_DEBUG("Override existing NP information");
-              req->line.req.uri = new_uri;
-            }
-
-            route_to_bgcf(req);
-            already_routed = true;
+            // NPDI flag which we're honouring
+            SAS::Event event(trail(), SASEvent::IGNORED_NP_DATA_FROM_ENUM);
+            event.add_var_param(new_uri_str);
+            event.add_var_param(rn);
+            SAS::report_event(event);
           }
         }
-        else if (PJUtils::get_npdi(new_uri))
+
+        if (PJUtils::get_rn(req->line.req.uri, rn))
         {
-          // The ENUM lookup has returned NP data. Rewrite the request
-          // URI and route the request to the BGCF
-          TRC_DEBUG("Update request URI to %s", new_uri_str.c_str());
-          req->line.req.uri = new_uri;
+          SAS::Event event(trail(), SASEvent::NP_ROUTING_TO_BGCF);
+          event.add_var_param(new_uri_str);
+          event.add_var_param(rn);
+          SAS::report_event(event);
           route_to_bgcf(req);
           already_routed = true;
-        }
-        else
-        {
-          TRC_DEBUG("Update request URI to %s", new_uri_str.c_str());
-          req->line.req.uri = new_uri;
         }
       }
       else
@@ -1503,6 +1514,9 @@ bool SCSCFSproutletTsx::uri_translation_and_route(pjsip_msg* req)
     }
     else if (PJUtils::is_uri_phone_number(uri))
     {
+      SAS::Event event(trail(), SASEvent::ENUM_FAILED_ROUTING_TO_BGCF);
+      event.add_var_param(new_uri_str);
+      SAS::report_event(event);
       // The URI translation failed, but we have been left with a URI that
       // definitely encodes a phone number, so we should route to the BGCF.
       TRC_DEBUG("Unable to resolve URI phone number %s using ENUM, route to BGCF",
