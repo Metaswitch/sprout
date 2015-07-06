@@ -43,6 +43,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/types.h>
+#include <netdb.h>
 
 #include "enumservice.h"
 #include "dnsresolver.h"
@@ -273,6 +275,7 @@ DNSEnumService::DNSEnumService(const std::vector<std::string>& dns_servers,
   // Initialize the ares library.  This might have already been done by curl
   // but it's safe to do it twice.
   ares_library_init(ARES_LIB_INIT_ALL);
+  struct addrinfo* res;
 
   for (std::vector<std::string>::const_iterator server = dns_servers.begin();
        server != dns_servers.end();
@@ -288,9 +291,22 @@ DNSEnumService::DNSEnumService(const std::vector<std::string>& dns_servers,
     {
       dns_server_addr.af = AF_INET6;
     }
+    else if ((getaddrinfo(server->c_str(), NULL, NULL, &res)) == 0)
+    {
+      dns_server_addr.af = res->ai_family;
+      if (dns_server_addr.af == AF_INET)
+      {
+        dns_server_addr.addr.ipv4 = ((struct sockaddr_in*)res->ai_addr)->sin_addr;   
+      }
+      else if (dns_server_addr.af == AF_INET6)
+      {
+        dns_server_addr.addr.ipv6 = ((struct sockaddr_in6*)res->ai_addr)->sin6_addr;
+      }
+      freeaddrinfo(res);
+    }
     else
     {
-      TRC_ERROR("Failed to parse '%s' as IP address - defaulting to 127.0.0.1", server->c_str());
+      TRC_ERROR("Failed to parse '%s' as IP address or resolve host name - defaulting to 127.0.0.1", server->c_str());
       dns_server_addr.af = AF_INET;
       (void)inet_aton("127.0.0.1", &dns_server_addr.addr.ipv4);
     }
