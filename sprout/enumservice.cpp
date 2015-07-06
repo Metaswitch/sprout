@@ -276,7 +276,6 @@ DNSEnumService::DNSEnumService(const std::vector<std::string>& dns_servers,
   // but it's safe to do it twice.
   ares_library_init(ARES_LIB_INIT_ALL);
   struct addrinfo* res;
-  int ret;
 
   for (std::vector<std::string>::const_iterator server = dns_servers.begin();
        server != dns_servers.end();
@@ -292,7 +291,7 @@ DNSEnumService::DNSEnumService(const std::vector<std::string>& dns_servers,
     {
       dns_server_addr.af = AF_INET6;
     }
-    else if ((ret = getaddrinfo(server->c_str(), NULL, NULL, &res)) == 0)
+    else if ((getaddrinfo(server->c_str(), NULL, NULL, &res)) == 0)
     {
       dns_server_addr.af = res->ai_family;
       if (dns_server_addr.af == AF_INET)
