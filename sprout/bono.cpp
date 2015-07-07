@@ -167,6 +167,7 @@ static bool scscf = false;
 static bool allow_emergency_reg = false;
 
 PJUtils::host_list_t trusted_hosts(&PJUtils::compare_pj_sockaddr);
+PJUtils::host_list_t pbx_hosts(&PJUtils::compare_pj_sockaddr);
 
 //
 // mod_stateful_proxy is the module to receive SIP request and
@@ -231,6 +232,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
                                  TrustBoundary **trust,
                                  Target **target);
 static bool ibcf_trusted_peer(const pj_sockaddr& addr);
+static bool is_pbx(const pj_sockaddr& addr);
 static pj_status_t proxy_process_routing(pjsip_tx_data *tdata);
 static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata);
 
@@ -783,6 +785,11 @@ static SIPPeerType determine_source(pjsip_transport* transport, pj_sockaddr addr
     return SIP_PEER_CONFIGURED_TRUNK;
   }
 
+  if (is_pbx(addr))
+  {
+    return SIP_NONREGISTERING_PBX;
+  }
+
   return SIP_PEER_CLIENT;
 }
 
@@ -1173,6 +1180,22 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
           return PJSIP_SC_FORBIDDEN;
         }
       }
+      else if (source_type == SIP_NONREGISTERING_PBX)
+      {
+        TRC_DEBUG("Message received on configured SIP nonregistering PBX");
+        trusted = true;
+        *trust = &TrustBoundary::INBOUND_EDGE_CLIENT;
+
+        bool initial_request = (rdata->msg_info.to->tag.slen == 0);
+        if (initial_request)
+        {
+          // Initial requests (ones without a To tag) always go upstream
+          // to Sprout
+          TRC_DEBUG("Routing initial request from PBX to upstream Sprout");
+          PJUtils::add_integrity_protected_proxy_auth(tdata);
+          proxy_route_upstream(rdata, tdata, src_flow, trust, target);
+        }
+      } 
       else
       {
         src_flow = flow_table->find_flow(rdata->tp_info.transport,
@@ -1428,6 +1451,22 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
   }
 
   return PJSIP_SC_OK;
+}
+
+
+/// Determine whether a source or destination IP address corresponds to
+/// a configured trusted PBX.  "Trusted" here simply means that it's
+/// known, not that we trust any headers it sets.
+static bool is_pbx(const pj_sockaddr& addr)
+{
+  // Check whether the source IP address of the message is in the list of
+  // trusted hosts.  Zero out the source port before doing the search.
+  pj_sockaddr sockaddr;
+  pj_sockaddr_cp(&sockaddr, &addr);
+  pj_sockaddr_set_port(&sockaddr, 0);
+  PJUtils::host_list_t::const_iterator i = pbx_hosts.find(sockaddr);
+
+  return (i != pbx_hosts.end());
 }
 
 
@@ -3172,6 +3211,7 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 int upstream_proxy_recycle,
                                 pj_bool_t enable_ibcf,
                                 const std::string& ibcf_trusted_hosts,
+                                const std::string& pbx_host_str,
                                 AnalyticsLogger* analytics,
                                 EnumService *enumService,
                                 bool enforce_user_phone,
@@ -3265,6 +3305,27 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
       TRC_STATUS("Adding host %s to list", pj_sockaddr_print(&sockaddr, buf, sizeof(buf), 1));
       trusted_hosts.insert(std::make_pair(sockaddr, true));
     }
+  }
+
+  TRC_STATUS("Create list of PBXes");
+  std::list<std::string> hosts;
+  Utils::split_string(pbx_host_str, ',', hosts, 0, true);
+  for (std::list<std::string>::const_iterator i = hosts.begin();
+       i != hosts.end();
+       ++i)
+  {
+    pj_str_t host;
+    pj_cstr(&host, (*i).c_str());
+    pj_sockaddr sockaddr;
+    pj_status_t status = pj_sockaddr_parse(pj_AF_UNSPEC(), 0, &host, &sockaddr);
+    if (status != PJ_SUCCESS)
+    {
+      TRC_ERROR("Badly formatted trusted host %.*s", host.slen, host.ptr);
+      return status;
+    }
+    char buf[100];
+    TRC_STATUS("Adding host %s to list", pj_sockaddr_print(&sockaddr, buf, sizeof(buf), 1));
+    pbx_hosts.insert(std::make_pair(sockaddr, true));
   }
 
   enum_service = enumService;

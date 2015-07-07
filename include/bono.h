@@ -361,6 +361,7 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 int upstream_proxy_recycle,
                                 pj_bool_t enable_ibcf,
                                 const std::string& trusted_hosts,
+                                const std::string& pbx_host_str,
                                 AnalyticsLogger* analytics_logger,
                                 EnumService *enumService,
                                 bool enforce_user_phone,
@@ -389,6 +390,7 @@ enum SIPPeerType
   SIP_PEER_TRUSTED_PORT,
   SIP_PEER_CONFIGURED_TRUNK,
   SIP_PEER_CLIENT,
+  SIP_NONREGISTERING_PBX,
   SIP_PEER_UNKNOWN
 };
 

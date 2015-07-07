@@ -130,7 +130,8 @@ enum OptionTypes
   OPT_SIP_TCP_SEND_TIMEOUT,
   OPT_SESSION_CONTINUED_TIMEOUT_MS,
   OPT_SESSION_TERMINATED_TIMEOUT_MS,
-  OPT_STATELESS_PROXIES
+  OPT_STATELESS_PROXIES,
+  OPT_NON_REGISTERING_PBXES
 };
 
 
@@ -200,6 +201,7 @@ const static struct pj_getopt_option long_opt[] =
   { "session-continued-timeout",    required_argument, 0, OPT_SESSION_CONTINUED_TIMEOUT_MS},
   { "session-terminated-timeout",   required_argument, 0, OPT_SESSION_TERMINATED_TIMEOUT_MS},
   { "stateless-proxies",            required_argument, 0, OPT_STATELESS_PROXIES},
+  { "non-registering-pbxes",        required_argument, 0, OPT_NON_REGISTERING_PBXES},
   { NULL,                           0,                 0, 0}
 };
 
@@ -357,6 +359,10 @@ static void usage(void)
        "                            in SIP (for example if a cluster of nodes is identified by the name\n"
        "                            'cluster.example.com', this value should be used instead of the hostnames\n"
        "                            or IP addresses of individual servers\n"
+       "     --non-registering-pbxes <comma-separated-list>\n"
+       "                            A comma separated list of domain names that are treated as\n"
+       "                            non-registering PBXes (i.e. INVITEs should be allowed by the \n"
+       "                            P-CSCF, but challenged by the core)\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
@@ -950,6 +956,15 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
                  options->stateless_proxies.size());
       }
       break;
+
+    case OPT_NON_REGISTERING_PBXES:
+      {
+        options->pbxes = std::string(pj_optarg);
+        TRC_INFO("Non-registering PBX IP addresses are %s",
+                 options->pbxes.c_str());
+      }
+      break;
+
 
     case 'h':
       usage();
@@ -1717,6 +1732,7 @@ int main(int argc, char* argv[])
                                  opt.upstream_proxy_recycle,
                                  opt.ibcf,
                                  opt.trusted_hosts,
+                                 opt.pbxes,
                                  analytics_logger,
                                  NULL,
                                  false,
