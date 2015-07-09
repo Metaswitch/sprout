@@ -179,6 +179,7 @@ public:
   string _user;
   string _domain;
   bool _auth_hdr;
+  bool _proxy_auth_hdr;
   string _auth_user;
   string _auth_realm;
   string _nonce;
@@ -200,6 +201,7 @@ public:
     _user("6505550001"),
     _domain("homedomain"),
     _auth_hdr(true),
+    _proxy_auth_hdr(false),
     _auth_user("6505550001@homedomain"),
     _auth_realm("homedomain"),
     _nonce(""),
@@ -320,6 +322,7 @@ string AuthenticationMessage::get()
                    "%5$s"
                    "Route: <sip:sprout.ut.cw-ngv.com;transport=tcp;lr>\r\n"
                    "%6$s"
+                   "%7$s"
                    "Content-Length: 0\r\n"
                    "\r\n",
                    /*  1 */ _method.c_str(),
@@ -329,6 +332,22 @@ string AuthenticationMessage::get()
                    /*  5 */ _extra_contact.empty() ? "" : _extra_contact.append("\r\n").c_str(),
                    /*  6 */ _auth_hdr ?
                               string("Authorization: Digest ")
+                                .append((!_auth_user.empty()) ? string("username=\"").append(_auth_user).append("\", ") : "")
+                                .append((!_auth_realm.empty()) ? string("realm=\"").append(_auth_realm).append("\", ") : "")
+                                .append((!_nonce.empty()) ? string("nonce=\"").append(_nonce).append("\", ") : "")
+                                .append((!_uri.empty()) ? string("uri=\"").append(_uri).append("\", ") : "")
+                                .append((!_response.empty()) ? string("response=\"").append(_response).append("\", ") : "")
+                                .append((!_opaque.empty()) ? string("opaque=\"").append(_opaque).append("\", ") : "")
+                                .append((!_nc.empty()) ? string("nc=").append(_nc).append(", ") : "")
+                                .append((!_cnonce.empty()) ? string("cnonce=\"").append(_cnonce).append("\", ") : "")
+                                .append((!_qop.empty()) ? string("qop=").append(_qop).append(", ") : "")
+                                .append((!_auts.empty()) ? string("auts=\"").append(_auts).append("\", ") : "")
+                                .append((!_integ_prot.empty()) ? string("integrity-protected=\"").append(_integ_prot).append("\", ") : "")
+                                .append((!_algorithm.empty()) ? string("algorithm=").append(_algorithm) : "")
+                                .append("\r\n").c_str() :
+                                "",
+                    /*  7 */ _proxy_auth_hdr ?
+                              string("Proxy-Authorization: Digest ")
                                 .append((!_auth_user.empty()) ? string("username=\"").append(_auth_user).append("\", ") : "")
                                 .append((!_auth_realm.empty()) ? string("realm=\"").append(_auth_realm).append("\", ") : "")
                                 .append((!_nonce.empty()) ? string("nonce=\"").append(_nonce).append("\", ") : "")
@@ -379,6 +398,48 @@ TEST_F(AuthenticationTest, NoAuthorizationNonReg)
   pj_bool_t ret = inject_msg_direct(msg.get());
   EXPECT_EQ(PJ_FALSE, ret);
 }
+
+TEST_F(AuthenticationTest, ProxyAuthorizationNonReg)
+{
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Test that the authentication module lets through non-REGISTER requests
+  // with no authorization header.
+  AuthenticationMessage msg("INVITE");
+  msg._auth_hdr = false;
+  msg._proxy_auth_hdr = true;
+  inject_msg_direct(msg.get());
+  
+  // Expect a 407 response.
+  ASSERT_EQ(1, txdata_count());
+  pjsip_tx_data* tdata = current_txdata();
+  RespMatcher(407).matches(tdata->msg);
+  free_txdata();
+
+  AuthenticationMessage ack("ACK");
+  inject_msg_direct(ack.get());
+ 
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+}
+
+TEST_F(AuthenticationTest, ProxyAuthorizationWithIntegrity)
+{
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Test that the authentication module lets through non-REGISTER requests
+  // with no authorization header.
+  AuthenticationMessage msg("INVITE");
+  msg._auth_hdr = false;
+  msg._proxy_auth_hdr = true;
+  msg._integ_prot = "yes";
+  pj_bool_t ret = inject_msg_direct(msg.get());
+  EXPECT_EQ(PJ_FALSE, ret);
+ 
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+}
+
 
 
 TEST_F(AuthenticationTest, NoAuthorizationEmergencyReg)
