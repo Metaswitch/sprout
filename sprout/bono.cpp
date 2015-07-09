@@ -1401,6 +1401,16 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
             *trust = &TrustBoundary::OUTBOUND_TRUNK;
             pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, NULL);
           }
+
+          // Also check against the PBX peers.
+          TRC_DEBUG("Parsed destination as an IP address, so check against PBX list");
+          if (is_pbx(dest))
+          {
+            TRC_DEBUG("Destination is a SIP PBX");
+            *trust = &TrustBoundary::OUTBOUND_EDGE_CLIENT;
+            pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, NULL);
+          }
+ 
         }
       }
     }
