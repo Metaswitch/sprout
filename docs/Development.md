@@ -128,3 +128,8 @@ As an example, to run Sprout as a basic S-CSCF on port 5054 run the following co
     LD_LIBRARY_PATH=usr/lib:$LD_LIBRARY_PATH build/bin/sprout -t --domain=<Home Domain> --scscf=5054 --scscf-uri=sip:<Sprout cluster>:5054;transport=TCP --hss=<Homestead cluster> 
 
 For all command-line options, use the `-h` option.
+
+Sprout attempts to connect to the local SNMP agent (snmpd) to provide statistics. If running it interactively, you will see warnings ("Warning (Net-SNMP): Warning: Failed to connect to the agentx master agent ([NIL])") unless you either:
+
+* install the clearwater-snmpd package
+* install the normal snmpd package, and configure it as an AgentX master in /etc/snmp/snmpd.conf
