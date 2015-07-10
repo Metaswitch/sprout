@@ -54,6 +54,7 @@ extern "C" {
 #include "fakehssconnection.hpp"
 #include "fakechronosconnection.hpp"
 #include "md5.h"
+#include "fakesnmp.hpp"
 
 using namespace std;
 using namespace std;
@@ -82,7 +83,8 @@ public:
                                           _hss_connection,
                                           _chronos_connection,
                                           _acr_factory,
-                                          _analytics);
+                                          _analytics,
+                                          &SNMP::FAKE_AUTHENTICATION_STATS_TABLES);
     ASSERT_EQ(PJ_SUCCESS, ret);
   }
 

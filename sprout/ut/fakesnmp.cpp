@@ -36,6 +36,7 @@
 
 #include "snmp_internal/snmp_includes.h"
 #include "fakesnmp.hpp"
+#include "snmp_success_fail_count_table.h"
 
 namespace SNMP
 {
@@ -44,6 +45,14 @@ FakeIPCountRow FAKE_IP_COUNT_ROW;
 FakeIPCountTable FAKE_IP_COUNT_TABLE;
 FakeCounterTable FAKE_COUNTER_TABLE;
 FakeAccumulatorTable FAKE_ACCUMULATOR_TABLE;
+FakeSuccessFailCountTable FAKE_INIT_REG_TABLE;
+FakeSuccessFailCountTable FAKE_RE_REG_TABLE;
+FakeSuccessFailCountTable FAKE_DE_REG_TABLE;
+FakeSuccessFailCountTable FAKE_SIP_DIGEST_AUTH_TABLE;
+FakeSuccessFailCountTable FAKE_IMS_AKA_AUTH_TABLE;
+
+RegistrationStatsTables FAKE_REGISTRATION_STATS_TABLES = { &FAKE_INIT_REG_TABLE, &FAKE_RE_REG_TABLE, &FAKE_DE_REG_TABLE };
+AuthenticationStatsTables FAKE_AUTHENTICATION_STATS_TABLES = { &FAKE_SIP_DIGEST_AUTH_TABLE, &FAKE_IMS_AKA_AUTH_TABLE };
 
 // Alternative implementations is some functions, so we aren't calling real SNMP code in UT
 IPCountTable* IPCountTable::create(std::string name, std::string oid) { return new FakeIPCountTable(); };

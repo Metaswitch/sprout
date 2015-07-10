@@ -41,6 +41,7 @@
 #include "snmp_accumulator_table.h"
 #include "snmp_counter_table.h"
 #include "snmp_ip_count_table.h"
+#include "snmp_success_fail_count_table.h"
 
 namespace SNMP
 {
@@ -84,9 +85,26 @@ public:
   void remove(std::string key) {};
 };
 
+class FakeSuccessFailCountTable : public SuccessFailCountTable
+{
+public:
+  FakeSuccessFailCountTable() {};
+  void increment_attempts() {};
+  void increment_successes() {};
+  void increment_failures() {};
+};
+
+
 extern FakeIPCountTable FAKE_IP_COUNT_TABLE;
 extern FakeCounterTable FAKE_COUNTER_TABLE;
 extern FakeAccumulatorTable FAKE_ACCUMULATOR_TABLE;
+extern FakeSuccessFailCountTable FAKE_INIT_REG_TABLE;
+extern FakeSuccessFailCountTable FAKE_RE_REG_TABLE;
+extern FakeSuccessFailCountTable FAKE_DE_REG_TABLE;
+extern FakeSuccessFailCountTable FAKE_SIP_DIGEST_AUTH_TABLE;
+extern FakeSuccessFailCountTable FAKE_IMS_AKA_AUTH_TABLE;
+extern RegistrationStatsTables FAKE_REGISTRATION_STATS_TABLES;
+extern AuthenticationStatsTables FAKE_AUTHENTICATION_STATS_TABLES;
 }
 
 #endif

@@ -59,6 +59,7 @@ extern "C" {
 #include "hssconnection.h"
 #include "authentication.h"
 #include "avstore.h"
+#include "snmp_success_fail_count_table.h"
 
 
 //
@@ -107,6 +108,8 @@ static AvStore* av_store;
 // Analytics logger.
 static AnalyticsLogger* analytics;
 
+// SNMP tables counting authentication successes and failures.
+static SNMP::AuthenticationStatsTables* auth_stats_tables;
 
 // PJSIP structure for control server authentication functions.
 pjsip_auth_srv auth_srv;
@@ -583,6 +586,8 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   int sc = PJSIP_SC_UNAUTHORIZED;
   status = PJSIP_EAUTHNOAUTH;
 
+  rapidjson::Document* av = NULL;
+
   if ((auth_hdr != NULL) &&
       (auth_hdr->credential.digest.response.slen != 0))
   {
@@ -590,7 +595,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     std::string nonce = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.nonce);
     uint64_t cas = 0;
 
-    rapidjson::Document* av = av_store->get_av(impi, nonce, cas, trail);
+    av = av_store->get_av(impi, nonce, cas, trail);
 
     // Request contains a response to a previous challenge, so pass it to
     // the authentication module to verify.
@@ -604,6 +609,17 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
       SAS::Event event(trail, SASEvent::AUTHENTICATION_SUCCESS, 0);
       SAS::report_event(event);
+
+      if (av->HasMember("digest"))
+      {
+        auth_stats_tables->sip_digest_auth_tbl->increment_attempts();
+        auth_stats_tables->sip_digest_auth_tbl->increment_successes();
+      }
+      else if (av->HasMember("aka"))
+      {
+        auth_stats_tables->ims_aka_auth_tbl->increment_attempts();
+        auth_stats_tables->ims_aka_auth_tbl->increment_successes();
+      }
 
       // Write a tombstone flag back to the AV store, handling contention.
       // We don't actually expect anything else to be writing to this row in
@@ -694,7 +710,6 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
         return PJ_FALSE;
       }
     }
-    delete av;
   }
 
 
@@ -752,6 +767,20 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
     TRC_ERROR("Authentication failed, %s", error_msg.c_str());
 
+    if (av != NULL)
+    {
+      if (av->HasMember("digest"))
+      {
+        auth_stats_tables->sip_digest_auth_tbl->increment_attempts();
+        auth_stats_tables->sip_digest_auth_tbl->increment_successes();
+      }
+      else if (av->HasMember("aka"))
+      {
+        auth_stats_tables->ims_aka_auth_tbl->increment_attempts();
+        auth_stats_tables->ims_aka_auth_tbl->increment_successes();
+      }
+    }
+ 
     SAS::Event event(trail, SASEvent::AUTHENTICATION_FAILED, 0);
     event.add_var_param(error_msg);
     SAS::report_event(event);
@@ -796,7 +825,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   // Send the ACR.
   acr->send_message();
   delete acr;
-
+  delete av;
   return PJ_TRUE;
 }
 
@@ -806,7 +835,8 @@ pj_status_t init_authentication(const std::string& realm_name,
                                 HSSConnection* hss_connection,
                                 ChronosConnection* chronos_connection,
                                 ACRFactory* rfacr_factory,
-                                AnalyticsLogger* analytics_logger)
+                                AnalyticsLogger* analytics_logger,
+                                SNMP::AuthenticationStatsTables* auth_stats_tbls)
 {
   pj_status_t status;
 
@@ -816,6 +846,7 @@ pj_status_t init_authentication(const std::string& realm_name,
   chronos = chronos_connection;
   acr_factory = rfacr_factory;
   analytics = analytics_logger;
+  auth_stats_tables = auth_stats_tbls;
 
   // Register the authentication module.  This needs to be in the stack
   // before the transaction layer.

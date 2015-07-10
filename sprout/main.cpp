@@ -102,6 +102,7 @@ extern "C" {
 #include "scscfsproutlet.h"
 #include "snmp_accumulator_table.h"
 #include "snmp_counter_table.h"
+#include "snmp_success_fail_count_table.h"
 #include "snmp_agent.h"
 
 enum OptionTypes
@@ -1477,6 +1478,11 @@ int main(int argc, char* argv[])
   SNMP::AccumulatorTable* homestead_sar_latency_table = NULL;
   SNMP::AccumulatorTable* homestead_uar_latency_table = NULL;
   SNMP::AccumulatorTable* homestead_lir_latency_table = NULL;
+  
+  SNMP::RegistrationStatsTables reg_stats_tbls;
+  SNMP::RegistrationStatsTables third_party_reg_stats_tbls;
+  SNMP::AuthenticationStatsTables auth_stats_tbls;
+
   if (opt.pcscf_enabled)
   {
     latency_table = SNMP::AccumulatorTable::create("bono_latency",
@@ -1511,6 +1517,26 @@ int main(int argc, char* argv[])
                                                                  ".1.2.826.0.1.1578918.9.3.3.5");
     homestead_lir_latency_table = SNMP::AccumulatorTable::create("sprout_homestead_lir_latency",
                                                                  ".1.2.826.0.1.1578918.9.3.3.6");
+
+    reg_stats_tbls.init_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+                                                                      ".1.2.826.0.1.1578918.9.3.9");
+    reg_stats_tbls.re_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+                                                                    ".1.2.826.0.1.1578918.9.3.10");
+    reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+                                                                     ".1.2.826.0.1.1578918.9.3.11");
+    
+    third_party_reg_stats_tbls.init_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+                                                                                  ".1.2.826.0.1.1578918.9.3.12");
+    third_party_reg_stats_tbls.re_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+                                                                                ".1.2.826.0.1.1578918.9.3.13");
+    third_party_reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+                                                                                ".1.2.826.0.1.1578918.9.3.14");
+    
+    auth_stats_tbls.sip_digest_auth_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+                                                                              ".1.2.826.0.1.1578918.9.3.15");
+    auth_stats_tbls.ims_aka_auth_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+                                                                           ".1.2.826.0.1.1578918.9.3.16");
+    
   }
 
   if ((opt.icscf_enabled || opt.scscf_enabled) && opt.alarms_enabled)
@@ -1847,7 +1873,8 @@ int main(int argc, char* argv[])
                                    hss_connection,
                                    chronos_connection,
                                    scscf_acr_factory,
-                                   analytics_logger);
+                                   analytics_logger,
+                                   &auth_stats_tbls);
     }
 
     // Launch the registrar.
@@ -1856,7 +1883,9 @@ int main(int argc, char* argv[])
                             hss_connection,
                             analytics_logger,
                             scscf_acr_factory,
-                            opt.reg_max_expires);
+                            opt.reg_max_expires,
+                            &reg_stats_tbls,
+                            &third_party_reg_stats_tbls);
 
     if (status != PJ_SUCCESS)
     {
