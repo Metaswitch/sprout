@@ -420,8 +420,8 @@ TEST_F(AuthenticationTest, ProxyAuthorizationNonReg)
   _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
-  // Test that the authentication module lets through non-REGISTER requests
-  // with no authorization header.
+  // Test that the authentication module challenges non-REGISTER requests
+  // with a Proxy-Authorization header.
   AuthenticationMessage msg("INVITE");
   msg._auth_hdr = false;
   msg._proxy_auth_hdr = true;
@@ -433,31 +433,13 @@ TEST_F(AuthenticationTest, ProxyAuthorizationNonReg)
   RespMatcher(407).matches(tdata->msg);
   free_txdata();
 
+  // ACK that response
   AuthenticationMessage ack("ACK");
   ack._cseq = 1;
   inject_msg_direct(ack.get());
  
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
-
-TEST_F(AuthenticationTest, ProxyAuthorizationWithIntegrity)
-{
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
-                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
-
-  // Test that the authentication module lets through non-REGISTER requests
-  // with no authorization header.
-  AuthenticationMessage msg("INVITE");
-  msg._auth_hdr = false;
-  msg._proxy_auth_hdr = true;
-  msg._integ_prot = "yes";
-  pj_bool_t ret = inject_msg_direct(msg.get());
-  EXPECT_EQ(PJ_FALSE, ret);
- 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
-}
-
-
 
 TEST_F(AuthenticationTest, NoAuthorizationEmergencyReg)
 {

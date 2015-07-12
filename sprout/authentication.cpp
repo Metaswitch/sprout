@@ -111,6 +111,8 @@ static AnalyticsLogger* analytics;
 // PJSIP structure for control server authentication functions.
 pjsip_auth_srv auth_srv;
 
+// Retrieve the digest credentials (from the Authorization header for REGISTERs, and the
+// Proxy-Authorization header otherwise).
 static pjsip_digest_credential* get_credentials(const pjsip_rx_data* rdata)
 {
   bool is_register = (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD);
@@ -506,8 +508,18 @@ void create_challenge(pjsip_digest_credential* credentials,
   }
 }
 
+// Determine whether this request should be challenged (and SAS log appropriately).
 static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
 {
+  if (rdata->tp_info.transport->local_name.port != stack_data.scscf_port)
+  {
+    // Request not received on S-CSCF port, so don't authenticate it.
+    SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_NOT_SCSCF_PORT, 0);
+    SAS::report_event(event);
+
+    return PJ_FALSE;
+  }
+
   if (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD)
   {
     // Authentication isn't required for emergency registrations. An emergency
@@ -586,37 +598,24 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
   else
   {
     // Check to see if we should authenticate this non-REGISTER message - this behaviour is not from
-    // the IMS specs, but part of our custom logic to authenticate non-registering PBXes.
+    // the IMS specs, but part of our custom logic to authenticate non-registering PBXes. We
+    // challenge all messages with a Proxy-Authorization header.
     pjsip_proxy_authorization_hdr* auth_hdr = (pjsip_proxy_authorization_hdr*)
       pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_PROXY_AUTHORIZATION, NULL);
 
     if (auth_hdr != NULL)
     {
-      // There is an authorization header, so check for the integrity-protected
-      // indication.
-      TRC_DEBUG("Proxy-Authorization header in request");
-      pjsip_param* integrity =
-        pjsip_param_find(&auth_hdr->credential.digest.other_param,
-                         &STR_INTEGRITY_PROTECTED);
-
-      if (integrity == NULL)
-      {
-        // Edge proxy has explicitly asked us to authenticate this non-REGISTER message
-        return PJ_TRUE;
-      }
-      else
-      {
-        TRC_INFO("SIP Digest authenticated request integrity protected by edge proxy");
-        SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_INTEGRITY_PROTECTED, 0);
-        SAS::report_event(event);
-
-        return PJ_FALSE;
-      }
+      // Edge proxy has explicitly asked us to authenticate this non-REGISTER message
+      SAS::Event event(trail, SASEvent::AUTHENTICATION_NEEDED_PROXY_AUTHORIZATION, 0);
+      SAS::report_event(event);
+      return PJ_TRUE;
     }
     else
     {
       // No Proxy-Authorization header - this indicates the P-CSCF trusts this message so we don't
       // need to perform further authentication.
+      SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_PROXY_AUTHORIZATION, 0);
+      SAS::report_event(event);
       return PJ_FALSE;
     }
 
@@ -631,22 +630,8 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
   SAS::TrailId trail = get_trail(rdata);
 
-  if (rdata->tp_info.transport->local_name.port != stack_data.scscf_port)
-  {
-    // Request not received on S-CSCF port, so don't authenticate it.
-    SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_NOT_SCSCF_PORT, 0);
-    SAS::report_event(event);
-
-    return PJ_FALSE;
-  }
-
   if (!needs_authentication(rdata, trail))
   {
-    // Non-REGISTER request, so don't do authentication as it must have come
-    // from an authenticated or trusted source.
-    SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_NOT_REGISTER, 0);
-    SAS::report_event(event);
-
     return PJ_FALSE;
   }
 
