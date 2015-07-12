@@ -787,7 +787,7 @@ static SIPPeerType determine_source(pjsip_transport* transport, pj_sockaddr addr
 
   if (is_pbx(addr))
   {
-    return SIP_NONREGISTERING_PBX;
+    return SIP_PEER_NONREGISTERING_PBX;
   }
 
   return SIP_PEER_CLIENT;
@@ -1180,7 +1180,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
           return PJSIP_SC_FORBIDDEN;
         }
       }
-      else if (source_type == SIP_NONREGISTERING_PBX)
+      else if (source_type == SIP_PEER_NONREGISTERING_PBX)
       {
         TRC_DEBUG("Message received on configured SIP nonregistering PBX");
         trusted = true;
@@ -1192,7 +1192,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
           // Initial requests (ones without a To tag) always go upstream
           // to Sprout
           TRC_DEBUG("Routing initial request from PBX to upstream Sprout");
-          PJUtils::add_integrity_protected_proxy_auth(tdata);
+          PJUtils::add_proxy_auth_for_pbx(tdata);
           proxy_route_upstream(rdata, tdata, src_flow, trust, target);
         }
       } 
@@ -1401,16 +1401,17 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
             *trust = &TrustBoundary::OUTBOUND_TRUNK;
             pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, NULL);
           }
-
-          // Also check against the PBX peers.
-          TRC_DEBUG("Parsed destination as an IP address, so check against PBX list");
-          if (is_pbx(dest))
+          else
           {
-            TRC_DEBUG("Destination is a SIP PBX");
-            *trust = &TrustBoundary::OUTBOUND_EDGE_CLIENT;
-            pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, NULL);
+            // Also check against the PBX peers.
+            TRC_DEBUG("Parsed destination as an IP address, and not a trusted peer, so check against PBX list");
+            if (is_pbx(dest))
+            {
+              TRC_DEBUG("Destination is a SIP PBX");
+              *trust = &TrustBoundary::OUTBOUND_EDGE_CLIENT;
+              pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, NULL);
+            }
           }
- 
         }
       }
     }
@@ -3330,11 +3331,11 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
     pj_status_t status = pj_sockaddr_parse(pj_AF_UNSPEC(), 0, &host, &sockaddr);
     if (status != PJ_SUCCESS)
     {
-      TRC_ERROR("Badly formatted trusted host %.*s", host.slen, host.ptr);
+      TRC_ERROR("Badly formatted PBX IP %.*s", host.slen, host.ptr);
       return status;
     }
     char buf[100];
-    TRC_STATUS("Adding host %s to list", pj_sockaddr_print(&sockaddr, buf, sizeof(buf), 1));
+    TRC_STATUS("Adding PBX %s to list", pj_sockaddr_print(&sockaddr, buf, sizeof(buf), 1));
     pbx_hosts.insert(std::make_pair(sockaddr, true));
   }
 

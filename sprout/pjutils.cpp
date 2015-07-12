@@ -447,7 +447,8 @@ void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity
   pj_list_insert_before(&auth_hdr->credential.common.other_param, new_param);
 }
 
-void PJUtils::add_integrity_protected_proxy_auth(pjsip_tx_data* tdata)
+// Add an empty Proxy-Authorization header to signal to Sprout that this needs to be challenged
+void PJUtils::add_proxy_auth_for_pbx(pjsip_tx_data* tdata)
 {
   pjsip_proxy_authorization_hdr* auth_hdr = (pjsip_proxy_authorization_hdr*)
                                       pjsip_msg_find_hdr(tdata->msg, PJSIP_H_PROXY_AUTHORIZATION, NULL);
@@ -456,23 +457,9 @@ void PJUtils::add_integrity_protected_proxy_auth(pjsip_tx_data* tdata)
   {
     auth_hdr = pjsip_proxy_authorization_hdr_create(tdata->pool);
     auth_hdr->scheme = pj_str("Digest");
-    // Construct a default private identifier from the URI in the To header.
-    TRC_DEBUG("Construct default private identity");
-    pjsip_uri* to_uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(tdata->msg)->uri);
-    std::string private_id = PJUtils::default_private_id_from_uri(to_uri);
-    pj_strdup2(tdata->pool, &auth_hdr->credential.digest.username, private_id.c_str());
     pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)auth_hdr);
   }
-
-  pjsip_param* new_param = (pjsip_param*) pj_pool_alloc(tdata->pool, sizeof(pjsip_param));
-  new_param->name = STR_INTEGRITY_PROTECTED;
-  new_param->value = STR_IP_ASSOC_PENDING;
-   
-  TRC_INFO("Adding integrity-protected=%.*s indicator to message",
-           new_param->value.slen, new_param->value.ptr);
-  pj_list_insert_before(&auth_hdr->credential.common.other_param, new_param);
 }
-
 
 void PJUtils::get_impi_and_impu(pjsip_rx_data* rdata, std::string& impi_out, std::string& impu_out)
 {
