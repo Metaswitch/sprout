@@ -53,6 +53,7 @@ extern "C" {
 #include "authentication.h"
 #include "fakehssconnection.hpp"
 #include "fakechronosconnection.hpp"
+#include "test_interposer.hpp"
 #include "md5.h"
 
 using namespace std;
@@ -101,10 +102,14 @@ public:
 
   AuthenticationTest() : SipTest(&mod_authentication)
   {
+    _current_cseq = 1;
   }
 
   ~AuthenticationTest()
   {
+    // Clear out transactions
+    cwtest_advance_time_ms(33000L);
+    poll();
   }
 
   /// Parses a WWW-Authenticate header to the list of parameters.
@@ -163,6 +168,7 @@ protected:
   static FakeHSSConnection* _hss_connection;
   static FakeChronosConnection* _chronos_connection;
   static AnalyticsLogger* _analytics;
+  static int _current_cseq;
 };
 
 LocalStore* AuthenticationTest::_local_data_store;
@@ -171,6 +177,7 @@ ACRFactory* AuthenticationTest::_acr_factory;
 FakeHSSConnection* AuthenticationTest::_hss_connection;
 FakeChronosConnection* AuthenticationTest::_chronos_connection;
 AnalyticsLogger* AuthenticationTest::_analytics;
+int AuthenticationTest::_current_cseq;
 
 class AuthenticationMessage
 {
@@ -178,6 +185,7 @@ public:
   string _method;
   string _user;
   string _domain;
+  int _cseq;
   bool _auth_hdr;
   bool _proxy_auth_hdr;
   string _auth_user;
@@ -200,6 +208,7 @@ public:
     _method(method),
     _user("6505550001"),
     _domain("homedomain"),
+    _cseq(0),
     _auth_hdr(true),
     _proxy_auth_hdr(false),
     _auth_user("6505550001@homedomain"),
@@ -305,16 +314,22 @@ string AuthenticationMessage::get()
     calculate_digest_response();
   }
 
+  if (_cseq == 0)
+  {
+    _cseq = AuthenticationTest::_current_cseq;
+    AuthenticationTest::_current_cseq++;
+  }
+ 
   int n = snprintf(buf, sizeof(buf),
                    "%1$s sip:%3$s SIP/2.0\r\n"
-                   "Via: SIP/2.0/TCP 10.83.18.38:36530;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY5e9kSPI\r\n"
+                   "Via: SIP/2.0/TCP 10.83.18.38:36530;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY5e9kSPI+cseq%8$d\r\n"
                    "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n"
                    "Max-Forwards: 68\r\n"
                    "Supported: outbound, path\r\n"
                    "To: <sip:%2$s@%3$s>\r\n"
                    "From: <sip:%2$s@%3$s>;tag=fc614d9c\r\n"
                    "Call-ID: OWZiOGFkZDQ4MGI1OTljNjlkZDkwNTdlMTE0NmUyOTY.\r\n"
-                   "CSeq: 1 %1$s\r\n"
+                   "CSeq: %8$d %1$s\r\n"
                    "Expires: 300\r\n"
                    "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY, MESSAGE, SUBSCRIBE, INFO\r\n"
                    "User-Agent: X-Lite release 5.0.0 stamp 67284\r\n"
@@ -361,7 +376,8 @@ string AuthenticationMessage::get()
                                 .append((!_integ_prot.empty()) ? string("integrity-protected=\"").append(_integ_prot).append("\", ") : "")
                                 .append((!_algorithm.empty()) ? string("algorithm=").append(_algorithm) : "")
                                 .append("\r\n").c_str() :
-                              ""
+                              "",
+                    /* 8 */ _cseq
     );
 
   EXPECT_LT(n, (int)sizeof(buf));
@@ -418,6 +434,7 @@ TEST_F(AuthenticationTest, ProxyAuthorizationNonReg)
   free_txdata();
 
   AuthenticationMessage ack("ACK");
+  ack._cseq = 1;
   inject_msg_direct(ack.get());
  
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
@@ -778,8 +795,10 @@ TEST_F(AuthenticationTest, DigestAuthFailTimeout)
   RespMatcher(504).matches(tdata->msg);
   free_txdata();
 
-  msg1._auth_user = "6505550002@homedomain";
-  inject_msg(msg1.get());
+  AuthenticationMessage msg2("REGISTER");
+  msg2._auth_hdr = true;
+  msg2._auth_user = "6505550002@homedomain";
+  inject_msg(msg2.get());
 
   // Expect a 504 Server Timeout response.
   ASSERT_EQ(1, txdata_count());

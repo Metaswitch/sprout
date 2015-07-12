@@ -861,7 +861,24 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
   acr->tx_response(tdata->msg);
 
-  status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
+  pjsip_transaction* tsx = NULL;
+  status = pjsip_tsx_create_uas2(NULL, rdata, NULL, &tsx);
+  if (status != PJ_SUCCESS)
+  {
+    // LCOV_EXCL_START - defensive code not hit in UT
+    TRC_WARNING("Couldn't create PJSIP transaction for authentication response: %d"
+                " (sending statelessly instead)", status);
+    // Send the response statelessly in this case - it's better than nothing
+    pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
+    // LCOV_EXCL_STOP
+  }
+  else
+  {
+    // Let the tsx know about the original message
+    pjsip_tsx_recv_msg(tsx, rdata);
+    // Send our response in this transaction
+    pjsip_tsx_send_msg(tsx, tdata);
+  }
 
   // Send the ACR.
   acr->send_message();
