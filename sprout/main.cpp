@@ -360,7 +360,7 @@ static void usage(void)
        "                            'cluster.example.com', this value should be used instead of the hostnames\n"
        "                            or IP addresses of individual servers\n"
        "     --non-registering-pbxes <comma-separated-list>\n"
-       "                            A comma separated list of domain names that are treated as\n"
+       "                            A comma separated list of IP addresses that are treated as\n"
        "                            non-registering PBXes (i.e. INVITEs should be allowed by the \n"
        "                            P-CSCF, but challenged by the core)\n"
        " -F, --log-file <directory>\n"

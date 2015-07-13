@@ -455,6 +455,8 @@ void PJUtils::add_proxy_auth_for_pbx(pjsip_tx_data* tdata)
 
   if (auth_hdr == NULL)
   {
+    // Creates a minimal Authorization header (which PJSIP prints with just an empty 'nonce' and
+    // 'response' field).
     auth_hdr = pjsip_proxy_authorization_hdr_create(tdata->pool);
     auth_hdr->scheme = pj_str("Digest");
     pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)auth_hdr);

@@ -1335,9 +1335,6 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
         pjsip_transport_add_ref((*target)->transport);
 
         *trust = &TrustBoundary::OUTBOUND_EDGE_CLIENT;
-
-        // If there is an authorization header remove it.
-        pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, NULL);
       }
     }
 
@@ -1399,7 +1396,6 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
           {
             TRC_DEBUG("Destination is a SIP trunk");
             *trust = &TrustBoundary::OUTBOUND_TRUNK;
-            pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, NULL);
           }
           else
           {
@@ -1409,7 +1405,6 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
             {
               TRC_DEBUG("Destination is a SIP PBX");
               *trust = &TrustBoundary::OUTBOUND_EDGE_CLIENT;
-              pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, NULL);
             }
           }
         }
