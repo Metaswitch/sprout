@@ -203,6 +203,7 @@ public:
   string _key;
   bool _sos;
   string _extra_contact;
+  string _to_tag;
 
   AuthenticationMessage(std::string method) :
     _method(method),
@@ -224,7 +225,8 @@ public:
     _auts(""),
     _key(""),
     _sos(false),
-    _extra_contact("")
+    _extra_contact(""),
+    _to_tag("")
   {
   }
 
@@ -326,7 +328,7 @@ string AuthenticationMessage::get()
                    "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n"
                    "Max-Forwards: 68\r\n"
                    "Supported: outbound, path\r\n"
-                   "To: <sip:%2$s@%3$s>\r\n"
+                   "To: <sip:%2$s@%3$s>%9$s\r\n"
                    "From: <sip:%2$s@%3$s>;tag=fc614d9c\r\n"
                    "Call-ID: OWZiOGFkZDQ4MGI1OTljNjlkZDkwNTdlMTE0NmUyOTY.\r\n"
                    "CSeq: %8$d %1$s\r\n"
@@ -377,7 +379,8 @@ string AuthenticationMessage::get()
                                 .append((!_algorithm.empty()) ? string("algorithm=").append(_algorithm) : "")
                                 .append("\r\n").c_str() :
                               "",
-                    /* 8 */ _cseq
+                    /* 8 */ _cseq,
+                    /* 9 */ _to_tag.c_str()
     );
 
   EXPECT_LT(n, (int)sizeof(buf));
@@ -414,6 +417,19 @@ TEST_F(AuthenticationTest, NoAuthorizationNonReg)
   pj_bool_t ret = inject_msg_direct(msg.get());
   EXPECT_EQ(PJ_FALSE, ret);
 }
+
+TEST_F(AuthenticationTest, NoAuthorizationInDialog)
+{
+  // Test that the authentication module lets through non-REGISTER requests
+  // with no authorization header.
+  AuthenticationMessage msg("INVITE");
+  msg._auth_hdr = false;
+  msg._proxy_auth_hdr = true;
+  msg._to_tag = ";tag=abcde";
+  pj_bool_t ret = inject_msg_direct(msg.get());
+  EXPECT_EQ(PJ_FALSE, ret);
+}
+
 
 TEST_F(AuthenticationTest, ProxyAuthorizationNonReg)
 {

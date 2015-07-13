@@ -110,6 +110,7 @@ static AnalyticsLogger* analytics;
 
 // PJSIP structure for control server authentication functions.
 pjsip_auth_srv auth_srv;
+pjsip_auth_srv auth_srv_proxy;
 
 // Retrieve the digest credentials (from the Authorization header for REGISTERs, and the
 // Proxy-Authorization header otherwise).
@@ -513,6 +514,7 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
 {
   if (rdata->tp_info.transport->local_name.port != stack_data.scscf_port)
   {
+    TRC_DEBUG("Request does not need authentication - not on S-CSCF port");
     // Request not received on S-CSCF port, so don't authenticate it.
     SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_NOT_SCSCF_PORT, 0);
     SAS::report_event(event);
@@ -597,6 +599,12 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
   }
   else
   {
+    if (PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->tag.slen != 0)
+    {
+      // This is an in-dialog request which needs no authentication.
+      return PJ_FALSE;
+    }
+
     // Check to see if we should authenticate this non-REGISTER message - this behaviour is not from
     // the IMS specs, but part of our custom logic to authenticate non-registering PBXes. We
     // challenge all messages with a Proxy-Authorization header.
@@ -624,6 +632,7 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
 
 pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 {
+  TRC_DEBUG("Authentication module invoked");
   pj_status_t status;
   bool is_register = (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD);
   std::string resync;
@@ -632,9 +641,11 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
   if (!needs_authentication(rdata, trail))
   {
+    TRC_DEBUG("Request does not need authentication");
     return PJ_FALSE;
   }
 
+  TRC_DEBUG("Request needs authentication");
   const int unauth_sc = is_register ? PJSIP_SC_UNAUTHORIZED : PJSIP_SC_PROXY_AUTHENTICATION_REQUIRED;
   int sc = unauth_sc;
   status = PJSIP_EAUTHNOAUTH;
@@ -653,7 +664,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     // Request contains a response to a previous challenge, so pass it to
     // the authentication module to verify.
     TRC_DEBUG("Verify authentication information in request");
-    status = pjsip_auth_srv_verify2(&auth_srv, rdata, &sc, (void*)av);
+    status = pjsip_auth_srv_verify2((is_register ? &auth_srv : &auth_srv_proxy), rdata, &sc, (void*)av);
 
     if (status == PJ_SUCCESS)
     {
@@ -899,6 +910,10 @@ pj_status_t init_authentication(const std::string& realm_name,
   params.lookup3 = user_lookup;
   params.options = 0;
   status = pjsip_auth_srv_init2(stack_data.pool, &auth_srv, &params);
+
+  params.options = PJSIP_AUTH_SRV_IS_PROXY;
+  status = pjsip_auth_srv_init2(stack_data.pool, &auth_srv_proxy, &params);
+
 
   return status;
 }
