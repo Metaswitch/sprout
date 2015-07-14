@@ -59,6 +59,8 @@ static void proxy_strip_trusted(pjsip_tx_data *tdata)
   PJUtils::remove_hdr(tdata->msg, &STR_P_A_N_I);
   PJUtils::remove_hdr(tdata->msg, &STR_P_V_N_I);
   PJUtils::remove_hdr(tdata->msg, &STR_P_SERVED_USER);
+  pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, NULL);
+  pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_PROXY_AUTHORIZATION, NULL);
 }
 
 /// Add P-Charging headers on incoming out-of-dialog/dialog initiating requests

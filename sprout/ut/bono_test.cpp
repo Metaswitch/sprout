@@ -280,7 +280,7 @@ public:
 
   void match(pjsip_msg* msg)
   {
-    pj_str_t name_str = { const_cast<char*>(_header.data()), _header.length() };
+    pj_str_t name_str = { const_cast<char*>(_header.data()), (long int)_header.length() };
     pjsip_hdr* hdr = NULL;
     list<string> values;
 
@@ -327,6 +327,7 @@ public:
   /// Set up test case.  Caller must clear host_mapping.
   static void SetUpTestCase(const string& edge_upstream_proxy,
                             const string& ibcf_trusted_hosts,
+                            const string& pbx_hosts,
                             bool ifcs,
                             bool icscf_enabled = false,
                             bool scscf_enabled = false,
@@ -353,6 +354,7 @@ public:
     _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_stateful_proxy_scscf.json"));
     _edge_upstream_proxy = edge_upstream_proxy;
     _ibcf_trusted_hosts = ibcf_trusted_hosts;
+    _pbx_hosts = pbx_hosts;
     _icscf_uri_str = icscf_uri_str;
     _icscf = icscf_enabled;
     _scscf = scscf_enabled;
@@ -368,6 +370,7 @@ public:
                                           86400,
                                           !_ibcf_trusted_hosts.empty(),
                                           _ibcf_trusted_hosts.c_str(),
+                                          _pbx_hosts.c_str(),
                                           _analytics,
                                           _enum_service,
                                           false,
@@ -472,6 +475,7 @@ protected:
   static ACRFactory* _acr_factory;
   static string _edge_upstream_proxy;
   static string _ibcf_trusted_hosts;
+  static string _pbx_hosts;
   static string _icscf_uri_str;
   static bool _icscf;
   static bool _scscf;
@@ -503,6 +507,7 @@ SCSCFSelector* StatefulProxyTestBase::_scscf_selector;
 ACRFactory* StatefulProxyTestBase::_acr_factory;
 string StatefulProxyTestBase::_edge_upstream_proxy;
 string StatefulProxyTestBase::_ibcf_trusted_hosts;
+string StatefulProxyTestBase::_pbx_hosts;
 string StatefulProxyTestBase::_icscf_uri_str;
 bool StatefulProxyTestBase::_icscf;
 bool StatefulProxyTestBase::_scscf;
@@ -514,7 +519,7 @@ class StatefulEdgeProxyTest : public StatefulProxyTestBase
 public:
   static void SetUpTestCase()
   {
-    StatefulProxyTestBase::SetUpTestCase("upstreamnode", "", false);
+    StatefulProxyTestBase::SetUpTestCase("upstreamnode", "", "", false);
     add_host_mapping("upstreamnode", "10.6.6.8");
   }
 
@@ -551,7 +556,7 @@ class StatefulEdgeProxyAcceptRegisterTest : public StatefulProxyTestBase
 public:
   static void SetUpTestCase()
   {
-    StatefulProxyTestBase::SetUpTestCase("upstreamnode", "", false, false, false, "", true);
+    StatefulProxyTestBase::SetUpTestCase("upstreamnode", "", "", false, false, false, "", true);
     add_host_mapping("upstreamnode", "10.6.6.8");
   }
 
@@ -571,6 +576,32 @@ public:
 protected:
 };
 
+class StatefulEdgeProxyPBXTest : public StatefulProxyTestBase
+{
+public:
+  static void SetUpTestCase()
+  {
+    StatefulProxyTestBase::SetUpTestCase("upstreamnode", "", "1.2.3.4", false);
+    add_host_mapping("upstreamnode", "10.6.6.8");
+  }
+
+  static void TearDownTestCase()
+  {
+    StatefulProxyTestBase::TearDownTestCase();
+  }
+
+  StatefulEdgeProxyPBXTest()
+  {
+  }
+
+  ~StatefulEdgeProxyPBXTest()
+  {
+  }
+
+protected:
+};
+
+
 class StatefulTrunkProxyTest : public StatefulProxyTestBase
 {
 public:
@@ -579,7 +610,7 @@ public:
     add_host_mapping("upstreamnode", "10.6.6.8");
     add_host_mapping("trunknode", "10.7.7.10");
     add_host_mapping("trunknode2", "10.7.7.11");
-    StatefulProxyTestBase::SetUpTestCase("upstreamnode", "10.7.7.10,10.7.7.11", false);
+    StatefulProxyTestBase::SetUpTestCase("upstreamnode", "10.7.7.10,10.7.7.11", "", false);
   }
 
   static void TearDownTestCase()
@@ -990,7 +1021,10 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
   if (!integrity.empty())
   {
     actual = get_headers(tdata->msg, "Authorization");
-    EXPECT_EQ("Authorization: Digest username=\"6505551000@homedomain\", nonce=\"\", response=\"" + response + "\",integrity-protected=" + integrity, actual);
+    EXPECT_THAT(actual, MatchesRegex("^Authorization: Digest .*"));
+    EXPECT_THAT(actual, MatchesRegex(".*username=\"6505551000@homedomain\".*"));
+    EXPECT_THAT(actual, MatchesRegex(".*response=\"" + response + "\".*"));
+    EXPECT_THAT(actual, MatchesRegex(".*integrity-protected=" + integrity + ".*"));
   }
 
   // Check P-Charging headers are added correctly
@@ -2018,6 +2052,36 @@ TEST_F(StatefulEdgeProxyAcceptRegisterTest, TestBonoEmergencyAcceptRegister)
   r1.matches(tdata->msg);
 
   free_txdata();
+}
+
+// Test flows into Bono (P-CSCF) of non-registering PBX.
+TEST_F(StatefulEdgeProxyPBXTest, AcceptInvite)
+{
+  SCOPED_TRACE("");
+
+  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "1.2.3.4", 36531);
+  pjsip_msg* out;
+
+  Message msg;
+  msg._method = "INVITE";
+
+  inject_msg(msg.get_request(), &tp);
+  poll();
+  ASSERT_EQ(1, txdata_count());
+  
+  
+  // INVITE should be passed to Sprout despite the lack of a REGISTER
+  SCOPED_TRACE("INVITE (S)");
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(ReqMatcher("INVITE").matches(out));
+  
+  // Goes to the configured upstream proxy ("upstreamnode", "10.6.6.8")
+  expect_target("TCP", "10.6.6.8", stack_data.pcscf_trusted_port, current_txdata());
+
+  // Check that a Proxy-Authorization header gets added.
+  std::string actual = get_headers(out, "Proxy-Authorization");
+  EXPECT_THAT(actual, MatchesRegex("^Proxy-Authorization: Digest .*"));
+  EXPECT_THAT(actual, MatchesRegex(".*response=\"\".*"));
 }
 
 // Test flows into IBCF, in particular for header stripping.

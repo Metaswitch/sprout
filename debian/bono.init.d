@@ -170,7 +170,8 @@ get_daemon_args()
                      $min_token_rate_arg
                      $ibcf_arg
                      $billing_cdf_arg
-                     $exception_max_ttl_arg"
+                     $exception_max_ttl_arg
+                     --non-registering-pbxes=$pbxes"
 
         [ "$additional_home_domains" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --additional-domains $additional_home_domains"
         [ "$sip_blacklist_duration" = "" ]  || DAEMON_ARGS="$DAEMON_ARGS --sip-blacklist-duration=$sip_blacklist_duration"
