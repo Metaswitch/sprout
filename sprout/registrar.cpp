@@ -501,13 +501,13 @@ void process_register_request(pjsip_rx_data* rdata)
   int st_code = PJSIP_SC_OK;
   SAS::TrailId trail = get_trail(rdata);
 
-  // Moved this block of code further up so that the correct stats tables can be
-  // updated.
   // Get the system time in seconds for calculating absolute expiry times.
   int now = time(NULL);
   int expiry = 0;
   bool is_initial_registration;
 
+  // Loop through headers as early as possible so that we know the expiry time
+  // and which registration statistics to update.
   // Loop through each contact header. If every registration is an emergency
   // registration and its expiry is 0 then reject with a 501.
   // If there are valid registration updates to make then attempt to write to
@@ -543,6 +543,11 @@ void process_register_request(pjsip_rx_data* rdata)
                                                           contact_hdr->next);
   }
   
+  if (expiry == 0)
+  {
+    reg_stats_tables->de_reg_tbl->increment_attempts();
+  }
+  
   // Get the URI from the To header and check it is a SIP or SIPS URI.
   pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
  
@@ -564,10 +569,11 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL);
     if (expiry == 0)
     {
-      reg_stats_tables->de_reg_tbl->increment_attempts();
       reg_stats_tables->de_reg_tbl->increment_failures();
     }
-    else // If not a de-register request, then count as an initial register attempt.
+    else 
+    // Invalid URI means this cannot be a re-register request, so if not
+    // a de-register request, then treat as an initial register request.
     {
       reg_stats_tables->init_reg_tbl->increment_attempts();
       reg_stats_tables->init_reg_tbl->increment_failures();
@@ -683,10 +689,11 @@ void process_register_request(pjsip_rx_data* rdata)
     
     if (expiry == 0)
     {
-      reg_stats_tables->de_reg_tbl->increment_attempts();
       reg_stats_tables->de_reg_tbl->increment_failures();
     }
-    else // If not a de-register request, then count as an initial register attempt.
+    else 
+    // Invalid public/private identity means this cannot be a re-register request,
+    // so if not a de-register request, then treat as an initial register request.
     {
       reg_stats_tables->init_reg_tbl->increment_attempts();
       reg_stats_tables->init_reg_tbl->increment_failures();
@@ -711,8 +718,8 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL,
                                NULL);
     delete acr;
-      
-    reg_stats_tables->de_reg_tbl->increment_attempts();
+     
+    reg_stats_tables->de_reg_tbl->increment_attempts(); 
     reg_stats_tables->de_reg_tbl->increment_failures();
     
     return;
@@ -734,7 +741,6 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL);
     delete acr;
 
-    reg_stats_tables->de_reg_tbl->increment_attempts();
     reg_stats_tables->de_reg_tbl->increment_failures();
     
     return;
@@ -777,6 +783,16 @@ void process_register_request(pjsip_rx_data* rdata)
     // LCOV_EXCL_STOP
   }
 
+  if (expiry == 0) {}
+  else if (is_initial_registration)
+  {
+    reg_stats_tables->init_reg_tbl->increment_attempts();
+  }
+  else
+  {
+    reg_stats_tables->re_reg_tbl->increment_attempts();
+  }
+
   // Build and send the reply.
   pjsip_tx_data* tdata;
   status = PJUtils::create_response(stack_data.endpt, rdata, st_code, NULL, &tdata);
@@ -804,17 +820,14 @@ void process_register_request(pjsip_rx_data* rdata)
 
     if (is_initial_registration)
     {
-      reg_stats_tables->init_reg_tbl->increment_attempts();
       reg_stats_tables->init_reg_tbl->increment_failures();
     }
     else if (expiry == 0)
     {
-      reg_stats_tables->de_reg_tbl->increment_attempts();
       reg_stats_tables->de_reg_tbl->increment_failures();
     }
     else
     {
-      reg_stats_tables->re_reg_tbl->increment_attempts();
       reg_stats_tables->re_reg_tbl->increment_failures();
     }
     
@@ -839,17 +852,14 @@ void process_register_request(pjsip_rx_data* rdata)
 
     if (is_initial_registration)
     {
-      reg_stats_tables->init_reg_tbl->increment_attempts();
       reg_stats_tables->init_reg_tbl->increment_failures();
     }
     else if (expiry == 0)
     {
-      reg_stats_tables->de_reg_tbl->increment_attempts();
       reg_stats_tables->de_reg_tbl->increment_failures();
     }
     else
     {
-      reg_stats_tables->re_reg_tbl->increment_attempts();
       reg_stats_tables->re_reg_tbl->increment_failures();
     }
     
@@ -879,17 +889,14 @@ void process_register_request(pjsip_rx_data* rdata)
 
     if (is_initial_registration)
     {
-      reg_stats_tables->init_reg_tbl->increment_attempts();
       reg_stats_tables->init_reg_tbl->increment_failures();
     }
     else if (expiry == 0)
     {
-      reg_stats_tables->de_reg_tbl->increment_attempts();
       reg_stats_tables->de_reg_tbl->increment_failures();
     }
     else
     {
-      reg_stats_tables->re_reg_tbl->increment_attempts();
       reg_stats_tables->re_reg_tbl->increment_failures();
     }
     
@@ -968,19 +975,16 @@ void process_register_request(pjsip_rx_data* rdata)
   SAS::Event reg_Accepted(trail, SASEvent::REGISTER_ACCEPTED, 0);
   SAS::report_event(reg_Accepted);
   
-  if (is_initial_registration)
+  if (expiry == 0)
   {
-    reg_stats_tables->init_reg_tbl->increment_attempts();
-    reg_stats_tables->init_reg_tbl->increment_successes();
-  }
-  else if (expiry == 0)
-  {
-    reg_stats_tables->de_reg_tbl->increment_attempts();
     reg_stats_tables->de_reg_tbl->increment_successes();
+  }
+  else if (is_initial_registration)
+  {
+    reg_stats_tables->init_reg_tbl->increment_successes();
   }
   else
   {
-    reg_stats_tables->re_reg_tbl->increment_attempts();
     reg_stats_tables->re_reg_tbl->increment_successes();
   }
 
@@ -1058,8 +1062,8 @@ void process_register_request(pjsip_rx_data* rdata)
                                                          expiry,
                                                          is_initial_registration,
                                                          public_id,
-                                                         trail,
-                                                         third_party_reg_stats_tables);
+                                                         third_party_reg_stats_tables,
+                                                         trail);
   }
 
   // Now we can free the tdata.

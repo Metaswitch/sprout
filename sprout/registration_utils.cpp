@@ -82,8 +82,8 @@ void send_register_to_as(pjsip_rx_data* received_register,
 void RegistrationUtils::deregister_with_application_servers(Ifcs& ifcs,
                                                             RegStore* store,
                                                             const std::string& served_user,
-                                                            SAS::TrailId trail,
-                                                            SNMP::RegistrationStatsTables* third_party_reg_stats_tables)
+                                                            SNMP::RegistrationStatsTables* third_party_reg_stats_tables,
+                                                            SAS::TrailId trail)
 {
   RegistrationUtils::register_with_application_servers(ifcs,
                                                        store,
@@ -92,8 +92,8 @@ void RegistrationUtils::deregister_with_application_servers(Ifcs& ifcs,
                                                        0,
                                                        false,
                                                        served_user,
-                                                       trail,
-                                                       third_party_reg_stats_tables);
+                                                       third_party_reg_stats_tables,
+                                                       trail);
 }
 
 void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
@@ -103,8 +103,8 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
                                                           int expires,
                                                           bool is_initial_registration,
                                                           const std::string& served_user,
-                                                          SAS::TrailId trail,
-                                                          SNMP::RegistrationStatsTables* third_party_reg_stats_tbls)
+                                                          SNMP::RegistrationStatsTables* third_party_reg_stats_tbls,
+                                                          SAS::TrailId trail)
 {
   // Function preconditions
   if (received_register == NULL)
@@ -189,6 +189,18 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
        as_iter != as_list.end();
        as_iter++)
   {
+    if (expires == 0)
+    {
+      third_party_reg_stats_tables->de_reg_tbl->increment_attempts();
+    }
+    else if (is_initial_registration)
+    {
+      third_party_reg_stats_tables->init_reg_tbl->increment_attempts();
+    }
+    else
+    {
+      third_party_reg_stats_tables->re_reg_tbl->increment_attempts();
+    }
     send_register_to_as(received_register, ok_response, *as_iter, expires, is_initial_registration, served_user, trail);
   }
 }
@@ -212,21 +224,19 @@ static void send_register_cb(void* token, pjsip_event *event)
     third_party_register_failed(tsxdata->public_id, tsxdata->trail);
   }
   
+  // printf("Expiry: %d, Is_initial_registration: %d\n", tsxdata->expires, tsxdata->is_initial_registration);
   if (tsx->status_code == 200)
   {  
-    if (tsxdata->is_initial_registration)
+    if (tsxdata->expires == 0)
     {
-      third_party_reg_stats_tables->init_reg_tbl->increment_attempts();
-      third_party_reg_stats_tables->init_reg_tbl->increment_successes();
-    }
-    else if (tsxdata->expires == 0)
-    {
-      third_party_reg_stats_tables->de_reg_tbl->increment_attempts();
       third_party_reg_stats_tables->de_reg_tbl->increment_successes();
+    }
+    else if (tsxdata->is_initial_registration)
+    {
+      third_party_reg_stats_tables->init_reg_tbl->increment_successes();
     }
     else
     {
-      third_party_reg_stats_tables->re_reg_tbl->increment_attempts();
       third_party_reg_stats_tables->re_reg_tbl->increment_successes();
     }
   }
@@ -236,17 +246,14 @@ static void send_register_cb(void* token, pjsip_event *event)
   {
     if (tsxdata->expires == 0)
     {
-      third_party_reg_stats_tables->init_reg_tbl->increment_attempts();
-      third_party_reg_stats_tables->init_reg_tbl->increment_failures();
+      third_party_reg_stats_tables->de_reg_tbl->increment_failures();
     }
     else if (tsxdata->is_initial_registration)
     {
-      third_party_reg_stats_tables->de_reg_tbl->increment_attempts();
-      third_party_reg_stats_tables->de_reg_tbl->increment_failures();
+      third_party_reg_stats_tables->init_reg_tbl->increment_failures();
     }
     else
     {
-      third_party_reg_stats_tables->re_reg_tbl->increment_attempts();
       third_party_reg_stats_tables->re_reg_tbl->increment_failures();
     }
   }
@@ -474,7 +481,7 @@ void RegistrationUtils::remove_bindings(RegStore* store,
     {
       // Note that 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 doesn't specify that any binding information
       // should be passed on the REGISTER message, so we don't need the binding ID.
-      deregister_with_application_servers(ifc_map[aor], store, aor, trail, third_party_reg_stats_tables);
+      deregister_with_application_servers(ifc_map[aor], store, aor, third_party_reg_stats_tables, trail);
       notify_application_servers();
     }
   }

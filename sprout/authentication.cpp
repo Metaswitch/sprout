@@ -542,6 +542,17 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
   if (auth_hdr != NULL)
   {
+    if (pj_strcmp2(&auth_hdr->credential.digest.response, ""))
+    {
+      if (!pj_strcmp2(&auth_hdr->credential.digest.algorithm, "MD5"))
+      {
+        auth_stats_tables->sip_digest_auth_tbl->increment_attempts();
+      }
+      else if (!pj_strcmp2(&auth_hdr->credential.digest.algorithm, "AKAv1-MD5"))
+      {
+        auth_stats_tables->ims_aka_auth_tbl->increment_attempts();
+      }
+    }
     // There is an authorization header, so check for the integrity-protected
     // indication.
     TRC_DEBUG("Authorization header in request");
@@ -612,12 +623,10 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
       if (av->HasMember("digest"))
       {
-        auth_stats_tables->sip_digest_auth_tbl->increment_attempts();
         auth_stats_tables->sip_digest_auth_tbl->increment_successes();
       }
       else if (av->HasMember("aka"))
       {
-        auth_stats_tables->ims_aka_auth_tbl->increment_attempts();
         auth_stats_tables->ims_aka_auth_tbl->increment_successes();
       }
 
@@ -745,6 +754,18 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     TRC_DEBUG("No authentication information in request or stale nonce, so reject with challenge");
     pj_bool_t stale = (status == PJSIP_EAUTHACCNOTFOUND);
 
+    if (stale)
+    {
+      if (!pj_strcmp2(&auth_hdr->credential.digest.algorithm, "MD5"))
+      {
+        auth_stats_tables->sip_digest_auth_tbl->increment_failures();
+      }
+      if (!pj_strcmp2(&auth_hdr->credential.digest.algorithm, "AKAv1-MD5"))
+      {
+      auth_stats_tables->ims_aka_auth_tbl->increment_failures();
+      }
+    }
+
     sc = PJSIP_SC_UNAUTHORIZED;
     status = PJUtils::create_response(stack_data.endpt, rdata, sc, NULL, &tdata);
 
@@ -767,18 +788,13 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
     TRC_ERROR("Authentication failed, %s", error_msg.c_str());
 
-    if (av != NULL)
+    if (!pj_strcmp2(&auth_hdr->credential.digest.algorithm, "MD5"))
     {
-      if (av->HasMember("digest"))
-      {
-        auth_stats_tables->sip_digest_auth_tbl->increment_attempts();
-        auth_stats_tables->sip_digest_auth_tbl->increment_successes();
-      }
-      else if (av->HasMember("aka"))
-      {
-        auth_stats_tables->ims_aka_auth_tbl->increment_attempts();
-        auth_stats_tables->ims_aka_auth_tbl->increment_successes();
-      }
+      auth_stats_tables->sip_digest_auth_tbl->increment_failures();
+    }
+    else if (!pj_strcmp2(&auth_hdr->credential.digest.algorithm, "AKAv1-MD5"))
+    {
+      auth_stats_tables->ims_aka_auth_tbl->increment_failures();
     }
  
     SAS::Event event(trail, SASEvent::AUTHENTICATION_FAILED, 0);

@@ -526,8 +526,8 @@ RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
       RegistrationUtils::deregister_with_application_servers(ifc_map[aor_id],
                                                              current_store,
                                                              aor_id,
-                                                             trail(),
-                                                             NULL);
+                                                             NULL,
+                                                             trail());
     }
   }
 
