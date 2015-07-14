@@ -1021,7 +1021,10 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
   if (!integrity.empty())
   {
     actual = get_headers(tdata->msg, "Authorization");
-    EXPECT_EQ("Authorization: Digest username=\"6505551000@homedomain\", nonce=\"\", response=\"" + response + "\",integrity-protected=" + integrity, actual);
+    EXPECT_THAT(actual, MatchesRegex("^Authorization: Digest .*"));
+    EXPECT_THAT(actual, MatchesRegex(".*username=\"6505551000@homedomain\".*"));
+    EXPECT_THAT(actual, MatchesRegex(".*response=\"" + response + "\".*"));
+    EXPECT_THAT(actual, MatchesRegex(".*integrity-protected=" + integrity + ".*"));
   }
 
   // Check P-Charging headers are added correctly
@@ -2076,8 +2079,9 @@ TEST_F(StatefulEdgeProxyPBXTest, AcceptInvite)
   expect_target("TCP", "10.6.6.8", stack_data.pcscf_trusted_port, current_txdata());
 
   // Check that a Proxy-Authorization header gets added.
-  EXPECT_EQ("Proxy-Authorization: Digest , nonce=\"\", response=\"\"",
-            get_headers(out, "Proxy-Authorization")) << "INVITE";
+  std::string actual = get_headers(out, "Proxy-Authorization");
+  EXPECT_THAT(actual, MatchesRegex("^Proxy-Authorization: Digest .*"));
+  EXPECT_THAT(actual, MatchesRegex(".*response=\"\".*"));
 }
 
 // Test flows into IBCF, in particular for header stripping.
