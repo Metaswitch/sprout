@@ -116,24 +116,25 @@ pjsip_auth_srv auth_srv_proxy;
 // Proxy-Authorization header otherwise).
 static pjsip_digest_credential* get_credentials(const pjsip_rx_data* rdata)
 {
-  bool is_register = (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD);
+  pjsip_authorization_hdr* auth_hdr;
+  pjsip_digest_credential* credentials = NULL;
 
-  pjsip_hdr* auth_hdr = (pjsip_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg,
-                                                       (is_register ? PJSIP_H_AUTHORIZATION : PJSIP_H_PROXY_AUTHORIZATION),
-                                                       NULL);
-  pjsip_digest_credential* credentials;
-
-  if (auth_hdr == NULL)
+  if (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD)
   {
-    credentials = NULL;
-  }
-  else if (is_register)
-  {
-    credentials = &((pjsip_authorization_hdr*)auth_hdr)->credential.digest;
+    auth_hdr = (pjsip_authorization_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg,
+                                                            PJSIP_H_AUTHORIZATION,
+                                                            NULL);
   }
   else
   {
-    credentials = &((pjsip_proxy_authorization_hdr*)auth_hdr)->credential.digest;
+    auth_hdr = (pjsip_proxy_authorization_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg,
+                                                                  PJSIP_H_PROXY_AUTHORIZATION,
+                                                                  NULL);
+  }
+
+  if (auth_hdr)
+  {
+    credentials = &auth_hdr->credential.digest;
   }
 
   return credentials;
@@ -588,7 +589,7 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
         // the challenge response if included.
         TRC_INFO("AKA authenticated request integrity protected by edge proxy");
 
-        SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_INTEGRITY_PROTECTED, 0);
+        SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_INTEGRITY_PROTECTED, 1);
         SAS::report_event(event);
 
         return PJ_FALSE;
@@ -857,6 +858,9 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
   acr->tx_response(tdata->msg);
 
+  // Issue the challenge response transaction-statefully. This is so that:
+  //  * if we challenge an INVITE, the UE can ACK the 407
+  //  * if a challenged request gets retransmitted, we don't repeat the work
   pjsip_transaction* tsx = NULL;
   status = pjsip_tsx_create_uas2(NULL, rdata, NULL, &tsx);
   if (status != PJ_SUCCESS)
