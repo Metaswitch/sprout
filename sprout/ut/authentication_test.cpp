@@ -55,6 +55,7 @@ extern "C" {
 #include "fakechronosconnection.hpp"
 #include "test_interposer.hpp"
 #include "md5.h"
+#include "fakesnmp.hpp"
 
 using namespace std;
 using namespace std;
@@ -83,7 +84,8 @@ public:
                                           _hss_connection,
                                           _chronos_connection,
                                           _acr_factory,
-                                          _analytics);
+                                          _analytics,
+                                          &SNMP::FAKE_AUTHENTICATION_STATS_TABLES);
     ASSERT_EQ(PJ_SUCCESS, ret);
   }
 
@@ -110,6 +112,8 @@ public:
     // Clear out transactions
     cwtest_advance_time_ms(33000L);
     poll();
+    ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->reset_count();
+    ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->reset_count();
   }
 
   /// Parses a WWW-Authenticate header to the list of parameters.
@@ -565,7 +569,6 @@ TEST_F(AuthenticationTest, IntegrityProtected)
   // must not have a response field in the authorization header, otherwise
   // this will be checked.
   pj_bool_t ret;
-
   AuthenticationMessage msg1("REGISTER");
   msg1._auth_hdr = true;
   msg1._integ_prot = "yes";
@@ -589,6 +592,9 @@ TEST_F(AuthenticationTest, IntegrityProtected)
   msg3._response = "12341234123412341234123412341234";
   ret = inject_msg_direct(msg3.get());
   EXPECT_EQ(PJ_FALSE, ret);
+  
+  EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts); 
+  EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts); 
 }
 
 
@@ -660,6 +666,8 @@ TEST_F(AuthenticationTest, DigestAuthSuccess)
 
   // Expect no response, as the authentication module has let the request through.
   ASSERT_EQ(0, txdata_count());
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts); 
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_successes); 
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
@@ -711,6 +719,8 @@ TEST_F(AuthenticationTest, DigestAuthFailBadResponse)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(403).matches(tdata->msg);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts); 
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_failures); 
   free_txdata();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
@@ -737,6 +747,7 @@ TEST_F(AuthenticationTest, DigestAuthFailBadIMPI)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(403).matches(tdata->msg);
+  EXPECT_EQ(0, ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts); 
   free_txdata();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
@@ -774,6 +785,8 @@ TEST_F(AuthenticationTest, DigestAuthFailStale)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(401).matches(tdata->msg);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts); 
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_failures); 
 
   // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
   std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
@@ -800,6 +813,8 @@ TEST_F(AuthenticationTest, DigestAuthFailStale)
 
   // Expect no response, as the authentication module has let the request through.
   ASSERT_EQ(0, txdata_count());
+  EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts); 
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_successes); 
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
@@ -852,6 +867,8 @@ TEST_F(AuthenticationTest, DigestAuthFailWrongRealm)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(401).matches(tdata->msg);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts); 
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_failures); 
   free_txdata();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
@@ -866,9 +883,9 @@ TEST_F(AuthenticationTest, DigestAuthFailTimeout)
 
   // Set up the HSS response for the AV query using a default private user identity.
   _hss_connection->set_rc("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
-                           503);
+                          503);
   _hss_connection->set_rc("/impi/6505550002%40homedomain/av?impu=sip%3A6505550001%40homedomain",
-                           504);
+                          504);
 
   // Send in a REGISTER request.
   AuthenticationMessage msg1("REGISTER");
@@ -891,6 +908,7 @@ TEST_F(AuthenticationTest, DigestAuthFailTimeout)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(504).matches(tdata->msg);
+  EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts); 
   free_txdata();
 
   _hss_connection->delete_rc("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
@@ -909,9 +927,9 @@ TEST_F(AuthenticationTest, AKAAuthSuccess)
   // algorithms to generate or extract keys.
   _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
                               "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
-                                        "\"response\":\"12345678123456781234567812345678\","
-                                        "\"cryptkey\":\"0123456789abcdef\","
-                                        "\"integritykey\":\"fedcba9876543210\"}}");
+                              "\"response\":\"12345678123456781234567812345678\","
+                              "\"cryptkey\":\"0123456789abcdef\","
+                              "\"integritykey\":\"fedcba9876543210\"}}");
 
   // Send in a REGISTER request with an authentication header with
   // integrity-protected=no.  This triggers aka authentication.
@@ -950,6 +968,8 @@ TEST_F(AuthenticationTest, AKAAuthSuccess)
 
   // Expect no response, as the authentication module has let the request through.
   ASSERT_EQ(0, txdata_count());
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts); 
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes); 
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
 }
@@ -966,9 +986,9 @@ TEST_F(AuthenticationTest, AKAAuthFailBadResponse)
   // algorithms to generate or extract keys.
   _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
                               "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
-                                        "\"response\":\"12345678123456781234567812345678\","
-                                        "\"cryptkey\":\"0123456789abcdef\","
-                                        "\"integritykey\":\"fedcba9876543210\"}}");
+                              "\"response\":\"12345678123456781234567812345678\","
+                              "\"cryptkey\":\"0123456789abcdef\","
+                              "\"integritykey\":\"fedcba9876543210\"}}");
 
   // Send in a REGISTER request with an authentication header with
   // integrity-protected=no.  This triggers aka authentication.
@@ -1010,11 +1030,53 @@ TEST_F(AuthenticationTest, AKAAuthFailBadResponse)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(403).matches(tdata->msg);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts); 
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_failures); 
   free_txdata();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
 }
 
+TEST_F(AuthenticationTest, AKAAuthFailStale)
+{
+  // Test a failed AKA authentication flow where the response is stale.
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query the default private user identity.
+
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                              "{\"aka\":{\"challenge\":\"12345678123456781234567812345678\","
+                              "\"response\":\"87654321876543218765432187654321\","
+                              "\"cryptkey\":\"fedcba9876543210\","
+                              "\"integritykey\":\"0123456789abcdef\"}}");
+  // Send in a REGISTER request with an authentication header with a response
+  // to an old challenge.  The content of the challenge doesn't matter,
+  // provided it has a response and a nonce that won't be found in the AV
+  // store.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = true;
+  msg1._algorithm = "AKAv1-MD5";
+  msg1._key = "12345678123456781234567812345678";
+  msg1._nonce = "abcdefabcdefabcdefabcdefabcdef";
+  msg1._opaque = "123123";
+  msg1._nc = "00000001";
+  msg1._cnonce = "8765432187654321";
+  msg1._qop = "auth";
+  msg1._integ_prot = "ip-assoc-pending";
+  msg1._response = "00000000000000000000000000000000";
+  inject_msg(msg1.get());
+
+  // The authentication module should recognise this as a stale request and
+  // respond with a challenge.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts); 
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_failures); 
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+}
 
 TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
 {
@@ -1028,9 +1090,9 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
   // algorithms to generate or extract keys.
   _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
                               "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
-                                        "\"response\":\"12345678123456781234567812345678\","
-                                        "\"cryptkey\":\"0123456789abcdef\","
-                                        "\"integritykey\":\"fedcba9876543210\"}}");
+                              "\"response\":\"12345678123456781234567812345678\","
+                              "\"cryptkey\":\"0123456789abcdef\","
+                              "\"integritykey\":\"fedcba9876543210\"}}");
 
   // Send in a REGISTER request with an authentication header with
   // integrity-protected=no.  This triggers aka authentication.
@@ -1058,9 +1120,9 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
   // module.
   _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&autn=876543218765432132132132132132",
                               "{\"aka\":{\"challenge\":\"12345678123456781234567812345678\","
-                                        "\"response\":\"87654321876543218765432187654321\","
-                                        "\"cryptkey\":\"fedcba9876543210\","
-                                        "\"integritykey\":\"0123456789abcdef\"}}");
+                              "\"response\":\"87654321876543218765432187654321\","
+                              "\"cryptkey\":\"fedcba9876543210\","
+                              "\"integritykey\":\"0123456789abcdef\"}}");
 
   // Send a new REGISTER request with an authentication header with a correct
   // response, but with an auts parameter indicating the sequence number in
@@ -1081,6 +1143,8 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(401).matches(tdata->msg);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts); 
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes); 
 
   // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
   auth = get_headers(tdata->msg, "WWW-Authenticate");
@@ -1108,6 +1172,8 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
 
   // Expect no response, as the authentication module has let the request through.
   ASSERT_EQ(0, txdata_count());
+  EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts); 
+  EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes); 
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&autn=876543218765432132132132132132");
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
@@ -1171,6 +1237,8 @@ TEST_F(AuthenticationTest, AKAAuthResyncFail)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(403).matches(tdata->msg);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts); 
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_failures); 
   free_txdata();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
@@ -1238,6 +1306,8 @@ TEST_F(AuthenticationTest, AuthCorruptAV)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(403).matches(tdata->msg);
+  EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts); 
+  EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts); 
   free_txdata();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");

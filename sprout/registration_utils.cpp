@@ -54,8 +54,11 @@ extern "C" {
 #include "log.h"
 #include <boost/lexical_cast.hpp>
 #include "sproutsasevent.h"
+#include "snmp_success_fail_count_table.h"
 
 #define MAX_SIP_MSG_SIZE 65535
+
+static SNMP::RegistrationStatsTables* third_party_reg_stats_tables;
 
 /// Temporary data structure maintained while transmitting a third-party
 /// REGISTER to an application server.
@@ -64,18 +67,22 @@ struct ThirdPartyRegData
   std::string public_id;
   DefaultHandling default_handling;
   SAS::TrailId trail;
+  int expires;
+  bool is_initial_registration;
 };
 
 void send_register_to_as(pjsip_rx_data* received_register,
                          pjsip_tx_data* ok_response,
                          AsInvocation& as,
                          int expires,
+                         bool is_initial_registration,
                          const std::string&,
                          SAS::TrailId);
 
 void RegistrationUtils::deregister_with_application_servers(Ifcs& ifcs,
                                                             RegStore* store,
                                                             const std::string& served_user,
+                                                            SNMP::RegistrationStatsTables* third_party_reg_stats_tables,
                                                             SAS::TrailId trail)
 {
   RegistrationUtils::register_with_application_servers(ifcs,
@@ -85,6 +92,7 @@ void RegistrationUtils::deregister_with_application_servers(Ifcs& ifcs,
                                                        0,
                                                        false,
                                                        served_user,
+                                                       third_party_reg_stats_tables,
                                                        trail);
 }
 
@@ -95,6 +103,7 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
                                                           int expires,
                                                           bool is_initial_registration,
                                                           const std::string& served_user,
+                                                          SNMP::RegistrationStatsTables* third_party_reg_stats_tbls,
                                                           SAS::TrailId trail)
 {
   // Function preconditions
@@ -107,6 +116,11 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
   {
     // We should have both messages or neither
     assert(ok_response != NULL);
+  }
+
+  if (third_party_reg_stats_tbls != NULL)
+  {
+    third_party_reg_stats_tables = third_party_reg_stats_tbls;
   }
 
   std::vector<AsInvocation> as_list;
@@ -175,7 +189,19 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
        as_iter != as_list.end();
        as_iter++)
   {
-    send_register_to_as(received_register, ok_response, *as_iter, expires, served_user, trail);
+    if (expires == 0)
+    {
+      third_party_reg_stats_tables->de_reg_tbl->increment_attempts();
+    }
+    else if (is_initial_registration)
+    {
+      third_party_reg_stats_tables->init_reg_tbl->increment_attempts();
+    }
+    else
+    {
+      third_party_reg_stats_tables->re_reg_tbl->increment_attempts();
+    }
+    send_register_to_as(received_register, ok_response, *as_iter, expires, is_initial_registration, served_user, trail);
   }
 }
 
@@ -197,6 +223,40 @@ static void send_register_cb(void* token, pjsip_event *event)
 
     third_party_register_failed(tsxdata->public_id, tsxdata->trail);
   }
+  
+  // printf("Expiry: %d, Is_initial_registration: %d\n", tsxdata->expires, tsxdata->is_initial_registration);
+  if (tsx->status_code == 200)
+  {  
+    if (tsxdata->expires == 0)
+    {
+      third_party_reg_stats_tables->de_reg_tbl->increment_successes();
+    }
+    else if (tsxdata->is_initial_registration)
+    {
+      third_party_reg_stats_tables->init_reg_tbl->increment_successes();
+    }
+    else
+    {
+      third_party_reg_stats_tables->re_reg_tbl->increment_successes();
+    }
+  }
+  else
+  // Count all failed registration attempts, not just ones that result in user
+  // being unsubscribed.
+  {
+    if (tsxdata->expires == 0)
+    {
+      third_party_reg_stats_tables->de_reg_tbl->increment_failures();
+    }
+    else if (tsxdata->is_initial_registration)
+    {
+      third_party_reg_stats_tables->init_reg_tbl->increment_failures();
+    }
+    else
+    {
+      third_party_reg_stats_tables->re_reg_tbl->increment_failures();
+    }
+  }
 
   delete tsxdata; tsxdata = NULL;
 }
@@ -205,6 +265,7 @@ void send_register_to_as(pjsip_rx_data *received_register,
                          pjsip_tx_data *ok_response,
                          AsInvocation& as,
                          int expires,
+                         bool is_initial_registration,
                          const std::string& served_user,
                          SAS::TrailId trail)
 {
@@ -336,6 +397,8 @@ void send_register_to_as(pjsip_rx_data *received_register,
   tsxdata->default_handling = as.default_handling;
   tsxdata->trail = trail;
   tsxdata->public_id = served_user;
+  tsxdata->expires = expires;
+  tsxdata->is_initial_registration = is_initial_registration;
   pj_status_t resolv_status = PJUtils::send_request(tdata, 0, tsxdata, &send_register_cb);
 
   if (resolv_status != PJ_SUCCESS)
@@ -418,7 +481,7 @@ void RegistrationUtils::remove_bindings(RegStore* store,
     {
       // Note that 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 doesn't specify that any binding information
       // should be passed on the REGISTER message, so we don't need the binding ID.
-      deregister_with_application_servers(ifc_map[aor], store, aor, trail);
+      deregister_with_application_servers(ifc_map[aor], store, aor, third_party_reg_stats_tables, trail);
       notify_application_servers();
     }
   }

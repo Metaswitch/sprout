@@ -1,4 +1,4 @@
-/**
+/*
  * @file registrar.cpp
  *
  * Project Clearwater - IMS in the Cloud
@@ -62,6 +62,7 @@ extern "C" {
 #include "custom_headers.h"
 #include "log.h"
 #include "notify_utils.h"
+#include "snmp_success_fail_count_table.h"
 
 static RegStore* store;
 static RegStore* remote_store;
@@ -84,6 +85,11 @@ static pjsip_routing_hdr* service_route;
 // must get invoked before the proxy UA module.
 //
 static pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata);
+
+// SNMP tables that count the number of attempts, successes and failures of
+// registration attempts.
+static SNMP::RegistrationStatsTables* reg_stats_tables;
+static SNMP::RegistrationStatsTables* third_party_reg_stats_tables;
 
 pjsip_module mod_registrar =
 {
@@ -495,9 +501,51 @@ void process_register_request(pjsip_rx_data* rdata)
   int st_code = PJSIP_SC_OK;
   SAS::TrailId trail = get_trail(rdata);
 
+  // Get the system time in seconds for calculating absolute expiry times.
+  int now = time(NULL);
+  int expiry = 0;
+  bool is_initial_registration;
+
+  // Loop through headers as early as possible so that we know the expiry time
+  // and which registration statistics to update.
+  // Loop through each contact header. If every registration is an emergency
+  // registration and its expiry is 0 then reject with a 501.
+  // If there are valid registration updates to make then attempt to write to
+  // store, which also stops emergency registrations from being deregistered.
+  bool reject_with_501 = true;
+  bool any_emergency_registrations = false;
+  bool reject_with_400 = false;
+  pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
+                 pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL);
+
+  while (contact_hdr != NULL)
+  {
+    pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_EXPIRES, NULL);
+    expiry = (contact_hdr->expires != -1) ? contact_hdr->expires :
+             (expires != NULL) ? expires->ivalue :
+              max_expires;
+
+    if ((contact_hdr->star) && (expiry != 0))
+    {
+      // Wildcard contact, which can only be used if the expiry is 0
+      TRC_ERROR("Attempted to deregister all bindings, but expiry value wasn't 0");
+      reject_with_400 = true;
+      break;
+    }
+
+    reject_with_501 = (reject_with_501 &&
+                       PJUtils::is_emergency_registration(contact_hdr) && (expiry == 0));
+    any_emergency_registrations = (any_emergency_registrations ||
+                                  PJUtils::is_emergency_registration(contact_hdr));
+
+    contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(rdata->msg_info.msg,
+                                                          PJSIP_H_CONTACT,
+                                                          contact_hdr->next);
+  }
+  
   // Get the URI from the To header and check it is a SIP or SIPS URI.
   pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
-
+ 
   if ((!PJSIP_URI_SCHEME_IS_SIP(uri)) && (!PJSIP_URI_SCHEME_IS_TEL(uri)))
   {
     // Reject a non-SIP/TEL URI with 404 Not Found (RFC3261 isn't clear
@@ -514,6 +562,18 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL,
                                NULL,
                                NULL);
+    if (expiry == 0)
+    {
+      reg_stats_tables->de_reg_tbl->increment_attempts();
+      reg_stats_tables->de_reg_tbl->increment_failures();
+    }
+    else 
+    // Invalid URI means this cannot be a re-register request, so if not
+    // a de-register request, then treat as an initial register request.
+    {
+      reg_stats_tables->init_reg_tbl->increment_attempts();
+      reg_stats_tables->init_reg_tbl->increment_failures();
+    }
     return;
   }
 
@@ -622,52 +682,25 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL,
                                NULL);
     delete acr;
+    
+    if (expiry == 0)
+    {
+      reg_stats_tables->de_reg_tbl->increment_attempts();
+      reg_stats_tables->de_reg_tbl->increment_failures();
+    }
+    else 
+    // Invalid public/private identity means this cannot be a re-register request,
+    // so if not a de-register request, then treat as an initial register request.
+    {
+      reg_stats_tables->init_reg_tbl->increment_attempts();
+      reg_stats_tables->init_reg_tbl->increment_failures();
+    }
     return;
   }
 
   // Determine the AOR from the first entry in the uris array.
   std::string aor = uris.front();
   TRC_DEBUG("REGISTER for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
-
-  // Get the system time in seconds for calculating absolute expiry times.
-  int now = time(NULL);
-  int expiry = 0;
-  bool is_initial_registration;
-
-  // Loop through each contact header. If every registration is an emergency
-  // registration and its expiry is 0 then reject with a 501.
-  // If there are valid registration updates to make then attempt to write to
-  // store, which also stops emergency registrations from being deregistered.
-  bool reject_with_501 = true;
-  bool any_emergency_registrations = false;
-  bool reject_with_400 = false;
-  pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
-                 pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL);
-
-  while (contact_hdr != NULL)
-  {
-    pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_EXPIRES, NULL);
-    expiry = (contact_hdr->expires != -1) ? contact_hdr->expires :
-             (expires != NULL) ? expires->ivalue :
-              max_expires;
-
-    if ((contact_hdr->star) && (expiry != 0))
-    {
-      // Wildcard contact, which can only be used if the expiry is 0
-      TRC_ERROR("Attempted to deregister all bindings, but expiry value wasn't 0");
-      reject_with_400 = true;
-      break;
-    }
-
-    reject_with_501 = (reject_with_501 &&
-                       PJUtils::is_emergency_registration(contact_hdr) && (expiry == 0));
-    any_emergency_registrations = (any_emergency_registrations ||
-                                  PJUtils::is_emergency_registration(contact_hdr));
-
-    contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(rdata->msg_info.msg,
-                                                          PJSIP_H_CONTACT,
-                                                          contact_hdr->next);
-  }
 
   if (reject_with_400)
   {
@@ -682,6 +715,10 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL,
                                NULL);
     delete acr;
+     
+    reg_stats_tables->de_reg_tbl->increment_attempts(); 
+    reg_stats_tables->de_reg_tbl->increment_failures();
+    
     return;
   }
 
@@ -700,6 +737,10 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL,
                                NULL);
     delete acr;
+
+    reg_stats_tables->de_reg_tbl->increment_attempts();
+    reg_stats_tables->de_reg_tbl->increment_failures();
+    
     return;
   }
 
@@ -740,6 +781,19 @@ void process_register_request(pjsip_rx_data* rdata)
     // LCOV_EXCL_STOP
   }
 
+  if (expiry == 0)
+  {
+    reg_stats_tables->de_reg_tbl->increment_attempts();
+  }
+  else if (is_initial_registration)
+  {
+    reg_stats_tables->init_reg_tbl->increment_attempts();
+  }
+  else
+  {
+    reg_stats_tables->re_reg_tbl->increment_attempts();
+  }
+
   // Build and send the reply.
   pjsip_tx_data* tdata;
   status = PJUtils::create_response(stack_data.endpt, rdata, st_code, NULL, &tdata);
@@ -764,6 +818,20 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL);
     delete acr;
     delete aor_data;
+
+    if (is_initial_registration)
+    {
+      reg_stats_tables->init_reg_tbl->increment_failures();
+    }
+    else if (expiry == 0)
+    {
+      reg_stats_tables->de_reg_tbl->increment_failures();
+    }
+    else
+    {
+      reg_stats_tables->re_reg_tbl->increment_failures();
+    }
+    
     return;
     // LCOV_EXCL_STOP
   }
@@ -782,6 +850,20 @@ void process_register_request(pjsip_rx_data* rdata)
 
     delete acr;
     delete aor_data;
+
+    if (is_initial_registration)
+    {
+      reg_stats_tables->init_reg_tbl->increment_failures();
+    }
+    else if (expiry == 0)
+    {
+      reg_stats_tables->de_reg_tbl->increment_failures();
+    }
+    else
+    {
+      reg_stats_tables->re_reg_tbl->increment_failures();
+    }
+    
     return;
     // LCOV_EXCL_STOP
   }
@@ -805,6 +887,20 @@ void process_register_request(pjsip_rx_data* rdata)
     status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
     delete acr;
     delete aor_data;
+
+    if (is_initial_registration)
+    {
+      reg_stats_tables->init_reg_tbl->increment_failures();
+    }
+    else if (expiry == 0)
+    {
+      reg_stats_tables->de_reg_tbl->increment_failures();
+    }
+    else
+    {
+      reg_stats_tables->re_reg_tbl->increment_failures();
+    }
+    
     return;
     // LCOV_EXCL_STOP
   }
@@ -879,6 +975,19 @@ void process_register_request(pjsip_rx_data* rdata)
 
   SAS::Event reg_Accepted(trail, SASEvent::REGISTER_ACCEPTED, 0);
   SAS::report_event(reg_Accepted);
+  
+  if (expiry == 0)
+  {
+    reg_stats_tables->de_reg_tbl->increment_successes();
+  }
+  else if (is_initial_registration)
+  {
+    reg_stats_tables->init_reg_tbl->increment_successes();
+  }
+  else
+  {
+    reg_stats_tables->re_reg_tbl->increment_successes();
+  }
 
   // Deal with path header related fields in the response.
   pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
@@ -954,6 +1063,7 @@ void process_register_request(pjsip_rx_data* rdata)
                                                          expiry,
                                                          is_initial_registration,
                                                          public_id,
+                                                         third_party_reg_stats_tables,
                                                          trail);
   }
 
@@ -1005,7 +1115,9 @@ pj_status_t init_registrar(RegStore* registrar_store,
                            HSSConnection* hss_connection,
                            AnalyticsLogger* analytics_logger,
                            ACRFactory* rfacr_factory,
-                           int cfg_max_expires)
+                           int cfg_max_expires,
+                           SNMP::RegistrationStatsTables* reg_stats_tbls,
+                           SNMP::RegistrationStatsTables* third_party_reg_stats_tbls)
 {
   pj_status_t status;
 
@@ -1015,6 +1127,8 @@ pj_status_t init_registrar(RegStore* registrar_store,
   analytics = analytics_logger;
   max_expires = cfg_max_expires;
   acr_factory = rfacr_factory;
+  reg_stats_tables = reg_stats_tbls;
+  third_party_reg_stats_tables = third_party_reg_stats_tbls;
 
   // Construct a Service-Route header pointing at the S-CSCF ready to be added
   // to REGISTER 200 OK response.
