@@ -43,6 +43,7 @@
 #include "chronosconnection.h"
 #include "acr.h"
 #include "analyticslogger.h"
+#include "snmp_success_fail_count_table.h"
 
 extern pjsip_module mod_authentication;
 
@@ -51,7 +52,8 @@ pj_status_t init_authentication(const std::string& realm_name,
                                 HSSConnection* hss_connection,
                                 ChronosConnection* chronos_connection,
                                 ACRFactory* rfacr_factory,
-                                AnalyticsLogger* analytics_logger);
+                                AnalyticsLogger* analytics_logger,
+                                SNMP::AuthenticationStatsTables* auth_stats_tables);
 
 void destroy_authentication();
 
