@@ -365,8 +365,17 @@ void create_challenge(pjsip_digest_credential* credentials,
     random.ptr = buf;
     random.slen = sizeof(buf);
 
-    TRC_DEBUG("Create WWW-Authenticate header");
-    pjsip_www_authenticate_hdr* hdr = pjsip_www_authenticate_hdr_create(tdata->pool);
+    pjsip_www_authenticate_hdr* hdr;
+    if (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD)
+    {
+      TRC_DEBUG("Create WWW-Authenticate header");
+      hdr = pjsip_www_authenticate_hdr_create(tdata->pool);
+    }
+    else
+    {
+      TRC_DEBUG("Create Proxy-Authenticate header");
+      hdr = pjsip_proxy_authenticate_hdr_create(tdata->pool);
+    }
 
     // Set up common fields for Digest and AKA cases (both are considered
     // Digest authentication).
