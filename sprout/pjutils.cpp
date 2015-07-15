@@ -447,6 +447,22 @@ void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity
   pj_list_insert_before(&auth_hdr->credential.common.other_param, new_param);
 }
 
+// Add an empty Proxy-Authorization header to signal to Sprout that this needs to be challenged
+void PJUtils::add_proxy_auth_for_pbx(pjsip_tx_data* tdata)
+{
+  pjsip_proxy_authorization_hdr* auth_hdr = (pjsip_proxy_authorization_hdr*)
+                                      pjsip_msg_find_hdr(tdata->msg, PJSIP_H_PROXY_AUTHORIZATION, NULL);
+
+  if (auth_hdr == NULL)
+  {
+    // Creates a minimal Authorization header (which PJSIP prints with just an empty 'nonce' and
+    // 'response' field).
+    auth_hdr = pjsip_proxy_authorization_hdr_create(tdata->pool);
+    auth_hdr->scheme = pj_str("Digest");
+    pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)auth_hdr);
+  }
+}
+
 void PJUtils::get_impi_and_impu(pjsip_rx_data* rdata, std::string& impi_out, std::string& impu_out)
 {
   if (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD)

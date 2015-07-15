@@ -137,6 +137,7 @@ struct options
   int                                  session_continued_timeout_ms;
   int                                  session_terminated_timeout_ms;
   std::set<std::string>                stateless_proxies;
+  std::string                          pbxes;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
