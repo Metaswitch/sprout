@@ -542,24 +542,13 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
   if (auth_hdr != NULL)
   {
-    if (pj_strcmp2(&auth_hdr->credential.digest.response, ""))
-    {
-      if (!pj_strcmp2(&auth_hdr->credential.digest.algorithm, "MD5"))
-      {
-        auth_stats_tables->sip_digest_auth_tbl->increment_attempts();
-      }
-      else if (!pj_strcmp2(&auth_hdr->credential.digest.algorithm, "AKAv1-MD5"))
-      {
-        auth_stats_tables->ims_aka_auth_tbl->increment_attempts();
-      }
-    }
     // There is an authorization header, so check for the integrity-protected
     // indication.
     TRC_DEBUG("Authorization header in request");
     pjsip_param* integrity =
            pjsip_param_find(&auth_hdr->credential.digest.other_param,
                             &STR_INTEGRITY_PROTECTED);
-
+    
     if ((integrity != NULL) &&
         ((pj_stricmp(&integrity->value, &STR_TLS_YES) == 0) ||
          (pj_stricmp(&integrity->value, &STR_IP_ASSOC_YES) == 0)))
@@ -592,6 +581,19 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
       return PJ_FALSE;
     }
+    
+    if (pj_strcmp2(&auth_hdr->credential.digest.response, ""))
+    {
+      if (!pj_strcmp2(&auth_hdr->credential.digest.algorithm, "MD5"))
+      {
+        auth_stats_tables->sip_digest_auth_tbl->increment_attempts();
+      }
+      else if (!pj_strcmp2(&auth_hdr->credential.digest.algorithm, "AKAv1-MD5"))
+      {
+        auth_stats_tables->ims_aka_auth_tbl->increment_attempts();
+      }
+    }
+
   }
 
   int sc = PJSIP_SC_UNAUTHORIZED;

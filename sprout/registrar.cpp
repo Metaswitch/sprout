@@ -543,11 +543,6 @@ void process_register_request(pjsip_rx_data* rdata)
                                                           contact_hdr->next);
   }
   
-  if (expiry == 0)
-  {
-    reg_stats_tables->de_reg_tbl->increment_attempts();
-  }
-  
   // Get the URI from the To header and check it is a SIP or SIPS URI.
   pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
  
@@ -569,6 +564,7 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL);
     if (expiry == 0)
     {
+      reg_stats_tables->de_reg_tbl->increment_attempts();
       reg_stats_tables->de_reg_tbl->increment_failures();
     }
     else 
@@ -689,6 +685,7 @@ void process_register_request(pjsip_rx_data* rdata)
     
     if (expiry == 0)
     {
+      reg_stats_tables->de_reg_tbl->increment_attempts();
       reg_stats_tables->de_reg_tbl->increment_failures();
     }
     else 
@@ -741,6 +738,7 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL);
     delete acr;
 
+    reg_stats_tables->de_reg_tbl->increment_attempts();
     reg_stats_tables->de_reg_tbl->increment_failures();
     
     return;
@@ -783,7 +781,10 @@ void process_register_request(pjsip_rx_data* rdata)
     // LCOV_EXCL_STOP
   }
 
-  if (expiry == 0) {}
+  if (expiry == 0)
+  {
+    reg_stats_tables->de_reg_tbl->increment_attempts();
+  }
   else if (is_initial_registration)
   {
     reg_stats_tables->init_reg_tbl->increment_attempts();
