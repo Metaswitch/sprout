@@ -158,6 +158,13 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
     TRC_DEBUG("Next route for message cannot be a sproutlet");
   }
 
+  // Force the S-CSCF Sproutlet to only be chosen based on port - this ensures that the PJSIP
+  // authentication module is invoked between the I-CSCF and the S-CSCF
+  if (sproutlet && (sproutlet->service_name() == "scscf"))
+  {
+    sproutlet = NULL;
+  }
+
   if ((sproutlet == NULL) &&
       (port != 0))
   {
