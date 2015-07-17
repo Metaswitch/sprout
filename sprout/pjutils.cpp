@@ -2010,16 +2010,26 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
       if (to_uri != NULL)
       {
         pj_str_t to_user = user_from_uri(to_uri);
+
         SAS::Marker called_dn(trail, MARKER_ID_CALLED_DN, 1u);
         called_dn.add_var_param(to_user.slen, to_user.ptr);
         SAS::report_marker(called_dn);
+
+        SAS::Marker called_uri(trail, MARKER_ID_INBOUND_CALLED_URI, 1u);
+        called_uri.add_var_param(uri_to_string(PJSIP_URI_IN_FROMTO_HDR, to_uri));
+        SAS::report_marker(called_uri);
       }
+
       if (from_uri != NULL)
       {
         pj_str_t from_user = user_from_uri(from_uri);
         SAS::Marker calling_dn(trail, MARKER_ID_CALLING_DN, 1u);
         calling_dn.add_var_param(from_user.slen, from_user.ptr);
         SAS::report_marker(calling_dn);
+
+        SAS::Marker calling_uri(trail, MARKER_ID_INBOUND_CALLING_URI, 1u);
+        calling_uri.add_var_param(uri_to_string(PJSIP_URI_IN_FROMTO_HDR, from_uri));
+        SAS::report_marker(calling_uri);
       }
     }
   }
