@@ -51,12 +51,14 @@ extern "C" {
 ///
 /// The Privacy header is a simple comma-separated list of values so we use
 /// the built-in PJSIP parser code.
+// LCOV_EXCL_START
 pjsip_hdr* parse_hdr_privacy(pjsip_parse_ctx* ctx)
 {
   pjsip_generic_array_hdr *privacy = pjsip_generic_array_hdr_create(ctx->pool, &STR_PRIVACY);
   pjsip_parse_generic_array_hdr_imp(privacy, ctx->scanner);
   return (pjsip_hdr*)privacy;
 }
+// LCOV_EXCL_STOP
 
 typedef void* (*clone_fptr)(pj_pool_t *, const void*);
 typedef int   (*print_fptr)(void *hdr, char *buf, pj_size_t len);

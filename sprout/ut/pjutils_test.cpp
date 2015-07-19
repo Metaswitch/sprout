@@ -1,8 +1,8 @@
 /**
- * @file callservices_test.cpp UT for Sprout call services.
+ * @file pjutils_test.cpp UT for PJUtils.
  *
  * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Copyright (C) 2015 Metaswitch Networks Ltd
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -38,70 +38,29 @@
 ///----------------------------------------------------------------------------
 
 #include <string>
-#include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include <json/reader.h>
+#include "gmock/gmock.h"
 
-#include "utils.h"
-#include "sas.h"
-#include "aschain.h"
-#include "ifchandler.h"
-#include "callservices.h"
-#include "fakehssconnection.hpp"
-#include "fakexdmconnection.hpp"
-#include "siptest.hpp"
-#include "stack.h"
-#include "test_utils.hpp"
+#include "basetest.hpp"
+#include "pjutils.h"
 
-using namespace std;
-
-/// Fixture for CallServicesTest.
-class CallServicesTest : public SipTest
+class PJUtilsTest : public BaseTest
 {
-  IfcHandler _ifcs;
-  CallServices _calls;
 
-  static void SetUpTestCase()
-  {
-    SipTest::SetUpTestCase();
-
-    _hss_connection = new FakeHSSConnection();
-    _xdm_connection = new FakeXDMConnection();
-  }
-
-  static void TearDownTestCase()
-  {
-    delete _xdm_connection;
-    delete _hss_connection;
-
-    SipTest::TearDownTestCase();
-  }
-
-  CallServicesTest() :
-    _ifcs(),
-    _calls(_xdm_connection)
+  PJUtilsTest() 
   {
   }
 
-  virtual ~CallServicesTest()
+  virtual ~PJUtilsTest()
   {
   }
-
-protected:
-  static FakeHSSConnection* _hss_connection;
-  static FakeXDMConnection* _xdm_connection;
 };
 
-FakeHSSConnection* CallServicesTest::_hss_connection;
-FakeXDMConnection* CallServicesTest::_xdm_connection;
-
-TEST_F(CallServicesTest, IsOurs)
+TEST_F(PJUtilsTest, IsUserNumeric)
 {
-  EXPECT_TRUE(_calls.is_mmtel("sip:mmtel.homedomain"));
-  EXPECT_FALSE(_calls.is_mmtel("sip:homedomain"));
-  EXPECT_FALSE(_calls.is_mmtel("sip:mmtel.otherdomain"));
-  EXPECT_FALSE(_calls.is_mmtel("sip:mmtel"));
-  EXPECT_FALSE(_calls.is_mmtel("sips:mmtel.homedomain"));
-  EXPECT_FALSE(_calls.is_mmtel("tel:+12125551212"));
-  EXPECT_FALSE(_calls.is_mmtel(""));
+  EXPECT_TRUE(PJUtils::is_user_numeric("+1234"));
+  EXPECT_TRUE(PJUtils::is_user_numeric("1234"));
+  EXPECT_TRUE(PJUtils::is_user_numeric("(1)-23-4"));
+  EXPECT_TRUE(PJUtils::is_user_numeric("1-23-4"));
+  EXPECT_TRUE(PJUtils::is_user_numeric("+1.23.4"));
 }

@@ -37,8 +37,8 @@
 #include <string>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include <json/reader.h>
 
+#include "test_interposer.hpp"
 #include "utils.h"
 #include "sas.h"
 #include "enumservice.h"
@@ -172,11 +172,12 @@ TEST_F(JSONEnumServiceTest, BadRegex)
   CapturingTestLogger log;
   JSONEnumService enum_(string(UT_DIR).append("/test_enum_bad_regex.json"));
   // Unfortunately the logs here are hard to parse, so we just look for at least one instance of the
-  // "badly formed regular expression" log, followed by a JSON expression for each of the bad number blocks.
+  // "badly formed regular expression" log, followed by the bad regexes
   EXPECT_TRUE(log.contains("Badly formed regular expression in ENUM number block"));
-  EXPECT_TRUE(log.contains("\"prefix\" : \"+15108580273\""));
-  EXPECT_TRUE(log.contains("\"prefix\" : \"+15108580274\""));
-  EXPECT_TRUE(log.contains("\"prefix\" : \"+15108580275\""));
+  EXPECT_TRUE(log.contains("!(^.*$)!sip:\\1@ut.cw-ngv.com"));
+  EXPECT_TRUE(log.contains("!(^.*$)sip:\\1@ut.cw-ngv.com!"));
+  EXPECT_TRUE(log.contains("!(^.*$)!sip:\\1@!ut.cw-ngv.com!"));
+  EXPECT_TRUE(log.contains("!(^[a-z*$)!sip:\\1@ut.cw-ngv.com!"));
   // First entry is valid to confirm basic regular expression is valid.
   ET("+15108580271", "sip:+15108580271@ut.cw-ngv.com").test(enum_);
   // Second entry is technically invalid but it works in the obvious way and it's easier to permit than to add code to reject.
@@ -345,6 +346,18 @@ TEST_F(DNSEnumServiceTest, InvalidServerTest)
   DNSEnumService enum_(_bad_servers, ".e164.arpa", new FakeDNSResolverFactory());
 }
 
+TEST_F(DNSEnumServiceTest, HostNameIPv4Test)
+{
+  cwtest_add_host_mapping("enumserver", "1.2.3.4");
+  DNSEnumService enum_({"enumserver"}, ".e164.arpa", new FakeDNSResolverFactory());
+}
+
+TEST_F(DNSEnumServiceTest, HostNameIPv6Test)
+{
+  cwtest_add_host_mapping("enumserver", "2001:0db8:0a0b:12f0:0000:0000:0000:0001");
+  DNSEnumService enum_({"enumserver"}, ".e164.arpa", new FakeDNSResolverFactory());
+}
+
 TEST_F(DNSEnumServiceTest, DifferentSuffixTest)
 {
   FakeDNSResolver::_database.insert(std::make_pair(std::string("4.3.2.1.e164.arpa.cw-ngv.com"), (struct ares_naptr_reply*)basic_naptr_reply));
@@ -368,11 +381,23 @@ TEST_F(DNSEnumServiceTest, ResolverOkCommMonMockTest)
   ET("1234", "sip:1234@ut.cw-ngv.com").test(enum_);
 }
 
+TEST_F(DNSEnumServiceTest, ResolverNotFoundCommMonMockTest)
+{
+  // If we request a nonexistent number, and the ENUM server tells us it doesn't exist,
+  // we shouldn't treat that as a communications error.
+  MockCommunicationMonitor cm_;
+  EXPECT_CALL(cm_, inform_success(_));
+  DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory(), &cm_);
+  ET("1234", "").test(enum_);
+}
+
 TEST_F(DNSEnumServiceTest, ResolverErrorCommMonMockTest)
 {
+  // If we request a number, and the ENUM server fails to respond,
+  // we should treat that as a communications error.
   MockCommunicationMonitor cm_;
   EXPECT_CALL(cm_, inform_failure(_));
-  DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory(), &cm_);
+  DNSEnumService enum_(_servers, ".e164.arpa", new BrokenDNSResolverFactory(), &cm_);
   ET("1234", "").test(enum_);
 }
 

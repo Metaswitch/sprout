@@ -21,7 +21,7 @@ TARGET_SOURCES := logger.cpp \
                   dnscachedresolver.cpp \
                   baseresolver.cpp \
                   sipresolver.cpp \
-                  stateful_proxy.cpp \
+                  bono.cpp \
                   registration_utils.cpp \
                   registrar.cpp \
                   authentication.cpp \
@@ -40,7 +40,6 @@ TARGET_SOURCES := logger.cpp \
                   regstore.cpp \
                   xdmconnection.cpp \
                   simservs.cpp \
-                  callservices.cpp \
                   enumservice.cpp \
                   dnsresolver.cpp \
                   bgcfservice.cpp \
@@ -87,7 +86,9 @@ TARGET_SOURCES := logger.cpp \
                   communicationmonitor.cpp \
                   thread_dispatcher.cpp \
                   common_sip_processing.cpp \
-                  exception_handler.cpp
+                  exception_handler.cpp \
+                  snmp_scalar.cpp \
+                  snmp_row.cpp
 
 TARGET_SOURCES_TEST := test_main.cpp \
                        fakecurl.cpp \
@@ -112,7 +113,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        regstore_test.cpp \
                        avstore_test.cpp \
                        registrar_test.cpp \
-                       stateful_proxy_test.cpp \
+                       bono_test.cpp \
                        bgcfservice_test.cpp \
                        options_test.cpp \
                        logger_test.cpp \
@@ -121,13 +122,11 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        sessioncase_test.cpp \
                        ifchandler_test.cpp \
                        custom_headers_test.cpp \
-                       accumulator_test.cpp \
                        connection_tracker_test.cpp \
                        quiescing_manager_test.cpp \
                        dialog_tracker_test.cpp \
                        flow_test.cpp \
                        load_monitor_test.cpp \
-                       counter_test.cpp \
                        icscfsproutlet_test.cpp \
                        basicproxy_test.cpp \
                        scscfselector_test.cpp \
@@ -146,7 +145,10 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        mangelwurzel_test.cpp \
                        alarm_test.cpp \
                        communicationmonitor_test.cpp \
-                       common_sip_processing_test.cpp
+                       common_sip_processing_test.cpp \
+                       pjutils_test.cpp \
+                       fakesnmp.cpp \
+
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
@@ -212,7 +214,6 @@ CPPFLAGS_TEST  += -DUNIT_TEST \
 LDFLAGS += -L${ROOT}/usr/lib
 LDFLAGS += -lmemcached \
            -lmemcachedutil \
-           -ljsoncpp \
            -lssl \
            -lcrypto \
            -ldl \
@@ -225,10 +226,11 @@ LDFLAGS += -lmemcached \
            -lzmq \
            -levhtp \
            -levent \
-           -levent_pthreads
+           -levent_pthreads \
+           $(shell net-snmp-config --netsnmp-agent-libs)
 
 # Test build fakes out cURL
-LDFLAGS_BUILD += -lcurl -lsas
+LDFLAGS_BUILD += -lcurl -lsas -lz
 
 # Include memento if desired
 #LDFLAGS += -lmemento -lthrift -lcassandra

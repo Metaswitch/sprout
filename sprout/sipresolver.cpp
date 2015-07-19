@@ -39,10 +39,11 @@
 #include "sas.h"
 #include "sproutsasevent.h"
 
-SIPResolver::SIPResolver(DnsCachedResolver* dns_client) :
+SIPResolver::SIPResolver(DnsCachedResolver* dns_client,
+                         int blacklist_duration) :
   BaseResolver(dns_client)
 {
-  LOG_DEBUG("Creating SIP resolver");
+  TRC_DEBUG("Creating SIP resolver");
 
   // Create the NAPTR cache.
   std::map<std::string, int> naptr_services;
@@ -54,9 +55,9 @@ SIPResolver::SIPResolver(DnsCachedResolver* dns_client) :
   create_srv_cache();
 
   // Create the blacklist.
-  create_blacklist();
+  create_blacklist(blacklist_duration);
 
-  LOG_STATUS("Created SIP resolver");
+  TRC_STATUS("Created SIP resolver");
 }
 
 SIPResolver::~SIPResolver()
@@ -81,7 +82,7 @@ void SIPResolver::resolve(const std::string& name,
   // 4.1.
   AddrInfo ai;
 
-  LOG_DEBUG("SIPResolver::resolve for name %s, port %d, transport %d, family %d",
+  TRC_DEBUG("SIPResolver::resolve for name %s, port %d, transport %d, family %d",
             name.c_str(), port, transport, af);
 
   if (trail != 0)
@@ -99,7 +100,7 @@ void SIPResolver::resolve(const std::string& name,
   {
     // The name is already an IP address, so no DNS resolution is possible.
     // Use specified transport and port or defaults if not specified.
-    LOG_DEBUG("Target is an IP address - default port/transport if required");
+    TRC_DEBUG("Target is an IP address - default port/transport if required");
     ai.transport = (transport != -1) ? transport : IPPROTO_UDP;
     ai.port = (port != 0) ? port : 5060;
     targets.push_back(ai);
@@ -124,7 +125,7 @@ void SIPResolver::resolve(const std::string& name,
     {
       // Port is specified, so don't do NAPTR or SRV look-ups.  Default transport
       // if required and move straight to A record look-up.
-      LOG_DEBUG("Port is specified");
+      TRC_DEBUG("Port is specified");
       transport = (transport != -1) ? transport : IPPROTO_UDP;
 
       if (trail != 0)
@@ -141,7 +142,7 @@ void SIPResolver::resolve(const std::string& name,
     else if (transport == -1)
     {
       // Transport protocol isn't specified, so do a NAPTR lookup for the target.
-      LOG_DEBUG("Do NAPTR look-up for %s", name.c_str());
+      TRC_DEBUG("Do NAPTR look-up for %s", name.c_str());
 
       if (trail != 0)
       {
@@ -155,7 +156,7 @@ void SIPResolver::resolve(const std::string& name,
       if (naptr != NULL)
       {
         // NAPTR resolved to a supported service
-        LOG_DEBUG("NAPTR resolved to transport %d", naptr->transport);
+        TRC_DEBUG("NAPTR resolved to transport %d", naptr->transport);
         transport = naptr->transport;
         if (strcasecmp(naptr->flags.c_str(), "S") == 0)
         {
@@ -190,7 +191,7 @@ void SIPResolver::resolve(const std::string& name,
       {
         // NAPTR resolution failed, so do SRV lookups for both UDP and TCP to
         // see which transports are supported.
-        LOG_DEBUG("NAPTR lookup failed, so do SRV lookups for UDP and TCP");
+        TRC_DEBUG("NAPTR lookup failed, so do SRV lookups for UDP and TCP");
 
         if (trail != 0)
         {
@@ -205,23 +206,23 @@ void SIPResolver::resolve(const std::string& name,
         std::vector<DnsResult> results;
         _dns_client->dns_query(domains, ns_t_srv, results);
         DnsResult& udp_result = results[0];
-        LOG_DEBUG("UDP SRV record %s returned %d records",
+        TRC_DEBUG("UDP SRV record %s returned %d records",
                   udp_result.domain().c_str(), udp_result.records().size());
         DnsResult& tcp_result = results[1];
-        LOG_DEBUG("TCP SRV record %s returned %d records",
+        TRC_DEBUG("TCP SRV record %s returned %d records",
                   tcp_result.domain().c_str(), tcp_result.records().size());
 
         if (!udp_result.records().empty())
         {
           // UDP SRV lookup returned some records, so use UDP transport.
-          LOG_DEBUG("UDP SRV lookup successful, select UDP transport");
+          TRC_DEBUG("UDP SRV lookup successful, select UDP transport");
           transport = IPPROTO_UDP;
           srv_name = udp_result.domain();
         }
         else if (!tcp_result.records().empty())
         {
           // TCP SRV lookup returned some records, so use TCP transport.
-          LOG_DEBUG("TCP SRV lookup successful, select TCP transport");
+          TRC_DEBUG("TCP SRV lookup successful, select TCP transport");
           transport = IPPROTO_TCP;
           srv_name = tcp_result.domain();
         }
@@ -229,7 +230,7 @@ void SIPResolver::resolve(const std::string& name,
         {
           // Neither UDP nor TCP SRV lookup returned any results, so default to
           // UDP transport and move straight to A/AAAA record lookups.
-          LOG_DEBUG("UDP and TCP SRV queries unsuccessful, default to UDP");
+          TRC_DEBUG("UDP and TCP SRV queries unsuccessful, default to UDP");
           transport = IPPROTO_UDP;
         }
       }
@@ -277,7 +278,7 @@ void SIPResolver::resolve(const std::string& name,
 
     if (srv_name != "")
     {
-      LOG_DEBUG("Do SRV lookup for %s", srv_name.c_str());
+      TRC_DEBUG("Do SRV lookup for %s", srv_name.c_str());
 
       if (trail != 0)
       {
@@ -292,7 +293,7 @@ void SIPResolver::resolve(const std::string& name,
     }
     else
     {
-      LOG_DEBUG("Perform A/AAAA record lookup only, name = %s", a_name.c_str());
+      TRC_DEBUG("Perform A/AAAA record lookup only, name = %s", a_name.c_str());
       port = (port != 0) ? port : 5060;
 
       if (trail != 0)

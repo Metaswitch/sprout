@@ -68,12 +68,6 @@ private:
   std::string _configuration;
   Updater<void, BgcfService>* _updater;
 
-  // Strip any visual separators from the number
-  static const boost::regex CHARS_TO_STRIP;
-  static std::string remove_visual_separators(const std::string& number)
-  { 
-    return boost::regex_replace(number, CHARS_TO_STRIP, std::string("")); 
-  };
 };
 
 #endif

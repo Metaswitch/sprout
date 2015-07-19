@@ -38,8 +38,6 @@
 #include <string>
 #include <memory>
 #include <map>
-#include <json/reader.h>
-#include <json/writer.h>
 
 #include "utils.h"
 #include "log.h"
@@ -47,7 +45,7 @@
 #include "sproutsasevent.h"
 #include "httpconnection.h"
 #include "hssconnection.h"
-#include "accumulator.h"
+#include "rapidjson/error/en.h"
 
 const std::string HSSConnection::REG = "reg";
 const std::string HSSConnection::CALL = "call";
@@ -63,21 +61,25 @@ const std::string HSSConnection::STATE_NOT_REGISTERED = "NOT_REGISTERED";
 HSSConnection::HSSConnection(const std::string& server,
                              HttpResolver* resolver,
                              LoadMonitor *load_monitor,
-                             LastValueCache *stats_aggregator,
+                             SNMP::IPCountTable* homestead_count_tbl,
+                             SNMP::AccumulatorTable* homestead_overall_latency_tbl,
+                             SNMP::AccumulatorTable* homestead_mar_latency_tbl,
+                             SNMP::AccumulatorTable* homestead_sar_latency_tbl,
+                             SNMP::AccumulatorTable* homestead_uar_latency_tbl,
+                             SNMP::AccumulatorTable* homestead_lir_latency_tbl,
                              CommunicationMonitor* comm_monitor) :
   _http(new HttpConnection(server,
                            false,
                            resolver,
-                           "connected_homesteads",
+                           homestead_count_tbl,
                            load_monitor,
-                           stats_aggregator,
                            SASEvent::HttpLogLevel::PROTOCOL,
                            comm_monitor)),
-  _latency_stat("hss_latency_us", stats_aggregator),
-  _digest_latency_stat("hss_digest_latency_us", stats_aggregator),
-  _subscription_latency_stat("hss_subscription_latency_us", stats_aggregator),
-  _user_auth_latency_stat("hss_user_auth_latency_us", stats_aggregator),
-  _location_latency_stat("hss_location_latency_us", stats_aggregator)
+  _latency_tbl(homestead_overall_latency_tbl),
+  _mar_latency_tbl(homestead_mar_latency_tbl),
+  _sar_latency_tbl(homestead_sar_latency_tbl),
+  _uar_latency_tbl(homestead_uar_latency_tbl),
+  _lir_latency_tbl(homestead_lir_latency_tbl)
 {
 }
 
@@ -93,7 +95,7 @@ HTTPCode HSSConnection::get_auth_vector(const std::string& private_user_identity
                                         const std::string& public_user_identity,
                                         const std::string& auth_type,
                                         const std::string& autn,
-                                        Json::Value*& av,
+                                        rapidjson::Document*& av,
                                         SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
@@ -126,7 +128,6 @@ HTTPCode HSSConnection::get_auth_vector(const std::string& private_user_identity
   }
 
   HTTPCode rc = get_json_object(path, av, trail);
-
   unsigned long latency_us = 0;
 
   // Only accumulate the latency if we haven't already applied a
@@ -135,13 +136,13 @@ HTTPCode HSSConnection::get_auth_vector(const std::string& private_user_identity
       (rc != HTTP_GATEWAY_TIMEOUT)    &&
       (stopWatch.read(latency_us)))
   {
-    _latency_stat.accumulate(latency_us);
-    _digest_latency_stat.accumulate(latency_us);
+    _latency_tbl->accumulate(latency_us);
+    _mar_latency_tbl->accumulate(latency_us);
   }
 
   if (av == NULL)
   {
-    LOG_ERROR("Failed to get Authentication Vector for %s",
+    TRC_ERROR("Failed to get Authentication Vector for %s",
               private_user_identity.c_str());
   }
 
@@ -151,21 +152,23 @@ HTTPCode HSSConnection::get_auth_vector(const std::string& private_user_identity
 
 /// Retrieve a JSON object from a path on the server. Caller is responsible for deleting.
 HTTPCode HSSConnection::get_json_object(const std::string& path,
-                                        Json::Value*& json_object,
+                                        rapidjson::Document*& json_object,
                                         SAS::TrailId trail)
 {
   std::string json_data;
-
   HTTPCode rc = _http->send_get(path, json_data, "", trail);
+
   if (rc == HTTP_OK)
   {
-    json_object = new Json::Value;
-    Json::Reader reader;
-    bool parsingSuccessful = reader.parse(json_data, *json_object);
-    if (!parsingSuccessful)
+    json_object = new rapidjson::Document;
+    json_object->Parse<0>(json_data.c_str());
+
+    if (json_object->HasParseError())
     {
-      // report to the user the failure and their locations in the document.
-      LOG_WARNING("Failed to parse Homestead response:\n %s\n %s\n %s\n", path.c_str(), json_data.c_str(), reader.getFormatedErrorMessages().c_str());
+      TRC_INFO("Failed to parse Homestead response:\nPath: %s\nData: %s\nError: %s\n", 
+               path.c_str(), 
+               json_data.c_str(), 
+               rapidjson::GetParseError_En(json_object->GetParseError()));
       delete json_object;
       json_object = NULL;
     }
@@ -188,7 +191,7 @@ rapidxml::xml_document<>* HSSConnection::parse_xml(std::string raw_data, const s
   catch (rapidxml::parse_error& err)
   {
     // report to the user the failure and their locations in the document.
-    LOG_WARNING("Failed to parse Homestead response:\n %s\n %s\n %s\n", url.c_str(), raw_data.c_str(), err.what());
+    TRC_WARNING("Failed to parse Homestead response:\n %s\n %s\n %s\n", url.c_str(), raw_data.c_str(), err.what());
     delete root;
     root = NULL;
   }
@@ -264,7 +267,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
   if (!root.get())
   {
     // If get_xml_object has not returned a document, there must have been a parsing error.
-    LOG_WARNING("Malformed HSS XML - document couldn't be parsed");
+    TRC_WARNING("Malformed HSS XML - document couldn't be parsed");
     return false;
   }
 
@@ -272,7 +275,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
   if (!cw)
   {
-    LOG_WARNING("Malformed Homestead XML - no ClearwaterRegData element");
+    TRC_WARNING("Malformed Homestead XML - no ClearwaterRegData element");
     return false;
   }
 
@@ -280,7 +283,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
   if (!reg)
   {
-    LOG_WARNING("Malformed Homestead XML - no RegistrationState element");
+    TRC_WARNING("Malformed Homestead XML - no RegistrationState element");
     return false;
   }
 
@@ -288,7 +291,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
   if ((regstate == HSSConnection::STATE_NOT_REGISTERED) && (allowNoIMS))
   {
-    LOG_DEBUG("Subscriber is not registered on a get_registration_state request");
+    TRC_DEBUG("Subscriber is not registered on a get_registration_state request");
     return true;
   }
 
@@ -296,7 +299,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
   if (!imss)
   {
-    LOG_WARNING("Malformed HSS XML - no IMSSubscription element");
+    TRC_WARNING("Malformed HSS XML - no IMSSubscription element");
     return false;
   }
 
@@ -319,7 +322,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
   if (!imss->first_node("ServiceProfile"))
   {
-    LOG_WARNING("Malformed HSS XML - no ServiceProfiles");
+    TRC_WARNING("Malformed HSS XML - no ServiceProfiles");
     return false;
   }
 
@@ -332,7 +335,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
     if (!sp->first_node("PublicIdentity"))
     {
-      LOG_WARNING("Malformed ServiceProfile XML - no Public Identity");
+      TRC_WARNING("Malformed ServiceProfile XML - no Public Identity");
       return false;
     }
 
@@ -345,7 +348,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
       if (identity)
       {
         std::string uri = std::string(identity->value());
-        LOG_DEBUG("Processing Identity node from HSS XML - %s\n",
+        TRC_DEBUG("Processing Identity node from HSS XML - %s\n",
                   uri.c_str());
 
         associated_uris.push_back(uri);
@@ -363,7 +366,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
       }
       else
       {
-        LOG_WARNING("Malformed PublicIdentity XML - no Identity");
+        TRC_WARNING("Malformed PublicIdentity XML - no Identity");
         return false;
       }
     }
@@ -407,7 +410,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
          it != xml_ccfs.end();
          ++it)
     {
-      LOG_DEBUG("Found CCF: %s", (*it)->value());
+      TRC_DEBUG("Found CCF: %s", (*it)->value());
       ccfs.push_back((*it)->value());
     }
 
@@ -427,7 +430,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
          it != xml_ecfs.end();
          ++it)
     {
-      LOG_DEBUG("Found ECF: %s", (*it)->value());
+      TRC_DEBUG("Found ECF: %s", (*it)->value());
       ecfs.push_back((*it)->value());
     }
   }
@@ -560,7 +563,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
     path += "?private_id=" + Utils::url_escape(private_user_identity);
   }
 
-  LOG_DEBUG("Making Homestead request for %s", path.c_str());
+  TRC_DEBUG("Making Homestead request for %s", path.c_str());
   // Needs to be a shared pointer - multiple Ifcs objects will need a reference
   // to it, so we want to delete the underlying document when they all go out
   // of scope.
@@ -577,8 +580,8 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
       (http_code != HTTP_GATEWAY_TIMEOUT)    &&
       (stopWatch.read(latency_us)))
   {
-    _latency_stat.accumulate(latency_us);
-    _subscription_latency_stat.accumulate(latency_us);
+    _latency_tbl->accumulate(latency_us);
+    _sar_latency_tbl->accumulate(latency_us);
   }
 
   if (http_code != HTTP_OK)
@@ -586,7 +589,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
     // If get_xml_object has returned a HTTP error code, we have either not found
     // the subscriber on the HSS or been unable to communicate with
     // the HSS successfully. In either case we should fail.
-    LOG_ERROR("Could not get subscriber data from HSS");
+    TRC_ERROR("Could not get subscriber data from HSS");
     return http_code;
   }
 
@@ -635,7 +638,7 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
 
   std::string path = "/impu/" + Utils::url_escape(public_user_identity) + "/reg-data";
 
-  LOG_DEBUG("Making Homestead request for %s", path.c_str());
+  TRC_DEBUG("Making Homestead request for %s", path.c_str());
   rapidxml::xml_document<>* root_underlying_ptr = NULL;
   HTTPCode http_code = get_xml_object(path, root_underlying_ptr, trail);
 
@@ -651,8 +654,8 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
       (http_code != HTTP_GATEWAY_TIMEOUT)    &&
       (stopWatch.read(latency_us)))
   {
-    _latency_stat.accumulate(latency_us);
-    _subscription_latency_stat.accumulate(latency_us);
+    _latency_tbl->accumulate(latency_us);
+    _sar_latency_tbl->accumulate(latency_us);
   }
 
   if (http_code != HTTP_OK)
@@ -660,7 +663,7 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
     // If get_xml_object has returned a HTTP error code, we have either not found
     // the subscriber on the HSS or been unable to communicate with
     // the HSS successfully. In either case we should fail.
-    LOG_ERROR("Could not get subscriber data from HSS");
+    TRC_ERROR("Could not get subscriber data from HSS");
     return http_code;
   }
 
@@ -685,7 +688,7 @@ HTTPCode HSSConnection::get_user_auth_status(const std::string& private_user_ide
                                              const std::string& public_user_identity,
                                              const std::string& visited_network,
                                              const std::string& auth_type,
-                                             Json::Value*& user_auth_status,
+                                             rapidjson::Document*& user_auth_status,
                                              SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
@@ -720,8 +723,8 @@ HTTPCode HSSConnection::get_user_auth_status(const std::string& private_user_ide
       (rc != HTTP_GATEWAY_TIMEOUT)    &&
       (stopWatch.read(latency_us)))
   {
-    _latency_stat.accumulate(latency_us);
-    _user_auth_latency_stat.accumulate(latency_us);
+    _latency_tbl->accumulate(latency_us);
+    _uar_latency_tbl->accumulate(latency_us);
   }
 
   return rc;
@@ -731,7 +734,7 @@ HTTPCode HSSConnection::get_user_auth_status(const std::string& private_user_ide
 HTTPCode HSSConnection::get_location_data(const std::string& public_user_identity,
                                           const bool& originating,
                                           const std::string& auth_type,
-                                          Json::Value*& location_data,
+                                          rapidjson::Document*& location_data,
                                           SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
@@ -764,8 +767,8 @@ HTTPCode HSSConnection::get_location_data(const std::string& public_user_identit
       (rc != HTTP_GATEWAY_TIMEOUT)    &&
       (stopWatch.read(latency_us)))
   {
-    _latency_stat.accumulate(latency_us);
-    _location_latency_stat.accumulate(latency_us);
+    _latency_tbl->accumulate(latency_us);
+    _lir_latency_tbl->accumulate(latency_us);
   }
 
   return rc;

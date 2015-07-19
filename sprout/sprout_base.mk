@@ -17,7 +17,7 @@ TARGET_SOURCES := logger.cpp \
                   dnscachedresolver.cpp \
                   baseresolver.cpp \
                   sipresolver.cpp \
-                  stateful_proxy.cpp \
+                  bono.cpp \
                   registration_utils.cpp \
                   registrar.cpp \
                   authentication.cpp \
@@ -36,7 +36,6 @@ TARGET_SOURCES := logger.cpp \
                   regstore.cpp \
                   xdmconnection.cpp \
                   simservs.cpp \
-                  callservices.cpp \
                   enumservice.cpp \
                   bgcfservice.cpp \
                   icscfrouter.cpp \
@@ -77,7 +76,14 @@ TARGET_SOURCES := logger.cpp \
                   communicationmonitor.cpp \
                   thread_dispatcher.cpp \
                   common_sip_processing.cpp \
-                  exception_handler.cpp
+                  exception_handler.cpp \
+                  snmp_agent.cpp \
+                  snmp_accumulator_table.cpp \
+                  snmp_counter_table.cpp \
+                  snmp_ip_count_table.cpp \
+                  snmp_success_fail_count_table.cpp \
+                  snmp_row.cpp \
+                  snmp_scalar.cpp \
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -104,7 +110,6 @@ CPPFLAGS_BUILD += -O2
 LDFLAGS += -L${ROOT}/usr/lib -rdynamic
 LDFLAGS += -lmemcached \
            -lmemcachedutil \
-           -ljsoncpp \
            -lssl \
            -lcrypto \
            -ldl \
@@ -120,9 +125,15 @@ LDFLAGS += -lmemcached \
            -levent_pthreads \
            -lcurl \
            -lsas \
-           -lboost_filesystem
+           -lz \
+           -lboost_filesystem \
+           $(shell net-snmp-config --netsnmp-agent-libs)
 
-LDFLAGS += $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --libs libpjproject)
+# Explicitly link some pjsip modules. Some plugins require symbols in them
+# (which sprout-base doesn't), and the plugins are dynamically linked at run
+# time, so GCC won't link in the symbols they need unless we explicitly tell
+# it to.
+LDFLAGS += -Wl,--whole-archive -lpjmedia-x86_64-unknown-linux-gnu -Wl,--no-whole-archive $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --libs libpjproject)
 
 include ${MK_DIR}/platform.mk
 

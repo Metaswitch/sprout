@@ -68,13 +68,13 @@ extern "C" {
 #include "statistic.h"
 #include "custom_headers.h"
 #include "utils.h"
-#include "accumulator.h"
 #include "connection_tracker.h"
 #include "quiescing_manager.h"
 #include "load_monitor.h"
 #include "counter.h"
 #include "sprout_pd_definitions.h"
 #include "exception_handler.h"
+#include "snmp_accumulator_table.h"
 
 static std::vector<pj_thread_t*> worker_threads;
 
@@ -93,9 +93,9 @@ eventq<struct rx_msg_qe> rx_msg_q;
 static const int MSG_Q_DEADLOCK_TIME = 4000;
 
 static int num_worker_threads = 1;
-static Accumulator* latency_accumulator = NULL;
+static SNMP::AccumulatorTable* latency_table = NULL;
 static LoadMonitor* load_monitor = NULL;
-static Accumulator* queue_size_accumulator = NULL;
+static SNMP::AccumulatorTable* queue_size_table = NULL;
 static ExceptionHandler* exception_handler = NULL;
 
 static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata);
@@ -136,7 +136,7 @@ static int worker_thread(void* p)
   rp.start_mod = &mod_thread_dispatcher;
   rp.idx_after_start = 1;
 
-  LOG_DEBUG("Worker thread started");
+  TRC_DEBUG("Worker thread started");
 
   struct rx_msg_qe qe = {0};
 
@@ -146,7 +146,7 @@ static int worker_thread(void* p)
 
     if (rdata)
     {
-      LOG_DEBUG("Worker thread dequeue message %p", rdata);
+      TRC_DEBUG("Worker thread dequeue message %p", rdata);
 
       CW_TRY
       {
@@ -154,6 +154,23 @@ static int worker_thread(void* p)
       }
       CW_EXCEPT(exception_handler)
       {
+        // Dump details about the exception.  Be defensive about reading these
+        // as we don't know much about the state we're in.
+        TRC_ERROR("Exception SAS Trail: %llu (maybe)", get_trail(rdata));
+        if (rdata->msg_info.cid != NULL)
+        {
+          TRC_ERROR("Exception Call-Id: %.*s",
+                    ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.slen,
+                    ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.ptr);
+        }
+        if (rdata->msg_info.cseq != NULL)
+        {
+          TRC_ERROR("Exception CSeq: %ld %.*s",
+                    ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->cseq,
+                    ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.slen,
+                    ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.ptr);
+        }
+
         // Make a 500 response to the rdata with a retry-after header of
         // 10 mins
         pjsip_retry_after_hdr* retry_after =
@@ -173,24 +190,24 @@ static int worker_thread(void* p)
       }
       CW_END
 
-      LOG_DEBUG("Worker thread completed processing message %p", rdata);
+      TRC_DEBUG("Worker thread completed processing message %p", rdata);
       pjsip_rx_data_free_cloned(rdata);
 
-      unsigned long latency_us;
+      unsigned long latency_us = 0;
       if (qe.stop_watch.read(latency_us))
       {
-        LOG_DEBUG("Request latency = %ldus", latency_us);
-        latency_accumulator->accumulate(latency_us);
+        TRC_DEBUG("Request latency = %ldus", latency_us);
+        latency_table->accumulate(latency_us);
         load_monitor->request_complete(latency_us);
       }
       else
       {
-        LOG_ERROR("Failed to get done timestamp: %s", strerror(errno));
+        TRC_ERROR("Failed to get done timestamp: %s", strerror(errno));
       }
     }
   }
 
-  LOG_DEBUG("Worker thread ended");
+  TRC_DEBUG("Worker thread ended");
 
   return 0;
 }
@@ -204,7 +221,7 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
     // all the worker threads are deadlock, so exit the process so it will be
     // restarted.
     CL_SPROUT_SIP_DEADLOCK.log();
-    LOG_ERROR("Detected worker thread deadlock - exiting");
+    TRC_ERROR("Detected worker thread deadlock - exiting");
     abort();
   }
 
@@ -220,7 +237,7 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   if (status != PJ_SUCCESS)
   {
     // Failed to clone the message, so drop it.
-    LOG_ERROR("Failed to clone incoming message (%s)", PJUtils::pj_status_to_string(status).c_str());
+    TRC_ERROR("Failed to clone incoming message (%s)", PJUtils::pj_status_to_string(status).c_str());
     return PJ_TRUE;
   }
 
@@ -233,11 +250,11 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   // will force back pressure on the particular TCP connection.  Or should we
   // have a queue per transport and round-robin them?
 
-  LOG_DEBUG("Queuing cloned received message %p for worker threads", clone_rdata);
+  TRC_DEBUG("Queuing cloned received message %p for worker threads", clone_rdata);
   qe.rdata = clone_rdata;
 
   // Track the current queue size
-  queue_size_accumulator->accumulate(rx_msg_q.size());
+  queue_size_table->accumulate(rx_msg_q.size());
   rx_msg_q.push(qe);
 
   // return TRUE to flag that we have absorbed the incoming message.
@@ -245,8 +262,8 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
 }
 
 pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
-                                   Accumulator* latency_acc_arg,
-                                   Accumulator* queue_size_acc_arg,
+                                   SNMP::AccumulatorTable* latency_table_arg,
+                                   SNMP::AccumulatorTable* queue_size_table_arg,
                                    LoadMonitor* load_monitor_arg,
                                    ExceptionHandler* exception_handler_arg)
 {
@@ -258,8 +275,8 @@ pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
   rx_msg_q.set_deadlock_threshold(MSG_Q_DEADLOCK_TIME);
 
   num_worker_threads = num_worker_threads_arg;
-  latency_accumulator = latency_acc_arg;
-  queue_size_accumulator = queue_size_acc_arg;
+  latency_table = latency_table_arg;
+  queue_size_table = queue_size_table_arg;
   load_monitor = load_monitor_arg;
   exception_handler = exception_handler_arg;
 
@@ -281,7 +298,7 @@ pj_status_t start_worker_threads()
                               NULL, 0, 0, &thread);
     if (status != PJ_SUCCESS)
     {
-      LOG_ERROR("Error creating worker thread, %s",
+      TRC_ERROR("Error creating worker thread, %s",
                 PJUtils::pj_status_to_string(status).c_str());
       return 1;
     }

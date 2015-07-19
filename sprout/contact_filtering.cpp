@@ -103,7 +103,7 @@ void filter_bindings_to_targets(const std::string& aor,
   if ((PJSIP_URI_SCHEME_IS_SIP(msg->line.req.uri) && (pjsip_param_find(&((pjsip_sip_uri*)msg->line.req.uri)->other_param, &STR_GR) != NULL)))
   {
     request_uri_is_gruu = true;
-    LOG_DEBUG("Request-URI has 'gr' param, so GRUU matching will be done");
+    TRC_DEBUG("Request-URI has 'gr' param, so GRUU matching will be done");
   }
 
   // Loop over the bindings, trying to match each.
@@ -111,7 +111,7 @@ void filter_bindings_to_targets(const std::string& aor,
        binding != bindings.end();
        ++binding)
   {
-    LOG_DEBUG("Performing contact filtering on binding %s", binding->first.c_str());
+    TRC_DEBUG("Performing contact filtering on binding %s", binding->first.c_str());
     bool rejected = false;
     bool deprioritized = false;
 
@@ -128,13 +128,13 @@ void filter_bindings_to_targets(const std::string& aor,
         bindings_rejected_due_to_gruu++;
         if (pub_gruu != NULL)
         {
-        LOG_DEBUG("GRUU %s did not match Request-URI %s",
+        TRC_DEBUG("GRUU %s did not match Request-URI %s",
                   PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, (pjsip_uri*)pub_gruu).c_str(),
                   PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, msg->line.req.uri).c_str());
         }
         else
         {
-        LOG_DEBUG("Binding without GRUU did not match Request-URI %s",
+        TRC_DEBUG("Binding without GRUU did not match Request-URI %s",
                   PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, msg->line.req.uri).c_str());
         }
       }
@@ -147,7 +147,7 @@ void filter_bindings_to_targets(const std::string& aor,
     {
       if (match_feature_sets(binding->second->_params, *reject) == YES)
       {
-        LOG_DEBUG("Rejecting Contact: header matching Reject-Contact header");
+        TRC_DEBUG("Rejecting Contact: header matching Reject-Contact header");
         // TODO SAS log.
         rejected = true;
       }
@@ -165,13 +165,13 @@ void filter_bindings_to_targets(const std::string& aor,
       if (accept_rc == NO)
       {
         if ((*accept)->required_match) {
-          LOG_DEBUG("Rejecting Contact: header matching Accept-Contact header");
+          TRC_DEBUG("Rejecting Contact: header matching Accept-Contact header");
           // TODO SAS log.
           rejected = true;
         }
         else
         {
-          LOG_DEBUG("Deprioritizing Contact: header matching Accept-Contact header");
+          TRC_DEBUG("Deprioritizing Contact: header matching Accept-Contact header");
           // TODO SAS log.
           deprioritized = true;
         }
@@ -200,7 +200,7 @@ void filter_bindings_to_targets(const std::string& aor,
   // SAS logging now we know how many targets we have.
   if (request_uri_is_gruu)
   {
-    LOG_DEBUG("%d of %d bindings rejected because a GRUU was specified", bindings_rejected_due_to_gruu, bindings.size());
+    TRC_DEBUG("%d of %d bindings rejected because a GRUU was specified", bindings_rejected_due_to_gruu, bindings.size());
     SAS::Event event(trail, SASEvent::GRUU_FILTERING, 0);
     event.add_static_param(bindings_rejected_due_to_gruu);
     event.add_static_param(bindings.size());
@@ -244,7 +244,7 @@ bool binding_to_target(const std::string& aor,
 
   if (target.uri == NULL)
   {
-    LOG_WARNING("Ignoring badly formed contact URI %s for target %s",
+    TRC_WARNING("Ignoring badly formed contact URI %s for target %s",
                 binding._uri.c_str(), aor.c_str());
     // TODO SAS log
     valid = false;
@@ -262,7 +262,7 @@ bool binding_to_target(const std::string& aor,
       }
       else
       {
-        LOG_WARNING("Ignoring contact %s for target %s because of badly formed path header %s",
+        TRC_WARNING("Ignoring contact %s for target %s because of badly formed path header %s",
                     binding._uri.c_str(), aor.c_str(), (*path).c_str());
         // TODO SAS log
         valid = false;
@@ -335,7 +335,7 @@ MatchResult match_feature_sets(const FeatureSet& contact_feature_set,
   {
     std::string feature_name = PJUtils::pj_str_to_string(&feature_param->name);
     std::string feature_value = PJUtils::pj_str_to_string(&feature_param->value);
-    LOG_DEBUG("Trying to match Accept-Contact parameter '%s' (value '%s')", feature_name.c_str(), feature_value.c_str());
+    TRC_DEBUG("Trying to match Accept-Contact parameter '%s' (value '%s')", feature_name.c_str(), feature_value.c_str());
 
     Feature feature(feature_name, feature_value);
 
@@ -352,12 +352,12 @@ MatchResult match_feature_sets(const FeatureSet& contact_feature_set,
       if (accept->explicit_match)
       {
         rc = NO;
-        LOG_DEBUG("Parameter %s is not in the Contact parameters and is explicitly required", feature_name.c_str());
+        TRC_DEBUG("Parameter %s is not in the Contact parameters and is explicitly required", feature_name.c_str());
       }
       else
       {
         rc = YES;
-        LOG_DEBUG("Parameter %s is not in the Contact parameters but is not explicitly required", feature_name.c_str());
+        TRC_DEBUG("Parameter %s is not in the Contact parameters but is not explicitly required", feature_name.c_str());
       }
     }
     else
@@ -388,7 +388,7 @@ MatchResult match_feature_sets(const FeatureSet& contact_feature_set,
   {
     std::string feature_name = PJUtils::pj_str_to_string(&feature_param->name);
     std::string feature_value = PJUtils::pj_str_to_string(&feature_param->value);
-    LOG_DEBUG("Trying to match Reject-Contact parameter '%s' (value '%s')", feature_name.c_str(), feature_value.c_str());
+    TRC_DEBUG("Trying to match Reject-Contact parameter '%s' (value '%s')", feature_name.c_str(), feature_value.c_str());
 
     Feature feature(feature_name, feature_value);
 
@@ -402,7 +402,7 @@ MatchResult match_feature_sets(const FeatureSet& contact_feature_set,
       // The Contact header doesn't contain this feature tag, so this
       // Reject-Contact predicate is discarded.
       rc = NO;
-      LOG_DEBUG("Parameter %s is not in the Contact parameters", feature_name.c_str());
+      TRC_DEBUG("Parameter %s is not in the Contact parameters", feature_name.c_str());
     }
     else
     {
@@ -421,7 +421,7 @@ MatchResult match_feature(Feature matcher,
                           Feature matchee)
 {
   MatchResult rc;
-  LOG_DEBUG("Matching parameter '%s' - Accept-Contact/Reject-Contact value '%s', Contact value '%s'",
+  TRC_DEBUG("Matching parameter '%s' - Accept-Contact/Reject-Contact value '%s', Contact value '%s'",
             matcher.first.c_str(),
             matcher.second.c_str(),
             matchee.second.c_str());
@@ -505,11 +505,11 @@ MatchResult match_feature(Feature matcher,
 
   if (rc == NO)
   {
-    LOG_DEBUG("No possible feature collection could match this parameter in both feature predicates");
+    TRC_DEBUG("No possible feature collection could match this parameter in both feature predicates");
   }
   else if (rc == YES)
   {
-    LOG_DEBUG("A feature collection could match this parameter in both feature predicates");
+    TRC_DEBUG("A feature collection could match this parameter in both feature predicates");
   }
 
   return rc;
@@ -633,7 +633,7 @@ MatchResult match_tokens(const std::string& matcher,
       if ((*token1)[0] == '!')
       {
         std::string token1_without_negation = token1->substr(1, std::string::npos);
-        LOG_DEBUG("Comparing negation of %s to %s", token1_without_negation.c_str(), token2->c_str());
+        TRC_DEBUG("Comparing negation of %s to %s", token1_without_negation.c_str(), token2->c_str());
         if (token1_without_negation != *token2)
         {
           return YES;
@@ -643,7 +643,7 @@ MatchResult match_tokens(const std::string& matcher,
       if ((*token2)[0] == '!')
       {
         std::string token2_without_negation = token2->substr(1, std::string::npos);
-        LOG_DEBUG("Comparing negation of %s to %s", token2_without_negation.c_str(), token1->c_str());
+        TRC_DEBUG("Comparing negation of %s to %s", token2_without_negation.c_str(), token1->c_str());
         if (token2_without_negation != *token1)
         {
           return YES;

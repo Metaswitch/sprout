@@ -42,6 +42,9 @@
 #include "avstore.h"
 #include "sas.h"
 #include "sproutsasevent.h"
+#include <rapidjson/writer.h>
+#include <rapidjson/stringbuffer.h>
+#include "rapidjson/error/en.h"
 
 AvStore::AvStore(Store* data_store) :
   _data_store(data_store)
@@ -54,56 +57,61 @@ AvStore::~AvStore()
 }
 
 
-bool AvStore::set_av(const std::string& impi,
-                     const std::string& nonce,
-                     const Json::Value* av,
-                     uint64_t cas,
-                     SAS::TrailId trail)
+Store::Status AvStore::set_av(const std::string& impi,
+                              const std::string& nonce,
+                              const rapidjson::Document* av,
+                              uint64_t cas,
+                              SAS::TrailId trail)
 {
   std::string key = impi + '\\' + nonce;
-  Json::FastWriter writer;
-  std::string data = writer.write(*av);
-  LOG_DEBUG("Set AV for %s\n%s", key.c_str(), data.c_str());
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+  av->Accept(writer);
+  std::string data = buffer.GetString();
+
+  TRC_DEBUG("Set AV for %s\n%s", key.c_str(), data.c_str());
   Store::Status status = _data_store->set_data("av", key, data, cas, AV_EXPIRY, trail);
-  if (status != Store::Status::OK)
+
+  if (status == Store::Status::OK)
+  {
+    SAS::Event event(trail, SASEvent::AVSTORE_SET_SUCCESS, 0);
+    event.add_var_param(impi);
+    SAS::report_event(event);
+  }
+  else
   {
     // LCOV_EXCL_START
-    LOG_ERROR("Failed to write Authentication Vector for private_id %s", impi.c_str());
+    TRC_ERROR("Failed to write Authentication Vector for private_id %s", impi.c_str());
     SAS::Event event(trail, SASEvent::AVSTORE_SET_FAILURE, 0);
     event.add_var_param(impi);
     SAS::report_event(event);
-
-    return false;
     // LCOV_EXCL_STOP
   }
 
-  SAS::Event event(trail, SASEvent::AVSTORE_SET_SUCCESS, 0);
-  event.add_var_param(impi);
-  SAS::report_event(event);
-
-  return true;
+  return status;
 }
 
-Json::Value* AvStore::get_av(const std::string& impi,
-                             const std::string& nonce,
-                             uint64_t& cas,
-                             SAS::TrailId trail)
+rapidjson::Document* AvStore::get_av(const std::string& impi,
+                                     const std::string& nonce,
+                                     uint64_t& cas,
+                                     SAS::TrailId trail)
 {
-  Json::Value* av = NULL;
+  rapidjson::Document* av = NULL;
   std::string key = impi + '\\' + nonce;
   std::string data;
   Store::Status status = _data_store->get_data("av", key, data, cas, trail);
 
   if (status == Store::Status::OK)
   {
-    LOG_DEBUG("Retrieved AV for %s\n%s", key.c_str(), data.c_str());
-    av = new Json::Value;
-    Json::Reader reader;
-    bool parsingSuccessful = reader.parse(data, *av);
-    if (!parsingSuccessful)
+    TRC_DEBUG("Retrieved AV for %s\n%s", key.c_str(), data.c_str());
+    av = new rapidjson::Document;
+    av->Parse<0>(data.c_str());
+
+    if (av->HasParseError())
     {
-      LOG_DEBUG("Failed to parse AV\n%s",
-                reader.getFormattedErrorMessages().c_str());
+      TRC_INFO("Failed to parse AV: %s\nError: %s",
+               data.c_str(),
+               rapidjson::GetParseError_En(av->GetParseError()));
       delete av;
       av = NULL;
     }
@@ -122,26 +130,29 @@ Json::Value* AvStore::get_av(const std::string& impi,
   return av;
 }
 
-void correlate_branch_from_av(Json::Value* av, SAS::TrailId trail)
+void correlate_branch_from_av(rapidjson::Document* av, SAS::TrailId trail)
 {
-  Json::Value null_json;
-  Json::Value branch = av->get("branch", null_json);
-  if (branch.isNull())
+  if (!(*av).HasMember("branch"))
   {
-    LOG_WARNING("Could not raise branch correlation marker because the stored authentication vector is missing 'branch' field");
+    TRC_WARNING("Could not raise branch correlation marker because the stored authentication vector is missing 'branch' field");
   }
-  else if (!branch.isString())
+  else if (!(*av)["branch"].IsString())
   {
-    LOG_WARNING("Could not raise branch correlation marker because the stored authentication vector has a non-string 'branch' field");
-  }
-  else if (branch.asString().empty())
-  {
-    LOG_WARNING("Could not raise branch correlation marker because the stored authentication vector has an empty 'branch' field");
+    TRC_WARNING("Could not raise branch correlation marker because the stored authentication vector has a non-string 'branch' field");
   }
   else
   {
-    SAS::Marker via_marker(trail, MARKER_ID_VIA_BRANCH_PARAM, 1u);
-    via_marker.add_var_param(branch.asString());
-    SAS::report_marker(via_marker, SAS::Marker::Scope::Trace);
+    std::string branch = (*av)["branch"].GetString();
+
+    if (branch == "")
+    {
+      TRC_WARNING("Could not raise branch correlation marker because the stored authentication vector has an empty 'branch' field");
+    }
+    else
+    {
+      SAS::Marker via_marker(trail, MARKER_ID_VIA_BRANCH_PARAM, 1u);
+      via_marker.add_var_param(branch.c_str());
+      SAS::report_marker(via_marker, SAS::Marker::Scope::Trace);
+    }
   }
 }

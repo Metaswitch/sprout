@@ -304,6 +304,8 @@ public:
     std::string serialize_aor(AoR* aor_data);
     AoR* deserialize_aor(const std::string& aor_id, const std::string& s);
 
+    bool underlying_store_has_servers() { return (_data_store != NULL) && _data_store->has_servers(); }
+
     Store* _data_store;
 
     /// RegStore is the only class that can use Connector
@@ -343,7 +345,9 @@ public:
            ChronosConnection* chronos_connection);
 
   /// Destructor.
-  ~RegStore();
+  virtual ~RegStore();
+
+  bool has_servers() { return _connector->underlying_store_has_servers(); }
 
   /// Get the data for a particular address of record (registered SIP URI,
   /// in format "sip:2125551212@example.com"), creating creating it if

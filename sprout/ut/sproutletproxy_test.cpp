@@ -200,7 +200,7 @@ public:
         (!pj_strcmp2(&req->line.req.method.name, "MESSAGE")))
     {
       // Fork INVITE and MESSAGE requests.
-      for (int ii = 0; ii < N; ++ii)
+      for (int ii = NUM_FORKS - 1; ii >= 0; --ii)
       {
         pjsip_msg* clone = clone_request(req);
         pj_pool_t* pool = get_pool(clone);
@@ -374,7 +374,7 @@ public:
     {
       // This is a final response, so build and send an ACK for this
       // response, irrespective of the status code.
-      LOG_DEBUG("Process INVITE final response");
+      TRC_DEBUG("Process INVITE final response");
       pjsip_msg* ack = original_request();
       pjsip_method_set(&ack->line.req.method, PJSIP_ACK_METHOD);
 
@@ -384,7 +384,7 @@ public:
            hdr = next)
       {
         next = hdr->next;
-        LOG_DEBUG("%.*s header", hdr->name.slen, hdr->name.ptr);
+        TRC_DEBUG("%.*s header", hdr->name.slen, hdr->name.ptr);
 
         switch (hdr->type)
         {
@@ -393,30 +393,30 @@ public:
           case PJSIP_H_REQUIRE:
           case PJSIP_H_ROUTE:
             // Leave header in the ACK.
-            LOG_DEBUG("Leave header in ACK");
+            TRC_DEBUG("Leave header in ACK");
             break;
 
           case PJSIP_H_TO:
             // Leave header in the ACK, but copy tag from the response.
             if (PJSIP_MSG_TO_HDR(rsp) != NULL)
             {
-              LOG_DEBUG("Copy To tag from response");
+              TRC_DEBUG("Copy To tag from response");
               pj_strdup(get_pool(ack),
                         &(((pjsip_to_hdr*)hdr)->tag),
                         &(PJSIP_MSG_TO_HDR(rsp)->tag));
             }
-            LOG_DEBUG("Leave header in ACK");
+            TRC_DEBUG("Leave header in ACK");
             break;
 
           case PJSIP_H_CSEQ:
             // Update the method to ACK.
-            LOG_DEBUG("Update method in CSeq");
+            TRC_DEBUG("Update method in CSeq");
             pjsip_method_set(&((pjsip_cseq_hdr*)hdr)->method, PJSIP_ACK_METHOD);
             break;
 
           default:
             // Remove header from the ACK.
-            LOG_DEBUG("Remove header");
+            TRC_DEBUG("Remove header");
             pj_list_erase(hdr);
             break;
         }
@@ -476,7 +476,8 @@ public:
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "sip:proxy1.homedomain",
                                 host_aliases,
-                                _sproutlets);
+                                _sproutlets,
+                                std::set<std::string>());
 
     // Schedule timers.
     SipTest::poll();
@@ -1071,7 +1072,7 @@ TEST_F(SproutletProxyTest, SimpleSproutletForker)
   tp->expect_target(tdata);
   free_txdata();
 
-  for (int ii = 1; ii < NUM_FORKS; ++ii)
+  for (int ii = NUM_FORKS - 1; ii >= 1; --ii)
   {
     tdata = current_txdata();
     expect_target("TCP", "10.10.20.1", 5060, tdata);
@@ -1240,7 +1241,7 @@ TEST_F(SproutletProxyTest, CancelForking)
   RespMatcher(200).matches(tdata->msg);
   free_txdata();
 
-  for (int ii = 1; ii < NUM_FORKS; ++ii)
+  for (int ii = NUM_FORKS - 1; ii >= 1; --ii)
   {
     tdata = current_txdata();
     expect_target("TCP", "10.10.20.1", 5060, tdata);
@@ -1650,7 +1651,7 @@ TEST_F(SproutletProxyTest, UASError)
 
   ASSERT_EQ(NUM_FORKS, txdata_count());
 
-  for (int ii = 0; ii < NUM_FORKS; ++ii)
+  for (int ii = NUM_FORKS - 1; ii >= 0; --ii)
   {
     tdata = current_txdata();
     expect_target("TCP", "10.10.20.1", 5060, tdata);

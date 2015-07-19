@@ -39,7 +39,6 @@
 
 #include <string>
 #include "gtest/gtest.h"
-#include <json/reader.h>
 
 #include "utils.h"
 #include "stack.h"
@@ -70,6 +69,8 @@ public:
     connections_quiesced(false)
   {}
 
+  virtual ~TestConnectionHandler() {}
+
   void close_untrusted_port() { TOGGLE_FLAG(untrusted_port_open, false); }
   void close_trusted_port() { TOGGLE_FLAG(trusted_port_open, false); }
   void quiesce() { TOGGLE_FLAG(connections_quiesced, true); }
@@ -89,6 +90,8 @@ public:
     flows_quiesced(false)
   {};
 
+  virtual ~TestFlowsHandler() {}
+
   void quiesce() { TOGGLE_FLAG(flows_quiesced, true); }
   void unquiesce() { TOGGLE_FLAG(flows_quiesced, false); }
 
@@ -101,6 +104,8 @@ public:
   TestCompletionHandler() :
     complete(false)
   {}
+
+  virtual ~TestCompletionHandler() {}
 
   void quiesce_complete() { TOGGLE_FLAG(complete, true); }
 

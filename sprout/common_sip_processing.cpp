@@ -56,6 +56,7 @@ extern "C" {
 #include <queue>
 #include <string>
 
+#include "common_sip_processing.h"
 #include "constants.h"
 #include "pjutils.h"
 #include "log.h"
@@ -66,13 +67,11 @@ extern "C" {
 #include "utils.h"
 #include "custom_headers.h"
 #include "utils.h"
-#include "accumulator.h"
 #include "load_monitor.h"
-#include "counter.h"
 #include "health_checker.h"
 
-static Counter* requests_counter = NULL;
-static Counter* overload_counter = NULL;
+static SNMP::CounterTable* requests_counter = NULL;
+static SNMP::CounterTable* overload_counter = NULL;
 static LoadMonitor* load_monitor = NULL;
 static HealthChecker* health_checker = NULL;
 
@@ -107,7 +106,7 @@ static pjsip_module mod_common_processing =
 
 static void local_log_rx_msg(pjsip_rx_data* rdata)
 {
-  LOG_VERBOSE("RX %d bytes %s from %s %s:%d:\n"
+  TRC_VERBOSE("RX %d bytes %s from %s %s:%d:\n"
               "--start msg--\n\n"
               "%.*s\n"
               "--end msg--",
@@ -123,7 +122,7 @@ static void local_log_rx_msg(pjsip_rx_data* rdata)
 
 static void local_log_tx_msg(pjsip_tx_data* tdata)
 {
-  LOG_VERBOSE("TX %d bytes %s to %s %s:%d:\n"
+  TRC_VERBOSE("TX %d bytes %s to %s %s:%d:\n"
               "--start msg--\n\n"
               "%.*s\n"
               "--end msg--",
@@ -141,6 +140,28 @@ static void sas_log_rx_msg(pjsip_rx_data* rdata)
 {
   SAS::TrailId trail = 0;
 
+  // Look for the SAS Trail ID for the corresponding transaction object.
+  //
+  // Note that we are NOT locking the transaction object before we fetch the
+  // trail ID from it.  This is deliberate - we cannot get a group lock from
+  // this routine as we may already have obtained the IO lock (which is lower
+  // in the locking hierarchy) higher up the stack.
+  // (e.g. from ioqueue_common_abs::ioqueue_dispatch_read_event) and grabbing
+  // the group lock here may cause us to deadlock with a thread using the locks
+  // in the right order.
+  //
+  // This is safe for the following reasons
+  // - The transaction objects are only ever invalidated by the current thread
+  //   (i.e. the transport thread), so we don't need to worry about the tsx
+  //   pointers being invalid.
+  // - In principle, the trail IDs (which are 64 bit numbers stored as void*s
+  //   since thats the format of the generic PJSIP user data area) might be
+  //   being written to as we are reading them, thereby invalidating them.
+  //   However, the chances of this happening are exceedingly remote and, if it
+  //   ever happened, the worst that could happen is that the trail ID would be
+  //   invalid and the log we're about to make unreachable by SAS.  This is
+  //   assumed to be sufficiently low impact as to be ignorable for practical
+  //   purposes.
   if (rdata->msg_info.msg->type == PJSIP_RESPONSE_MSG)
   {
     // Message is a response, so try to correlate to an existing UAC
@@ -148,14 +169,11 @@ static void sas_log_rx_msg(pjsip_rx_data* rdata)
     pj_str_t key;
     pjsip_tsx_create_key(rdata->tp_info.pool, &key, PJSIP_ROLE_UAC,
                          &rdata->msg_info.cseq->method, rdata);
-    pjsip_transaction* tsx = pjsip_tsx_layer_find_tsx(&key, PJ_TRUE);
+    pjsip_transaction* tsx = pjsip_tsx_layer_find_tsx(&key, PJ_FALSE);
     if (tsx)
     {
       // Found the UAC transaction, so get the trail if there is one.
       trail = get_trail(tsx);
-
-      // Unlock tsx because it is locked in find_tsx()
-      pj_grp_lock_release(tsx->grp_lock);
     }
   }
   else if (rdata->msg_info.msg->line.req.method.id == PJSIP_ACK_METHOD)
@@ -165,14 +183,11 @@ static void sas_log_rx_msg(pjsip_rx_data* rdata)
     pj_str_t key;
     pjsip_tsx_create_key(rdata->tp_info.pool, &key, PJSIP_UAS_ROLE,
                          &rdata->msg_info.cseq->method, rdata);
-    pjsip_transaction* tsx = pjsip_tsx_layer_find_tsx(&key, PJ_TRUE);
+    pjsip_transaction* tsx = pjsip_tsx_layer_find_tsx(&key, PJ_FALSE);
     if (tsx)
     {
       // Found the UAS transaction, so get the trail if there is one.
       trail = get_trail(tsx);
-
-      // Unlock tsx because it is locked in find_tsx()
-      pj_grp_lock_release(tsx->grp_lock);
     }
   }
   else if (rdata->msg_info.msg->line.req.method.id == PJSIP_CANCEL_METHOD)
@@ -182,14 +197,11 @@ static void sas_log_rx_msg(pjsip_rx_data* rdata)
     pj_str_t key;
     pjsip_tsx_create_key(rdata->tp_info.pool, &key, PJSIP_UAS_ROLE,
                          pjsip_get_invite_method(), rdata);
-    pjsip_transaction* tsx = pjsip_tsx_layer_find_tsx(&key, PJ_TRUE);
+    pjsip_transaction* tsx = pjsip_tsx_layer_find_tsx(&key, PJ_FALSE);
     if (tsx)
     {
       // Found the INVITE UAS transaction, so get the trail if there is one.
       trail = get_trail(tsx);
-
-      // Unlock tsx because it is locked in find_tsx()
-      pj_grp_lock_release(tsx->grp_lock);
     }
   }
 
@@ -232,7 +244,7 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
   }
   else
   {
-    LOG_ERROR("Transmitting message with no SAS trail identifier\n%.*s",
+    TRC_ERROR("Transmitting message with no SAS trail identifier\n%.*s",
               (int)(tdata->buf.cur - tdata->buf.start),
               tdata->buf.start);
   }
@@ -255,7 +267,7 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
     // Discard non-ACK requests if there are no available tokens.
     // Respond statelessly with a 503 Service Unavailable, including a
     // Retry-After header with a zero length timeout.
-    LOG_DEBUG("Rejected request due to overload");
+    TRC_DEBUG("Rejected request due to overload");
 
     pjsip_cid_hdr* cid = (pjsip_cid_hdr*)rdata->msg_info.cid;
 
@@ -313,17 +325,17 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
   if (!pj_list_empty((pj_list_type*)&rdata->msg_info.parse_err))
   {
     SAS::TrailId trail = get_trail(rdata);
-    LOG_DEBUG("Report SAS start marker - trail (%llx)", trail);
+    TRC_DEBUG("Report SAS start marker - trail (%llx)", trail);
     SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
     SAS::report_marker(start_marker);
 
     PJUtils::report_sas_to_from_markers(trail, rdata->msg_info.msg);
     PJUtils::mark_sas_call_branch_ids(trail, rdata->msg_info.cid, rdata->msg_info.msg);
-    
+
     pjsip_parser_err_report *err = rdata->msg_info.parse_err.next;
     while (err != &rdata->msg_info.parse_err)
     {
-      LOG_VERBOSE("Error parsing header %.*s", (int)err->hname.slen, err->hname.ptr);
+      TRC_VERBOSE("Error parsing header %.*s", (int)err->hname.slen, err->hname.ptr);
       SAS::Event event(trail, SASEvent::UNPARSEABLE_HEADER, 0);
       event.add_var_param((int)err->hname.slen, err->hname.ptr);
       SAS::report_event(event);
@@ -332,7 +344,7 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
 
     if (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG)
     {
-      LOG_WARNING("Rejecting malformed request with a 400 error");
+      TRC_WARNING("Rejecting malformed request with a 400 error");
       PJUtils::respond_stateless(stack_data.endpt,
                                  rdata,
                                  PJSIP_SC_BAD_REQUEST,
@@ -342,7 +354,7 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
     }
     else
     {
-      LOG_WARNING("Dropping malformed response");
+      TRC_WARNING("Dropping malformed response");
     }
 
     // As this message is malformed, return PJ_TRUE to absorb it and
@@ -373,8 +385,8 @@ static pj_status_t process_on_tx_msg(pjsip_tx_data* tdata)
 
 pj_status_t
 init_common_sip_processing(LoadMonitor* load_monitor_arg,
-                           Counter* requests_counter_arg,
-                           Counter* overload_counter_arg,
+                           SNMP::CounterTable* requests_counter_arg,
+                           SNMP::CounterTable* overload_counter_arg,
                            HealthChecker* health_checker_arg)
 {
   // Register the stack modules.

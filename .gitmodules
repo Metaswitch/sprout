@@ -10,9 +10,6 @@
 [submodule "modules/gmock"]
 	path = modules/gmock
 	url = git@github.com:Metaswitch/gmock-upstream.git
-[submodule "modules/jsoncpp"]
-	path = modules/jsoncpp
-	url = git@github.com:Metaswitch/jsoncpp-upstream.git
 [submodule "modules/libmemcached"]
 	path = modules/libmemcached
 	url = git@github.com:Metaswitch/libmemcached-upstream.git
@@ -60,7 +57,7 @@
 	url = git@github.com:Metaswitch/memento
 [submodule "modules/thrift"]
 	path = modules/thrift
-	url = https://github.com/apache/thrift.git
+	url = git@github.com:Metaswitch/thrift.git
 [submodule "modules/cassandra"]
 	path = modules/cassandra
 	url = https://github.com/apache/cassandra.git

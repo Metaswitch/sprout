@@ -117,7 +117,7 @@ std::string BGCFSproutlet::enum_lookup(pjsip_uri* uri, SAS::TrailId trail)
   if (_enum_service != NULL)
   {
     // ENUM is enabled.
-    LOG_DEBUG("ENUM is enabled");
+    TRC_DEBUG("ENUM is enabled");
     std::string user;
 
     // Determine whether we have a SIP URI or a tel URI
@@ -134,17 +134,17 @@ std::string BGCFSproutlet::enum_lookup(pjsip_uri* uri, SAS::TrailId trail)
         ((PJUtils::is_user_global(user)) || 
          (!_global_only_lookups)))
     {
-      LOG_DEBUG("Performing ENUM lookup for user %s", user.c_str());
+      TRC_DEBUG("Performing ENUM lookup for user %s", user.c_str());
       new_uri = _enum_service->lookup_uri_from_user(user, trail);
     }
     else
     {
-      LOG_DEBUG("Not doing an ENUM lookup");
+      TRC_DEBUG("Not doing an ENUM lookup");
     }
   }
   else
   {
-    LOG_DEBUG("ENUM isn't enabled");
+    TRC_DEBUG("ENUM isn't enabled");
     SAS::Event event(trail, SASEvent::ENUM_NOT_ENABLED, 0);
     SAS::report_event(event);
   }
@@ -198,14 +198,14 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
  
       if (req_uri != NULL)
       {
-        LOG_DEBUG("Rewrite request URI to %s", new_uri.c_str());
+        TRC_DEBUG("Rewrite request URI to %s", new_uri.c_str());
         req->line.req.uri = req_uri;
       }
       else
       {
         // The ENUM lookup has returned an invalid URI. Reject the 
         // request. 
-        LOG_DEBUG("Invalid ENUM response: %s", new_uri.c_str());
+        TRC_DEBUG("Invalid ENUM response: %s", new_uri.c_str());
         SAS::Event event(trail(), SASEvent::ENUM_INVALID, 0);
         event.add_var_param(new_uri);
         SAS::report_event(event);
@@ -220,7 +220,7 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     }
     else
     {
-      LOG_DEBUG("ENUM lookup was unsuccessful");
+      TRC_DEBUG("ENUM lookup was unsuccessful");
     }
   }
 
@@ -259,7 +259,7 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       }
       else
       {
-        LOG_WARNING("Configured route (%s) isn't a valid SIP URI", (*ii).c_str());
+        TRC_WARNING("Configured route (%s) isn't a valid SIP URI", (*ii).c_str());
 
         pjsip_msg* rsp = create_response(req, PJSIP_SC_INTERNAL_SERVER_ERROR);
         send_response(rsp);
@@ -273,7 +273,7 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   }
   else
   {
-    LOG_DEBUG("No route configured for %s", routing_value.c_str());
+    TRC_DEBUG("No route configured for %s", routing_value.c_str());
 
     if ((routing_value == "") || (routing_with_number))
     {

@@ -19,6 +19,15 @@ modules/cpp-common/src/saslogger.cpp
 modules/cpp-common/src/ipv6utils.cpp
 modules/cpp-common/src/exception_handler.cpp
 modules/cpp-common/src/utils.cpp
+
+# SNMP code is covered by clearwater-fv-test
+modules/cpp-common/src/snmp_row.cpp
+
+# 0MQ statistics are being phased out
+modules/cpp-common/src/statistic.cpp
+modules/cpp-common/src/accumulator.cpp
+modules/cpp-common/src/counter.cpp
+
 modules/cpp-common/test_utils/mock_sas.cpp
 modules/cpp-common/test_utils/fakecurl.cpp
 modules/cpp-common/test_utils/fakehttpconnection.cpp
@@ -29,6 +38,8 @@ modules/cpp-common/test_utils/faketransport_udp.cpp
 modules/cpp-common/test_utils/fakezmq.h
 modules/cpp-common/test_utils/fakezmq.cpp
 
+modules/cpp-common/src/httpconnection.cpp
+
 modules/app-servers/include/appserver.h
 modules/app-servers/test/mockappserver.hpp
 
@@ -37,7 +48,7 @@ modules/rapidjson/include/rapidjson/allocators.h
 modules/rapidjson/include/rapidjson/internal/stack.h
 modules/rapidjson/include/rapidjson/writer.h
 
-stateful_proxy.cpp
+bono.cpp
 connection_pool.cpp
 pjutils.cpp
 callservices.cpp

@@ -162,6 +162,8 @@ public:
   /// Convert the ENUM node role to a displayable string.
   static std::string node_role_str(NodeRole role);
 
+  /// Set the default CCF for this ACR.
+  virtual void set_default_ccf(const std::string& default_ccf);
 };
 
 
@@ -253,6 +255,9 @@ public:
   /// Returns the JSON encoded message in string form.
   /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
   virtual std::string get_message(pj_time_val timestamp=unspec);
+
+  /// Set the default CCF for this ACR.
+  virtual void set_default_ccf(const std::string& default_ccf);
 
 private:
 

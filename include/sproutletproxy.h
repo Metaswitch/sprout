@@ -58,15 +58,18 @@ class SproutletProxy : public BasicProxy
 public:
   /// Constructor.
   ///
-  /// @param  endpt         - The pjsip endpoint to associate with.
-  /// @param  priority      - The pjsip priority to load at.
-  /// @param  host_aliases  - The IP addresses/domains that refer to this proxy.
-  /// @param  sproutlets    - Sproutlets to load in this proxy.
+  /// @param  endpt             - The pjsip endpoint to associate with.
+  /// @param  priority          - The pjsip priority to load at.
+  /// @param  host_aliases      - The IP addresses/domains that refer to this proxy.
+  /// @param  sproutlets        - Sproutlets to load in this proxy.
+  /// @param  stateless_proxies - A set of next-hops that are considered to be
+  ///                             stateless proxies.
   SproutletProxy(pjsip_endpoint* endpt,
                  int priority,
                  const std::string& root_uri,
                  const std::unordered_set<std::string>& host_aliases,
-                 const std::list<Sproutlet*>& sproutlets);
+                 const std::list<Sproutlet*>& sproutlets,
+                 const std::set<std::string> stateless_proxies);
 
   /// Destructor.
   virtual ~SproutletProxy();
@@ -105,22 +108,14 @@ protected:
   /// Defintion of a timer set by an child sproutlet transaction.
   struct SproutletTimerCallbackData
   {
-    SproutletProxy* proxy;
     SproutletProxy::UASTsx* uas_tsx;
     SproutletWrapper* sproutlet_wrapper;
     void* context;
   };
 
-  bool schedule_timer(SproutletProxy::UASTsx* uas_tsx,
-                      SproutletWrapper* sproutlet_wrapper,
-                      void* context,
-                      TimerID& id,
-                      int duration);
-  void cancel_timer(TimerID id);
-  bool timer_running(TimerID id);
-  void on_timer_pop(SproutletProxy::UASTsx* uas_tsx,
-                    SproutletWrapper* sproutlet_wrapper,
-                    void* context);
+  bool schedule_timer(pj_timer_entry* tentry, int duration);
+  void cancel_timer(pj_timer_entry* tentry);
+  bool timer_running(pj_timer_entry* tentry);
 
   class UASTsx : public BasicProxy::UASTsx
   {
@@ -141,8 +136,7 @@ protected:
     virtual void process_cancel_request(pjsip_rx_data* rdata);
 
     /// Handle a timer pop.
-    void process_timer_pop(SproutletWrapper* tsx,
-                           void* context);
+    static void on_timer_pop(pj_timer_heap_t* th, pj_timer_entry* tentry);
 
   protected:
     /// Handles a response to an associated UACTsx.
@@ -163,6 +157,7 @@ protected:
 
     void schedule_requests();
 
+    void process_timer_pop(pj_timer_entry* tentry);
     bool schedule_timer(SproutletWrapper* tsx, void* context, TimerID& id, int duration);
     void cancel_timer(TimerID id);
     bool timer_running(TimerID id);
@@ -214,6 +209,13 @@ protected:
 
     /// Parent proxy object
     SproutletProxy* _sproutlet_proxy;
+
+    /// This set holds all the timers created by sproutlet tsxs that are
+    /// children of this UASTsx. They are only freed when the UASTsx is freed
+    /// (they are not freed when a timer pops or is cancelled for example).
+    /// This prevents race conditions (such as a double free caused by one
+    /// thread popping a timer and another thread cancelling it).
+    std::set<pj_timer_entry*> _timers;
 
     friend class SproutletWrapper;
   };
@@ -289,6 +291,7 @@ private:
   void tx_cancel(int fork_id);
   int compare_sip_sc(int sc1, int sc2);
   bool is_uri_local(const pjsip_uri*) const;
+  void log_inter_sproutlet(pjsip_tx_data* tdata, bool downstream);
 
   SproutletProxy* _proxy;
 

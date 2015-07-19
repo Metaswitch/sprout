@@ -65,6 +65,7 @@ extern "C" {
 #include "sproutsasevent.h"
 #include "constants.h"
 #include "json_parse_utils.h"
+#include "rapidjson/error/en.h"
 
 RegStore::RegStore(Store* data_store,
                    SerializerDeserializer*& serializer,
@@ -96,7 +97,6 @@ RegStore::~RegStore()
   delete _connector;
 }
 
-
 /// Retrieve the registration data for a given SIP Address of Record, creating
 /// an empty record if no data exists for the AoR.
 ///
@@ -117,7 +117,7 @@ RegStore::AoR* RegStore::get_aor_data(const std::string& aor_id, SAS::TrailId tr
 
 RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id, SAS::TrailId trail)
 {
-  LOG_DEBUG("Get AoR data for %s", aor_id.c_str());
+  TRC_DEBUG("Get AoR data for %s", aor_id.c_str());
   AoR* aor_data = NULL;
 
   std::string data;
@@ -127,7 +127,7 @@ RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id, SAS:
   if (status == Store::Status::OK)
   {
     // Retrieved the data, so deserialize it.
-    LOG_DEBUG("Data store returned a record, CAS = %ld", cas);
+    TRC_DEBUG("Data store returned a record, CAS = %ld", cas);
     aor_data = deserialize_aor(aor_id, data);
 
     if (aor_data != NULL)
@@ -141,7 +141,7 @@ RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id, SAS:
     else
     {
       // Could not deserialize the record. Treat it as not found.
-      LOG_INFO("Failed to deserialize record");
+      TRC_INFO("Failed to deserialize record");
       SAS::Event event(trail, SASEvent::REGSTORE_DESERIALIZATION_FAILED, 0);
       event.add_var_param(aor_id);
       event.add_var_param(data);
@@ -157,7 +157,7 @@ RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id, SAS:
     event.add_var_param(aor_id);
     SAS::report_event(event);
 
-    LOG_DEBUG("Data store returned not found, so create new record, CAS = %ld", aor_data->_cas);
+    TRC_DEBUG("Data store returned not found, so create new record, CAS = %ld", aor_data->_cas);
   }
   else
   {
@@ -221,7 +221,7 @@ Store::Status RegStore::set_aor_data(const std::string& aor_id,
   // so test for that.
   if (orig_max_expires == now)
   {
-    LOG_DEBUG("All bindings have expired, so this is a deregistration for AOR %s", aor_id.c_str());
+    TRC_DEBUG("All bindings have expired, so this is a deregistration for AOR %s", aor_id.c_str());
     all_bindings_expired = true;
   }
 
@@ -231,7 +231,7 @@ Store::Status RegStore::set_aor_data(const std::string& aor_id,
   // expires.
   expire_subscriptions(aor_data, now);
 
-  LOG_DEBUG("Set AoR data for %s, CAS=%ld, expiry = %d",
+  TRC_DEBUG("Set AoR data for %s, CAS=%ld, expiry = %d",
             aor_id.c_str(), aor_data->_cas, max_expires);
 
   // Set the chronos timers
@@ -293,7 +293,7 @@ Store::Status RegStore::Connector::set_aor_data(const std::string& aor_id,
                                                expiry,
                                                trail);
 
-  LOG_DEBUG("Data store set_data returned %d", status);
+  TRC_DEBUG("Data store set_data returned %d", status);
 
   if (status == Store::Status::OK)
   {
@@ -417,19 +417,19 @@ RegStore::AoR* RegStore::Connector::deserialize_aor(const std::string& aor_id, c
   {
     SerializerDeserializer* deserializer = *it;
 
-    LOG_DEBUG("Try to deserialize record for %s with '%s' deserializer",
+    TRC_DEBUG("Try to deserialize record for %s with '%s' deserializer",
               aor_id.c_str(),
               deserializer->name().c_str());
     aor = deserializer->deserialize_aor(aor_id, s);
 
     if (aor != NULL)
     {
-      LOG_DEBUG("Deserialization suceeded");
+      TRC_DEBUG("Deserialization suceeded");
       return aor;
     }
     else
     {
-      LOG_DEBUG("Deserialization failed");
+      TRC_DEBUG("Deserialization failed");
     }
   }
 
@@ -734,7 +734,7 @@ RegStore::AoR* RegStore::BinarySerializerDeserializer::
   if (iss.eof())
   {
     // Hit an EOF which means the record is corrupt.
-    LOG_INFO("Could not deserialize AOR - EOF reached");
+    TRC_INFO("Could not deserialize AOR - EOF reached");
     return NULL;
   }
 
@@ -742,7 +742,7 @@ RegStore::AoR* RegStore::BinarySerializerDeserializer::
   {
     // That's a lot of bindings. It is more likely that the data is corrupt, or
     // that we have been passed a record in a different format.
-    LOG_INFO("Could not deserialize AOR. Got %d bindings suggesting the data"
+    TRC_INFO("Could not deserialize AOR. Got %d bindings suggesting the data"
              " is corrupt or not in the binary format",
              num_bindings);
     return NULL;
@@ -750,14 +750,14 @@ RegStore::AoR* RegStore::BinarySerializerDeserializer::
 
   AoR* aor_data = new AoR(aor_id);
 
-  LOG_DEBUG("Deserialize %d bindings", num_bindings);
+  TRC_DEBUG("Deserialize %d bindings", num_bindings);
 
   for (int ii = 0; ii < num_bindings; ++ii)
   {
     // Extract the binding identifier into a string.
     std::string binding_id;
     getline(iss, binding_id, '\0');
-    LOG_DEBUG("  Binding %s", binding_id.c_str());
+    TRC_DEBUG("  Binding %s", binding_id.c_str());
 
     AoR::Binding* b = aor_data->get_binding(binding_id);
 
@@ -785,13 +785,13 @@ RegStore::AoR* RegStore::BinarySerializerDeserializer::
     int num_paths = 0;
     iss.read((char *)&num_paths, sizeof(int));
     b->_path_headers.resize(num_paths);
-    LOG_DEBUG("Deserialize %d path headers", num_paths);
+    TRC_DEBUG("Deserialize %d path headers", num_paths);
     for (std::list<std::string>::iterator i = b->_path_headers.begin();
          i != b->_path_headers.end();
          ++i)
     {
       getline(iss, *i, '\0');
-      LOG_DEBUG("  Deserialized path header %s", i->c_str());
+      TRC_DEBUG("  Deserialized path header %s", i->c_str());
     }
     getline(iss, b->_timer_id, '\0');
     getline(iss, b->_private_id, '\0');
@@ -800,14 +800,14 @@ RegStore::AoR* RegStore::BinarySerializerDeserializer::
 
   int num_subscriptions;
   iss.read((char *)&num_subscriptions, sizeof(int));
-  LOG_DEBUG("Deserialize %d subscriptions", num_subscriptions);
+  TRC_DEBUG("Deserialize %d subscriptions", num_subscriptions);
 
   for (int ii = 0; ii < num_subscriptions; ++ii)
   {
     // Extract the to tag index into a string.
     std::string to_tag;
     getline(iss, to_tag, '\0');
-    LOG_DEBUG("  Subscription %s", to_tag.c_str());
+    TRC_DEBUG("  Subscription %s", to_tag.c_str());
 
     AoR::Subscription* s = aor_data->get_subscription(to_tag);
 
@@ -821,7 +821,7 @@ RegStore::AoR* RegStore::BinarySerializerDeserializer::
 
     int num_routes = 0;
     iss.read((char *)&num_routes, sizeof(int));
-    LOG_DEBUG("    number of routes = %d", num_routes);
+    TRC_DEBUG("    number of routes = %d", num_routes);
     s->_route_uris.resize(num_routes);
     for (std::list<std::string>::iterator i = s->_route_uris.begin();
          i != s->_route_uris.end();
@@ -844,14 +844,14 @@ std::string RegStore::BinarySerializerDeserializer::serialize_aor(AoR* aor_data)
   std::ostringstream oss(std::ostringstream::out|std::ostringstream::binary);
 
   int num_bindings = aor_data->bindings().size();
-  LOG_DEBUG("Serialize %d bindings", num_bindings);
+  TRC_DEBUG("Serialize %d bindings", num_bindings);
   oss.write((const char *)&num_bindings, sizeof(int));
 
   for (AoR::Bindings::const_iterator i = aor_data->bindings().begin();
        i != aor_data->bindings().end();
        ++i)
   {
-    LOG_DEBUG("  Binding %s", i->first.c_str());
+    TRC_DEBUG("  Binding %s", i->first.c_str());
     oss << i->first << '\0';
 
     AoR::Binding* b = i->second;
@@ -882,14 +882,14 @@ std::string RegStore::BinarySerializerDeserializer::serialize_aor(AoR* aor_data)
   }
 
   int num_subscriptions = aor_data->subscriptions().size();
-  LOG_DEBUG("Serialize %d subscriptions", num_subscriptions);
+  TRC_DEBUG("Serialize %d subscriptions", num_subscriptions);
   oss.write((const char *)&num_subscriptions, sizeof(int));
 
   for (AoR::Subscriptions::const_iterator i = aor_data->subscriptions().begin();
        i != aor_data->subscriptions().end();
        ++i)
   {
-    LOG_DEBUG("  Subscription %s", i->first.c_str());
+    TRC_DEBUG("  Subscription %s", i->first.c_str());
     oss << i->first << '\0';
 
     AoR::Subscription* s = i->second;
@@ -900,7 +900,7 @@ std::string RegStore::BinarySerializerDeserializer::serialize_aor(AoR* aor_data)
     oss << s->_to_tag << '\0';
     oss << s->_cid << '\0';
     int num_routes = s->_route_uris.size();
-    LOG_DEBUG("    number of routes = %d", num_routes);
+    TRC_DEBUG("    number of routes = %d", num_routes);
     oss.write((const char *)&num_routes, sizeof(int));
     for (std::list<std::string>::const_iterator i = s->_route_uris.begin();
          i != s->_route_uris.end();
@@ -950,14 +950,16 @@ static const char* const JSON_NOTIFY_CSEQ = "notify_cseq";
 RegStore::AoR* RegStore::JsonSerializerDeserializer::
   deserialize_aor(const std::string& aor_id, const std::string& s)
 {
-  LOG_DEBUG("Deserialize JSON document: %s", s.c_str());
+  TRC_DEBUG("Deserialize JSON document: %s", s.c_str());
 
   rapidjson::Document doc;
   doc.Parse<0>(s.c_str());
 
   if (doc.HasParseError())
   {
-    LOG_DEBUG("Failed to parse document");
+    TRC_DEBUG("Failed to parse document: %s\nError: %s", 
+              s.c_str(),
+              rapidjson::GetParseError_En(doc.GetParseError()));
     return NULL;
   }
 
@@ -973,7 +975,7 @@ RegStore::AoR* RegStore::JsonSerializerDeserializer::
          bindings_it != bindings_obj.MemberEnd();
          ++bindings_it)
     {
-      LOG_DEBUG("  Binding: %s", bindings_it->name.GetString());
+      TRC_DEBUG("  Binding: %s", bindings_it->name.GetString());
       AoR::Binding* b = aor->get_binding(bindings_it->name.GetString());
 
       JSON_ASSERT_OBJECT(bindings_it->value);
@@ -1022,7 +1024,7 @@ RegStore::AoR* RegStore::JsonSerializerDeserializer::
          subscriptions_it != subscriptions_obj.MemberEnd();
          ++subscriptions_it)
     {
-      LOG_DEBUG("  Subscription: %s", subscriptions_it->name.GetString());
+      TRC_DEBUG("  Subscription: %s", subscriptions_it->name.GetString());
       AoR::Subscription* s = aor->get_subscription(subscriptions_it->name.GetString());
 
       JSON_ASSERT_OBJECT(subscriptions_it->value);
@@ -1054,7 +1056,7 @@ RegStore::AoR* RegStore::JsonSerializerDeserializer::
   }
   catch(JsonFormatError err)
   {
-    LOG_INFO("Failed to deserialize JSON document (hit error at %s:%d)",
+    TRC_INFO("Failed to deserialize JSON document (hit error at %s:%d)",
              err._file, err._line);
     delete aor; aor = NULL;
   }

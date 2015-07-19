@@ -47,6 +47,7 @@ extern "C" {
 #include "chronosconnection.h"
 #include "analyticslogger.h"
 #include "acr.h"
+#include "snmp_success_fail_count_table.h"
 
 extern pjsip_module mod_registrar;
 
@@ -58,7 +59,9 @@ extern pj_status_t init_registrar(RegStore* registrar_store,
                                   HSSConnection* hss_connection,
                                   AnalyticsLogger* analytics_logger,
                                   ACRFactory* rfacr_factory,
-                                  int cfg_max_expires);
+                                  int cfg_max_expires,
+                                  SNMP::RegistrationStatsTables* reg_stats_tbls,
+                                  SNMP::RegistrationStatsTables* third_party_reg_stats_tbls);
 
 
 extern void destroy_registrar();

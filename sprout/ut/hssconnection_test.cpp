@@ -39,7 +39,6 @@
 
 #include <string>
 #include "gtest/gtest.h"
-#include <json/reader.h>
 
 #include "utils.h"
 #include "sas.h"
@@ -47,6 +46,7 @@
 #include "hssconnection.h"
 #include "basetest.hpp"
 #include "fakecurl.hpp"
+#include "fakesnmp.hpp"
 
 using namespace std;
 
@@ -60,8 +60,17 @@ class HssConnectionTest : public BaseTest
   HssConnectionTest() :
     _resolver("10.42.42.42"),
     _cm(new Alarm("sprout", AlarmDef::SPROUT_HOMESTEAD_COMM_ERROR, AlarmDef::CRITICAL)),
-    _hss("narcissus", &_resolver, NULL, NULL, &_cm)
-  {
+    _hss("narcissus",
+         &_resolver,
+         NULL,
+         &SNMP::FAKE_IP_COUNT_TABLE,
+         &SNMP::FAKE_ACCUMULATOR_TABLE,
+         &SNMP::FAKE_ACCUMULATOR_TABLE,
+         &SNMP::FAKE_ACCUMULATOR_TABLE,
+         &SNMP::FAKE_ACCUMULATOR_TABLE,
+         &SNMP::FAKE_ACCUMULATOR_TABLE,
+         &_cm)
+    {
     fakecurl_responses.clear();
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid42/reg-data", "{\"reqtype\": \"reg\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
@@ -469,26 +478,26 @@ TEST_F(HssConnectionTest, ServerFailure)
 
 TEST_F(HssConnectionTest, SimpleUserAuth)
 {
-  Json::Value* actual;
+  rapidjson::Document* actual;
   _hss.get_user_auth_status("privid69", "pubid44", "", "", actual, 0);
   ASSERT_TRUE(actual != NULL);
-  EXPECT_EQ("server-name", actual->get("scscf", "").asString());
+  EXPECT_EQ(std::string("server-name"), (*actual)["scscf"].GetString()); 
   delete actual;
 }
 
 TEST_F(HssConnectionTest, FullUserAuth)
 {
-  Json::Value* actual;
+  rapidjson::Document* actual;
   _hss.get_user_auth_status("privid69", "pubid44", "domain", "REG", actual, 0);
   ASSERT_TRUE(actual != NULL);
-  EXPECT_EQ("2001", actual->get("result-code", "").asString());
+  EXPECT_EQ(2001, (*actual)["result-code"].GetInt());
   delete actual;
 }
 
 TEST_F(HssConnectionTest, CorruptAuth)
 {
   CapturingTestLogger log;
-  Json::Value* actual;
+  rapidjson::Document* actual;
   _hss.get_user_auth_status("privid_corrupt", "pubid44", "", "", actual, 0);
   ASSERT_TRUE(actual == NULL);
   EXPECT_TRUE(log.contains("Failed to parse Homestead response"));
@@ -497,34 +506,34 @@ TEST_F(HssConnectionTest, CorruptAuth)
 
 TEST_F(HssConnectionTest, SimpleLocation)
 {
-  Json::Value* actual;
+  rapidjson::Document* actual;
   _hss.get_location_data("pubid44", false, "", actual, 0);
   ASSERT_TRUE(actual != NULL);
-  EXPECT_EQ("server-name", actual->get("scscf", "").asString());
+  EXPECT_EQ(std::string("server-name"), (*actual)["scscf"].GetString());
   delete actual;
 }
 
 TEST_F(HssConnectionTest, LocationWithAuthType)
 {
-  Json::Value* actual;
+  rapidjson::Document* actual;
   _hss.get_location_data("pubid44", false, "DEREG", actual, 0);
   ASSERT_TRUE(actual != NULL);
-  EXPECT_EQ("2001", actual->get("result-code", "").asString());
+  EXPECT_EQ(2001, (*actual)["result-code"].GetInt());
   delete actual;
 }
 
 TEST_F(HssConnectionTest, FullLocation)
 {
-  Json::Value* actual;
+  rapidjson::Document* actual;
   _hss.get_location_data("pubid44", true, "CAPAB", actual, 0);
   ASSERT_TRUE(actual != NULL);
-  EXPECT_EQ("2001", actual->get("result-code", "").asString());
+  EXPECT_EQ(2001, (*actual)["result-code"].GetInt());
   delete actual;
 }
 
 TEST_F(HssConnectionTest, LocationNotFound)
 {
-  Json::Value* actual;
+  rapidjson::Document* actual;
   HTTPCode rc = _hss.get_location_data("pubid45", false, "", actual, 0);
   ASSERT_TRUE(actual == NULL);
   ASSERT_TRUE(rc == 404);

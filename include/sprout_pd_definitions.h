@@ -161,18 +161,6 @@ static const PDLog CL_SPROUT_XDM_NO_HOMESTEAD
   "/etc/clearwater/config file. "
 );
 
-static const PDLog CL_SPROUT_BAD_S_CSCF_JSON
-(
-  PDLogBase::CL_SPROUT_ID + 11,
-  PDLOG_ERR,
-  "Missing or malformed /etc/clearwater/s-cscf.json file.",
-  "The s-cscf.json file must be corrected or created to allow the I-CSCF to "
-  "select an S-CSCF for a subscriber.",
-  "This prevents the I-CSCF from selecting an S-CSCF.",
-  "Correct or add the /etc/clearwater/s-cscf.json file "
-  "and reload the application."
-);
-
 static const PDLog1<const char*> CL_SPROUT_SIP_INIT_INTERFACE_FAIL
 (
   PDLogBase::CL_SPROUT_ID + 12,
@@ -430,6 +418,96 @@ static const PDLog CL_SPROUT_PLUGIN_FAILURE
   "The service is no longer available.",
   "The application will exit and restart until the problem is fixed.",
   "Check the configuration in /etc/clearwater/config."
+);
+
+static const PDLog1<const char*> CL_SPROUT_ENUM_FILE_MISSING
+(
+  PDLogBase::CL_SPROUT_ID + 39,
+  PDLOG_ERR,
+  "The ENUM file is not present.",
+  "Sprout is configured to use file-based ENUM, but the configuration file does not exist.",
+  "Sprout will not be able to translate telephone numbers into routable URIs.",
+  "Confirm that %s is the correct file to be using. If not, correct /etc/clearwater/shared_config. If so, create it according to the documentation. If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd."
+);
+
+static const PDLog1<const char*> CL_SPROUT_ENUM_FILE_EMPTY
+(
+  PDLogBase::CL_SPROUT_ID + 40,
+  PDLOG_ERR,
+  "The ENUM file is empty.",
+  "Sprout is configured to use file-based ENUM, but the configuration file is empty.",
+  "Sprout will not be able to translate telephone numbers into routable URIs.",
+  "Confirm that %s is the correct file to be using. If not, correct /etc/clearwater/shared_config. If so, create it according to the documentation. If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd."
+);
+
+static const PDLog1<const char*> CL_SPROUT_ENUM_FILE_INVALID
+(
+  PDLogBase::CL_SPROUT_ID + 41,
+  PDLOG_ERR,
+  "The ENUM file is invalid.",
+  "Sprout is configured to use file-based ENUM, but the configuration file does not exist.",
+  "Sprout will not be able to translate telephone numbers into routable URIs.",
+  "Confirm that %s is the correct file to be using. If not, correct /etc/clearwater/shared_config. If so, check that it is a valid and correctly formatted file."
+);
+
+static const PDLog CL_SPROUT_SCSCF_FILE_MISSING
+(
+  PDLogBase::CL_SPROUT_ID + 42,
+  PDLOG_ERR,
+  "The file listing S-CSCFs is not present.",
+  "Sprout is configured as an I-CSCF, but the /etc/clearwater/s-cscf.json file (defining which S-CSCFs to use) does not exist.",
+  "The Sprout I-CSCF will not be able to select an S-CSCF.",
+  "If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd. If you are managing /etc/clearwater/s-cscf.json manually, follow the documentation to create it."
+);
+
+static const PDLog CL_SPROUT_SCSCF_FILE_EMPTY
+(
+  PDLogBase::CL_SPROUT_ID + 43,
+  PDLOG_ERR,
+  "The file listing S-CSCFs is empty.",
+  "Sprout is configured as an I-CSCF, but the /etc/clearwater/s-cscf.json file (defining which S-CSCFs to use) is empty.",
+  "The Sprout I-CSCF will not be able to select an S-CSCF.",
+  "If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd. If you are managing /etc/clearwater/s-cscf.json manually, follow the documentation to create it."
+);
+
+static const PDLog CL_SPROUT_SCSCF_FILE_INVALID
+(
+  PDLogBase::CL_SPROUT_ID + 44,
+  PDLOG_ERR,
+  "The file listing S-CSCFs is invalid.",
+  "Sprout is configured as an I-CSCF, but the /etc/clearwater/s-cscf.json file (defining which S-CSCFs to use) is invalid due to invalid JSON or missing elements.",
+  "The Sprout I-CSCF will not be able to select an S-CSCF.",
+  "Follow the documentation to create this file correctly."
+);
+
+static const PDLog CL_SPROUT_BGCF_FILE_MISSING
+(
+  PDLogBase::CL_SPROUT_ID + 45,
+  PDLOG_NOTICE,
+  "The file listing BGCF routes is not present.",
+  "The /etc/clearwater/bgcf.json file, defining which BGCF routes to use, does not exist.",
+  "Sprout will not be able to route any calls outside the local deployment.",
+  "If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd. If you are not expecting clearwater-config-manager to manage this, but are expecting to route calls off-net, follow the documentation to create routes in /etc/clearwater/bgcf.json. Otherwise, no action is needed."
+);
+
+static const PDLog CL_SPROUT_BGCF_FILE_EMPTY
+(
+  PDLogBase::CL_SPROUT_ID + 46,
+  PDLOG_ERR,
+  "The file listing BGCF routes is empty.",
+  "The /etc/clearwater/bgcf.json file, defining which BGCF routes to use, is empty.",
+  "Sprout will not be able to route any calls outside the local deployment.",
+  "If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd. If you are not expecting clearwater-config-manager to manage this, but are expecting to route calls off-net, follow the documentation to create routes in /etc/clearwater/bgcf.json. Otherwise, delete this empty file."
+);
+
+static const PDLog CL_SPROUT_BGCF_FILE_INVALID
+(
+  PDLogBase::CL_SPROUT_ID + 47,
+  PDLOG_ERR,
+  "The file listing BGCF routes is not present or empty.",
+  "The /etc/clearwater/bgcf.json file, defining which BGCF routes to use, is not valid (due to invalid JSON or missing elements).",
+  "Sprout will not be able to route some or all calls outside the local deployment.", 
+  "If you are expecting to route calls off-net, follow the documentation to create routes in /etc/clearwater/bgcf.json. Otherwise, delete this file."
 );
 
 #endif

@@ -36,10 +36,20 @@
 
 #include <cstdio>
 #include "fakehssconnection.hpp"
-#include <json/reader.h>
 #include "gtest/gtest.h"
 
-FakeHSSConnection::FakeHSSConnection() : HSSConnection("localhost", NULL, NULL, NULL, NULL)
+#include "fakesnmp.hpp"
+
+FakeHSSConnection::FakeHSSConnection() : HSSConnection("localhost",
+                                                       NULL,
+                                                       NULL,
+                                                       &SNMP::FAKE_IP_COUNT_TABLE,
+                                                       &SNMP::FAKE_ACCUMULATOR_TABLE,
+                                                       &SNMP::FAKE_ACCUMULATOR_TABLE,
+                                                       &SNMP::FAKE_ACCUMULATOR_TABLE,
+                                                       &SNMP::FAKE_ACCUMULATOR_TABLE,
+                                                       &SNMP::FAKE_ACCUMULATOR_TABLE,
+                                                       NULL)
 {
 }
 
@@ -121,7 +131,7 @@ void FakeHSSConnection::delete_rc(const std::string& url)
 
 
 long FakeHSSConnection::get_json_object(const std::string& path,
-                                        Json::Value*& object,
+                                        rapidjson::Document*& object,
                                         SAS::TrailId trail)
 {
   _calls.insert(UrlBody(path, ""));
@@ -131,28 +141,28 @@ long FakeHSSConnection::get_json_object(const std::string& path,
 
   if (i != _results.end())
   {
-    object = new Json::Value;
-    Json::Reader reader;
-    LOG_DEBUG("Found HSS data for %s\n%s", path.c_str(), i->second.c_str());
-    bool parsingSuccessful = reader.parse(i->second, *object);
-    if (parsingSuccessful)
+    TRC_DEBUG("Found HSS data for %s\n%s", path.c_str(), i->second.c_str());
+    object = new rapidjson::Document;
+    object->Parse<0>(i->second.c_str());
+
+    if (!object->HasParseError())
     {
       http_code = HTTP_OK;
     }
     else
     {
       // report to the user the failure and their locations in the document.
-      LOG_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n",
+      TRC_ERROR("Failed to parse Homestead response:\n %s\n %s.\n Error offset: %d\n",
                 path.c_str(),
                 i->second.c_str(),
-                reader.getFormatedErrorMessages().c_str());
+                object->GetErrorOffset());
       delete object;
       object = NULL;
     }
   }
   else
   {
-    LOG_DEBUG("Failed to find JSON result for URL %s", path.c_str());
+    TRC_DEBUG("Failed to find JSON result for URL %s", path.c_str());
   }
 
   std::map<std::string, long>::const_iterator i2 = _rcs.find(path);
@@ -196,7 +206,7 @@ long FakeHSSConnection::get_xml_object(const std::string& path,
              path.c_str(),
              i->second.c_str(),
              err.what());
-      LOG_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n",
+      TRC_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n",
                 path.c_str(),
                 i->second.c_str(),
                 err.what());
@@ -206,7 +216,7 @@ long FakeHSSConnection::get_xml_object(const std::string& path,
   }
   else
   {
-    LOG_ERROR("Failed to find XML result for URL %s", path.c_str());
+    TRC_ERROR("Failed to find XML result for URL %s", path.c_str());
   }
 
   std::map<std::string, long>::const_iterator i2 = _rcs.find(path);

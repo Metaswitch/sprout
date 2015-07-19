@@ -54,17 +54,19 @@ extern "C" {
 /// Strip headers as appropriate when crossing a trust boundary.
 static void proxy_strip_trusted(pjsip_tx_data *tdata)
 {
-  LOG_DEBUG("Strip trusted headers");
+  TRC_DEBUG("Strip trusted headers");
 
   PJUtils::remove_hdr(tdata->msg, &STR_P_A_N_I);
   PJUtils::remove_hdr(tdata->msg, &STR_P_V_N_I);
   PJUtils::remove_hdr(tdata->msg, &STR_P_SERVED_USER);
+  pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, NULL);
+  pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_PROXY_AUTHORIZATION, NULL);
 }
 
 /// Add P-Charging headers on incoming out-of-dialog/dialog initiating requests
 static void proxy_add_p_charging_header(pjsip_tx_data *tdata)
 {
-  LOG_DEBUG("Add P-Charging headers");
+  TRC_DEBUG("Add P-Charging headers");
 
   std::string cdf_domain = PJUtils::pj_str_to_string(&stack_data.cdf_domain);
 
@@ -117,7 +119,7 @@ TrustBoundary::TrustBoundary(std::string description,
       (_add_p_charging_rsp && !_strip_request))
   {
     // LCOV_EXCL_START
-    LOG_ERROR("Trust boundary configured to add P-Charging headers without stripping existing ones, inconsistent configuration");
+    TRC_ERROR("Trust boundary configured to add P-Charging headers without stripping existing ones, inconsistent configuration");
     _strip_p_charging = PJ_TRUE;
     // LCOV_EXCL_STOP
   }
@@ -163,7 +165,7 @@ void TrustBoundary::process_response(pjsip_tx_data* tdata)
 
 void TrustBoundary::process_stateless_message(pjsip_tx_data* tdata)
 {
-  LOG_DEBUG("Strip trusted headers - stateless");
+  TRC_DEBUG("Strip trusted headers - stateless");
   proxy_strip_trusted(tdata);
 }
 

@@ -34,7 +34,9 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#include <json/reader.h>
+#include "rapidjson/document.h"
+#include "rapidjson/error/en.h"
+#include "json_parse_utils.h"
 
 extern "C" {
 #include <pjsip.h>
@@ -62,13 +64,13 @@ static bool reg_store_access_common(RegStore::AoR** aor_data,
   // Find the current bindings for the AoR.
   delete *aor_data;
   *aor_data = current_store->get_aor_data(aor_id, trail);
-  LOG_DEBUG("Retrieved AoR data %p", *aor_data);
+  TRC_DEBUG("Retrieved AoR data %p", *aor_data);
 
   if (*aor_data == NULL)
   {
     // Failed to get data for the AoR because there is no connection
     // to the store.
-    LOG_ERROR("Failed to get AoR binding for %s from store", aor_id.c_str());
+    TRC_ERROR("Failed to get AoR binding for %s from store", aor_id.c_str());
     return false;
   }
 
@@ -76,7 +78,8 @@ static bool reg_store_access_common(RegStore::AoR** aor_data,
   if ((*aor_data)->bindings().empty())
   {
     if ((*previous_aor_data == NULL) &&
-        (remote_store != NULL))
+        (remote_store != NULL) &&
+        (remote_store->has_servers()))
     {
       *previous_aor_data = remote_store->get_aor_data(aor_id, trail);
       previous_aor_data_alloced = true;
@@ -128,7 +131,7 @@ static void report_sip_all_register_marker(SAS::TrailId trail, std::string uri_s
   }
   else
   {
-    LOG_WARNING("Could not raise SAS REGISTER marker for unparseable URI '%s'", uri_str.c_str());
+    TRC_WARNING("Could not raise SAS REGISTER marker for unparseable URI '%s'", uri_str.c_str());
   }
 
   // Remember to release the temporary pool.
@@ -149,7 +152,7 @@ void RegistrationTimeoutTask::run()
 
   if (rc != HTTP_OK)
   {
-    LOG_DEBUG("Unable to parse response from Chronos");
+    TRC_DEBUG("Unable to parse response from Chronos");
     send_http_reply(rc);
     delete this;
     return;
@@ -187,7 +190,7 @@ void AuthTimeoutTask::run()
 
   if (rc != HTTP_OK)
   {
-    LOG_DEBUG("Unable to handle callback from Chronos");
+    TRC_DEBUG("Unable to handle callback from Chronos");
     send_http_reply(rc);
     delete this;
     return;
@@ -203,7 +206,7 @@ void DeregistrationTask::run()
   // HTTP method must be a DELETE
   if (_req.method() != htp_method_DELETE)
   {
-    LOG_WARNING("HTTP method isn't delete");
+    TRC_WARNING("HTTP method isn't delete");
     send_http_reply(HTTP_BADMETHOD);
     delete this;
     return;
@@ -214,7 +217,7 @@ void DeregistrationTask::run()
 
   if (_notify != "true" && _notify != "false")
   {
-    LOG_WARNING("Mandatory send-notifications param is missing or invalid, send 400");
+    TRC_WARNING("Mandatory send-notifications param is missing or invalid, send 400");
     send_http_reply(HTTP_BAD_REQUEST);
     delete this;
     return;
@@ -225,7 +228,7 @@ void DeregistrationTask::run()
 
   if (rc != HTTP_OK)
   {
-    LOG_WARNING("Request body is invalid, send %d", rc);
+    TRC_WARNING("Request body is invalid, send %d", rc);
     send_http_reply(rc);
     delete this;
     return;
@@ -246,7 +249,7 @@ void RegistrationTimeoutTask::handle_response()
   {
     // If we have a remote store, try to store this there too.  We don't worry
     // about failures in this case.
-    if (_cfg->_remote_store != NULL)
+    if ((_cfg->_remote_store != NULL) && (_cfg->_remote_store->has_servers()))
     {
       bool ignored;
       RegStore::AoR* remote_aor_data = set_aor_data(_cfg->_remote_store, _aor_id, aor_data, NULL, false, ignored);
@@ -255,7 +258,7 @@ void RegistrationTimeoutTask::handle_response()
 
     if (all_bindings_expired)
     {
-      LOG_DEBUG("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS");
+      TRC_DEBUG("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS");
       _cfg->_hss->update_registration_state(_aor_id, "", HSSConnection::DEREG_TIMEOUT, 0);
     }
   }
@@ -263,7 +266,7 @@ void RegistrationTimeoutTask::handle_response()
   {
     // We couldn't update the RegStore but there is nothing else we can do to
     // recover from this.
-    LOG_INFO("Could not update update RegStore on registration timeout for AoR: %s",
+    TRC_INFO("Could not update update RegStore on registration timeout for AoR: %s",
              _aor_id.c_str());
   }
 
@@ -321,37 +324,26 @@ RegStore::AoR* RegistrationTimeoutTask::set_aor_data(RegStore* current_store,
 // Retrieve the aor and binding ID from the opaque data
 HTTPCode RegistrationTimeoutTask::parse_response(std::string body)
 {
-  Json::Value json_body;
+  rapidjson::Document doc;
   std::string json_str = body;
-  Json::Reader reader;
-  bool parsingSuccessful = reader.parse(json_str.c_str(), json_body);
+  doc.Parse<0>(json_str.c_str());
 
-  if (!parsingSuccessful)
+  if (doc.HasParseError())
   {
-    LOG_WARNING("Failed to read opaque data, %s",
-                reader.getFormattedErrorMessages().c_str());
+    TRC_INFO("Failed to parse opaque data as JSON: %s\nError: %s",
+             json_str.c_str(), 
+             rapidjson::GetParseError_En(doc.GetParseError()));
     return HTTP_BAD_REQUEST;
   }
 
-  if ((json_body.isMember("aor_id")) &&
-      ((json_body)["aor_id"].isString()))
+  try
   {
-    _aor_id = json_body.get("aor_id", "").asString();
+    JSON_GET_STRING_MEMBER(doc, "aor_id", _aor_id);
+    JSON_GET_STRING_MEMBER(doc, "binding_id", _binding_id);
   }
-  else
+  catch (JsonFormatError err)
   {
-    LOG_WARNING("AoR ID not available in JSON");
-    return HTTP_BAD_REQUEST;
-  }
-
-  if ((json_body.isMember("binding_id")) &&
-      ((json_body)["binding_id"].isString()))
-  {
-    _binding_id = json_body.get("binding_id", "").asString();
-  }
-  else
-  {
-    LOG_WARNING("Binding ID not available in JSON");
+    TRC_INFO("Badly formed opaque data (missing aor_id or binding_id)");
     return HTTP_BAD_REQUEST;
   }
 
@@ -361,56 +353,55 @@ HTTPCode RegistrationTimeoutTask::parse_response(std::string body)
 // Retrieve the aors and any private IDs from the request body
 HTTPCode DeregistrationTask::parse_request(std::string body)
 {
-  Json::Value json_body;
-  Json::Reader reader;
-  bool parsingSuccessful = reader.parse(body.c_str(), json_body);
+  rapidjson::Document doc;
+  doc.Parse<0>(body.c_str());
 
-  if (!parsingSuccessful)
+  if (doc.HasParseError())
   {
-    LOG_WARNING("Failed to read data, %s",
-                reader.getFormattedErrorMessages().c_str());
+    TRC_INFO("Failed to parse data as JSON: %s\nError: %s",
+             body.c_str(),
+             rapidjson::GetParseError_En(doc.GetParseError()));
     return HTTP_BAD_REQUEST;
   }
 
-  if ((json_body.isMember("registrations")) &&
-      ((json_body)["registrations"].isArray()))
+  try
   {
-    Json::Value registration_vals = json_body["registrations"];
+    JSON_ASSERT_CONTAINS(doc, "registrations");
+    JSON_ASSERT_ARRAY(doc["registrations"]);
+    const rapidjson::Value& reg_arr = doc["registrations"];
 
-    for (size_t ii = 0; ii < registration_vals.size(); ++ii)
+    for (rapidjson::Value::ConstValueIterator reg_it = reg_arr.Begin();
+         reg_it != reg_arr.End();
+         ++reg_it)
     {
-      Json::Value registration = registration_vals[(int)ii];
-      std::string primary_impu;
-      std::string impi = "";
-
-      if ((registration.isMember("primary-impu")) &&
-          ((registration)["primary-impu"].isString()))
+      try 
       {
-        primary_impu = registration["primary-impu"].asString();
+        std::string primary_impu;
+        std::string impi = "";
+        JSON_GET_STRING_MEMBER(*reg_it, "primary-impu", primary_impu);
 
-        if ((registration.isMember("impi")) &&
-            (registration["impi"].isString()))
-
+        if (((*reg_it).HasMember("impi")) &&
+            ((*reg_it)["impi"].IsString()))
         {
-          impi = registration["impi"].asString();
+          impi = (*reg_it)["impi"].GetString();
         }
+
+        _bindings.insert(std::make_pair(primary_impu, impi));
       }
-      else
+      catch (JsonFormatError err)
       {
-        LOG_WARNING("Invalid JSON - registration doesn't contain primary-impu");
+        TRC_WARNING("Invalid JSON - registration doesn't contain primary-impu");
         return HTTP_BAD_REQUEST;
       }
-
-      _bindings.insert(std::make_pair(primary_impu, impi));
     }
   }
-  else
+  catch (JsonFormatError err)
   {
-    LOG_WARNING("Registrations not available in JSON");
+    TRC_INFO("Registrations not available in JSON");
     return HTTP_BAD_REQUEST;
   }
 
-  LOG_DEBUG("HTTP request successfully parsed");
+  TRC_DEBUG("HTTP request successfully parsed");
   return HTTP_OK;
 }
 
@@ -436,7 +427,7 @@ HTTPCode DeregistrationTask::handle_request()
       // then this will lead to an inconsistency between the HSS and Sprout, as
       // Sprout will have changed some of the AoRs, but HSS will believe they all failed.
       // Sprout accepts changes to AoRs that don't exist though.
-      LOG_WARNING("Unable to connect to memcached for AoR %s", it->first.c_str());
+      TRC_WARNING("Unable to connect to memcached for AoR %s", it->first.c_str());
       delete aor_data;
       return HTTP_SERVER_ERROR;
     }
@@ -528,13 +519,14 @@ RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
     std::vector<std::string> uris;
     std::map<std::string, Ifcs> ifc_map;
     std::string state;
-    LOG_INFO("ID %s", aor_id.c_str());
+    TRC_INFO("ID %s", aor_id.c_str());
 
     if (_cfg->_hss->get_registration_data(aor_id, state, ifc_map, uris, trail()) == HTTP_OK)
     {
       RegistrationUtils::deregister_with_application_servers(ifc_map[aor_id],
                                                              current_store,
                                                              aor_id,
+                                                             NULL,
                                                              trail());
     }
   }
@@ -542,7 +534,7 @@ RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
   // If we allocated the AoR, tidy up.
   if (previous_aor_data_alloced)
   {
-    delete previous_aor_data;
+    delete previous_aor_data; //LCOV_EXCL_LINE
   }
 
   return aor_data;
@@ -550,55 +542,34 @@ RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
 
 HTTPCode AuthTimeoutTask::handle_response(std::string body)
 {
-  Json::Value json_body;
+  rapidjson::Document doc;
   std::string json_str = body;
-  Json::Reader reader;
-  bool parsingSuccessful = reader.parse(json_str.c_str(), json_body);
+  doc.Parse<0>(json_str.c_str());
 
-  if (!parsingSuccessful)
+  if (doc.HasParseError())
   {
-    LOG_ERROR("Failed to read opaque data, %s",
-              reader.getFormattedErrorMessages().c_str());
+    TRC_INFO("Failed to parse opaque data as JSON: %s\nError: %s",
+             json_str.c_str(),
+             rapidjson::GetParseError_En(doc.GetParseError()));
     return HTTP_BAD_REQUEST;
   }
 
-  if ((json_body.isMember("impu")) &&
-      ((json_body)["impu"].isString()))
+  try
   {
-    _impu = json_body.get("impu", "").asString();
+    JSON_GET_STRING_MEMBER(doc, "impu", _impu);
+    JSON_GET_STRING_MEMBER(doc, "impi", _impi);
+    JSON_GET_STRING_MEMBER(doc, "nonce", _nonce);
     report_sip_all_register_marker(trail(), _impu);
   }
-  else
+  catch (JsonFormatError err)
   {
-    LOG_ERROR("IMPU not available in JSON");
-    return HTTP_BAD_REQUEST;
-  }
-
-  if ((json_body.isMember("impi")) &&
-      ((json_body)["impi"].isString()))
-  {
-    _impi = json_body.get("impi", "").asString();
-  }
-  else
-  {
-    LOG_ERROR("IMPI not available in JSON");
-    return HTTP_BAD_REQUEST;
-  }
-
-  if ((json_body.isMember("nonce")) &&
-      ((json_body)["nonce"].isString()))
-  {
-    _nonce = json_body.get("nonce", "").asString();
-  }
-  else
-  {
-    LOG_ERROR("Nonce not available in JSON");
+    TRC_INFO("Badly formed opaque data (missing impu, impi or nonce");
     return HTTP_BAD_REQUEST;
   }
 
   bool success = false;
   uint64_t cas;
-  Json::Value* av = _cfg->_avstore->get_av(_impi, _nonce, cas, trail());
+  rapidjson::Document* av = _cfg->_avstore->get_av(_impi, _nonce, cas, trail());
   if (av != NULL)
   {
     // Use the original REGISTER's branch parameter for SAS
@@ -608,9 +579,9 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
 
     // If authentication completed, we'll have written a marker to
     // indicate that. Look for it.
-    if (!av->isMember("tombstone"))
+    if (!av->HasMember("tombstone"))
     {
-      LOG_DEBUG("AV for %s:%s has timed out", _impi.c_str(), _nonce.c_str());
+      TRC_DEBUG("AV for %s:%s has timed out", _impi.c_str(), _nonce.c_str());
 
       // The AUTHENTICATION_TIMEOUT SAR is idempotent, so there's no
       // problem if Chronos' timer pops twice (e.g. if we have high
@@ -631,13 +602,13 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
       SAS::Event event(trail(), SASEvent::AUTHENTICATION_TIMER_POP_IGNORED, 0);
       SAS::report_event(event);
 
-      LOG_DEBUG("Tombstone record indicates Authentication Vector has been used successfully - ignoring timer pop");
+      TRC_DEBUG("Tombstone record indicates Authentication Vector has been used successfully - ignoring timer pop");
       success = true;
     }
   }
   else
   {
-    LOG_WARNING("Could not find AV for %s:%s when checking authentication timeout", _impi.c_str(), _nonce.c_str()); // LCOV_EXCL_LINE
+    TRC_WARNING("Could not find AV for %s:%s when checking authentication timeout", _impi.c_str(), _nonce.c_str()); // LCOV_EXCL_LINE
   }
   delete av;
 

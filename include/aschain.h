@@ -118,16 +118,25 @@ private:
           ACR* acr);
   ~AsChain();
 
-  void inc_ref()
+  bool inc_ref()
   {
-    ++_refs;
-    LOG_DEBUG("AsChain inc ref %p -> %d", this, _refs.load());
+    // Increment the reference count if it's non-zero.
+    int refs;
+    do
+    {
+      refs = _refs.load();
+    }
+    while ((refs != 0) &&
+           (!_refs.compare_exchange_weak(refs, refs + 1)));
+    TRC_DEBUG("AsChain inc ref %p -> %d", this, _refs.load());
+    // If the reference count is non-zero, we successfully incremented it.
+    return (refs != 0);
   }
 
   void dec_ref()
   {
     int count = --_refs;
-    LOG_DEBUG("AsChain dec ref %p -> %d", this, count);
+    TRC_DEBUG("AsChain dec ref %p -> %d", this, count);
     pj_assert(count >= 0);
     if (count == 0)
     {
@@ -138,7 +147,6 @@ private:
   std::string to_string(size_t index) const;
   const SessionCase& session_case() const;
   size_t size() const;
-  bool matches_target(pjsip_tx_data* tdata) const;
   SAS::TrailId trail() const;
   ACR* acr() const;
 
@@ -221,7 +229,10 @@ public:
   {
     if (_as_chain != NULL)
     {
-      _as_chain->inc_ref();
+      // No need to check the return code from inc_ref - it only fails if
+      // its reference count is already 0 and we know that can't be the case
+      // because we already hold one reference.
+      (void)_as_chain->inc_ref();
     }
     return *this;
   }
@@ -267,21 +278,10 @@ public:
     return (_as_chain != NULL) ? _as_chain->_is_registered : false;
   }
 
-  bool matches_target(pjsip_tx_data* tdata) const
-  {
-    return _as_chain->matches_target(tdata);
-  }
-
   /// Returns the ODI token of the next AsChainLink in this chain.
   const std::string& next_odi_token() const
   {
     return _as_chain->_odi_tokens[_index + 1];
-  }
-
-  /// Returns the appropriate AS timeout to use for this link.
-  int as_timeout() const
-  {
-    return (_default_handling == SESSION_CONTINUED) ? AS_TIMEOUT_CONTINUE : AS_TIMEOUT_TERMINATE;
   }
 
   /// Returns whether or not processing of the AS chain should continue on
@@ -293,9 +293,6 @@ public:
 
   /// Called on receipt of each response from the AS.
   void on_response(int status_code);
-
-  /// Called if the AS is not responding.
-  void on_not_responding();
 
   /// Disposition of a request. Suggests what to do next.
   enum Disposition {
@@ -348,11 +345,6 @@ private:
 
   /// The configured Default Handling configured on the relevant iFC.
   DefaultHandling _default_handling;
-
-  /// Application server timeouts (in seconds).
-  static const int AS_TIMEOUT_CONTINUE = 2;
-  static const int AS_TIMEOUT_TERMINATE = 4;
-
 };
 
 

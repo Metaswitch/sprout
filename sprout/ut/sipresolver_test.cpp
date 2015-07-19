@@ -37,7 +37,6 @@
 #include <string>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include <json/reader.h>
 
 #include "utils.h"
 #include "dnscachedresolver.h"
@@ -245,7 +244,7 @@ TEST_F(SIPResolverTest, SimpleNAPTRSRVTCPResolution)
   records.push_back(a("sprout-1.cw-ngv.com", 3600, "3.0.0.1"));
   _dnsresolver.add_to_cache("sprout-1.cw-ngv.com", ns_t_a, records);
 
-  LOG_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
+  TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   EXPECT_EQ("3.0.0.1:5054;transport=TCP",
             RT(_sipresolver, "sprout.cw-ngv.com").resolve());
@@ -264,7 +263,7 @@ TEST_F(SIPResolverTest, SimpleNAPTRSRVUDPResolution)
   records.push_back(a("sprout-1.cw-ngv.com", 3600, "3.0.0.1"));
   _dnsresolver.add_to_cache("sprout-1.cw-ngv.com", ns_t_a, records);
 
-  LOG_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
+  TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   EXPECT_EQ("3.0.0.1:5054;transport=UDP",
             RT(_sipresolver, "sprout.cw-ngv.com").resolve());
@@ -280,7 +279,7 @@ TEST_F(SIPResolverTest, SimpleSRVTCPResolution)
   records.push_back(a("sprout-1.cw-ngv.com", 3600, "3.0.0.1"));
   _dnsresolver.add_to_cache("sprout-1.cw-ngv.com", ns_t_a, records);
 
-  LOG_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
+  TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   EXPECT_EQ("3.0.0.1:5054;transport=TCP",
             RT(_sipresolver, "sprout.cw-ngv.com").resolve());
@@ -296,7 +295,7 @@ TEST_F(SIPResolverTest, SimpleSRVUDPResolution)
   records.push_back(a("sprout-1.cw-ngv.com", 3600, "3.0.0.1"));
   _dnsresolver.add_to_cache("sprout-1.cw-ngv.com", ns_t_a, records);
 
-  LOG_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
+  TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   EXPECT_EQ("3.0.0.1:5054;transport=UDP",
             RT(_sipresolver, "sprout.cw-ngv.com").resolve());
@@ -315,7 +314,7 @@ TEST_F(SIPResolverTest, SimpleSRVUDPPreference)
   records.push_back(a("sprout-1.cw-ngv.com", 3600, "3.0.0.1"));
   _dnsresolver.add_to_cache("sprout-1.cw-ngv.com", ns_t_a, records);
 
-  LOG_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
+  TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   EXPECT_EQ("3.0.0.1:5054;transport=UDP",
             RT(_sipresolver, "sprout.cw-ngv.com").resolve());
@@ -328,7 +327,7 @@ TEST_F(SIPResolverTest, SimpleAResolution)
   records.push_back(a("sprout.cw-ngv.com", 3600, "3.0.0.1"));
   _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_a, records);
 
-  LOG_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
+  TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   // Test default port/transport.
   EXPECT_EQ("3.0.0.1:5060;transport=UDP",
@@ -393,10 +392,10 @@ TEST_F(SIPResolverTest, ExpiryNoInvalidRead)
   _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_a, udp_records);
   _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_a, tcp_records);
 
-  LOG_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
+  TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
   cwtest_advance_time_ms(3000);
   _dnsresolver.expire_cache();
-  LOG_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
+  TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
   cwtest_reset_time();
 }
 
@@ -407,7 +406,7 @@ TEST_F(SIPResolverTest, SimpleAAAAResolution)
   records.push_back(aaaa("sprout.cw-ngv.com", 3600, "3::1"));
   _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_aaaa, records);
 
-  LOG_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
+  TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   // Test default port/transport.
   EXPECT_EQ("[3::1]:5060;transport=UDP",
@@ -443,7 +442,7 @@ TEST_F(SIPResolverTest, NAPTROrderPreference)
   records.push_back(a("sprout-1.cw-ngv.com", 3600, "3.0.0.1"));
   _dnsresolver.add_to_cache("sprout-1.cw-ngv.com", ns_t_a, records);
 
-  LOG_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
+  TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   EXPECT_EQ("3.0.0.1:5054;transport=TCP",
             RT(_sipresolver, "sprout-1.cw-ngv.com").resolve());
@@ -453,7 +452,7 @@ TEST_F(SIPResolverTest, NAPTROrderPreference)
   records.push_back(naptr("sprout-2.cw-ngv.com", 3600, 0, 1, "S", "SIP+D2U", "", "_sip._udp.sprout.cw-ngv.com"));
   _dnsresolver.add_to_cache("sprout-2.cw-ngv.com", ns_t_naptr, records);
 
-  LOG_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
+  TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   EXPECT_EQ("3.0.0.1:5054;transport=UDP",
             RT(_sipresolver, "sprout-2.cw-ngv.com").resolve());
@@ -475,7 +474,7 @@ TEST_F(SIPResolverTest, SRVPriority)
   records.push_back(a("sprout-2.cw-ngv.com", 3600, "3.0.0.2"));
   _dnsresolver.add_to_cache("sprout-2.cw-ngv.com", ns_t_a, records);
 
-  LOG_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
+  TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   // Do 100 resolutions and check that sprout-1 is picked every time.
   std::map<std::string, int> counts;
@@ -511,7 +510,7 @@ TEST_F(SIPResolverTest, SRVWeight)
   records.push_back(a("sprout-4.cw-ngv.com", 3600, "3.0.0.4"));
   _dnsresolver.add_to_cache("sprout-4.cw-ngv.com", ns_t_a, records);
 
-  LOG_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
+  TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   // Do 1000 resolutions and check that the proportions are roughly as
   // expected.  The error bound is chosen to be 5 standard deviations.
@@ -542,7 +541,7 @@ TEST_F(SIPResolverTest, ARecordLoadBalancing)
   records.push_back(a("sprout.cw-ngv.com", 3600, "3.0.0.4"));
   _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_a, records);
 
-  LOG_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
+  TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   // Do 10000 resolutions and check that the proportions are roughly even
   // The error bound is chosen to be 5 standard deviations.
@@ -585,7 +584,7 @@ TEST_F(SIPResolverTest, BlacklistSRVRecords)
   records.push_back(a("sprout-4.cw-ngv.com", 3600, "3.0.0.4"));
   _dnsresolver.add_to_cache("sprout-4.cw-ngv.com", ns_t_a, records);
 
-  LOG_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
+  TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   // Blacklist 3.0.0.4.
   AddrInfo ai;
@@ -624,7 +623,7 @@ TEST_F(SIPResolverTest, BlacklistARecord)
   records.push_back(a("sprout.cw-ngv.com", 3600, "3.0.0.4"));
   _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_a, records);
 
-  LOG_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
+  TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   // Blacklist 3.0.0.3.
   AddrInfo ai;
@@ -671,7 +670,7 @@ TEST_F(SIPResolverTest, NoMatchingNAPTR)
   records.push_back(a("sprout.cw-ngv.com", 3600, "4.0.0.1"));
   _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_a, records);
 
-  LOG_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
+  TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   EXPECT_EQ("4.0.0.1:5060;transport=UDP",
             RT(_sipresolver, "sprout.cw-ngv.com").resolve());

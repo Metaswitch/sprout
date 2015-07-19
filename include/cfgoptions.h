@@ -43,6 +43,7 @@
 #define CFGOPTIONS_H__
 
 #include <string>
+#include <set>
 
 #include "hssconnection.h"
 #include "regstore.h"
@@ -129,6 +130,14 @@ struct options
   float                                min_token_rate;
   int                                  cass_target_latency_us;
   int                                  exception_max_ttl;
+  int                                  sip_blacklist_duration;
+  int                                  http_blacklist_duration;
+  int                                  sip_tcp_connect_timeout;
+  int                                  sip_tcp_send_timeout;
+  int                                  session_continued_timeout_ms;
+  int                                  session_terminated_timeout_ms;
+  std::set<std::string>                stateless_proxies;
+  std::string                          pbxes;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be

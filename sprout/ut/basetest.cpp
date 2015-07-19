@@ -66,5 +66,5 @@ BaseTest::~BaseTest()
   stack_data.stats_aggregator = NULL;
 
   cwtest_reset_time();
-}
+};
 

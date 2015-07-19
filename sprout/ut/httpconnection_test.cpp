@@ -40,7 +40,6 @@
 #include <string>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include <json/reader.h>
 #include <boost/algorithm/string.hpp>
 
 #include "utils.h"
@@ -55,6 +54,7 @@
 #include "load_monitor.h"
 #include "mock_sas.h"
 #include "mockcommunicationmonitor.h"
+#include "fakesnmp.hpp"
 
 using namespace std;
 using ::testing::MatchesRegex;
@@ -74,9 +74,8 @@ class HttpConnectionTest : public BaseTest
     _http("cyrus",
           true,
           &_resolver,
-          "connected_homers",
+          &SNMP::FAKE_IP_COUNT_TABLE,
           &_lm,
-          stack_data.stats_aggregator,
           SASEvent::HttpLogLevel::PROTOCOL,
           &_cm)
   {
@@ -124,11 +123,11 @@ TEST_F(HttpConnectionTest, SimpleIPv6Get)
   HttpConnection http2("[1::1]:80",
                        true,
                        &_resolver,
-                       "connected_homers",
+                       &SNMP::FAKE_IP_COUNT_TABLE,
                        &_lm,
-                       stack_data.stats_aggregator,
                        SASEvent::HttpLogLevel::PROTOCOL,
-                       NULL);
+                       &_cm);
+
   fakecurl_responses["http://[1::1]:80/ipv6get"] = CURLE_OK;
   long ret = http2.send_get("/ipv6get", output, "gandalf", 0);
   EXPECT_EQ(200, ret);
@@ -215,10 +214,6 @@ TEST_F(HttpConnectionTest, ConnectionRecycle)
   EXPECT_EQ(200, ret);
   Request& req2 = fakecurl_requests["http://10.42.42.42:80/down/down/down"];
   EXPECT_TRUE(req2._fresh);
-
-  // Should be a single connection to the hardcoded fakecurl IP.
-  EXPECT_EQ(1u, _http._server_count.size());
-  EXPECT_EQ(1, _http._server_count["10.42.42.42"]);
 }
 
 TEST_F(HttpConnectionTest, SimplePost)
@@ -311,11 +306,10 @@ TEST_F(HttpConnectionTest, ParseHostPort)
   HttpConnection http2("cyrus:1234",
                        true,
                        &_resolver,
-                       "connected_homers",
+                       &SNMP::FAKE_IP_COUNT_TABLE,
                        &_lm,
-                       stack_data.stats_aggregator,
                        SASEvent::HttpLogLevel::PROTOCOL,
-                       NULL);
+                       &_cm);
   fakecurl_responses["http://10.42.42.42:1234/port-1234"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Document</boring>";
 
   string output;
@@ -330,11 +324,10 @@ TEST_F(HttpConnectionTest, ParseHostPortIPv6)
   HttpConnection http2("[1::1]",
                        true,
                        &_resolver,
-                       "connected_homers",
+                       &SNMP::FAKE_IP_COUNT_TABLE,
                        &_lm,
-                       stack_data.stats_aggregator,
                        SASEvent::HttpLogLevel::PROTOCOL,
-                       NULL);
+                       &_cm);
 
   string output;
   long ret = http2.send_get("/blah/blah/blah", output, "gandalf", 0);

@@ -38,7 +38,6 @@
 #include <string>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include <json/reader.h>
 
 #include "utils.h"
 #include "sas.h"
@@ -81,21 +80,18 @@ TEST_F(AvStoreTest, SimpleWriteRead)
   std::string impi = "6505551234@cw-ngv.com";
   std::string nonce = "9876543210";
   std::string av = "{\"digest\":{\"realm\": \"cw-ngv.com\",\"qop\": \"auth\",\"ha1\": \"12345678\"}}";
+  rapidjson::Document av_json_write;
+  av_json_write.Parse<0>(av.c_str());
 
-  Json::Reader reader;
-  Json::Value* av_json_write = new Json::Value;
-  reader.parse(av, *av_json_write);
-
-  av_store->set_av(impi, nonce, av_json_write, 0, 0);
+  av_store->set_av(impi, nonce, &av_json_write, 0, 0);
 
   // Retrieve the AV from the store.
   uint64_t cas;
-  Json::Value* av_json_read = av_store->get_av(impi, nonce, cas, 0);
+  rapidjson::Document* av_json_read = av_store->get_av(impi, nonce, cas, 0);
 
   EXPECT_THAT(av_json_read, ::testing::NotNull());
-  ASSERT_EQ(0, av_json_read->compare(*av_json_write));
+  ASSERT_TRUE(*av_json_read == av_json_write);
 
-  delete av_json_write;
   delete av_json_read;
 
   delete av_store;
@@ -112,28 +108,24 @@ TEST_F(AvStoreTest, ReadExpired)
   std::string impi = "6505551234@cw-ngv.com";
   std::string nonce = "9876543210";
   std::string av = "{\"digest\":{\"realm\": \"cw-ngv.com\",\"qop\": \"auth\",\"ha1\": \"12345678\"}}";
+  rapidjson::Document av_json_write;
+  av_json_write.Parse<0>(av.c_str());
 
-  Json::Reader reader;
-  Json::Value* av_json_write = new Json::Value;
-  reader.parse(av, *av_json_write);
-
-  av_store->set_av(impi, nonce, av_json_write, 0, 0);
+  av_store->set_av(impi, nonce, &av_json_write, 0, 0);
 
   // Advance the time by 39 seconds and read the record.
   cwtest_advance_time_ms(39000);
   uint64_t cas;
-  Json::Value* av_json_read = av_store->get_av(impi, nonce, cas, 0);
+  rapidjson::Document* av_json_read = av_store->get_av(impi, nonce, cas, 0);
 
   EXPECT_THAT(av_json_read, ::testing::NotNull());
-  ASSERT_EQ(0, av_json_read->compare(*av_json_write));
+  ASSERT_TRUE(*av_json_read == av_json_write);
   delete av_json_read;
 
   // Advance the time another 2 seconds to expire the record.
   cwtest_advance_time_ms(2000);
   av_json_read = av_store->get_av(impi, nonce, cas, 0);
   ASSERT_EQ(NULL, av_json_read);
-
-  delete av_json_write;
 
   delete av_store;
   delete local_data_store;
@@ -155,11 +147,9 @@ TEST_F(AvStoreTest, ReadCorrupt)
   // Attempt to retrieve the corrupt AV from the store and get a
   // failure.
   uint64_t cas;
-  Json::Value* av_json_read = av_store->get_av(impi, nonce, cas, 0);
+  rapidjson::Document* av_json_read = av_store->get_av(impi, nonce, cas, 0);
   ASSERT_EQ(NULL, av_json_read);
 
   delete av_store;
   delete local_data_store;
 }
-
-

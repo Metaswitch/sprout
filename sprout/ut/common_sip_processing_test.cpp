@@ -47,8 +47,10 @@
 #include "sproutletproxy.h"
 #include "common_sip_processing.h"
 #include "counter.h"
+#include "fakesnmp.hpp"
 
 using namespace std;
+
 
 class CommonProcessingTest : public SipTest
 {
@@ -87,10 +89,8 @@ public:
     // Load monitor with one token in the bucket at startup.
     _lm = new LoadMonitor(0, 1, 0, 0);
     
-    _requests_counter = new StatisticCounter("incoming_requests",
-                                             stack_data.stats_aggregator);
-    _overload_counter = new StatisticCounter("rejected_overload",
-                                             stack_data.stats_aggregator);
+    _requests_counter = &SNMP::FAKE_COUNTER_TABLE;
+    _overload_counter = &SNMP::FAKE_COUNTER_TABLE;
 
     _health_checker = new HealthChecker();
 
@@ -101,8 +101,6 @@ public:
   {
     delete(_tp);
     delete(_lm);
-    delete(_requests_counter);
-    delete(_overload_counter);
     delete(_health_checker);
     unregister_common_processing_module();
     pjsip_tsx_layer_dump(true);
@@ -278,8 +276,8 @@ public:
 protected:
   TransportFlow* _tp;
   LoadMonitor* _lm;
-  StatisticCounter* _requests_counter;
-  StatisticCounter* _overload_counter;
+  SNMP::CounterTable* _requests_counter;
+  SNMP::CounterTable* _overload_counter;
   HealthChecker* _health_checker;
 };
 

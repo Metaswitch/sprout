@@ -35,7 +35,9 @@
 */
 
 #include <sys/stat.h>
-#include <json/reader.h>
+#include "rapidjson/document.h"
+#include "rapidjson/error/en.h"
+#include "json_parse_utils.h"
 #include <fstream>
 #include <stdlib.h>
 #include <algorithm>
@@ -56,94 +58,102 @@ SCSCFSelector::SCSCFSelector(std::string configuration) :
 
 void SCSCFSelector::update_scscf()
 {
-  Json::Value root;
-  Json::Reader reader;
-
-  std::string jsonData;
-  std::ifstream file;
-
-  std::vector<scscf_t> new_scscfs;
-
   // Check whether the file exists.
   struct stat s;
   if ((stat(_configuration.c_str(), &s) != 0) &&
       (errno == ENOENT))
   {
-    CL_SPROUT_BAD_S_CSCF_JSON.log();
-    LOG_STATUS("No S-CSCF configuration data (file %s does not exist)",
+    TRC_STATUS("No S-CSCF configuration data (file %s does not exist)",
                _configuration.c_str());
+    CL_SPROUT_SCSCF_FILE_MISSING.log();
     return;
   }
 
-  // The file exists so try to open it.
-  LOG_STATUS("Loading S-CSCF configuration from %s", _configuration.c_str());
+  TRC_STATUS("Loading S-CSCF configuration from %s", _configuration.c_str());
 
-  file.open(_configuration.c_str());
-  if (file.is_open())
+  // Read from the file
+  std::ifstream fs(_configuration.c_str());
+  std::string scscf_str((std::istreambuf_iterator<char>(fs)),
+                         std::istreambuf_iterator<char>());
+
+  if (scscf_str == "")
   {
-    if (!reader.parse(file, root))
-    {
-      CL_SPROUT_BAD_S_CSCF_JSON.log();
-      LOG_WARNING("Failed to read S-CSCF configuration data, %s",
-                  reader.getFormattedErrorMessages().c_str());
-      return;
-    }
-
-    file.close();
-
-    if (root["s-cscfs"].isArray())
-    {
-      Json::Value scscfs = root["s-cscfs"];
-
-      for (size_t ii = 0; ii < scscfs.size(); ++ii)
-      {
-        Json::Value scscf = scscfs[(int)ii];
-
-        if ((scscf["server"].isString()) &&
-            (scscf["priority"].isInt()) &&
-            (scscf["weight"].isInt()) &&
-            (scscf["capabilities"].isArray()))
-        {
-          scscf_t new_scscf;
-
-          new_scscf.server = scscf["server"].asString();
-          new_scscf.priority = scscf["priority"].asInt();
-          new_scscf.weight = scscf["weight"].asInt();
-
-          Json::Value capabilities_vals = scscf["capabilities"];
-          std::vector<int> capabilities_vec;
-
-          for (size_t jj = 0; jj < capabilities_vals.size(); ++jj)
-          {
-            Json::Value capability_val = capabilities_vals[(int)jj];
-            capabilities_vec.push_back(capability_val.asInt());
-          }
-
-          // Sort the capabalities and remove duplicates
-          std::sort(capabilities_vec.begin(), capabilities_vec.end());
-          capabilities_vec.erase(unique(capabilities_vec.begin(), capabilities_vec.end() ), capabilities_vec.end() );
-          new_scscf.capabilities = capabilities_vec;
-          new_scscfs.push_back(new_scscf);
-          capabilities_vec.clear();
-        }
-        else
-        {
-          LOG_WARNING("Badly formed S-CSCF entry %s", scscf.toStyledString().c_str());
-        }
-      }
-
-      _scscfs = new_scscfs;
-    }
-    else
-    {
-      LOG_WARNING("Badly formed S-CSCF configuration file - missing s-cscfs object");
-    }
+    // LCOV_EXCL_START
+    TRC_ERROR("Failed to read S-CSCF configuration data from %s",
+              _configuration.c_str());
+    CL_SPROUT_SCSCF_FILE_EMPTY.log();
+    return;
+    // LCOV_EXCL_STOP
   }
-  else
+
+  // Now parse the document
+  rapidjson::Document doc;
+  doc.Parse<0>(scscf_str.c_str());
+
+  if (doc.HasParseError())
   {
-    //LCOV_EXCL_START
-    LOG_WARNING("Failed to read S-CSCF configuration data %d", file.rdstate());
-    //LCOV_EXCL_STOP
+    TRC_ERROR("Failed to read S-CSCF configuration data: %s\nError: %s",
+              scscf_str.c_str(),
+              rapidjson::GetParseError_En(doc.GetParseError()));
+    CL_SPROUT_SCSCF_FILE_INVALID.log();
+    return;
+  }
+
+  try
+  {
+    std::vector<scscf_t> new_scscfs;
+
+    JSON_ASSERT_CONTAINS(doc, "s-cscfs");
+    JSON_ASSERT_ARRAY(doc["s-cscfs"]);
+    const rapidjson::Value& scscfs_arr = doc["s-cscfs"];
+
+    for (rapidjson::Value::ConstValueIterator scscfs_it = scscfs_arr.Begin();
+         scscfs_it != scscfs_arr.End();
+         ++scscfs_it)
+    {
+      try 
+      {
+        scscf_t new_scscf;
+        JSON_GET_STRING_MEMBER(*scscfs_it, "server", new_scscf.server);
+        JSON_GET_INT_MEMBER(*scscfs_it, "priority", new_scscf.priority);
+        JSON_GET_INT_MEMBER(*scscfs_it, "weight", new_scscf.weight);
+        
+        JSON_ASSERT_CONTAINS(*scscfs_it, "capabilities");
+        JSON_ASSERT_ARRAY((*scscfs_it)["capabilities"]);
+        const rapidjson::Value& cap_arr = (*scscfs_it)["capabilities"];
+        std::vector<int> capabilities_vec;
+ 
+        for (rapidjson::Value::ConstValueIterator cap_it = cap_arr.Begin();
+             cap_it != cap_arr.End();
+             ++cap_it)
+        {
+          capabilities_vec.push_back((*cap_it).GetInt());
+        }
+
+        // Sort the capabilities and remove duplicates
+        std::sort(capabilities_vec.begin(), capabilities_vec.end());
+        capabilities_vec.erase(unique(capabilities_vec.begin(),  
+                                      capabilities_vec.end()),
+                               capabilities_vec.end() );
+        new_scscf.capabilities = capabilities_vec;
+        new_scscfs.push_back(new_scscf);
+        capabilities_vec.clear();
+      }
+      catch (JsonFormatError err)
+      {
+        // Badly formed number block.
+        TRC_WARNING("Badly formed S-CSCF entry (hit error at %s:%d)",
+                    err._file, err._line);
+        CL_SPROUT_SCSCF_FILE_INVALID.log();
+      }
+    }
+
+    _scscfs = new_scscfs;
+  }
+  catch (JsonFormatError err)
+  {
+    TRC_ERROR("Badly formed S-CSCF configuration file - missing s-cscfs object");
+    CL_SPROUT_SCSCF_FILE_INVALID.log();
   }
 }
 
@@ -165,7 +175,7 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
     SAS::Event event(trail, SASEvent::SCSCF_NONE_CONFIGURED, 0);
     SAS::report_event(event);
 
-    LOG_WARNING("There are no configured S-CSCFs");
+    TRC_WARNING("There are no configured S-CSCFs");
     return std::string();
   }
 
@@ -248,7 +258,7 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
   // If there's only one match, then return its name.
   if (matches.empty())
   {
-    LOG_WARNING("There are no configured S-CSCFs that have the requested mandatory capabilities (%s)",
+    TRC_WARNING("There are no configured S-CSCFs that have the requested mandatory capabilities (%s)",
                 mandatory_str.c_str());
 
     SAS::Event event(trail, SASEvent::SCSCF_NONE_VALID, 0);
@@ -261,7 +271,7 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
   }
   else if (matches.size() == 1)
   {
-    LOG_DEBUG("Selected S-CSCF is %s",  matches[0].server.c_str());
+    TRC_DEBUG("Selected S-CSCF is %s",  matches[0].server.c_str());
 
     SAS::Event event(trail, SASEvent::SCSCF_SELECTED, 0);
     event.add_var_param(matches[0].server);
@@ -292,7 +302,7 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
     accumulator +=  matches[index].weight;
   }
 
-  LOG_DEBUG("Selected S-CSCF is %s",  matches[index].server.c_str());
+  TRC_DEBUG("Selected S-CSCF is %s",  matches[index].server.c_str());
 
   SAS::Event event(trail, SASEvent::SCSCF_SELECTED, 0);
   event.add_var_param(matches[index].server);
