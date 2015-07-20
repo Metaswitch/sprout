@@ -1978,7 +1978,9 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
       pj_str_t to_user = user_from_uri(to_uri);
       SAS::Marker sip_all_register(trail, MARKER_ID_SIP_ALL_REGISTER, 1u);
       sip_all_register.add_var_param(to_uri_str);
-      sip_all_register.add_var_param(to_user.slen, to_user.ptr);
+      sip_all_register.add_var_param(is_user_numeric(to_user) ?
+                                     remove_visual_separators(to_user) :
+                                     to_uri_str);
       SAS::report_marker(sip_all_register);
     }
   }
@@ -1996,7 +1998,9 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
                                             SASEvent::SubscribeNotifyType::SUBSCRIBE :
                                             SASEvent::SubscribeNotifyType::NOTIFY);
       sip_subscribe_notify.add_var_param(to_uri_str);
-      sip_subscribe_notify.add_var_param(to_user.slen, to_user.ptr);
+      sip_subscribe_notify.add_var_param(is_user_numeric(to_user) ?
+                                         remove_visual_separators(to_user) :
+                                         to_uri_str);
       SAS::report_marker(sip_subscribe_notify);
     }
   }
@@ -2010,10 +2014,12 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
       if (to_uri != NULL)
       {
         pj_str_t to_user = user_from_uri(to_uri);
-
-        SAS::Marker called_dn(trail, MARKER_ID_CALLED_DN, 1u);
-        called_dn.add_var_param(to_user.slen, to_user.ptr);
-        SAS::report_marker(called_dn);
+        if (is_user_numeric(to_user))
+        {
+          SAS::Marker called_dn(trail, MARKER_ID_CALLED_DN, 1u);
+          called_dn.add_var_param(remove_visual_separators(to_user));
+          SAS::report_marker(called_dn);
+        }
 
         SAS::Marker called_uri(trail, MARKER_ID_INBOUND_CALLED_URI, 1u);
         called_uri.add_var_param(uri_to_string(PJSIP_URI_IN_FROMTO_HDR, to_uri));
@@ -2023,9 +2029,12 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
       if (from_uri != NULL)
       {
         pj_str_t from_user = user_from_uri(from_uri);
-        SAS::Marker calling_dn(trail, MARKER_ID_CALLING_DN, 1u);
-        calling_dn.add_var_param(from_user.slen, from_user.ptr);
-        SAS::report_marker(calling_dn);
+        if (is_user_numeric(from_user))
+        {
+          SAS::Marker calling_dn(trail, MARKER_ID_CALLING_DN, 1u);
+          calling_dn.add_var_param(remove_visual_separators(from_user));
+          SAS::report_marker(calling_dn);
+        }
 
         SAS::Marker calling_uri(trail, MARKER_ID_INBOUND_CALLING_URI, 1u);
         calling_uri.add_var_param(uri_to_string(PJSIP_URI_IN_FROMTO_HDR, from_uri));
@@ -2155,8 +2164,15 @@ static const boost::regex CHARS_TO_STRIP = boost::regex("[.)(-]");
 
 // Strip any visual separators from the number
 std::string PJUtils::remove_visual_separators(const std::string& number)
-{ 
-  return boost::regex_replace(number, CHARS_TO_STRIP, std::string("")); 
+{
+  return boost::regex_replace(number, CHARS_TO_STRIP, std::string(""));
+};
+
+// Strip any visual separators from the number
+std::string PJUtils::remove_visual_separators(const pj_str_t& number)
+{
+  std::string s = pj_str_to_string(&number);
+  return remove_visual_separators(s);
 };
 
 /// Determines whether a user string is a valid phone number
