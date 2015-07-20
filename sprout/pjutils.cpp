@@ -1978,6 +1978,8 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
       pj_str_t to_user = user_from_uri(to_uri);
       SAS::Marker sip_all_register(trail, MARKER_ID_SIP_ALL_REGISTER, 1u);
       sip_all_register.add_var_param(to_uri_str);
+      // Add the DN parameter. If the user part is not numeric log the whole URI
+      // so that it displays properly in SAS.
       sip_all_register.add_var_param(is_user_numeric(to_user) ?
                                      remove_visual_separators(to_user) :
                                      to_uri_str);
@@ -1998,6 +2000,8 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
                                             SASEvent::SubscribeNotifyType::SUBSCRIBE :
                                             SASEvent::SubscribeNotifyType::NOTIFY);
       sip_subscribe_notify.add_var_param(to_uri_str);
+      // Add the DN parameter. If the user part is not numeric log the whole URI
+      // so that it displays properly in SAS.
       sip_subscribe_notify.add_var_param(is_user_numeric(to_user) ?
                                          remove_visual_separators(to_user) :
                                          to_uri_str);
