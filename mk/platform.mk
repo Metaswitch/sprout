@@ -89,7 +89,7 @@ TARGET_OBJS_TEST := $(patsubst %.cpp, ${OBJ_DIR_TEST}/%.o, ${TARGET_SOURCES} ${T
 TARGET_OBJS_DEPS := $(patsubst %.cpp, ${OBJ_DIR_TEST}/%.o, ${TARGET_SOURCES} ${TARGET_SOURCES_TEST})
 
 # The dependencies
-DEPS := $(patsubst %.o, %.depends, $(patsubst %.so, %.depends, ${TARGET_OBJS} ${TARGET_OBJS_DEPS}))
+DEPS := $(patsubst %.o, %.d, $(patsubst %.so, %.d, ${TARGET_OBJS} ${TARGET_OBJS_DEPS}))
 
 # Build the production binary.
 .PHONY: build
@@ -122,25 +122,13 @@ ${TARGET_BIN_TEST}: ${TARGET_OBJS_TEST}
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(CPPFLAGS_TEST) -o $@ $^ $(LDFLAGS) $(LDFLAGS_TEST) $(TARGET_ARCH) $(LOADLIBES) $(LDLIBS)
 
 ${OBJ_DIR}/%.o: %.cpp | ${OBJ_DIR}
-	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(CPPFLAGS_BUILD) $(TARGET_ARCH) -c -o $@ $<
+	$(CXX) -MMD $(CXXFLAGS) $(CPPFLAGS) $(CPPFLAGS_BUILD) $(TARGET_ARCH) -c -o $@ $<
 
 ${OBJ_DIR_TEST}/%.o: %.cpp | ${OBJ_DIR_TEST}
-	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(CPPFLAGS_TEST) $(TARGET_ARCH) -c -o $@ $<
+	$(CXX) -MMD $(CXXFLAGS) $(CPPFLAGS) $(CPPFLAGS_TEST) $(TARGET_ARCH) -c -o $@ $<
 
 ${OBJ_DIR_TEST}/%.o: $(UT_DIR)/%.cpp | ${OBJ_DIR_TEST}
-	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(CPPFLAGS_TEST) $(TARGET_ARCH) -c -o $@ $<
-
-${OBJ_DIR}/%.depends: %.cpp | ${OBJ_DIR}
-	@echo $@
-	@$(CXX) -M -MQ ${OBJ_DIR}/$*.o -MQ $@ $(CXXFLAGS) $(CPPFLAGS) $(CPPFLAGS_BUILD) $(TARGET_ARCH) -c -o $@ $<
-
-${OBJ_DIR_TEST}/%.depends: %.cpp | ${OBJ_DIR_TEST}
-	@echo $@
-	@$(CXX) -M -MQ ${OBJ_DIR_TEST}/$*.o -MQ $@ $(CXXFLAGS) $(CPPFLAGS) $(CPPFLAGS_TEST) $(TARGET_ARCH) -c -o $@ $<
-
-${OBJ_DIR_TEST}/%.depends: $(UT_DIR)/%.cpp | ${OBJ_DIR_TEST}
-	@echo $@
-	@$(CXX) -M -MQ ${OBJ_DIR_TEST}/$*.o -MQ $@ $(CXXFLAGS) $(CPPFLAGS) $(CPPFLAGS_TEST) $(TARGET_ARCH) -c -o $@ $<
+	$(CXX) -MMD $(CXXFLAGS) $(CPPFLAGS) $(CPPFLAGS_TEST) $(TARGET_ARCH) -c -o $@ $<
 
 ${OBJ_DIR}:
 	mkdir -p ${OBJ_DIR}
