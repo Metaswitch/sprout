@@ -163,7 +163,20 @@ std::string PJUtils::uri_to_string(pjsip_uri_context_e context,
   {
     uri_clen = pjsip_uri_print(context, uri, uri_cstr, sizeof(uri_cstr));
   }
+
   return std::string(uri_cstr, uri_clen);
+}
+
+
+std::string PJUtils::strip_uri_scheme(const std::string& uri)
+{
+  std::string s(uri);
+  size_t colon = s.find(':');
+  if (colon != std::string::npos)
+  {
+    s.erase(0, colon + 1);
+  }
+  return s;
 }
 
 
@@ -1974,15 +1987,16 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
     // For REGISTERs, report the To URI in the SIP_ALL_REGISTER marker.
     if (to_uri != NULL)
     {
-      std::string to_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, to_uri);
+      std::string to_uri_str = uri_to_string(PJSIP_URI_IN_FROMTO_HDR, to_uri);
       pj_str_t to_user = user_from_uri(to_uri);
+
       SAS::Marker sip_all_register(trail, MARKER_ID_SIP_ALL_REGISTER, 1u);
-      sip_all_register.add_var_param(to_uri_str);
-      // Add the DN parameter. If the user part is not numeric log the whole URI
-      // so that it displays properly in SAS.
+      sip_all_register.add_var_param(strip_uri_scheme(to_uri_str));
+      // Add the DN parameter. If the user part is not numeric just log it in
+      // its entirety.
       sip_all_register.add_var_param(is_user_numeric(to_user) ?
                                      remove_visual_separators(to_user) :
-                                     to_uri_str);
+                                     pj_str_to_string(&to_user));
       SAS::report_marker(sip_all_register);
     }
   }
@@ -1991,20 +2005,21 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
     // For SUBSCRIBEs and NOTIFYs, report the To URI in the SIP_SUBSCRIBE_NOTIFY marker.
     if (to_uri != NULL)
     {
-      std::string to_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, to_uri);
+      std::string to_uri_str = uri_to_string(PJSIP_URI_IN_FROMTO_HDR, to_uri);
       pj_str_t to_user = user_from_uri(to_uri);
+
       SAS::Marker sip_subscribe_notify(trail, MARKER_ID_SIP_SUBSCRIBE_NOTIFY, 1u);
       // The static parameter contains the type of request - 1 for SUBSCRIBE and 2 for
       // NOTIFY.
       sip_subscribe_notify.add_static_param(is_subscribe ?
                                             SASEvent::SubscribeNotifyType::SUBSCRIBE :
                                             SASEvent::SubscribeNotifyType::NOTIFY);
-      sip_subscribe_notify.add_var_param(to_uri_str);
-      // Add the DN parameter. If the user part is not numeric log the whole URI
-      // so that it displays properly in SAS.
+      sip_subscribe_notify.add_var_param(strip_uri_scheme(to_uri_str));
+      // Add the DN parameter. If the user part is not numeric just log it in
+      // its entirety.
       sip_subscribe_notify.add_var_param(is_user_numeric(to_user) ?
                                          remove_visual_separators(to_user) :
-                                         to_uri_str);
+                                         pj_str_to_string(&to_user));
       SAS::report_marker(sip_subscribe_notify);
     }
   }
@@ -2026,7 +2041,8 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
         }
 
         SAS::Marker called_uri(trail, MARKER_ID_INBOUND_CALLED_URI, 1u);
-        called_uri.add_var_param(uri_to_string(PJSIP_URI_IN_FROMTO_HDR, to_uri));
+        called_uri.add_var_param(strip_uri_scheme(
+                                   uri_to_string(PJSIP_URI_IN_FROMTO_HDR, to_uri)));
         SAS::report_marker(called_uri);
       }
 
@@ -2041,7 +2057,8 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
         }
 
         SAS::Marker calling_uri(trail, MARKER_ID_INBOUND_CALLING_URI, 1u);
-        calling_uri.add_var_param(uri_to_string(PJSIP_URI_IN_FROMTO_HDR, from_uri));
+        calling_uri.add_var_param(strip_uri_scheme(
+                                    uri_to_string(PJSIP_URI_IN_FROMTO_HDR, from_uri)));
         SAS::report_marker(calling_uri);
       }
     }
@@ -2250,15 +2267,15 @@ bool PJUtils::get_rn(pjsip_uri* uri, std::string& routing_value)
   return rn_set;
 }
 
-bool PJUtils::does_uri_represent_number(pjsip_uri* uri, 
+bool PJUtils::does_uri_represent_number(pjsip_uri* uri,
                                         bool enforce_user_phone)
 {
   // A URI represents a telephone number if:
-  // - It's a Tel URI, or 
+  // - It's a Tel URI, or
   // - It's a SIP URI where
   //    - user=phone is set or enforce_user_phone is false
   //    - The user part is numeric
-  //    - It's not a gruu. 
+  //    - It's not a gruu.
   return ((is_uri_phone_number(uri)) ||
           ((!enforce_user_phone) &&
            (is_user_numeric(user_from_uri(uri))) &&
@@ -2266,14 +2283,14 @@ bool PJUtils::does_uri_represent_number(pjsip_uri* uri,
 }
 
 // Adds/updates a Session-Expires header to/in the request.
-// We use the value of the Min-SE header if it's set (and valid), 
+// We use the value of the Min-SE header if it's set (and valid),
 // or the default session expiry value otherwise (which comes from
-// configuration. 
+// configuration.
 //
-// Returns success if we could set the Session-Expires header to a 
+// Returns success if we could set the Session-Expires header to a
 // valid value
 bool PJUtils::add_update_session_expires(pjsip_msg* req,
-                                         pj_pool_t* pool, 
+                                         pj_pool_t* pool,
                                          SAS::TrailId trail)
 {
   bool added_se = true;
@@ -2292,7 +2309,7 @@ bool PJUtils::add_update_session_expires(pjsip_msg* req,
 
   if (session_expires == NULL)
   {
-    // No session expiry header, so add one with the default session 
+    // No session expiry header, so add one with the default session
     // expiry value
     TRC_DEBUG("Adding session expires header with default value");
     session_expires = pjsip_session_expires_hdr_create(pool);
@@ -2305,8 +2322,8 @@ bool PJUtils::add_update_session_expires(pjsip_msg* req,
     {
       if (min_se->expires > stack_data.max_session_expires)
       {
-        // Min SE header is requesting a session expiry that is too 
-        // large. Reject the request. 
+        // Min SE header is requesting a session expiry that is too
+        // large. Reject the request.
         TRC_INFO("Requested session expiry is too large");
 
         SAS::Event event(trail, SASEvent::INVALID_SESSION_EXPIRES_HEADER, 0);
@@ -2318,7 +2335,7 @@ bool PJUtils::add_update_session_expires(pjsip_msg* req,
       }
       else
       {
-        TRC_DEBUG("Setting session expires value from Min-SE header: %d", 
+        TRC_DEBUG("Setting session expires value from Min-SE header: %d",
                   min_se->expires);
         session_expires->expires = min_se->expires;
       }
