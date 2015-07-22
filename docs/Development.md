@@ -121,15 +121,12 @@ The sprout makefile offers the following additional options and targets.
 
 To run sprout on the machine it was built on, change to the top-level `sprout` directory and then run the following command, passing in the appropriate parameters
 
-    LD_LIBRARY_PATH=usr/lib:$LD_LIBRARY_PATH build/bin/sprout <parameters>
+    MIBS="" LD_LIBRARY_PATH=usr/lib:$LD_LIBRARY_PATH build/bin/sprout <parameters>
 
 As an example, to run Sprout as a basic S-CSCF on port 5054 run the following command.
 
-    LD_LIBRARY_PATH=usr/lib:$LD_LIBRARY_PATH build/bin/sprout -t --domain=<Home Domain> --scscf=5054 --scscf-uri=sip:<Sprout cluster>:5054;transport=TCP --hss=<Homestead cluster> 
+    MIBS="" LD_LIBRARY_PATH=usr/lib:$LD_LIBRARY_PATH build/bin/sprout -t --domain=<Home Domain> --scscf=5054 --scscf-uri=sip:<Sprout cluster>:5054;transport=TCP --hss=<Homestead cluster> 
 
 For all command-line options, use the `-h` option.
 
-Sprout attempts to connect to the local SNMP agent (snmpd) to provide statistics. If running it interactively, you will see warnings ("Warning (Net-SNMP): Warning: Failed to connect to the agentx master agent ([NIL])") unless you either:
-
-* install the clearwater-snmpd package
-* install the normal snmpd package, and configure it as an AgentX master in /etc/snmp/snmpd.conf
+Sprout attempts to connect to the local SNMP agent (snmpd) to provide statistics. If running it interactively, you will see warnings ("Warning (Net-SNMP): Warning: Failed to connect to the agentx master agent ([NIL])") unless you install the `snmpd` package, and configure it as an AgentX master in /etc/snmp/snmpd.conf (http://www.net-snmp.org/docs/README.agentx.html).
