@@ -619,6 +619,17 @@ void PJUtils::add_record_route(pjsip_tx_data* tdata,
 }
 
 /// Add a Route header with the specified URI.
+void PJUtils::add_top_route_header(pjsip_msg* msg,
+                                   pjsip_sip_uri* uri,
+                                   pj_pool_t* pool)
+{
+  pjsip_route_hdr* hroute = pjsip_route_hdr_create(pool);
+  hroute->name_addr.uri = (pjsip_uri*)uri;
+  uri->lr_param = 1;            // Always use loose routing.
+  pjsip_msg_insert_first_hdr(msg, (pjsip_hdr*)hroute);
+}
+
+/// Add a Route header with the specified URI.
 void PJUtils::add_route_header(pjsip_msg* msg,
                                pjsip_sip_uri* uri,
                                pj_pool_t* pool)

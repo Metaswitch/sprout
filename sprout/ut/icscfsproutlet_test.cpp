@@ -3118,6 +3118,58 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteBadServerName)
   delete tp;
 }
 
+TEST_F(ICSCFSproutletTest, INVITEWithTwoRouteHeaders)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.icscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a INVITE request with orig in the Route header and a P-Served-User
+  // header.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:icscf.homedomain;lr>, <sip:scscf1.homedomain:5059;transport=TCP;lr;orig>";
+  inject_msg(msg1.get_request(), tp);
+
+  ASSERT_EQ(2, txdata_count());
+
+  // Ignore the 100 Trying
+  free_txdata();
+
+  // INVITE request should be forwarded to the server named in the Route header, scscf1.homedomain.
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.1", 5059, tdata);
+  ReqMatcher r1("INVITE");
+  r1.matches(tdata->msg);
+
+  // Check that no additional Route header has been added
+  string route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("Route: <sip:scscf1.homedomain:5059;transport=TCP;lr;orig>", route);
+
+  // Check that no Record-Route headers have been added.
+  string rr = get_headers(tdata->msg, "Record-Route");
+  ASSERT_EQ("", rr);
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher r2(200);
+  r2.matches(tdata->msg);
+
+  free_txdata();
+
+  delete tp;
+}
+
 // Test the case where the I-CSCF receives an ACK. This is not valid and should be dropped.
 TEST_F(ICSCFSproutletTest, RouteOutOfDialogAck)
 {
@@ -3127,6 +3179,7 @@ TEST_F(ICSCFSproutletTest, RouteOutOfDialogAck)
                                         "1.2.3.4",
                                         49152);
 
+ 
   // Inject an ACK request to a local URI
   Message msg1;
   msg1._method = "ACK";

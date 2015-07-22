@@ -128,6 +128,8 @@ inline pj_bool_t is_top_route_local(const pjsip_msg* msg, pjsip_route_hdr** hdr)
 
 void add_record_route(pjsip_tx_data* tdata, const char* transport, int port, const char* user, const pj_str_t& host);
 
+void add_top_route_header(pjsip_msg* msg, pjsip_sip_uri* uri, pj_pool_t* pool);
+
 void add_route_header(pjsip_msg* msg, pjsip_sip_uri* uri, pj_pool_t* pool);
 
 void remove_hdr(pjsip_msg* msg,

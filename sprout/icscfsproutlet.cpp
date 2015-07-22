@@ -459,6 +459,18 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 {
   pj_pool_t* pool = get_pool(req);
 
+  pjsip_route_hdr* hroute = (pjsip_route_hdr*)
+                                pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
+
+  // TS 24.229 says I-CSCF processing shouldn't be done if a message has more than one Route header.
+  // We've stripped one off in Sproutlet processing, so check for a second and just forward the
+  // message if it's there.
+  if (hroute != NULL)
+  {
+    send_request(req);
+    return;
+  }
+
   pjsip_uri* next_hop = PJUtils::next_hop(req);
   if (req->line.req.method.id == PJSIP_ACK_METHOD &&
       next_hop == req->line.req.uri &&
