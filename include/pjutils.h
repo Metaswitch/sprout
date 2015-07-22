@@ -271,6 +271,7 @@ pj_bool_t is_user_global(const std::string& user);
 pj_bool_t is_user_global(const pj_str_t& user);
 
 std::string remove_visual_separators(const std::string& user);
+std::string remove_visual_separators(const pj_str_t& number);
 
 pj_bool_t is_user_numeric(const std::string& user);
 pj_bool_t is_user_numeric(const pj_str_t& user);

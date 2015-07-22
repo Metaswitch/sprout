@@ -126,7 +126,11 @@ static void report_sip_all_register_marker(SAS::TrailId trail, std::string uri_s
     // Create and report the marker.
     SAS::Marker sip_all_register(trail, MARKER_ID_SIP_ALL_REGISTER, 1u);
     sip_all_register.add_var_param(uri_str);
-    sip_all_register.add_var_param(user.slen, user.ptr);
+    // Add the DN parameter. If the user part is not numeric log the whole URI
+    // so that it displays properly in SAS.
+    sip_all_register.add_var_param(PJUtils::is_user_numeric(user) ?
+                                   PJUtils::remove_visual_separators(user) :
+                                   PJUtils::pj_str_to_string(&user));
     SAS::report_marker(sip_all_register);
   }
   else
