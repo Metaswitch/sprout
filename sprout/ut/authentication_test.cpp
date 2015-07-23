@@ -463,6 +463,17 @@ TEST_F(AuthenticationTest, NoAuthorizationNonReg)
   EXPECT_EQ(PJ_FALSE, ret);
 }
 
+TEST_F(AuthenticationTest, NoAuthorizationNonRegWithPxyAuthHdr)
+{
+  // Test that the authentication module lets through non-REGISTER requests
+  // with no authorization header.
+  AuthenticationMessage msg("INVITE");
+  msg._auth_hdr = false;
+  msg._proxy_auth_hdr = true;
+  pj_bool_t ret = inject_msg_direct(msg.get());
+  EXPECT_EQ(PJ_FALSE, ret);
+}
+
 TEST_F(AuthenticationTest, NoAuthorizationInDialog)
 {
   // Test that the authentication module lets through non-REGISTER requests
@@ -1352,5 +1363,3 @@ TEST_F(AuthenticationPxyAuthHdrTest, ProxyAuthorizationFailure)
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
-
-
