@@ -52,6 +52,7 @@
 #include "acr.h"
 #include "enumservice.h"
 #include "exception_handler.h"
+#include "authentication.h"
 
 enum struct MemcachedWriteFormat
 {
@@ -138,6 +139,7 @@ struct options
   int                                  session_terminated_timeout_ms;
   std::set<std::string>                stateless_proxies;
   std::string                          pbxes;
+  NonRegisterAuthentication            non_register_auth_mode;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
