@@ -475,121 +475,6 @@ TEST_F(AuthenticationTest, NoAuthorizationInDialog)
   EXPECT_EQ(PJ_FALSE, ret);
 }
 
-TEST_F(AuthenticationPxyAuthHdrTest, ProxyAuthorizationSuccess)
-{
-  // Test a successful SIP Digest authentication flow.
-  pjsip_tx_data* tdata;
-
-  // Set up the HSS response for the AV query using a default private user identity.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
-                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
-
-  // Send in a request with a Proxy-Authentication header.  This triggers
-  // Digest authentication.
-  AuthenticationMessage msg("INVITE");
-  msg._auth_hdr = false;
-  msg._proxy_auth_hdr = true;
-  inject_msg(msg.get());
-
-  // Expect a 407 Proxy Authorization Required response.
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  RespMatcher(407).matches(tdata->msg);
-
-  // Extract the nonce, nc, cnonce and qop fields from the header.
-  std::string auth = get_headers(tdata->msg, "Proxy-Authenticate");
-  std::map<std::string, std::string> auth_params;
-  parse_www_authenticate(auth, auth_params);
-  EXPECT_NE("", auth_params["nonce"]);
-  EXPECT_EQ("auth", auth_params["qop"]);
-  EXPECT_EQ("MD5", auth_params["algorithm"]);
-  free_txdata();
-
-  // ACK that response
-  AuthenticationMessage ack("ACK");
-  ack._cseq = 1;
-  inject_msg_direct(ack.get());
-
-  // Send a new request with an authentication header including the response.
-  AuthenticationMessage msg2("INVITE");
-  msg2._auth_hdr = false;
-  msg2._proxy_auth_hdr = true;
-  msg2._algorithm = "MD5";
-  msg2._key = "12345678123456781234567812345678";
-  msg2._nonce = auth_params["nonce"];
-  msg2._opaque = auth_params["opaque"];
-  msg2._nc = "00000001";
-  msg2._cnonce = "8765432187654321";
-  msg2._qop = "auth";
-  msg2._integ_prot = "ip-assoc-pending";
-  inject_msg(msg2.get());
-
-  // Expect no response, as the authentication module has let the request through.
-  ASSERT_EQ(0, txdata_count());
-
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
-}
-
-TEST_F(AuthenticationPxyAuthHdrTest, ProxyAuthorizationFailure)
-{
-  // Test a successful SIP Digest authentication flow.
-  pjsip_tx_data* tdata;
-
-  // Set up the HSS response for the AV query using a default private user identity.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
-                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
-
-  // Send in a request with a Proxy-Authentication header.  This triggers
-  // Digest authentication.
-  AuthenticationMessage msg("INVITE");
-  msg._auth_hdr = false;
-  msg._proxy_auth_hdr = true;
-  inject_msg(msg.get());
-
-  // Expect a 407 Proxy Authorization Required response.
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  RespMatcher(407).matches(tdata->msg);
-
-  // Extract the nonce, nc, cnonce and qop fields from the header.
-  std::string auth = get_headers(tdata->msg, "Proxy-Authenticate");
-  std::map<std::string, std::string> auth_params;
-  parse_www_authenticate(auth, auth_params);
-  EXPECT_NE("", auth_params["nonce"]);
-  EXPECT_EQ("auth", auth_params["qop"]);
-  EXPECT_EQ("MD5", auth_params["algorithm"]);
-  free_txdata();
-
-  // ACK that response
-  AuthenticationMessage ack("ACK");
-  ack._cseq = 1;
-  inject_msg_direct(ack.get());
-
-  // Send a new request with an authentication header - the nonce should match but the password
-  // should be wrong.
-  AuthenticationMessage msg2("INVITE");
-  msg2._auth_hdr = false;
-  msg2._proxy_auth_hdr = true;
-  msg2._algorithm = "MD5";
-  msg2._key = "wrong";
-  msg2._nonce = auth_params["nonce"];
-  msg2._opaque = auth_params["opaque"];
-  msg2._nc = "00000001";
-  msg2._cnonce = "8765432187654321";
-  msg2._qop = "auth";
-  msg2._integ_prot = "ip-assoc-pending";
-  inject_msg(msg2.get());
-
-  // Expect a 403 Forbidden response.
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  RespMatcher(403).matches(tdata->msg);
-  free_txdata();
-
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
-}
-
-
 TEST_F(AuthenticationTest, NoAuthorizationEmergencyReg)
 {
   // Test that the authentication module lets through emergency REGISTER requests
@@ -1348,6 +1233,121 @@ TEST_F(AuthenticationTest, AuthCorruptAV)
   RespMatcher(403).matches(tdata->msg);
   EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
   EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+}
+
+
+TEST_F(AuthenticationPxyAuthHdrTest, ProxyAuthorizationSuccess)
+{
+  // Test a successful SIP Digest authentication flow.
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Send in a request with a Proxy-Authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg("INVITE");
+  msg._auth_hdr = false;
+  msg._proxy_auth_hdr = true;
+  inject_msg(msg.get());
+
+  // Expect a 407 Proxy Authorization Required response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(407).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the header.
+  std::string auth = get_headers(tdata->msg, "Proxy-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  parse_www_authenticate(auth, auth_params);
+  EXPECT_NE("", auth_params["nonce"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("MD5", auth_params["algorithm"]);
+  free_txdata();
+
+  // ACK that response
+  AuthenticationMessage ack("ACK");
+  ack._cseq = 1;
+  inject_msg_direct(ack.get());
+
+  // Send a new request with an authentication header including the response.
+  AuthenticationMessage msg2("INVITE");
+  msg2._auth_hdr = false;
+  msg2._proxy_auth_hdr = true;
+  msg2._algorithm = "MD5";
+  msg2._key = "12345678123456781234567812345678";
+  msg2._nonce = auth_params["nonce"];
+  msg2._opaque = auth_params["opaque"];
+  msg2._nc = "00000001";
+  msg2._cnonce = "8765432187654321";
+  msg2._qop = "auth";
+  msg2._integ_prot = "ip-assoc-pending";
+  inject_msg(msg2.get());
+
+  // Expect no response, as the authentication module has let the request through.
+  ASSERT_EQ(0, txdata_count());
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+}
+
+TEST_F(AuthenticationPxyAuthHdrTest, ProxyAuthorizationFailure)
+{
+  // Test a successful SIP Digest authentication flow.
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Send in a request with a Proxy-Authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg("INVITE");
+  msg._auth_hdr = false;
+  msg._proxy_auth_hdr = true;
+  inject_msg(msg.get());
+
+  // Expect a 407 Proxy Authorization Required response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(407).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the header.
+  std::string auth = get_headers(tdata->msg, "Proxy-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  parse_www_authenticate(auth, auth_params);
+  EXPECT_NE("", auth_params["nonce"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("MD5", auth_params["algorithm"]);
+  free_txdata();
+
+  // ACK that response
+  AuthenticationMessage ack("ACK");
+  ack._cseq = 1;
+  inject_msg_direct(ack.get());
+
+  // Send a new request with an authentication header - the nonce should match but the password
+  // should be wrong.
+  AuthenticationMessage msg2("INVITE");
+  msg2._auth_hdr = false;
+  msg2._proxy_auth_hdr = true;
+  msg2._algorithm = "MD5";
+  msg2._key = "wrong";
+  msg2._nonce = auth_params["nonce"];
+  msg2._opaque = auth_params["opaque"];
+  msg2._nc = "00000001";
+  msg2._cnonce = "8765432187654321";
+  msg2._qop = "auth";
+  msg2._integ_prot = "ip-assoc-pending";
+  inject_msg(msg2.get());
+
+  // Expect a 403 Forbidden response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(403).matches(tdata->msg);
   free_txdata();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
