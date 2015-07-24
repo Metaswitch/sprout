@@ -111,6 +111,9 @@ static AnalyticsLogger* analytics;
 // SNMP tables counting authentication successes and failures.
 static SNMP::AuthenticationStatsTables* auth_stats_tables;
 
+// SNMP table counting successes and failures of non-register requests.
+static SNMP::SuccessFailCountTable* non_register_auth_table;
+
 // PJSIP structure for control server authentication functions.
 pjsip_auth_srv auth_srv;
 pjsip_auth_srv auth_srv_proxy;
@@ -647,6 +650,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   TRC_DEBUG("Authentication module invoked");
   pj_status_t status;
   bool is_register = (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD);
+  SNMP::SuccessFailCountTable* auth_stats_table;
   std::string resync;
 
   SAS::TrailId trail = get_trail(rdata);
@@ -669,17 +673,22 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   if ((credentials != NULL) &&
       (credentials->response.slen != 0))
   {
-    if (is_register)
+    if (!is_register)
+    {
+      auth_stats_table = non_register_auth_table;
+    }
+    else 
     {
       if (!pj_strcmp2(&credentials->algorithm, "MD5"))
       {
-        auth_stats_tables->sip_digest_auth_tbl->increment_attempts();
+        auth_stats_table = auth_stats_tables->sip_digest_auth_tbl;
       }
       else if (!pj_strcmp2(&credentials->algorithm, "AKAv1-MD5"))
       {
-        auth_stats_tables->ims_aka_auth_tbl->increment_attempts();
+        auth_stats_table = auth_stats_tables->ims_aka_auth_tbl;
       }
     }
+    auth_stats_table->increment_attempts();
 
     std::string impi = PJUtils::pj_str_to_string(&credentials->username);
     std::string nonce = PJUtils::pj_str_to_string(&credentials->nonce);
@@ -700,17 +709,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       SAS::Event event(trail, SASEvent::AUTHENTICATION_SUCCESS, 0);
       SAS::report_event(event);
 
-      if (is_register)
-      {
-        if (av->HasMember("digest"))
-        {
-          auth_stats_tables->sip_digest_auth_tbl->increment_successes();
-        }
-        else if (av->HasMember("aka"))
-        {
-          auth_stats_tables->ims_aka_auth_tbl->increment_successes();
-        }
-      }
+      auth_stats_table->increment_successes();   
 
       // Write a tombstone flag back to the AV store, handling contention.
       // We don't actually expect anything else to be writing to this row in
@@ -838,16 +837,9 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
     sc = unauth_sc;
 
-    if (is_register && stale)
+    if (stale)
     {
-      if (!pj_strcmp2(&credentials->algorithm, "MD5"))
-      {
-        auth_stats_tables->sip_digest_auth_tbl->increment_failures();
-      }
-      if (!pj_strcmp2(&credentials->algorithm, "AKAv1-MD5"))
-      {
-      auth_stats_tables->ims_aka_auth_tbl->increment_failures();
-      }
+      auth_stats_table->increment_failures();
     }
 
     status = PJUtils::create_response(stack_data.endpt, rdata, sc, NULL, &tdata);
@@ -871,17 +863,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
     TRC_ERROR("Authentication failed, %s", error_msg.c_str());
 
-    if (is_register)
-    {
-      if (!pj_strcmp2(&credentials->algorithm, "MD5"))
-      {
-        auth_stats_tables->sip_digest_auth_tbl->increment_failures();
-      }
-      else if (!pj_strcmp2(&credentials->algorithm, "AKAv1-MD5"))
-      {
-        auth_stats_tables->ims_aka_auth_tbl->increment_failures();
-      }
-    }
+    auth_stats_table->increment_failures();
  
     SAS::Event event(trail, SASEvent::AUTHENTICATION_FAILED, 0);
     event.add_var_param(error_msg);
@@ -955,7 +937,8 @@ pj_status_t init_authentication(const std::string& realm_name,
                                 ChronosConnection* chronos_connection,
                                 ACRFactory* rfacr_factory,
                                 AnalyticsLogger* analytics_logger,
-                                SNMP::AuthenticationStatsTables* auth_stats_tbls)
+                                SNMP::AuthenticationStatsTables* auth_stats_tbls,
+                                SNMP::SuccessFailCountTable* non_reg_auth_table)
 {
   pj_status_t status;
 
@@ -966,6 +949,7 @@ pj_status_t init_authentication(const std::string& realm_name,
   acr_factory = rfacr_factory;
   analytics = analytics_logger;
   auth_stats_tables = auth_stats_tbls;
+  non_register_auth_table = non_reg_auth_table;
 
   // Register the authentication module.  This needs to be in the stack
   // before the transaction layer.

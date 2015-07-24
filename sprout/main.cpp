@@ -1498,6 +1498,8 @@ int main(int argc, char* argv[])
   SNMP::RegistrationStatsTables third_party_reg_stats_tbls;
   SNMP::AuthenticationStatsTables auth_stats_tbls;
 
+  SNMP::SuccessFailCountTable non_register_auth_table;
+
   if (opt.pcscf_enabled)
   {
     latency_table = SNMP::AccumulatorTable::create("bono_latency",
@@ -1552,6 +1554,8 @@ int main(int argc, char* argv[])
     auth_stats_tbls.ims_aka_auth_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
                                                                            ".1.2.826.0.1.1578918.9.3.16");
     
+    non_register_auth_table = SNMP::SuccessFailCountTable::create("non_register_auth_success_fail_count",
+                                                                  ".1.2.826.0.1.1578918.9.3.17");
   }
 
   if ((opt.icscf_enabled || opt.scscf_enabled) && opt.alarms_enabled)
@@ -1890,7 +1894,8 @@ int main(int argc, char* argv[])
                                    chronos_connection,
                                    scscf_acr_factory,
                                    analytics_logger,
-                                   &auth_stats_tbls);
+                                   &auth_stats_tbls,
+                                   non_register_auth_table);
     }
 
     // Launch the registrar.
