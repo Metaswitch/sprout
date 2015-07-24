@@ -53,6 +53,7 @@ FakeSuccessFailCountTable FAKE_THIRD_PARTY_RE_REG_TABLE;
 FakeSuccessFailCountTable FAKE_THIRD_PARTY_DE_REG_TABLE;
 FakeSuccessFailCountTable FAKE_SIP_DIGEST_AUTH_TABLE;
 FakeSuccessFailCountTable FAKE_IMS_AKA_AUTH_TABLE;
+FakeSuccessFailCountTable FAKE_NON_REG_AUTH_TABLE;
 
 RegistrationStatsTables FAKE_REGISTRATION_STATS_TABLES =
 {
