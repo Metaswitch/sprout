@@ -53,7 +53,8 @@ pj_status_t init_authentication(const std::string& realm_name,
                                 ChronosConnection* chronos_connection,
                                 ACRFactory* rfacr_factory,
                                 AnalyticsLogger* analytics_logger,
-                                SNMP::AuthenticationStatsTables* auth_stats_tables);
+                                SNMP::AuthenticationStatsTables* auth_stats_tables,
+                                SNMP::SuccessFailCountTable* non_register_auth_table);
 
 void destroy_authentication();
 

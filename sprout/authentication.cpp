@@ -650,7 +650,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   TRC_DEBUG("Authentication module invoked");
   pj_status_t status;
   bool is_register = (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD);
-  SNMP::SuccessFailCountTable* auth_stats_table;
+  SNMP::SuccessFailCountTable* auth_stats_table = NULL;
   std::string resync;
 
   SAS::TrailId trail = get_trail(rdata);

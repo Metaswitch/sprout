@@ -1498,7 +1498,7 @@ int main(int argc, char* argv[])
   SNMP::RegistrationStatsTables third_party_reg_stats_tbls;
   SNMP::AuthenticationStatsTables auth_stats_tbls;
 
-  SNMP::SuccessFailCountTable non_register_auth_table;
+  SNMP::SuccessFailCountTable* non_register_auth_table = NULL;
 
   if (opt.pcscf_enabled)
   {
