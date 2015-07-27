@@ -4164,7 +4164,7 @@ TEST_F(SCSCFTest, Cdiv)
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
-  msg._route = "Route: <sip:homedomain;orig>";
+  msg._route = "Route: <sip:homedomain>";
   msg._requri = "sip:6505551234@homedomain";
 
   msg._method = "INVITE";
@@ -4316,7 +4316,7 @@ TEST_F(SCSCFTest, CdivToDifferentDomain)
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
-  msg._route = "Route: <sip:homedomain;orig>";
+  msg._route = "Route: <sip:homedomain>";
   msg._requri = "sip:6505551234@homedomain";
 
   msg._method = "INVITE";
