@@ -111,9 +111,6 @@ static AnalyticsLogger* analytics;
 // SNMP tables counting authentication successes and failures.
 static SNMP::AuthenticationStatsTables* auth_stats_tables;
 
-// SNMP table counting successes and failures of non-register requests.
-static SNMP::SuccessFailCountTable* non_register_auth_table;
-
 // PJSIP structure for control server authentication functions.
 pjsip_auth_srv auth_srv;
 pjsip_auth_srv auth_srv_proxy;
@@ -675,7 +672,9 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   {
     if (!is_register)
     {
-      auth_stats_table = non_register_auth_table;
+      // Challenged non-register requests must be SIP digest, so only one table
+      // needed for this case.
+      auth_stats_table = auth_stats_tables->non_register_auth_tbl;
     }
     else 
     {
@@ -937,8 +936,7 @@ pj_status_t init_authentication(const std::string& realm_name,
                                 ChronosConnection* chronos_connection,
                                 ACRFactory* rfacr_factory,
                                 AnalyticsLogger* analytics_logger,
-                                SNMP::AuthenticationStatsTables* auth_stats_tbls,
-                                SNMP::SuccessFailCountTable* non_reg_auth_table)
+                                SNMP::AuthenticationStatsTables* auth_stats_tbls)
 {
   pj_status_t status;
 
@@ -949,7 +947,6 @@ pj_status_t init_authentication(const std::string& realm_name,
   acr_factory = rfacr_factory;
   analytics = analytics_logger;
   auth_stats_tables = auth_stats_tbls;
-  non_register_auth_table = non_reg_auth_table;
 
   // Register the authentication module.  This needs to be in the stack
   // before the transaction layer.
