@@ -4250,6 +4250,155 @@ TEST_F(SCSCFTest, Cdiv)
   free_txdata();
 }
 
+
+// Test call-diversion AS flow where the AS diverts to a different domain.
+TEST_F(SCSCFTest, CdivToDifferentDomain)
+{
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551000", "homedomain", "sip:wuntootree@10.14.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                R"(<IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>2</Priority>
+                                    <TriggerPoint>
+                                      <ConditionTypeCNF>0</ConditionTypeCNF>
+                                      <SPT>
+                                        <ConditionNegated>0</ConditionNegated>
+                                        <Group>0</Group>
+                                        <SessionCase>4</SessionCase>  <!-- originating-cdiv -->
+                                        <Extension></Extension>
+                                      </SPT>
+                                      <SPT>
+                                        <ConditionNegated>0</ConditionNegated>
+                                        <Group>0</Group>
+                                        <Method>INVITE</Method>
+                                        <Extension></Extension>
+                                      </SPT>
+                                    </TriggerPoint>
+                                    <ApplicationServer>
+                                      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
+                                      <DefaultHandling>0</DefaultHandling>
+                                    </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                  <InitialFilterCriteria>
+                                    <Priority>0</Priority>
+                                    <TriggerPoint>
+                                      <ConditionTypeCNF>0</ConditionTypeCNF>
+                                      <SPT>
+                                        <ConditionNegated>0</ConditionNegated>
+                                        <Group>0</Group>
+                                        <Method>INVITE</Method>
+                                        <Extension></Extension>
+                                      </SPT>
+                                      <SPT>
+                                        <ConditionNegated>0</ConditionNegated>
+                                        <Group>0</Group>
+                                        <SessionCase>1</SessionCase>  <!-- terminating-registered -->
+                                        <Extension></Extension>
+                                      </SPT>
+                                    </TriggerPoint>
+                                    <ApplicationServer>
+                                      <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
+                                      <DefaultHandling>0</DefaultHandling>
+                                    </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
+  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._todomain = "";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS1 (as terminating AS for Bob)
+  SCOPED_TRACE("INVITE (S)");
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS1.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+
+  // ---------- AS1 turns it around (acting as routing B2BUA by changing the target)
+  const pj_str_t STR_ROUTE = pj_str("Route");
+  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+
+  // Re-target the request to a new user. Use the domain "newdomain" as this
+  // will be routed off net by the BGCF.
+  ((pjsip_sip_uri*)out->line.req.uri)->user = pj_str("newuser");
+  ((pjsip_sip_uri*)out->line.req.uri)->host = pj_str("domainvalid");
+  inject_msg(out, &tpAS1);
+  free_txdata();
+
+  // 100 Trying goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS2 (as originating AS for Bob)
+  SCOPED_TRACE("INVITE (2)");
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS2.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:newuser@domainvalid", r1.uri());
+
+  // ---------- AS2 turns it around (acting as proxy)
+  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS2);
+  free_txdata();
+
+  // 100 Trying goes back to AS2
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpAS2.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to final destination
+  SCOPED_TRACE("INVITE (4)");
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpBono.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:newuser@domainvalid", r1.uri());
+  // This route header is determined from the BGCF config.
+  EXPECT_EQ("Route: <sip:10.0.0.1:5060;transport=TCP;lr>", get_headers(out, "Route"));
+
+  free_txdata();
+}
+
 // Test that ENUM lookups and appropriate URI translation is done before any terminating services are applied.
 TEST_F(SCSCFTest, BothEndsWithEnumRewrite)
 {
