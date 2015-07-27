@@ -1384,21 +1384,6 @@ TEST_F(SCSCFTest, TestStrictRouteThrough)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*nexthop@intermediate.com.*"), hdrs, false, false);
 }
 
-TEST_F(SCSCFTest, TestMultipleRouteHeaders)
-{
-  SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  Message msg;
-  msg._extra = "Route: <sip:homedomain:5058;transport=tcp;lr>\r\nRoute: <sip:homedomain:5054;lr>";
-  list<HeaderMatcher> hdrs;
-  // Expect only the top Route header to be stripped, as is necessary
-  // for Sprout and Bono to be colocated
-
-  hdrs.push_back(HeaderMatcher("Route", "Route: <sip:homedomain:5054;lr>"));
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*"), hdrs);
-}
-
-
 TEST_F(SCSCFTest, TestNonLocal)
 {
   SCOPED_TRACE("");
@@ -3266,7 +3251,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueRecordRouting)
   EXPECT_NE("", get_headers(out, "Record-Route"));
 
   free_txdata();
-  
+
   stack_data.record_route_on_initiation_of_terminating = false;
   stack_data.record_route_on_completion_of_originating = false;
   stack_data.record_route_on_diversion = false;
