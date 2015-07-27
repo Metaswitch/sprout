@@ -193,7 +193,8 @@ public:
   AsChainLink() :
     _as_chain(NULL),
     _index(0u),
-    _default_handling(SESSION_CONTINUED)
+    _default_handling(SESSION_CONTINUED),
+    _interrupted(false)
   {
   }
 
@@ -213,7 +214,11 @@ public:
 
   bool complete() const
   {
-    return ((_as_chain == NULL) || (_index == _as_chain->size()));
+    // We're complete if there is no AS chain, or we're at the end of the
+    // chain, or we have been interrupted.
+    return ((_as_chain == NULL) ||
+            (_index == _as_chain->size()) ||
+            (_interrupted));
   }
 
   /// Get the next link in the chain.
@@ -327,6 +332,13 @@ public:
                           std::string& server_name,
                           SAS::TrailId msg_trail);
 
+  /// Interrupt AS processing on this chain link. This prevents any more
+  /// application servers from being invoked.
+  void interrupt()
+  {
+    _interrupted = true;
+  }
+
 private:
   friend class AsChainTable;
 
@@ -345,6 +357,10 @@ private:
 
   /// The configured Default Handling configured on the relevant iFC.
   DefaultHandling _default_handling;
+
+  /// Whether AS processing has been interrupted (meaning no further application
+  /// servers will be invoked).
+  bool _interrupted;
 };
 
 
