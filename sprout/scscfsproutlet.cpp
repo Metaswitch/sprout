@@ -1110,8 +1110,16 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
       add_record_route(req, NODE_ROLE_TERMINATING);
     }
 
-    // Route the call to the appropriate target.
-    route_to_target(req);
+    if (pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL) != NULL)
+    {
+      // Route according to normal SIP routing.
+      send_request(req);
+    }
+    else
+    {
+      // Route the call to the appropriate target.
+      route_to_target(req);
+    }
   }
 }
 
