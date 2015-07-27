@@ -49,6 +49,9 @@
 #include "registration_utils.h"
 #include "scscfsproutlet.h"
 
+// Constant indicating there is no served user fro a request.
+const char* NO_SERVED_USER = "";
+
 /// SCSCFSproutlet constructor.
 SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
                                const std::string& scscf_node_uri,
@@ -938,7 +941,7 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
   // header. However, the History-Info mechanism has fundamental
   // problems as outlined in RFC5502 appendix A, and we do not
   // implement it.
-  pjsip_uri* uri;
+  pjsip_uri* uri = NULL;
   std::string user;
 
   if (_session_case->is_originating())  // (includes orig-cdiv)
@@ -947,22 +950,30 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
   }
   else
   {
-    uri = PJUtils::term_served_user(msg);
+    // We only consider a terminating request to be destined for a served user
+    // if it doesn't have a route header.
+    if (pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, NULL) == NULL)
+    {
+      uri = PJUtils::term_served_user(msg);
+    }
   }
 
-  if ((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
-     ((PJUtils::is_home_domain(uri)) ||
-      (PJUtils::is_uri_local(uri))))
+  if (uri != NULL)
   {
-    user = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
-  }
-  else if (PJSIP_URI_SCHEME_IS_TEL(uri))
-  {
-    user = PJUtils::public_id_from_uri(uri);
-  }
-  else
-  {
-    TRC_DEBUG("URI is not locally hosted");
+    if ((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
+        ((PJUtils::is_home_domain(uri)) ||
+         (PJUtils::is_uri_local(uri))))
+    {
+      user = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
+    }
+    else if (PJSIP_URI_SCHEME_IS_TEL(uri))
+    {
+      user = PJUtils::public_id_from_uri(uri);
+    }
+    else
+    {
+      TRC_DEBUG("URI is not locally hosted");
+    }
   }
 
   return user;
@@ -1127,7 +1138,7 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
       pj_list_insert_after(&odi_uri->other_param, orig_param);
     }
     PJUtils::add_top_route_header(req, odi_uri, get_pool(req));
-    
+
     // Add the application server URI as the top Route header, per TS 24.229.
     PJUtils::add_top_route_header(req, as_uri, get_pool(req));
 
