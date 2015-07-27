@@ -1535,23 +1535,24 @@ int main(int argc, char* argv[])
 
     reg_stats_tbls.init_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
                                                                       ".1.2.826.0.1.1578918.9.3.9");
-    reg_stats_tbls.re_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+    reg_stats_tbls.re_reg_tbl = SNMP::SuccessFailCountTable::create("re_reg_success_fail_count",
                                                                     ".1.2.826.0.1.1578918.9.3.10");
-    reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+    reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("de_reg_success_fail_count",
                                                                      ".1.2.826.0.1.1578918.9.3.11");
     
-    third_party_reg_stats_tbls.init_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+    third_party_reg_stats_tbls.init_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_initial_reg_success_fail_count",
                                                                                   ".1.2.826.0.1.1578918.9.3.12");
-    third_party_reg_stats_tbls.re_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+    third_party_reg_stats_tbls.re_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_re_reg_success_fail_count",
                                                                                 ".1.2.826.0.1.1578918.9.3.13");
-    third_party_reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+    third_party_reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_de_reg_success_fail_count",
                                                                                 ".1.2.826.0.1.1578918.9.3.14");
     
-    auth_stats_tbls.sip_digest_auth_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+    auth_stats_tbls.sip_digest_auth_tbl = SNMP::SuccessFailCountTable::create("sip_digest_auth_success_fail_count",
                                                                               ".1.2.826.0.1.1578918.9.3.15");
-    auth_stats_tbls.ims_aka_auth_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+    auth_stats_tbls.ims_aka_auth_tbl = SNMP::SuccessFailCountTable::create("ims_aka_auth_success_fail_count",
                                                                            ".1.2.826.0.1.1578918.9.3.16");
-    
+    auth_stats_tbls.non_register_auth_tbl = SNMP::SuccessFailCountTable::create("non_register_auth_success_fail_count",
+                                                                                ".1.2.826.0.1.1578918.9.3.17");
   }
 
   if ((opt.icscf_enabled || opt.scscf_enabled) && opt.alarms_enabled)

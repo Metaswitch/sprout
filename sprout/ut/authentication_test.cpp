@@ -114,6 +114,7 @@ public:
     poll();
     ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->reset_count();
     ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->reset_count();
+    ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->reset_count();
   }
 
   /// Parses a WWW-Authenticate header to the list of parameters.
@@ -488,6 +489,8 @@ TEST_F(AuthenticationTest, ProxyAuthorizationSuccess)
   ASSERT_EQ(0, txdata_count());
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->_attempts); 
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->_successes); 
 }
 
 TEST_F(AuthenticationTest, ProxyAuthorizationFailure)
@@ -544,6 +547,8 @@ TEST_F(AuthenticationTest, ProxyAuthorizationFailure)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(403).matches(tdata->msg);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->_attempts); 
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->_failures); 
   free_txdata();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
