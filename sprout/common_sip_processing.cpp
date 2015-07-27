@@ -210,7 +210,7 @@ static void sas_log_rx_msg(pjsip_rx_data* rdata)
            PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri))
   {
     // This is an OPTIONS poll directed at this node. Don't log it to SAS, and set the trail ID to a sentinel value so we don't log the response either.
-    LOG_DEBUG("Skipping SAS logging for OPTIONS request");
+    TRC_DEBUG("Skipping SAS logging for OPTIONS request");
     set_trail(rdata, DONT_LOG_TO_SAS);
     return;
   }
@@ -247,7 +247,7 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
 
   if (trail == DONT_LOG_TO_SAS)
   {
-    LOG_DEBUG("Skipping SAS logging for OPTIONS response");
+    TRC_DEBUG("Skipping SAS logging for OPTIONS response");
     return;
   }
   else if (trail != 0)
