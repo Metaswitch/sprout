@@ -345,7 +345,8 @@ private:
   AsChainLink(AsChain* as_chain, size_t index) :
     _as_chain(as_chain),
     _index(index),
-    _default_handling(SESSION_CONTINUED)
+    _default_handling(SESSION_CONTINUED),
+    _interrupted(false)
   {
   }
 
