@@ -785,6 +785,8 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         // directly to the target. Interrupt the AS chain link to prevent any
         // more app servers from being triggered.
         TRC_INFO("Preloaded route - interrupt AS processing");
+        SAS::Event preloaded_route(trail(), SASEvent::AS_SUPPLIED_PRELOADED_ROUTE, 0);
+        SAS::report_event(preloaded_route);
         _as_chain_link.interrupt();
       }
       else
