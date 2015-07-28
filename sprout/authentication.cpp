@@ -653,8 +653,10 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
     }
     else
     {
-      // Unrecognized authentication mode - should never happen.
-      return PJ_FALSE; // LCOV_EXCL_LINE
+      // Unrecognized authentication mode - should never happen. LCOV_EXCL_START
+      assert(!"Unrecognized authentication mode");
+      return PJ_FALSE;
+      // LCOV_EXCL_STOP
     }
   }
 }

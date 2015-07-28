@@ -49,7 +49,7 @@
 #include "registration_utils.h"
 #include "scscfsproutlet.h"
 
-// Constant indicating there is no served user fro a request.
+// Constant indicating there is no served user for a request.
 const char* NO_SERVED_USER = "";
 
 /// SCSCFSproutlet constructor.
