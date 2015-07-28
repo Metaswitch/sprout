@@ -38,10 +38,9 @@
 #define RALF_PROCESSOR_H_
 
 #include "threadpool.h"
-#include "load_monitor.h"
 #include "sas.h"
-#include "sproutsasevent.h"
 #include "httpconnection.h"
+#include "exception_handler.h"
 
 class RalfProcessor
 {
@@ -61,17 +60,11 @@ public:
     SAS::TrailId trail;
   };
 
-  /// This function constructs a Cassandra request to write a call to the
-  /// call list store. It runs synchronously, so must be done in a
-  /// separate thread to avoid introducing unnecessary latencies in the
-  /// call path.
-  /// @param impu       IMPU
-  /// @param timestamp  Timestamp of call list entry
-  /// @param id         Id of call list entry
-  /// @param type       Type of call fragment to write
-  /// @param xml        Contents of call list entry
-  /// @param trail      SAS trail
-  virtual void send_request_to_ralf(RalfRequest* rr); // TODO maybe split this up?
+  /// This function adds a ralf request to the pool. Actually sending
+  /// the Ralf request must be done in a separate thread to avoid
+  /// introducing unnecessary latencies in the call path.
+  /// @param rr         The RalfRequest to add to the queue
+  virtual void send_request_to_ralf(RalfRequest* rr);
 
   static void exception_callback(RalfProcessor::RalfRequest* work)
   {
@@ -86,11 +79,10 @@ private:
   {
   public:
     /// Constructor.
-    /// @param call_list_store_proc Parent call list store processor.
-    /// @param call_list_store      A pointer to the underlying call list store.
-    /// @param num_threads          Number of memento worker threads to start
-    Pool(RalfProcessor* ralf_processor,
-         HttpConnection* ralf_connection,
+    /// @param ralf_connection    A pointer to the underlying ralf connection.
+    /// @param num_threads        Number of ralf threads to start
+    /// @param exception_handler  Exception handler
+    Pool(HttpConnection* ralf_connection,
          ExceptionHandler* exception_handler,
          void (*callback)(RalfProcessor::RalfRequest*),
          unsigned int num_threads);
@@ -104,9 +96,6 @@ private:
 
     /// Underlying Ralf connection
     HttpConnection* _ralf_connection;
-
-    /// Parent ralf processor.
-    RalfProcessor* _ralf_proc;
   };
 
   friend class Pool;

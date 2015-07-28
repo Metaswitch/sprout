@@ -133,7 +133,8 @@ enum OptionTypes
   OPT_SESSION_CONTINUED_TIMEOUT_MS,
   OPT_SESSION_TERMINATED_TIMEOUT_MS,
   OPT_STATELESS_PROXIES,
-  OPT_NON_REGISTERING_PBXES
+  OPT_NON_REGISTERING_PBXES,
+  OPT_RALF_THREADS
 };
 
 
@@ -204,6 +205,7 @@ const static struct pj_getopt_option long_opt[] =
   { "session-terminated-timeout",   required_argument, 0, OPT_SESSION_TERMINATED_TIMEOUT_MS},
   { "stateless-proxies",            required_argument, 0, OPT_STATELESS_PROXIES},
   { "non-registering-pbxes",        required_argument, 0, OPT_NON_REGISTERING_PBXES},
+  { "ralf-threads",                 required_argument, 0, OPT_RALF_THREADS},
   { NULL,                           0,                 0, 0}
 };
 
@@ -275,6 +277,7 @@ static void usage(void)
        "                            processing (i.e. when it receives or sends to an I-CSCF).\n"
        "                            If 'pcscf,icscf,as', it also Record-Routes between every AS.\n"
        " -G, --ralf <server>        Name/IP address of Ralf (Rf) billing server.\n"
+       "     --ralf-threads N       Number of Ralf threads (default: 25)\n"
        " -X, --xdms <server>        Name/IP address of XDM server\n"
        "     --dns-server <server>[,<server2>,<server3>]\n"
        "                            IP addresses of the DNS servers to use (defaults to 127.0.0.1)\n"
@@ -665,6 +668,12 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case 'G':
       options->ralf_server = std::string(pj_optarg);
       fprintf(stdout, "Ralf server set to %s\n", pj_optarg);
+      break;
+
+    case OPT_RALF_THREADS:
+      options->ralf_threads = atoi(pj_optarg);
+      TRC_INFO("Number of ralf threads set to %d",
+               options->ralf_threads);
       break;
 
     case 'E':
@@ -1294,7 +1303,7 @@ int main(int argc, char* argv[])
   opt.session_continued_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_CONTINUED_TIMEOUT;
   opt.session_terminated_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_TERMINATED_TIMEOUT;
   opt.stateless_proxies.clear();
-  opt.ralf_threads = 50;
+  opt.ralf_threads = 25;
 
   boost::filesystem::path p = argv[0];
   // Copy the filename to a string so that we can be sure of its lifespan -

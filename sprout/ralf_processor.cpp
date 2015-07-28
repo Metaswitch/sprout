@@ -40,8 +40,7 @@
 RalfProcessor::RalfProcessor(HttpConnection* ralf_connection,
                              ExceptionHandler* exception_handler,
                              const int ralf_threads) :
-  _thread_pool(new Pool(this,
-                        ralf_connection,
+  _thread_pool(new Pool(ralf_connection,
                         exception_handler,
                         &exception_callback,
                         ralf_threads))
@@ -60,55 +59,30 @@ RalfProcessor::~RalfProcessor()
   }
 }
 
-// TODO may need splitting up
-/// Creates a call list entry and adds it to the queue.
+/// Adds a ralf request to the queue
 void RalfProcessor::send_request_to_ralf(RalfRequest* rr)
-//                                      std::string path,
-  //                                    std::map<std::string,std::string> headers,
-    //                                  std::string message,
-      //                                SAS::TrailId trail)
 {
-  // Create stop watch to time how long between the CallListStoreProcessor
-  // receives the request, and a worker thread finishes processing it.
-
-  // Create a call list entry and populate it
-//  RalfRequest* rr = new RalfProcessor::RalfRequest();
-
- // rr->id = id;
-  //rr->type = type;
-  ///rr->contents = xml;
-  //rr->trail = trail;
-
   _thread_pool->add_work(rr);
 }
 
-// Write the call list entry to the call list store
+// Send the ACR to Ralf
 void RalfProcessor::Pool::process_work(RalfProcessor::RalfRequest*& rr)
 {
-  TRC_STATUS("Sending Ralf message");
-
   std::map<std::string, std::string> headers;
-  TRC_STATUS("Path %s", rr->path.c_str());
-  TRC_STATUS("Message %s", rr->message.c_str());
-
   long rc = _ralf_connection->send_post(rr->path,
                                         headers,
                                         rr->message,
                                         rr->trail);
-
   
   if (rc != HTTP_OK)
   {
-   TRC_STATUS("Sending Ralf message failed with rc = %ld", rc);
-
-//    TRC_WARNING("Failed to send Ralf ACR message (%p), rc = %ld", this, rc);
+    TRC_INFO("Sending Ralf message failed with rc = %ld", rc);
   }
 
   delete rr; rr = NULL;
 }
 
-RalfProcessor::Pool::Pool(RalfProcessor* ralf_processor,
-                          HttpConnection* ralf_connection,
+RalfProcessor::Pool::Pool(HttpConnection* ralf_connection,
                           ExceptionHandler* exception_handler, 
                           void (*callback)(RalfProcessor::RalfRequest*),
                           unsigned int num_threads) :
@@ -116,8 +90,7 @@ RalfProcessor::Pool::Pool(RalfProcessor* ralf_processor,
                                           exception_handler, 
                                           callback, 
                                           0), // No maximum queue size for Ralf
-  _ralf_connection(ralf_connection),
-  _ralf_proc(ralf_processor) // Needed?
+  _ralf_connection(ralf_connection)
 {}
 
 RalfProcessor::Pool::~Pool()
