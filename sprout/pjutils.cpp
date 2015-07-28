@@ -1740,6 +1740,16 @@ bool PJUtils::is_uri_phone_number(pjsip_uri* uri)
             (!pj_strcmp(&((pjsip_sip_uri*)uri)->user_param, &STR_USER_PHONE)))));
 }
 
+bool PJUtils::is_globally_routable_sip_uri(pjsip_uri* uri)
+{
+  return ((uri != NULL) &&
+           PJSIP_URI_SCHEME_IS_SIP(uri) &&
+           (pj_strcmp(&((pjsip_sip_uri*)uri)->user_param, &STR_USER_PHONE) != 0) &&
+           (pjsip_param_find(&((pjsip_sip_uri*)uri)->userinfo_param, &STR_RN) == NULL)
+         );
+}
+
+
 bool PJUtils::is_uri_gruu(pjsip_uri* uri)
 {
   return ((uri != NULL) &&

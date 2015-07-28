@@ -1681,12 +1681,12 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPData)
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
   Message msg;
-  msg._to = "+15108580301;npdi";
+  msg._to = "+15108580401;npdi;rn=+16";
   msg._route = "Route: <sip:homedomain;orig>";
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580301;npdi@homedomain.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*15108580401;rn.*+16;npdi@homedomain"), hdrs, false);
 }
 
 // Test where the request URI represents a number and has NP data. The ENUM
@@ -1699,12 +1699,12 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPDataOverride)
 
   _scscf_sproutlet->set_override_npdi(true);
   Message msg;
-  msg._to = "+15108580301;npdi";
+  msg._to = "+15108580401;npdi;rn=+16";
   msg._route = "Route: <sip:homedomain;orig>";
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580301;npdi@ut.cw-ngv.com.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580401;rn.*+151085804;npdi@homedomain.*"), hdrs, false);
 }
 
 // Test where the request URI represents a number and has NP data. The ENUM
@@ -1717,14 +1717,34 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPDataToSIP)
 
   _scscf_sproutlet->set_enforce_user_phone(true);
   Message msg;
-  msg._to = "+15108580301;npdi";
-  msg._requri = "sip:+15108580301;npdi@homedomain;user=phone";
+  msg._to = "+15108580272;npdi;rn=+16";
+  msg._requri = "sip:+15108580272;npdi;rn=+16@homedomain;user=phone";
   msg._route = "Route: <sip:homedomain;orig>";
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580301;npdi@ut.cw-ngv.com.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580272@ut.cw-ngv.com"), hdrs, false);
 }
+
+// Test where the request URI represents a number and has NP data. The ENUM
+// lookup returns a URI that doesn't represent a number so the request URI
+// is rewritten
+TEST_F(SCSCFTest, DISABLED_TestEnumToCIC)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+
+  _scscf_sproutlet->set_enforce_user_phone(true);
+  Message msg;
+  msg._to = "+15108580501";
+  msg._requri = "sip:+15108580501@homedomain;user=phone";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580501;cic=12345@homedomain.*"), hdrs, false);
+}
+
 
 // Test where the BGCF receives a SIP request URI represents a number and has NP data.
 // The ENUM lookup returns a rn which the BGCF routes on.

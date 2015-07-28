@@ -264,9 +264,8 @@ private:
   /// Add a Route header with the specified URI.
   void add_route_uri(pjsip_msg* msg, pjsip_sip_uri* uri);
 
-  /// Does URI translation if required. Returns whether the routing
-  /// decision for the request has already been made
-  bool uri_translation_and_route(pjsip_msg* req);
+  /// Does URI translation if required.
+  void uri_translation(pjsip_msg* req);
 
   /// Gets the subscriber's associated URIs and iFCs for each URI from
   /// the HSS. Returns true on success, false on failure.

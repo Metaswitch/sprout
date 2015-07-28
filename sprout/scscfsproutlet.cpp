@@ -284,14 +284,12 @@ std::string SCSCFSproutlet::translate_request_uri(pjsip_msg* req,
     // Determine whether we have a SIP URI or a tel URI
     if (PJSIP_URI_SCHEME_IS_SIP(uri))
     {
-      user =
-        PJUtils::pj_str_to_string(&((pjsip_sip_uri*)uri)->user);
+      user = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)uri)->user);
       TRC_DEBUG("SIP URI - user = %s", user.c_str());
     }
     else if (PJSIP_URI_SCHEME_IS_TEL(uri))
     {
-      user =
-        PJUtils::pj_str_to_string(&((pjsip_tel_uri*)uri)->number);
+      user = PJUtils::pj_str_to_string(&((pjsip_tel_uri*)uri)->number);
       TRC_DEBUG("TEL URI - user = %s", user.c_str());
     }
 
@@ -1032,19 +1030,31 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
 
     // Attempt to translate the RequestURI using ENUM or an alternative
     // database.
-    if (!uri_translation_and_route(req))
+    uri_translation(req);
+    
+    std::string new_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req->line.req.uri);
+
+    if (!PJUtils::is_globally_routable_sip_uri(req->line.req.uri))
     {
-      if ((PJSIP_URI_SCHEME_IS_TEL(req->line.req.uri)) ||
-          (!PJUtils::is_home_domain(req->line.req.uri)))
-      {
-        // Destination is off-net, so route to the BGCF.
-        route_to_bgcf(req);
-      }
-      else
-      {
-        // Destination is on-net so route to the I-CSCF.
-        route_to_icscf(req);
-      }
+      TRC_DEBUG("Routing to BGCF");
+      SAS::Event event(trail(), SASEvent::PHONE_ROUTING_TO_BGCF, 0);
+      event.add_var_param(new_uri_str);
+      SAS::report_event(event);
+      route_to_bgcf(req);
+    }
+    else if (!PJUtils::is_home_domain(req->line.req.uri))
+    {
+      // Destination is off-net, so route to the BGCF.
+      TRC_DEBUG("Routing to BGCF");
+      SAS::Event event(trail(), SASEvent::OFFNET_ROUTING_TO_BGCF, 0);
+      event.add_var_param(new_uri_str);
+      SAS::report_event(event);
+      route_to_bgcf(req);
+    }
+    else
+    {
+      // Destination is on-net so route to the I-CSCF.
+      route_to_icscf(req);
     }
   }
 }
@@ -1424,108 +1434,108 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
 }
 
 
-/// Do URI translation if required.
-bool SCSCFSproutletTsx::uri_translation_and_route(pjsip_msg* req)
+/// Do URI translation.
+///
+/// Assumes that the Request-URI is a local SIP 
+void SCSCFSproutletTsx::uri_translation(pjsip_msg* req)
 {
-  bool already_routed = false;
   pjsip_uri* uri = req->line.req.uri;
 
-  if ((PJUtils::is_home_domain(uri)) ||
-      (PJSIP_URI_SCHEME_IS_TEL(uri)))
+  if (!(PJUtils::is_home_domain(uri) || PJSIP_URI_SCHEME_IS_TEL(uri)))
   {
-    // Request is either to a URI in this domain, or a Tel URI, so attempt
-    // to translate it.
-    TRC_DEBUG("Translating URI");
-    std::string new_uri_str = _scscf->translate_request_uri(req, trail());
+    return;
+  }
 
-    if (!new_uri_str.empty())
+  // Request is either to a URI in this domain, or a Tel URI, so attempt
+  // to translate it according to 5.4.3.2 section 10.
+  TRC_DEBUG("Translating URI");
+  std::string new_uri_str = _scscf->translate_request_uri(req, trail());
+
+  if (!new_uri_str.empty())
+  {
+    pjsip_uri* new_uri = (pjsip_uri*)PJUtils::uri_from_string(new_uri_str,
+                                                              get_pool(req));
+
+    if (new_uri == NULL)
     {
-      // The URI was successfully translated, so attempt to parse the returned
-      // URI and substitute it in to the request.
-      pjsip_uri* new_uri = (pjsip_uri*)PJUtils::uri_from_string(new_uri_str,
-                                                                get_pool(req));
-      if (new_uri)
+      // The ENUM lookup has returned an invalid URI. Reject the 
+      // request. 
+      TRC_WARNING("Invalid ENUM response: %s", new_uri_str.c_str());
+      SAS::Event event(trail(), SASEvent::ENUM_INVALID, 0);
+      event.add_var_param(new_uri_str);
+      SAS::report_event(event);
+
+      pjsip_msg* rsp = create_response(req,
+                                       PJSIP_SC_NOT_FOUND,
+                                       "ENUM failure");
+      send_response(rsp);
+      free_msg(req);
+      return;
+    }
+
+    // The URI was successfully translated, so see what it is.
+    std::string rn;
+
+    if (PJUtils::is_globally_routable_sip_uri(new_uri))
+    {
+      // Translation to a real SIP URI - this always takes priority.
+      TRC_DEBUG("Translated URI %s is a real SIP URI - replacing Request-URI",
+                new_uri_str.c_str());
+      req->line.req.uri = new_uri;
+      SAS::Event event(trail(), SASEvent::SIP_URI_FROM_ENUM, 0);
+      event.add_var_param(new_uri_str);
+      SAS::report_event(event);
+    }
+    else if (PJUtils::get_rn(new_uri, rn))
+    {
+      // We didn't translate the number to a globally routable SIP URI, but we did retrieve number
+      // portability data from ENUM.
+
+      if (!PJUtils::get_npdi(uri))
       {
-        std::string rn;
-
-        bool new_uri_has_np_data = PJUtils::get_rn(new_uri, rn);
-
-        if (!PJUtils::does_uri_represent_number(new_uri,
-                                                _scscf->should_require_user_phone()))
-        {
-          // Translation to a real SIP URI - this always takes priority.
-          req->line.req.uri = new_uri;
-          SAS::Event event(trail(), SASEvent::SIP_URI_FROM_ENUM);
-          event.add_var_param(new_uri_str);
-          SAS::report_event(event);
-        }
-        else if (new_uri_has_np_data)
-        {
-          if (!PJUtils::get_npdi(uri))
-          {
-            // No NPDI flag, so use the new data.
-            req->line.req.uri = new_uri;
-            SAS::Event event(trail(), SASEvent::NP_DATA_FROM_ENUM);
-            event.add_var_param(new_uri_str);
-            event.add_var_param(rn);
-            SAS::report_event(event);
-          }
-          else if (PJUtils::get_npdi(uri) && _scscf->should_override_npdi())
-          {
-            // Configured to ignore the NPDI flag, so use the new data.
-            req->line.req.uri = new_uri;
-            SAS::Event event(trail(), SASEvent::NP_DATA_FROM_ENUM_IGNORING_NPDI);
-            event.add_var_param(new_uri_str);
-            event.add_var_param(rn);
-            SAS::report_event(event);
-          }
-          else
-          {
-            // NPDI flag which we're honouring
-            SAS::Event event(trail(), SASEvent::IGNORED_NP_DATA_FROM_ENUM);
-            event.add_var_param(new_uri_str);
-            event.add_var_param(rn);
-            SAS::report_event(event);
-          }
-        }
-
-        if (PJUtils::get_rn(req->line.req.uri, rn))
-        {
-          SAS::Event event(trail(), SASEvent::NP_ROUTING_TO_BGCF);
-          event.add_var_param(new_uri_str);
-          event.add_var_param(rn);
-          SAS::report_event(event);
-          route_to_bgcf(req);
-          already_routed = true;
-        }
+        // No NPDI flag on the original URI, so use the number portability data.
+        TRC_DEBUG("Translated URI %s has NP data and the npdi flag is not set - replacing Request-URI",
+                  new_uri_str.c_str());
+        req->line.req.uri = new_uri;
+        SAS::Event event(trail(), SASEvent::NP_DATA_FROM_ENUM, 0);
+        event.add_var_param(new_uri_str);
+        event.add_var_param(rn);
+        SAS::report_event(event);
+      }
+      else if (PJUtils::get_npdi(uri) && _scscf->should_override_npdi())
+      {
+        // Configured to ignore the NPDI flag on the original URI, so use the number portability data.
+        TRC_DEBUG("Translated URI %s has NP data and the npdi flag is ignored - replacing Request-URI",
+                  new_uri_str.c_str());
+        req->line.req.uri = new_uri;
+        SAS::Event event(trail(), SASEvent::NP_DATA_FROM_ENUM_IGNORING_NPDI, 0);
+        event.add_var_param(new_uri_str);
+        event.add_var_param(rn);
+        SAS::report_event(event);
       }
       else
       {
-        TRC_WARNING("Badly formed URI %s from ENUM translation", new_uri_str.c_str());
-        SAS::Event event(trail(), SASEvent::ENUM_INVALID, 0);
+        // The NPDI flag is set on the original URI and not overriden by local policy, so ignore the number portability data.
+        TRC_DEBUG("Translated URI %s has NP data and the npdi flag is set - not replacing Request-URI",
+                  new_uri_str.c_str());
+        SAS::Event event(trail(), SASEvent::IGNORED_NP_DATA_FROM_ENUM, 0);
         event.add_var_param(new_uri_str);
+        event.add_var_param(rn);
         SAS::report_event(event);
-
-        pjsip_msg* rsp = create_response(req, PJSIP_SC_NOT_FOUND, "ENUM Failed");
-        send_response(rsp);
-        free_msg(req);
-        already_routed = true;
       }
     }
-    else if (PJUtils::is_uri_phone_number(uri))
+    else
     {
-      SAS::Event event(trail(), SASEvent::ENUM_FAILED_ROUTING_TO_BGCF);
+      // We got a TEL URI of some description - update the Request-URI anyway and expect a
+      // downstream MGCF to sort it out.
+      TRC_DEBUG("Translated URI %s is not a SIP URI - replacing Request-URI anyway",
+                new_uri_str.c_str());
+      req->line.req.uri = new_uri;
+      SAS::Event event(trail(), SASEvent::NON_SIP_URI_FROM_ENUM, 0);
       event.add_var_param(new_uri_str);
       SAS::report_event(event);
-      // The URI translation failed, but we have been left with a URI that
-      // definitely encodes a phone number, so we should route to the BGCF.
-      TRC_DEBUG("Unable to resolve URI phone number %s using ENUM, route to BGCF",
-                PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, uri).c_str());
-      route_to_bgcf(req);
-      already_routed = true;
     }
   }
-  return already_routed;
 }
 
 
