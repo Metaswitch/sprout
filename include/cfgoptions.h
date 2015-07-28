@@ -52,6 +52,7 @@
 #include "acr.h"
 #include "enumservice.h"
 #include "exception_handler.h"
+#include "ralf_processor.h"
 
 enum struct MemcachedWriteFormat
 {
@@ -95,6 +96,7 @@ struct options
   std::string                          store_servers;
   std::string                          remote_store_servers;
   std::string                          ralf_server;
+  int                                  ralf_threads;
   std::vector<std::string>             dns_servers;
   std::vector<std::string>             enum_servers;
   std::string                          enum_suffix;
@@ -146,7 +148,7 @@ extern LoadMonitor* load_monitor;
 extern HSSConnection* hss_connection;
 extern RegStore* local_reg_store;
 extern RegStore* remote_reg_store;
-extern HttpConnection* ralf_connection;
+extern RalfProcessor* ralf_processor;
 extern HttpResolver* http_resolver;
 extern ACRFactory* scscf_acr_factory;
 extern EnumService* enum_service;

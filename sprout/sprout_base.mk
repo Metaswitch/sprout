@@ -84,6 +84,7 @@ TARGET_SOURCES := logger.cpp \
                   snmp_success_fail_count_table.cpp \
                   snmp_row.cpp \
                   snmp_scalar.cpp \
+                  ralf_processor.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 

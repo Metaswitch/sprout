@@ -147,7 +147,7 @@ ACR* ACRFactory::get_acr(SAS::TrailId trail, Initiator initiator, NodeRole role)
   return new ACR();
 }
 
-RalfACR::RalfACR(HttpConnection* ralf,
+RalfACR::RalfACR(RalfProcessor* ralf,
                  SAS::TrailId trail,
                  Node node_functionality,
                  Initiator initiator,
@@ -624,20 +624,18 @@ void RalfACR::send_message(pj_time_val timestamp)
       (_record_type == INTERIM_RECORD) ||
       (_record_type == STOP_RECORD))
   {
-    // Encode and send the request using the Ralf HTTP connection.
+    // Encode and add the request to the RalfProcessor pool
     TRC_VERBOSE("Sending %s Ralf ACR (%p)",
                 ACR::node_name(_node_functionality).c_str(), this);
     std::string path = "/call-id/" + Utils::url_escape(_user_session_id);
-    std::map<std::string, std::string> headers;
-    long rc = _ralf->send_post(path,
-                               headers,
-                               get_message(timestamp),
-                               _trail);
 
-    if (rc != HTTP_OK)
-    {
-      TRC_WARNING("Failed to send Ralf ACR message (%p), rc = %ld", this, rc);
-    }
+    // Create a Ralf request and populate it
+    RalfProcessor::RalfRequest* rr = new RalfProcessor::RalfRequest();
+    rr->path = path;
+    rr->message = get_message(timestamp);
+    rr->trail = _trail;
+   
+    _ralf->send_request_to_ralf(rr);
   }
   else
   {
@@ -1719,7 +1717,7 @@ std::string RalfACR::hdr_contents(pjsip_hdr* hdr)
 }
 
 /// RalfACRFactory Constructor.
-RalfACRFactory::RalfACRFactory(HttpConnection* ralf,
+RalfACRFactory::RalfACRFactory(RalfProcessor* ralf,
                                Node node_functionality) :
   _ralf(ralf),
   _node_functionality(node_functionality)

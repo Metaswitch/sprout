@@ -88,8 +88,8 @@ bool BGCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     _bgcf_service = new BgcfService();
 
     // Create the BGCF ACR factory.
-    _acr_factory = (ralf_connection != NULL) ?
-                       (ACRFactory*)new RalfACRFactory(ralf_connection, BGCF) :
+    _acr_factory = (ralf_processor != NULL) ?
+                       (ACRFactory*)new RalfACRFactory(ralf_processor, BGCF) :
                        new ACRFactory();
 
     // Create the Sproutlet.
