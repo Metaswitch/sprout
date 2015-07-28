@@ -154,8 +154,7 @@ private:
                      SAS::TrailId trail);
 
   /// Translate RequestURI using ENUM service if appropriate.
-  std::string translate_request_uri(pjsip_msg* req,
-                                    SAS::TrailId trail);
+  bool translate_request_uri(pjsip_msg* req, pj_pool_t* pool, SAS::TrailId trail);
 
   /// Get an ACR instance from the factory.
   /// @param trail                SAS trail identifier to use for the ACR.

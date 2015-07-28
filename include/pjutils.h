@@ -54,6 +54,7 @@ extern "C" {
 #include <deque>
 #include "sas.h"
 #include "sipresolver.h"
+#include "enumservice.h"
 
 namespace PJUtils {
 
@@ -290,6 +291,13 @@ bool add_update_session_expires(pjsip_msg* req,
                                 pj_pool_t* pool,
                                 SAS::TrailId trail);
 
+bool translate_request_uri(pjsip_msg* req,
+                           pj_pool_t* pool,
+                           EnumService* enum_service,
+                           bool enforce_user_phone,
+                           bool global_only_lookups,
+                           bool should_override_npdi,
+                           SAS::TrailId trail);
 } // namespace PJUtils
 
 #endif
