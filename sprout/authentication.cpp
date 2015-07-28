@@ -809,9 +809,6 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
 
-  PJUtils::report_sas_to_from_markers(trail, rdata->msg_info.msg);
-  PJUtils::mark_sas_call_branch_ids(trail, NULL, rdata->msg_info.msg);
-
   // Add a SAS end marker
   SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
