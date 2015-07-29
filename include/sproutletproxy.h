@@ -49,7 +49,7 @@
 
 #include "basicproxy.h"
 #include "sproutlet.h"
-
+#include "snmp_sip_request_types.h"
 
 class SproutletWrapper;
 
@@ -311,6 +311,7 @@ private:
   /// Immutable reference to the original request.  A mutable clone of this
   /// is passed to the Sproutlet.
   pjsip_tx_data* _req;
+  SNMP::SIPRequestTypes _req_type;
 
   typedef std::unordered_map<const pjsip_msg*, pjsip_tx_data*> Packets;
   Packets _packets;
@@ -338,7 +339,7 @@ private:
     int cancel_reason;
   } ForkStatus;
   std::vector<ForkStatus> _forks;
-
+  
   SAS::TrailId _trail_id;
 
   friend class SproutletProxy::UASTsx;

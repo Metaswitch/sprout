@@ -37,6 +37,7 @@
 #include "snmp_internal/snmp_includes.h"
 #include "fakesnmp.hpp"
 #include "snmp_success_fail_count_table.h"
+#include "snmp_success_fail_count_by_request_type_table.h"
 
 namespace SNMP
 {
@@ -54,6 +55,8 @@ FakeSuccessFailCountTable FAKE_THIRD_PARTY_DE_REG_TABLE;
 FakeSuccessFailCountTable FAKE_SIP_DIGEST_AUTH_TABLE;
 FakeSuccessFailCountTable FAKE_IMS_AKA_AUTH_TABLE;
 FakeSuccessFailCountTable FAKE_NON_REG_AUTH_TABLE;
+FakeSuccessFailCountByRequestTypeTable FAKE_INCOMING_SIP_TRANSACTIONS_TABLE;
+FakeSuccessFailCountByRequestTypeTable FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE;
 
 RegistrationStatsTables FAKE_REGISTRATION_STATS_TABLES =
 {
@@ -86,7 +89,13 @@ ColumnData IPCountRow::get_columns()
   ColumnData ret;
   return ret;
 }
-}
+
+SuccessFailCountByRequestTypeTable* SuccessFailCountByRequestTypeTable::create(std::string name, std::string oid)
+{
+  return new FakeSuccessFailCountByRequestTypeTable();
+};
+
+} // Namespace SNMP ends
 
 // Fake implementation of scalar registration function, so SNMP::U32Scalar doesn't call real SNMP
 // code

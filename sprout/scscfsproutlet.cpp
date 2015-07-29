@@ -85,6 +85,10 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
   _icscf_uri_str(icscf_uri),
   _bgcf_uri_str(bgcf_uri)
 {
+  _incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("scscf_incoming_sip_transactions",
+                                                                                    "1.2.826.0.1.1578918.9.3.20");
+  _outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("scscf_outgoing_sip_transactions",
+                                                                                    "1.2.826.0.1.1578918.9.3.21");
 }
 
 
@@ -92,6 +96,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
 SCSCFSproutlet::~SCSCFSproutlet()
 {
   delete _as_chain_table;
+  delete _incoming_sip_transactions_tbl;
+  delete _outgoing_sip_transactions_tbl;
 }
 
 bool SCSCFSproutlet::init()

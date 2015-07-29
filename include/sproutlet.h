@@ -51,7 +51,7 @@ extern "C" {
 
 #include <list>
 #include "sas.h"
-
+#include "snmp_success_fail_count_by_request_type_table.h"
 
 #define API_VERSION 1
 
@@ -547,6 +547,9 @@ public:
   /// Virtual destructor.
   virtual ~Sproutlet() {}
 
+  SNMP::SuccessFailCountByRequestTypeTable* _incoming_sip_transactions_tbl = NULL;
+  SNMP::SuccessFailCountByRequestTypeTable* _outgoing_sip_transactions_tbl = NULL;
+  
   /// Called when the system determines the service should be invoked for a
   /// received request.  The Sproutlet can either return NULL indicating it
   /// does not want to process the request, or create a suitable object

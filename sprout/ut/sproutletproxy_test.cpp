@@ -485,17 +485,21 @@ public:
 
   static void TearDownTestCase()
   {
+    //printf("Starting tear down\n");
     // Shut down the transaction module first, before we destroy the
     // objects that might handle any callbacks!
+   // printf("pjsip_tsx_layer destroyed\n");
     pjsip_tsx_layer_destroy();
 
-
+    //printf("deleting proxy\n");
     delete _proxy;
 
+    //printf("begin for loop\n");
     for (std::list<Sproutlet*>::iterator i = _sproutlets.begin();
          i != _sproutlets.end();
          ++i)
     {
+      //printf("end sproutlet\n");
       delete (*i);
     }
 

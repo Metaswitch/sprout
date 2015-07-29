@@ -60,7 +60,7 @@ extern "C" {
 #include "icscfrouter.h"
 #include "acr.h"
 #include "sproutlet.h"
-
+#include "snmp_success_fail_count_by_request_type_table.h"
 
 class ICSCFSproutletTsx;
 class ICSCFSproutletRegTsx;

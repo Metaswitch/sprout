@@ -53,6 +53,7 @@ extern "C" {
 #include "pjutils.h"
 #include "sproutsasevent.h"
 #include "sproutletproxy.h"
+#include "snmp_sip_request_types.h"
 
 const pj_str_t SproutletProxy::STR_SERVICE = {"service", 7};
 
@@ -970,6 +971,7 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _service_name(""),
   _id(""),
   _req(req),
+  _req_type(),
   _packets(),
   _send_requests(),
   _send_responses(),
@@ -980,6 +982,7 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _forks(),
   _trail_id(trail_id)
 {
+  _req_type = SNMP::string_to_request_type(&_req->msg->line.req.method.name);
   if (sproutlet != NULL)
   {
     // Offer the Sproutlet the chance to handle this transaction.
@@ -999,6 +1002,16 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
     _sproutlet_tsx = new SproutletTsx(this);
   }
 
+  if ((_sproutlet != NULL) && 
+      (_sproutlet->_incoming_sip_transactions_tbl != NULL))
+  {
+    _sproutlet->_incoming_sip_transactions_tbl->increment_attempts(_req_type);
+    if (_req_type == SNMP::SIPRequestTypes::ACK)
+    {
+      _sproutlet->_incoming_sip_transactions_tbl->increment_successes(_req_type);
+    }
+  }
+  
   // Construct a unique identifier for this Sproutlet.
   std::ostringstream id;
   id << _service_name << "-" << (const void*)_sproutlet_tsx;
@@ -1181,6 +1194,16 @@ int SproutletWrapper::send_request(pjsip_msg*& req)
     return -1;
   }
 
+  if ((_sproutlet != NULL) && 
+      (_sproutlet->_outgoing_sip_transactions_tbl != NULL))
+  {
+    _sproutlet->_outgoing_sip_transactions_tbl->increment_attempts(_req_type);
+    if (_req_type == SNMP::SIPRequestTypes::ACK)
+    {
+      _sproutlet->_outgoing_sip_transactions_tbl->increment_successes(_req_type);
+    }
+  }
+  
   // We've found the tdata, move it to _send_requests under a new unique ID.
   int fork_id = _forks.size();
   _forks.resize(fork_id + 1);
@@ -1428,6 +1451,19 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
                 _id.c_str(), pjsip_tx_data_get_info(rsp),
                 fork_id, pjsip_tsx_state_str(_forks[fork_id].state.tsx_state));
     --_pending_responses;
+  
+    if ((_sproutlet != NULL) && 
+      (_sproutlet->_outgoing_sip_transactions_tbl != NULL))
+    {
+      if (rsp->msg->line.status.code >= 200 && rsp->msg->line.status.code < 300)
+      {
+        _sproutlet->_outgoing_sip_transactions_tbl->increment_successes(_req_type);
+      }
+      else
+      {
+        _sproutlet->_outgoing_sip_transactions_tbl->increment_failures(_req_type);
+      }
+    }
   }
   _sproutlet_tsx->on_rx_response(rsp->msg, fork_id);
   process_actions(false);
@@ -1588,7 +1624,7 @@ void SproutletWrapper::process_actions(bool complete_after_actions)
   {
     _complete = true;
   }
-
+  
   if ((_complete) &&
       (_pending_responses == 0))
   {
@@ -1721,6 +1757,19 @@ void SproutletWrapper::tx_response(pjsip_tx_data* rsp)
   {
     _complete = true;
     cancel_pending_forks();
+    if ((_sproutlet != NULL) &&
+        (_sproutlet->_incoming_sip_transactions_tbl != NULL))
+    {
+      if ((_best_rsp != NULL) && 
+               (_best_rsp->msg->line.status.code >= 200 && _best_rsp->msg->line.status.code < 300))
+      {
+        _sproutlet->_incoming_sip_transactions_tbl->increment_successes(_req_type);
+      }
+      else
+      {
+        _sproutlet->_incoming_sip_transactions_tbl->increment_failures(_req_type);
+      }
+    }
   }
 
   // Forward the response upstream.

@@ -86,6 +86,10 @@ bool MementoPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
   bool plugin_loaded = true;
 
+  SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("memento_as_incoming_sip_transactions",
+                                                                                                                             "1.2.826.0.1.1578918.9.8.1.4");
+  SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("memento_as_outgoing_sip_transactions",
+                                                                                                                             "1.2.826.0.1.1578918.9.8.1.5");
   if (((opt.max_call_list_length == 0) &&
        (opt.call_list_ttl == 0)))
   {
@@ -117,7 +121,7 @@ bool MementoPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                     opt.min_token_rate,
                                     exception_handler);
 
-    _memento_sproutlet = new SproutletAppServerShim(_memento);
+    _memento_sproutlet = new SproutletAppServerShim(_memento, incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl);
     sproutlets.push_back(_memento_sproutlet);
   }
 

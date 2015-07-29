@@ -82,6 +82,8 @@ TARGET_SOURCES := logger.cpp \
                   snmp_counter_table.cpp \
                   snmp_ip_count_table.cpp \
                   snmp_success_fail_count_table.cpp \
+                  snmp_success_fail_count_by_request_type_table.cpp \
+                  sip_string_to_request_type.cpp \
                   snmp_row.cpp \
                   snmp_scalar.cpp \
 
