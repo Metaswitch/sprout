@@ -44,13 +44,22 @@
 #include "load_monitor.h"
 #include "test_interposer.hpp"
 
+static SNMP::ContinuousAccumulatorTable* token_rate_table = SNMP::ContinuousAccumulatorTable::create("","");
+static SNMP::U32Scalar* smoothed_latency_scalar = new SNMP::U32Scalar("","");
+static SNMP::U32Scalar* target_latency_scalar = new SNMP::U32Scalar("","");
+static SNMP::U32Scalar* penalties_scalar = new SNMP::U32Scalar("","");
+static SNMP::U32Scalar* token_rate_scalar = new SNMP::U32Scalar("","");
+
 /// Fixture for LoadMonitorTest.
 class LoadMonitorTest : public BaseTest
 {
   LoadMonitor _load_monitor;
 
   LoadMonitorTest() :
-    _load_monitor(100000, 20, 10, 10)
+    _load_monitor(100000, 20, 10, 10,
+                  token_rate_table, smoothed_latency_scalar,
+                  target_latency_scalar, penalties_scalar,
+                  token_rate_scalar)
   {
     cwtest_completely_control_time();
   }
@@ -154,7 +163,7 @@ TEST_F(LoadMonitorTest, NoRateDecreaseBelowMinimum)
 
 TEST_F(LoadMonitorTest, AdmitRequest)
 {
-  // Test that initially the load monitor admits requests, but after a large number  
+  // Test that initially the load monitor admits requests, but after a large number
   // of attempts in quick succession it has run out.
   EXPECT_EQ(_load_monitor.admit_request(), true);
 
@@ -162,7 +171,7 @@ TEST_F(LoadMonitorTest, AdmitRequest)
   {
     _load_monitor.admit_request();
   }
- 
+
   EXPECT_EQ(_load_monitor.admit_request(), false);
 }
 

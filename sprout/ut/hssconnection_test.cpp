@@ -64,11 +64,11 @@ class HssConnectionTest : public BaseTest
          &_resolver,
          NULL,
          &SNMP::FAKE_IP_COUNT_TABLE,
-         &SNMP::FAKE_ACCUMULATOR_TABLE,
-         &SNMP::FAKE_ACCUMULATOR_TABLE,
-         &SNMP::FAKE_ACCUMULATOR_TABLE,
-         &SNMP::FAKE_ACCUMULATOR_TABLE,
-         &SNMP::FAKE_ACCUMULATOR_TABLE,
+         &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+         &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+         &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+         &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+         &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
          &_cm)
     {
     fakecurl_responses.clear();
@@ -481,7 +481,7 @@ TEST_F(HssConnectionTest, SimpleUserAuth)
   rapidjson::Document* actual;
   _hss.get_user_auth_status("privid69", "pubid44", "", "", actual, 0);
   ASSERT_TRUE(actual != NULL);
-  EXPECT_EQ(std::string("server-name"), (*actual)["scscf"].GetString()); 
+  EXPECT_EQ(std::string("server-name"), (*actual)["scscf"].GetString());
   delete actual;
 }
 

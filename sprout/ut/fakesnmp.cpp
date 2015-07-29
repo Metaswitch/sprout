@@ -44,7 +44,8 @@ struct in_addr dummy_addr;
 FakeIPCountRow FAKE_IP_COUNT_ROW;
 FakeIPCountTable FAKE_IP_COUNT_TABLE;
 FakeCounterTable FAKE_COUNTER_TABLE;
-FakeAccumulatorTable FAKE_ACCUMULATOR_TABLE;
+FakeEventAccumulatorTable FAKE_EVENT_ACCUMULATOR_TABLE;
+FakeContinuousAccumulatorTable FAKE_CONTINUOUS_ACCUMULATOR_TABLE;
 FakeSuccessFailCountTable FAKE_INIT_REG_TABLE;
 FakeSuccessFailCountTable FAKE_RE_REG_TABLE;
 FakeSuccessFailCountTable FAKE_DE_REG_TABLE;
@@ -76,8 +77,8 @@ AuthenticationStatsTables FAKE_AUTHENTICATION_STATS_TABLES =
 
 // Alternative implementations is some functions, so we aren't calling real SNMP code in UT
 IPCountTable* IPCountTable::create(std::string name, std::string oid) { return new FakeIPCountTable(); };
-IPCountRow::IPCountRow(struct in_addr addr) {}; 
-IPCountRow::IPCountRow(struct in6_addr addr) {}; 
+IPCountRow::IPCountRow(struct in_addr addr) {};
+IPCountRow::IPCountRow(struct in6_addr addr) {};
 
 ColumnData IPCountRow::get_columns()
 {
@@ -94,5 +95,5 @@ int netsnmp_register_read_only_ulong_instance(const char *name,
                                               u_long *it,
                                               Netsnmp_Node_Handler *subhandler)
 {
-  return 0; 
+  return 0;
 }

@@ -39,7 +39,7 @@
 #include <map>
 #include "log.h"
 #include "fakehttpconnection.hpp"
-#include "snmp_accumulator_table.h"
+#include "snmp_event_accumulator_table.h"
 #include "xdmconnection.h"
 
 /// XDMConnection that writes to/reads from a local map rather than the XDMS.
