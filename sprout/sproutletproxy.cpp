@@ -1005,6 +1005,7 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   if ((_sproutlet != NULL) && 
       (_sproutlet->_incoming_sip_transactions_tbl != NULL))
   {
+    // Update SNMP SIP transactions statistics for the Sproutlet.
     _sproutlet->_incoming_sip_transactions_tbl->increment_attempts(_req_type);
     if (_req_type == SNMP::SIPRequestTypes::ACK)
     {
@@ -1197,6 +1198,7 @@ int SproutletWrapper::send_request(pjsip_msg*& req)
   if ((_sproutlet != NULL) && 
       (_sproutlet->_outgoing_sip_transactions_tbl != NULL))
   {
+    // Update SNMP SIP transactions statistics for the Sproutlet.
     _sproutlet->_outgoing_sip_transactions_tbl->increment_attempts(_req_type);
     if (_req_type == SNMP::SIPRequestTypes::ACK)
     {
@@ -1455,6 +1457,7 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
     if ((_sproutlet != NULL) && 
       (_sproutlet->_outgoing_sip_transactions_tbl != NULL))
     {
+      // Update SNMP SIP transactions statistics for the Sproutlet.
       if (rsp->msg->line.status.code >= 200 && rsp->msg->line.status.code < 300)
       {
         _sproutlet->_outgoing_sip_transactions_tbl->increment_successes(_req_type);
@@ -1760,6 +1763,7 @@ void SproutletWrapper::tx_response(pjsip_tx_data* rsp)
     if ((_sproutlet != NULL) &&
         (_sproutlet->_incoming_sip_transactions_tbl != NULL))
     {
+      // Update SNMP SIP transactions statistics for the Sproutlet.
       if ((_best_rsp != NULL) && 
                (_best_rsp->msg->line.status.code >= 200 && _best_rsp->msg->line.status.code < 300))
       {
