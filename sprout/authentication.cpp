@@ -104,7 +104,6 @@ static ACRFactory* acr_factory;
 // client to respond to a challenge.
 static AvStore* av_store;
 
-
 // Analytics logger.
 static AnalyticsLogger* analytics;
 
@@ -114,6 +113,9 @@ static SNMP::AuthenticationStatsTables* auth_stats_tables;
 // PJSIP structure for control server authentication functions.
 pjsip_auth_srv auth_srv;
 pjsip_auth_srv auth_srv_proxy;
+
+// Controls when to challenge non-REGISTER messages.
+NonRegisterAuthentication non_register_auth_mode;
 
 // Retrieve the digest credentials (from the Authorization header for REGISTERs, and the
 // Proxy-Authorization header otherwise).
@@ -258,8 +260,8 @@ pj_status_t user_lookup(pj_pool_t *pool,
       // into binary as this is what PJSIP is expecting.
       std::string response = "";
       if (((*av)["aka"].HasMember("response")) &&
-          ((*av)["aka"]["response"].IsString())) 
-      {     
+          ((*av)["aka"]["response"].IsString()))
+      {
         response = (*av)["aka"]["response"].GetString();
       }
 
@@ -618,26 +620,43 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
       return PJ_FALSE;
     }
 
-    // Check to see if we should authenticate this non-REGISTER message - this behaviour is not from
-    // the IMS specs, but part of our custom logic to authenticate non-registering PBXes. We
-    // challenge all messages with a Proxy-Authorization header.
-    pjsip_proxy_authorization_hdr* auth_hdr = (pjsip_proxy_authorization_hdr*)
-      pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_PROXY_AUTHORIZATION, NULL);
-
-    if (auth_hdr != NULL)
+    // Check to see if we should authenticate this non-REGISTER message - this
+    if (non_register_auth_mode == NonRegisterAuthentication::NEVER)
     {
-      // Edge proxy has explicitly asked us to authenticate this non-REGISTER message
-      SAS::Event event(trail, SASEvent::AUTHENTICATION_NEEDED_PROXY_AUTHORIZATION, 0);
+      // Configured to never authenticate non-REGISTER requests.
+      SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_NEVER_AUTH_NON_REG, 0);
       SAS::report_event(event);
-      return PJ_TRUE;
+      return PJ_FALSE;
+    }
+    else if (non_register_auth_mode == NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT)
+    {
+      // Only authenticate the request if it has a Proxy-Authorization header.
+      pjsip_proxy_authorization_hdr* auth_hdr = (pjsip_proxy_authorization_hdr*)
+        pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_PROXY_AUTHORIZATION, NULL);
+
+      if (auth_hdr != NULL)
+      {
+        // Edge proxy has explicitly asked us to authenticate this non-REGISTER
+        // message
+        SAS::Event event(trail, SASEvent::AUTHENTICATION_NEEDED_PROXY_AUTHORIZATION, 0);
+        SAS::report_event(event);
+        return PJ_TRUE;
+      }
+      else
+      {
+        // No Proxy-Authorization header - this indicates the P-CSCF trusts this
+        // message so we don't need to perform further authentication.
+        SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_PROXY_AUTHORIZATION, 0);
+        SAS::report_event(event);
+        return PJ_FALSE;
+      }
     }
     else
     {
-      // No Proxy-Authorization header - this indicates the P-CSCF trusts this message so we don't
-      // need to perform further authentication.
-      SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_PROXY_AUTHORIZATION, 0);
-      SAS::report_event(event);
+      // Unrecognized authentication mode - should never happen. LCOV_EXCL_START
+      assert(!"Unrecognized authentication mode");
       return PJ_FALSE;
+      // LCOV_EXCL_STOP
     }
   }
 }
@@ -657,16 +676,16 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     TRC_DEBUG("Request does not need authentication");
     return PJ_FALSE;
   }
-    
+
   TRC_DEBUG("Request needs authentication");
   rapidjson::Document* av = NULL;
 
   const int unauth_sc = is_register ? PJSIP_SC_UNAUTHORIZED : PJSIP_SC_PROXY_AUTHENTICATION_REQUIRED;
   int sc = unauth_sc;
   status = PJSIP_EAUTHNOAUTH;
-  
+
   pjsip_digest_credential* credentials = get_credentials(rdata);
-  
+
   if ((credentials != NULL) &&
       (credentials->response.slen != 0))
   {
@@ -676,7 +695,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       // needed for this case.
       auth_stats_table = auth_stats_tables->non_register_auth_tbl;
     }
-    else 
+    else
     {
       if (!pj_strcmp2(&credentials->algorithm, "MD5"))
       {
@@ -708,7 +727,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       SAS::Event event(trail, SASEvent::AUTHENTICATION_SUCCESS, 0);
       SAS::report_event(event);
 
-      auth_stats_table->increment_successes();   
+      auth_stats_table->increment_successes();
 
       // Write a tombstone flag back to the AV store, handling contention.
       // We don't actually expect anything else to be writing to this row in
@@ -863,7 +882,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     TRC_ERROR("Authentication failed, %s", error_msg.c_str());
 
     auth_stats_table->increment_failures();
- 
+
     SAS::Event event(trail, SASEvent::AUTHENTICATION_FAILED, 0);
     event.add_var_param(error_msg);
     SAS::report_event(event);
@@ -905,6 +924,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   //  * if a challenged request gets retransmitted, we don't repeat the work
   pjsip_transaction* tsx = NULL;
   status = pjsip_tsx_create_uas2(NULL, rdata, NULL, &tsx);
+  set_trail(tsx, trail);
   if (status != PJ_SUCCESS)
   {
     // LCOV_EXCL_START - defensive code not hit in UT
@@ -935,6 +955,7 @@ pj_status_t init_authentication(const std::string& realm_name,
                                 HSSConnection* hss_connection,
                                 ChronosConnection* chronos_connection,
                                 ACRFactory* rfacr_factory,
+                                NonRegisterAuthentication non_register_auth_mode_param,
                                 AnalyticsLogger* analytics_logger,
                                 SNMP::AuthenticationStatsTables* auth_stats_tbls)
 {
@@ -962,6 +983,7 @@ pj_status_t init_authentication(const std::string& realm_name,
   params.options = PJSIP_AUTH_SRV_IS_PROXY;
   status = pjsip_auth_srv_init2(stack_data.pool, &auth_srv_proxy, &params);
 
+  non_register_auth_mode = non_register_auth_mode_param;
 
   return status;
 }
