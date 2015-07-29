@@ -56,6 +56,7 @@
 #include "sproutletappserver.h"
 #include "mmtel.h"
 #include "sproutletproxy.h"
+#include "fakesnmp.hpp"
 
 using namespace std;
 using testing::StrEq;
@@ -377,7 +378,10 @@ public:
 
     // Create the MMTEL AppServer.
     _mmtel = new Mmtel("mmtel", _xdm_connection);
-    _mmtel_sproutlet = new SproutletAppServerShim(_mmtel, "mmtel.homedomain");
+    _mmtel_sproutlet = new SproutletAppServerShim(_mmtel,
+                                                  &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
+                                                  &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
+                                                  "mmtel.homedomain");
 
     // Create the SproutletProxy.
     std::list<Sproutlet*> sproutlets;

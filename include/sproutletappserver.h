@@ -225,7 +225,10 @@ public:
                                 pjsip_msg* req);
 
   /// Constructor.
-  SproutletAppServerShim(AppServer* app, const std::string& service_host="");
+  SproutletAppServerShim(AppServer* app,
+                         SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl = NULL,
+                         SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl = NULL,
+                         const std::string& service_host="");
 
 private:
   AppServer* _app;

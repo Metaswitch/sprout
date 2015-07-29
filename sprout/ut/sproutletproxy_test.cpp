@@ -489,7 +489,6 @@ public:
     // objects that might handle any callbacks!
     pjsip_tsx_layer_destroy();
 
-
     delete _proxy;
 
     for (std::list<Sproutlet*>::iterator i = _sproutlets.begin();
