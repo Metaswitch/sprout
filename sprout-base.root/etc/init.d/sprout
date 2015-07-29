@@ -80,6 +80,7 @@ log_directory=/var/log/$NAME
 #
 setup_environment()
 {
+        export MIBS=""
         export LD_LIBRARY_PATH=/usr/share/clearwater/sprout/lib
         ulimit -Hn 1000000
         ulimit -Sn 1000000
