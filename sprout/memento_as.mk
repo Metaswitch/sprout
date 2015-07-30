@@ -44,14 +44,16 @@ LDFLAGS += -lthrift \
            -lcassandra
 
 include ${MK_DIR}/platform.mk
+include ${ROOT}/modules/cpp-common/makefiles/alarm-utils.mk
 
 .PHONY: stage-build
-stage-build: alarms build
+stage-build: build
 
-alarms:
-	${MAKE} -f ../modules/cpp-common/makefiles/alarms-header.mk
-	${BUILD_DIR}/bin/alarm_header -j "../memento-as.root/usr/share/clearwater/infrastructure/alarms/memento_as_alarms.json" -n "memento_as"
-	mv memento_as_alarmdefinition.h ${ROOT}/usr/include/
+build: ${ROOT}/usr/include/memento_as_alarmdefinition.h
+
+${ROOT}/usr/include/memento_as_alarmdefinition.h : ${BUILD_DIR}/bin/alarm_header ${ROOT}/memento-as.root/usr/share/clearwater/infrastructure/alarms/memento_as_alarms.json
+	${BUILD_DIR}/bin/alarm_header -j "${ROOT}/memento-as.root/usr/share/clearwater/infrastructure/alarms/memento_as_alarms.json" -n "memento_as"
+	mv memento_as_alarmdefinition.h $@
 
 .PHONY: distclean
 distclean: clean
