@@ -58,6 +58,7 @@ extern "C" {
 #include "sproutsasevent.h"
 #include "constants.h"
 #include "basicproxy.h"
+#include "uri_classifier.h"
 
 
 BasicProxy::BasicProxy(pjsip_endpoint* endpt,
@@ -662,6 +663,7 @@ int BasicProxy::UASTsx::process_routing()
 {
   pjsip_msg* msg = _req->msg;
   pjsip_sip_uri* req_uri = (pjsip_sip_uri*)msg->line.req.uri;
+  URIClass uri_class = URIClassifier::classify_uri(msg->line.req.uri);
   pjsip_route_hdr* hroute;
 
   // RFC 3261 Section 16.4 Route Information Preprocessing
@@ -674,7 +676,7 @@ int BasicProxy::UASTsx::process_routing()
   // value from the Route header field, and remove that value from the
   // Route header field.  The proxy MUST then proceed as if it received
   // this modified request.
-  if (PJUtils::is_uri_local((pjsip_uri*)req_uri))
+  if (uri_class == NODE_LOCAL_SIP_URI)
   {
     pjsip_route_hdr *r;
     pjsip_sip_uri *uri;
@@ -724,8 +726,9 @@ int BasicProxy::UASTsx::process_routing()
   hroute = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, NULL);
   if (hroute != NULL)
   {
-    if ((!PJUtils::is_uri_local(hroute->name_addr.uri)) &&
-        (!PJUtils::is_home_domain(hroute->name_addr.uri)))
+    URIClass hroute_uri_class = URIClassifier::classify_uri(hroute->name_addr.uri);
+    if ((hroute_uri_class != NODE_LOCAL_SIP_URI) &&
+        (hroute_uri_class != HOME_DOMAIN_SIP_URI))
     {
       // The top route header is not this node or the local domain so set up
       // a target containing just the Request URI so the requesst will be
@@ -817,8 +820,10 @@ int BasicProxy::UASTsx::calculate_targets()
   // not responsible for, the Request-URI MUST be placed into the target
   // set as the only target, and the element MUST proceed to the task of
   // Request Forwarding (Section 16.6).
-  if ((!PJUtils::is_home_domain((pjsip_uri*)req_uri)) &&
-      (!PJUtils::is_uri_local((pjsip_uri*)req_uri)))
+  URIClass uri_class = URIClassifier::classify_uri(msg->line.req.uri);
+
+  if ((uri_class != NODE_LOCAL_SIP_URI) &&
+      (uri_class != HOME_DOMAIN_SIP_URI))
   {
     TRC_INFO("Route request to domain %.*s",
              req_uri->host.slen, req_uri->host.ptr);

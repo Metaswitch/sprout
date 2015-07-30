@@ -52,6 +52,7 @@ extern "C" {
 #include "stack.h"
 #include "pjutils.h"
 #include "sproutsasevent.h"
+#include "uri_classifier.h"
 
 static bool reg_store_access_common(RegStore::AoR** aor_data,
                                     bool& previous_aor_data_alloced,
@@ -128,7 +129,7 @@ static void report_sip_all_register_marker(SAS::TrailId trail, std::string uri_s
     sip_all_register.add_var_param(PJUtils::strip_uri_scheme(uri_str));
     // Add the DN parameter. If the user part is not numeric just log it in
     // its entirety.
-    sip_all_register.add_var_param(PJUtils::is_user_numeric(user) ?
+    sip_all_register.add_var_param(URIClassifier::is_user_numeric(user) ?
                                    PJUtils::remove_visual_separators(user) :
                                    PJUtils::pj_str_to_string(&user));
     SAS::report_marker(sip_all_register);

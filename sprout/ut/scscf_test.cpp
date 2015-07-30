@@ -458,8 +458,8 @@ public:
     pjsip_tsx_layer_instance()->start();
 
     // Reset any configuration changes
-    _scscf_sproutlet->set_global_only_lookups(false);
-    _scscf_sproutlet->set_enforce_user_phone(false);
+    URIClassifier::enforce_user_phone = false;
+    URIClassifier::enforce_global = false;
     _scscf_sproutlet->set_override_npdi(false);
     _scscf_sproutlet->set_session_continued_timeout(3000);
     _scscf_sproutlet->set_session_terminated_timeout(6000);
@@ -1572,7 +1572,7 @@ TEST_F(SCSCFTest, TestEnumUserPhone)
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
-  _scscf_sproutlet->set_enforce_user_phone(true);
+  URIClassifier::enforce_user_phone = true;
   Message msg;
   msg._to = "+15108580271";
   msg._requri = "sip:+15108580271@homedomain;user=phone";
@@ -1591,7 +1591,7 @@ TEST_F(SCSCFTest, TestEnumNoUserPhone)
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
-  _scscf_sproutlet->set_enforce_user_phone(true);
+  URIClassifier::enforce_user_phone = true;
   Message msg;
   msg._to = "+15108580271";
   // We only do ENUM on originating calls
@@ -1607,7 +1607,7 @@ TEST_F(SCSCFTest, TestEnumLocalNumber)
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
-  _scscf_sproutlet->set_global_only_lookups(true);
+  URIClassifier::enforce_global = true;
   Message msg;
   msg._to = "15108580271";
   // We only do ENUM on originating calls
@@ -1623,7 +1623,7 @@ TEST_F(SCSCFTest, TestEnumLocalTelURI)
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
-  _scscf_sproutlet->set_global_only_lookups(true);
+  URIClassifier::enforce_global = true;
   Message msg;
   msg._to = "16505551234;npdi";
   msg._toscheme = "tel";
@@ -1643,7 +1643,7 @@ TEST_F(SCSCFTest, TestEnumLocalSIPURINumber)
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
-  _scscf_sproutlet->set_global_only_lookups(true);
+  URIClassifier::enforce_global = true;
   Message msg;
   msg._to = "15108580271;npdi";
   msg._requri = "sip:15108580271;npdi@homedomain;user=phone";
@@ -1715,10 +1715,10 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPDataToSIP)
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
-  _scscf_sproutlet->set_enforce_user_phone(true);
+  URIClassifier::enforce_user_phone = true;
   Message msg;
-  msg._to = "+15108580272;npdi;rn=+16";
-  msg._requri = "sip:+15108580272;npdi;rn=+16@homedomain;user=phone";
+  msg._to = "+15108580272;rn=+16";
+  msg._requri = "sip:+15108580272;rn=+16@homedomain;user=phone";
   msg._route = "Route: <sip:homedomain;orig>";
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
@@ -1734,7 +1734,7 @@ TEST_F(SCSCFTest, DISABLED_TestEnumToCIC)
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
-  _scscf_sproutlet->set_enforce_user_phone(true);
+  URIClassifier::enforce_user_phone = true;
   Message msg;
   msg._to = "+15108580501";
   msg._requri = "sip:+15108580501@homedomain;user=phone";
@@ -1782,25 +1782,6 @@ TEST_F(SCSCFTest, TestEnumNPBGCFTel)
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("Route", "Route: <sip:10.0.0.1:5060;transport=TCP;lr>"));
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580401;rn.*+151085804;npdi@homedomain.*"), hdrs, false);
-}
-
-// Test where the BGCF does an ENUM lookup which returns an invalid rule. This
-// test uses two ENUM rules. The first one is invoked by the S-CSCF before
-// routing to the BGCF. The BGCF does the second lookup. At this point an
-// invalid rule is returned and we reply with a 404 ENUM failure.
-TEST_F(SCSCFTest, TestBGCFInvalidEnumRule)
-{
-  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
-  SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551239", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  Message msg;
-  msg._toscheme = "tel";
-  msg._to = "16505551239";
-  msg._route = "Route: <sip:homedomain;orig>";
-  msg._todomain = "";
-  list<HeaderMatcher> hdrs;
-  doSlowFailureFlow(msg, 404, "", "ENUM failure");
 }
 
 TEST_F(SCSCFTest, TestValidBGCFRoute)
@@ -4320,8 +4301,8 @@ TEST_F(SCSCFTest, BothEndsWithEnumRewrite)
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
 
-  _scscf_sproutlet->set_enforce_user_phone(false);
-  _scscf_sproutlet->set_global_only_lookups(false);
+  URIClassifier::enforce_global = false;
+  URIClassifier::enforce_user_phone = false;
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.

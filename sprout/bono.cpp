@@ -131,6 +131,7 @@ extern "C" {
 #include "quiescing_manager.h"
 #include "scscfselector.h"
 #include "contact_filtering.h"
+#include "uri_classifier.h"
 
 static RegStore* store;
 static RegStore* remote_store;
@@ -899,13 +900,13 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   *target = new Target();
   Target* target_p = *target;
   target_p->upstream_route = PJ_TRUE;
+  URIClass uri_class = URIClassifier::classify_uri(tdata->msg->line.req.uri);
 
   // Some trunks will send incoming requests directed at the IBCF node,
   // rather than determining the correct domain for the subscriber first.
   // In this case, we'll re-write the ReqURI to the default home domain.
   if ((*trust == &TrustBoundary::INBOUND_TRUNK) &&
-      (PJSIP_URI_SCHEME_IS_SIP(tdata->msg->line.req.uri)) &&
-      (PJUtils::is_uri_local((pjsip_uri*)tdata->msg->line.req.uri)))
+      uri_class == NODE_LOCAL_SIP_URI)
   {
     // Change host/domain in target to use default home domain.
     target_p->uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool,
@@ -1360,9 +1361,9 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
       // Check if we have any Route headers.  If so, we'll follow them.  If not,
       // we get to choose where to route to, so route upstream to sprout.
       void* top_route = pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
+      URIClass uri_class = URIClassifier::classify_uri(tdata->msg->line.req.uri);
       if ((top_route == NULL) &&
-          (PJUtils::is_home_domain(tdata->msg->line.req.uri) ||
-           PJUtils::is_uri_local(tdata->msg->line.req.uri)))
+          (uri_class != OFFNET_SIP_URI))
       {
         // Route the request upstream to Sprout.
         proxy_route_upstream(rdata, tdata, src_flow, trust, target);
@@ -1501,6 +1502,7 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
   // RFC 3261 Section 16.4 Route Information Preprocessing
 
   target = tdata->msg->line.req.uri;
+  URIClass uri_class = URIClassifier::classify_uri(target);
 
   // The proxy MUST inspect the Request-URI of the request.  If the
   // Request-URI of the request contains a value this proxy previously
@@ -1509,7 +1511,7 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
   // value from the Route header field, and remove that value from the
   // Route header field.  The proxy MUST then proceed as if it received
   // this modified request.
-  if (PJUtils::is_uri_local((pjsip_uri*)target))
+  if (uri_class == NODE_LOCAL_SIP_URI)
   {
     pjsip_route_hdr *r;
     pjsip_sip_uri *uri;

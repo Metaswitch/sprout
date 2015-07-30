@@ -69,6 +69,7 @@ extern "C" {
 #include "utils.h"
 #include "load_monitor.h"
 #include "health_checker.h"
+#include "uri_classifier.h"
 
 static SNMP::CounterTable* requests_counter = NULL;
 static SNMP::CounterTable* overload_counter = NULL;
@@ -207,7 +208,7 @@ static void sas_log_rx_msg(pjsip_rx_data* rdata)
     }
   }
   else if ((rdata->msg_info.msg->line.req.method.id == PJSIP_OPTIONS_METHOD) &&
-           PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri))
+           (URIClassifier::classify_uri(rdata->msg_info.msg->line.req.uri) == NODE_LOCAL_SIP_URI))
   {
     // This is an OPTIONS poll directed at this node. Don't log it to SAS, and set the trail ID to a sentinel value so we don't log the response either.
     TRC_DEBUG("Skipping SAS logging for OPTIONS request");

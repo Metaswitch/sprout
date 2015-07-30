@@ -55,6 +55,7 @@ extern "C" {
 #include "icscfsproutlet.h"
 #include "scscfselector.h"
 #include "constants.h"
+#include "uri_classifier.h"
 
 /// Define a constant for the maximum number of ENUM lookups
 /// we want to do in I-CSCF termination processing.
@@ -132,17 +133,15 @@ ACR* ICSCFSproutlet::get_acr(SAS::TrailId trail)
 }
 
 /// Translates a Tel URI to a SIP URI (if ENUM is enabled).
-bool ICSCFSproutlet::translate_request_uri(pjsip_msg* req,
+void ICSCFSproutlet::translate_request_uri(pjsip_msg* req,
                                            pj_pool_t* pool,
                                            SAS::TrailId trail)
 {
-  return PJUtils::translate_request_uri(req,
-                                        pool,
-                                        _enum_service,
-                                        should_require_user_phone(),
-                                        _global_only_lookups,
-                                        should_override_npdi(),
-                                        trail);
+  PJUtils::translate_request_uri(req,
+                                 pool,
+                                 _enum_service,
+                                 should_override_npdi(),
+                                 trail);
 }
 
 /*****************************************************************************/
@@ -459,10 +458,11 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   }
 
   pjsip_uri* next_hop = PJUtils::next_hop(req);
+  URIClass next_hop_class = URIClassifier::classify_uri(next_hop);
   if (req->line.req.method.id == PJSIP_ACK_METHOD &&
       next_hop == req->line.req.uri &&
-      (PJUtils::is_uri_local(next_hop) ||
-       PJUtils::is_home_domain(next_hop)))
+      ((next_hop_class == NODE_LOCAL_SIP_URI) ||
+       (next_hop_class == HOME_DOMAIN_SIP_URI)))
   {
     // Ignore ACK messages with no Route headers and a local Request-URI, as:
     // - the I-CSCF should not be handling these
@@ -515,12 +515,10 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     // we should replace it with a tel URI, as per TS24.229 5.3.2.1.
     if (PJSIP_URI_SCHEME_IS_SIP(uri))
     {
+      URIClass uri_class = URIClassifier::classify_uri(uri);
       pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)uri;
 
-      if ((!pj_strcmp(&sip_uri->user_param, &STR_USER_PHONE)) &&
-          (PJUtils::is_user_numeric(sip_uri->user)) &&
-          (!_icscf->are_global_only_lookups_enforced() || PJUtils::is_user_global(sip_uri->user)) &&
-          (!PJUtils::is_uri_gruu(uri)))
+      if (uri_class == GLOBAL_PHONE_NUMBER)
       {
         TRC_DEBUG("Change request URI from SIP URI to tel URI");
         req->line.req.uri =
@@ -557,6 +555,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   {
     TRC_DEBUG("Couldn't find an S-CSCF, attempt to translate the URI");
     pjsip_uri* uri = PJUtils::term_served_user(req);
+    URIClass uri_class = URIClassifier::classify_uri(uri, false);
 
     // For terminating processing, if the HSS indicates that the user does not
     // exist, and if the request URI is a tel URI, try an ENUM translation. If
@@ -566,11 +565,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     // set. If it isn't, and we have a numeric SIP URI, it is possible that
     // this should have been a tel URI, so translate it and do the HSS lookup
     // again.  Once again, only do this for global numbers.
-    if ((!_icscf->should_require_user_phone()) &&
-        (PJSIP_URI_SCHEME_IS_SIP(uri)) &&
-        (PJUtils::is_user_numeric(((pjsip_sip_uri*)uri)->user)) &&
-        (!_icscf->are_global_only_lookups_enforced() || PJUtils::is_user_global(((pjsip_sip_uri*)uri)->user)) &&
-        (!PJUtils::is_uri_gruu(uri)))
+    if (PJSIP_URI_SCHEME_IS_SIP(uri) && (uri_class == GLOBAL_PHONE_NUMBER))
     {
       TRC_DEBUG("enforce_user_phone set to false, try using a tel URI");
       uri = PJUtils::translate_sip_uri_to_tel_uri((pjsip_sip_uri*)uri, pool);
@@ -596,10 +591,13 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
         // Do an ENUM lookup and see if we should translate the TEL URI
         pjsip_uri* original_req_uri = req->line.req.uri;
         _icscf->translate_request_uri(req, get_pool(req), trail());
+        uri = req->line.req.uri;
+        URIClass uri_class = URIClassifier::classify_uri(uri, false);
 
         std::string rn;
 
-        if (PJUtils::get_rn(req->line.req.uri, rn))
+        if ((uri_class == NP_DATA) ||
+            (uri_class == FINAL_NP_DATA))
         {
           // We got number portability information from ENUM - drop out and route to the BGCF.
           route_to_bgcf(req);
@@ -616,10 +614,9 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
         // If we successfully translate the req URI and end up with either another TEL URI or a
         // local SIP URI, we should look for an S-CSCF again.
-        uri = req->line.req.uri;
-        if ((PJSIP_URI_SCHEME_IS_TEL(uri)) ||
-            ((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
-             (PJUtils::is_home_domain(uri))))
+        if ((uri_class == LOCAL_PHONE_NUMBER) ||
+            (uri_class == GLOBAL_PHONE_NUMBER) ||
+            (uri_class == HOME_DOMAIN_SIP_URI))
         {
           // TEL or local SIP URI.  Look up the S-CSCF again.
           status_code = (pjsip_status_code)_router->get_scscf(pool, scscf_sip_uri);
@@ -638,6 +635,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     }
   }
 
+  URIClass uri_class = URIClassifier::classify_uri(req->line.req.uri);
   if (status_code == PJSIP_SC_OK)
   {
     TRC_DEBUG("Found SCSCF for non-REGISTER");
@@ -654,18 +652,18 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     PJUtils::add_route_header(req, scscf_sip_uri, get_pool(req));
     send_request(req);
   }
-  else if ((PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri)) &&
-           (PJUtils::is_home_domain(req->line.req.uri)))
+  else if ((uri_class == OFFNET_SIP_URI) ||
+           (uri_class == GLOBAL_PHONE_NUMBER))
+  {
+    // Target is a TEL URI or not in our home domain.  Pass to the BGCF.
+    route_to_bgcf(req);
+  }
+  else
   {
     // Target is in our home domain, but we failed to find an S-CSCF. This is the final response.
     pjsip_msg* rsp = create_response(req, status_code);
     send_response(rsp);
     free_msg(req);
-  }
-  else
-  {
-    // Target is a TEL URI or not in our home domain.  Pass to the BGCF.
-    route_to_bgcf(req);
   }
 }
 

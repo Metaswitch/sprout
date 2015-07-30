@@ -48,6 +48,7 @@
 #include "contact_filtering.h"
 #include "registration_utils.h"
 #include "scscfsproutlet.h"
+#include "uri_classifier.h"
 
 /// SCSCFSproutlet constructor.
 SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
@@ -269,15 +270,13 @@ bool SCSCFSproutlet::read_hss_data(const std::string& public_id,
 
 
 /// Attempt ENUM lookup if appropriate.
-bool SCSCFSproutlet::translate_request_uri(pjsip_msg* req,
+void SCSCFSproutlet::translate_request_uri(pjsip_msg* req,
                                            pj_pool_t* pool,
                                            SAS::TrailId trail)
 {
   return PJUtils::translate_request_uri(req,
                                         pool,
                                         _enum_service,
-                                        _user_phone,
-                                        _global_only_lookups,
                                         should_override_npdi(),
                                         trail);
 }
@@ -615,10 +614,15 @@ void SCSCFSproutletTsx::retrieve_odi_and_sesscase(pjsip_msg* req)
 {
   // Get the top route header.
   const pjsip_route_hdr* hroute = route_hdr();
+  URIClass uri_class;
+  if (hroute != NULL)
+  {
+    uri_class = URIClassifier::classify_uri(hroute->name_addr.uri);
+  }
 
   if ((hroute != NULL) &&
-      ((PJUtils::is_home_domain(hroute->name_addr.uri)) ||
-       (PJUtils::is_uri_local(hroute->name_addr.uri))))
+      ((uri_class == NODE_LOCAL_SIP_URI) ||
+       (uri_class == HOME_DOMAIN_SIP_URI)))
   {
     // This is our own Route header, containing a SIP URI.  Check for an
     // ODI token.  We need to determine the session case: is
@@ -885,9 +889,11 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
     uri = PJUtils::term_served_user(msg);
   }
 
+  URIClass uri_class = URIClassifier::classify_uri(uri);
+
   if ((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
-     ((PJUtils::is_home_domain(uri)) ||
-      (PJUtils::is_uri_local(uri))))
+      ((uri_class == NODE_LOCAL_SIP_URI) ||
+       (uri_class == HOME_DOMAIN_SIP_URI)))
   {
     user = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
   }
@@ -967,19 +973,16 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
 
     // Attempt to translate the RequestURI using ENUM or an alternative
     // database.
-    if (!_scscf->translate_request_uri(req, get_pool(req), trail()))
-    {
-      pjsip_msg* rsp = create_response(req,
-                                       PJSIP_SC_NOT_FOUND,
-                                       "ENUM failure");
-      send_response(rsp);
-      free_msg(req);
-      return;
-    }
+    _scscf->translate_request_uri(req, get_pool(req), trail());
     
+    URIClass uri_class = URIClassifier::classify_uri(req->line.req.uri);
     std::string new_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req->line.req.uri);
+    TRC_INFO("New URI string is %s", new_uri_str.c_str());
 
-    if (!PJUtils::is_globally_routable_sip_uri(req->line.req.uri))
+    if ((uri_class == LOCAL_PHONE_NUMBER) ||
+        (uri_class == GLOBAL_PHONE_NUMBER) ||
+        (uri_class == NP_DATA) ||
+        (uri_class == FINAL_NP_DATA))
     {
       TRC_DEBUG("Routing to BGCF");
       SAS::Event event(trail(), SASEvent::PHONE_ROUTING_TO_BGCF, 0);
@@ -987,7 +990,7 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
       SAS::report_event(event);
       route_to_bgcf(req);
     }
-    else if (!PJUtils::is_home_domain(req->line.req.uri))
+    else if (uri_class == OFFNET_SIP_URI)
     {
       // Destination is off-net, so route to the BGCF.
       TRC_DEBUG("Routing to BGCF");
@@ -1208,6 +1211,7 @@ void SCSCFSproutletTsx::route_to_term_scscf(pjsip_msg* req)
 void SCSCFSproutletTsx::route_to_target(pjsip_msg* req)
 {
   pjsip_uri* req_uri = req->line.req.uri;
+  URIClass uri_class = URIClassifier::classify_uri(req_uri);
 
   if ((PJSIP_URI_SCHEME_IS_SIP(req_uri) &&
       ((pjsip_sip_uri*)req_uri)->maddr_param.slen))
@@ -1219,8 +1223,7 @@ void SCSCFSproutletTsx::route_to_target(pjsip_msg* req)
              ((pjsip_sip_uri*)req_uri)->maddr_param.ptr);
     send_request(req);
   }
-  else if ((!PJUtils::is_home_domain(req_uri)) &&
-           (!PJUtils::is_uri_local(req_uri)))
+  else if (uri_class == OFFNET_SIP_URI)
   {
     // The Request-URI indicates an non-home domain, so forward the request
     // to the domain in the Request-URI unchanged.

@@ -55,6 +55,7 @@ extern "C" {
 #include "sasevent.h"
 #include "sproutsasevent.h"
 #include "enumservice.h"
+#include "uri_classifier.h"
 
 static const int DEFAULT_RETRIES = 5;
 
@@ -92,55 +93,6 @@ void PJUtils::term()
 {
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_sprout_util);
 }
-
-
-/// Utility to determine if this URI belongs to the home domain.
-pj_bool_t PJUtils::is_home_domain(const pjsip_uri* uri)
-{
-  if (PJSIP_URI_SCHEME_IS_SIP(uri))
-  {
-    std::string host = pj_str_to_string(&((pjsip_sip_uri*)uri)->host);
-    return is_home_domain(host);
-  }
-
-  return PJ_FALSE;
-}
-
-
-/// Utility to determine if this domain is a home domain
-pj_bool_t PJUtils::is_home_domain(const std::string& domain)
-{
-  return (stack_data.home_domains.find(domain) != stack_data.home_domains.end()) ?
-         PJ_TRUE : PJ_FALSE;
-}
-
-
-/// Utility to determine if URI is local to this host.
-pj_bool_t PJUtils::is_uri_local(const pjsip_uri* uri)
-{
-  if (PJSIP_URI_SCHEME_IS_SIP(uri))
-  {
-    // Check the list of host names.
-    pj_str_t host = ((pjsip_sip_uri*)uri)->host;
-    unsigned i;
-    for (i=0; i<stack_data.name_cnt; ++i)
-    {
-      if (pj_stricmp(&host, &stack_data.name[i])==0)
-      {
-        /* Match */
-        return PJ_TRUE;
-      }
-    }
-  }
-  else
-  {
-    TRC_INFO("URI scheme is not SIP - treating as not locally hosted");
-  }
-
-  /* Doesn't match */
-  return PJ_FALSE;
-}
-
 
 pj_str_t PJUtils::uri_to_pj_str(pjsip_uri_context_e context,
                                 const pjsip_uri* uri,
@@ -576,8 +528,10 @@ pj_bool_t PJUtils::is_next_route_local(const pjsip_msg* msg, pjsip_route_hdr* st
     // Found the next Route header, so check whether the URI corresponds to
     // this node or one of its aliases.
     pjsip_uri* uri = route_hdr->name_addr.uri;
+    URIClass uri_class = URIClassifier::classify_uri(uri);
     TRC_DEBUG("Found Route header, URI = %s", uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri).c_str());
-    if ((is_home_domain(uri)) || (is_uri_local(uri)))
+    if ((uri_class == NODE_LOCAL_SIP_URI) ||
+        (uri_class == HOME_DOMAIN_SIP_URI))
     {
       TRC_DEBUG("Route header is local");
       rc = true;
@@ -1733,31 +1687,6 @@ bool PJUtils::is_emergency_registration(pjsip_contact_hdr* contact_hdr)
           (pjsip_param_find(&uri->other_param, &STR_SOS) != NULL));
 }
 
-bool PJUtils::is_uri_phone_number(pjsip_uri* uri)
-{
-  return ((uri != NULL) &&
-          ((PJSIP_URI_SCHEME_IS_TEL(uri)) ||
-           ((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
-            (!pj_strcmp(&((pjsip_sip_uri*)uri)->user_param, &STR_USER_PHONE)))));
-}
-
-bool PJUtils::is_globally_routable_sip_uri(pjsip_uri* uri)
-{
-  return ((uri != NULL) &&
-           PJSIP_URI_SCHEME_IS_SIP(uri) &&
-           (pj_strcmp(&((pjsip_sip_uri*)uri)->user_param, &STR_USER_PHONE) != 0) &&
-           (pjsip_param_find(&((pjsip_sip_uri*)uri)->userinfo_param, &STR_RN) == NULL)
-         );
-}
-
-
-bool PJUtils::is_uri_gruu(pjsip_uri* uri)
-{
-  return ((uri != NULL) &&
-          (PJSIP_URI_SCHEME_IS_SIP(uri)) &&
-          (pjsip_param_find(&((pjsip_sip_uri*)uri)->other_param, &STR_GR)));
-}
-
 // Return true if there are no route headers, or there is exactly one,
 // which is local
 bool PJUtils::check_route_headers(pjsip_rx_data* rdata)
@@ -1770,7 +1699,8 @@ bool PJUtils::check_route_headers(pjsip_rx_data* rdata)
   while (route_hdr != NULL)
   {
     count++;
-    local = (is_uri_local(route_hdr->name_addr.uri)) || (is_home_domain(route_hdr->name_addr.uri));
+    URIClass uri_class = URIClassifier::classify_uri(route_hdr->name_addr.uri);
+    local = (uri_class == NODE_LOCAL_SIP_URI) || (uri_class == HOME_DOMAIN_SIP_URI);
     route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_ROUTE, route_hdr->next);
   }
 
@@ -2016,7 +1946,7 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
       sip_all_register.add_var_param(strip_uri_scheme(to_uri_str));
       // Add the DN parameter. If the user part is not numeric just log it in
       // its entirety.
-      sip_all_register.add_var_param(is_user_numeric(to_user) ?
+      sip_all_register.add_var_param(URIClassifier::is_user_numeric(to_user) ?
                                      remove_visual_separators(to_user) :
                                      pj_str_to_string(&to_user));
       SAS::report_marker(sip_all_register);
@@ -2039,7 +1969,7 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
       sip_subscribe_notify.add_var_param(strip_uri_scheme(to_uri_str));
       // Add the DN parameter. If the user part is not numeric just log it in
       // its entirety.
-      sip_subscribe_notify.add_var_param(is_user_numeric(to_user) ?
+      sip_subscribe_notify.add_var_param(URIClassifier::is_user_numeric(to_user) ?
                                          remove_visual_separators(to_user) :
                                          pj_str_to_string(&to_user));
       SAS::report_marker(sip_subscribe_notify);
@@ -2055,7 +1985,7 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
       if (to_uri != NULL)
       {
         pj_str_t to_user = user_from_uri(to_uri);
-        if (is_user_numeric(to_user))
+        if (URIClassifier::is_user_numeric(to_user))
         {
           SAS::Marker called_dn(trail, MARKER_ID_CALLED_DN, 1u);
           called_dn.add_var_param(remove_visual_separators(to_user));
@@ -2071,7 +2001,7 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
       if (from_uri != NULL)
       {
         pj_str_t from_user = user_from_uri(from_uri);
-        if (is_user_numeric(from_user))
+        if (URIClassifier::is_user_numeric(from_user))
         {
           SAS::Marker calling_dn(trail, MARKER_ID_CALLING_DN, 1u);
           calling_dn.add_var_param(remove_visual_separators(from_user));
@@ -2178,31 +2108,6 @@ pjsip_uri* PJUtils::translate_sip_uri_to_tel_uri(const pjsip_sip_uri* sip_uri,
   return (pjsip_uri*)tel_uri;
 }
 
-/// Determines whether a user string represents a global number.
-///
-/// @returns                      PJ_TRUE if the user is global, PJ_FALSE if
-///                               not.
-/// @param user                   The user to test.
-pj_bool_t PJUtils::is_user_global(const std::string& user)
-{
-  pj_bool_t rc = PJ_FALSE;
-
-  if ((!user.empty()) && (user[0] == '+'))
-  {
-    TRC_DEBUG("Global user %s", user.c_str());
-    rc = PJ_TRUE;
-  }
-
-  return rc;
-}
-
-
-pj_bool_t PJUtils::is_user_global(const pj_str_t& user)
-{
-  return is_user_global(pj_str_to_string(&user));
-}
-
-
 static const boost::regex CHARS_TO_STRIP = boost::regex("[.)(-]");
 
 // Strip any visual separators from the number
@@ -2217,34 +2122,6 @@ std::string PJUtils::remove_visual_separators(const pj_str_t& number)
   std::string s = pj_str_to_string(&number);
   return remove_visual_separators(s);
 };
-
-/// Determines whether a user string is a valid phone number
-/// (maybe with a leading + or separator characters).
-///
-/// @returns                      PJ_TRUE if the user is numeric, PJ_FALSE if
-///                               not.
-/// @param user                   The user to test.
-pj_bool_t PJUtils::is_user_numeric(const std::string& user_raw)
-{
-  pj_bool_t rc = PJ_TRUE;
-  std::string user = PJUtils::remove_visual_separators(user_raw);
-
-  for (size_t i = 0; i < user.size(); i++)
-  {
-    if ((!isdigit(user[i])) &&
-        ((user[i] != '+') || (i != 0)))
-    {
-      rc = PJ_FALSE;
-    }
-  }
-  return rc;
-}
-
-
-pj_bool_t PJUtils::is_user_numeric(const pj_str_t& user)
-{
-  return is_user_numeric(pj_str_to_string(&user));
-}
 
 bool PJUtils::get_npdi(pjsip_uri* uri)
 {
@@ -2287,21 +2164,6 @@ bool PJUtils::get_rn(pjsip_uri* uri, std::string& routing_value)
   }
 
   return rn_set;
-}
-
-bool PJUtils::does_uri_represent_number(pjsip_uri* uri,
-                                        bool enforce_user_phone)
-{
-  // A URI represents a telephone number if:
-  // - It's a Tel URI, or
-  // - It's a SIP URI where
-  //    - user=phone is set or enforce_user_phone is false
-  //    - The user part is numeric
-  //    - It's not a gruu.
-  return ((is_uri_phone_number(uri)) ||
-          ((!enforce_user_phone) &&
-           (is_user_numeric(user_from_uri(uri))) &&
-           (!is_uri_gruu(uri))));
 }
 
 // Adds/updates a Session-Expires header to/in the request.
@@ -2386,8 +2248,6 @@ bool PJUtils::add_update_session_expires(pjsip_msg* req,
 /// Attempt ENUM lookup if appropriate.
 static std::string query_enum(pjsip_msg* req,
                               EnumService* enum_service,
-                              bool enforce_user_phone,
-                              bool global_only_lookups,
                               SAS::TrailId trail)
 {
   std::string user;
@@ -2399,37 +2259,17 @@ static std::string query_enum(pjsip_msg* req,
     // ENUM is enabled.
     TRC_DEBUG("ENUM is enabled");
 
-    // Determine whether we have a SIP URI or a tel URI
-    if (PJSIP_URI_SCHEME_IS_SIP(uri))
-    {
-      user = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)uri)->user);
-      TRC_DEBUG("SIP URI - user = %s", user.c_str());
-    }
-    else if (PJSIP_URI_SCHEME_IS_TEL(uri))
-    {
-      user = PJUtils::pj_str_to_string(&((pjsip_tel_uri*)uri)->number);
-      TRC_DEBUG("TEL URI - user = %s", user.c_str());
-    }
 
     // Check whether we have a global number or whether we allow
     // ENUM lookups for local numbers
-    if ((PJUtils::is_user_global(user)) || (!global_only_lookups))
+
     {
       // Perform an ENUM lookup if we have a tel URI, or if we have
       // a SIP URI which is being treated as a phone number.
-
-      // If we aren't configured to require 'user=phone', we treat any
-      // numeric SIP URIs as phone numbers - unless it's a GRUU, which
-      // can never be generated by the user dialling a string of digits.
-      TRC_DEBUG("Global number or look-ups allowed for non-global numbers");
-      if ((PJUtils::is_uri_phone_number(uri)) ||
-          ((!enforce_user_phone) &&
-           (PJUtils::is_user_numeric(user)) &&
-           (!PJUtils::is_uri_gruu(uri))))
-      {
-        TRC_DEBUG("Performing ENUM lookup for user %s", user.c_str());
-        new_uri = enum_service->lookup_uri_from_user(user, trail);
-      }
+      pj_str_t pj_user = PJUtils::user_from_uri(uri);
+      user = PJUtils::pj_str_to_string(&pj_user);
+      TRC_DEBUG("Performing ENUM lookup for user %s", user.c_str());
+      new_uri = enum_service->lookup_uri_from_user(user, trail);
     }
   }
   else
@@ -2463,111 +2303,178 @@ static std::string query_enum(pjsip_msg* req,
   return new_uri;
 }
 
-bool PJUtils::translate_request_uri(pjsip_msg* req,
+void PJUtils::translate_request_uri(pjsip_msg* req,
                                     pj_pool_t* pool,
                                     EnumService* enum_service,
-                                    bool enforce_user_phone,
-                                    bool global_only_lookups,
                                     bool should_override_npdi,
                                     SAS::TrailId trail)
 {
   pjsip_uri* uri = req->line.req.uri;
+  URIClass uri_class = URIClassifier::classify_uri(uri, false);
 
-  if (!(PJUtils::is_home_domain(uri) || PJSIP_URI_SCHEME_IS_TEL(uri)))
+  if ((uri_class == GLOBAL_PHONE_NUMBER) ||
+      (uri_class == NP_DATA) ||
+      (uri_class == FINAL_NP_DATA))
   {
-    return true;
-  }
 
-  // Request is either to a URI in this domain, or a Tel URI, so attempt
-  // to translate it according to 5.4.3.2 section 10.
-  TRC_DEBUG("Translating URI");
-  std::string new_uri_str = query_enum(req,
-                                       enum_service,
-                                       enforce_user_phone,
-                                       global_only_lookups,
-                                       trail);
+    // Request is either to a URI in this domain, or a Tel URI, so attempt
+    // to translate it according to 5.4.3.2 section 10.
+    TRC_DEBUG("Translating URI");
+    std::string new_uri_str = query_enum(req,
+                                         enum_service,
+                                         trail);
 
-  if (!new_uri_str.empty())
-  {
-    pjsip_uri* new_uri = (pjsip_uri*)PJUtils::uri_from_string(new_uri_str,
-                                                              pool);
-
-    if (new_uri == NULL)
+    if (!new_uri_str.empty())
     {
-      // The ENUM lookup has returned an invalid URI. Reject the 
-      // request. 
-      TRC_WARNING("Invalid ENUM response: %s", new_uri_str.c_str());
-      SAS::Event event(trail, SASEvent::ENUM_INVALID, 0);
+      pjsip_uri* new_uri = (pjsip_uri*)PJUtils::uri_from_string(new_uri_str,
+                                                                pool);
+
+      if (new_uri == NULL)
+      {
+        // The ENUM lookup has returned an invalid URI. Reject the 
+        // request. 
+        TRC_WARNING("Invalid ENUM response: %s", new_uri_str.c_str());
+        SAS::Event event(trail, SASEvent::ENUM_INVALID, 0);
+        event.add_var_param(new_uri_str);
+        SAS::report_event(event);
+        return;
+      }
+
+      // The URI was successfully translated, so see what it is.
+      URIClass new_uri_class = URIClassifier::classify_uri(new_uri, false);
+      std::string rn;
+
+      if ((new_uri_class == HOME_DOMAIN_SIP_URI) ||
+          (new_uri_class == NODE_LOCAL_SIP_URI) ||
+          (new_uri_class == OFFNET_SIP_URI))
+      {
+        // Translation to a real SIP URI - this always takes priority.
+        TRC_DEBUG("Translated URI %s is a real SIP URI - replacing Request-URI",
+                  new_uri_str.c_str());
+        req->line.req.uri = new_uri;
+        SAS::Event event(trail, SASEvent::SIP_URI_FROM_ENUM, 0);
+        event.add_var_param(new_uri_str);
+        SAS::report_event(event);
+      }
+      else if ((new_uri_class == NP_DATA) || (new_uri_class == FINAL_NP_DATA))
+      {
+        if (should_update_np_data(uri_class, new_uri_class, new_uri_str, should_override_npdi, trail))
+        {
+          req->line.req.uri = new_uri;
+        }
+      }
+      else
+      {
+        // We got a TEL URI of some description - update the Request-URI anyway and expect a
+        // downstream MGCF to sort it out.
+        TRC_DEBUG("Translated URI %s is not a SIP URI - replacing Request-URI anyway",
+                  new_uri_str.c_str());
+        req->line.req.uri = new_uri;
+        SAS::Event event(trail, SASEvent::NON_SIP_URI_FROM_ENUM, 0);
+        event.add_var_param(new_uri_str);
+        SAS::report_event(event);
+      }
+    }
+  }
+}
+
+void PJUtils::update_request_uri_np_data(pjsip_msg* req,
+                                    pj_pool_t* pool,
+                                    EnumService* enum_service,
+                                    bool should_override_npdi,
+                                    SAS::TrailId trail)
+{
+  pjsip_uri* uri = req->line.req.uri;
+  URIClass uri_class = URIClassifier::classify_uri(uri);
+
+  if ((uri_class == GLOBAL_PHONE_NUMBER) ||
+      (uri_class == NP_DATA) ||
+      (uri_class == FINAL_NP_DATA))
+  {
+
+    // Request is either to a URI in this domain, or a Tel URI, so attempt
+    // to translate it according to 5.4.3.2 section 10.
+    TRC_DEBUG("Translating URI");
+    std::string new_uri_str = query_enum(req,
+                                         enum_service,
+                                         trail);
+
+    if (!new_uri_str.empty())
+    {
+      pjsip_uri* new_uri = (pjsip_uri*)PJUtils::uri_from_string(new_uri_str,
+                                                                pool);
+
+      if (new_uri == NULL)
+      {
+        // The ENUM lookup has returned an invalid URI. Reject the 
+        // request. 
+        TRC_WARNING("Invalid ENUM response: %s", new_uri_str.c_str());
+        SAS::Event event(trail, SASEvent::ENUM_INVALID, 0);
+        event.add_var_param(new_uri_str);
+        SAS::report_event(event);
+        return;
+      }
+
+      // The URI was successfully translated, so see what it is.
+      URIClass new_uri_class = URIClassifier::classify_uri(new_uri, false);
+      
+      if ((new_uri_class == NP_DATA) || (new_uri_class == FINAL_NP_DATA))
+      {
+        if (should_update_np_data(uri_class, new_uri_class, new_uri_str, should_override_npdi, trail))
+        {
+          req->line.req.uri = new_uri;
+        }
+      }
+    }
+  }
+  else
+  {
+    TRC_DEBUG("Not translating URI");
+  }
+}
+
+
+bool PJUtils::should_update_np_data(URIClass old_uri_class,
+                           URIClass new_uri_class,
+                           std::string& new_uri_str,
+                           bool should_override_npdi,
+                           SAS::TrailId trail)
+{
+  if ((new_uri_class == NP_DATA) || (new_uri_class == FINAL_NP_DATA))
+  {
+    if (old_uri_class != FINAL_NP_DATA)
+    {
+      // No NPDI flag on the original URI, so use the number portability data.
+      TRC_DEBUG("Translated URI %s has NP data and the npdi flag is not set - replacing Request-URI",
+                new_uri_str.c_str());
+      SAS::Event event(trail, SASEvent::NP_DATA_FROM_ENUM, 0);
+      event.add_var_param(new_uri_str);
+      SAS::report_event(event);
+      return true;
+    }
+    else if (should_override_npdi)
+    {
+      // Configured to ignore the NPDI flag on the original URI, so use the number portability data.
+      TRC_DEBUG("Translated URI %s has NP data and the npdi flag is ignored - replacing Request-URI",
+                new_uri_str.c_str());
+      SAS::Event event(trail, SASEvent::NP_DATA_FROM_ENUM_IGNORING_NPDI, 0);
+      event.add_var_param(new_uri_str);
+      SAS::report_event(event);
+      return true;
+    }
+    else
+    {
+      // The NPDI flag is set on the original URI and not overriden by local policy, so ignore the number portability data.
+      TRC_DEBUG("Translated URI %s has NP data and the npdi flag is set - not replacing Request-URI",
+                new_uri_str.c_str());
+      SAS::Event event(trail, SASEvent::IGNORED_NP_DATA_FROM_ENUM, 0);
       event.add_var_param(new_uri_str);
       SAS::report_event(event);
       return false;
     }
-
-    // The URI was successfully translated, so see what it is.
-    std::string rn;
-
-    if (PJUtils::is_globally_routable_sip_uri(new_uri))
-    {
-      // Translation to a real SIP URI - this always takes priority.
-      TRC_DEBUG("Translated URI %s is a real SIP URI - replacing Request-URI",
-                new_uri_str.c_str());
-      req->line.req.uri = new_uri;
-      SAS::Event event(trail, SASEvent::SIP_URI_FROM_ENUM, 0);
-      event.add_var_param(new_uri_str);
-      SAS::report_event(event);
-    }
-    else if (PJUtils::get_rn(new_uri, rn))
-    {
-      // We didn't translate the number to a globally routable SIP URI, but we did retrieve number
-      // portability data from ENUM.
-
-      if (!PJUtils::get_npdi(uri))
-      {
-        // No NPDI flag on the original URI, so use the number portability data.
-        TRC_DEBUG("Translated URI %s has NP data and the npdi flag is not set - replacing Request-URI",
-                  new_uri_str.c_str());
-        req->line.req.uri = new_uri;
-        SAS::Event event(trail, SASEvent::NP_DATA_FROM_ENUM, 0);
-        event.add_var_param(new_uri_str);
-        event.add_var_param(rn);
-        SAS::report_event(event);
-      }
-      else if (PJUtils::get_npdi(uri) && should_override_npdi)
-      {
-        // Configured to ignore the NPDI flag on the original URI, so use the number portability data.
-        TRC_DEBUG("Translated URI %s has NP data and the npdi flag is ignored - replacing Request-URI",
-                  new_uri_str.c_str());
-        req->line.req.uri = new_uri;
-        SAS::Event event(trail, SASEvent::NP_DATA_FROM_ENUM_IGNORING_NPDI, 0);
-        event.add_var_param(new_uri_str);
-        event.add_var_param(rn);
-        SAS::report_event(event);
-      }
-      else
-      {
-        // The NPDI flag is set on the original URI and not overriden by local policy, so ignore the number portability data.
-        TRC_DEBUG("Translated URI %s has NP data and the npdi flag is set - not replacing Request-URI",
-                  new_uri_str.c_str());
-        SAS::Event event(trail, SASEvent::IGNORED_NP_DATA_FROM_ENUM, 0);
-        event.add_var_param(new_uri_str);
-        event.add_var_param(rn);
-        SAS::report_event(event);
-      }
-    }
-    else
-    {
-      // We got a TEL URI of some description - update the Request-URI anyway and expect a
-      // downstream MGCF to sort it out.
-      TRC_DEBUG("Translated URI %s is not a SIP URI - replacing Request-URI anyway",
-                new_uri_str.c_str());
-      req->line.req.uri = new_uri;
-      SAS::Event event(trail, SASEvent::NON_SIP_URI_FROM_ENUM, 0);
-      event.add_var_param(new_uri_str);
-      SAS::report_event(event);
-    }
   }
-
-  return true;
+  else
+  {
+    return false;
+  }
 }
-
-

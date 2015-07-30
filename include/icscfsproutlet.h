@@ -127,7 +127,7 @@ private:
   }
 
   /// Attempts to use ENUM to translate the specified Tel URI into a SIP URI.
-  bool translate_request_uri(pjsip_msg* req, pj_pool_t* pool, SAS::TrailId trail);
+  void translate_request_uri(pjsip_msg* req, pj_pool_t* pool, SAS::TrailId trail);
 
   /// Get an ACR instance from the factory.
   /// @param trail                SAS trail identifier to use for the ACR.

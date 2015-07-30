@@ -2640,7 +2640,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnumExistingNP)
   Message msg1;
   msg1._method = "INVITE";
   msg1._toscheme = "tel";
-  msg1._to = "+1690100001;npdi";
+  msg1._to = "+1690100001;rn=+16;npdi";
   msg1._todomain = "";
   inject_msg(msg1.get_request(), tp);
 
@@ -2660,7 +2660,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnumExistingNP)
   r1.matches(tdata->msg);
 
   // Check the RequestURI hasn't been altered
-  ASSERT_EQ("tel:+1690100001;npdi", str_uri(tdata->msg->line.req.uri));
+  ASSERT_EQ("tel:+1690100001;rn=+16;npdi", str_uri(tdata->msg->line.req.uri));
 
   // Send a 200 OK response.
   inject_msg(respond_to_current_txdata(200));
@@ -2756,7 +2756,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteLocalUserPhoneFailure)
   pjsip_tx_data* tdata;
 
   // Turn on enforcement of global-only user=phone to Tel URI lookups in I-CSCF
-  _icscf_sproutlet->set_global_only_lookups_enforced(true);
+  URIClassifier::enforce_global = true;
 
   // Setup common config and submit test INVITE
   TransportFlow* tp = RouteTermInviteLocalUserPhoneSetup();
@@ -2791,7 +2791,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteLocalUserPhoneSuccess)
   pjsip_tx_data* tdata;
 
   // Turn off enforcement of global-only user=phone to Tel URI lookups in I-CSCF
-  _icscf_sproutlet->set_global_only_lookups_enforced(false);
+  URIClassifier::enforce_global = false;
 
   // Setup common config and submit test INVITE
   TransportFlow* tp = RouteTermInviteLocalUserPhoneSetup();
