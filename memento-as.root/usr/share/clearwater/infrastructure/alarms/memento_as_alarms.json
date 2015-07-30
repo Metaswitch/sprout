@@ -1,0 +1,21 @@
+{
+    "alarms": [
+        {
+            "index": 5006,
+            "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
+            "name": "MEMENTO_AS_CASSANDRA_COMM_ERROR",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "Memento Application Server communication to the local Cassandra has been restored.",
+                    "description": "Memento: Application Server Cassandra communication error cleared"
+                },
+                {
+                    "severity": "CRITICAL",
+                    "details": "While this condition persists, new call list records will not be written and will be lost. The Application Server will periodically attempt to reconnect.",
+                    "description": "Memento: Application Server Cassandra communication error"
+                }
+            ]
+        }
+    ]
+}

@@ -44,6 +44,7 @@
 #include "mementoappserver.h"
 #include "call_list_store.h"
 #include "sproutletappserver.h"
+#include "memento_as_alarmdefinition.h"
 
 class MementoPlugin : public SproutletPlugin
 {

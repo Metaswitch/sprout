@@ -44,6 +44,7 @@
 #include "alarm.h"
 #include "fakezmq.h"
 #include "fakelogger.h"
+#include "sprout_alarmdefinition.h"
 
 using ::testing::_;
 using ::testing::Return;
