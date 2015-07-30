@@ -69,8 +69,6 @@ ICSCFSproutlet::ICSCFSproutlet(const std::string& bgcf_uri,
                                ACRFactory* acr_factory,
                                SCSCFSelector* scscf_selector,
                                EnumService* enum_service,
-                               bool enforce_global_only_lookups,
-                               bool enforce_user_phone,
                                bool override_npdi) :
   Sproutlet("icscf", port),
   _bgcf_uri(NULL),
@@ -78,8 +76,6 @@ ICSCFSproutlet::ICSCFSproutlet(const std::string& bgcf_uri,
   _scscf_selector(scscf_selector),
   _acr_factory(acr_factory),
   _enum_service(enum_service),
-  _global_only_lookups(enforce_global_only_lookups),
-  _user_phone(enforce_user_phone),
   _override_npdi(override_npdi),
   _bgcf_uri_str(bgcf_uri)
 {

@@ -84,8 +84,6 @@ public:
                  HSSConnection* hss,
                  EnumService* enum_service,
                  ACRFactory* acr_factory,
-                 bool user_phone,
-                 bool global_only_lookups,
                  bool override_npdi,
                  int session_continued_timeout = DEFAULT_SESSION_CONTINUED_TIMEOUT,
                  int session_terminated_timeout = DEFAULT_SESSION_TERMINATED_TIMEOUT);
@@ -98,16 +96,9 @@ public:
 
   // Methods used to change the values of internal configuration during unit
   // test.
-  void set_enforce_user_phone(bool v) { _user_phone = v; }
-  void set_global_only_lookups(bool v) { _global_only_lookups = v; }
   void set_override_npdi(bool v) { _override_npdi = v; }
   void set_session_continued_timeout(int timeout) { _session_continued_timeout_ms = timeout; }
   void set_session_terminated_timeout(int timeout) { _session_terminated_timeout_ms = timeout; }
-
-  inline bool should_require_user_phone() const
-  {
-    return _user_phone;
-  }
 
   inline bool should_override_npdi() const
   {
@@ -189,8 +180,6 @@ private:
 
   AsChainTable* _as_chain_table;
 
-  bool _global_only_lookups;
-  bool _user_phone;
   bool _override_npdi;
 
   /// Timeouts related to default handling of unresponsive application servers.

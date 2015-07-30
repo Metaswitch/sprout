@@ -360,8 +360,6 @@ public:
                                           _enum_service,
                                           _acr_factory,
                                           false,
-                                          false,
-                                          false,
                                           3000, // Session continue timeout - different from default
                                           6000  // Session terminated timeout - different from default
                                           );
@@ -372,8 +370,6 @@ public:
                                         _bgcf_service,
                                         _enum_service,
                                         _acr_factory,
-                                        false,
-                                        false,
                                         false);
 
     // Create the MMTEL AppServer.

@@ -50,15 +50,11 @@ BGCFSproutlet::BGCFSproutlet(int port,
                              BgcfService* bgcf_service,
                              EnumService* enum_service,
                              ACRFactory* acr_factory,
-                             bool user_phone,
-                             bool global_only_lookups,
                              bool override_npdi) :
   Sproutlet("bgcf", port),
   _bgcf_service(bgcf_service),
   _enum_service(enum_service),
   _acr_factory(acr_factory),
-  _global_only_lookups(global_only_lookups),
-  _user_phone(user_phone),
   _override_npdi(override_npdi)
 {
   _incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("bgcf_incoming_sip_transactions",

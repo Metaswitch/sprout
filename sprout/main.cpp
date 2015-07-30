@@ -693,12 +693,12 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       break;
 
     case 'u':
-      options->enforce_user_phone = true;
+      URIClassifier::enforce_user_phone = true;
       TRC_INFO("ENUM lookups are only done on SIP URIs if they contain user=phone");
       break;
 
     case 'g':
-      options->enforce_global_only_lookups = true;
+      URIClassifier::enforce_global = true;
       TRC_INFO("ENUM lookups are only done on URIs if they contain a global number");
       break;
 
@@ -1280,8 +1280,6 @@ int main(int argc, char* argv[])
   opt.external_icscf_uri = "";
   opt.auth_enabled = PJ_FALSE;
   opt.enum_suffix = ".e164.arpa";
-  opt.enforce_user_phone = false;
-  opt.enforce_global_only_lookups = false;
   opt.reg_max_expires = 300;
   opt.sub_max_expires = 300;
   opt.icscf_enabled = false;

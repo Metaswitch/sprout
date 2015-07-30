@@ -100,8 +100,6 @@ struct options
   std::vector<std::string>             enum_servers;
   std::string                          enum_suffix;
   std::string                          enum_file;
-  bool                                 enforce_user_phone;
-  bool                                 enforce_global_only_lookups;
   bool                                 analytics_enabled;
   std::string                          analytics_directory;
   int                                  reg_max_expires;

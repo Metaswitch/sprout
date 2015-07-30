@@ -74,8 +74,6 @@ public:
                  ACRFactory* acr_factory,
                  SCSCFSelector* scscf_selector,
                  EnumService* enum_service,
-                 bool enforce_global_only_lookups,
-                 bool enforce_user_phone,
                  bool override_npdi);
 
   virtual ~ICSCFSproutlet();
@@ -85,13 +83,6 @@ public:
   SproutletTsx* get_tsx(SproutletTsxHelper* helper,
                         const std::string& alias,
                         pjsip_msg* req);
-
-#ifdef UNIT_TEST
-  inline void set_global_only_lookups_enforced(bool enforce_global_only_lookups)
-  {
-    _global_only_lookups = enforce_global_only_lookups;
-  }
-#endif
 
 private:
 
@@ -111,19 +102,9 @@ private:
     return _scscf_selector;
   }
 
-  inline bool should_require_user_phone() const
-  {
-    return _user_phone;
-  }
-
   inline bool should_override_npdi() const
   {
     return _override_npdi;
-  }
-
-  inline bool are_global_only_lookups_enforced() const
-  {
-    return _global_only_lookups;
   }
 
   /// Attempts to use ENUM to translate the specified Tel URI into a SIP URI.
@@ -147,8 +128,6 @@ private:
 
   EnumService* _enum_service;
 
-  bool _global_only_lookups;
-  bool _user_phone;
   bool _override_npdi;
 
   /// String versions of cluster URIs
