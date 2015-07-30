@@ -270,12 +270,13 @@ ifdef JUSTTEST
 endif
 
 include ${MK_DIR}/platform.mk
+include ${ROOT}/modules/cpp-common/makefiles/alarm-utils.mk
 
 .PHONY: stage-build
 stage-build: build
 
 .PHONY: test
-test: alarms run_test coverage vg coverage-check vg-check
+test: run_test coverage vg coverage-check vg-check
 
 # Run the test.  You can set EXTRA_TEST_ARGS to pass extra arguments
 # to the test, e.g.,
@@ -361,10 +362,11 @@ vg_raw: | build_test
 .PHONY: distclean
 distclean: clean
 
-alarms:
-	${MAKE} -f ../modules/cpp-common/makefiles/alarms-header.mk
-	${BUILD_DIR}/bin/alarm_header -j "../sprout-base.root/usr/share/clearwater/infrastructure/alarms/sprout_alarms.json" -n "sprout"
-	mv sprout_alarmdefinition.h ${ROOT}/usr/include/
+build: ${ROOT}/usr/include/sprout_alarmdefinition.h
+
+${ROOT}/usr/include/sprout_alarmdefinition.h : ${BUILD_DIR}/bin/alarm_header ${ROOT}/sprout-base.root/usr/share/clearwater/infrastructure/alarms/sprout_alarms.json
+	${BUILD_DIR}/bin/alarm_header -j "${ROOT}/sprout-base.root/usr/share/clearwater/infrastructure/alarms/sprout_alarms.json" -n "sprout"
+	mv sprout_alarmdefinition.h $@
 
 # Build rules for GMock/GTest library.
 $(OBJ_DIR_TEST)/gtest-all.o : $(GTEST_SRCS_)
