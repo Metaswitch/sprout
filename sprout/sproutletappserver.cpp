@@ -293,10 +293,14 @@ pjsip_sip_uri* SproutletAppServerTsxHelper::get_reflexive_uri(pj_pool_t* pool) c
 
 /// Constructor.
 SproutletAppServerShim::SproutletAppServerShim(AppServer* app,
+                                               SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
+                                               SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                                                const std::string& service_host) :
   Sproutlet(app->service_name(), 0, service_host),
   _app(app)
 {
+  _incoming_sip_transactions_tbl = incoming_sip_transactions_tbl;
+  _outgoing_sip_transactions_tbl = outgoing_sip_transactions_tbl;
 }
 
 /// Called when the system determines the app-server should be invoked for a

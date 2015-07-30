@@ -56,6 +56,7 @@ extern "C" {
 #include "scscfselector.h"
 #include "constants.h"
 #include "uri_classifier.h"
+#include "snmp_success_fail_count_by_request_type_table.h"
 
 /// Define a constant for the maximum number of ENUM lookups
 /// we want to do in I-CSCF termination processing.
@@ -82,12 +83,18 @@ ICSCFSproutlet::ICSCFSproutlet(const std::string& bgcf_uri,
   _override_npdi(override_npdi),
   _bgcf_uri_str(bgcf_uri)
 {
+  _incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("icscf_incoming_sip_transactions",
+                                                                                    "1.2.826.0.1.1578918.9.3.18");
+  _outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("icscf_outgoing_sip_transactions",
+                                                                                    "1.2.826.0.1.1578918.9.3.19");
 }
 
 
 /// Destructor.
 ICSCFSproutlet::~ICSCFSproutlet()
 {
+  delete _incoming_sip_transactions_tbl;
+  delete _outgoing_sip_transactions_tbl;
 }
 
 bool ICSCFSproutlet::init()

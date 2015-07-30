@@ -82,6 +82,8 @@ TARGET_SOURCES := logger.cpp \
                   snmp_counter_table.cpp \
                   snmp_ip_count_table.cpp \
                   snmp_success_fail_count_table.cpp \
+                  snmp_success_fail_count_by_request_type_table.cpp \
+                  sip_string_to_request_type.cpp \
                   snmp_row.cpp \
                   snmp_scalar.cpp \
                   uri_classifier.cpp
@@ -139,10 +141,15 @@ LDFLAGS += -Wl,--whole-archive -lpjmedia-x86_64-unknown-linux-gnu -Wl,--no-whole
 include ${MK_DIR}/platform.mk
 
 .PHONY: stage-build
-stage-build: build
+stage-build: alarms build
 
 .PHONY: distclean
 distclean: clean
+
+alarms:
+	${MAKE} -f ../modules/cpp-common/makefiles/alarms-header.mk
+	${BUILD_DIR}/bin/alarm_header -j "../sprout-base.root/usr/share/clearwater/infrastructure/alarms/sprout_alarms.json" -n "sprout"
+	mv sprout_alarmdefinition.h ${ROOT}/usr/include/
 
 # Build rules for SIPp cryptographic modules.
 $(OBJ_DIR_TEST)/md5.o : $(SIPP_DIR)/md5.c

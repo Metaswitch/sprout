@@ -11,7 +11,7 @@ TARGET_TEST := sprout_icscf.so_test
 TARGET_SOURCES := icscfsproutlet.cpp \
                   icscfrouter.cpp \
                   scscfselector.cpp \
-                  icscfplugin.cpp
+                  icscfplugin.cpp \
 
 CPPFLAGS += -Wno-write-strings \
             -ggdb3 -std=c++0x
