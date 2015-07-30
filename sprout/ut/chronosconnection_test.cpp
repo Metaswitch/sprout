@@ -46,6 +46,7 @@
 #include "chronosconnection.h"
 #include "basetest.hpp"
 #include "fakecurl.hpp"
+#include "sprout_alarmdefinition.h"
 
 using namespace std;
 

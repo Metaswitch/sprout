@@ -35,8 +35,6 @@ from metaswitch.clearwater.cluster_manager.plugin_base import \
     SynchroniserPluginBase
 from metaswitch.clearwater.cluster_manager.plugin_utils import \
     run_command, write_memcached_cluster_settings
-from metaswitch.clearwater.cluster_manager.alarms import issue_alarm
-from metaswitch.clearwater.cluster_manager import constants
 import subprocess
 import logging
 import os

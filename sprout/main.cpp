@@ -104,6 +104,7 @@ extern "C" {
 #include "snmp_counter_table.h"
 #include "snmp_success_fail_count_table.h"
 #include "snmp_agent.h"
+#include "sprout_alarmdefinition.h"
 
 enum OptionTypes
 {

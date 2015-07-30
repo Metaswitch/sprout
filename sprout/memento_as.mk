@@ -46,7 +46,12 @@ LDFLAGS += -lthrift \
 include ${MK_DIR}/platform.mk
 
 .PHONY: stage-build
-stage-build: build
+stage-build: alarms build
+
+alarms:
+	${MAKE} -f ../modules/cpp-common/makefiles/alarms-header.mk
+	${BUILD_DIR}/bin/alarm_header -j "../memento-as.root/usr/share/clearwater/infrastructure/alarms/memento_as_alarms.json" -n "memento_as"
+	mv memento_as_alarmdefinition.h ${ROOT}/usr/include/
 
 .PHONY: distclean
 distclean: clean
