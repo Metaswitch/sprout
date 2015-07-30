@@ -467,6 +467,7 @@ public:
     _scscf_sproutlet->set_override_npdi(false);
     _scscf_sproutlet->set_session_continued_timeout(3000);
     _scscf_sproutlet->set_session_terminated_timeout(6000);
+    ((SNMP::FakeCounterTable*)_scscf_sproutlet->_routed_by_preloaded_route_tbl)->reset_count();
   }
 
 protected:
@@ -7179,6 +7180,7 @@ TEST_F(SCSCFTest, PreloadedRouteChangedReqUri)
   EXPECT_THAT(get_headers(out, "Record-Route"),
               MatchesRegex("Record-Route: <sip:homedomain:5058;.*billing-role=charge-term.*>"));
 
+  EXPECT_EQ(1, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_routed_by_preloaded_route_tbl)->_count);
   free_txdata();
 }
 
@@ -7290,6 +7292,7 @@ TEST_F(SCSCFTest, PreloadedRoutePreserveReqUri)
   EXPECT_THAT(get_headers(out, "Record-Route"),
               MatchesRegex("Record-Route: <sip:homedomain:5058;.*billing-role=charge-term.*>"));
 
+  EXPECT_EQ(1, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_routed_by_preloaded_route_tbl)->_count);
   free_txdata();
 }
 
@@ -7427,5 +7430,6 @@ TEST_F(SCSCFTest, PreloadedRouteNotLastAs)
   EXPECT_THAT(get_headers(out, "Record-Route"),
               MatchesRegex("Record-Route: <sip:homedomain:5058;.*billing-role=charge-term.*>"));
 
+  EXPECT_EQ(1, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_routed_by_preloaded_route_tbl)->_count);
   free_txdata();
 }
