@@ -982,7 +982,8 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _forks(),
   _trail_id(trail_id)
 {
-  _req_type = SNMP::string_to_request_type(&_req->msg->line.req.method.name);
+  _req_type = SNMP::string_to_request_type(_req->msg->line.req.method.name.ptr,
+                                           _req->msg->line.req.method.name.slen);
   if (sproutlet != NULL)
   {
     // Offer the Sproutlet the chance to handle this transaction.
