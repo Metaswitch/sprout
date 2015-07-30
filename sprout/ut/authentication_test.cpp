@@ -1302,6 +1302,8 @@ TEST_F(AuthenticationPxyAuthHdrTest, ProxyAuthorizationSuccess)
 
   // Expect no response, as the authentication module has let the request through.
   ASSERT_EQ(0, txdata_count());
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->_successes);
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
@@ -1360,6 +1362,8 @@ TEST_F(AuthenticationPxyAuthHdrTest, ProxyAuthorizationFailure)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(403).matches(tdata->msg);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->_failures);
   free_txdata();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
