@@ -80,6 +80,8 @@ AuthenticationStatsTables FAKE_AUTHENTICATION_STATS_TABLES =
 };
 
 // Alternative implementations is some functions, so we aren't calling real SNMP code in UT
+CounterTable* CounterTable::create(std::string name, std::string oid) { return new FakeCounterTable(); };
+
 IPCountTable* IPCountTable::create(std::string name, std::string oid) { return new FakeIPCountTable(); };
 IPCountRow::IPCountRow(struct in_addr addr) {}; 
 IPCountRow::IPCountRow(struct in6_addr addr) {}; 

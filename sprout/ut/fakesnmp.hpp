@@ -56,8 +56,10 @@ public:
 class FakeCounterTable: public CounterTable
 {
 public:
-    FakeCounterTable() {};
-    void increment() {};
+  int _count;
+  FakeCounterTable() { _count = 0; };
+  void increment() { _count++; };
+  void reset_count() { _count = 0; }
 };
 
 extern struct in_addr dummy_addr;
@@ -98,16 +100,14 @@ public:
   };
   void increment_attempts()
   {  
-    //printf("Incrementing attempts\n");
     _attempts++;
   };
   void increment_successes()
-  { //printf("Incrementing successes\n");
+  {
     _successes++;
   };
   void increment_failures()
   {
-    //printf("Incrementing failures\n");
     _failures++;
   };
   void reset_count()

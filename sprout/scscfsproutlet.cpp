@@ -92,6 +92,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
                                                                                     "1.2.826.0.1.1578918.9.3.20");
   _outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("scscf_outgoing_sip_transactions",
                                                                                     "1.2.826.0.1.1578918.9.3.21");
+  _routed_by_preloaded_route_tbl = SNMP::CounterTable::create("scscf_routed_by_preloaded_route",
+                                                              "1.2.826.0.1.1578918.9.3.26");
 }
 
 
@@ -101,6 +103,7 @@ SCSCFSproutlet::~SCSCFSproutlet()
   delete _as_chain_table;
   delete _incoming_sip_transactions_tbl;
   delete _outgoing_sip_transactions_tbl;
+  delete _routed_by_preloaded_route_tbl;
 }
 
 bool SCSCFSproutlet::init()
@@ -791,6 +794,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         // directly to the target. Interrupt the AS chain link to prevent any
         // more app servers from being triggered.
         TRC_INFO("Preloaded route - interrupt AS processing");
+        _scscf->_routed_by_preloaded_route_tbl->increment();
         SAS::Event preloaded_route(trail(), SASEvent::AS_SUPPLIED_PRELOADED_ROUTE, 0);
         SAS::report_event(preloaded_route);
         _as_chain_link.interrupt();
