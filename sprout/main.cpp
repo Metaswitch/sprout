@@ -1973,6 +1973,7 @@ int main(int argc, char* argv[])
     return 1;
   }
 
+  // Must happen after all SNMP tables have been registered.
   if (opt.pcscf_enabled)
   {
     init_snmp_handler_threads("bono");
