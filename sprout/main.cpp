@@ -1973,6 +1973,15 @@ int main(int argc, char* argv[])
     return 1;
   }
 
+  if (opt.pcscf_enabled)
+  {
+    init_snmp_handler_threads("bono");
+  }
+  else
+  {
+    init_snmp_handler_threads("sprout");
+  }
+  
   if (!sproutlets.empty())
   {
     // There are Sproutlets loaded, so start the Sproutlet proxy.
