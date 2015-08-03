@@ -73,6 +73,7 @@ TARGET_SOURCES := logger.cpp \
                   sproutletproxy.cpp \
                   pluginloader.cpp \
                   alarm.cpp \
+                  base_communication_monitor.cpp \
                   communicationmonitor.cpp \
                   thread_dispatcher.cpp \
                   common_sip_processing.cpp \
@@ -137,6 +138,8 @@ LDFLAGS += -lmemcached \
 # it to.
 LDFLAGS += -Wl,--whole-archive -lpjmedia-x86_64-unknown-linux-gnu -Wl,--no-whole-archive $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --libs libpjproject)
 
+build: ${ROOT}/usr/include/sprout_alarmdefinition.h
+
 include ${MK_DIR}/platform.mk
 include ${ROOT}/modules/cpp-common/makefiles/alarm-utils.mk
 
@@ -145,8 +148,6 @@ stage-build: build
 
 .PHONY: distclean
 distclean: clean
-
-build: ${ROOT}/usr/include/sprout_alarmdefinition.h
 
 ${ROOT}/usr/include/sprout_alarmdefinition.h : ${BUILD_DIR}/bin/alarm_header ${ROOT}/sprout-base.root/usr/share/clearwater/infrastructure/alarms/sprout_alarms.json
 	${BUILD_DIR}/bin/alarm_header -j "${ROOT}/sprout-base.root/usr/share/clearwater/infrastructure/alarms/sprout_alarms.json" -n "sprout"
