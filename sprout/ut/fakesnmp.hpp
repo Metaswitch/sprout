@@ -40,6 +40,7 @@
 #include "snmp_row.h"
 #include "snmp_event_accumulator_table.h"
 #include "snmp_continuous_accumulator_table.h"
+#include "snmp_scalar.h"
 #include "snmp_counter_table.h"
 #include "snmp_ip_count_table.h"
 #include "snmp_success_fail_count_table.h"
@@ -128,6 +129,7 @@ public:
 extern FakeIPCountTable FAKE_IP_COUNT_TABLE;
 extern FakeCounterTable FAKE_COUNTER_TABLE;
 extern FakeEventAccumulatorTable FAKE_EVENT_ACCUMULATOR_TABLE;
+extern FakeContinuousAccumulatorTable FAKE_CONTINUOUS_ACCUMULATOR_TABLE;
 extern FakeSuccessFailCountTable FAKE_INIT_REG_TABLE;
 extern FakeSuccessFailCountTable FAKE_RE_REG_TABLE;
 extern FakeSuccessFailCountTable FAKE_DE_REG_TABLE;

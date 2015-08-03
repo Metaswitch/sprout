@@ -41,14 +41,14 @@
 #include "gtest/gtest.h"
 
 #include "basetest.hpp"
+#include "fakesnmp.hpp"
 #include "load_monitor.h"
 #include "test_interposer.hpp"
 
-static SNMP::ContinuousAccumulatorTable* token_rate_table = SNMP::ContinuousAccumulatorTable::create("","");
-static SNMP::U32Scalar* smoothed_latency_scalar = new SNMP::U32Scalar("","");
-static SNMP::U32Scalar* target_latency_scalar = new SNMP::U32Scalar("","");
-static SNMP::U32Scalar* penalties_scalar = new SNMP::U32Scalar("","");
-static SNMP::U32Scalar* token_rate_scalar = new SNMP::U32Scalar("","");
+static SNMP::U32Scalar smoothed_latency("", "");
+static SNMP::U32Scalar target_latency("", "");
+static SNMP::U32Scalar penalties("", "");
+static SNMP::U32Scalar token_rate("","");
 
 /// Fixture for LoadMonitorTest.
 class LoadMonitorTest : public BaseTest
@@ -57,18 +57,30 @@ class LoadMonitorTest : public BaseTest
 
   LoadMonitorTest() :
     _load_monitor(100000, 20, 10, 10,
-                  token_rate_table, smoothed_latency_scalar,
-                  target_latency_scalar, penalties_scalar,
-                  token_rate_scalar)
+                  &SNMP::FAKE_CONTINUOUS_ACCUMULATOR_TABLE,
+                  &smoothed_latency, &target_latency,
+                  &penalties, &token_rate)
   {
     cwtest_completely_control_time();
   }
+
+  void jump_to_next_periodstart();
 
   virtual ~LoadMonitorTest()
   {
     cwtest_reset_time();
   }
 };
+
+// Pushes the time until the next period
+// The time is within the first second of the next period
+void LoadMonitorTest::jump_to_next_periodstart()
+{
+  struct timespec now;
+  clock_gettime(CLOCK_REALTIME_COARSE, &now);
+  uint64_t ms_since_epoch = (now.tv_sec * 1000) + (now.tv_nsec / 1000000);
+  cwtest_advance_time_ms(300000 - (ms_since_epoch % 300000));
+}
 
 class TokenBucketTest : public BaseTest
 {
@@ -190,3 +202,25 @@ TEST_F(TokenBucketTest, GetToken)
   EXPECT_EQ(got_token, false);
 
 }
+
+
+TEST_F(LoadMonitorTest, CorrectStatistics)
+{
+  // Scalars should report values from last update, not current values.
+  // Initialisation should count as an update though
+  EXPECT_EQ(target_latency.value, 100000);
+  EXPECT_EQ(smoothed_latency.value, 100000);
+  EXPECT_EQ(penalties.value, 0);
+  EXPECT_EQ(token_rate.value, 10);
+
+  // Give low latency value and force rate update through penalty
+  _load_monitor.incr_penalties();
+  _load_monitor.request_complete(100);
+
+  _load_monitor.request_complete(100000000);
+
+  // Scalar value should be reported as less than current value
+  // as the current smoothed latency will have increased
+  EXPECT_GT(_load_monitor.smoothed_latency, smoothed_latency.value);
+}
+
