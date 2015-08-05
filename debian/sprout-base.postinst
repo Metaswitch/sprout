@@ -106,7 +106,7 @@ case "$1" in
 
         # Restart the alarm agent
         if [ -x "/etc/init.d/clearwater-snmp-alarm-agent" ]; then
-          service clearwater-snmp-alarms-agent stop || /bin/true
+          service clearwater-snmp-alarm-agent stop || /bin/true
         fi
 
         # Restart sprout.  Always do this by terminating sprout so monit will
