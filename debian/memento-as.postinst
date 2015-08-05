@@ -55,7 +55,7 @@ case "$1" in
     configure)
         # Restart the alarm agent
         if [ -x "/etc/init.d/clearwater-snmp-alarm-agent" ]; then
-          service clearwater-snmp-alarms-agent stop || /bin/true
+          service clearwater-snmp-alarm-agent stop || /bin/true
         fi
 
         # Restart sprout to force reload of new plug-in.  Always do this by
