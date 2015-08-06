@@ -329,10 +329,6 @@ static pj_bool_t proxy_on_rx_response(pjsip_rx_data *rdata)
       res_addr.dst_host.addr.port = hvia->sent_by.port;
     }
 
-    // Report SIP call and branch ID markers on the trail to make sure it gets
-    // associated with the INVITE transaction at SAS.
-    PJUtils::mark_sas_call_branch_ids(get_trail(rdata), rdata->msg_info.cid, rdata->msg_info.msg);
-
     // We don't know the transaction, so be pessimistic and strip
     // everything.
     TrustBoundary::process_stateless_message(tdata);
@@ -468,7 +464,6 @@ void process_tsx_request(pjsip_rx_data* rdata)
     // associated with the INVITE transaction at SAS.  There's no need to
     // report the branch IDs as they won't be used for correlation.
     TRC_DEBUG("Statelessly forwarding ACK");
-    PJUtils::mark_sas_call_branch_ids(get_trail(rdata), rdata->msg_info.cid, NULL);
 
     trust->process_request(tdata);
 
@@ -2381,21 +2376,6 @@ void UASTransaction::log_on_tsx_start(const pjsip_rx_data* rdata)
   TRC_DEBUG("Report SAS start marker - trail (%llx)", trail());
   SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
-
-  PJUtils::report_sas_to_from_markers(trail(), rdata->msg_info.msg);
-
-  if ((rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
-      ((pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_subscribe_method())) == 0) ||
-      ((pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_notify_method())) == 0))
-  {
-    // Omit the Call-ID for these requests, as the same Call-ID can be
-    // reused over a long period of time and produce huge SAS trails.
-    PJUtils::mark_sas_call_branch_ids(get_trail(rdata), NULL, rdata->msg_info.msg);
-  }
-  else
-  {
-    PJUtils::mark_sas_call_branch_ids(get_trail(rdata), _analytics.cid, rdata->msg_info.msg);
-  }
 }
 
 // Generate analytics logs relating to a transaction completing.
