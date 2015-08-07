@@ -1127,8 +1127,10 @@ pjsip_msg* SproutletWrapper::create_request()
 
   if (status != PJ_SUCCESS)
   {
+    //LCOV_EXCL_START
     TRC_ERROR("Failed to create new request");
     return NULL;
+    //LCOV_EXCL_STOP
   }
 
   pjsip_tx_data_add_ref(new_tdata);
