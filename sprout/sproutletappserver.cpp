@@ -146,6 +146,16 @@ const std::string& SproutletAppServerTsxHelper::dialog_id() const
   return _rr_param_value;
 }
 
+/// Creates a new, blank request.  This is typically used when creating
+/// a downstream request to another SIP server as part of handling a
+/// request.
+///
+/// @returns             - A new, blank request message.
+pjsip_msg* SproutletAppServerTsxHelper::create_request()
+{
+  return _helper->create_request();
+}
+
 /// Clones the request.  This is typically used when forking a request if
 /// different request modifications are required on each fork or for storing
 /// off to handle late forking.
