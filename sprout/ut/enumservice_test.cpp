@@ -46,6 +46,7 @@
 #include "fakelogger.h"
 #include "test_utils.hpp"
 #include "mockcommunicationmonitor.h"
+#include "sprout_alarmdefinition.h"
 
 using namespace std;
 using ::testing::_;

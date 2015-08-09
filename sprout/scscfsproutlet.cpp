@@ -49,6 +49,9 @@
 #include "registration_utils.h"
 #include "scscfsproutlet.h"
 
+// Constant indicating there is no served user for a request.
+const char* NO_SERVED_USER = "";
+
 /// SCSCFSproutlet constructor.
 SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
                                const std::string& scscf_node_uri,
@@ -85,6 +88,12 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
   _icscf_uri_str(icscf_uri),
   _bgcf_uri_str(bgcf_uri)
 {
+  _incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("scscf_incoming_sip_transactions",
+                                                                                    "1.2.826.0.1.1578918.9.3.20");
+  _outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("scscf_outgoing_sip_transactions",
+                                                                                    "1.2.826.0.1.1578918.9.3.21");
+  _routed_by_preloaded_route_tbl = SNMP::CounterTable::create("scscf_routed_by_preloaded_route",
+                                                              "1.2.826.0.1.1578918.9.3.26");
 }
 
 
@@ -92,6 +101,9 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
 SCSCFSproutlet::~SCSCFSproutlet()
 {
   delete _as_chain_table;
+  delete _incoming_sip_transactions_tbl;
+  delete _outgoing_sip_transactions_tbl;
+  delete _routed_by_preloaded_route_tbl;
 }
 
 bool SCSCFSproutlet::init()
@@ -770,65 +782,83 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
 
   if (_as_chain_link.is_set())
   {
+    bool retargeted = false;
     std::string served_user = served_user_from_msg(req);
 
     if ((_session_case->is_terminating()) &&
         (served_user != _as_chain_link.served_user()))
     {
-      // AS is retargeting per 3GPP TS 24.229 s5.4.3.3 step 3, so
-      // create new AS chain with session case orig-cdiv and the
-      // terminating user as served user.
-      TRC_INFO("Request-URI has changed, retargeting");
-      _session_case = &SessionCase::OriginatingCdiv;
-      served_user = _as_chain_link.served_user();
-
-      sas_log_start_of_sesion_case(req, _session_case, served_user);
-
-      // We might not be the terminating server any more, so we
-      // should blank out the term_ioi parameter. If we are still
-      // the terminating server, we'll fill it back in when we go
-      // through handle_terminating.
-
-      // Note that there's no need to change orig_ioi - we don't
-      // actually become the originating server when we do this redirect.
-      pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
-                             pjsip_msg_find_hdr_by_name(req, &STR_P_C_V, NULL);
-      if (pcv)
+      if (pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL) != NULL)
       {
-        TRC_DEBUG("Blanking out term_ioi parameter due to redirect");
-        pcv->term_ioi = pj_str("");
-      }
-
-      // Create a new ACR for this request.
-      ACR* acr = _scscf->get_acr(trail(),
-                                 CALLING_PARTY,
-                                 NODE_ROLE_ORIGINATING);
-
-      Ifcs ifcs;
-      if (lookup_ifcs(served_user, ifcs))
-      {
-        TRC_DEBUG("Creating originating CDIV AS chain");
-        _as_chain_link.release();
-        _as_chain_link = create_as_chain(ifcs, served_user, acr);
-
-        if (stack_data.record_route_on_diversion)
-        {
-          TRC_DEBUG("Add service to dialog - originating Cdiv");
-          add_record_route(req, NODE_ROLE_ORIGINATING);
-        }
+        // The AS has supplied a pre-loaded route, which means it is routing
+        // directly to the target. Interrupt the AS chain link to prevent any
+        // more app servers from being triggered.
+        TRC_INFO("Preloaded route - interrupt AS processing");
+        _scscf->_routed_by_preloaded_route_tbl->increment(); // Update SNMP statistics.
+        SAS::Event preloaded_route(trail(), SASEvent::AS_SUPPLIED_PRELOADED_ROUTE, 0);
+        SAS::report_event(preloaded_route);
+        _as_chain_link.interrupt();
       }
       else
       {
-        TRC_DEBUG("Failed to retrieve ServiceProfile for %s", served_user.c_str());
-        status_code = PJSIP_SC_NOT_FOUND;
-        SAS::Event no_ifcs(trail(), SASEvent::IFC_GET_FAILURE, 0);
-        SAS::report_event(no_ifcs);
+        // AS is retargeting per 3GPP TS 24.229 s5.4.3.3 step 3, so
+        // create new AS chain with session case orig-cdiv and the
+        // terminating user as served user.
+        TRC_INFO("AS is retargeting the request");
+        retargeted = true;
 
-        // No AsChain, store ACR locally.
-        _failed_ood_acr = acr;
+        _session_case = &SessionCase::OriginatingCdiv;
+        served_user = _as_chain_link.served_user();
+
+        sas_log_start_of_sesion_case(req, _session_case, served_user);
+
+        // We might not be the terminating server any more, so we
+        // should blank out the term_ioi parameter. If we are still
+        // the terminating server, we'll fill it back in when we go
+        // through handle_terminating.
+
+        // Note that there's no need to change orig_ioi - we don't
+        // actually become the originating server when we do this redirect.
+        pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
+                               pjsip_msg_find_hdr_by_name(req, &STR_P_C_V, NULL);
+        if (pcv)
+        {
+          TRC_DEBUG("Blanking out term_ioi parameter due to redirect");
+          pcv->term_ioi = pj_str("");
+        }
+
+        // Create a new ACR for this request.
+        ACR* acr = _scscf->get_acr(trail(),
+                                   CALLING_PARTY,
+                                   NODE_ROLE_ORIGINATING);
+
+        Ifcs ifcs;
+        if (lookup_ifcs(served_user, ifcs))
+        {
+          TRC_DEBUG("Creating originating CDIV AS chain");
+          _as_chain_link.release();
+          _as_chain_link = create_as_chain(ifcs, served_user, acr);
+
+          if (stack_data.record_route_on_diversion)
+          {
+            TRC_DEBUG("Add service to dialog - originating Cdiv");
+            add_record_route(req, NODE_ROLE_ORIGINATING);
+          }
+        }
+        else
+        {
+          TRC_DEBUG("Failed to retrieve ServiceProfile for %s", served_user.c_str());
+          status_code = PJSIP_SC_NOT_FOUND;
+          SAS::Event no_ifcs(trail(), SASEvent::IFC_GET_FAILURE, 0);
+          SAS::report_event(no_ifcs);
+
+          // No AsChain, store ACR locally.
+          _failed_ood_acr = acr;
+        }
       }
     }
-    else
+
+    if (!retargeted)
     {
       if (stack_data.record_route_on_every_hop)
       {
@@ -938,7 +968,7 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
   // header. However, the History-Info mechanism has fundamental
   // problems as outlined in RFC5502 appendix A, and we do not
   // implement it.
-  pjsip_uri* uri;
+  pjsip_uri* uri = NULL;
   std::string user;
 
   if (_session_case->is_originating())  // (includes orig-cdiv)
@@ -947,22 +977,30 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
   }
   else
   {
-    uri = PJUtils::term_served_user(msg);
+    // We only consider a terminating request to be destined for a served user
+    // if it doesn't have a route header.
+    if (pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, NULL) == NULL)
+    {
+      uri = PJUtils::term_served_user(msg);
+    }
   }
 
-  if ((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
-     ((PJUtils::is_home_domain(uri)) ||
-      (PJUtils::is_uri_local(uri))))
+  if (uri != NULL)
   {
-    user = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
-  }
-  else if (PJSIP_URI_SCHEME_IS_TEL(uri))
-  {
-    user = PJUtils::public_id_from_uri(uri);
-  }
-  else
-  {
-    TRC_DEBUG("URI is not locally hosted");
+    if ((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
+        ((PJUtils::is_home_domain(uri)) ||
+         (PJUtils::is_uri_local(uri))))
+    {
+      user = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
+    }
+    else if (PJSIP_URI_SCHEME_IS_TEL(uri))
+    {
+      user = PJUtils::public_id_from_uri(uri);
+    }
+    else
+    {
+      TRC_DEBUG("URI is not locally hosted");
+    }
   }
 
   return user;
@@ -1084,8 +1122,16 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
       add_record_route(req, NODE_ROLE_TERMINATING);
     }
 
-    // Route the call to the appropriate target.
-    route_to_target(req);
+    if (pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL) != NULL)
+    {
+      // Route according to normal SIP routing.
+      send_request(req);
+    }
+    else
+    {
+      // Route the call to the appropriate target.
+      route_to_target(req);
+    }
   }
 }
 
@@ -1127,7 +1173,7 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
       pj_list_insert_after(&odi_uri->other_param, orig_param);
     }
     PJUtils::add_top_route_header(req, odi_uri, get_pool(req));
-    
+
     // Add the application server URI as the top Route header, per TS 24.229.
     PJUtils::add_top_route_header(req, as_uri, get_pool(req));
 

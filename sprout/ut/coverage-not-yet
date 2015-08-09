@@ -19,6 +19,7 @@ modules/cpp-common/src/saslogger.cpp
 modules/cpp-common/src/ipv6utils.cpp
 modules/cpp-common/src/exception_handler.cpp
 modules/cpp-common/src/utils.cpp
+modules/cpp-common/src/sip_string_to_request_type.cpp
 
 # SNMP code is covered by clearwater-fv-test
 modules/cpp-common/src/snmp_row.cpp

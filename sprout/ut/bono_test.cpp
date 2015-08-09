@@ -1580,8 +1580,8 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeCorruptToken)
   // A simple tampered token
   string tampered(token);
   // 'Z'++ is '[', which PJSIP rejects as invalid when used in a From
-  // header, so use 'Z'-- instead.
-  if (tampered[6] != 'Z')
+  // header, so use 'Z'-- instead. Similarly for 'z'.
+  if ((tampered[6] != 'Z') && (tampered[6] != 'z'))
   {
     tampered[6]++;
   }
@@ -2068,13 +2068,13 @@ TEST_F(StatefulEdgeProxyPBXTest, AcceptInvite)
   inject_msg(msg.get_request(), &tp);
   poll();
   ASSERT_EQ(1, txdata_count());
-  
-  
+
+
   // INVITE should be passed to Sprout despite the lack of a REGISTER
   SCOPED_TRACE("INVITE (S)");
   out = current_txdata()->msg;
   ASSERT_NO_FATAL_FAILURE(ReqMatcher("INVITE").matches(out));
-  
+
   // Goes to the configured upstream proxy ("upstreamnode", "10.6.6.8")
   expect_target("TCP", "10.6.6.8", stack_data.pcscf_trusted_port, current_txdata());
 

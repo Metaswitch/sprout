@@ -53,6 +53,7 @@ extern "C" {
 #include "pjutils.h"
 #include "sproutsasevent.h"
 #include "sproutletproxy.h"
+#include "snmp_sip_request_types.h"
 
 const pj_str_t SproutletProxy::STR_SERVICE = {"service", 7};
 
@@ -970,6 +971,7 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _service_name(""),
   _id(""),
   _req(req),
+  _req_type(),
   _packets(),
   _send_requests(),
   _send_responses(),
@@ -980,6 +982,8 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _forks(),
   _trail_id(trail_id)
 {
+  _req_type = SNMP::string_to_request_type(_req->msg->line.req.method.name.ptr,
+                                           _req->msg->line.req.method.name.slen);
   if (sproutlet != NULL)
   {
     // Offer the Sproutlet the chance to handle this transaction.
@@ -999,6 +1003,17 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
     _sproutlet_tsx = new SproutletTsx(this);
   }
 
+  if ((_sproutlet != NULL) && 
+      (_sproutlet->_incoming_sip_transactions_tbl != NULL))
+  {
+    // Update SNMP SIP transactions statistics for the Sproutlet.
+    _sproutlet->_incoming_sip_transactions_tbl->increment_attempts(_req_type);
+    if (_req_type == SNMP::SIPRequestTypes::ACK)
+    {
+      _sproutlet->_incoming_sip_transactions_tbl->increment_successes(_req_type);
+    }
+  }
+  
   // Construct a unique identifier for this Sproutlet.
   std::ostringstream id;
   id << _service_name << "-" << (const void*)_sproutlet_tsx;
@@ -1102,6 +1117,42 @@ const pjsip_route_hdr* SproutletWrapper::route_hdr() const
   return NULL;
 }
 
+pjsip_msg* SproutletWrapper::create_request()
+{
+  // Create a new tdata
+  pj_status_t status;
+  pjsip_tx_data* new_tdata;
+
+  status = pjsip_endpt_create_tdata(stack_data.endpt, &new_tdata);
+
+  if (status != PJ_SUCCESS)
+  {
+    //LCOV_EXCL_START
+    TRC_ERROR("Failed to create new request");
+    return NULL;
+    //LCOV_EXCL_STOP
+  }
+
+  pjsip_tx_data_add_ref(new_tdata);
+
+  // Create a message inside the tdata
+  new_tdata->msg = pjsip_msg_create(new_tdata->pool, PJSIP_REQUEST_MSG);
+
+  // Add any additional request headers from the endpoint
+  const pjsip_hdr* endpt_hdr = pjsip_endpt_get_request_headers(stack_data.endpt)->next;
+  while (endpt_hdr != pjsip_endpt_get_request_headers(stack_data.endpt))
+  {
+    pjsip_hdr* hdr = (pjsip_hdr*)pjsip_hdr_shallow_clone(new_tdata->pool, endpt_hdr);
+    pjsip_msg_add_hdr(new_tdata->msg, hdr);
+    endpt_hdr = endpt_hdr->next;
+  }
+
+  set_trail(new_tdata, trail());
+  register_tdata(new_tdata);
+
+  return new_tdata->msg;
+}
+
 pjsip_msg* SproutletWrapper::clone_request(pjsip_msg* req)
 {
   // Get the old tdata from the map of clones
@@ -1181,6 +1232,17 @@ int SproutletWrapper::send_request(pjsip_msg*& req)
     return -1;
   }
 
+  if ((_sproutlet != NULL) && 
+      (_sproutlet->_outgoing_sip_transactions_tbl != NULL))
+  {
+    // Update SNMP SIP transactions statistics for the Sproutlet.
+    _sproutlet->_outgoing_sip_transactions_tbl->increment_attempts(_req_type);
+    if (_req_type == SNMP::SIPRequestTypes::ACK)
+    {
+      _sproutlet->_outgoing_sip_transactions_tbl->increment_successes(_req_type);
+    }
+  }
+  
   // We've found the tdata, move it to _send_requests under a new unique ID.
   int fork_id = _forks.size();
   _forks.resize(fork_id + 1);
@@ -1428,6 +1490,20 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
                 _id.c_str(), pjsip_tx_data_get_info(rsp),
                 fork_id, pjsip_tsx_state_str(_forks[fork_id].state.tsx_state));
     --_pending_responses;
+  
+    if ((_sproutlet != NULL) && 
+      (_sproutlet->_outgoing_sip_transactions_tbl != NULL))
+    {
+      // Update SNMP SIP transactions statistics for the Sproutlet.
+      if (rsp->msg->line.status.code >= 200 && rsp->msg->line.status.code < 300)
+      {
+        _sproutlet->_outgoing_sip_transactions_tbl->increment_successes(_req_type);
+      }
+      else
+      {
+        _sproutlet->_outgoing_sip_transactions_tbl->increment_failures(_req_type);
+      }
+    }
   }
   _sproutlet_tsx->on_rx_response(rsp->msg, fork_id);
   process_actions(false);
@@ -1588,7 +1664,7 @@ void SproutletWrapper::process_actions(bool complete_after_actions)
   {
     _complete = true;
   }
-
+  
   if ((_complete) &&
       (_pending_responses == 0))
   {
@@ -1721,6 +1797,20 @@ void SproutletWrapper::tx_response(pjsip_tx_data* rsp)
   {
     _complete = true;
     cancel_pending_forks();
+    if ((_sproutlet != NULL) &&
+        (_sproutlet->_incoming_sip_transactions_tbl != NULL))
+    {
+      // Update SNMP SIP transactions statistics for the Sproutlet.
+      if ((_best_rsp != NULL) && 
+               (_best_rsp->msg->line.status.code >= 200 && _best_rsp->msg->line.status.code < 300))
+      {
+        _sproutlet->_incoming_sip_transactions_tbl->increment_successes(_req_type);
+      }
+      else
+      {
+        _sproutlet->_incoming_sip_transactions_tbl->increment_failures(_req_type);
+      }
+    }
   }
 
   // Forward the response upstream.

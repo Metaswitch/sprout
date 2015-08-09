@@ -47,11 +47,21 @@
 
 extern pjsip_module mod_authentication;
 
+enum struct NonRegisterAuthentication
+{
+  // Never challenge a non-REGISTER.
+  NEVER,
+
+  // Only challenge a non-REGISTER if it has a Proxy-Authorization header.
+  IF_PROXY_AUTHORIZATION_PRESENT
+};
+
 pj_status_t init_authentication(const std::string& realm_name,
                                 AvStore* avstore,
                                 HSSConnection* hss_connection,
                                 ChronosConnection* chronos_connection,
                                 ACRFactory* rfacr_factory,
+                                NonRegisterAuthentication non_register_auth_mode_param,
                                 AnalyticsLogger* analytics_logger,
                                 SNMP::AuthenticationStatsTables* auth_stats_tables);
 

@@ -104,6 +104,14 @@ public:
   ///                        or by an earlier transaction in the same dialog.
   virtual const std::string& dialog_id() const;
 
+  /// Creates a new, blank request.  This is typically used when creating
+  /// a downstream request to another SIP server as part of handling a
+  /// request.
+  ///
+  /// @returns             - A new, blank request message.
+  ///
+  virtual pjsip_msg* create_request();
+
   /// Clones the request.  This is typically used when forking a request if
   /// different request modifications are required on each fork or for storing
   /// off to handle late forking.
@@ -225,7 +233,10 @@ public:
                                 pjsip_msg* req);
 
   /// Constructor.
-  SproutletAppServerShim(AppServer* app, const std::string& service_host="");
+  SproutletAppServerShim(AppServer* app,
+                         SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl = NULL,
+                         SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl = NULL,
+                         const std::string& service_host="");
 
 private:
   AppServer* _app;
