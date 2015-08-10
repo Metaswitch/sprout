@@ -46,6 +46,7 @@
 #include "httpconnection.h"
 #include "hssconnection.h"
 #include "rapidjson/error/en.h"
+#include "snmp_continuous_accumulator_table.h"
 
 const std::string HSSConnection::REG = "reg";
 const std::string HSSConnection::CALL = "call";

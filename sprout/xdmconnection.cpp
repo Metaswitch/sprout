@@ -46,6 +46,7 @@
 #include "sproutsasevent.h"
 #include "httpconnection.h"
 #include "xdmconnection.h"
+#include "snmp_continuous_accumulator_table.h"
 
 /// Main constructor.
 XDMConnection::XDMConnection(const std::string& server,
