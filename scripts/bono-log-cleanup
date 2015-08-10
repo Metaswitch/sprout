@@ -1,4 +1,8 @@
 #!/bin/bash
 ONE_GIG=1073741824
-python2.7 /usr/share/clearwater/bin/log_cleanup.py /var/log/bono --prefix bono_ --maxsize $ONE_GIG
-python2.7 /usr/share/clearwater/bin/log_cleanup.py /var/log/bono --prefix log_ --maxsize $ONE_GIG
+WEEK_COUNT=168
+max_log_directory_size=$ONE_GIG
+. /etc/clearwater/config
+
+python2.7 /usr/share/clearwater/bin/log_cleanup.py /var/log/bono --prefix bono_ --maxsize $max_log_directory_size --count $WEEK_COUNT
+python2.7 /usr/share/clearwater/bin/log_cleanup.py /var/log/bono --prefix log_ --maxsize $max_log_directory_size --count $WEEK_COUNT

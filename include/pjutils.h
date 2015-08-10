@@ -74,6 +74,8 @@ pj_str_t uri_to_pj_str(pjsip_uri_context_e context,
 std::string uri_to_string(pjsip_uri_context_e context,
                           const pjsip_uri* uri);
 
+std::string strip_uri_scheme(const std::string& uri);
+
 pjsip_uri* uri_from_string(const std::string& uri_s,
                            pj_pool_t* pool,
                            pj_bool_t force_name_addr=false);
@@ -125,6 +127,8 @@ inline pj_bool_t is_top_route_local(const pjsip_msg* msg, pjsip_route_hdr** hdr)
 }
 
 void add_record_route(pjsip_tx_data* tdata, const char* transport, int port, const char* user, const pj_str_t& host);
+
+void add_top_route_header(pjsip_msg* msg, pjsip_sip_uri* uri, pj_pool_t* pool);
 
 void add_route_header(pjsip_msg* msg, pjsip_sip_uri* uri, pj_pool_t* pool);
 
@@ -281,8 +285,8 @@ bool does_uri_represent_number(pjsip_uri* uri,
 bool get_npdi(pjsip_uri* uri);
 bool get_rn(pjsip_uri* uri, std::string& routing_value);
 
-bool add_update_session_expires(pjsip_msg* req, 
-                                pj_pool_t* pool, 
+bool add_update_session_expires(pjsip_msg* req,
+                                pj_pool_t* pool,
                                 SAS::TrailId trail);
 
 } // namespace PJUtils

@@ -40,10 +40,8 @@
  */
 
 extern "C" {
-#include <pjsip.h>
 #include <pjlib-util.h>
 #include <pjlib.h>
-#include "pjsip-simple/evsub.h"
 }
 #include <arpa/inet.h>
 
@@ -77,6 +75,8 @@ static HealthChecker* health_checker = NULL;
 
 static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata);
 static pj_status_t process_on_tx_msg(pjsip_tx_data* tdata);
+
+static SAS::TrailId DONT_LOG_TO_SAS = 0xFFFFFFFF;
 
 // Module handling common processing for all SIP messages - logging,
 // overload control, and rejection of bad requests.
@@ -204,16 +204,34 @@ static void sas_log_rx_msg(pjsip_rx_data* rdata)
       trail = get_trail(tsx);
     }
   }
+  else if ((rdata->msg_info.msg->line.req.method.id == PJSIP_OPTIONS_METHOD) &&
+           PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri))
+  {
+    // This is an OPTIONS poll directed at this node. Don't log it to SAS, and set the trail ID to a sentinel value so we don't log the response either.
+    TRC_DEBUG("Skipping SAS logging for OPTIONS request");
+    set_trail(rdata, DONT_LOG_TO_SAS);
+    return;
+  }
 
   if (trail == 0)
   {
     // The message doesn't correlate to an existing trail, so create a new
     // one.
-    trail = SAS::new_trail(1u);
+
+    // If SAS::new_trail returns 0 or DONT_LOG_TO_SAS, keep going.
+    while ((trail == 0) || (trail == DONT_LOG_TO_SAS))
+    {
+      trail = SAS::new_trail(1u);
+    }
   }
 
   // Store the trail in the message as it gets passed up the stack.
   set_trail(rdata, trail);
+
+  PJUtils::report_sas_to_from_markers(trail, rdata->msg_info.msg);
+
+  pjsip_cid_hdr* cid = (pjsip_cid_hdr*)rdata->msg_info.cid;
+  PJUtils::mark_sas_call_branch_ids(trail, cid, rdata->msg_info.msg);
 
   // Log the message event.
   SAS::Event event(trail, SASEvent::RX_SIP_MSG, 0);
@@ -230,8 +248,17 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
   // For outgoing messages always use the trail identified in the module data
   SAS::TrailId trail = get_trail(tdata);
 
-  if (trail != 0)
+  if (trail == DONT_LOG_TO_SAS)
   {
+    TRC_DEBUG("Skipping SAS logging for OPTIONS response");
+    return;
+  }
+  else if (trail != 0)
+  {
+    PJUtils::report_sas_to_from_markers(trail, tdata->msg);
+
+    PJUtils::mark_sas_call_branch_ids(trail, NULL, tdata->msg);
+
     // Log the message event.
     SAS::Event event(trail, SASEvent::TX_SIP_MSG, 0);
     event.add_static_param(pjsip_transport_get_type_from_flag(tdata->tp_info.transport->flag));
@@ -269,8 +296,6 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
     // Retry-After header with a zero length timeout.
     TRC_DEBUG("Rejected request due to overload");
 
-    pjsip_cid_hdr* cid = (pjsip_cid_hdr*)rdata->msg_info.cid;
-
     // LCOV_EXCL_START - can't meaningfully verify SAS in UT
     SAS::TrailId trail = get_trail(rdata);
 
@@ -282,21 +307,6 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
     event.add_static_param(load_monitor->get_current_latency());
     event.add_static_param(load_monitor->get_rate_limit());
     SAS::report_event(event);
-
-    PJUtils::report_sas_to_from_markers(trail, rdata->msg_info.msg);
-
-    if ((rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
-        ((pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_subscribe_method())) == 0) ||
-        ((pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_notify_method())) == 0))
-    {
-      // Omit the Call-ID for these requests, as the same Call-ID can be
-      // reused over a long period of time and produce huge SAS trails.
-      PJUtils::mark_sas_call_branch_ids(trail, NULL, rdata->msg_info.msg);
-    }
-    else
-    {
-      PJUtils::mark_sas_call_branch_ids(trail, cid, rdata->msg_info.msg);
-    }
 
     SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
     SAS::report_marker(end_marker);

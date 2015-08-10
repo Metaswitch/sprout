@@ -146,6 +146,16 @@ const std::string& SproutletAppServerTsxHelper::dialog_id() const
   return _rr_param_value;
 }
 
+/// Creates a new, blank request.  This is typically used when creating
+/// a downstream request to another SIP server as part of handling a
+/// request.
+///
+/// @returns             - A new, blank request message.
+pjsip_msg* SproutletAppServerTsxHelper::create_request()
+{
+  return _helper->create_request();
+}
+
 /// Clones the request.  This is typically used when forking a request if
 /// different request modifications are required on each fork or for storing
 /// off to handle late forking.
@@ -293,10 +303,14 @@ pjsip_sip_uri* SproutletAppServerTsxHelper::get_reflexive_uri(pj_pool_t* pool) c
 
 /// Constructor.
 SproutletAppServerShim::SproutletAppServerShim(AppServer* app,
+                                               SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
+                                               SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                                                const std::string& service_host) :
   Sproutlet(app->service_name(), 0, service_host),
   _app(app)
 {
+  _incoming_sip_transactions_tbl = incoming_sip_transactions_tbl;
+  _outgoing_sip_transactions_tbl = outgoing_sip_transactions_tbl;
 }
 
 /// Called when the system determines the app-server should be invoked for a

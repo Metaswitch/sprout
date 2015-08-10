@@ -55,6 +55,7 @@ extern "C" {
 #include "icscfsproutlet.h"
 #include "scscfselector.h"
 #include "constants.h"
+#include "snmp_success_fail_count_by_request_type_table.h"
 
 /// Define a constant for the maximum number of ENUM lookups
 /// we want to do in I-CSCF termination processing.
@@ -81,12 +82,18 @@ ICSCFSproutlet::ICSCFSproutlet(const std::string& bgcf_uri,
   _override_npdi(override_npdi),
   _bgcf_uri_str(bgcf_uri)
 {
+  _incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("icscf_incoming_sip_transactions",
+                                                                                    "1.2.826.0.1.1578918.9.3.18");
+  _outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("icscf_outgoing_sip_transactions",
+                                                                                    "1.2.826.0.1.1578918.9.3.19");
 }
 
 
 /// Destructor.
 ICSCFSproutlet::~ICSCFSproutlet()
 {
+  delete _incoming_sip_transactions_tbl;
+  delete _outgoing_sip_transactions_tbl;
 }
 
 bool ICSCFSproutlet::init()
@@ -458,6 +465,18 @@ ICSCFSproutletTsx::~ICSCFSproutletTsx()
 void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 {
   pj_pool_t* pool = get_pool(req);
+
+  pjsip_route_hdr* hroute = (pjsip_route_hdr*)
+                                pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
+
+  // TS 24.229 says I-CSCF processing shouldn't be done if a message has more than one Route header.
+  // We've stripped one off in Sproutlet processing, so check for a second and just forward the
+  // message if it's there.
+  if (hroute != NULL)
+  {
+    send_request(req);
+    return;
+  }
 
   pjsip_uri* next_hop = PJUtils::next_hop(req);
   if (req->line.req.method.id == PJSIP_ACK_METHOD &&

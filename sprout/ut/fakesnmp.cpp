@@ -37,6 +37,7 @@
 #include "snmp_internal/snmp_includes.h"
 #include "fakesnmp.hpp"
 #include "snmp_success_fail_count_table.h"
+#include "snmp_success_fail_count_by_request_type_table.h"
 
 namespace SNMP
 {
@@ -54,6 +55,9 @@ FakeSuccessFailCountTable FAKE_THIRD_PARTY_RE_REG_TABLE;
 FakeSuccessFailCountTable FAKE_THIRD_PARTY_DE_REG_TABLE;
 FakeSuccessFailCountTable FAKE_SIP_DIGEST_AUTH_TABLE;
 FakeSuccessFailCountTable FAKE_IMS_AKA_AUTH_TABLE;
+FakeSuccessFailCountTable FAKE_NON_REG_AUTH_TABLE;
+FakeSuccessFailCountByRequestTypeTable FAKE_INCOMING_SIP_TRANSACTIONS_TABLE;
+FakeSuccessFailCountByRequestTypeTable FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE;
 
 RegistrationStatsTables FAKE_REGISTRATION_STATS_TABLES =
 {
@@ -72,10 +76,13 @@ RegistrationStatsTables FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES =
 AuthenticationStatsTables FAKE_AUTHENTICATION_STATS_TABLES =
 {
   &FAKE_SIP_DIGEST_AUTH_TABLE,
-  &FAKE_IMS_AKA_AUTH_TABLE
+  &FAKE_IMS_AKA_AUTH_TABLE,
+  &FAKE_NON_REG_AUTH_TABLE
 };
 
 // Alternative implementations is some functions, so we aren't calling real SNMP code in UT
+CounterTable* CounterTable::create(std::string name, std::string oid) { return new FakeCounterTable(); };
+
 IPCountTable* IPCountTable::create(std::string name, std::string oid) { return new FakeIPCountTable(); };
 IPCountRow::IPCountRow(struct in_addr addr) {};
 IPCountRow::IPCountRow(struct in6_addr addr) {};
@@ -85,7 +92,13 @@ ColumnData IPCountRow::get_columns()
   ColumnData ret;
   return ret;
 }
-}
+
+SuccessFailCountByRequestTypeTable* SuccessFailCountByRequestTypeTable::create(std::string name, std::string oid)
+{
+  return new FakeSuccessFailCountByRequestTypeTable();
+};
+
+} // Namespace SNMP ends
 
 // Fake implementation of scalar registration function, so SNMP::U32Scalar doesn't call real SNMP
 // code

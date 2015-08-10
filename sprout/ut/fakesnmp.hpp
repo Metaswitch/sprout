@@ -44,6 +44,7 @@
 #include "snmp_counter_table.h"
 #include "snmp_ip_count_table.h"
 #include "snmp_success_fail_count_table.h"
+#include "snmp_success_fail_count_by_request_type_table.h"
 
 namespace SNMP
 {
@@ -64,8 +65,10 @@ public:
 class FakeCounterTable: public CounterTable
 {
 public:
-    FakeCounterTable() {};
-    void increment() {};
+  int _count;
+  FakeCounterTable() { _count = 0; };
+  void increment() { _count++; };
+  void reset_count() { _count = 0; }
 };
 
 extern struct in_addr dummy_addr;
@@ -106,16 +109,14 @@ public:
   };
   void increment_attempts()
   {
-    //printf("Incrementing attempts\n");
     _attempts++;
   };
   void increment_successes()
-  { //printf("Incrementing successes\n");
+  {
     _successes++;
   };
   void increment_failures()
   {
-    //printf("Incrementing failures\n");
     _failures++;
   };
   void reset_count()
@@ -125,6 +126,16 @@ public:
     _failures = 0;
   };
 };
+
+class FakeSuccessFailCountByRequestTypeTable : public SuccessFailCountByRequestTypeTable
+{
+public:
+  FakeSuccessFailCountByRequestTypeTable() {};
+  void increment_attempts(SIPRequestTypes type) {};
+  void increment_successes(SIPRequestTypes type) {};
+  void increment_failures(SIPRequestTypes type) {};
+};
+
 
 extern FakeIPCountTable FAKE_IP_COUNT_TABLE;
 extern FakeCounterTable FAKE_COUNTER_TABLE;
@@ -138,9 +149,12 @@ extern FakeSuccessFailCountTable FAKE_THIRD_PARTY_RE_REG_TABLE;
 extern FakeSuccessFailCountTable FAKE_THIRD_PARTY_DE_REG_TABLE;
 extern FakeSuccessFailCountTable FAKE_SIP_DIGEST_AUTH_TABLE;
 extern FakeSuccessFailCountTable FAKE_IMS_AKA_AUTH_TABLE;
+extern FakeSuccessFailCountTable FAKE_NON_REG_AUTH_TABLE;
 extern RegistrationStatsTables FAKE_REGISTRATION_STATS_TABLES;
 extern RegistrationStatsTables FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES;
 extern AuthenticationStatsTables FAKE_AUTHENTICATION_STATS_TABLES;
+extern FakeSuccessFailCountByRequestTypeTable FAKE_INCOMING_SIP_TRANSACTIONS_TABLE;
+extern FakeSuccessFailCountByRequestTypeTable FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE;
 }
 
 #endif

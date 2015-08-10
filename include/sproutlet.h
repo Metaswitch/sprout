@@ -51,7 +51,7 @@ extern "C" {
 
 #include <list>
 #include "sas.h"
-
+#include "snmp_success_fail_count_by_request_type_table.h"
 
 #define API_VERSION 1
 
@@ -120,6 +120,14 @@ public:
   /// @returns             - Whether the URI is reflexive.
   /// @param  uri          - The URI to check.
   virtual bool is_uri_reflexive(const pjsip_uri* uri) const = 0;
+
+  /// Creates a new, blank request.  This is typically used when creating
+  /// a downstream request to another SIP server as part of handling a
+  /// request.
+  ///
+  /// @returns             - A new, blank request message.
+  ///
+  virtual pjsip_msg* create_request() = 0;
 
   /// Clones the request.  This is typically used when forking a request if
   /// different request modifications are required on each fork or for storing
@@ -376,6 +384,15 @@ protected:
   const pjsip_route_hdr* route_hdr() const
     {return _helper->route_hdr();}
 
+  /// Creates a new, blank request.  This is typically used when creating
+  /// a downstream request to another SIP server as part of handling a
+  /// request.
+  ///
+  /// @returns             - A new, blank request message.
+  ///
+  pjsip_msg* create_request()
+    {return _helper->create_request();}
+
   /// Clones the request.  This is typically used when forking a request if
   /// different request modifications are required on each fork.
   ///
@@ -547,6 +564,9 @@ public:
   /// Virtual destructor.
   virtual ~Sproutlet() {}
 
+  SNMP::SuccessFailCountByRequestTypeTable* _incoming_sip_transactions_tbl = NULL;
+  SNMP::SuccessFailCountByRequestTypeTable* _outgoing_sip_transactions_tbl = NULL;
+  
   /// Called when the system determines the service should be invoked for a
   /// received request.  The Sproutlet can either return NULL indicating it
   /// does not want to process the request, or create a suitable object

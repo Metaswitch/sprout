@@ -47,6 +47,7 @@
 #include "basetest.hpp"
 #include "fakecurl.hpp"
 #include "fakesnmp.hpp"
+#include "sprout_alarmdefinition.h"
 
 using namespace std;
 

@@ -64,7 +64,7 @@ extern "C" {
 #include "aschain.h"
 #include "acr.h"
 #include "sproutlet.h"
-
+#include "snmp_counter_table.h"
 
 class SCSCFSproutletTsx;
 
@@ -203,6 +203,8 @@ private:
   std::string _scscf_node_uri_str;
   std::string _icscf_uri_str;
   std::string _bgcf_uri_str;
+
+  SNMP::CounterTable* _routed_by_preloaded_route_tbl = NULL;
 };
 
 

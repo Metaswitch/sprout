@@ -83,12 +83,14 @@ TARGET_SOURCES := logger.cpp \
                   mobiletwinned.cpp \
                   mangelwurzel.cpp \
                   alarm.cpp \
+                  base_communication_monitor.cpp \
                   communicationmonitor.cpp \
                   thread_dispatcher.cpp \
                   common_sip_processing.cpp \
                   exception_handler.cpp \
                   snmp_scalar.cpp \
-                  snmp_row.cpp
+                  snmp_row.cpp \
+                  sip_string_to_request_type.cpp
 
 TARGET_SOURCES_TEST := test_main.cpp \
                        fakecurl.cpp \
@@ -269,6 +271,7 @@ ifdef JUSTTEST
 endif
 
 include ${MK_DIR}/platform.mk
+include ${ROOT}/modules/cpp-common/makefiles/alarm-utils.mk
 
 .PHONY: stage-build
 stage-build: build
@@ -359,6 +362,12 @@ vg_raw: | build_test
 
 .PHONY: distclean
 distclean: clean
+
+build: ${ROOT}/usr/include/sprout_alarmdefinition.h
+
+${ROOT}/usr/include/sprout_alarmdefinition.h : ${BUILD_DIR}/bin/alarm_header ${ROOT}/sprout-base.root/usr/share/clearwater/infrastructure/alarms/sprout_alarms.json
+	${BUILD_DIR}/bin/alarm_header -j "${ROOT}/sprout-base.root/usr/share/clearwater/infrastructure/alarms/sprout_alarms.json" -n "sprout"
+	mv sprout_alarmdefinition.h $@
 
 # Build rules for GMock/GTest library.
 $(OBJ_DIR_TEST)/gtest-all.o : $(GTEST_SRCS_)

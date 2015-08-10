@@ -49,7 +49,7 @@
 
 #include "basicproxy.h"
 #include "sproutlet.h"
-
+#include "snmp_sip_request_types.h"
 
 class SproutletWrapper;
 
@@ -256,6 +256,7 @@ public:
   const char* msg_info(pjsip_msg*);
   const pjsip_route_hdr* route_hdr() const;
   const std::string& dialog_id() const;
+  pjsip_msg* create_request();
   pjsip_msg* clone_request(pjsip_msg* req);
   pjsip_msg* create_response(pjsip_msg* req,
                              pjsip_status_code status_code,
@@ -311,6 +312,7 @@ private:
   /// Immutable reference to the original request.  A mutable clone of this
   /// is passed to the Sproutlet.
   pjsip_tx_data* _req;
+  SNMP::SIPRequestTypes _req_type;
 
   typedef std::unordered_map<const pjsip_msg*, pjsip_tx_data*> Packets;
   Packets _packets;
@@ -338,7 +340,7 @@ private:
     int cancel_reason;
   } ForkStatus;
   std::vector<ForkStatus> _forks;
-
+  
   SAS::TrailId _trail_id;
 
   friend class SproutletProxy::UASTsx;

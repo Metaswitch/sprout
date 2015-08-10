@@ -61,12 +61,18 @@ BGCFSproutlet::BGCFSproutlet(int port,
   _user_phone(user_phone),
   _override_npdi(override_npdi)
 {
+  _incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("bgcf_incoming_sip_transactions",
+                                                                                    "1.2.826.0.1.1578918.9.3.22");
+  _outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("bgcf_outgoing_sip_transactions",
+                                                                                    "1.2.826.0.1.1578918.9.3.23");
 }
 
 
 /// BGCFSproutlet destructor.
 BGCFSproutlet::~BGCFSproutlet()
 {
+  delete _incoming_sip_transactions_tbl;
+  delete _outgoing_sip_transactions_tbl;
 }
 
 

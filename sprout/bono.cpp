@@ -329,10 +329,6 @@ static pj_bool_t proxy_on_rx_response(pjsip_rx_data *rdata)
       res_addr.dst_host.addr.port = hvia->sent_by.port;
     }
 
-    // Report SIP call and branch ID markers on the trail to make sure it gets
-    // associated with the INVITE transaction at SAS.
-    PJUtils::mark_sas_call_branch_ids(get_trail(rdata), rdata->msg_info.cid, rdata->msg_info.msg);
-
     // We don't know the transaction, so be pessimistic and strip
     // everything.
     TrustBoundary::process_stateless_message(tdata);
@@ -468,7 +464,6 @@ void process_tsx_request(pjsip_rx_data* rdata)
     // associated with the INVITE transaction at SAS.  There's no need to
     // report the branch IDs as they won't be used for correlation.
     TRC_DEBUG("Statelessly forwarding ACK");
-    PJUtils::mark_sas_call_branch_ids(get_trail(rdata), rdata->msg_info.cid, NULL);
 
     trust->process_request(tdata);
 
@@ -1195,7 +1190,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
           PJUtils::add_proxy_auth_for_pbx(tdata);
           proxy_route_upstream(rdata, tdata, src_flow, trust, target);
         }
-      } 
+      }
       else
       {
         src_flow = flow_table->find_flow(rdata->tp_info.transport,
@@ -1356,7 +1351,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
     if (*target == NULL)
     {
       TRC_DEBUG("No target found yet");
-    
+
       // Check if we have any Route headers.  If so, we'll follow them.  If not,
       // we get to choose where to route to, so route upstream to sprout.
       void* top_route = pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
@@ -1382,7 +1377,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
           (tgt_flow == NULL) &&
           (PJSIP_URI_SCHEME_IS_SIP(next_hop)))
       {
-        
+
         // Check if the message is destined for a SIP trunk
         TRC_DEBUG("Check whether destination %.*s is a SIP trunk",
                   ((pjsip_sip_uri*)next_hop)->host.slen, ((pjsip_sip_uri*)next_hop)->host.ptr);
@@ -1436,7 +1431,8 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
       PJUtils::add_record_route(tdata, rdata->tp_info.transport->type_name, rdata->tp_info.transport->local_name.port, NULL, stack_data.public_host);
       PJUtils::add_record_route(tdata, "TCP", stack_data.pcscf_trusted_port, NULL, stack_data.local_host);
     }
-    else if ((ibcf) && (*trust == &TrustBoundary::OUTBOUND_TRUNK))
+    else if (((ibcf) && (*trust == &TrustBoundary::OUTBOUND_TRUNK)) ||
+             (*trust == &TrustBoundary::OUTBOUND_EDGE_CLIENT))
     {
       // Message destined for trunk, so add separate Record-Route headers for
       // the ingress and egress hops.
@@ -1865,7 +1861,7 @@ UASTransaction::~UASTransaction()
   delete _upstream_acr;
   _upstream_acr = NULL;
   _downstream_acr = NULL;
-  
+
   if (_icscf_router != NULL)
   {
     delete _icscf_router;
@@ -1976,8 +1972,8 @@ void UASTransaction::handle_outgoing_non_cancel(Target* target)
   targets.push_back(*target);
 
   // Try to add the session_expires header
-  if (!PJUtils::add_update_session_expires(_req->msg, 
-                                           _req->pool, 
+  if (!PJUtils::add_update_session_expires(_req->msg,
+                                           _req->pool,
                                            trail()))
   {
     // Session expires header is invalid, so reject the request
@@ -2380,21 +2376,6 @@ void UASTransaction::log_on_tsx_start(const pjsip_rx_data* rdata)
   TRC_DEBUG("Report SAS start marker - trail (%llx)", trail());
   SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
-
-  PJUtils::report_sas_to_from_markers(trail(), rdata->msg_info.msg);
-
-  if ((rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
-      ((pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_subscribe_method())) == 0) ||
-      ((pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_notify_method())) == 0))
-  {
-    // Omit the Call-ID for these requests, as the same Call-ID can be
-    // reused over a long period of time and produce huge SAS trails.
-    PJUtils::mark_sas_call_branch_ids(get_trail(rdata), NULL, rdata->msg_info.msg);
-  }
-  else
-  {
-    PJUtils::mark_sas_call_branch_ids(get_trail(rdata), _analytics.cid, rdata->msg_info.msg);
-  }
 }
 
 // Generate analytics logs relating to a transaction completing.
@@ -3252,7 +3233,7 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
 
   edge_proxy = enable_edge_proxy;
   assert(edge_proxy);
-  
+
   // Create a URI for the upstream proxy to use in Route headers.
   upstream_proxy = (pjsip_uri*)pjsip_sip_uri_create(stack_data.pool, PJ_FALSE);
   ((pjsip_sip_uri*)upstream_proxy)->host = pj_strdup3(stack_data.pool, upstream_proxy_arg.c_str());

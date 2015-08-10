@@ -66,7 +66,7 @@ using testing::HasSubstr;
 using testing::Not;
 
 /// Fixture for AuthenticationTest.
-class AuthenticationTest : public SipTest
+class BaseAuthenticationTest : public SipTest
 {
 public:
   static void SetUpTestCase()
@@ -79,19 +79,10 @@ public:
     _chronos_connection = new FakeChronosConnection();
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _acr_factory = new ACRFactory();
-    pj_status_t ret = init_authentication("homedomain",
-                                          _av_store,
-                                          _hss_connection,
-                                          _chronos_connection,
-                                          _acr_factory,
-                                          _analytics,
-                                          &SNMP::FAKE_AUTHENTICATION_STATS_TABLES);
-    ASSERT_EQ(PJ_SUCCESS, ret);
   }
 
   static void TearDownTestCase()
   {
-    destroy_authentication();
     delete _acr_factory;
     delete _hss_connection;
     delete _chronos_connection;
@@ -102,18 +93,19 @@ public:
     SipTest::TearDownTestCase();
   }
 
-  AuthenticationTest() : SipTest(&mod_authentication)
+  BaseAuthenticationTest() : SipTest(&mod_authentication)
   {
     _current_cseq = 1;
   }
 
-  ~AuthenticationTest()
+  ~BaseAuthenticationTest()
   {
     // Clear out transactions
     cwtest_advance_time_ms(33000L);
     poll();
     ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->reset_count();
     ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->reset_count();
+    ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->reset_count();
   }
 
   /// Parses a WWW-Authenticate header to the list of parameters.
@@ -175,13 +167,62 @@ protected:
   static int _current_cseq;
 };
 
-LocalStore* AuthenticationTest::_local_data_store;
-AvStore* AuthenticationTest::_av_store;
-ACRFactory* AuthenticationTest::_acr_factory;
-FakeHSSConnection* AuthenticationTest::_hss_connection;
-FakeChronosConnection* AuthenticationTest::_chronos_connection;
-AnalyticsLogger* AuthenticationTest::_analytics;
-int AuthenticationTest::_current_cseq;
+LocalStore* BaseAuthenticationTest::_local_data_store;
+AvStore* BaseAuthenticationTest::_av_store;
+ACRFactory* BaseAuthenticationTest::_acr_factory;
+FakeHSSConnection* BaseAuthenticationTest::_hss_connection;
+FakeChronosConnection* BaseAuthenticationTest::_chronos_connection;
+AnalyticsLogger* BaseAuthenticationTest::_analytics;
+int BaseAuthenticationTest::_current_cseq;
+
+
+class AuthenticationTest : public BaseAuthenticationTest
+{
+  static void SetUpTestCase()
+  {
+    BaseAuthenticationTest::SetUpTestCase();
+    pj_status_t ret = init_authentication("homedomain",
+                                          _av_store,
+                                          _hss_connection,
+                                          _chronos_connection,
+                                          _acr_factory,
+                                          NonRegisterAuthentication::NEVER,
+                                          _analytics,
+                                          &SNMP::FAKE_AUTHENTICATION_STATS_TABLES);
+    ASSERT_EQ(PJ_SUCCESS, ret);
+  }
+
+  static void TearDownTestCase()
+  {
+    destroy_authentication();
+    BaseAuthenticationTest::TearDownTestCase();
+  }
+};
+
+
+class AuthenticationPxyAuthHdrTest : public BaseAuthenticationTest
+{
+  static void SetUpTestCase()
+  {
+    BaseAuthenticationTest::SetUpTestCase();
+    pj_status_t ret = init_authentication("homedomain",
+                                          _av_store,
+                                          _hss_connection,
+                                          _chronos_connection,
+                                          _acr_factory,
+                                          NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT,
+                                          _analytics,
+                                          &SNMP::FAKE_AUTHENTICATION_STATS_TABLES);
+    ASSERT_EQ(PJ_SUCCESS, ret);
+  }
+
+  static void TearDownTestCase()
+  {
+    destroy_authentication();
+    BaseAuthenticationTest::TearDownTestCase();
+  }
+};
+
 
 class AuthenticationMessage
 {
@@ -325,7 +366,7 @@ string AuthenticationMessage::get()
     _cseq = AuthenticationTest::_current_cseq;
     AuthenticationTest::_current_cseq++;
   }
- 
+
   int n = snprintf(buf, sizeof(buf),
                    "%1$s sip:%3$s SIP/2.0\r\n"
                    "Via: SIP/2.0/TCP 10.83.18.38:36530;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY5e9kSPI+cseq%8$d\r\n"
@@ -423,6 +464,17 @@ TEST_F(AuthenticationTest, NoAuthorizationNonReg)
   EXPECT_EQ(PJ_FALSE, ret);
 }
 
+TEST_F(AuthenticationTest, NoAuthorizationNonRegWithPxyAuthHdr)
+{
+  // Test that the authentication module lets through non-REGISTER requests
+  // with no authorization header.
+  AuthenticationMessage msg("INVITE");
+  msg._auth_hdr = false;
+  msg._proxy_auth_hdr = true;
+  pj_bool_t ret = inject_msg_direct(msg.get());
+  EXPECT_EQ(PJ_FALSE, ret);
+}
+
 TEST_F(AuthenticationTest, NoAuthorizationInDialog)
 {
   // Test that the authentication module lets through non-REGISTER requests
@@ -434,121 +486,6 @@ TEST_F(AuthenticationTest, NoAuthorizationInDialog)
   pj_bool_t ret = inject_msg_direct(msg.get());
   EXPECT_EQ(PJ_FALSE, ret);
 }
-
-TEST_F(AuthenticationTest, ProxyAuthorizationSuccess)
-{
-  // Test a successful SIP Digest authentication flow.
-  pjsip_tx_data* tdata;
-
-  // Set up the HSS response for the AV query using a default private user identity.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
-                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
-
-  // Send in a request with a Proxy-Authentication header.  This triggers
-  // Digest authentication.
-  AuthenticationMessage msg("INVITE");
-  msg._auth_hdr = false;
-  msg._proxy_auth_hdr = true;
-  inject_msg(msg.get());
-
-  // Expect a 407 Proxy Authorization Required response.
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  RespMatcher(407).matches(tdata->msg);
-
-  // Extract the nonce, nc, cnonce and qop fields from the header.
-  std::string auth = get_headers(tdata->msg, "Proxy-Authenticate");
-  std::map<std::string, std::string> auth_params;
-  parse_www_authenticate(auth, auth_params);
-  EXPECT_NE("", auth_params["nonce"]);
-  EXPECT_EQ("auth", auth_params["qop"]);
-  EXPECT_EQ("MD5", auth_params["algorithm"]);
-  free_txdata();
-
-  // ACK that response
-  AuthenticationMessage ack("ACK");
-  ack._cseq = 1;
-  inject_msg_direct(ack.get());
- 
-  // Send a new request with an authentication header including the response.
-  AuthenticationMessage msg2("INVITE");
-  msg2._auth_hdr = false;
-  msg2._proxy_auth_hdr = true;
-  msg2._algorithm = "MD5";
-  msg2._key = "12345678123456781234567812345678";
-  msg2._nonce = auth_params["nonce"];
-  msg2._opaque = auth_params["opaque"];
-  msg2._nc = "00000001";
-  msg2._cnonce = "8765432187654321";
-  msg2._qop = "auth";
-  msg2._integ_prot = "ip-assoc-pending";
-  inject_msg(msg2.get());
-
-  // Expect no response, as the authentication module has let the request through.
-  ASSERT_EQ(0, txdata_count());
-
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
-}
-
-TEST_F(AuthenticationTest, ProxyAuthorizationFailure)
-{
-  // Test a successful SIP Digest authentication flow.
-  pjsip_tx_data* tdata;
-
-  // Set up the HSS response for the AV query using a default private user identity.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
-                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
-
-  // Send in a request with a Proxy-Authentication header.  This triggers
-  // Digest authentication.
-  AuthenticationMessage msg("INVITE");
-  msg._auth_hdr = false;
-  msg._proxy_auth_hdr = true;
-  inject_msg(msg.get());
-
-  // Expect a 407 Proxy Authorization Required response.
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  RespMatcher(407).matches(tdata->msg);
-
-  // Extract the nonce, nc, cnonce and qop fields from the header.
-  std::string auth = get_headers(tdata->msg, "Proxy-Authenticate");
-  std::map<std::string, std::string> auth_params;
-  parse_www_authenticate(auth, auth_params);
-  EXPECT_NE("", auth_params["nonce"]);
-  EXPECT_EQ("auth", auth_params["qop"]);
-  EXPECT_EQ("MD5", auth_params["algorithm"]);
-  free_txdata();
-
-  // ACK that response
-  AuthenticationMessage ack("ACK");
-  ack._cseq = 1;
-  inject_msg_direct(ack.get());
- 
-  // Send a new request with an authentication header - the nonce should match but the password
-  // should be wrong.
-  AuthenticationMessage msg2("INVITE");
-  msg2._auth_hdr = false;
-  msg2._proxy_auth_hdr = true;
-  msg2._algorithm = "MD5";
-  msg2._key = "wrong";
-  msg2._nonce = auth_params["nonce"];
-  msg2._opaque = auth_params["opaque"];
-  msg2._nc = "00000001";
-  msg2._cnonce = "8765432187654321";
-  msg2._qop = "auth";
-  msg2._integ_prot = "ip-assoc-pending";
-  inject_msg(msg2.get());
-
-  // Expect a 403 Forbidden response.
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  RespMatcher(403).matches(tdata->msg);
-  free_txdata();
-
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
-}
-
 
 TEST_F(AuthenticationTest, NoAuthorizationEmergencyReg)
 {
@@ -592,9 +529,9 @@ TEST_F(AuthenticationTest, IntegrityProtected)
   msg3._response = "12341234123412341234123412341234";
   ret = inject_msg_direct(msg3.get());
   EXPECT_EQ(PJ_FALSE, ret);
-  
-  EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts); 
-  EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts); 
+
+  EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
+  EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
 }
 
 
@@ -666,8 +603,8 @@ TEST_F(AuthenticationTest, DigestAuthSuccess)
 
   // Expect no response, as the authentication module has let the request through.
   ASSERT_EQ(0, txdata_count());
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts); 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_successes); 
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_successes);
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
@@ -719,8 +656,8 @@ TEST_F(AuthenticationTest, DigestAuthFailBadResponse)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(403).matches(tdata->msg);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts); 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_failures); 
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_failures);
   free_txdata();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
@@ -747,7 +684,7 @@ TEST_F(AuthenticationTest, DigestAuthFailBadIMPI)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(403).matches(tdata->msg);
-  EXPECT_EQ(0, ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts); 
+  EXPECT_EQ(0, ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
   free_txdata();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
@@ -785,8 +722,8 @@ TEST_F(AuthenticationTest, DigestAuthFailStale)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(401).matches(tdata->msg);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts); 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_failures); 
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_failures);
 
   // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
   std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
@@ -813,8 +750,8 @@ TEST_F(AuthenticationTest, DigestAuthFailStale)
 
   // Expect no response, as the authentication module has let the request through.
   ASSERT_EQ(0, txdata_count());
-  EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts); 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_successes); 
+  EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_successes);
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
@@ -867,8 +804,8 @@ TEST_F(AuthenticationTest, DigestAuthFailWrongRealm)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(401).matches(tdata->msg);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts); 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_failures); 
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_failures);
   free_txdata();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
@@ -908,7 +845,7 @@ TEST_F(AuthenticationTest, DigestAuthFailTimeout)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(504).matches(tdata->msg);
-  EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts); 
+  EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
   free_txdata();
 
   _hss_connection->delete_rc("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
@@ -968,8 +905,8 @@ TEST_F(AuthenticationTest, AKAAuthSuccess)
 
   // Expect no response, as the authentication module has let the request through.
   ASSERT_EQ(0, txdata_count());
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts); 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes); 
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes);
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
 }
@@ -1030,8 +967,8 @@ TEST_F(AuthenticationTest, AKAAuthFailBadResponse)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(403).matches(tdata->msg);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts); 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_failures); 
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_failures);
   free_txdata();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
@@ -1071,8 +1008,8 @@ TEST_F(AuthenticationTest, AKAAuthFailStale)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(401).matches(tdata->msg);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts); 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_failures); 
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_failures);
   free_txdata();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
@@ -1143,8 +1080,8 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(401).matches(tdata->msg);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts); 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes); 
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes);
 
   // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
   auth = get_headers(tdata->msg, "WWW-Authenticate");
@@ -1172,8 +1109,8 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
 
   // Expect no response, as the authentication module has let the request through.
   ASSERT_EQ(0, txdata_count());
-  EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts); 
-  EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes); 
+  EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
+  EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes);
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&autn=876543218765432132132132132132");
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
@@ -1237,8 +1174,8 @@ TEST_F(AuthenticationTest, AKAAuthResyncFail)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(403).matches(tdata->msg);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts); 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_failures); 
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_failures);
   free_txdata();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
@@ -1306,11 +1243,128 @@ TEST_F(AuthenticationTest, AuthCorruptAV)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(403).matches(tdata->msg);
-  EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts); 
-  EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts); 
+  EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
+  EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
   free_txdata();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
 
 
+TEST_F(AuthenticationPxyAuthHdrTest, ProxyAuthorizationSuccess)
+{
+  // Test a successful SIP Digest authentication flow.
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Send in a request with a Proxy-Authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg("INVITE");
+  msg._auth_hdr = false;
+  msg._proxy_auth_hdr = true;
+  inject_msg(msg.get());
+
+  // Expect a 407 Proxy Authorization Required response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(407).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the header.
+  std::string auth = get_headers(tdata->msg, "Proxy-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  parse_www_authenticate(auth, auth_params);
+  EXPECT_NE("", auth_params["nonce"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("MD5", auth_params["algorithm"]);
+  free_txdata();
+
+  // ACK that response
+  AuthenticationMessage ack("ACK");
+  ack._cseq = 1;
+  inject_msg_direct(ack.get());
+
+  // Send a new request with an authentication header including the response.
+  AuthenticationMessage msg2("INVITE");
+  msg2._auth_hdr = false;
+  msg2._proxy_auth_hdr = true;
+  msg2._algorithm = "MD5";
+  msg2._key = "12345678123456781234567812345678";
+  msg2._nonce = auth_params["nonce"];
+  msg2._opaque = auth_params["opaque"];
+  msg2._nc = "00000001";
+  msg2._cnonce = "8765432187654321";
+  msg2._qop = "auth";
+  msg2._integ_prot = "ip-assoc-pending";
+  inject_msg(msg2.get());
+
+  // Expect no response, as the authentication module has let the request through.
+  ASSERT_EQ(0, txdata_count());
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->_successes);
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+}
+
+TEST_F(AuthenticationPxyAuthHdrTest, ProxyAuthorizationFailure)
+{
+  // Test a successful SIP Digest authentication flow.
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Send in a request with a Proxy-Authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg("INVITE");
+  msg._auth_hdr = false;
+  msg._proxy_auth_hdr = true;
+  inject_msg(msg.get());
+
+  // Expect a 407 Proxy Authorization Required response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(407).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the header.
+  std::string auth = get_headers(tdata->msg, "Proxy-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  parse_www_authenticate(auth, auth_params);
+  EXPECT_NE("", auth_params["nonce"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("MD5", auth_params["algorithm"]);
+  free_txdata();
+
+  // ACK that response
+  AuthenticationMessage ack("ACK");
+  ack._cseq = 1;
+  inject_msg_direct(ack.get());
+
+  // Send a new request with an authentication header - the nonce should match but the password
+  // should be wrong.
+  AuthenticationMessage msg2("INVITE");
+  msg2._auth_hdr = false;
+  msg2._proxy_auth_hdr = true;
+  msg2._algorithm = "MD5";
+  msg2._key = "wrong";
+  msg2._nonce = auth_params["nonce"];
+  msg2._opaque = auth_params["opaque"];
+  msg2._nc = "00000001";
+  msg2._cnonce = "8765432187654321";
+  msg2._qop = "auth";
+  msg2._integ_prot = "ip-assoc-pending";
+  inject_msg(msg2.get());
+
+  // Expect a 403 Forbidden response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(403).matches(tdata->msg);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->_failures);
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+}

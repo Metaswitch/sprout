@@ -106,6 +106,7 @@ extern "C" {
 #include "snmp_counter_table.h"
 #include "snmp_success_fail_count_table.h"
 #include "snmp_agent.h"
+#include "sprout_alarmdefinition.h"
 
 enum OptionTypes
 {
@@ -134,7 +135,8 @@ enum OptionTypes
   OPT_SESSION_CONTINUED_TIMEOUT_MS,
   OPT_SESSION_TERMINATED_TIMEOUT_MS,
   OPT_STATELESS_PROXIES,
-  OPT_NON_REGISTERING_PBXES
+  OPT_NON_REGISTERING_PBXES,
+  OPT_NON_REGISTER_AUTHENTICATION
 };
 
 
@@ -205,6 +207,7 @@ const static struct pj_getopt_option long_opt[] =
   { "session-terminated-timeout",   required_argument, 0, OPT_SESSION_TERMINATED_TIMEOUT_MS},
   { "stateless-proxies",            required_argument, 0, OPT_STATELESS_PROXIES},
   { "non-registering-pbxes",        required_argument, 0, OPT_NON_REGISTERING_PBXES},
+  { "non-register-authentication",  required_argument, 0, OPT_NON_REGISTER_AUTHENTICATION},
   { NULL,                           0,                 0, 0}
 };
 
@@ -358,14 +361,20 @@ static void usage(void)
        "                            before terminating the session.\n"
        "     --stateless-proxies <comma-separated-list>\n"
        "                            A comma separated list of domain names that are treated as SIP\n"
-       "                            stateless proxies. This field should reflect how the servers are identified\n"
-       "                            in SIP (for example if a cluster of nodes is identified by the name\n"
-       "                            'cluster.example.com', this value should be used instead of the hostnames\n"
-       "                            or IP addresses of individual servers\n"
+       "                            stateless proxies. This field should reflect how the servers are\n"
+       "                            identified in SIP (for example if a cluster of nodes is identified by\n"
+       "                            the name 'cluster.example.com', this value should be used instead of\n"
+       "                            the hostnames or IP addresses of individual servers\n"
        "     --non-registering-pbxes <comma-separated-list>\n"
        "                            A comma separated list of IP addresses that are treated as\n"
        "                            non-registering PBXes (i.e. INVITEs should be allowed by the \n"
        "                            P-CSCF, but challenged by the core)\n"
+       "     --non-register-authentication <option>\n"
+       "                            Controls when sprout will challenge the sender of a non-REGISTER\n"
+       "                            message to provide authentication. Takes one of the following values:\n"
+       "                            - 'never' means that sprout never challenges non-REGISTER requests.\n"
+       "                            - 'if_proxy_authorization_present' means sprout will only challenge\n"
+       "                              requests that already have a Proxy-Authorization header.\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
@@ -968,6 +977,28 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
+    case OPT_NON_REGISTER_AUTHENTICATION:
+      {
+        std::string this_arg = pj_optarg;
+
+        if (this_arg == "never")
+        {
+          TRC_INFO("Non-REGISTER authentication set to 'never'");
+          options->non_register_auth_mode = NonRegisterAuthentication::NEVER;
+        }
+        else if (this_arg == "if_proxy_authorization_present")
+        {
+          TRC_INFO("Non-REGISTER authentication set to 'if_proxy_authorization_present'");
+          options->non_register_auth_mode =
+            NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT;
+        }
+        else
+        {
+          TRC_ERROR("Invalid value for non-REGISTER authentication: %s", pj_optarg);
+          return -1;
+        }
+      }
+      break;
 
     case 'h':
       usage();
@@ -1294,6 +1325,7 @@ int main(int argc, char* argv[])
   opt.session_continued_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_CONTINUED_TIMEOUT;
   opt.session_terminated_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_TERMINATED_TIMEOUT;
   opt.stateless_proxies.clear();
+  opt.non_register_auth_mode = NonRegisterAuthentication::NEVER;
 
   boost::filesystem::path p = argv[0];
   // Copy the filename to a string so that we can be sure of its lifespan -
@@ -1490,6 +1522,7 @@ int main(int argc, char* argv[])
   SNMP::CounterTable* overload_counter;
 
   SNMP::IPCountTable* homestead_cxn_count = NULL;
+
   SNMP::EventAccumulatorTable* homestead_latency_table = NULL;
   SNMP::EventAccumulatorTable* homestead_mar_latency_table = NULL;
   SNMP::EventAccumulatorTable* homestead_sar_latency_table = NULL;
@@ -1543,36 +1576,36 @@ int main(int argc, char* argv[])
 
     reg_stats_tbls.init_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
                                                                       ".1.2.826.0.1.1578918.9.3.9");
-    reg_stats_tbls.re_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+    reg_stats_tbls.re_reg_tbl = SNMP::SuccessFailCountTable::create("re_reg_success_fail_count",
                                                                     ".1.2.826.0.1.1578918.9.3.10");
-    reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+    reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("de_reg_success_fail_count",
                                                                      ".1.2.826.0.1.1578918.9.3.11");
 
-    third_party_reg_stats_tbls.init_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+    third_party_reg_stats_tbls.init_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_initial_reg_success_fail_count",
                                                                                   ".1.2.826.0.1.1578918.9.3.12");
-    third_party_reg_stats_tbls.re_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+    third_party_reg_stats_tbls.re_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_re_reg_success_fail_count",
                                                                                 ".1.2.826.0.1.1578918.9.3.13");
-    third_party_reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+    third_party_reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_de_reg_success_fail_count",
                                                                                 ".1.2.826.0.1.1578918.9.3.14");
 
-    auth_stats_tbls.sip_digest_auth_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+    auth_stats_tbls.sip_digest_auth_tbl = SNMP::SuccessFailCountTable::create("sip_digest_auth_success_fail_count",
                                                                               ".1.2.826.0.1.1578918.9.3.15");
-    auth_stats_tbls.ims_aka_auth_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+    auth_stats_tbls.ims_aka_auth_tbl = SNMP::SuccessFailCountTable::create("ims_aka_auth_success_fail_count",
                                                                            ".1.2.826.0.1.1578918.9.3.16");
 
+    auth_stats_tbls.non_register_auth_tbl = SNMP::SuccessFailCountTable::create("non_register_auth_success_fail_count",
+                                                                                ".1.2.826.0.1.1578918.9.3.17");
+
     token_rate_table = SNMP::ContinuousAccumulatorTable::create("sprout_token_rate",
-                                                      ".1.2.826.0.1.1578918.9.3.17");
+                                                      ".1.2.826.0.1.1578918.9.3.27");
     smoothed_latency_scalar = new SNMP::U32Scalar("sprout_smoothed_latency",
-                                                      ".1.2.826.0.1.1578918.9.3.18");
+                                                      ".1.2.826.0.1.1578918.9.3.28");
     target_latency_scalar = new SNMP::U32Scalar("sprout_target_latency",
-                                                      ".1.2.826.0.1.1578918.9.3.19");
+                                                      ".1.2.826.0.1.1578918.9.3.29");
     penalties_scalar = new SNMP::U32Scalar("sprout_penalties",
-                                                      ".1.2.826.0.1.1578918.9.3.20");
+                                                      ".1.2.826.0.1.1578918.9.3.30");
     token_rate_scalar = new SNMP::U32Scalar("sprout_current_token_rate",
-                                                      ".1.2.826.0.1.1578918.9.3.21");
-
-
-
+                                                      ".1.2.826.0.1.1578918.9.3.31");
   }
 
   if ((opt.icscf_enabled || opt.scscf_enabled) && opt.alarms_enabled)
@@ -1915,6 +1948,7 @@ int main(int argc, char* argv[])
                                    hss_connection,
                                    chronos_connection,
                                    scscf_acr_factory,
+                                   opt.non_register_auth_mode,
                                    analytics_logger,
                                    &auth_stats_tbls);
     }
@@ -1963,6 +1997,16 @@ int main(int argc, char* argv[])
     closelog();
     TRC_ERROR("Failed to successfully load plug-ins");
     return 1;
+  }
+
+  // Must happen after all SNMP tables have been registered.
+  if (opt.pcscf_enabled)
+  {
+    init_snmp_handler_threads("bono");
+  }
+  else
+  {
+    init_snmp_handler_threads("sprout");
   }
 
   if (!sproutlets.empty())
