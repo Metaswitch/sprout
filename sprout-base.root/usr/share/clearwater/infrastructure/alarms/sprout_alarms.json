@@ -80,7 +80,7 @@
                 },
                 {
                     "severity": "MAJOR",
-                    "details": "Sprout is unable to contact any Chronos's. It will periodically attempt to reconnect. If this alarm does not clear, ensure that at least one Chronos is operational and that network connectivity exists between it and Sprout.",
+                    "details": "Sprout is unable to contact any Chronos's. It will periodically attempt to reconnect. If this alarm does not clear, investigate the health of the Chronos cluster and ensure that at least the local Chronos mode is operational.",
                     "description": "Sprout: Chronos communication error"
                 }
             ]
