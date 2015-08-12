@@ -64,23 +64,11 @@ class LoadMonitorTest : public BaseTest
     cwtest_completely_control_time();
   }
 
-  void jump_to_next_periodstart();
-
   virtual ~LoadMonitorTest()
   {
     cwtest_reset_time();
   }
 };
-
-// Pushes the time until the next period
-// The time is within the first second of the next period
-void LoadMonitorTest::jump_to_next_periodstart()
-{
-  struct timespec now;
-  clock_gettime(CLOCK_REALTIME_COARSE, &now);
-  uint64_t ms_since_epoch = (now.tv_sec * 1000) + (now.tv_nsec / 1000000);
-  cwtest_advance_time_ms(300000 - (ms_since_epoch % 300000));
-}
 
 class TokenBucketTest : public BaseTest
 {
@@ -208,6 +196,8 @@ TEST_F(LoadMonitorTest, CorrectStatistics)
 {
   // Scalars should report values from last update, not current values.
   // Initialisation should count as an update though
+  // Observe these values are the values that the load monitor has been
+  // initialised with
   EXPECT_EQ(target_latency.value, 100000);
   EXPECT_EQ(smoothed_latency.value, 100000);
   EXPECT_EQ(penalties.value, 0);
