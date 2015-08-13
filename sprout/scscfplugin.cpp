@@ -40,6 +40,7 @@
  */
 
 #include "cfgoptions.h"
+#include "ipv6utils.h"
 #include "sproutletplugin.h"
 #include "scscfsproutlet.h"
 
@@ -80,10 +81,14 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     // Determine the S-CSCF, BGCF and I-CSCF URIs.
     std::string scscf_cluster_uri = std::string(stack_data.scscf_uri.ptr,
                                                 stack_data.scscf_uri.slen);
-    std::string scscf_node_uri = "sip:" +
-                                 std::string(stack_data.local_host.ptr,
-                                             stack_data.local_host.slen) +
-                                 ":" + std::to_string(opt.scscf_port);
+    std::string node_ip(stack_data.local_host.ptr, stack_data.local_host.slen);
+    
+    if (is_ipv6(node_ip))
+    {
+      node_ip = "[" + node_ip + "]";
+    }
+
+    std::string scscf_node_uri = "sip:" + node_ip + ":" + std::to_string(opt.scscf_port);
     std::string bgcf_uri = "sip:bgcf." + scscf_cluster_uri.substr(4);
     std::string icscf_uri;
     if (opt.icscf_enabled)
