@@ -89,7 +89,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     }
 
     std::string scscf_node_uri = "sip:" + node_ip + ":" + std::to_string(opt.scscf_port);
-    std::string bgcf_uri = "sip:bgcf." + scscf_cluster_uri.substr(4);
+    std::string bgcf_uri = "sip:bgcf@" + scscf_cluster_uri.substr(4);
     std::string icscf_uri;
     if (opt.icscf_enabled)
     {
@@ -106,8 +106,8 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
       }
       else
       {
-        // No port number, so best we can do is strap icscf. on the front.
-        icscf_uri = "sip:icscf." + scscf_cluster_uri.substr(4);
+        // No port number, so best we can do is strap 'icscf@' on the front.
+        icscf_uri = "sip:icscf@" + scscf_cluster_uri.substr(4);
       }
     }
     else
