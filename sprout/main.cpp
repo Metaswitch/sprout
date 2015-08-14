@@ -2217,6 +2217,32 @@ int main(int argc, char* argv[])
   delete requests_counter;
   delete overload_counter;
 
+  delete homestead_cxn_count;
+
+  delete homestead_latency_table;
+  delete homestead_mar_latency_table;
+  delete homestead_sar_latency_table;
+  delete homestead_uar_latency_table;
+  delete homestead_lir_latency_table;
+
+  delete token_rate_table;
+  delete smoothed_latency_scalar;
+  delete target_latency_scalar;
+  delete penalties_scalar;
+  delete token_rate_scalar;
+
+  delete reg_stats_tbls.init_reg_tbl;
+  delete reg_stats_tbls.re_reg_tbl;
+  delete reg_stats_tbls.de_reg_tbl;
+
+  delete third_party_reg_stats_tbls.init_reg_tbl;
+  delete third_party_reg_stats_tbls.re_reg_tbl;
+  delete third_party_reg_stats_tbls.de_reg_tbl;
+
+  delete auth_stats_tbls.sip_digest_auth_tbl;
+  delete auth_stats_tbls.ims_aka_auth_tbl;
+  delete auth_stats_tbls.non_register_auth_tbl;
+
   health_checker->terminate();
   pthread_join(health_check_thread, NULL);
   delete health_checker;
