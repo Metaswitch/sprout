@@ -41,8 +41,14 @@
 #include "gtest/gtest.h"
 
 #include "basetest.hpp"
+#include "fakesnmp.hpp"
 #include "load_monitor.h"
 #include "test_interposer.hpp"
+
+static SNMP::U32Scalar smoothed_latency("", "");
+static SNMP::U32Scalar target_latency("", "");
+static SNMP::U32Scalar penalties("", "");
+static SNMP::U32Scalar token_rate("","");
 
 /// Fixture for LoadMonitorTest.
 class LoadMonitorTest : public BaseTest
@@ -50,7 +56,10 @@ class LoadMonitorTest : public BaseTest
   LoadMonitor _load_monitor;
 
   LoadMonitorTest() :
-    _load_monitor(100000, 20, 10, 10)
+    _load_monitor(100000, 20, 10, 10,
+                  &SNMP::FAKE_CONTINUOUS_ACCUMULATOR_TABLE,
+                  &smoothed_latency, &target_latency,
+                  &penalties, &token_rate)
   {
     cwtest_completely_control_time();
   }
@@ -154,7 +163,7 @@ TEST_F(LoadMonitorTest, NoRateDecreaseBelowMinimum)
 
 TEST_F(LoadMonitorTest, AdmitRequest)
 {
-  // Test that initially the load monitor admits requests, but after a large number  
+  // Test that initially the load monitor admits requests, but after a large number
   // of attempts in quick succession it has run out.
   EXPECT_EQ(_load_monitor.admit_request(), true);
 
@@ -162,7 +171,7 @@ TEST_F(LoadMonitorTest, AdmitRequest)
   {
     _load_monitor.admit_request();
   }
- 
+
   EXPECT_EQ(_load_monitor.admit_request(), false);
 }
 
@@ -181,3 +190,27 @@ TEST_F(TokenBucketTest, GetToken)
   EXPECT_EQ(got_token, false);
 
 }
+
+
+TEST_F(LoadMonitorTest, CorrectStatistics)
+{
+  // Scalars should report values from last update, not current values.
+  // Initialisation should count as an update though
+  // Observe these values are the values that the load monitor has been
+  // initialised with
+  EXPECT_EQ(target_latency.value, 100000);
+  EXPECT_EQ(smoothed_latency.value, 100000);
+  EXPECT_EQ(penalties.value, 0);
+  EXPECT_EQ(token_rate.value, 10);
+
+  // Give low latency value and force rate update through penalty
+  _load_monitor.incr_penalties();
+  _load_monitor.request_complete(100);
+
+  _load_monitor.request_complete(100000000);
+
+  // Scalar value should be reported as less than current value
+  // as the current smoothed latency will have increased
+  EXPECT_GT(_load_monitor.smoothed_latency, smoothed_latency.value);
+}
+
