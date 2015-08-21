@@ -217,7 +217,8 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
                               RegStore* backup_store,        ///<backup store to read from if no entry in store and no backup data
                               bool send_notify,              ///<whether to send notifies (only send when writing to the local store)
                               std::string private_id,        ///<private id that the binding was registered with
-                              SAS::TrailId trail)
+                              SAS::TrailId trail,
+                              std::vector<std::string> tags) ///<type of request
 {
   // Get the call identifier and the cseq number from the respective headers.
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);
@@ -542,10 +543,10 @@ void process_register_request(pjsip_rx_data* rdata)
                                                           PJSIP_H_CONTACT,
                                                           contact_hdr->next);
   }
-  
+
   // Get the URI from the To header and check it is a SIP or SIPS URI.
   pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
- 
+
   if ((!PJSIP_URI_SCHEME_IS_SIP(uri)) && (!PJSIP_URI_SCHEME_IS_TEL(uri)))
   {
     // Reject a non-SIP/TEL URI with 404 Not Found (RFC3261 isn't clear
@@ -567,7 +568,7 @@ void process_register_request(pjsip_rx_data* rdata)
       reg_stats_tables->de_reg_tbl->increment_attempts();
       reg_stats_tables->de_reg_tbl->increment_failures();
     }
-    else 
+    else
     // Invalid URI means this cannot be a re-register request, so if not
     // a de-register request, then treat as an initial register request.
     {
@@ -679,13 +680,13 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL,
                                NULL);
     delete acr;
-    
+
     if (expiry == 0)
     {
       reg_stats_tables->de_reg_tbl->increment_attempts();
       reg_stats_tables->de_reg_tbl->increment_failures();
     }
-    else 
+    else
     // Invalid public/private identity means this cannot be a re-register request,
     // so if not a de-register request, then treat as an initial register request.
     {
@@ -712,10 +713,10 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL,
                                NULL);
     delete acr;
-     
-    reg_stats_tables->de_reg_tbl->increment_attempts(); 
+
+    reg_stats_tables->de_reg_tbl->increment_attempts();
     reg_stats_tables->de_reg_tbl->increment_failures();
-    
+
     return;
   }
 
@@ -737,15 +738,16 @@ void process_register_request(pjsip_rx_data* rdata)
 
     reg_stats_tables->de_reg_tbl->increment_attempts();
     reg_stats_tables->de_reg_tbl->increment_failures();
-    
+
     return;
   }
 
+  std::vector<std::string> tags = {"REGISTRATION"};
 
   // Write to the local store, checking the remote store if there is no entry locally.
   RegStore::AoR* aor_data = write_to_store(store, aor, rdata, now, expiry,
                                            is_initial_registration, NULL, remote_store,
-                                           true, private_id_for_binding, trail);
+                                           true, private_id_for_binding, trail, tags);
   if (aor_data != NULL)
   {
     // Log the bindings.
@@ -760,7 +762,7 @@ void process_register_request(pjsip_rx_data* rdata)
       RegStore::AoR* remote_aor_data = write_to_store(remote_store, aor, rdata, now,
                                                       tmp_expiry, ignored, aor_data,
                                                       NULL, false, private_id_for_binding,
-                                                      trail);
+                                                      trail, tags);
       delete remote_aor_data;
     }
   }
@@ -828,7 +830,7 @@ void process_register_request(pjsip_rx_data* rdata)
     {
       reg_stats_tables->re_reg_tbl->increment_failures();
     }
-    
+
     return;
     // LCOV_EXCL_STOP
   }
@@ -860,7 +862,7 @@ void process_register_request(pjsip_rx_data* rdata)
     {
       reg_stats_tables->re_reg_tbl->increment_failures();
     }
-    
+
     return;
     // LCOV_EXCL_STOP
   }
@@ -897,7 +899,7 @@ void process_register_request(pjsip_rx_data* rdata)
     {
       reg_stats_tables->re_reg_tbl->increment_failures();
     }
-    
+
     return;
     // LCOV_EXCL_STOP
   }
@@ -972,7 +974,7 @@ void process_register_request(pjsip_rx_data* rdata)
 
   SAS::Event reg_Accepted(trail, SASEvent::REGISTER_ACCEPTED, 0);
   SAS::report_event(reg_Accepted);
-  
+
   if (expiry == 0)
   {
     reg_stats_tables->de_reg_tbl->increment_successes();

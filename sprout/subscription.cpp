@@ -131,7 +131,8 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
                                          RegStore::AoR** aor_data,     ///<aor_data to write to
                                          bool update_notify,           ///<whether to generate a SIP NOTIFY
                                          std::string& subscription_id,
-                                         SAS::TrailId trail)
+                                         SAS::TrailId trail,
+                                         std::vector<std::string> tags)///<type of request
 {
   // Parse the headers
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);;
@@ -269,7 +270,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
     }
 
     // Try to write the AoR back to the store.
-    set_rc = primary_store->set_aor_data(aor, (*aor_data), false, trail);
+    set_rc = primary_store->set_aor_data(aor, (*aor_data), false, trail, tags);
 
     if (set_rc != Store::OK)
     {
@@ -502,11 +503,12 @@ void process_subscription_request(pjsip_rx_data* rdata)
   pjsip_tx_data* tdata_notify = NULL;
   RegStore::AoR* aor_data = NULL;
   std::string subscription_id;
+  std::vector<std::string> tags = {"SUBSCRIPTION"};
   pj_status_t notify_status = write_subscriptions_to_store(store, aor, rdata,
                                                            now, NULL, remote_store,
                                                            &tdata_notify, &aor_data,
                                                            true, subscription_id,
-                                                           trail);
+                                                           trail, tags);
 
   if (aor_data != NULL)
   {
@@ -521,7 +523,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
       std::string ignore;
       write_subscriptions_to_store(remote_store, aor, rdata, now, aor_data, NULL,
                                    &tdata_notify, &remote_aor_data, false, ignore,
-                                   trail);
+                                   trail, tags);
       delete remote_aor_data;
     }
   }
