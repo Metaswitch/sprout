@@ -362,12 +362,14 @@ public:
   virtual Store::Status set_aor_data(const std::string& aor_id,
                                      AoR* data,
                                      bool update_timers,
-                                     SAS::TrailId trail);
+                                     SAS::TrailId trail,
+                                     const std::vector<std::string> tags = EMPTY_TAGS);
   virtual Store::Status set_aor_data(const std::string& aor_id,
                                      AoR* data,
                                      bool update_timers,
                                      SAS::TrailId trail,
-                                     bool& all_bindings_expired);
+                                     bool& all_bindings_expired,
+                                     const std::vector<std::string> tags = EMPTY_TAGS);
 
   // Send a SIP NOTIFY
   virtual void send_notify(AoR::Subscription* s,
@@ -382,6 +384,7 @@ private:
 
   ChronosConnection* _chronos;
   Connector* _connector;
+  static const std::vector<std::string> EMPTY_TAGS;
 };
 
 #endif
