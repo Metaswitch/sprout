@@ -717,7 +717,6 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     {
       // Authorisation header did not specify an algorithm, so check the av for
       // this information instead.
-      av->Accept(writer);
       if (av->HasMember("digest"))
       {
         auth_stats_table = auth_stats_tables->sip_digest_auth_tbl;
@@ -898,7 +897,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     std::string error_msg = PJUtils::pj_status_to_string(status);
 
     TRC_ERROR("Authentication failed, %s", error_msg.c_str());
-    if (auth_stast_table != NULL)
+    if (auth_stats_table != NULL)
     {
       auth_stats_table->increment_failures();
     }
