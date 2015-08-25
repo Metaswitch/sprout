@@ -178,7 +178,7 @@ get_daemon_args()
         [ -z "$init_token_rate" ] || init_token_rate_arg="--init-token-rate=$init_token_rate"
         [ -z "$min_token_rate" ] || min_token_rate_arg="--min-token-rate=$min_token_rate"
         [ -z "$exception_max_ttl" ] || exception_max_ttl_arg="--exception-max-ttl=$exception_max_ttl"
-        [ -z "$signaling_namespace" ] || namespace_prefix="ip netns exec $signaling_namespace"
+        [ -z "$max_session_expires" ] || max_session_expires_arg="--max-session-expires=$max_session_expires"
 
         DAEMON_ARGS="
                      --domain=$home_domain
@@ -200,6 +200,7 @@ get_daemon_args()
                      --http-threads=$num_http_threads
                      --record-routing-model=$sprout_rr_level
                      --default-session-expires=$default_session_expires
+                     $max_session_expires_arg
                      $target_latency_us_arg
                      $cass_target_latency_us_arg
                      $max_tokens_arg
@@ -295,7 +296,7 @@ do_start()
         # daemon is not running, so attempt to start it.
         setup_environment
         get_daemon_args
-        $namespace_prefix start-stop-daemon --start --quiet --background --make-pidfile --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME -- $DAEMON_ARGS \
+        /usr/share/clearwater/bin/run-in-signaling-namespace start-stop-daemon --start --quiet --background --make-pidfile --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME -- $DAEMON_ARGS \
                 || return 2
         # Add code here, if necessary, that waits for the process to be ready
         # to handle requests from services started subsequently which depend
@@ -335,7 +336,7 @@ do_run()
 {
         setup_environment
         get_daemon_args
-        $namespace_prefix start-stop-daemon --start --quiet --exec $DAEMON --chuid $NAME --chdir $HOME -- $DAEMON_ARGS \
+        /usr/share/clearwater/bin/run-in-signaling-namespace start-stop-daemon --start --quiet --exec $DAEMON --chuid $NAME --chdir $HOME -- $DAEMON_ARGS \
                 || return 2
 }
 
