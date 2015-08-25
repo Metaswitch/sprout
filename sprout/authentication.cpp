@@ -667,8 +667,6 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   pj_status_t status;
   bool is_register = (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD);
   SNMP::SuccessFailCountTable* auth_stats_table = NULL;
-  rapidjson::StringBuffer buffer;
-  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
   std::string resync;
 
   SAS::TrailId trail = get_trail(rdata);
@@ -715,7 +713,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     }
     if (auth_stats_table == NULL)
     {
-      // Authorisation header did not specify an algorithm, so check the av for
+      // Authorization header did not specify an algorithm, so check the av for
       // this information instead.
       if (av->HasMember("digest"))
       {
