@@ -689,6 +689,11 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   if ((credentials != NULL) &&
       (credentials->response.slen != 0))
   {
+    std::string impi = PJUtils::pj_str_to_string(&credentials->username);
+    std::string nonce = PJUtils::pj_str_to_string(&credentials->nonce);
+    uint64_t cas = 0;
+    av = av_store->get_av(impi, nonce, cas, trail);
+    
     if (!is_register)
     {
       // Challenged non-register requests must be SIP digest, so only one table
@@ -706,13 +711,23 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
         auth_stats_table = auth_stats_tables->ims_aka_auth_tbl;
       }
     }
-    auth_stats_table->increment_attempts();
-
-    std::string impi = PJUtils::pj_str_to_string(&credentials->username);
-    std::string nonce = PJUtils::pj_str_to_string(&credentials->nonce);
-    uint64_t cas = 0;
-
-    av = av_store->get_av(impi, nonce, cas, trail);
+    if (auth_stats_table == NULL)
+    {
+      // Authorization header did not specify an algorithm, so check the av for
+      // this information instead.
+      if (av->HasMember("digest"))
+      {
+        auth_stats_table = auth_stats_tables->sip_digest_auth_tbl;
+      }
+      else if (av->HasMember("aka"))
+      {
+        auth_stats_table = auth_stats_tables->ims_aka_auth_tbl;
+      }
+    }
+    if (auth_stats_table != NULL)
+    {
+      auth_stats_table->increment_attempts();
+    }
 
     // Request contains a response to a previous challenge, so pass it to
     // the authentication module to verify.
@@ -727,7 +742,10 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       SAS::Event event(trail, SASEvent::AUTHENTICATION_SUCCESS, 0);
       SAS::report_event(event);
 
-      auth_stats_table->increment_successes();
+      if (auth_stats_table != NULL)
+      {
+        auth_stats_table->increment_successes();
+      }
 
       // Write a tombstone flag back to the AV store, handling contention.
       // We don't actually expect anything else to be writing to this row in
@@ -852,7 +870,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
     sc = unauth_sc;
 
-    if (stale)
+    if (stale && auth_stats_table != NULL)
     {
       auth_stats_table->increment_failures();
     }
@@ -877,9 +895,10 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     std::string error_msg = PJUtils::pj_status_to_string(status);
 
     TRC_ERROR("Authentication failed, %s", error_msg.c_str());
-
-    auth_stats_table->increment_failures();
-
+    if (auth_stats_table != NULL)
+    {
+      auth_stats_table->increment_failures();
+    }
     SAS::Event event(trail, SASEvent::AUTHENTICATION_FAILED, 0);
     event.add_var_param(error_msg);
     SAS::report_event(event);
