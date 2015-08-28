@@ -79,7 +79,8 @@ TARGET_SOURCES := logger.cpp \
                   common_sip_processing.cpp \
                   exception_handler.cpp \
                   snmp_agent.cpp \
-                  snmp_accumulator_table.cpp \
+                  snmp_continuous_accumulator_table.cpp \
+                  snmp_event_accumulator_table.cpp \
                   snmp_counter_table.cpp \
                   snmp_ip_count_table.cpp \
                   snmp_success_fail_count_table.cpp \

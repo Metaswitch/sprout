@@ -44,11 +44,11 @@ FakeHSSConnection::FakeHSSConnection() : HSSConnection("localhost",
                                                        NULL,
                                                        NULL,
                                                        &SNMP::FAKE_IP_COUNT_TABLE,
-                                                       &SNMP::FAKE_ACCUMULATOR_TABLE,
-                                                       &SNMP::FAKE_ACCUMULATOR_TABLE,
-                                                       &SNMP::FAKE_ACCUMULATOR_TABLE,
-                                                       &SNMP::FAKE_ACCUMULATOR_TABLE,
-                                                       &SNMP::FAKE_ACCUMULATOR_TABLE,
+                                                       &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+                                                       &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+                                                       &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+                                                       &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+                                                       &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
                                                        NULL)
 {
 }

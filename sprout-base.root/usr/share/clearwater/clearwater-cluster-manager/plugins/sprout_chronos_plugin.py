@@ -48,7 +48,7 @@ _log = logging.getLogger("sprout_chronos_plugin")
 class SproutChronosPlugin(SynchroniserPluginBase):
     def __init__(self, params):
         self.local_server = params.ip
-        self._key = "/clearwater/{}/sprout/clustering/chronos".format(params.local_site)
+        self._key = "/{}/{}/sprout/clustering/chronos".format(params.etcd_key, params.local_site)
         _log.debug("Raising not-clustered alarm")
         issue_alarm(alarm_constants.CHRONOS_NOT_YET_CLUSTERED_MAJOR)
         pdlogs.NOT_YET_CLUSTERED_ALARM.log(cluster_desc=self.cluster_description())

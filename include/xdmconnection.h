@@ -46,7 +46,7 @@
 #include "sas.h"
 #include "load_monitor.h"
 #include "snmp_ip_count_table.h"
-#include "snmp_accumulator_table.h"
+#include "snmp_event_accumulator_table.h"
 
 class XDMConnection
 {
@@ -55,15 +55,15 @@ public:
                 HttpResolver* resolver,
                 LoadMonitor *load_monitor,
                 SNMP::IPCountTable* xdm_cxn_count,
-                SNMP::AccumulatorTable* xdm_latency);
-  XDMConnection(HttpConnection* http, SNMP::AccumulatorTable* xdm_latency);
+                SNMP::EventAccumulatorTable* xdm_latency);
+  XDMConnection(HttpConnection* http, SNMP::EventAccumulatorTable* xdm_latency);
   virtual ~XDMConnection();
 
   bool get_simservs(const std::string& user, std::string& xml_data, const std::string& password, SAS::TrailId trail);
 
 private:
   HttpConnection* _http;
-  SNMP::AccumulatorTable* _latency_tbl;
+  SNMP::EventAccumulatorTable* _latency_tbl;
 };
 
 #endif

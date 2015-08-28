@@ -47,7 +47,7 @@
 using namespace std;
 
 FakeXDMConnection::FakeXDMConnection() :
-  XDMConnection(new FakeHttpConnection(), &SNMP::FAKE_ACCUMULATOR_TABLE),
+  XDMConnection(new FakeHttpConnection(), &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE),
   _fakehttp((FakeHttpConnection*)_http)
 {
 }
