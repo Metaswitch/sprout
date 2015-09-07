@@ -1187,7 +1187,10 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
           // to Sprout
           TRC_DEBUG("Routing initial request from PBX to upstream Sprout");
           PJUtils::add_proxy_auth_for_pbx(tdata);
-          proxy_route_upstream(rdata, tdata, src_flow, trust, target);
+
+          // Don't route upstream - instead follow the endpoint's route to the
+          // originating PBX. This is not secure, but Bono's non-registering
+          // PBX support is only for testing purposes.
         }
       }
       else
