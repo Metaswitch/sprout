@@ -7525,3 +7525,45 @@ TEST_F(SCSCFTest, PreloadedRouteNotLastAs)
   EXPECT_EQ(1, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_routed_by_preloaded_route_tbl)->_count);
   free_txdata();
 }
+
+TEST_F(SCSCFTest, AutomaticRegistration)
+{
+  SCOPED_TRACE("");
+
+  // Create an originating request that has a proxy-authorization header and
+  // requires automatic registration.
+  Message msg;
+  msg._to = "newuser";
+  msg._todomain = "domainvalid";
+  msg._route = "Route: <sip:homedomain;orig;auto-reg>";
+  msg._extra = "Proxy-Authorization: Digest username=\"kermit\", realm=\"homedomain\", uri=\"sip:6505551000@homedomain\", algorithm=MD5";
+
+  // The HSS expects to be invoked with a request type of "reg" and with the
+  // right private ID.
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=kermit");
+
+  add_host_mapping("domainvalid", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Route", "Route: <sip:10.0.0.1:5060;transport=TCP;lr>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex("sip:newuser@domainvalid"), hdrs);
+}
+
+TEST_F(SCSCFTest, AutomaticRegistrationDerivedIMPI)
+{
+  SCOPED_TRACE("");
+
+  // Create an originating request that requires automatic registration.
+  Message msg;
+  msg._to = "newuser";
+  msg._todomain = "domainvalid";
+  msg._route = "Route: <sip:homedomain;orig;auto-reg>";
+
+  // The HSS expects to be invoked with a request type of "reg". No
+  // Proxy-Authorization present, so derive the IMPI from the IMPU.
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=6505551000%40homedomain");
+
+  add_host_mapping("domainvalid", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Route", "Route: <sip:10.0.0.1:5060;transport=TCP;lr>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex("sip:newuser@domainvalid"), hdrs);
+}

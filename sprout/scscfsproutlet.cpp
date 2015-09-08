@@ -393,6 +393,26 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     return;
   }
 
+  // Work out if we should be auto-registering the user based on this
+  // request. If we are, also work out the IMPI to register them with.
+  const pjsip_route_hdr* top_route = route_hdr();
+  pjsip_sip_uri* uri = (pjsip_sip_uri*)top_route->name_addr.uri;
+
+  if (pjsip_param_find(&uri->other_param, &STR_ORIG) != NULL)
+  {
+    _auto_reg = (pjsip_param_find(&uri->other_param, &STR_AUTO_REG) != NULL);
+
+    if (_auto_reg)
+    {
+      pjsip_proxy_authorization_hdr* proxy_auth_hdr =
+        (pjsip_proxy_authorization_hdr*)pjsip_msg_find_hdr(req,
+                                                           PJSIP_H_PROXY_AUTHORIZATION,
+                                                           NULL);
+      _impi = PJUtils::extract_username(proxy_auth_hdr,
+                                        PJUtils::orig_served_user(req));
+    }
+  }
+
   // Determine the session case and the served user.  This will link to
   // an AsChain object (creating it if necessary), if we need to provide
   // services.
@@ -429,22 +449,6 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     if (_session_case->is_originating())
     {
       add_second_p_a_i_hdr(req);
-
-      // Work out if we should be auto-registering the user based on this
-      // request. If we are, also work out the IMPI to register them with.
-      const pjsip_route_hdr* top_route = route_hdr();
-      pjsip_sip_uri* uri = (pjsip_sip_uri*)top_route->name_addr.uri;
-      _auto_reg = (pjsip_param_find(&uri->other_param, &STR_AUTO_REG) != NULL);
-
-      if (_auto_reg)
-      {
-        pjsip_proxy_authorization_hdr* proxy_auth_hdr =
-          (pjsip_proxy_authorization_hdr*)pjsip_msg_find_hdr(req,
-                                                             PJSIP_H_PROXY_AUTHORIZATION,
-                                                             NULL);
-        _impi = PJUtils::extract_username(proxy_auth_hdr,
-                                          PJUtils::orig_served_user(req));
-      }
     }
 
     if (_as_chain_link.is_set())
@@ -876,6 +880,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       sas_log_start_of_sesion_case(req, _session_case, served_user);
 
       TRC_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
+
       Ifcs ifcs;
       if (lookup_ifcs(served_user, ifcs))
       {

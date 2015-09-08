@@ -217,6 +217,13 @@ long FakeHSSConnection::get_xml_object(const std::string& path,
   else
   {
     TRC_ERROR("Failed to find XML result for URL %s", path.c_str());
+
+    for(std::map<UrlBody, std::string>::const_iterator it = _results.begin();
+        it != _results.end();
+        ++it)
+    {
+      TRC_DEBUG(  "Have: (%s, %s)", it->first.first.c_str(), it->first.second.c_str());
+    }
   }
 
   std::map<std::string, long>::const_iterator i2 = _rcs.find(path);
