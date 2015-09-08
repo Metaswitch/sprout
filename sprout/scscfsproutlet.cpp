@@ -252,6 +252,9 @@ void SCSCFSproutlet::remove_binding(const std::string& aor,
 
 /// Read data for a public user identity from the HSS.
 bool SCSCFSproutlet::read_hss_data(const std::string& public_id,
+                                   const std::string& private_id,
+                                   const std::string& req_type,
+                                   bool cache_allowed,
                                    bool& registered,
                                    std::vector<std::string>& uris,
                                    std::vector<std::string>& aliases,
@@ -264,14 +267,15 @@ bool SCSCFSproutlet::read_hss_data(const std::string& public_id,
   std::map<std::string, Ifcs> ifc_map;
 
   long http_code = _hss->update_registration_state(public_id,
-                                                   "",
-                                                   HSSConnection::CALL,
+                                                   private_id,
+                                                   req_type,
                                                    regstate,
                                                    ifc_map,
                                                    uris,
                                                    aliases,
                                                    ccfs,
                                                    ecfs,
+                                                   cache_allowed,
                                                    trail);
   if (http_code == 200)
   {
@@ -1467,8 +1471,14 @@ bool SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
 {
   if (!_hss_data_cached)
   {
+    std::string req_type = _auto_reg ? HSSConnection::REG : HSSConnection::CALL;
+    bool cache_allowed = !_auto_reg;
+
     // We haven't previous read data from the HSS, so read it now.
     if (_scscf->read_hss_data(public_id,
+                              _impi,
+                              req_type,
+                              cache_allowed,
                               _registered,
                               _uris,
                               _aliases,

@@ -548,7 +548,17 @@ TEST_F(HssConnectionTest, SimpleAliases)
   std::string regstate;
   std::vector<std::string> unused_vector;
   std::deque<std::string> unused_deque;
-  _hss.update_registration_state("pubid46", "", HSSConnection::CALL, regstate, ifcs_map, unused_vector, aliases, unused_deque, unused_deque, 0);
+  _hss.update_registration_state("pubid46",
+                                 "",
+                                 HSSConnection::CALL,
+                                 regstate,
+                                 ifcs_map,
+                                 unused_vector,
+                                 aliases,
+                                 unused_deque,
+                                 unused_deque,
+                                 true,
+                                 0);
   ASSERT_EQ(3u, aliases.size());
   EXPECT_EQ("sip:321@example.com", aliases[0]);
   EXPECT_EQ("pubid46", aliases[1]);

@@ -108,7 +108,7 @@ void FakeHSSConnection::delete_result(const std::string& url)
   _results.erase(UrlBody(url, ""));
 }
 
-long FakeHSSConnection::put_for_xml_object(const std::string& path, std::string body, rapidxml::xml_document<>*& root, SAS::TrailId trail)
+long FakeHSSConnection::put_for_xml_object(const std::string& path, std::string body, bool cache_allowed, rapidxml::xml_document<>*& root, SAS::TrailId trail)
 {
   return FakeHSSConnection::get_xml_object(path,
                                            body,

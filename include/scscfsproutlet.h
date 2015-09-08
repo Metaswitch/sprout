@@ -136,6 +136,9 @@ private:
 
   /// Read data for a public user identity from the HSS.
   bool read_hss_data(const std::string& public_id,
+                     const std::string& private_id,
+                     const std::string& req_type,
+                     bool cache_allowed,
                      bool& registered,
                      std::vector<std::string>& uris,
                      std::vector<std::string>& aliases,
