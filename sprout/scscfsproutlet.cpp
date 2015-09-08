@@ -326,7 +326,9 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
   _liveness_timer(0),
   _record_routed(false),
   _req_type(req_type),
-  _seen_1xx(false)
+  _seen_1xx(false),
+  _impi(),
+  _auto_reg(false)
 {
   TRC_DEBUG("S-CSCF Transaction (%p) created", this);
 }
@@ -610,7 +612,7 @@ void SCSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
 void SCSCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
 {
   TRC_INFO("S-CSCF received CANCEL");
-   
+
   if (_req_type == PJSIP_INVITE_METHOD)
   // If an INVITE is being cancelled, then update INVITE cancellation stats.
   {
@@ -1036,7 +1038,7 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
     // Attempt to translate the RequestURI using ENUM or an alternative
     // database.
     _scscf->translate_request_uri(req, get_pool(req), trail());
-    
+
     URIClass uri_class = URIClassifier::classify_uri(req->line.req.uri);
     std::string new_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req->line.req.uri);
     TRC_INFO("New URI string is %s", new_uri_str.c_str());
