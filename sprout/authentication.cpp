@@ -693,7 +693,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     std::string nonce = PJUtils::pj_str_to_string(&credentials->nonce);
     uint64_t cas = 0;
     av = av_store->get_av(impi, nonce, cas, trail);
-    
+
     if (!is_register)
     {
       // Challenged non-register requests must be SIP digest, so only one table
@@ -912,7 +912,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
       PJUtils::get_impi_and_impu(rdata, impi, impu);
 
-      hss->update_registration_state(impu, impi, HSSConnection::AUTH_FAIL, 0);
+      hss->update_registration_state(impu, impi, HSSConnection::AUTH_FAIL, trail);
     }
 
     if (analytics != NULL)
