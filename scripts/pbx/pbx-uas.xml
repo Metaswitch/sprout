@@ -24,7 +24,7 @@
     <action>
       <!-- The value to use as our contact IP address. Useful if the    -->
       <!-- box is behind a NAT.                                         -->
-      <assignstr assign_to="1" value="52.6.247.221" />
+      <assignstr assign_to="1" value="54.175.67.146" />
     </action>
   </nop>
 

@@ -55,9 +55,9 @@ extern "C" {
 
 #include "sproutlet.h"
 
-const std::string TARGET = "sip:52.6.247.221:5060;transport=TCP";
+const std::string TARGET = "sip:54.175.67.146:5060;transport=TCP";
 const std::vector<std::string> PATH = {
-  "sip:10.69.78.156:5058;transport=TCP;lr",
+  "sip:10.239.139.116:5058;transport=TCP;lr",
 };
 
 class PbxAppServer;
