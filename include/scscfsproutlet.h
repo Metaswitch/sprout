@@ -372,7 +372,7 @@ private:
   /// - It causes registration state updates to have a type of REG rather than
   ///   CALL.
   /// - If there is a real HSS it forces registration state updates to flow all
-  ///   the way to the HSS (i.e. Homestead is not answer the response solely
+  ///   the way to the HSS (i.e. Homestead may not answer the response solely
   ///   from its cache).
   bool _auto_reg;
 };

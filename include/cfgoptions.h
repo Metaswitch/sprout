@@ -137,6 +137,7 @@ struct options
   int                                  session_terminated_timeout_ms;
   std::set<std::string>                stateless_proxies;
   std::string                          pbxes;
+  std::string                          pbx_service_route;
   NonRegisterAuthentication            non_register_auth_mode;
 };
 
