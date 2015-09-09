@@ -94,6 +94,10 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
                                                                                     "1.2.826.0.1.1578918.9.3.21");
   _routed_by_preloaded_route_tbl = SNMP::CounterTable::create("scscf_routed_by_preloaded_route",
                                                               "1.2.826.0.1.1578918.9.3.26");
+  _invites_cancelled_before_1xx_tbl = SNMP::CounterTable::create("invites_cancelled_before_1xx",
+                                                                 "1.2.826.0.1.1578918.9.3.32");
+  _invites_cancelled_after_1xx_tbl = SNMP::CounterTable::create("invites_cancelled_after_1xx",
+                                                                "1.2.826.0.1.1578918.9.3.33");
 }
 
 
@@ -104,6 +108,8 @@ SCSCFSproutlet::~SCSCFSproutlet()
   delete _incoming_sip_transactions_tbl;
   delete _outgoing_sip_transactions_tbl;
   delete _routed_by_preloaded_route_tbl;
+  delete _invites_cancelled_before_1xx_tbl;
+  delete _invites_cancelled_after_1xx_tbl;
 }
 
 bool SCSCFSproutlet::init()
@@ -166,7 +172,9 @@ SproutletTsx* SCSCFSproutlet::get_tsx(SproutletTsxHelper* helper,
                                       const std::string& alias,
                                       pjsip_msg* req)
 {
-  return (SproutletTsx*)new SCSCFSproutletTsx(helper, this);
+  SNMP::SIPRequestTypes req_type = SNMP::string_to_request_type(req->line.req.method.name.ptr,
+                                                                req->line.req.method.name.slen);
+  return (SproutletTsx*)new SCSCFSproutletTsx(helper, this, req_type);
 }
 
 
@@ -371,7 +379,8 @@ ACR* SCSCFSproutlet::get_acr(SAS::TrailId trail, Initiator initiator, NodeRole r
 
 
 SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
-                                     SCSCFSproutlet* scscf) :
+                                     SCSCFSproutlet* scscf,
+                                     SNMP::SIPRequestTypes req_type) :
   SproutletTsx(helper),
   _scscf(scscf),
   _cancelled(false),
@@ -386,7 +395,9 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
   _target_aor(),
   _target_bindings(),
   _liveness_timer(0),
-  _record_routed(false)
+  _record_routed(false),
+  _req_type(req_type),
+  _seen_1xx(false)
 {
   TRC_DEBUG("S-CSCF Transaction (%p) created", this);
 }
@@ -572,6 +583,11 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
   int st_code = rsp->line.status.code;
 
+  if (st_code > 100)
+  {
+    _seen_1xx = true;
+  }
+
   if (st_code == SIP_STATUS_FLOW_FAILED)
   {
     // The edge proxy / P-CSCF has reported that this flow has failed.
@@ -665,6 +681,13 @@ void SCSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
 void SCSCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
 {
   TRC_INFO("S-CSCF received CANCEL");
+   
+  if (_req_type == SNMP::SIPRequestTypes::INVITE)
+  // If an INVITE is being cancelled, then update INVITE cancellation stats.
+  {
+    if (_seen_1xx) { _scscf->_invites_cancelled_after_1xx_tbl->increment(); }
+    else { _scscf->_invites_cancelled_before_1xx_tbl->increment(); }
+  }
 
   _cancelled = true;
 

@@ -205,13 +205,15 @@ private:
   std::string _bgcf_uri_str;
 
   SNMP::CounterTable* _routed_by_preloaded_route_tbl = NULL;
+  SNMP::CounterTable* _invites_cancelled_before_1xx_tbl = NULL;
+  SNMP::CounterTable* _invites_cancelled_after_1xx_tbl = NULL;
 };
 
 
 class SCSCFSproutletTsx : public SproutletTsx
 {
 public:
-  SCSCFSproutletTsx(SproutletTsxHelper* helper, SCSCFSproutlet* scscf);
+  SCSCFSproutletTsx(SproutletTsxHelper* helper, SCSCFSproutlet* scscf, SNMP::SIPRequestTypes req_type);
   ~SCSCFSproutletTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req);
@@ -360,6 +362,11 @@ private:
   /// Track if this transaction has already record-routed itself to prevent
   /// us accidentally record routing twice.
   bool _record_routed;
+
+  /// Track request type and whether a 1xx response has been seen so that the
+  /// correct stats can be updated.
+  SNMP::SIPRequestTypes _req_type;
+  bool _seen_1xx;
 
   static const int MAX_FORKING = 10;
 };
