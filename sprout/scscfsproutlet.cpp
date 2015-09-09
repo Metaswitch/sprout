@@ -394,16 +394,17 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   }
 
   // Work out if we should be auto-registering the user based on this
-  // request. If we are, also work out the IMPI to register them with.
+  // request and if we are, also work out the IMPI to register them with.
   const pjsip_route_hdr* top_route = route_hdr();
-  pjsip_sip_uri* uri = (pjsip_sip_uri*)top_route->name_addr.uri;
-
-  if (pjsip_param_find(&uri->other_param, &STR_ORIG) != NULL)
+  if (top_route != NULL)
   {
-    _auto_reg = (pjsip_param_find(&uri->other_param, &STR_AUTO_REG) != NULL);
+    pjsip_sip_uri* uri = (pjsip_sip_uri*)top_route->name_addr.uri;
 
-    if (_auto_reg)
+    if ((pjsip_param_find(&uri->other_param, &STR_ORIG) != NULL) &&
+        (pjsip_param_find(&uri->other_param, &STR_AUTO_REG) != NULL))
     {
+      _auto_reg = true;
+
       pjsip_proxy_authorization_hdr* proxy_auth_hdr =
         (pjsip_proxy_authorization_hdr*)pjsip_msg_find_hdr(req,
                                                            PJSIP_H_PROXY_AUTHORIZATION,
