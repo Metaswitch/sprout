@@ -172,8 +172,7 @@ SproutletTsx* SCSCFSproutlet::get_tsx(SproutletTsxHelper* helper,
                                       const std::string& alias,
                                       pjsip_msg* req)
 {
-  SNMP::SIPRequestTypes req_type = SNMP::string_to_request_type(req->line.req.method.name.ptr,
-                                                                req->line.req.method.name.slen);
+  pjsip_method_e req_type = req->line.req.method.id;
   return (SproutletTsx*)new SCSCFSproutletTsx(helper, this, req_type);
 }
 
@@ -380,7 +379,7 @@ ACR* SCSCFSproutlet::get_acr(SAS::TrailId trail, Initiator initiator, NodeRole r
 
 SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
                                      SCSCFSproutlet* scscf,
-                                     SNMP::SIPRequestTypes req_type) :
+                                     pjsip_method_e req_type) :
   SproutletTsx(helper),
   _scscf(scscf),
   _cancelled(false),
@@ -682,11 +681,17 @@ void SCSCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
 {
   TRC_INFO("S-CSCF received CANCEL");
    
-  if (_req_type == SNMP::SIPRequestTypes::INVITE)
+  if (_req_type == PJSIP_INVITE_METHOD)
   // If an INVITE is being cancelled, then update INVITE cancellation stats.
   {
-    if (_seen_1xx) { _scscf->_invites_cancelled_after_1xx_tbl->increment(); }
-    else { _scscf->_invites_cancelled_before_1xx_tbl->increment(); }
+    if (_seen_1xx)
+    {
+      _scscf->_invites_cancelled_after_1xx_tbl->increment();
+    }
+    else
+    {
+      _scscf->_invites_cancelled_before_1xx_tbl->increment();
+    }
   }
 
   _cancelled = true;

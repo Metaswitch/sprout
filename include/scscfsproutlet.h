@@ -213,7 +213,7 @@ private:
 class SCSCFSproutletTsx : public SproutletTsx
 {
 public:
-  SCSCFSproutletTsx(SproutletTsxHelper* helper, SCSCFSproutlet* scscf, SNMP::SIPRequestTypes req_type);
+  SCSCFSproutletTsx(SproutletTsxHelper* helper, SCSCFSproutlet* scscf, pjsip_method_e req_type);
   ~SCSCFSproutletTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req);
@@ -365,7 +365,7 @@ private:
 
   /// Track request type and whether a 1xx response has been seen so that the
   /// correct stats can be updated.
-  SNMP::SIPRequestTypes _req_type;
+  pjsip_method_e _req_type;
   bool _seen_1xx;
 
   static const int MAX_FORKING = 10;
