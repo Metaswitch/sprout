@@ -463,6 +463,62 @@ private:
   pjsip_method_e _method;
 };
 
+template <int T>
+class FakeSproutletTsxDelayAfterRsp : public SproutletTsx
+{
+  FakeSproutletTsxDelayAfterRsp(SproutletTsxHelper* helper) :
+    SproutletTsx(helper),
+    _tid(0),
+    _response(0)
+  {
+  }
+
+  void on_rx_initial_request(pjsip_msg* req)
+  {
+    TRC_DEBUG("Initial request.  Forward on.");
+    _second_request = clone_request(req);
+    pjsip_msg* rsp = create_response(req, PJSIP_SC_OK);
+    send_response(rsp);
+    send_request(req);
+  }
+
+  void on_rx_response(pjsip_msg* rsp, int fork_id)
+  {
+    ++_response;
+    TRC_DEBUG("Response %d", _response);
+
+    // Swallow this response
+    free_msg(rsp);
+
+    if (_response == 1)
+    {
+      // Start a timer for the specified timer duration.  This timer
+      // should be the only thing keeping the SproutletWrapper and
+      // UASTsx alive for its duration.
+      schedule_timer(NULL, _tid, T * 1000);
+    }
+  }
+
+  void on_timer_expiry(void* context)
+  {
+    TRC_DEBUG("Timer expiry (%ld)", _tid);
+    if (_tid != 0)
+    {
+      // Check concurrent cancellation of timer doesn't break
+      cancel_timer(_tid);
+
+      _tid = 0;
+
+      // Send another request.
+      send_request(_second_request);
+    }
+  }
+
+  TimerID _tid;
+  bool _response;
+  pjsip_msg* _second_request;
+};
+
 class SproutletProxyTest : public SipTest
 {
 public:
@@ -492,6 +548,7 @@ public:
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDelayRedirect<1> >("delayredirect", 0, ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxBad >("bad", 0, ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxB2BUA >("b2bua", 0, ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDelayAfterRsp<1> >("delayafterrsp", 0, ""));
 
     // Create a host alias.
     std::unordered_set<std::string> host_aliases;
@@ -1952,3 +2009,91 @@ TEST_F(SproutletProxyTest, LoopDetection)
   delete tp;
 }
 
+TEST_F(SproutletProxyTest, DelayAfterReponse)
+{
+  // Tests lifetime of a sproutlet that runs a timer after it responds
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with two Route headers - the first referencing the
+  // forwarder Sproutlet and the second referencing an external node.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@awaydomain";
+  msg1._from = "sip:alice@homedomain";
+  msg1._to = "sip:bob@awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:delayafterrsp.proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying, 200 OK and forwarded INVITE.
+  ASSERT_EQ(3, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
+  free_txdata();
+
+  // Check the 200 OK.
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
+  // Request is forwarded to the node in the second Route header.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Check the RequestURI has not been altered.
+  EXPECT_EQ("sip:bob@awaydomain", str_uri(tdata->msg->line.req.uri));
+
+  // Check the first Route header has been removed.
+  EXPECT_EQ("Route: <sip:proxy1.awaydomain;transport=TCP;lr>",
+            get_headers(tdata->msg, "Route"));
+
+  // Check no Record-Route headers have been added.
+  EXPECT_EQ("", get_headers(tdata->msg, "Record-Route"));
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // No outstanding messages.
+  ASSERT_EQ(0, txdata_count());
+
+  // Advance time to allow the delayed action to occur.
+  cwtest_advance_time_ms(1100L);
+  poll();
+
+  // Request is forwarded to the node in the second Route header.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Check the RequestURI has not been altered.
+  EXPECT_EQ("sip:bob@awaydomain", str_uri(tdata->msg->line.req.uri));
+
+  // Check the first Route header has been removed.
+  EXPECT_EQ("Route: <sip:proxy1.awaydomain;transport=TCP;lr>",
+            get_headers(tdata->msg, "Route"));
+
+  // Check no Record-Route headers have been added.
+  EXPECT_EQ("", get_headers(tdata->msg, "Record-Route"));
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // All done!
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
