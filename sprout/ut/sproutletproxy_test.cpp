@@ -2153,6 +2153,7 @@ TEST_F(SproutletProxyTest, DelayAfterReponse)
   cwtest_advance_time_ms(1100L);
   poll();
 
+  // SproutletTsx timer has expired and now the Tsx is gone.
   ASSERT_FALSE(FakeSproutletTsxDelayAfterRsp<1>::is_live(tsx_from_tag));
 
   // All done!
