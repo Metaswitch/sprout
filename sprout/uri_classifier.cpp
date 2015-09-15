@@ -77,7 +77,7 @@ static bool is_home_domain(pj_str_t host)
       }
     }
 
-  /* Doesn't match */
+  // Doesn't match
   return false;
 }
 
@@ -91,14 +91,23 @@ static bool is_local_name(pj_str_t host)
       }
     }
 
-  /* Doesn't match */
+  // Doesn't match
   return false;
 }
 
-
+// Determine the type of a URI.
+//
+// Parameters:
+//
+// - uri - the URI to classify
+// - prefer_sip - for ambiguous URIs like sip:+1234@example.com (which could be a global phone
+// number or just a SIP URI), prefer to interpret it as SIP
+//
 URIClass URIClassifier::classify_uri(pjsip_uri* uri, bool prefer_sip)
 {
   URIClass ret = URIClass::UNKNOWN;
+
+  // First, check to see if this URI has number portability data - this takes priority
   bool has_rn = false;
   bool has_npdi = false;
 
@@ -126,8 +135,10 @@ URIClass URIClassifier::classify_uri(pjsip_uri* uri, bool prefer_sip)
       ret = NP_DATA;
     }
   }
+  // No number portability data
   else if (PJSIP_URI_SCHEME_IS_TEL(uri))
   {
+    // TEL URIs can only represent phone numbers - decide if it's a global (E.164) number or not
     pjsip_tel_uri* tel_uri = (pjsip_tel_uri*)uri;
     if (tel_uri->number.slen > 0 && tel_uri->number.ptr[0] == '+')
     {
@@ -147,6 +158,15 @@ URIClass URIClassifier::classify_uri(pjsip_uri* uri, bool prefer_sip)
     bool is_gruu = (pjsip_param_find(&((pjsip_sip_uri*)uri)->other_param, &STR_GR) != NULL);
     bool treat_number_as_phone = !enforce_user_phone && !prefer_sip;
 
+    TRC_DEBUG("home domain: %s, local_to_node: %s, is_gruu: %s, enforce_user_phone: %s, prefer_sip: %s, treat_number_as_phone: %s",
+              home_domain ? "true" : "false",
+              local_to_node ? "true" : "false",
+              is_gruu ? "true" : "false",
+              enforce_user_phone ? "true" : "false",
+              prefer_sip ? "true" : "false",
+              treat_number_as_phone ? "true" : "false");
+
+    // SIP URI that's 'really' a phone number - apply the same logic as for TEL URIs
     if ((!pj_strcmp(&((pjsip_sip_uri*)uri)->user_param, &STR_USER_PHONE) ||
          (home_domain && treat_number_as_phone && !is_gruu)))
     {
@@ -159,6 +179,7 @@ URIClass URIClassifier::classify_uri(pjsip_uri* uri, bool prefer_sip)
         ret = enforce_global ? LOCAL_PHONE_NUMBER : GLOBAL_PHONE_NUMBER;
       }
     }
+    // Not a phone number - classify it based on domain
     else if (home_domain)
     {
       ret = HOME_DOMAIN_SIP_URI;

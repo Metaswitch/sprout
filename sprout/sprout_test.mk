@@ -150,6 +150,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        communicationmonitor_test.cpp \
                        common_sip_processing_test.cpp \
                        fakesnmp.cpp \
+                       uriclassifier_test.cpp \
 
 
 # Put the interposer in here, so it will be loaded before pjsip.

@@ -1818,8 +1818,6 @@ int main(int argc, char* argv[])
                                  opt.pbxes,
                                  analytics_logger,
                                  NULL,
-                                 false,
-                                 false,
                                  NULL,
                                  NULL,
                                  pcscf_acr_factory,

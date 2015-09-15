@@ -373,8 +373,6 @@ public:
                                           _pbx_hosts.c_str(),
                                           _analytics,
                                           _enum_service,
-                                          false,
-                                          false,
                                           _bgcf_service,
                                           _hss_connection,
                                           _acr_factory,
