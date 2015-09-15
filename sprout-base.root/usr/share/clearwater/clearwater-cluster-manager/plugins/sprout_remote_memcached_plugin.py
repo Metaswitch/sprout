@@ -44,7 +44,7 @@ _log = logging.getLogger("sprout_remote_memcached_plugin")
 
 class SproutRemoteMemcachedPlugin(SynchroniserPluginBase):
     def __init__(self, params):
-        self._key = "/clearwater/{}/sprout/clustering/memcached".format(params.remote_site)
+        self._key = "/{}/{}/sprout/clustering/memcached".format(params.etcd_key, params.remote_site)
         self._remote_site = params.remote_site
 
     def key(self):

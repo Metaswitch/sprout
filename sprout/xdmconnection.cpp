@@ -46,13 +46,14 @@
 #include "sproutsasevent.h"
 #include "httpconnection.h"
 #include "xdmconnection.h"
+#include "snmp_continuous_accumulator_table.h"
 
 /// Main constructor.
 XDMConnection::XDMConnection(const std::string& server,
                              HttpResolver* resolver,
                              LoadMonitor *load_monitor,
                              SNMP::IPCountTable* xdm_cxn_count,
-                             SNMP::AccumulatorTable* xdm_latency):
+                             SNMP::EventAccumulatorTable* xdm_latency):
   _http(new HttpConnection(server,
                            true,
                            resolver,
@@ -67,7 +68,7 @@ XDMConnection::XDMConnection(const std::string& server,
 /// Constructor supplying own connection. For UT use. Ownership passes
 /// to this object.
 XDMConnection::XDMConnection(HttpConnection* http,
-                             SNMP::AccumulatorTable* xdm_latency):
+                             SNMP::EventAccumulatorTable* xdm_latency):
   _http(http),
   _latency_tbl(xdm_latency)
 {
