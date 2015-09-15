@@ -1,4 +1,4 @@
-/**
+/*
  * @file registrar.cpp
  *
  * Project Clearwater - IMS in the Cloud
@@ -62,6 +62,7 @@ extern "C" {
 #include "custom_headers.h"
 #include "log.h"
 #include "notify_utils.h"
+#include "snmp_success_fail_count_table.h"
 
 static RegStore* store;
 static RegStore* remote_store;
@@ -85,6 +86,11 @@ static pjsip_routing_hdr* service_route;
 //
 static pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata);
 
+// SNMP tables that count the number of attempts, successes and failures of
+// registration attempts.
+static SNMP::RegistrationStatsTables* reg_stats_tables;
+static SNMP::RegistrationStatsTables* third_party_reg_stats_tables;
+
 pjsip_module mod_registrar =
 {
   NULL, NULL,                         // prev, next
@@ -105,13 +111,13 @@ pjsip_module mod_registrar =
 
 void log_bindings(const std::string& aor_name, RegStore::AoR* aor_data)
 {
-  LOG_DEBUG("Bindings for %s", aor_name.c_str());
+  TRC_DEBUG("Bindings for %s", aor_name.c_str());
   for (RegStore::AoR::Bindings::const_iterator i = aor_data->bindings().begin();
        i != aor_data->bindings().end();
        ++i)
   {
     RegStore::AoR::Binding* binding = i->second;
-    LOG_DEBUG("  %s URI=%s expires=%d q=%d from=%s cseq=%d timer=%s private_id=%s emergency_registration=%s",
+    TRC_DEBUG("  %s URI=%s expires=%d q=%d from=%s cseq=%d timer=%s private_id=%s emergency_registration=%s",
               i->first.c_str(),
               binding->_uri.c_str(),
               binding->_expires, binding->_priority,
@@ -192,7 +198,7 @@ bool get_private_id(pjsip_rx_data* rdata, std::string& id)
     else
     {
       // LCOV_EXCL_START
-      LOG_WARNING("Unsupported scheme \"%.*s\" in Authorization header when determining private ID - ignoring",
+      TRC_WARNING("Unsupported scheme \"%.*s\" in Authorization header when determining private ID - ignoring",
                   auth_hdr->scheme.slen, auth_hdr->scheme.ptr);
       // LCOV_EXCL_STOP
     }
@@ -240,14 +246,14 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
 
     // Find the current bindings for the AoR.
     aor_data = primary_store->get_aor_data(aor, trail);
-    LOG_DEBUG("Retrieved AoR data %p", aor_data);
+    TRC_DEBUG("Retrieved AoR data %p", aor_data);
 
     if (aor_data == NULL)
     {
       // Failed to get data for the AoR because there is no connection
       // to the store.
       // LCOV_EXCL_START - local store (used in testing) never fails
-      LOG_ERROR("Failed to get AoR binding for %s from store", aor.c_str());
+      TRC_ERROR("Failed to get AoR binding for %s from store", aor.c_str());
       break;
       // LCOV_EXCL_STOP
     }
@@ -331,7 +337,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
           binding_id = contact_uri;
         }
 
-        LOG_DEBUG(". Binding identifier for contact = %s", binding_id.c_str());
+        TRC_DEBUG(". Binding identifier for contact = %s", binding_id.c_str());
 
         // Find the appropriate binding in the bindings list for this AoR.
         RegStore::AoR::Binding* binding = aor_data->get_binding(binding_id);
@@ -369,7 +375,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
           {
             std::string path = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                                       path_hdr->name_addr.uri);
-            LOG_DEBUG("Path header %s", path.c_str());
+            TRC_DEBUG("Path header %s", path.c_str());
 
             // Extract all the paths from this header.
             Utils::split_string(path, ',', binding->_path_headers, 0, true);
@@ -404,7 +410,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
           // don't update the expiry time
           if ((binding->_expires >= now + expiry) && (binding->_emergency_registration))
           {
-            LOG_DEBUG("Don't reduce expiry time for an emergency registration");
+            TRC_DEBUG("Don't reduce expiry time for an emergency registration");
           }
           else
           {
@@ -480,7 +486,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
 
   if (all_bindings_expired)
   {
-    LOG_DEBUG("All bindings have expired - triggering deregistration at the HSS");
+    TRC_DEBUG("All bindings have expired - triggering deregistration at the HSS");
     hss->update_registration_state(aor, "", HSSConnection::DEREG_USER, trail);
   }
 
@@ -495,15 +501,57 @@ void process_register_request(pjsip_rx_data* rdata)
   int st_code = PJSIP_SC_OK;
   SAS::TrailId trail = get_trail(rdata);
 
+  // Get the system time in seconds for calculating absolute expiry times.
+  int now = time(NULL);
+  int expiry = 0;
+  bool is_initial_registration;
+
+  // Loop through headers as early as possible so that we know the expiry time
+  // and which registration statistics to update.
+  // Loop through each contact header. If every registration is an emergency
+  // registration and its expiry is 0 then reject with a 501.
+  // If there are valid registration updates to make then attempt to write to
+  // store, which also stops emergency registrations from being deregistered.
+  bool reject_with_501 = true;
+  bool any_emergency_registrations = false;
+  bool reject_with_400 = false;
+  pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
+                 pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL);
+
+  while (contact_hdr != NULL)
+  {
+    pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_EXPIRES, NULL);
+    expiry = (contact_hdr->expires != -1) ? contact_hdr->expires :
+             (expires != NULL) ? expires->ivalue :
+              max_expires;
+
+    if ((contact_hdr->star) && (expiry != 0))
+    {
+      // Wildcard contact, which can only be used if the expiry is 0
+      TRC_ERROR("Attempted to deregister all bindings, but expiry value wasn't 0");
+      reject_with_400 = true;
+      break;
+    }
+
+    reject_with_501 = (reject_with_501 &&
+                       PJUtils::is_emergency_registration(contact_hdr) && (expiry == 0));
+    any_emergency_registrations = (any_emergency_registrations ||
+                                  PJUtils::is_emergency_registration(contact_hdr));
+
+    contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(rdata->msg_info.msg,
+                                                          PJSIP_H_CONTACT,
+                                                          contact_hdr->next);
+  }
+  
   // Get the URI from the To header and check it is a SIP or SIPS URI.
   pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
-
+ 
   if ((!PJSIP_URI_SCHEME_IS_SIP(uri)) && (!PJSIP_URI_SCHEME_IS_TEL(uri)))
   {
     // Reject a non-SIP/TEL URI with 404 Not Found (RFC3261 isn't clear
     // whether 404 is the right status code - it says 404 should be used if
     // the AoR isn't valid for the domain in the RequestURI).
-    LOG_ERROR("Rejecting register request using invalid URI scheme");
+    TRC_ERROR("Rejecting register request using invalid URI scheme");
 
     SAS::Event event(trail, SASEvent::REGISTER_FAILED_INVALIDURISCHEME, 0);
     SAS::report_event(event);
@@ -514,6 +562,18 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL,
                                NULL,
                                NULL);
+    if (expiry == 0)
+    {
+      reg_stats_tables->de_reg_tbl->increment_attempts();
+      reg_stats_tables->de_reg_tbl->increment_failures();
+    }
+    else 
+    // Invalid URI means this cannot be a re-register request, so if not
+    // a de-register request, then treat as an initial register request.
+    {
+      reg_stats_tables->init_reg_tbl->increment_attempts();
+      reg_stats_tables->init_reg_tbl->increment_failures();
+    }
     return;
   }
 
@@ -527,7 +587,7 @@ void process_register_request(pjsip_rx_data* rdata)
   // Canonicalize the public ID from the URI in the To header.
   std::string public_id = PJUtils::public_id_from_uri(uri);
 
-  LOG_DEBUG("Process REGISTER for public ID %s", public_id.c_str());
+  TRC_DEBUG("Process REGISTER for public ID %s", public_id.c_str());
 
   // Get the call identifier and the cseq number from the respective headers.
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);;
@@ -535,12 +595,9 @@ void process_register_request(pjsip_rx_data* rdata)
 
   // Add SAS markers to the trail attached to the message so the trail
   // becomes searchable.
-  LOG_DEBUG("Report SAS start marker - trail (%llx)", trail);
+  TRC_DEBUG("Report SAS start marker - trail (%llx)", trail);
   SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
-
-  PJUtils::report_sas_to_from_markers(trail, rdata->msg_info.msg);
-  PJUtils::mark_sas_call_branch_ids(trail, NULL, rdata->msg_info.msg);
 
   // Query the HSS for the associated URIs.
   std::vector<std::string> uris;
@@ -608,7 +665,7 @@ void process_register_request(pjsip_rx_data* rdata)
       st_code = PJSIP_SC_FORBIDDEN;
     }
 
-    LOG_ERROR("Rejecting register request with invalid public/private identity");
+    TRC_ERROR("Rejecting register request with invalid public/private identity");
 
     SAS::Event event(trail, SASEvent::REGISTER_FAILED_INVALIDPUBPRIV, 0);
     event.add_var_param(public_id);
@@ -622,52 +679,25 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL,
                                NULL);
     delete acr;
+    
+    if (expiry == 0)
+    {
+      reg_stats_tables->de_reg_tbl->increment_attempts();
+      reg_stats_tables->de_reg_tbl->increment_failures();
+    }
+    else 
+    // Invalid public/private identity means this cannot be a re-register request,
+    // so if not a de-register request, then treat as an initial register request.
+    {
+      reg_stats_tables->init_reg_tbl->increment_attempts();
+      reg_stats_tables->init_reg_tbl->increment_failures();
+    }
     return;
   }
 
   // Determine the AOR from the first entry in the uris array.
   std::string aor = uris.front();
-  LOG_DEBUG("REGISTER for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
-
-  // Get the system time in seconds for calculating absolute expiry times.
-  int now = time(NULL);
-  int expiry = 0;
-  bool is_initial_registration;
-
-  // Loop through each contact header. If every registration is an emergency
-  // registration and its expiry is 0 then reject with a 501.
-  // If there are valid registration updates to make then attempt to write to
-  // store, which also stops emergency registrations from being deregistered.
-  bool reject_with_501 = true;
-  bool any_emergency_registrations = false;
-  bool reject_with_400 = false;
-  pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
-                 pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL);
-
-  while (contact_hdr != NULL)
-  {
-    pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_EXPIRES, NULL);
-    expiry = (contact_hdr->expires != -1) ? contact_hdr->expires :
-             (expires != NULL) ? expires->ivalue :
-              max_expires;
-
-    if ((contact_hdr->star) && (expiry != 0))
-    {
-      // Wildcard contact, which can only be used if the expiry is 0
-      LOG_ERROR("Attempted to deregister all bindings, but expiry value wasn't 0");
-      reject_with_400 = true;
-      break;
-    }
-
-    reject_with_501 = (reject_with_501 &&
-                       PJUtils::is_emergency_registration(contact_hdr) && (expiry == 0));
-    any_emergency_registrations = (any_emergency_registrations ||
-                                  PJUtils::is_emergency_registration(contact_hdr));
-
-    contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(rdata->msg_info.msg,
-                                                          PJSIP_H_CONTACT,
-                                                          contact_hdr->next);
-  }
+  TRC_DEBUG("REGISTER for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
 
   if (reject_with_400)
   {
@@ -682,12 +712,16 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL,
                                NULL);
     delete acr;
+     
+    reg_stats_tables->de_reg_tbl->increment_attempts(); 
+    reg_stats_tables->de_reg_tbl->increment_failures();
+    
     return;
   }
 
   if (reject_with_501)
   {
-    LOG_ERROR("Rejecting register request as attempting to deregister an emergency registration");
+    TRC_ERROR("Rejecting register request as attempting to deregister an emergency registration");
 
     SAS::Event event(trail, SASEvent::DEREGISTER_FAILED_EMERGENCY, 0);
     event.add_var_param(public_id);
@@ -700,6 +734,10 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL,
                                NULL);
     delete acr;
+
+    reg_stats_tables->de_reg_tbl->increment_attempts();
+    reg_stats_tables->de_reg_tbl->increment_failures();
+    
     return;
   }
 
@@ -740,6 +778,19 @@ void process_register_request(pjsip_rx_data* rdata)
     // LCOV_EXCL_STOP
   }
 
+  if (expiry == 0)
+  {
+    reg_stats_tables->de_reg_tbl->increment_attempts();
+  }
+  else if (is_initial_registration)
+  {
+    reg_stats_tables->init_reg_tbl->increment_attempts();
+  }
+  else
+  {
+    reg_stats_tables->re_reg_tbl->increment_attempts();
+  }
+
   // Build and send the reply.
   pjsip_tx_data* tdata;
   status = PJUtils::create_response(stack_data.endpt, rdata, st_code, NULL, &tdata);
@@ -749,7 +800,7 @@ void process_register_request(pjsip_rx_data* rdata)
     std::string error_msg = "Error building REGISTER " + std::to_string(status) +
                             " response " + PJUtils::pj_status_to_string(status);
 
-    LOG_ERROR(error_msg.c_str());
+    TRC_ERROR(error_msg.c_str());
 
     SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
     event.add_var_param(public_id);
@@ -764,6 +815,20 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL);
     delete acr;
     delete aor_data;
+
+    if (is_initial_registration)
+    {
+      reg_stats_tables->init_reg_tbl->increment_failures();
+    }
+    else if (expiry == 0)
+    {
+      reg_stats_tables->de_reg_tbl->increment_failures();
+    }
+    else
+    {
+      reg_stats_tables->re_reg_tbl->increment_failures();
+    }
+    
     return;
     // LCOV_EXCL_STOP
   }
@@ -782,6 +847,20 @@ void process_register_request(pjsip_rx_data* rdata)
 
     delete acr;
     delete aor_data;
+
+    if (is_initial_registration)
+    {
+      reg_stats_tables->init_reg_tbl->increment_failures();
+    }
+    else if (expiry == 0)
+    {
+      reg_stats_tables->de_reg_tbl->increment_failures();
+    }
+    else
+    {
+      reg_stats_tables->re_reg_tbl->increment_failures();
+    }
+    
     return;
     // LCOV_EXCL_STOP
   }
@@ -794,7 +873,7 @@ void process_register_request(pjsip_rx_data* rdata)
   if (gen_hdr == NULL)
   {
     // LCOV_EXCL_START - can't see how this could ever happen
-    LOG_ERROR("Failed to add RFC 5626 headers");
+    TRC_ERROR("Failed to add RFC 5626 headers");
 
     SAS::Event event(trail, SASEvent::REGISTER_FAILED_5636, 0);
     event.add_var_param(public_id);
@@ -805,6 +884,20 @@ void process_register_request(pjsip_rx_data* rdata)
     status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
     delete acr;
     delete aor_data;
+
+    if (is_initial_registration)
+    {
+      reg_stats_tables->init_reg_tbl->increment_failures();
+    }
+    else if (expiry == 0)
+    {
+      reg_stats_tables->de_reg_tbl->increment_failures();
+    }
+    else
+    {
+      reg_stats_tables->re_reg_tbl->increment_failures();
+    }
+    
     return;
     // LCOV_EXCL_STOP
   }
@@ -864,7 +957,7 @@ void process_register_request(pjsip_rx_data* rdata)
         // Contact URI is malformed.  Log an error, but otherwise don't try and
         // fix it.
         // LCOV_EXCL_START hard to hit - needs bad data in the store
-        LOG_WARNING("Badly formed contact URI %s for address of record %s",
+        TRC_WARNING("Badly formed contact URI %s for address of record %s",
                     binding->_uri.c_str(), aor.c_str());
 
         SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
@@ -879,6 +972,19 @@ void process_register_request(pjsip_rx_data* rdata)
 
   SAS::Event reg_Accepted(trail, SASEvent::REGISTER_ACCEPTED, 0);
   SAS::report_event(reg_Accepted);
+  
+  if (expiry == 0)
+  {
+    reg_stats_tables->de_reg_tbl->increment_successes();
+  }
+  else if (is_initial_registration)
+  {
+    reg_stats_tables->init_reg_tbl->increment_successes();
+  }
+  else
+  {
+    reg_stats_tables->re_reg_tbl->increment_successes();
+  }
 
   // Deal with path header related fields in the response.
   pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
@@ -954,13 +1060,14 @@ void process_register_request(pjsip_rx_data* rdata)
                                                          expiry,
                                                          is_initial_registration,
                                                          public_id,
+                                                         third_party_reg_stats_tables,
                                                          trail);
   }
 
   // Now we can free the tdata.
   pjsip_tx_data_dec_ref(tdata);
 
-  LOG_DEBUG("Report SAS end marker - trail (%llx)", trail);
+  TRC_DEBUG("Report SAS end marker - trail (%llx)", trail);
   SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
   delete aor_data;
@@ -1005,7 +1112,9 @@ pj_status_t init_registrar(RegStore* registrar_store,
                            HSSConnection* hss_connection,
                            AnalyticsLogger* analytics_logger,
                            ACRFactory* rfacr_factory,
-                           int cfg_max_expires)
+                           int cfg_max_expires,
+                           SNMP::RegistrationStatsTables* reg_stats_tbls,
+                           SNMP::RegistrationStatsTables* third_party_reg_stats_tbls)
 {
   pj_status_t status;
 
@@ -1015,6 +1124,8 @@ pj_status_t init_registrar(RegStore* registrar_store,
   analytics = analytics_logger;
   max_expires = cfg_max_expires;
   acr_factory = rfacr_factory;
+  reg_stats_tables = reg_stats_tbls;
+  third_party_reg_stats_tables = third_party_reg_stats_tbls;
 
   // Construct a Service-Route header pointing at the S-CSCF ready to be added
   // to REGISTER 200 OK response.

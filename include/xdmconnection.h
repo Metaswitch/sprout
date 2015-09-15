@@ -44,8 +44,9 @@
 #include <curl/curl.h>
 #include "httpconnection.h"
 #include "sas.h"
-#include "accumulator.h"
 #include "load_monitor.h"
+#include "snmp_ip_count_table.h"
+#include "snmp_event_accumulator_table.h"
 
 class XDMConnection
 {
@@ -53,15 +54,16 @@ public:
   XDMConnection(const std::string& server,
                 HttpResolver* resolver,
                 LoadMonitor *load_monitor,
-                LastValueCache* stats_aggregator);
-  XDMConnection(HttpConnection* http, LastValueCache* stats_aggregator);
+                SNMP::IPCountTable* xdm_cxn_count,
+                SNMP::EventAccumulatorTable* xdm_latency);
+  XDMConnection(HttpConnection* http, SNMP::EventAccumulatorTable* xdm_latency);
   virtual ~XDMConnection();
 
   bool get_simservs(const std::string& user, std::string& xml_data, const std::string& password, SAS::TrailId trail);
 
 private:
   HttpConnection* _http;
-  StatisticAccumulator _latency_stat;
+  SNMP::EventAccumulatorTable* _latency_tbl;
 };
 
 #endif

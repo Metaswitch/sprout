@@ -67,10 +67,12 @@ extern "C" {
 #include "analyticslogger.h"
 #include "regstore.h"
 #include "stack.h"
+#include "bono.h"
 #include "hssconnection.h"
 #include "xdmconnection.h"
 #include "bono.h"
 #include "websockets.h"
+#include "memcachedstore.h"
 #include "mmtel.h"
 #include "subscription.h"
 #include "registrar.h"
@@ -81,10 +83,8 @@ extern "C" {
 #include "bgcfservice.h"
 #include "pjutils.h"
 #include "log.h"
-#include "zmq_lvc.h"
 #include "quiescing_manager.h"
 #include "load_monitor.h"
-#include "memcachedstore.h"
 #include "localstore.h"
 #include "scscfselector.h"
 #include "chronosconnection.h"
@@ -99,6 +99,14 @@ extern "C" {
 #include "common_sip_processing.h"
 #include "thread_dispatcher.h"
 #include "exception_handler.h"
+#include "scscfsproutlet.h"
+#include "snmp_continuous_accumulator_table.h"
+#include "snmp_event_accumulator_table.h"
+#include "snmp_scalar.h"
+#include "snmp_counter_table.h"
+#include "snmp_success_fail_count_table.h"
+#include "snmp_agent.h"
+#include "sprout_alarmdefinition.h"
 
 enum OptionTypes
 {
@@ -123,7 +131,12 @@ enum OptionTypes
   OPT_SIP_BLACKLIST_DURATION,
   OPT_HTTP_BLACKLIST_DURATION,
   OPT_SIP_TCP_CONNECT_TIMEOUT,
-  OPT_SIP_TCP_SEND_TIMEOUT
+  OPT_SIP_TCP_SEND_TIMEOUT,
+  OPT_SESSION_CONTINUED_TIMEOUT_MS,
+  OPT_SESSION_TERMINATED_TIMEOUT_MS,
+  OPT_STATELESS_PROXIES,
+  OPT_NON_REGISTERING_PBXES,
+  OPT_NON_REGISTER_AUTHENTICATION
 };
 
 
@@ -190,6 +203,11 @@ const static struct pj_getopt_option long_opt[] =
   { "http-blacklist-duration",      required_argument, 0, OPT_HTTP_BLACKLIST_DURATION},
   { "sip-tcp-connect-timeout",      required_argument, 0, OPT_SIP_TCP_CONNECT_TIMEOUT},
   { "sip-tcp-send-timeout",         required_argument, 0, OPT_SIP_TCP_SEND_TIMEOUT},
+  { "session-continued-timeout",    required_argument, 0, OPT_SESSION_CONTINUED_TIMEOUT_MS},
+  { "session-terminated-timeout",   required_argument, 0, OPT_SESSION_TERMINATED_TIMEOUT_MS},
+  { "stateless-proxies",            required_argument, 0, OPT_STATELESS_PROXIES},
+  { "non-registering-pbxes",        required_argument, 0, OPT_NON_REGISTERING_PBXES},
+  { "non-register-authentication",  required_argument, 0, OPT_NON_REGISTER_AUTHENTICATION},
   { NULL,                           0,                 0, 0}
 };
 
@@ -333,6 +351,30 @@ static void usage(void)
        "     --sip-tcp-send-timeout <milliseconds>\n"
        "                            The amount of time to wait for data sent on a SIP TCP connection to be\n"
        "                            acknowledged by the peer.\n"
+       "     --session-continued-timeout <milliseconds>\n"
+       "                            If an Application Server with default handling of 'continue session'\n"
+       "                            is unresponsive, this is the time that sprout will wait (in ms)\n"
+       "                            before bypassing the AS and moving onto the next AS in the chain.\n"
+       "     --session-terminated-timeout <milliseconds>\n"
+       "                            If an Application Server with default handling of 'terminate session'\n"
+       "                            is unresponsive, this is the time that sprout will wait (in ms)\n"
+       "                            before terminating the session.\n"
+       "     --stateless-proxies <comma-separated-list>\n"
+       "                            A comma separated list of domain names that are treated as SIP\n"
+       "                            stateless proxies. This field should reflect how the servers are\n"
+       "                            identified in SIP (for example if a cluster of nodes is identified by\n"
+       "                            the name 'cluster.example.com', this value should be used instead of\n"
+       "                            the hostnames or IP addresses of individual servers\n"
+       "     --non-registering-pbxes <comma-separated-list>\n"
+       "                            A comma separated list of IP addresses that are treated as\n"
+       "                            non-registering PBXes (i.e. INVITEs should be allowed by the \n"
+       "                            P-CSCF, but challenged by the core)\n"
+       "     --non-register-authentication <option>\n"
+       "                            Controls when sprout will challenge the sender of a non-REGISTER\n"
+       "                            message to provide authentication. Takes one of the following values:\n"
+       "                            - 'never' means that sprout never challenges non-REGISTER requests.\n"
+       "                            - 'if_proxy_authorization_present' means sprout will only challenge\n"
+       "                              requests that already have a Proxy-Authorization header.\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
@@ -421,13 +463,13 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
         if ((options->pcscf_untrusted_port != 0) &&
             (options->pcscf_trusted_port != 0))
         {
-          LOG_INFO("P-CSCF enabled on ports %d (untrusted) and %d (trusted)",
+          TRC_INFO("P-CSCF enabled on ports %d (untrusted) and %d (trusted)",
                    options->pcscf_untrusted_port, options->pcscf_trusted_port);
           options->pcscf_enabled = true;
         }
         else
         {
-          LOG_ERROR("P-CSCF ports %s invalid", pj_optarg);
+          TRC_ERROR("P-CSCF ports %s invalid", pj_optarg);
           return -1;
         }
       }
@@ -437,13 +479,13 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       options->scscf_port = parse_port(std::string(pj_optarg));
       if (options->scscf_port != 0)
       {
-        LOG_INFO("S-CSCF enabled on port %d", options->scscf_port);
+        TRC_INFO("S-CSCF enabled on port %d", options->scscf_port);
         options->scscf_enabled = true;
       }
       else
       {
         CL_SPROUT_INVALID_S_CSCF_PORT.log(pj_optarg);
-        LOG_ERROR("S-CSCF port %s is invalid\n", pj_optarg);
+        TRC_ERROR("S-CSCF port %s is invalid\n", pj_optarg);
         return -1;
       }
       break;
@@ -452,13 +494,13 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       options->icscf_port = parse_port(std::string(pj_optarg));
       if (options->icscf_port != 0)
       {
-        LOG_INFO("I-CSCF enabled on port %d", options->icscf_port);
+        TRC_INFO("I-CSCF enabled on port %d", options->icscf_port);
         options->icscf_enabled = true;
       }
       else
       {
         CL_SPROUT_INVALID_I_CSCF_PORT.log(pj_optarg);
-        LOG_ERROR("I-CSCF port %s is invalid", pj_optarg);
+        TRC_ERROR("I-CSCF port %s is invalid", pj_optarg);
         return -1;
       }
       break;
@@ -467,11 +509,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       options->webrtc_port = parse_port(std::string(pj_optarg));
       if (options->webrtc_port != 0)
       {
-        LOG_INFO("WebRTC port is set to %d", options->webrtc_port);
+        TRC_INFO("WebRTC port is set to %d", options->webrtc_port);
       }
       else
       {
-        LOG_ERROR("WebRTC port %s is invalid", pj_optarg);
+        TRC_ERROR("WebRTC port %s is invalid", pj_optarg);
         return -1;
       }
       break;
@@ -491,10 +533,10 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       else
       {
-        LOG_ERROR("--record-routing-model must be one of 'pcscf', 'pcscf,icscf', or 'pcscf,icscf,as'");
+        TRC_ERROR("--record-routing-model must be one of 'pcscf', 'pcscf,icscf', or 'pcscf,icscf,as'");
         return -1;
       }
-      LOG_INFO("Record-Routing model is set to %d", options->record_routing_model);
+      TRC_INFO("Record-Routing model is set to %d", options->record_routing_model);
       break;
 
     case 'l':
@@ -505,43 +547,43 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
         {
           options->local_host = localhost_options[0];
           options->public_host = localhost_options[0];
-          LOG_INFO("Override private and public local host names %s",
+          TRC_INFO("Override private and public local host names %s",
                    options->local_host.c_str());
         }
         else if (localhost_options.size() == 2)
         {
           options->local_host = localhost_options[0];
           options->public_host = localhost_options[1];
-          LOG_INFO("Override private local host name to %s",
+          TRC_INFO("Override private local host name to %s",
                   options->local_host.c_str());
-          LOG_INFO("Override public local host name to %s",
+          TRC_INFO("Override public local host name to %s",
                   options->public_host.c_str());
         }
         else
         {
-          LOG_WARNING("Invalid --local-host option, ignored");
+          TRC_WARNING("Invalid --local-host option, ignored");
         }
       }
       break;
 
     case 'D':
       options->home_domain = std::string(pj_optarg);
-      LOG_INFO("Home domain set to %s", pj_optarg);
+      TRC_INFO("Home domain set to %s", pj_optarg);
       break;
 
     case OPT_ADDITIONAL_HOME_DOMAINS:
       options->additional_home_domains = std::string(pj_optarg);
-      LOG_INFO("Additional home domains set to %s", pj_optarg);
+      TRC_INFO("Additional home domains set to %s", pj_optarg);
       break;
 
     case 'c':
       options->scscf_uri = std::string(pj_optarg);
-      LOG_INFO("Sprout cluster URI set to %s", pj_optarg);
+      TRC_INFO("Sprout cluster URI set to %s", pj_optarg);
       break;
 
     case 'n':
       options->alias_hosts = std::string(pj_optarg);
-      LOG_INFO("Alias host names = %s", pj_optarg);
+      TRC_INFO("Alias host names = %s", pj_optarg);
       break;
 
     case 'r':
@@ -564,36 +606,36 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
             }
           }
         }
-        LOG_INFO("Upstream proxy is set to %s:%d", options->upstream_proxy.c_str(), options->upstream_proxy_port);
-        LOG_INFO("  connections = %d", options->upstream_proxy_connections);
-        LOG_INFO("  recycle time = %d seconds", options->upstream_proxy_recycle);
+        TRC_INFO("Upstream proxy is set to %s:%d", options->upstream_proxy.c_str(), options->upstream_proxy_port);
+        TRC_INFO("  connections = %d", options->upstream_proxy_connections);
+        TRC_INFO("  recycle time = %d seconds", options->upstream_proxy_recycle);
       }
       break;
 
     case 'I':
       options->ibcf = PJ_TRUE;
       options->trusted_hosts = std::string(pj_optarg);
-      LOG_INFO("IBCF mode enabled, trusted hosts = %s", pj_optarg);
+      TRC_INFO("IBCF mode enabled, trusted hosts = %s", pj_optarg);
       break;
 
     case 'j':
       options->external_icscf_uri = std::string(pj_optarg);
-      LOG_INFO("External I-CSCF URI = %s", pj_optarg);
+      TRC_INFO("External I-CSCF URI = %s", pj_optarg);
       break;
 
     case 'R':
       options->auth_realm = std::string(pj_optarg);
-      LOG_INFO("Authentication realm %s", pj_optarg);
+      TRC_INFO("Authentication realm %s", pj_optarg);
       break;
 
     case 'M':
       options->store_servers = std::string(pj_optarg);
-      LOG_INFO("Using memcached store with configuration file %s", pj_optarg);
+      TRC_INFO("Using memcached store with configuration file %s", pj_optarg);
       break;
 
     case 'm':
       options->remote_store_servers = std::string(pj_optarg);
-      LOG_INFO("Using remote memcached store with configuration file %s", pj_optarg);
+      TRC_INFO("Using remote memcached store with configuration file %s", pj_optarg);
       break;
 
     case 'S':
@@ -604,30 +646,30 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
         {
           options->sas_server = sas_options[0];
           options->sas_system_name = sas_options[1];
-          LOG_INFO("SAS set to %s", options->sas_server.c_str());
-          LOG_INFO("System name is set to %s", options->sas_system_name.c_str());
+          TRC_INFO("SAS set to %s", options->sas_server.c_str());
+          TRC_INFO("System name is set to %s", options->sas_system_name.c_str());
         }
         else
         {
           CL_SPROUT_INVALID_SAS_OPTION.log();
-          LOG_WARNING("Invalid --sas option, SAS disabled");
+          TRC_WARNING("Invalid --sas option, SAS disabled");
         }
       }
       break;
 
     case 'H':
       options->hss_server = std::string(pj_optarg);
-      LOG_INFO("HSS server set to %s", pj_optarg);
+      TRC_INFO("HSS server set to %s", pj_optarg);
       break;
 
     case 'X':
       options->xdm_server = std::string(pj_optarg);
-      LOG_INFO("XDM server set to %s", pj_optarg);
+      TRC_INFO("XDM server set to %s", pj_optarg);
       break;
 
     case 'K':
       options->chronos_service = std::string(pj_optarg);
-      LOG_INFO("Chronos service set to %s", pj_optarg);
+      TRC_INFO("Chronos service set to %s", pj_optarg);
       break;
 
     case 'G':
@@ -638,28 +680,28 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case 'E':
       options->enum_servers.clear();
       Utils::split_string(std::string(pj_optarg), ',', options->enum_servers, 0, false);
-      LOG_INFO("%d ENUM servers passed on the command line",
+      TRC_INFO("%d ENUM servers passed on the command line",
                options->enum_servers.size());
       break;
 
     case 'x':
       options->enum_suffix = std::string(pj_optarg);
-      LOG_INFO("ENUM suffix set to %s", pj_optarg);
+      TRC_INFO("ENUM suffix set to %s", pj_optarg);
       break;
 
     case 'f':
       options->enum_file = std::string(pj_optarg);
-      LOG_INFO("ENUM file set to %s", pj_optarg);
+      TRC_INFO("ENUM file set to %s", pj_optarg);
       break;
 
     case 'u':
       options->enforce_user_phone = true;
-      LOG_INFO("ENUM lookups are only done on SIP URIs if they contain user=phone");
+      TRC_INFO("ENUM lookups are only done on SIP URIs if they contain user=phone");
       break;
 
     case 'g':
       options->enforce_global_only_lookups = true;
-      LOG_INFO("ENUM lookups are only done on URIs if they contain a global number");
+      TRC_INFO("ENUM lookups are only done on URIs if they contain a global number");
       break;
 
     case 'e':
@@ -668,14 +710,14 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       if (reg_max_expires > 0)
       {
         options->reg_max_expires = reg_max_expires;
-        LOG_INFO("Maximum registration period set to %d seconds\n",
+        TRC_INFO("Maximum registration period set to %d seconds\n",
                  options->reg_max_expires);
       }
       else
       {
         // The parameter could be invalid either because it's -ve, or it's not
         // an integer (in which case atoi returns 0). Log, but don't store it.
-        LOG_WARNING("Invalid value for reg_max_expires: '%s'. "
+        TRC_WARNING("Invalid value for reg_max_expires: '%s'. "
                     "The default value of %d will be used.",
                     pj_optarg, options->reg_max_expires);
       }
@@ -687,14 +729,14 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       if (sub_max_expires > 0)
       {
         options->sub_max_expires = sub_max_expires;
-        LOG_INFO("Maximum registration period set to %d seconds\n",
+        TRC_INFO("Maximum registration period set to %d seconds\n",
                  options->sub_max_expires);
       }
       else
       {
         // The parameter could be invalid either because it's -ve, or it's not
         // an integer (in which case atoi returns 0). Log, but don't store it.
-        LOG_WARNING("Invalid value for sub_max_expires: '%s'. "
+        TRC_WARNING("Invalid value for sub_max_expires: '%s'. "
                     "The default value of %d will be used.",
                     pj_optarg, options->sub_max_expires);
       }
@@ -704,7 +746,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       options->target_latency_us = atoi(pj_optarg);
       if (options->target_latency_us <= 0)
       {
-        LOG_ERROR("Invalid --target-latency-us option %s", pj_optarg);
+        TRC_ERROR("Invalid --target-latency-us option %s", pj_optarg);
         return -1;
       }
       break;
@@ -713,7 +755,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       options->cass_target_latency_us = atoi(pj_optarg);
       if (options->cass_target_latency_us <= 0)
       {
-        LOG_ERROR("Invalid --cass-target-latency-us option %s", pj_optarg);
+        TRC_ERROR("Invalid --cass-target-latency-us option %s", pj_optarg);
         return -1;
       }
       break;
@@ -722,7 +764,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       options->max_tokens = atoi(pj_optarg);
       if (options->max_tokens <= 0)
       {
-        LOG_ERROR("Invalid --max-tokens option %s", pj_optarg);
+        TRC_ERROR("Invalid --max-tokens option %s", pj_optarg);
         return -1;
       }
       break;
@@ -731,7 +773,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       options->init_token_rate = atoi(pj_optarg);
       if (options->init_token_rate <= 0)
       {
-        LOG_ERROR("Invalid --init-token-rate option %s", pj_optarg);
+        TRC_ERROR("Invalid --init-token-rate option %s", pj_optarg);
         return -1;
       }
       break;
@@ -740,7 +782,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       options->min_token_rate = atoi(pj_optarg);
       if (options->min_token_rate <= 0)
       {
-        LOG_ERROR("Invalid --min-token-rate option %s", pj_optarg);
+        TRC_ERROR("Invalid --min-token-rate option %s", pj_optarg);
         return -1;
       }
       break;
@@ -748,17 +790,17 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case OPT_MEMCACHED_WRITE_FORMAT:
       if (strcmp(pj_optarg, "binary") == 0)
       {
-        LOG_INFO("Memcached write format set to 'binary'");
+        TRC_INFO("Memcached write format set to 'binary'");
         options->memcached_write_format = MemcachedWriteFormat::BINARY;
       }
       else if (strcmp(pj_optarg, "json") == 0)
       {
-        LOG_INFO("Memcached write format set to 'json'");
+        TRC_INFO("Memcached write format set to 'json'");
         options->memcached_write_format = MemcachedWriteFormat::JSON;
       }
       else
       {
-        LOG_WARNING("Invalid value for memcached-write-format, using '%s'."
+        TRC_WARNING("Invalid value for memcached-write-format, using '%s'."
                     "Got '%s', valid vales are 'json' and 'binary'",
                     ((options->memcached_write_format == MemcachedWriteFormat::JSON) ?
                      "json" : "binary"),
@@ -768,51 +810,51 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case 'P':
       options->pjsip_threads = atoi(pj_optarg);
-      LOG_INFO("Use %d PJSIP threads", options->pjsip_threads);
+      TRC_INFO("Use %d PJSIP threads", options->pjsip_threads);
       break;
 
     case 'W':
       options->worker_threads = atoi(pj_optarg);
-      LOG_INFO("Use %d worker threads", options->worker_threads);
+      TRC_INFO("Use %d worker threads", options->worker_threads);
       break;
 
     case 'a':
       options->analytics_enabled = PJ_TRUE;
       options->analytics_directory = std::string(pj_optarg);
-      LOG_INFO("Analytics directory set to %s", pj_optarg);
+      TRC_INFO("Analytics directory set to %s", pj_optarg);
       break;
 
     case 'A':
       options->auth_enabled = PJ_TRUE;
-      LOG_INFO("Authentication enabled");
+      TRC_INFO("Authentication enabled");
       break;
 
     case 'T':
       options->http_address = std::string(pj_optarg);
-      LOG_INFO("HTTP address set to %s", pj_optarg);
+      TRC_INFO("HTTP address set to %s", pj_optarg);
       break;
 
     case 'o':
       options->http_port = parse_port(std::string(pj_optarg));
       if (options->http_port != 0)
       {
-        LOG_INFO("HTTP port set to %d", options->http_port);
+        TRC_INFO("HTTP port set to %d", options->http_port);
       }
       else
       {
-        LOG_ERROR("HTTP port %s is invalid", pj_optarg);
+        TRC_ERROR("HTTP port %s is invalid", pj_optarg);
         return -1;
       }
       break;
 
     case 'q':
       options->http_threads = atoi(pj_optarg);
-      LOG_INFO("Use %d HTTP threads", options->http_threads);
+      TRC_INFO("Use %d HTTP threads", options->http_threads);
       break;
 
     case 'B':
       options->billing_cdf = std::string(pj_optarg);
-      LOG_INFO("Use %s as billing cdf server", options->billing_cdf.c_str());
+      TRC_INFO("Use %s as billing cdf server", options->billing_cdf.c_str());
       break;
 
     case 'L':
@@ -824,84 +866,138 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case OPT_DEFAULT_SESSION_EXPIRES:
       options->default_session_expires = atoi(pj_optarg);
-      LOG_INFO("Default session expiry set to %d",
+      TRC_INFO("Default session expiry set to %d",
                options->default_session_expires);
       break;
 
     case OPT_MAX_SESSION_EXPIRES:
       options->max_session_expires = atoi(pj_optarg);
-      LOG_INFO("Max session expiry set to %d",
+      TRC_INFO("Max session expiry set to %d",
                options->max_session_expires);
       break;
 
     case OPT_EMERGENCY_REG_ACCEPTED:
       options->emerg_reg_accepted = PJ_TRUE;
-      LOG_INFO("Emergency registrations accepted");
+      TRC_INFO("Emergency registrations accepted");
       break;
 
     case OPT_MAX_CALL_LIST_LENGTH:
       options->max_call_list_length = atoi(pj_optarg);
-      LOG_INFO("Max call list length set to %d",
+      TRC_INFO("Max call list length set to %d",
                options->max_call_list_length);
       break;
 
     case OPT_MEMENTO_THREADS:
       options->memento_threads = atoi(pj_optarg);
-      LOG_INFO("Number of memento threads set to %d",
+      TRC_INFO("Number of memento threads set to %d",
                options->memento_threads);
       break;
 
     case OPT_CALL_LIST_TTL:
       options->call_list_ttl = atoi(pj_optarg);
-      LOG_INFO("Call list TTL set to %d",
+      TRC_INFO("Call list TTL set to %d",
                options->call_list_ttl);
       break;
 
     case OPT_ALARMS_ENABLED:
       options->alarms_enabled = PJ_TRUE;
-      LOG_INFO("SNMP alarms are enabled");
+      TRC_INFO("SNMP alarms are enabled");
       break;
 
     case OPT_DNS_SERVER:
       options->dns_servers.clear();
       Utils::split_string(std::string(pj_optarg), ',', options->dns_servers, 0, false);
-      LOG_INFO("%d DNS servers passed on the command line",
+      TRC_INFO("%d DNS servers passed on the command line",
                options->dns_servers.size());
     break;
 
     case OPT_OVERRIDE_NPDI:
       options->override_npdi = true;
-      LOG_INFO("Number portability lookups will be done on URIs containing the 'npdi' indicator");
+      TRC_INFO("Number portability lookups will be done on URIs containing the 'npdi' indicator");
       break;
 
     case OPT_EXCEPTION_MAX_TTL:
       options->exception_max_ttl = atoi(pj_optarg);
-      LOG_INFO("Max TTL after an exception set to %d",
+      TRC_INFO("Max TTL after an exception set to %d",
                options->exception_max_ttl);
       break;
 
     case OPT_SIP_BLACKLIST_DURATION:
       options->sip_blacklist_duration = atoi(pj_optarg);
-      LOG_INFO("SIP blacklist duration set to %d",
+      TRC_INFO("SIP blacklist duration set to %d",
                options->sip_blacklist_duration);
       break;
 
     case OPT_HTTP_BLACKLIST_DURATION:
       options->http_blacklist_duration = atoi(pj_optarg);
-      LOG_INFO("HTTP blacklist duration set to %d",
+      TRC_INFO("HTTP blacklist duration set to %d",
                options->http_blacklist_duration);
       break;
 
     case OPT_SIP_TCP_CONNECT_TIMEOUT:
       options->sip_tcp_connect_timeout = atoi(pj_optarg);
-      LOG_INFO("SIP TCP connect timeout set to %d",
+      TRC_INFO("SIP TCP connect timeout set to %d",
                options->sip_tcp_connect_timeout);
       break;
 
     case OPT_SIP_TCP_SEND_TIMEOUT:
       options->sip_tcp_send_timeout = atoi(pj_optarg);
-      LOG_INFO("SIP TCP send timeout set to %d",
+      TRC_INFO("SIP TCP send timeout set to %d",
                options->sip_tcp_send_timeout);
+      break;
+
+    case OPT_SESSION_CONTINUED_TIMEOUT_MS:
+      options->session_continued_timeout_ms = atoi(pj_optarg);
+      TRC_INFO("Session continue timeout set to %dms",
+               options->session_continued_timeout_ms);
+      break;
+
+    case OPT_SESSION_TERMINATED_TIMEOUT_MS:
+      options->session_terminated_timeout_ms = atoi(pj_optarg);
+      TRC_INFO("Session terminated timeout set to %dms",
+               options->session_terminated_timeout_ms);
+      break;
+
+    case OPT_STATELESS_PROXIES:
+      {
+        std::vector<std::string> stateless_proxies;
+        Utils::split_string(std::string(pj_optarg), ',', stateless_proxies, 0, false);
+        options->stateless_proxies.insert(stateless_proxies.begin(),
+                                          stateless_proxies.end());
+        TRC_INFO("%d stateless proxies are configured",
+                 options->stateless_proxies.size());
+      }
+      break;
+
+    case OPT_NON_REGISTERING_PBXES:
+      {
+        options->pbxes = std::string(pj_optarg);
+        TRC_INFO("Non-registering PBX IP addresses are %s",
+                 options->pbxes.c_str());
+      }
+      break;
+
+    case OPT_NON_REGISTER_AUTHENTICATION:
+      {
+        std::string this_arg = pj_optarg;
+
+        if (this_arg == "never")
+        {
+          TRC_INFO("Non-REGISTER authentication set to 'never'");
+          options->non_register_auth_mode = NonRegisterAuthentication::NEVER;
+        }
+        else if (this_arg == "if_proxy_authorization_present")
+        {
+          TRC_INFO("Non-REGISTER authentication set to 'if_proxy_authorization_present'");
+          options->non_register_auth_mode =
+            NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT;
+        }
+        else
+        {
+          TRC_ERROR("Invalid value for non-REGISTER authentication: %s", pj_optarg);
+          return -1;
+        }
+      }
       break;
 
     case 'h':
@@ -909,7 +1005,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       return -1;
 
     default:
-      LOG_ERROR("Unknown option. Run with --help for help.");
+      TRC_ERROR("Unknown option. Run with --help for help.");
       return -1;
     }
   }
@@ -920,7 +1016,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
 int daemonize()
 {
-  LOG_STATUS("Switching to daemon mode");
+  TRC_STATUS("Switching to daemon mode");
 
   pid_t pid = fork();
   if (pid == -1)
@@ -972,11 +1068,11 @@ void signal_handler(int sig)
   signal(SIGSEGV, signal_handler);
 
   // Log the signal, along with a backtrace.
-  LOG_BACKTRACE("Signal %d caught", sig);
+  TRC_BACKTRACE("Signal %d caught", sig);
 
   // Ensure the log files are complete - the core file created by abort() below
   // will trigger the log files to be copied to the diags bundle
-  LOG_COMMIT();
+  TRC_COMMIT();
 
   // Check if there's a stored jmp_buf on the thread and handle if there is
   exception_handler->handle_exception();
@@ -995,12 +1091,12 @@ void quiesce_unquiesce_handler(int sig)
   // Set the flag indicating whether we're quiescing or not.
   if (sig == QUIESCE_SIGNAL)
   {
-    LOG_STATUS("Quiesce signal received");
+    TRC_STATUS("Quiesce signal received");
     quiescing = PJ_TRUE;
   }
   else
   {
-    LOG_STATUS("Unquiesce signal received");
+    TRC_STATUS("Unquiesce signal received");
     quiescing = PJ_FALSE;
   }
 
@@ -1029,7 +1125,7 @@ void* quiesce_unquiesce_thread_func(void* dummy)
 
   if (status != PJ_SUCCESS)
   {
-    LOG_ERROR("Error creating quiesce/unquiesce thread (status = %d). "
+    TRC_ERROR("Error creating quiesce/unquiesce thread (status = %d). "
               "This function will not be available",
               status);
     return NULL;
@@ -1063,7 +1159,7 @@ void* quiesce_unquiesce_thread_func(void* dummy)
     // thread while it is waiting on the semaphore will cause it to cancel.
     sem_wait(&quiescing_sem);
     new_quiescing = quiescing;
-    LOG_STATUS("Value of new_quiescing is %s", (new_quiescing == PJ_FALSE) ? "false" : "true");
+    TRC_STATUS("Value of new_quiescing is %s", (new_quiescing == PJ_FALSE) ? "false" : "true");
   }
 
   return NULL;
@@ -1100,7 +1196,7 @@ void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
 
     if (thread_reg_status != PJ_SUCCESS)
     {
-      LOG_ERROR("Failed to register thread with pjsip");
+      TRC_ERROR("Failed to register thread with pjsip");
     }
   }
 }
@@ -1226,6 +1322,10 @@ int main(int argc, char* argv[])
   opt.http_blacklist_duration = HttpResolver::DEFAULT_BLACKLIST_DURATION;
   opt.sip_tcp_connect_timeout = 2000;
   opt.sip_tcp_send_timeout = 2000;
+  opt.session_continued_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_CONTINUED_TIMEOUT;
+  opt.session_terminated_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_TERMINATED_TIMEOUT;
+  opt.stateless_proxies.clear();
+  opt.non_register_auth_mode = NonRegisterAuthentication::NEVER;
 
   boost::filesystem::path p = argv[0];
   // Copy the filename to a string so that we can be sure of its lifespan -
@@ -1245,7 +1345,7 @@ int main(int argc, char* argv[])
   if (opt.daemon && opt.interactive)
   {
     closelog();
-    LOG_ERROR("Cannot specify both --daemon and --interactive");
+    TRC_ERROR("Cannot specify both --daemon and --interactive");
     return 1;
   }
 
@@ -1255,7 +1355,7 @@ int main(int argc, char* argv[])
     if (errnum != 0)
     {
       closelog();
-      LOG_ERROR("Failed to convert to daemon, %d (%s)", errnum, strerror(errnum));
+      TRC_ERROR("Failed to convert to daemon, %d (%s)", errnum, strerror(errnum));
       exit(0);
     }
   }
@@ -1274,11 +1374,11 @@ int main(int argc, char* argv[])
     }
     Log::setLogger(new Logger(opt.log_directory, prog_name));
 
-    LOG_STATUS("Access logging enabled to %s", opt.log_directory.c_str());
+    TRC_STATUS("Access logging enabled to %s", opt.log_directory.c_str());
     access_logger = new AccessLogger(opt.log_directory);
   }
 
-  LOG_STATUS("Log level set to %d", opt.log_level);
+  TRC_STATUS("Log level set to %d", opt.log_level);
 
   std::stringstream options_ss;
   for (int ii = 0; ii < argc; ii++)
@@ -1288,7 +1388,7 @@ int main(int argc, char* argv[])
   }
   std::string options = "Command-line options were: " + options_ss.str();
 
-  LOG_INFO(options.c_str());
+  TRC_INFO(options.c_str());
 
   status = init_options(argc, argv, &opt);
   if (status != PJ_SUCCESS)
@@ -1308,14 +1408,14 @@ int main(int argc, char* argv[])
   {
     CL_SPROUT_NO_SI_CSCF.log();
     closelog();
-    LOG_ERROR("Must enable P-CSCF, S-CSCF or I-CSCF");
+    TRC_ERROR("Must enable P-CSCF, S-CSCF or I-CSCF");
     return 1;
   }
 
   if ((opt.pcscf_enabled) && ((opt.scscf_enabled) || (opt.icscf_enabled)))
   {
     closelog();
-    LOG_ERROR("Cannot enable both P-CSCF and S/I-CSCF");
+    TRC_ERROR("Cannot enable both P-CSCF and S/I-CSCF");
     return 1;
   }
 
@@ -1323,27 +1423,27 @@ int main(int argc, char* argv[])
       (opt.upstream_proxy == ""))
   {
     closelog();
-    LOG_ERROR("Cannot enable P-CSCF without specifying --routing-proxy");
+    TRC_ERROR("Cannot enable P-CSCF without specifying --routing-proxy");
     return 1;
   }
 
   if ((opt.ibcf) && (!opt.pcscf_enabled))
   {
     closelog();
-    LOG_ERROR("Cannot enable IBCF without also enabling P-CSCF");
+    TRC_ERROR("Cannot enable IBCF without also enabling P-CSCF");
     return 1;
   }
 
   if ((opt.webrtc_port != 0 ) && (!opt.pcscf_enabled))
   {
     closelog();
-    LOG_ERROR("Cannot enable WebRTC without also enabling P-CSCF");
+    TRC_ERROR("Cannot enable WebRTC without also enabling P-CSCF");
     return 1;
   }
 
   if ((opt.scscf_enabled) && (opt.scscf_uri == ""))
   {
-    LOG_ERROR("S-CSCF enabled, but no S-CSCF URI specified");
+    TRC_ERROR("S-CSCF enabled, but no S-CSCF URI specified");
     return 1;
   }
 
@@ -1352,7 +1452,7 @@ int main(int argc, char* argv[])
   {
     CL_SPROUT_SI_CSCF_NO_HOMESTEAD.log();
     closelog();
-    LOG_ERROR("S/I-CSCF enabled with no Homestead server");
+    TRC_ERROR("S/I-CSCF enabled with no Homestead server");
     return 1;
   }
 
@@ -1360,7 +1460,7 @@ int main(int argc, char* argv[])
   {
     CL_SPROUT_AUTH_NO_HOMESTEAD.log();
     closelog();
-    LOG_ERROR("Authentication enabled, but no Homestead server specified");
+    TRC_ERROR("Authentication enabled, but no Homestead server specified");
     return 1;
   }
 
@@ -1368,36 +1468,36 @@ int main(int argc, char* argv[])
   {
     CL_SPROUT_XDM_NO_HOMESTEAD.log();
     closelog();
-    LOG_ERROR("XDM server configured for services, but no Homestead server specified");
+    TRC_ERROR("XDM server configured for services, but no Homestead server specified");
     return 1;
   }
 
   if ((opt.pcscf_enabled) && (opt.hss_server != ""))
   {
-    LOG_WARNING("Homestead server configured on P-CSCF, ignoring");
+    TRC_WARNING("Homestead server configured on P-CSCF, ignoring");
   }
 
   if ((opt.pcscf_enabled) && (opt.xdm_server != ""))
   {
-    LOG_WARNING("XDM server configured on P-CSCF, ignoring");
+    TRC_WARNING("XDM server configured on P-CSCF, ignoring");
   }
 
   if ((opt.store_servers != "") &&
       (opt.auth_enabled) &&
       (opt.worker_threads == 1))
   {
-    LOG_WARNING("Use multiple threads for good performance when using memstore and/or authentication");
+    TRC_WARNING("Use multiple threads for good performance when using memstore and/or authentication");
   }
 
   if ((opt.pcscf_enabled) && (opt.reg_max_expires != 0))
   {
-    LOG_WARNING("A registration expiry period should not be specified for P-CSCF");
+    TRC_WARNING("A registration expiry period should not be specified for P-CSCF");
   }
 
   if ((!opt.enum_servers.empty()) &&
       (!opt.enum_file.empty()))
   {
-    LOG_WARNING("Both ENUM server and ENUM file lookup enabled - ignoring ENUM file");
+    TRC_WARNING("Both ENUM server and ENUM file lookup enabled - ignoring ENUM file");
   }
 
   // Ensure our random numbers are unpredictable.
@@ -1406,6 +1506,107 @@ int main(int argc, char* argv[])
   pj_gettimeofday(&now);
   seed = (unsigned int)now.sec ^ (unsigned int)now.msec ^ getpid();
   srand(seed);
+
+  if (opt.pcscf_enabled)
+  {
+    snmp_setup("bono");
+  }
+  else
+  {
+    snmp_setup("sprout");
+  }
+
+  SNMP::EventAccumulatorTable* latency_table;
+  SNMP::EventAccumulatorTable* queue_size_table;
+  SNMP::CounterTable* requests_counter;
+  SNMP::CounterTable* overload_counter;
+
+  SNMP::IPCountTable* homestead_cxn_count = NULL;
+
+  SNMP::EventAccumulatorTable* homestead_latency_table = NULL;
+  SNMP::EventAccumulatorTable* homestead_mar_latency_table = NULL;
+  SNMP::EventAccumulatorTable* homestead_sar_latency_table = NULL;
+  SNMP::EventAccumulatorTable* homestead_uar_latency_table = NULL;
+  SNMP::EventAccumulatorTable* homestead_lir_latency_table = NULL;
+
+  SNMP::ContinuousAccumulatorTable* token_rate_table = NULL;
+  SNMP::U32Scalar* smoothed_latency_scalar = NULL;
+  SNMP::U32Scalar* target_latency_scalar = NULL;
+  SNMP::U32Scalar* penalties_scalar = NULL;
+  SNMP::U32Scalar* token_rate_scalar = NULL;
+
+  SNMP::RegistrationStatsTables reg_stats_tbls;
+  SNMP::RegistrationStatsTables third_party_reg_stats_tbls;
+  SNMP::AuthenticationStatsTables auth_stats_tbls;
+
+  if (opt.pcscf_enabled)
+  {
+    latency_table = SNMP::EventAccumulatorTable::create("bono_latency",
+                                                   ".1.2.826.0.1.1578918.9.2.2");
+    queue_size_table = SNMP::EventAccumulatorTable::create("bono_queue_size",
+                                                      ".1.2.826.0.1.1578918.9.2.6");
+    requests_counter = SNMP::CounterTable::create("bono_incoming_requests",
+                                                  ".1.2.826.0.1.1578918.9.2.4");
+    overload_counter = SNMP::CounterTable::create("bono_rejected_overload",
+                                                  ".1.2.826.0.1.1578918.9.2.5");
+  }
+  else
+  {
+    latency_table = SNMP::EventAccumulatorTable::create("sprout_latency",
+                                                   ".1.2.826.0.1.1578918.9.3.1");
+    queue_size_table = SNMP::EventAccumulatorTable::create("sprout_queue_size",
+                                                      ".1.2.826.0.1.1578918.9.3.8");
+    requests_counter = SNMP::CounterTable::create("sprout_incoming_requests",
+                                                  ".1.2.826.0.1.1578918.9.3.6");
+    overload_counter = SNMP::CounterTable::create("sprout_rejected_overload",
+                                                  ".1.2.826.0.1.1578918.9.3.7");
+
+    homestead_cxn_count = SNMP::IPCountTable::create("sprout_homestead_cxn_count",
+                                                     ".1.2.826.0.1.1578918.9.3.3.1");
+    homestead_latency_table = SNMP::EventAccumulatorTable::create("sprout_homestead_latency",
+                                                             ".1.2.826.0.1.1578918.9.3.3.2");
+    homestead_mar_latency_table = SNMP::EventAccumulatorTable::create("sprout_homestead_mar_latency",
+                                                                 ".1.2.826.0.1.1578918.9.3.3.3");
+    homestead_sar_latency_table = SNMP::EventAccumulatorTable::create("sprout_homestead_sar_latency",
+                                                                 ".1.2.826.0.1.1578918.9.3.3.4");
+    homestead_uar_latency_table = SNMP::EventAccumulatorTable::create("sprout_homestead_uar_latency",
+                                                                 ".1.2.826.0.1.1578918.9.3.3.5");
+    homestead_lir_latency_table = SNMP::EventAccumulatorTable::create("sprout_homestead_lir_latency",
+                                                                 ".1.2.826.0.1.1578918.9.3.3.6");
+
+    reg_stats_tbls.init_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+                                                                      ".1.2.826.0.1.1578918.9.3.9");
+    reg_stats_tbls.re_reg_tbl = SNMP::SuccessFailCountTable::create("re_reg_success_fail_count",
+                                                                    ".1.2.826.0.1.1578918.9.3.10");
+    reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("de_reg_success_fail_count",
+                                                                     ".1.2.826.0.1.1578918.9.3.11");
+
+    third_party_reg_stats_tbls.init_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_initial_reg_success_fail_count",
+                                                                                  ".1.2.826.0.1.1578918.9.3.12");
+    third_party_reg_stats_tbls.re_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_re_reg_success_fail_count",
+                                                                                ".1.2.826.0.1.1578918.9.3.13");
+    third_party_reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_de_reg_success_fail_count",
+                                                                                ".1.2.826.0.1.1578918.9.3.14");
+
+    auth_stats_tbls.sip_digest_auth_tbl = SNMP::SuccessFailCountTable::create("sip_digest_auth_success_fail_count",
+                                                                              ".1.2.826.0.1.1578918.9.3.15");
+    auth_stats_tbls.ims_aka_auth_tbl = SNMP::SuccessFailCountTable::create("ims_aka_auth_success_fail_count",
+                                                                           ".1.2.826.0.1.1578918.9.3.16");
+
+    auth_stats_tbls.non_register_auth_tbl = SNMP::SuccessFailCountTable::create("non_register_auth_success_fail_count",
+                                                                                ".1.2.826.0.1.1578918.9.3.17");
+
+    token_rate_table = SNMP::ContinuousAccumulatorTable::create("sprout_token_rate",
+                                                      ".1.2.826.0.1.1578918.9.3.27");
+    smoothed_latency_scalar = new SNMP::U32Scalar("sprout_smoothed_latency",
+                                                      ".1.2.826.0.1.1578918.9.3.28");
+    target_latency_scalar = new SNMP::U32Scalar("sprout_target_latency",
+                                                      ".1.2.826.0.1.1578918.9.3.29");
+    penalties_scalar = new SNMP::U32Scalar("sprout_penalties",
+                                                      ".1.2.826.0.1.1578918.9.3.30");
+    token_rate_scalar = new SNMP::U32Scalar("sprout_current_token_rate",
+                                                      ".1.2.826.0.1.1578918.9.3.31");
+  }
 
   if ((opt.icscf_enabled || opt.scscf_enabled) && opt.alarms_enabled)
   {
@@ -1441,10 +1642,15 @@ int main(int argc, char* argv[])
   }
 
   // Start the load monitor
-  load_monitor = new LoadMonitor(opt.target_latency_us, // Initial target latency (us).
-                                 opt.max_tokens,        // Maximum token bucket size.
-                                 opt.init_token_rate,   // Initial token fill rate (per sec).
-                                 opt.min_token_rate);   // Minimum token fill rate (per sec).
+  load_monitor = new LoadMonitor(opt.target_latency_us,   // Initial target latency (us).
+                                 opt.max_tokens,          // Maximum token bucket size.
+                                 opt.init_token_rate,     // Initial token fill rate (per sec).
+                                 opt.min_token_rate,      // Minimum token fill rate (per sec).
+                                 token_rate_table,        // Statistics table for token rate.
+                                 smoothed_latency_scalar, // Statistics scalar for current latency.
+                                 target_latency_scalar,   // Statistics scalar for target latency.
+                                 penalties_scalar,        // Statistics scalar for number of penalties.
+                                 token_rate_scalar);      // Statistics scalar for current token rate.
 
   // Start the health checker
   HealthChecker* health_checker = new HealthChecker();
@@ -1495,7 +1701,7 @@ int main(int argc, char* argv[])
   if (status != PJ_SUCCESS)
   {
     CL_SPROUT_SIP_INIT_INTERFACE_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
-    LOG_ERROR("Error initializing stack %s", PJUtils::pj_status_to_string(status).c_str());
+    TRC_ERROR("Error initializing stack %s", PJUtils::pj_status_to_string(status).c_str());
     return 1;
   }
 
@@ -1524,9 +1730,8 @@ int main(int argc, char* argv[])
     ralf_connection = new HttpConnection(opt.ralf_server,
                                          false,
                                          http_resolver,
-                                         "connected_ralfs",
+                                         NULL, // No SNMP table for connected Ralfs
                                          load_monitor,
-                                         stack_data.stats_aggregator,
                                          SASEvent::HttpLogLevel::PROTOCOL,
                                          ralf_comm_monitor);
   }
@@ -1541,11 +1746,16 @@ int main(int argc, char* argv[])
   if (opt.hss_server != "")
   {
     // Create a connection to the HSS.
-    LOG_STATUS("Creating connection to HSS %s", opt.hss_server.c_str());
+    TRC_STATUS("Creating connection to HSS %s", opt.hss_server.c_str());
     hss_connection = new HSSConnection(opt.hss_server,
                                        http_resolver,
                                        load_monitor,
-                                       stack_data.stats_aggregator,
+                                       homestead_cxn_count,
+                                       homestead_latency_table,
+                                       homestead_mar_latency_table,
+                                       homestead_sar_latency_table,
+                                       homestead_uar_latency_table,
+                                       homestead_lir_latency_table,
                                        hss_comm_monitor);
   }
 
@@ -1554,7 +1764,7 @@ int main(int argc, char* argv[])
     // Create ENUM service required for I/S-CSCF.
     if (!opt.enum_servers.empty())
     {
-      LOG_STATUS("Setting up the ENUM server(s)");
+      TRC_STATUS("Setting up the ENUM server(s)");
       enum_service = new DNSEnumService(opt.enum_servers,
                                         opt.enum_suffix,
                                         new DNSResolverFactory(),
@@ -1562,7 +1772,7 @@ int main(int argc, char* argv[])
     }
     else if (!opt.enum_file.empty())
     {
-      LOG_STATUS("Reading from an ENUM file");
+      TRC_STATUS("Reading from an ENUM file");
       enum_service = new JSONEnumService(opt.enum_file);
     }
   }
@@ -1580,7 +1790,7 @@ int main(int argc, char* argv[])
     }
 
     // Create a connection to Chronos.
-    LOG_STATUS("Creating connection to Chronos %s using %s as the callback URI",
+    TRC_STATUS("Creating connection to Chronos %s using %s as the callback URI",
                opt.chronos_service.c_str(),
                chronos_callback_host.c_str());
     chronos_connection = new ChronosConnection(opt.chronos_service,
@@ -1607,6 +1817,7 @@ int main(int argc, char* argv[])
                                  opt.upstream_proxy_recycle,
                                  opt.ibcf,
                                  opt.trusted_hosts,
+                                 opt.pbxes,
                                  analytics_logger,
                                  NULL,
                                  false,
@@ -1624,7 +1835,7 @@ int main(int argc, char* argv[])
                                  opt.emerg_reg_accepted);
     if (status != PJ_SUCCESS)
     {
-      LOG_ERROR("Failed to enable P-CSCF edge proxy");
+      TRC_ERROR("Failed to enable P-CSCF edge proxy");
       return 1;
     }
 
@@ -1634,7 +1845,7 @@ int main(int argc, char* argv[])
       status = init_websockets((unsigned short)opt.webrtc_port);
       if (status != PJ_SUCCESS)
       {
-        LOG_ERROR("Error initializing websockets, %s",
+        TRC_ERROR("Error initializing websockets, %s",
                   PJUtils::pj_status_to_string(status).c_str());
 
         return 1;
@@ -1651,7 +1862,7 @@ int main(int argc, char* argv[])
     if (opt.store_servers != "")
     {
       // Use memcached store.
-      LOG_STATUS("Using memcached compatible store with ASCII protocol");
+      TRC_STATUS("Using memcached compatible store with ASCII protocol");
 
       local_data_store = (Store*)new MemcachedStore(true,
                                                     opt.store_servers,
@@ -1660,7 +1871,7 @@ int main(int argc, char* argv[])
 
       if (!(((MemcachedStore*)local_data_store)->has_servers()))
       {
-        LOG_ERROR("Cluster settings file '%s' does not contain a valid set of servers",
+        TRC_ERROR("Cluster settings file '%s' does not contain a valid set of servers",
                   opt.store_servers.c_str());
         return 1;
       };
@@ -1668,7 +1879,7 @@ int main(int argc, char* argv[])
       if (opt.remote_store_servers != "")
       {
         // Use remote memcached store too.
-        LOG_STATUS("Using remote memcached compatible store with ASCII protocol");
+        TRC_STATUS("Using remote memcached compatible store with ASCII protocol");
 
         remote_data_store = (Store*)new MemcachedStore(true,
                                                        opt.remote_store_servers,
@@ -1677,7 +1888,7 @@ int main(int argc, char* argv[])
 
         if (!(((MemcachedStore*)remote_data_store)->has_servers()))
         {
-          LOG_WARNING("Remote cluster settings file '%s' does not contain a valid set of servers",
+          TRC_WARNING("Remote cluster settings file '%s' does not contain a valid set of servers",
                       opt.remote_store_servers.c_str());
         };
       }
@@ -1685,7 +1896,7 @@ int main(int argc, char* argv[])
     else
     {
       // Use local store.
-      LOG_STATUS("Using local store");
+      TRC_STATUS("Using local store");
       local_data_store = (Store*)new LocalStore();
     }
 
@@ -1693,7 +1904,7 @@ int main(int argc, char* argv[])
     {
       CL_SPROUT_MEMCACHE_CONN_FAIL.log();
       closelog();
-      LOG_ERROR("Failed to connect to data store");
+      TRC_ERROR("Failed to connect to data store");
       exit(0);
     }
 
@@ -1730,14 +1941,16 @@ int main(int argc, char* argv[])
       // module.  We don't create a AV store using the remote data store as
       // Authentication Vectors are only stored for a short period after the
       // relevant challenge is sent.
-      LOG_STATUS("Initialise S-CSCF authentication module");
+      TRC_STATUS("Initialise S-CSCF authentication module");
       av_store = new AvStore(local_data_store);
       status = init_authentication(opt.auth_realm,
                                    av_store,
                                    hss_connection,
                                    chronos_connection,
                                    scscf_acr_factory,
-                                   analytics_logger);
+                                   opt.non_register_auth_mode,
+                                   analytics_logger,
+                                   &auth_stats_tbls);
     }
 
     // Launch the registrar.
@@ -1746,13 +1959,15 @@ int main(int argc, char* argv[])
                             hss_connection,
                             analytics_logger,
                             scscf_acr_factory,
-                            opt.reg_max_expires);
+                            opt.reg_max_expires,
+                            &reg_stats_tbls,
+                            &third_party_reg_stats_tbls);
 
     if (status != PJ_SUCCESS)
     {
       CL_SPROUT_INIT_SERVICE_ROUTE_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
       closelog();
-      LOG_ERROR("Failed to enable S-CSCF registrar");
+      TRC_ERROR("Failed to enable S-CSCF registrar");
       return 1;
     }
 
@@ -1768,7 +1983,7 @@ int main(int argc, char* argv[])
     {
       CL_SPROUT_REG_SUBSCRIBER_HAND_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
       closelog();
-      LOG_ERROR("Failed to enable subscription module");
+      TRC_ERROR("Failed to enable subscription module");
       return 1;
     }
   }
@@ -1780,8 +1995,18 @@ int main(int argc, char* argv[])
   {
     CL_SPROUT_PLUGIN_FAILURE.log();
     closelog();
-    LOG_ERROR("Failed to successfully load plug-ins");
+    TRC_ERROR("Failed to successfully load plug-ins");
     return 1;
+  }
+
+  // Must happen after all SNMP tables have been registered.
+  if (opt.pcscf_enabled)
+  {
+    init_snmp_handler_threads("bono");
+  }
+  else
+  {
+    init_snmp_handler_threads("sprout");
   }
 
   if (!sproutlets.empty())
@@ -1801,30 +2026,18 @@ int main(int argc, char* argv[])
                                          std::string(stack_data.scscf_uri.ptr,
                                                      stack_data.scscf_uri.slen),
                                          host_aliases,
-                                         sproutlets);
+                                         sproutlets,
+                                         opt.stateless_proxies);
     if (sproutlet_proxy == NULL)
     {
       CL_SPROUT_S_CSCF_INIT_FAIL.log();
       CL_SPROUT_BGCF_INIT_FAIL.log();
       CL_SPROUT_I_CSCF_INIT_FAIL.log();
-      LOG_ERROR("Failed to create SproutletProxy");
+      TRC_ERROR("Failed to create SproutletProxy");
       closelog();
       return 1;
     }
   }
-
-  Accumulator* latency_accumulator =
-      new StatisticAccumulator("latency_us",
-                               stack_data.stats_aggregator);
-  Accumulator* queue_size_accumulator =
-      new StatisticAccumulator("queue_size",
-                               stack_data.stats_aggregator);
-  Counter* requests_counter =
-      new StatisticCounter("incoming_requests",
-                           stack_data.stats_aggregator);
-  Counter* overload_counter =
-      new StatisticCounter("rejected_overload",
-                           stack_data.stats_aggregator);
 
   init_common_sip_processing(load_monitor,
                              requests_counter,
@@ -1832,8 +2045,8 @@ int main(int argc, char* argv[])
                              health_checker);
 
   init_thread_dispatcher(opt.worker_threads,
-                         latency_accumulator,
-                         queue_size_accumulator,
+                         latency_table,
+                         queue_size_table,
                          load_monitor,
                          exception_handler);
 
@@ -1843,7 +2056,7 @@ int main(int argc, char* argv[])
   status = start_worker_threads();
   if (status != PJ_SUCCESS)
   {
-    LOG_ERROR("Error starting SIP worker threads, %s", PJUtils::pj_status_to_string(status).c_str());
+    TRC_ERROR("Error starting SIP worker threads, %s", PJUtils::pj_status_to_string(status).c_str());
     return 1;
   }
 
@@ -1852,7 +2065,7 @@ int main(int argc, char* argv[])
   {
     CL_SPROUT_SIP_STACK_INIT_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
     closelog();
-    LOG_ERROR("Error starting SIP stack, %s", PJUtils::pj_status_to_string(status).c_str());
+    TRC_ERROR("Error starting SIP stack, %s", PJUtils::pj_status_to_string(status).c_str());
     return 1;
   }
 
@@ -1894,13 +2107,14 @@ int main(int argc, char* argv[])
     {
       CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
       closelog();
-      LOG_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      TRC_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
       return 1;
     }
   }
 
   // Wait here until the quit semaphore is signaled.
   sem_wait(&term_sem);
+  snmp_terminate("sprout");
 
   CL_SPROUT_ENDED.log();
   if (opt.scscf_enabled)
@@ -1913,7 +2127,7 @@ int main(int argc, char* argv[])
     catch (HttpStack::Exception& e)
     {
       CL_SPROUT_HTTP_INTERFACE_STOP_FAIL.log(e._func, e._rc);
-      LOG_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      TRC_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
     }
   }
 
@@ -1998,11 +2212,39 @@ int main(int argc, char* argv[])
     delete remote_vbucket_alarm;
   }
 
-  delete latency_accumulator;
-  delete queue_size_accumulator;
+  delete latency_table;
+  delete queue_size_table;
   delete requests_counter;
   delete overload_counter;
 
+  delete homestead_cxn_count;
+
+  delete homestead_latency_table;
+  delete homestead_mar_latency_table;
+  delete homestead_sar_latency_table;
+  delete homestead_uar_latency_table;
+  delete homestead_lir_latency_table;
+
+  delete token_rate_table;
+  delete smoothed_latency_scalar;
+  delete target_latency_scalar;
+  delete penalties_scalar;
+  delete token_rate_scalar;
+
+  if (!opt.pcscf_enabled)
+  {
+    delete reg_stats_tbls.init_reg_tbl;
+    delete reg_stats_tbls.re_reg_tbl;
+    delete reg_stats_tbls.de_reg_tbl;
+
+    delete third_party_reg_stats_tbls.init_reg_tbl;
+    delete third_party_reg_stats_tbls.re_reg_tbl;
+    delete third_party_reg_stats_tbls.de_reg_tbl;
+
+    delete auth_stats_tbls.sip_digest_auth_tbl;
+    delete auth_stats_tbls.ims_aka_auth_tbl;
+    delete auth_stats_tbls.non_register_auth_tbl;
+  }
   health_checker->terminate();
   pthread_join(health_check_thread, NULL);
   delete health_checker;

@@ -118,16 +118,25 @@ private:
           ACR* acr);
   ~AsChain();
 
-  void inc_ref()
+  bool inc_ref()
   {
-    ++_refs;
-    LOG_DEBUG("AsChain inc ref %p -> %d", this, _refs.load());
+    // Increment the reference count if it's non-zero.
+    int refs;
+    do
+    {
+      refs = _refs.load();
+    }
+    while ((refs != 0) &&
+           (!_refs.compare_exchange_weak(refs, refs + 1)));
+    TRC_DEBUG("AsChain inc ref %p -> %d", this, _refs.load());
+    // If the reference count is non-zero, we successfully incremented it.
+    return (refs != 0);
   }
 
   void dec_ref()
   {
     int count = --_refs;
-    LOG_DEBUG("AsChain dec ref %p -> %d", this, count);
+    TRC_DEBUG("AsChain dec ref %p -> %d", this, count);
     pj_assert(count >= 0);
     if (count == 0)
     {
@@ -184,7 +193,8 @@ public:
   AsChainLink() :
     _as_chain(NULL),
     _index(0u),
-    _default_handling(SESSION_CONTINUED)
+    _default_handling(SESSION_CONTINUED),
+    _interrupted(false)
   {
   }
 
@@ -204,7 +214,11 @@ public:
 
   bool complete() const
   {
-    return ((_as_chain == NULL) || (_index == _as_chain->size()));
+    // We're complete if there is no AS chain, or we're at the end of the
+    // chain, or we have been interrupted.
+    return ((_as_chain == NULL) ||
+            (_index == _as_chain->size()) ||
+            (_interrupted));
   }
 
   /// Get the next link in the chain.
@@ -220,7 +234,10 @@ public:
   {
     if (_as_chain != NULL)
     {
-      _as_chain->inc_ref();
+      // No need to check the return code from inc_ref - it only fails if
+      // its reference count is already 0 and we know that can't be the case
+      // because we already hold one reference.
+      (void)_as_chain->inc_ref();
     }
     return *this;
   }
@@ -272,12 +289,6 @@ public:
     return _as_chain->_odi_tokens[_index + 1];
   }
 
-  /// Returns the appropriate AS timeout to use for this link.
-  int as_timeout() const
-  {
-    return (_default_handling == SESSION_CONTINUED) ? AS_TIMEOUT_CONTINUE : AS_TIMEOUT_TERMINATE;
-  }
-
   /// Returns whether or not processing of the AS chain should continue on
   /// a timeout or 5xx error from the AS.
   bool continue_session() const
@@ -321,13 +332,21 @@ public:
                           std::string& server_name,
                           SAS::TrailId msg_trail);
 
+  /// Interrupt AS processing on this chain link. This prevents any more
+  /// application servers from being invoked.
+  void interrupt()
+  {
+    _interrupted = true;
+  }
+
 private:
   friend class AsChainTable;
 
   AsChainLink(AsChain* as_chain, size_t index) :
     _as_chain(as_chain),
     _index(index),
-    _default_handling(SESSION_CONTINUED)
+    _default_handling(SESSION_CONTINUED),
+    _interrupted(false)
   {
   }
 
@@ -340,10 +359,9 @@ private:
   /// The configured Default Handling configured on the relevant iFC.
   DefaultHandling _default_handling;
 
-  /// Application server timeouts (in seconds).
-  static const int AS_TIMEOUT_CONTINUE = 2;
-  static const int AS_TIMEOUT_TERMINATE = 4;
-
+  /// Whether AS processing has been interrupted (meaning no further application
+  /// servers will be invoked).
+  bool _interrupted;
 };
 
 

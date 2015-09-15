@@ -46,31 +46,31 @@
 #include "sproutsasevent.h"
 #include "httpconnection.h"
 #include "xdmconnection.h"
-#include "accumulator.h"
+#include "snmp_continuous_accumulator_table.h"
 
 /// Main constructor.
 XDMConnection::XDMConnection(const std::string& server,
                              HttpResolver* resolver,
                              LoadMonitor *load_monitor,
-                             LastValueCache* stats_aggregator) :
+                             SNMP::IPCountTable* xdm_cxn_count,
+                             SNMP::EventAccumulatorTable* xdm_latency):
   _http(new HttpConnection(server,
                            true,
                            resolver,
-                           "connected_homers",
+                           xdm_cxn_count,
                            load_monitor,
-                           stats_aggregator,
                            SASEvent::HttpLogLevel::PROTOCOL,
                            NULL)),
-  _latency_stat("xdm_latency_us", stats_aggregator)
+  _latency_tbl(xdm_latency)
 {
 }
 
 /// Constructor supplying own connection. For UT use. Ownership passes
 /// to this object.
 XDMConnection::XDMConnection(HttpConnection* http,
-                             LastValueCache* stats_aggregator) :
+                             SNMP::EventAccumulatorTable* xdm_latency):
   _http(http),
-  _latency_stat("xdm_latency_us", stats_aggregator)
+  _latency_tbl(xdm_latency)
 {
 }
 
@@ -95,7 +95,7 @@ bool XDMConnection::get_simservs(const std::string& user,
   unsigned long latency_us = 0;
   if (stopWatch.read(latency_us))
   {
-    _latency_stat.accumulate(latency_us);
+    _latency_tbl->accumulate(latency_us);
   }
 
   return (http_code == HTTP_OK);

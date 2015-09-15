@@ -49,6 +49,9 @@
 #include "registration_utils.h"
 #include "scscfsproutlet.h"
 
+// Constant indicating there is no served user for a request.
+const char* NO_SERVED_USER = "";
+
 /// SCSCFSproutlet constructor.
 SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
                                const std::string& scscf_node_uri,
@@ -62,7 +65,9 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
                                ACRFactory* acr_factory,
                                bool user_phone,
                                bool global_only_lookups,
-                               bool override_npdi) :
+                               bool override_npdi,
+                               int session_continued_timeout_ms,
+                               int session_terminated_timeout_ms) :
   Sproutlet("scscf", port),
   _scscf_cluster_uri(NULL),
   _scscf_node_uri(NULL),
@@ -76,11 +81,23 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
   _global_only_lookups(global_only_lookups),
   _user_phone(user_phone),
   _override_npdi(override_npdi),
+  _session_continued_timeout_ms(session_continued_timeout_ms),
+  _session_terminated_timeout_ms(session_terminated_timeout_ms),
   _scscf_cluster_uri_str(scscf_cluster_uri),
   _scscf_node_uri_str(scscf_node_uri),
   _icscf_uri_str(icscf_uri),
   _bgcf_uri_str(bgcf_uri)
 {
+  _incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("scscf_incoming_sip_transactions",
+                                                                                    "1.2.826.0.1.1578918.9.3.20");
+  _outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("scscf_outgoing_sip_transactions",
+                                                                                    "1.2.826.0.1.1578918.9.3.21");
+  _routed_by_preloaded_route_tbl = SNMP::CounterTable::create("scscf_routed_by_preloaded_route",
+                                                              "1.2.826.0.1.1578918.9.3.26");
+  _invites_cancelled_before_1xx_tbl = SNMP::CounterTable::create("invites_cancelled_before_1xx",
+                                                                 "1.2.826.0.1.1578918.9.3.32");
+  _invites_cancelled_after_1xx_tbl = SNMP::CounterTable::create("invites_cancelled_after_1xx",
+                                                                "1.2.826.0.1.1578918.9.3.33");
 }
 
 
@@ -88,15 +105,20 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
 SCSCFSproutlet::~SCSCFSproutlet()
 {
   delete _as_chain_table;
+  delete _incoming_sip_transactions_tbl;
+  delete _outgoing_sip_transactions_tbl;
+  delete _routed_by_preloaded_route_tbl;
+  delete _invites_cancelled_before_1xx_tbl;
+  delete _invites_cancelled_after_1xx_tbl;
 }
 
 bool SCSCFSproutlet::init()
 {
-  LOG_DEBUG("Creating S-CSCF Sproutlet");
-  LOG_DEBUG("  S-CSCF cluster URI = %s", _scscf_cluster_uri_str.c_str());
-  LOG_DEBUG("  S-CSCF node URI    = %s", _scscf_node_uri_str.c_str());
-  LOG_DEBUG("  I-CSCF URI         = %s", _icscf_uri_str.c_str());
-  LOG_DEBUG("  BGCF URI           = %s", _bgcf_uri_str.c_str());
+  TRC_DEBUG("Creating S-CSCF Sproutlet");
+  TRC_DEBUG("  S-CSCF cluster URI = %s", _scscf_cluster_uri_str.c_str());
+  TRC_DEBUG("  S-CSCF node URI    = %s", _scscf_node_uri_str.c_str());
+  TRC_DEBUG("  I-CSCF URI         = %s", _icscf_uri_str.c_str());
+  TRC_DEBUG("  BGCF URI           = %s", _bgcf_uri_str.c_str());
 
   bool init_success = true;
 
@@ -106,7 +128,7 @@ bool SCSCFSproutlet::init()
 
   if (_scscf_cluster_uri == NULL)
   {
-    LOG_ERROR("Invalid S-CSCF cluster %s", _scscf_cluster_uri_str.c_str());
+    TRC_ERROR("Invalid S-CSCF cluster %s", _scscf_cluster_uri_str.c_str());
     init_success = false;
   }
 
@@ -114,7 +136,7 @@ bool SCSCFSproutlet::init()
 
   if (_scscf_node_uri == NULL)
   {
-    LOG_ERROR("Invalid S-CSCF node URI %s", _scscf_node_uri_str.c_str());
+    TRC_ERROR("Invalid S-CSCF node URI %s", _scscf_node_uri_str.c_str());
     init_success = false;
   }
 
@@ -122,7 +144,7 @@ bool SCSCFSproutlet::init()
 
   if (_bgcf_uri == NULL)
   {
-    LOG_ERROR("Invalid BGCF URI %s", _bgcf_uri_str.c_str());
+    TRC_ERROR("Invalid BGCF URI %s", _bgcf_uri_str.c_str());
     init_success = false;
   }
 
@@ -132,7 +154,7 @@ bool SCSCFSproutlet::init()
 
     if (_icscf_uri == NULL)
     {
-      LOG_ERROR("Invalid I-CSCF URI %s", _icscf_uri_str.c_str());
+      TRC_ERROR("Invalid I-CSCF URI %s", _icscf_uri_str.c_str());
       init_success = false;
     }
   }
@@ -150,7 +172,8 @@ SproutletTsx* SCSCFSproutlet::get_tsx(SproutletTsxHelper* helper,
                                       const std::string& alias,
                                       pjsip_msg* req)
 {
-  return (SproutletTsx*)new SCSCFSproutletTsx(helper, this);
+  pjsip_method_e req_type = req->line.req.method.id;
+  return (SproutletTsx*)new SCSCFSproutletTsx(helper, this, req_type);
 }
 
 
@@ -197,7 +220,7 @@ void SCSCFSproutlet::get_bindings(const std::string& aor,
                                   SAS::TrailId trail)
 {
   // Look up the target in the registration data store.
-  LOG_INFO("Look up targets in registration store: %s", aor.c_str());
+  TRC_INFO("Look up targets in registration store: %s", aor.c_str());
   *aor_data = _store->get_aor_data(aor, trail);
 
   // If we didn't get bindings from the local store and we have a remote
@@ -275,20 +298,20 @@ std::string SCSCFSproutlet::translate_request_uri(pjsip_msg* req,
   if (_enum_service != NULL)
   {
     // ENUM is enabled.
-    LOG_DEBUG("ENUM is enabled");
+    TRC_DEBUG("ENUM is enabled");
 
     // Determine whether we have a SIP URI or a tel URI
     if (PJSIP_URI_SCHEME_IS_SIP(uri))
     {
       user =
         PJUtils::pj_str_to_string(&((pjsip_sip_uri*)uri)->user);
-      LOG_DEBUG("SIP URI - user = %s", user.c_str());
+      TRC_DEBUG("SIP URI - user = %s", user.c_str());
     }
     else if (PJSIP_URI_SCHEME_IS_TEL(uri))
     {
       user =
         PJUtils::pj_str_to_string(&((pjsip_tel_uri*)uri)->number);
-      LOG_DEBUG("TEL URI - user = %s", user.c_str());
+      TRC_DEBUG("TEL URI - user = %s", user.c_str());
     }
 
     // Check whether we have a global number or whether we allow
@@ -301,13 +324,13 @@ std::string SCSCFSproutlet::translate_request_uri(pjsip_msg* req,
       // If we aren't configured to require 'user=phone', we treat any
       // numeric SIP URIs as phone numbers - unless it's a GRUU, which
       // can never be generated by the user dialling a string of digits.
-      LOG_DEBUG("Global number or look-ups allowed for non-global numbers");
+      TRC_DEBUG("Global number or look-ups allowed for non-global numbers");
       if ((PJUtils::is_uri_phone_number(uri)) ||
           ((!_user_phone) &&
            (PJUtils::is_user_numeric(user)) &&
            (!PJUtils::is_uri_gruu(uri))))
       {
-        LOG_DEBUG("Performing ENUM lookup for user %s", user.c_str());
+        TRC_DEBUG("Performing ENUM lookup for user %s", user.c_str());
         new_uri = _enum_service->lookup_uri_from_user(user, trail);
       }
     }
@@ -321,7 +344,7 @@ std::string SCSCFSproutlet::translate_request_uri(pjsip_msg* req,
     //
     // We do this in order to avoid needing to setup an ENUM server on test
     // systems just to allow local calls to work.
-    LOG_DEBUG("No ENUM server configured, perform default translation");
+    TRC_DEBUG("No ENUM server configured, perform default translation");
     SAS::Event event(trail, SASEvent::ENUM_NOT_ENABLED, 0);
     SAS::report_event(event);
 
@@ -331,12 +354,12 @@ std::string SCSCFSproutlet::translate_request_uri(pjsip_msg* req,
       new_uri += PJUtils::pj_str_to_string(&((pjsip_tel_uri*)uri)->number);
       new_uri += "@";
       new_uri += PJUtils::pj_str_to_string(&stack_data.default_home_domain);
-      LOG_DEBUG("Translate tel URI to SIP URI %s", new_uri.c_str());
+      TRC_DEBUG("Translate tel URI to SIP URI %s", new_uri.c_str());
     }
     else
     {
       new_uri = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, uri);
-      LOG_DEBUG("Translate SIP URI %s to itself", new_uri.c_str());
+      TRC_DEBUG("Translate SIP URI %s to itself", new_uri.c_str());
     }
   }
 
@@ -355,7 +378,8 @@ ACR* SCSCFSproutlet::get_acr(SAS::TrailId trail, Initiator initiator, NodeRole r
 
 
 SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
-                                     SCSCFSproutlet* scscf) :
+                                     SCSCFSproutlet* scscf,
+                                     pjsip_method_e req_type) :
   SproutletTsx(helper),
   _scscf(scscf),
   _cancelled(false),
@@ -365,24 +389,29 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
   _registered(false),
   _uris(),
   _ifcs(),
-  _acr(NULL),
+  _in_dialog_acr(NULL),
+  _failed_ood_acr(NULL),
   _target_aor(),
   _target_bindings(),
   _liveness_timer(0),
-  _record_routed(false)
+  _record_routed(false),
+  _req_type(req_type),
+  _seen_1xx(false)
 {
-  LOG_DEBUG("S-CSCF Transaction (%p) created", this);
+  TRC_DEBUG("S-CSCF Transaction (%p) created", this);
 }
 
 
 SCSCFSproutletTsx::~SCSCFSproutletTsx()
 {
-  LOG_DEBUG("S-CSCF Transaction (%p) destroyed", this);
-  if ((_acr != NULL) &&
-      (!_as_chain_link.is_set()))
+  TRC_DEBUG("S-CSCF Transaction (%p) destroyed", this);
+  if (!_as_chain_link.is_set())
   {
-    _acr->send_message();
-    delete _acr;
+    ACR* acr = get_acr();
+    if (acr)
+    {
+      acr->send_message();
+    }
   }
 
   if (_as_chain_link.is_set())
@@ -395,19 +424,29 @@ SCSCFSproutletTsx::~SCSCFSproutletTsx()
     cancel_timer(_liveness_timer);
   }
 
+  // If the ACR was stored locally, destroy it now.
+  if (_failed_ood_acr)
+  {
+    delete _failed_ood_acr;
+  }
+  if (_in_dialog_acr)
+  {
+    delete _in_dialog_acr;
+  }
+
   _target_bindings.clear();
 }
 
 
 void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 {
-  LOG_INFO("S-CSCF received initial request");
+  TRC_INFO("S-CSCF received initial request");
 
   pjsip_status_code status_code = PJSIP_SC_OK;
 
   // Try to add a Session-Expires header
-  if (!PJUtils::add_update_session_expires(req, 
-                                           get_pool(req), 
+  if (!PJUtils::add_update_session_expires(req,
+                                           get_pool(req),
                                            trail()))
   {
     // Session expires header is invalid, so reject the request
@@ -425,13 +464,17 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
   // Pass the received request to the ACR.
   // @TODO - request timestamp???
-  _acr->rx_request(req);
+  ACR* acr = get_acr();
+  if (acr)
+  {
+    acr->rx_request(req);
+  }
 
   if (status_code != PJSIP_SC_OK)
   {
     // Failed to determine the served user for a request we should provide
     // services on, so reject the request.
-    LOG_INFO("Failed to determine served user for request, reject with %d status code",
+    TRC_INFO("Failed to determine served user for request, reject with %d status code",
              status_code);
     pjsip_msg* rsp = create_response(req, status_code);
     send_response(rsp);
@@ -455,7 +498,7 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     if (_as_chain_link.is_set())
     {
       // AS chain is set up, so must apply services to the request.
-      LOG_INFO("Found served user, so apply services");
+      TRC_INFO("Found served user, so apply services");
 
       if (_session_case->is_originating())
       {
@@ -470,7 +513,7 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     {
       // No AS chain set, so don't apply services to the request.
       // Default action is to route the request directly to the BGCF.
-      LOG_INFO("Route request to BGCF without applying services");
+      TRC_INFO("Route request to BGCF without applying services");
       route_to_bgcf(req);
     }
   }
@@ -479,11 +522,11 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
 void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
 {
-  LOG_INFO("S-CSCF received in-dialog request");
+  TRC_INFO("S-CSCF received in-dialog request");
 
   // Try to add a Session-Expires header
-  if (!PJUtils::add_update_session_expires(req, 
-                                           get_pool(req), 
+  if (!PJUtils::add_update_session_expires(req,
+                                           get_pool(req),
                                            trail()))
   {
     // Session expires header is invalid, so reject the request
@@ -495,12 +538,12 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
   }
 
   // Create an ACR for this request and pass the request to it.
-  _acr = _scscf->get_acr(trail(),
+  _in_dialog_acr = _scscf->get_acr(trail(),
                          CALLING_PARTY,
                          get_billing_role());
 
   // @TODO - request timestamp???
-  _acr->rx_request(req);
+  get_acr()->rx_request(req);
 
   send_request(req);
 }
@@ -508,24 +551,26 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
 
 void SCSCFSproutletTsx::on_tx_request(pjsip_msg* req)
 {
-  if (_acr != NULL)
+  ACR* acr = get_acr();
+  if (acr)
   {
     // Pass the transmitted request to the ACR to update the accounting
     // information.
-    _acr->tx_request(req);
+    acr->tx_request(req);
   }
 }
 
 
 void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 {
-  LOG_INFO("S-CSCF received response");
+  TRC_INFO("S-CSCF received response");
 
   // Pass the received response to the ACR.
   // @TODO - timestamp from response???
-  if (_acr != NULL)
+  ACR* acr = get_acr();
+  if (acr != NULL)
   {
-    _acr->rx_response(rsp);
+    acr->rx_response(rsp);
   }
 
   if (_liveness_timer != 0)
@@ -536,6 +581,11 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
   }
 
   int st_code = rsp->line.status.code;
+
+  if (st_code > 100)
+  {
+    _seen_1xx = true;
+  }
 
   if (st_code == SIP_STATUS_FLOW_FAILED)
   {
@@ -584,12 +634,13 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
       {
         // The AS either timed out or returned a 5xx error, and default
         // handling is set to continue.
-        LOG_DEBUG("Trigger default_handling=CONTINUE processing");
+        TRC_DEBUG("Trigger default_handling=CONTINUE processing");
         SAS::Event bypass_As(trail(), SASEvent::BYPASS_AS, 1);
         SAS::report_event(bypass_As);
 
         _as_chain_link = _as_chain_link.next();
         pjsip_msg* req = original_request();
+        _record_routed = false;
         if (_session_case->is_originating())
         {
           apply_originating_services(req);
@@ -616,18 +667,32 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
 void SCSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
 {
-  if (_acr != NULL)
+  ACR* acr = get_acr();
+  if (acr != NULL)
   {
     // Pass the transmitted response to the ACR to update the accounting
     // information.
-    _acr->tx_response(rsp);
+    acr->tx_response(rsp);
   }
 }
 
 
 void SCSCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
 {
-  LOG_INFO("S-CSCF received CANCEL");
+  TRC_INFO("S-CSCF received CANCEL");
+   
+  if (_req_type == PJSIP_INVITE_METHOD)
+  // If an INVITE is being cancelled, then update INVITE cancellation stats.
+  {
+    if (_seen_1xx)
+    {
+      _scscf->_invites_cancelled_after_1xx_tbl->increment();
+    }
+    else
+    {
+      _scscf->_invites_cancelled_before_1xx_tbl->increment();
+    }
+  }
 
   _cancelled = true;
 
@@ -641,13 +706,13 @@ void SCSCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
     {
       role = NODE_ROLE_TERMINATING;
     }
-    ACR* acr = _scscf->get_acr(trail(), CALLING_PARTY, role);
+    ACR* cancel_acr = _scscf->get_acr(trail(), CALLING_PARTY, role);
 
     // @TODO - timestamp from request.
-    acr->rx_request(cancel_req);
-    acr->send_message();
+    cancel_acr->rx_request(cancel_req);
+    cancel_acr->send_message();
 
-    delete acr;
+    delete cancel_acr;
   }
 }
 
@@ -665,7 +730,7 @@ void SCSCFSproutletTsx::retrieve_odi_and_sesscase(pjsip_msg* req)
     // this an originating request or not - see 3GPP TS 24.229
     // s5.4.3.1, s5.4.1.2.2F and the behaviour of
     // proxy_calculate_targets as an access proxy.
-    LOG_DEBUG("Route header references this system");
+    TRC_DEBUG("Route header references this system");
     pjsip_sip_uri* uri = (pjsip_sip_uri*)hroute->name_addr.uri;
     pjsip_param* orig_param = pjsip_param_find(&uri->other_param, &STR_ORIG);
 
@@ -678,12 +743,12 @@ void SCSCFSproutletTsx::retrieve_odi_and_sesscase(pjsip_msg* req)
       // See 3GPP TS 24.229 s5.4.3.4.
       std::string odi_token = std::string(uri->user.ptr + STR_ODI_PREFIX.slen,
                                           uri->user.slen - STR_ODI_PREFIX.slen);
-      LOG_DEBUG("Found ODI token %s", odi_token.c_str());
+      TRC_DEBUG("Found ODI token %s", odi_token.c_str());
       _as_chain_link = _scscf->as_chain_table()->lookup(odi_token);
 
       if (_as_chain_link.is_set())
       {
-        LOG_INFO("Original dialog for %.*s found: %s",
+        TRC_INFO("Original dialog for %.*s found: %s",
                  uri->user.slen, uri->user.ptr,
                  _as_chain_link.to_string().c_str());
         _session_case = &_as_chain_link.session_case();
@@ -691,7 +756,7 @@ void SCSCFSproutletTsx::retrieve_odi_and_sesscase(pjsip_msg* req)
       else
       {
         // The ODI token is invalid or expired.  Treat call as OOTB.
-        LOG_INFO("Expired ODI token %s so handle as OOTB request", odi_token.c_str());
+        TRC_INFO("Expired ODI token %s so handle as OOTB request", odi_token.c_str());
         SAS::Event event(trail(), SASEvent::SCSCF_ODI_INVALID, 0);
         event.add_var_param(PJUtils::pj_str_to_string(&uri->user));
         SAS::report_event(event);
@@ -711,18 +776,18 @@ void SCSCFSproutletTsx::retrieve_odi_and_sesscase(pjsip_msg* req)
                                                                           NULL);
       if (pcv)
       {
-        LOG_DEBUG("No ODI token, or invalid ODI token, on request - logging ICID marker %.*s for B2BUA AS correlation", pcv->icid.slen, pcv->icid.ptr);
+        TRC_DEBUG("No ODI token, or invalid ODI token, on request - logging ICID marker %.*s for B2BUA AS correlation", pcv->icid.slen, pcv->icid.ptr);
         SAS::Marker icid_marker(trail(), MARKER_ID_IMS_CHARGING_ID, 1u);
         icid_marker.add_var_param(pcv->icid.slen, pcv->icid.ptr);
         SAS::report_marker(icid_marker, SAS::Marker::Scope::Trace);
       }
       else
       {
-        LOG_DEBUG("No ODI token, or invalid ODI token, on request, and no P-Charging-Vector header (so can't log ICID for correlation)");
+        TRC_DEBUG("No ODI token, or invalid ODI token, on request, and no P-Charging-Vector header (so can't log ICID for correlation)");
       }
     }
-    
-    LOG_DEBUG("Got our Route header, session case %s, OD=%s",
+
+    TRC_DEBUG("Got our Route header, session case %s, OD=%s",
               _session_case->to_string().c_str(),
               _as_chain_link.to_string().c_str());
   }
@@ -731,10 +796,10 @@ void SCSCFSproutletTsx::retrieve_odi_and_sesscase(pjsip_msg* req)
     // No Route header on the request or top Route header does not correspond to
     // the S-CSCF.  This probably shouldn't happen, but if it does we will
     // treat it as a terminating request.
-    LOG_DEBUG("No S-CSCF Route header, so treat as terminating request");
+    TRC_DEBUG("No S-CSCF Route header, so treat as terminating request");
     _session_case = &SessionCase::Terminating;
   }
-  
+
 }
 
 pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
@@ -745,70 +810,87 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
 
   if (_as_chain_link.is_set())
   {
+    bool retargeted = false;
     std::string served_user = served_user_from_msg(req);
 
     if ((_session_case->is_terminating()) &&
         (served_user != _as_chain_link.served_user()))
     {
-      // AS is retargeting per 3GPP TS 24.229 s5.4.3.3 step 3, so
-      // create new AS chain with session case orig-cdiv and the
-      // terminating user as served user.
-      LOG_INFO("Request-URI has changed, retargeting");
-      _session_case = &SessionCase::OriginatingCdiv;
-      served_user = _as_chain_link.served_user();
-
-      sas_log_start_of_sesion_case(req, _session_case, served_user);
-
-      // We might not be the terminating server any more, so we
-      // should blank out the term_ioi parameter. If we are still
-      // the terminating server, we'll fill it back in when we go
-      // through handle_terminating.
-
-      // Note that there's no need to change orig_ioi - we don't
-      // actually become the originating server when we do this redirect.
-      pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
-                             pjsip_msg_find_hdr_by_name(req, &STR_P_C_V, NULL);
-      if (pcv)
+      if (pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL) != NULL)
       {
-        LOG_DEBUG("Blanking out term_ioi parameter due to redirect");
-        pcv->term_ioi = pj_str("");
-      }
-
-      // Create a new ACR for this request.
-      _acr = _scscf->get_acr(trail(),
-                             CALLING_PARTY,
-                             NODE_ROLE_ORIGINATING);
-
-      Ifcs ifcs;
-      if (lookup_ifcs(served_user, ifcs))
-      {
-        LOG_DEBUG("Creating originating CDIV AS chain");
-        _as_chain_link.release();
-        _as_chain_link = create_as_chain(ifcs, served_user);
-
-        if (stack_data.record_route_on_diversion)
-        {
-          LOG_DEBUG("Add service to dialog - originating Cdiv");
-          add_record_route(req, NODE_ROLE_ORIGINATING);
-        }
+        // The AS has supplied a pre-loaded route, which means it is routing
+        // directly to the target. Interrupt the AS chain link to prevent any
+        // more app servers from being triggered.
+        TRC_INFO("Preloaded route - interrupt AS processing");
+        _scscf->_routed_by_preloaded_route_tbl->increment(); // Update SNMP statistics.
+        SAS::Event preloaded_route(trail(), SASEvent::AS_SUPPLIED_PRELOADED_ROUTE, 0);
+        SAS::report_event(preloaded_route);
+        _as_chain_link.interrupt();
       }
       else
       {
-        LOG_DEBUG("Failed to retrieve ServiceProfile for %s", served_user.c_str());
-        status_code = PJSIP_SC_NOT_FOUND;
-        SAS::Event no_ifcs(trail(), SASEvent::IFC_GET_FAILURE, 0);
-        SAS::report_event(no_ifcs);
+        // AS is retargeting per 3GPP TS 24.229 s5.4.3.3 step 3, so
+        // create new AS chain with session case orig-cdiv and the
+        // terminating user as served user.
+        TRC_INFO("AS is retargeting the request");
+        retargeted = true;
+
+        _session_case = &SessionCase::OriginatingCdiv;
+        served_user = _as_chain_link.served_user();
+
+        sas_log_start_of_sesion_case(req, _session_case, served_user);
+
+        // We might not be the terminating server any more, so we
+        // should blank out the term_ioi parameter. If we are still
+        // the terminating server, we'll fill it back in when we go
+        // through handle_terminating.
+
+        // Note that there's no need to change orig_ioi - we don't
+        // actually become the originating server when we do this redirect.
+        pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
+                               pjsip_msg_find_hdr_by_name(req, &STR_P_C_V, NULL);
+        if (pcv)
+        {
+          TRC_DEBUG("Blanking out term_ioi parameter due to redirect");
+          pcv->term_ioi = pj_str("");
+        }
+
+        // Create a new ACR for this request.
+        ACR* acr = _scscf->get_acr(trail(),
+                                   CALLING_PARTY,
+                                   NODE_ROLE_ORIGINATING);
+
+        Ifcs ifcs;
+        if (lookup_ifcs(served_user, ifcs))
+        {
+          TRC_DEBUG("Creating originating CDIV AS chain");
+          _as_chain_link.release();
+          _as_chain_link = create_as_chain(ifcs, served_user, acr);
+
+          if (stack_data.record_route_on_diversion)
+          {
+            TRC_DEBUG("Add service to dialog - originating Cdiv");
+            add_record_route(req, NODE_ROLE_ORIGINATING);
+          }
+        }
+        else
+        {
+          TRC_DEBUG("Failed to retrieve ServiceProfile for %s", served_user.c_str());
+          status_code = PJSIP_SC_NOT_FOUND;
+          SAS::Event no_ifcs(trail(), SASEvent::IFC_GET_FAILURE, 0);
+          SAS::report_event(no_ifcs);
+
+          // No AsChain, store ACR locally.
+          _failed_ood_acr = acr;
+        }
       }
     }
-    else
-    {
-      // Continuing the existing chain, so get the ACR from the chain.
-      _acr = _as_chain_link.acr();
-      LOG_DEBUG("Retrieved ACR %p for existing AS chain", _acr);
 
+    if (!retargeted)
+    {
       if (stack_data.record_route_on_every_hop)
       {
-        LOG_DEBUG("Add service to dialog - AS hop");
+        TRC_DEBUG("Add service to dialog - AS hop");
         if (_session_case->is_terminating())
         {
           add_record_route(req, NODE_ROLE_TERMINATING);
@@ -826,36 +908,39 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
     std::string served_user = served_user_from_msg(req);
 
     // Create a new ACR for this request.
-    _acr = _scscf->get_acr(trail(),
-                           CALLING_PARTY,
-                           _session_case->is_originating() ?
-                                NODE_ROLE_ORIGINATING : NODE_ROLE_TERMINATING);
+    ACR* acr = _scscf->get_acr(trail(),
+                               CALLING_PARTY,
+                               _session_case->is_originating() ?
+                                 NODE_ROLE_ORIGINATING : NODE_ROLE_TERMINATING);
 
     if (!served_user.empty())
     {
       // SAS log the start of originating or terminating processing.
       sas_log_start_of_sesion_case(req, _session_case, served_user);
 
-      LOG_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
+      TRC_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
       Ifcs ifcs;
       if (lookup_ifcs(served_user, ifcs))
       {
-        LOG_DEBUG("Successfully looked up iFCs");
-        _as_chain_link = create_as_chain(ifcs, served_user);
+        TRC_DEBUG("Successfully looked up iFCs");
+        _as_chain_link = create_as_chain(ifcs, served_user, acr);
       }
       else
       {
-        LOG_DEBUG("Failed to retrieve ServiceProfile for %s", served_user.c_str());
+        TRC_DEBUG("Failed to retrieve ServiceProfile for %s", served_user.c_str());
         status_code = PJSIP_SC_NOT_FOUND;
         SAS::Event no_ifcs(trail(), SASEvent::IFC_GET_FAILURE, 1);
         SAS::report_event(no_ifcs);
+
+        // No IFC, so no AsChain, store the ACR locally.
+        _failed_ood_acr = acr;
       }
 
       if (_session_case->is_terminating())
       {
         if (stack_data.record_route_on_initiation_of_terminating)
         {
-          LOG_DEBUG("Single Record-Route - initiation of terminating handling");
+          TRC_DEBUG("Single Record-Route - initiation of terminating handling");
           add_record_route(req, NODE_ROLE_TERMINATING);
         }
       }
@@ -863,10 +948,14 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       {
         if (stack_data.record_route_on_initiation_of_originating)
         {
-          LOG_DEBUG("Single Record-Route - initiation of originating handling");
+          TRC_DEBUG("Single Record-Route - initiation of originating handling");
           add_record_route(req, NODE_ROLE_ORIGINATING);
         }
       }
+    }
+    else
+    {
+      delete acr;
     }
   }
 
@@ -907,7 +996,7 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
   // header. However, the History-Info mechanism has fundamental
   // problems as outlined in RFC5502 appendix A, and we do not
   // implement it.
-  pjsip_uri* uri;
+  pjsip_uri* uri = NULL;
   std::string user;
 
   if (_session_case->is_originating())  // (includes orig-cdiv)
@@ -916,22 +1005,28 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
   }
   else
   {
-    uri = PJUtils::term_served_user(msg);
+    // We only consider a terminating request to be destined for a served user
+    // if it doesn't have a route header.
+    if (pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, NULL) == NULL)
+    {
+      uri = PJUtils::term_served_user(msg);
+    }
   }
 
-  if ((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
-     ((PJUtils::is_home_domain(uri)) ||
+  if ((uri != NULL) &&
+      (PJSIP_URI_SCHEME_IS_SIP(uri)) &&
+      ((PJUtils::is_home_domain(uri)) ||
       (PJUtils::is_uri_local(uri))))
   {
     user = PJUtils::public_id_from_uri(uri);
   }
-  else if (PJSIP_URI_SCHEME_IS_TEL(uri))
+  else if ((uri != NULL) && (PJSIP_URI_SCHEME_IS_TEL(uri)))
   {
     user = PJUtils::public_id_from_uri(uri);
   }
   else
   {
-    LOG_DEBUG("URI is not locally hosted");
+    TRC_DEBUG("URI is not locally hosted");
   }
 
   return user;
@@ -940,11 +1035,12 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
 
 /// Factory method: create AsChain by looking up iFCs.
 AsChainLink SCSCFSproutletTsx::create_as_chain(Ifcs ifcs,
-                                               std::string served_user)
+                                               std::string served_user,
+                                               ACR*& acr)
 {
   if (served_user.empty())
   {
-    LOG_WARNING("create_as_chain called with an empty served_user");
+    TRC_WARNING("create_as_chain called with an empty served_user");
   }
   bool is_registered = is_user_registered(served_user);
 
@@ -954,8 +1050,9 @@ AsChainLink SCSCFSproutletTsx::create_as_chain(Ifcs ifcs,
                                                  is_registered,
                                                  trail(),
                                                  ifcs,
-                                                 _acr);
-  LOG_DEBUG("S-CSCF sproutlet transaction %p linked to AsChain %s",
+                                                 acr);
+  acr = NULL;
+  TRC_DEBUG("S-CSCF sproutlet transaction %p linked to AsChain %s",
             this, ret.to_string().c_str());
   return ret;
 }
@@ -964,7 +1061,7 @@ AsChainLink SCSCFSproutletTsx::create_as_chain(Ifcs ifcs,
 /// Apply originating services for this request.
 void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
 {
-  LOG_DEBUG("Performing originating initiating request processing");
+  TRC_DEBUG("Performing originating initiating request processing");
 
   // Add ourselves as orig-IOI.
   pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
@@ -989,11 +1086,11 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
   {
     // No more application servers, so perform processing at the end of
     // originating call processing.
-    LOG_INFO("Completed applying originating services");
+    TRC_INFO("Completed applying originating services");
 
     if (stack_data.record_route_on_completion_of_originating)
     {
-      LOG_DEBUG("Add service to dialog - end of originating handling");
+      TRC_DEBUG("Add service to dialog - end of originating handling");
       add_record_route(req, NODE_ROLE_ORIGINATING);
     }
 
@@ -1043,16 +1140,24 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
   {
     // No more application servers to invoke, so perform end of terminating
     // request processing.
-    LOG_INFO("Completed applying terminating services");
+    TRC_INFO("Completed applying terminating services");
 
     if (stack_data.record_route_on_completion_of_terminating)
     {
-      LOG_DEBUG("Add service to dialog - end of terminating handling");
+      TRC_DEBUG("Add service to dialog - end of terminating handling");
       add_record_route(req, NODE_ROLE_TERMINATING);
     }
 
-    // Route the call to the appropriate target.
-    route_to_target(req);
+    if (pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL) != NULL)
+    {
+      // Route according to normal SIP routing.
+      send_request(req);
+    }
+    else
+    {
+      // Route the call to the appropriate target.
+      route_to_target(req);
+    }
   }
 }
 
@@ -1074,13 +1179,10 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     // AS URI is valid, so encode the AS hop and the return hop in Route headers.
     std::string odi_value = PJUtils::pj_str_to_string(&STR_ODI_PREFIX) +
                             _as_chain_link.next_odi_token();
-    LOG_INFO("Routing to Application Server %s with ODI token %s for %s",
+    TRC_INFO("Routing to Application Server %s with ODI token %s for %s",
              server_name.c_str(),
              odi_value.c_str(),
              _as_chain_link.to_string().c_str());
-
-    // Add the application server URI as the next Route header.
-    PJUtils::add_route_header(req, as_uri, get_pool(req));
 
     // Insert route header below it with an ODI in it.  This must use the
     // URI for this S-CSCF node (not the cluster) to ensure any forwarded
@@ -1096,7 +1198,10 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
       pj_strdup2(get_pool(req), &orig_param->value, "");
       pj_list_insert_after(&odi_uri->other_param, orig_param);
     }
-    PJUtils::add_route_header(req, odi_uri, get_pool(req));
+    PJUtils::add_top_route_header(req, odi_uri, get_pool(req));
+
+    // Add the application server URI as the top Route header, per TS 24.229.
+    PJUtils::add_top_route_header(req, as_uri, get_pool(req));
 
     // Set P-Served-User, including session case and registration
     // state, per RFC5502 and the extension in 3GPP TS 24.229
@@ -1131,9 +1236,16 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     send_request(req);
 
     // Start the liveness timer for the AS.
-    if (!schedule_timer(NULL, _liveness_timer, _as_chain_link.as_timeout() * 1000))
+    int timeout = (_as_chain_link.continue_session() ?
+                   _scscf->_session_continued_timeout_ms :
+                   _scscf->_session_terminated_timeout_ms);
+
+    if (timeout != 0)
     {
-      LOG_WARNING("Failed to start liveness timer");
+      if (!schedule_timer(NULL, _liveness_timer, timeout))
+      {
+        TRC_WARNING("Failed to start liveness timer");
+      }
     }
   }
   else
@@ -1142,7 +1254,7 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     // to continue processing here with the next AS if the default handling
     // is set to allow it, but it feels better to fail the request for a
     // misconfiguration.)
-    LOG_ERROR("Badly formed AS URI %s", server_name.c_str());
+    TRC_ERROR("Badly formed AS URI %s", server_name.c_str());
     SAS::Event bad_uri(trail(), SASEvent::BAD_AS_URI, 0);
     SAS::report_event(bad_uri);
 
@@ -1161,7 +1273,7 @@ void SCSCFSproutletTsx::route_to_icscf(pjsip_msg* req)
   if (icscf_uri != NULL)
   {
     // I-CSCF is enabled, so route to it.
-    LOG_INFO("Routing to I-CSCF %s",
+    TRC_INFO("Routing to I-CSCF %s",
              PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, icscf_uri).c_str());
     PJUtils::add_route_header(req,
                               (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), icscf_uri),
@@ -1171,7 +1283,7 @@ void SCSCFSproutletTsx::route_to_icscf(pjsip_msg* req)
   {
     // I-CSCF is disabled, so route directly to the local S-CSCF.
     const pjsip_uri* scscf_uri = _scscf->scscf_cluster_uri();
-    LOG_INFO("Routing directly to S-CSCF %s",
+    TRC_INFO("Routing directly to S-CSCF %s",
              PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, scscf_uri).c_str());
     PJUtils::add_route_header(req,
                               (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), scscf_uri),
@@ -1184,7 +1296,7 @@ void SCSCFSproutletTsx::route_to_icscf(pjsip_msg* req)
 /// Route the request to the BGCF.
 void SCSCFSproutletTsx::route_to_bgcf(pjsip_msg* req)
 {
-  LOG_INFO("Routing to BGCF %s",
+  TRC_INFO("Routing to BGCF %s",
            PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                   _scscf->bgcf_uri()).c_str());
   PJUtils::add_route_header(req,
@@ -1198,7 +1310,7 @@ void SCSCFSproutletTsx::route_to_bgcf(pjsip_msg* req)
 /// Route the request to the terminating side S-CSCF.
 void SCSCFSproutletTsx::route_to_term_scscf(pjsip_msg* req)
 {
-  LOG_INFO("Routing to terminating S-CSCF %s",
+  TRC_INFO("Routing to terminating S-CSCF %s",
            PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                   _scscf->scscf_cluster_uri()).c_str());
   PJUtils::add_route_header(req,
@@ -1219,7 +1331,7 @@ void SCSCFSproutletTsx::route_to_target(pjsip_msg* req)
   {
     // The Request-URI of the request contains an maddr parameter, so forward
     // the request to the Request-URI.
-    LOG_INFO("Route request to maddr %.*s",
+    TRC_INFO("Route request to maddr %.*s",
              ((pjsip_sip_uri*)req_uri)->maddr_param.slen,
              ((pjsip_sip_uri*)req_uri)->maddr_param.ptr);
     send_request(req);
@@ -1230,7 +1342,7 @@ void SCSCFSproutletTsx::route_to_target(pjsip_msg* req)
   {
     // The Request-URI indicates an non-home domain, so forward the request
     // to the domain in the Request-URI unchanged.
-    LOG_INFO("Route request to Request-URI %s",
+    TRC_INFO("Route request to Request-URI %s",
              PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req_uri).c_str());
     send_request(req);
   }
@@ -1238,7 +1350,7 @@ void SCSCFSproutletTsx::route_to_target(pjsip_msg* req)
   {
     // The Request-URI is a SIP URI local to us, or a tel: URI that would only have reached this
     // point if it was owned by us, so look it up in the registration store.
-    LOG_INFO("Route request to registered UE bindings");
+    TRC_INFO("Route request to registered UE bindings");
     route_to_ue_bindings(req);
   }
 }
@@ -1286,7 +1398,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       // Failed to get the associated URIs from Homestead.  We'll try to
       // do the registration look-up with the specified target URI - this may
       // fail, but we'll never misroute the call.
-      LOG_WARNING("Invalid Homestead response - a user is registered but has no list of "
+      TRC_WARNING("Invalid Homestead response - a user is registered but has no list of "
                   "associated URIs, or is not in its own list of associated URIs");
       aor = public_id;
     }
@@ -1313,7 +1425,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       // Subscriber is registered, but there are no bindings in the store.
       // This indicates an error case - it is likely that de-registration
       // has failed.  Make a SAS log, the call will be rejected with a 480.
-      LOG_DEBUG("Public ID %s registered, but 0 bindings in store",
+      TRC_DEBUG("Public ID %s registered, but 0 bindings in store",
                 public_id.c_str());
       SAS::Event event(trail(), SASEvent::SCSCF_NO_BINDINGS, 0);
       event.add_var_param(public_id);
@@ -1324,7 +1436,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
   {
     // Subscriber is not registered.  This is not necessarily an error case,
     // but make a SAS log for clarity.  The call will be rejected with a 480.
-    LOG_DEBUG("Public ID %s not registered", public_id.c_str());
+    TRC_DEBUG("Public ID %s not registered", public_id.c_str());
     SAS::Event event(trail(), SASEvent::SCSCF_NOT_REGISTERED, 0);
     event.add_var_param(public_id);
     SAS::report_event(event);
@@ -1388,7 +1500,7 @@ bool SCSCFSproutletTsx::uri_translation_and_route(pjsip_msg* req)
   {
     // Request is either to a URI in this domain, or a Tel URI, so attempt
     // to translate it.
-    LOG_DEBUG("Translating URI");
+    TRC_DEBUG("Translating URI");
     std::string new_uri_str = _scscf->translate_request_uri(req, trail());
 
     if (!new_uri_str.empty())
@@ -1412,13 +1524,13 @@ bool SCSCFSproutletTsx::uri_translation_and_route(pjsip_msg* req)
           }
           else
           {
-            LOG_DEBUG("Request URI already has existing NP information");
+            TRC_DEBUG("Request URI already has existing NP information");
 
             // The existing URI had NP data. Only overwrite the URI if
             // we're configured to do so.
             if (_scscf->should_override_npdi())
             {
-              LOG_DEBUG("Override existing NP information");
+              TRC_DEBUG("Override existing NP information");
               req->line.req.uri = new_uri;
             }
 
@@ -1430,20 +1542,20 @@ bool SCSCFSproutletTsx::uri_translation_and_route(pjsip_msg* req)
         {
           // The ENUM lookup has returned NP data. Rewrite the request
           // URI and route the request to the BGCF
-          LOG_DEBUG("Update request URI to %s", new_uri_str.c_str());
+          TRC_DEBUG("Update request URI to %s", new_uri_str.c_str());
           req->line.req.uri = new_uri;
           route_to_bgcf(req);
           already_routed = true;
         }
         else
         {
-          LOG_DEBUG("Update request URI to %s", new_uri_str.c_str());
+          TRC_DEBUG("Update request URI to %s", new_uri_str.c_str());
           req->line.req.uri = new_uri;
         }
       }
       else
       {
-        LOG_WARNING("Badly formed URI %s from ENUM translation", new_uri_str.c_str());
+        TRC_WARNING("Badly formed URI %s from ENUM translation", new_uri_str.c_str());
         SAS::Event event(trail(), SASEvent::ENUM_INVALID, 0);
         event.add_var_param(new_uri_str);
         SAS::report_event(event);
@@ -1458,7 +1570,7 @@ bool SCSCFSproutletTsx::uri_translation_and_route(pjsip_msg* req)
     {
       // The URI translation failed, but we have been left with a URI that
       // definitely encodes a phone number, so we should route to the BGCF.
-      LOG_DEBUG("Unable to resolve URI phone number %s using ENUM, route to BGCF",
+      TRC_DEBUG("Unable to resolve URI phone number %s using ENUM, route to BGCF",
                 PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, uri).c_str());
       route_to_bgcf(req);
       already_routed = true;
@@ -1503,7 +1615,7 @@ bool SCSCFSproutletTsx::is_user_registered(std::string public_id)
   }
   else
   {
-    LOG_ERROR("Connection to Homestead failed, treating user as unregistered");
+    TRC_ERROR("Connection to Homestead failed, treating user as unregistered");
     return false;
   }
 }
@@ -1590,30 +1702,30 @@ NodeRole SCSCFSproutletTsx::get_billing_role()
     {
       if (!pj_strcmp(&param->value, &STR_CHARGE_ORIG))
       {
-        LOG_INFO("Charging role is originating");
+        TRC_INFO("Charging role is originating");
         role = NODE_ROLE_ORIGINATING;
       }
       else if (!pj_strcmp(&param->value, &STR_CHARGE_TERM))
       {
-        LOG_INFO("Charging role is terminating");
+        TRC_INFO("Charging role is terminating");
         role = NODE_ROLE_TERMINATING;
       }
       else
       {
-        LOG_WARNING("Unknown charging role %.*s, assume originating",
+        TRC_WARNING("Unknown charging role %.*s, assume originating",
                     param->value.slen, param->value.ptr);
         role = NODE_ROLE_ORIGINATING;
       }
     }
     else
     {
-      LOG_WARNING("No charging role in Route header, assume originating");
+      TRC_WARNING("No charging role in Route header, assume originating");
       role = NODE_ROLE_ORIGINATING;
     }
   }
   else
   {
-    LOG_WARNING("Cannot determine charging role as no Route header, assume originating");
+    TRC_WARNING("Cannot determine charging role as no Route header, assume originating");
     role = NODE_ROLE_ORIGINATING;
   }
 
@@ -1636,12 +1748,13 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
     {
       // The AS either timed out or returned a 5xx error, and default
       // handling is set to continue.
-      LOG_DEBUG("Trigger default_handling=CONTINUE processing");
+      TRC_DEBUG("Trigger default_handling=CONTINUED processing");
       SAS::Event bypass_as(trail(), SASEvent::BYPASS_AS, 0);
       SAS::report_event(bypass_as);
 
       _as_chain_link = _as_chain_link.next();
       pjsip_msg* req = original_request();
+      _record_routed = false;
       if (_session_case->is_originating())
       {
         apply_originating_services(req);
@@ -1653,6 +1766,7 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
     }
     else
     {
+      TRC_DEBUG("Trigger default_handling=TERMINATED processing");
       SAS::Event as_failed(trail(), SASEvent::AS_FAILED, 0);
       SAS::report_event(as_failed);
 
@@ -1718,7 +1832,7 @@ void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
                _aliases.end(),
                new_p_a_i_str) != _aliases.end())
       {
-        LOG_DEBUG("Add second P-Asserted-Identity for %s", new_p_a_i_str.c_str());
+        TRC_DEBUG("Add second P-Asserted-Identity for %s", new_p_a_i_str.c_str());
         PJUtils::add_asserted_identity(msg,
                                        get_pool(msg),
                                        new_p_a_i_str,
@@ -1734,7 +1848,7 @@ void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
       new_p_a_i_str += "@";
       new_p_a_i_str += PJUtils::pj_str_to_string(&stack_data.default_home_domain);
       new_p_a_i_str += ";user=phone";
-      LOG_DEBUG("Add second P-Asserted-Identity for %s", new_p_a_i_str.c_str());
+      TRC_DEBUG("Add second P-Asserted-Identity for %s", new_p_a_i_str.c_str());
       PJUtils::add_asserted_identity(msg,
                                      get_pool(msg),
                                      new_p_a_i_str,
@@ -1769,3 +1883,18 @@ void SCSCFSproutletTsx::sas_log_start_of_sesion_case(pjsip_msg* req,
   SAS::report_event(event);
 }
 
+ACR* SCSCFSproutletTsx::get_acr()
+{
+  if (_as_chain_link.is_set())
+  {
+    return _as_chain_link.acr();
+  }
+  else if (_in_dialog_acr)
+  {
+    return _in_dialog_acr;
+  }
+  else
+  {
+    return _failed_ood_acr;
+  }
+}

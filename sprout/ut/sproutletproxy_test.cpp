@@ -185,6 +185,31 @@ public:
   }
 };
 
+class FakeSproutletTsxDownstreamRequest : public SproutletTsx
+{
+public:
+  FakeSproutletTsxDownstreamRequest(SproutletTsxHelper* helper) :
+    SproutletTsx(helper)
+  {
+  }
+
+  void on_rx_initial_request(pjsip_msg* req)
+  {
+    pjsip_msg* ds_req = create_request();
+    free_msg(ds_req);
+    send_request(req);
+  }
+
+  void on_rx_in_dialog_request(pjsip_msg* req)
+  {
+    send_request(req);
+  }
+
+  void on_rx_response(pjsip_msg* rsp, int fork_id)
+  {
+    send_response(rsp);
+  }
+};
 template <int N>
 class FakeSproutletTsxForker : public SproutletTsx
 {
@@ -200,7 +225,7 @@ public:
         (!pj_strcmp2(&req->line.req.method.name, "MESSAGE")))
     {
       // Fork INVITE and MESSAGE requests.
-      for (int ii = 0; ii < N; ++ii)
+      for (int ii = NUM_FORKS - 1; ii >= 0; --ii)
       {
         pjsip_msg* clone = clone_request(req);
         pj_pool_t* pool = get_pool(clone);
@@ -374,7 +399,7 @@ public:
     {
       // This is a final response, so build and send an ACK for this
       // response, irrespective of the status code.
-      LOG_DEBUG("Process INVITE final response");
+      TRC_DEBUG("Process INVITE final response");
       pjsip_msg* ack = original_request();
       pjsip_method_set(&ack->line.req.method, PJSIP_ACK_METHOD);
 
@@ -384,7 +409,7 @@ public:
            hdr = next)
       {
         next = hdr->next;
-        LOG_DEBUG("%.*s header", hdr->name.slen, hdr->name.ptr);
+        TRC_DEBUG("%.*s header", hdr->name.slen, hdr->name.ptr);
 
         switch (hdr->type)
         {
@@ -393,30 +418,30 @@ public:
           case PJSIP_H_REQUIRE:
           case PJSIP_H_ROUTE:
             // Leave header in the ACK.
-            LOG_DEBUG("Leave header in ACK");
+            TRC_DEBUG("Leave header in ACK");
             break;
 
           case PJSIP_H_TO:
             // Leave header in the ACK, but copy tag from the response.
             if (PJSIP_MSG_TO_HDR(rsp) != NULL)
             {
-              LOG_DEBUG("Copy To tag from response");
+              TRC_DEBUG("Copy To tag from response");
               pj_strdup(get_pool(ack),
                         &(((pjsip_to_hdr*)hdr)->tag),
                         &(PJSIP_MSG_TO_HDR(rsp)->tag));
             }
-            LOG_DEBUG("Leave header in ACK");
+            TRC_DEBUG("Leave header in ACK");
             break;
 
           case PJSIP_H_CSEQ:
             // Update the method to ACK.
-            LOG_DEBUG("Update method in CSeq");
+            TRC_DEBUG("Update method in CSeq");
             pjsip_method_set(&((pjsip_cseq_hdr*)hdr)->method, PJSIP_ACK_METHOD);
             break;
 
           default:
             // Remove header from the ACK.
-            LOG_DEBUG("Remove header");
+            TRC_DEBUG("Remove header");
             pj_list_erase(hdr);
             break;
         }
@@ -462,6 +487,7 @@ public:
     // Create the Test Sproutlets.
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForwarder<false> >("fwd", 0, ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForwarder<true> >("fwdrr", 0, ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDownstreamRequest>("dsreq", 0, ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForker<NUM_FORKS> >("forker", 0, ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDelayRedirect<1> >("delayredirect", 0, ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxBad >("bad", 0, ""));
@@ -476,7 +502,8 @@ public:
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "sip:proxy1.homedomain",
                                 host_aliases,
-                                _sproutlets);
+                                _sproutlets,
+                                std::set<std::string>());
 
     // Schedule timers.
     SipTest::poll();
@@ -487,7 +514,6 @@ public:
     // Shut down the transaction module first, before we destroy the
     // objects that might handle any callbacks!
     pjsip_tsx_layer_destroy();
-
 
     delete _proxy;
 
@@ -809,6 +835,60 @@ TEST_F(SproutletProxyTest, NullSproutlet)
   delete tp;
 }
 
+TEST_F(SproutletProxyTest, DownstreamRequestSproutlet)
+{
+  // Tests standard routing of a request that doesn't match any Sproutlets.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with two Route headers, the first refering to the
+  // home domain and the second refering to an external domain.
+  Message msg;
+  msg._method = "INVITE";
+  msg._requri = "sip:bob@awaydomain";
+  msg._from = "sip:alice@homedomain";
+  msg._to = "sip:bob@awaydomain";
+  msg._via = tp->to_string(false);
+  msg._route = "Route: <sip:proxy1.homedomain;transport=TCP;service=dsreq;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  inject_msg(msg.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE
+
+  // Check the 100 Trying.
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
+  free_txdata();
+
+  // Request is forwarded to the node in the second Route header.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
+  // All done!
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
 TEST_F(SproutletProxyTest, SimpleSproutletForwarder)
 {
   // Tests standard routing of a request through a Sproutlet that simply
@@ -1071,7 +1151,7 @@ TEST_F(SproutletProxyTest, SimpleSproutletForker)
   tp->expect_target(tdata);
   free_txdata();
 
-  for (int ii = 1; ii < NUM_FORKS; ++ii)
+  for (int ii = NUM_FORKS - 1; ii >= 1; --ii)
   {
     tdata = current_txdata();
     expect_target("TCP", "10.10.20.1", 5060, tdata);
@@ -1240,7 +1320,7 @@ TEST_F(SproutletProxyTest, CancelForking)
   RespMatcher(200).matches(tdata->msg);
   free_txdata();
 
-  for (int ii = 1; ii < NUM_FORKS; ++ii)
+  for (int ii = NUM_FORKS - 1; ii >= 1; --ii)
   {
     tdata = current_txdata();
     expect_target("TCP", "10.10.20.1", 5060, tdata);
@@ -1650,7 +1730,7 @@ TEST_F(SproutletProxyTest, UASError)
 
   ASSERT_EQ(NUM_FORKS, txdata_count());
 
-  for (int ii = 0; ii < NUM_FORKS; ++ii)
+  for (int ii = NUM_FORKS - 1; ii >= 0; --ii)
   {
     tdata = current_txdata();
     expect_target("TCP", "10.10.20.1", 5060, tdata);

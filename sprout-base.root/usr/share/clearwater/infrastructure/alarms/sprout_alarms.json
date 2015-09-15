@@ -1,0 +1,157 @@
+{
+    "alarms": [
+        {
+            "index": 1000,
+            "cause": "SOFTWARE_ERROR",
+            "name": "SPROUT_PROCESS_FAIL",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "The Sprout process has been restored to normal operation.",
+                    "description": "Sprout: Process failure cleared"
+                },
+                {
+                    "severity": "CRITICAL",
+                    "details": "Monit has detected that the Sprout process has failed. A restart will automatically be attempted. If this alarm does not clear, the Sprout process may have been stopped or an unrecoverable failure may have occurred.",
+                    "description": "Sprout: Process failure"
+                }
+            ]
+        },
+        {
+            "index": 1001,
+            "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
+            "name": "SPROUT_HOMESTEAD_COMM_ERROR",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "Sprout communication to at least one Homestead has been restored.",
+                    "description": "Sprout: Homestead communication error cleared"
+                },
+                {
+                    "severity": "CRITICAL",
+                    "details": "Sprout is unable to contact any Homesteads. It will periodically attempt to reconnect. If this alarm does not clear, ensure that at least one Homestead is operational and that network connectivity exists between it and Sprout.",
+                    "description": "Sprout: Homestead communication error"
+                }
+            ]
+        },
+        {
+            "index": 1002,
+            "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
+            "name": "SPROUT_MEMCACHED_COMM_ERROR",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "Sprout communication to at least one Memcached has been restored.",
+                    "description": "Sprout: Memcached communication error cleared"
+                },
+                {
+                    "severity": "CRITICAL",
+                    "details": "Sprout is unable to contact any Memcacheds. It will periodically attempt to reconnect. If this alarm does not clear, ensure that at least one Memcached is operational and that network connectivity exists between it and Sprout.",
+                    "description": "Sprout: Memcached communication error"
+                }
+            ]
+        },
+        {
+            "index": 1003,
+            "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
+            "name": "SPROUT_REMOTE_MEMCACHED_COMM_ERROR",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "Sprout communication to at least one remote Memcached has been restored.",
+                    "description": "Sprout: Remote Memcached communication error cleared"
+                },
+                {
+                    "severity": "CRITICAL",
+                    "details": "Sprout is unable to contact any remote Memcacheds. It will periodically attempt to reconnect. If this alarm does not clear, ensure that at least one remote Memcached is operational and that network connectivity exists between it and Sprout.",
+                    "description": "Sprout: Remote Memcached communication error"
+                }
+            ]
+        },
+        {
+            "index": 1004,
+            "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
+            "name": "SPROUT_CHRONOS_COMM_ERROR",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "Sprout communication to at least one Chronos has been restored.",
+                    "description": "Sprout: Chronos communication error cleared"
+                },
+                {
+                    "severity": "MAJOR",
+                    "details": "Sprout is unable to contact any Chronos's. It will periodically attempt to reconnect. If this alarm does not clear, investigate the health of the Chronos cluster and ensure that at least the local Chronos mode is operational.",
+                    "description": "Sprout: Chronos communication error"
+                }
+            ]
+        },
+        {
+            "index": 1005,
+            "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
+            "name": "SPROUT_RALF_COMM_ERROR",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "Sprout communication to at least one Ralf has been restored.",
+                    "description": "Sprout: Ralf communication error cleared"
+                },
+                {
+                    "severity": "MAJOR",
+                    "details": "Sprout is unable to contact any Ralfs. It will periodically attempt to reconnect. If this alarm does not clear, ensure that at least one Ralf is operational and that network connectivity exists between it and Sprout.",
+                    "description": "Sprout: Ralf communication error"
+                }
+            ]
+        },
+        {
+            "index": 1006,
+            "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
+            "name": "SPROUT_ENUM_COMM_ERROR",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "Sprout communication to the ENUM server has been restored.",
+                    "description": "Sprout: ENUM communication error cleared"
+                },
+                {
+                    "severity": "MAJOR",
+                    "details": "Sprout is unable to contact the ENUM server. It will periodically attempt to reconnect. If this alarm does not clear, ensure that the ENUM server is operational and that network connectivity exists between it and Sprout.",
+                    "description": "Sprout: ENUM communication error"
+                }
+            ]
+        },
+        {
+            "index": 1007,
+            "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
+            "name": "SPROUT_VBUCKET_ERROR",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "Sprout communication to Memcached for a piece of data has been restored.",
+                    "description": "Sprout: Memcached vBucket communication error cleared"
+                },
+                {
+                    "severity": "MAJOR",
+                    "details": "Sprout is unable to contact any Memcacheds for a piece of data. Some subscriber data will be unavailable. If this alarm does not clear, ensure that all Memcacheds are operational and that network connectivity exists between them and Sprout.",
+                    "description": "Sprout: Memcached vBucket communication error"
+                }
+            ]
+        },
+        {
+            "index": 1008,
+            "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
+            "name": "SPROUT_REMOTE_VBUCKET_ERROR",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "Sprout communication to Memcached for a remote piece of data has been restored.",
+                    "description": "Sprout: Memcached remote vBucket communication error cleared"
+                },
+                {
+                    "severity": "MAJOR",
+                    "details": "Sprout is unable to contact any Memcacheds for a remote piece of data. Some subscriber data will be unavailable. If this alarm does not clear, ensure that all remote Memcacheds are operational and that network connectivity exists between them and Sprout.",
+                    "description": "Sprout: Memcached remote vBucket communication error"
+                }
+            ]
+        }
+    ]
+}

@@ -53,6 +53,7 @@ extern "C" {
 #include "pjutils.h"
 #include "sproutsasevent.h"
 #include "sproutletproxy.h"
+#include "snmp_sip_request_types.h"
 
 const pj_str_t SproutletProxy::STR_SERVICE = {"service", 7};
 
@@ -63,14 +64,19 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
                                int priority,
                                const std::string& root_uri,
                                const std::unordered_set<std::string>& host_aliases,
-                               const std::list<Sproutlet*>& sproutlets) :
-  BasicProxy(endpt, "mod-sproutlet-controller", priority, false),
+                               const std::list<Sproutlet*>& sproutlets,
+                               const std::set<std::string> stateless_proxies) :
+  BasicProxy(endpt,
+             "mod-sproutlet-controller",
+             priority,
+             false,
+             stateless_proxies),
   _root_uri(NULL),
   _host_aliases(host_aliases),
   _sproutlets(sproutlets)
 {
   /// Store the URI of this SproutletProxy - this is used for Record-Routing.
-  LOG_DEBUG("Root Record-Route URI = %s", root_uri.c_str());
+  TRC_DEBUG("Root Record-Route URI = %s", root_uri.c_str());
   _root_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(root_uri, stack_data.pool, false);
 }
 
@@ -78,19 +84,6 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
 /// Destructor.
 SproutletProxy::~SproutletProxy()
 {
-}
-
-
-void SproutletProxy::on_timer_pop(pj_timer_heap_t* th,
-                                  pj_timer_entry* tentry)
-{
-  SproutletTimerCallbackData* tdata = (SproutletTimerCallbackData*)tentry->user_data;
-  LOG_DEBUG("Sproutlet timer popped, id = %ld", (TimerID)tdata);
-  tdata->proxy->on_timer_pop(tdata->uas_tsx,
-                             tdata->sproutlet_wrapper,
-                             tdata->context);
-  delete tentry;
-  delete tdata;
 }
 
 
@@ -106,7 +99,7 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
                                             int port,
                                             std::string& alias)
 {
-  LOG_DEBUG("Find target Sproutlet for request");
+  TRC_DEBUG("Find target Sproutlet for request");
 
   Sproutlet* sproutlet = NULL;
   std::string id;
@@ -138,7 +131,7 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
 
   if (uri != NULL)
   {
-    LOG_DEBUG("Found next routable URI: %s",
+    TRC_DEBUG("Found next routable URI: %s",
               PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                      (pjsip_uri*)uri).c_str());
 
@@ -163,7 +156,14 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
   }
   else
   {
-    LOG_DEBUG("Next route for message cannot be a sproutlet");
+    TRC_DEBUG("Next route for message cannot be a sproutlet");
+  }
+
+  // Force the S-CSCF Sproutlet to only be chosen based on port - this ensures that the PJSIP
+  // authentication module is invoked between the I-CSCF and the S-CSCF
+  if (sproutlet && (sproutlet->service_name() == "scscf"))
+  {
+    sproutlet = NULL;
   }
 
   if ((sproutlet == NULL) &&
@@ -172,12 +172,12 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
     // No service identifier in the Route URI, so check for a default service
     // for the port.  We can only do this if there is either no route header
     // or the URI in the Route header corresponds to our hostname.
-    LOG_DEBUG("No Sproutlet found using service name or host");
+    TRC_DEBUG("No Sproutlet found using service name or host");
     if ((route == NULL) ||
         (PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri) &&
          (is_host_local(&((pjsip_sip_uri*)route->name_addr.uri)->host))))
     {
-      LOG_DEBUG("Find default service for port %d", port);
+      TRC_DEBUG("Find default service for port %d", port);
       for (std::list<Sproutlet*>::iterator it = _sproutlets.begin();
            it != _sproutlets.end();
            ++it)
@@ -203,7 +203,7 @@ bool SproutletProxy::does_uri_match_sproutlet(const pjsip_uri* uri,
   if (!PJSIP_URI_SCHEME_IS_SIP(uri))
   {
     // LCOV_EXCL_START
-    LOG_DEBUG("Sproutlet's cannot match non-SIP URIs");
+    TRC_DEBUG("Sproutlet's cannot match non-SIP URIs");
     return false;
     // LCOV_EXCL_STOP
   }
@@ -230,7 +230,7 @@ bool SproutletProxy::does_uri_match_sproutlet(const pjsip_uri* uri,
   if (services_param != NULL)
   {
     // Check the services param
-    LOG_DEBUG("Found services param - %.*s",
+    TRC_DEBUG("Found services param - %.*s",
               services_param->value.slen,
               services_param->value.ptr);
     pj_str_t service_str = services_param->value;
@@ -258,7 +258,7 @@ bool SproutletProxy::does_uri_match_sproutlet(const pjsip_uri* uri,
     if (sip_uri->user.slen != 0)
     {
       // Use the username
-      LOG_DEBUG("Found user - %.*s", sip_uri->user.slen, sip_uri->user.ptr);
+      TRC_DEBUG("Found user - %.*s", sip_uri->user.slen, sip_uri->user.ptr);
       service_name = PJUtils::pj_str_to_string(&sip_uri->user);
       if (is_host_local(&sip_uri->host))
       {
@@ -322,18 +322,18 @@ bool SproutletProxy::does_uri_match_sproutlet(const pjsip_uri* uri,
 pjsip_sip_uri* SproutletProxy::create_sproutlet_uri(pj_pool_t* pool,
                                                     Sproutlet* sproutlet) const
 {
-  LOG_DEBUG("Creating URI for %s", sproutlet->service_name().c_str());
+  TRC_DEBUG("Creating URI for %s", sproutlet->service_name().c_str());
   pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, _root_uri);
   uri->lr_param = 1;
 
-  LOG_DEBUG("Add services parameter");
+  TRC_DEBUG("Add services parameter");
   pjsip_param* p = PJ_POOL_ALLOC_T(pool, pjsip_param);
   pj_strdup(pool, &p->name, &STR_SERVICE);
   pj_list_insert_before(&uri->other_param, p);
   std::string services = sproutlet->service_name();
   pj_strdup2(pool, &p->value, services.c_str());
 
-  LOG_DEBUG(PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+  TRC_DEBUG(PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                    (pjsip_uri*)uri).c_str());
 
   return uri;
@@ -385,62 +385,32 @@ bool SproutletProxy::is_host_local(const pj_str_t* host)
   return rc;
 }
 
-bool SproutletProxy::schedule_timer(SproutletProxy::UASTsx* uas_tsx,
-                                    SproutletWrapper* sproutlet_wrapper,
-                                    void* context,
-                                    TimerID& id,
-                                    int duration)
+bool SproutletProxy::schedule_timer(pj_timer_entry* tentry, int duration)
 {
-  pj_timer_entry* tentry = new pj_timer_entry();
-  memset(tentry, 0, sizeof(*tentry));
-
-  SproutletTimerCallbackData* tdata = new SproutletTimerCallbackData;
-  tdata->uas_tsx = uas_tsx;
-  tdata->sproutlet_wrapper = sproutlet_wrapper;
-  tdata->context = context;
-  tentry->user_data = tdata;
-
-  tentry->cb = SproutletProxy::on_timer_pop;
-
-  id = (TimerID)tentry;
-
   pj_time_val tval;
   tval.sec = duration / 1000;
   tval.msec = duration % 1000;
 
   pj_status_t rc = pjsip_endpt_schedule_timer(_endpt, tentry, &tval);
 
-  LOG_DEBUG("Started Sproutlet timer, id = %ld, duration = %d.%.3d",
-            id, tval.sec, tval.msec);
+  TRC_DEBUG("Started Sproutlet timer, id = %ld, duration = %d.%.3d",
+            (TimerID)tentry, tval.sec, tval.msec);
   return (rc == 0);
 }
 
 
-void SproutletProxy::cancel_timer(TimerID id)
+void SproutletProxy::cancel_timer(pj_timer_entry* tentry)
 {
-  pj_timer_entry* tentry = (pj_timer_entry*)id;
   pjsip_endpt_cancel_timer(_endpt, tentry);
-  SproutletTimerCallbackData* tdata = (SproutletTimerCallbackData*)tentry->user_data;
-  delete tdata;
-  delete tentry;
-  LOG_DEBUG("Cancelled Sproutlet timer, id = %ld", id);
+  TRC_DEBUG("Cancelled Sproutlet timer, id = %ld", (TimerID)tentry);
 }
 
 
-bool SproutletProxy::timer_running(TimerID id)
+bool SproutletProxy::timer_running(pj_timer_entry* tentry)
 {
-  pj_timer_entry* tentry = (pj_timer_entry*)id;
   return pj_timer_entry_running(tentry);
 }
 
-
-void SproutletProxy::on_timer_pop(SproutletProxy::UASTsx* uas_tsx,
-                                  SproutletWrapper* sproutlet_wrapper,
-                                  void* context)
-{
-  uas_tsx->process_timer_pop(sproutlet_wrapper,
-                             context);
-}
 
 SproutletProxy::UASTsx::UASTsx(SproutletProxy* proxy) :
   BasicProxy::UASTsx(proxy),
@@ -449,15 +419,26 @@ SproutletProxy::UASTsx::UASTsx(SproutletProxy* proxy) :
   _dmap_uac(),
   _umap(),
   _pending_req_q(),
-  _sproutlet_proxy(proxy)
+  _sproutlet_proxy(proxy),
+  _timers()
 {
-  LOG_VERBOSE("Sproutlet Proxy transaction (%p) created", this);
+  TRC_VERBOSE("Sproutlet Proxy transaction (%p) created", this);
 }
 
 
 SproutletProxy::UASTsx::~UASTsx()
 {
-  LOG_VERBOSE("Sproutlet Proxy transaction (%p) destroyed", this);
+  for (std::set<pj_timer_entry*>::const_iterator timer = _timers.begin();
+       timer != _timers.end();
+       ++timer)
+  {
+    SproutletTimerCallbackData* tdata = (SproutletTimerCallbackData*)(*timer)->user_data;
+    delete tdata;
+    delete *timer;
+  }
+  _timers.clear();
+
+  TRC_VERBOSE("Sproutlet Proxy transaction (%p) destroyed", this);
 }
 
 
@@ -488,7 +469,7 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
         // There is a top Route header in the request, which by definition
         // caused the request to be routed to this node, so remove it and
         // allow the request to be forwarded.
-        LOG_INFO("Remove top Route header and forward request");
+        TRC_INFO("Remove top Route header and forward request");
         pj_list_erase(route);
       }
       else
@@ -496,7 +477,7 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
         // There is no top Route header in the request, so forwarding it will
         // result in a loop.  There is no option other than to reject the
         // request.
-        LOG_INFO("Reject request");
+        TRC_INFO("Reject request");
         status = PJ_ENOTSUP;
       }
     }
@@ -545,17 +526,6 @@ void SproutletProxy::UASTsx::process_cancel_request(pjsip_rx_data* rdata)
 }
 
 
-/// Handle a timer expiring.
-void SproutletProxy::UASTsx::process_timer_pop(SproutletWrapper* sproutlet_wrapper,
-                                               void* context)
-{
-  enter_context();
-  sproutlet_wrapper->on_timer_pop(context);
-  schedule_requests();
-  exit_context();
-}
-
-
 /// Handles a response to an associated UACTsx.
 void SproutletProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
                                                     pjsip_tx_data *rsp)
@@ -592,7 +562,7 @@ void SproutletProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
   else
   {
     //LCOV_EXCL_START
-    LOG_DEBUG("Discard response %s (%s)", pjsip_tx_data_get_info(rsp), rsp->obj_name);
+    TRC_DEBUG("Discard response %s (%s)", pjsip_tx_data_get_info(rsp), rsp->obj_name);
     pjsip_tx_data_dec_ref(rsp);
     //LCOV_EXCL_STOP
   }
@@ -623,7 +593,7 @@ void SproutletProxy::UASTsx::on_client_not_responding(UACTsx* uac_tsx,
     _dmap_uac.erase(i->second);
     _umap.erase(i);
 
-    LOG_VERBOSE("Notifying upstream sproutlet %s of client failure: %s",
+    TRC_VERBOSE("Notifying upstream sproutlet %s of client failure: %s",
            upstream_sproutlet->service_name().c_str(), pjsip_event_str(event));
 
     upstream_sproutlet->rx_fork_error(event, upstream_fork);
@@ -658,7 +628,7 @@ void SproutletProxy::UASTsx::on_tsx_state(pjsip_event* event)
        (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR)))
   {
     // Notify the root Sproutlet of the error.
-    LOG_DEBUG("Pass error to Sproutlet %p", _root);
+    TRC_DEBUG("Pass error to Sproutlet %p", _root);
     _root->rx_error(PJSIP_SC_REQUEST_TIMEOUT);
 
     // Schedule any requests generated by the Sproutlet.
@@ -671,7 +641,7 @@ void SproutletProxy::UASTsx::on_tsx_state(pjsip_event* event)
 
   if (_tsx->state == PJSIP_TSX_STATE_DESTROYED)
   {
-    LOG_DEBUG("%s - UAS tsx destroyed", _tsx->obj_name);
+    TRC_DEBUG("%s - UAS tsx destroyed", _tsx->obj_name);
     _proxy->unbind_transaction(_tsx);
     _tsx = NULL;
 
@@ -720,7 +690,7 @@ void SproutletProxy::UASTsx::schedule_requests()
       // discard it if it's an ACK.
       if (req.req->msg->line.req.method.id != PJSIP_ACK_METHOD)
       {
-        LOG_INFO("Loop detected - rejecting request with 483 status code");
+        TRC_INFO("Loop detected - rejecting request with 483 status code");
         pjsip_tx_data* rsp;
         pj_status_t status = PJUtils::create_response(stack_data.endpt,
                                                       req.req,
@@ -735,7 +705,7 @@ void SproutletProxy::UASTsx::schedule_requests()
       }
       else
       {
-        LOG_INFO("Loop detected - discarding ACK request");
+        TRC_INFO("Loop detected - discarding ACK request");
       }
     }
     else
@@ -783,7 +753,7 @@ void SproutletProxy::UASTsx::schedule_requests()
       else
       {
         // No local Sproutlet, proxy the request.
-        LOG_DEBUG("No local sproutlet matches request");
+        TRC_DEBUG("No local sproutlet matches request");
         size_t index;
 
         pj_status_t status = allocate_uac(req.req, index);
@@ -818,22 +788,52 @@ bool SproutletProxy::UASTsx::schedule_timer(SproutletWrapper* tsx,
                                             TimerID& id,
                                             int duration)
 {
-  return _sproutlet_proxy->schedule_timer(this,
-                                          tsx,
-                                          context,
-                                          id,
-                                          duration);
+  SproutletTimerCallbackData* tdata = new SproutletTimerCallbackData;
+  tdata->uas_tsx = this;
+  tdata->sproutlet_wrapper = tsx;
+  tdata->context = context;
+
+  pj_timer_entry* tentry = new pj_timer_entry();
+  pj_timer_entry_init(tentry, 0, tdata, &SproutletProxy::UASTsx::on_timer_pop);
+
+  _timers.insert(tentry);
+
+  id = (TimerID)tentry;
+
+  return _sproutlet_proxy->schedule_timer(tentry, duration);
 }
 
 void SproutletProxy::UASTsx::cancel_timer(TimerID id)
 {
-  _sproutlet_proxy->cancel_timer(id);
+  pj_timer_entry* tentry = (pj_timer_entry*)id;
+  _sproutlet_proxy->cancel_timer(tentry);
 }
 
 
 bool SproutletProxy::UASTsx::timer_running(TimerID id)
 {
-  return _sproutlet_proxy->timer_running(id);
+  pj_timer_entry* tentry = (pj_timer_entry*)id;
+  return _sproutlet_proxy->timer_running(tentry);
+}
+
+
+void SproutletProxy::UASTsx::on_timer_pop(pj_timer_heap_t* th,
+                                          pj_timer_entry* tentry)
+{
+  TRC_DEBUG("Sproutlet timer popped, id = %ld", (TimerID)tentry);
+  ((SproutletTimerCallbackData*)tentry->user_data)->uas_tsx->process_timer_pop(tentry);
+}
+
+
+void SproutletProxy::UASTsx::process_timer_pop(pj_timer_entry* tentry)
+{
+  enter_context();
+
+  SproutletTimerCallbackData* tdata = (SproutletTimerCallbackData*)tentry->user_data;
+  tdata->sproutlet_wrapper->on_timer_pop(tdata->context);
+  schedule_requests();
+
+  exit_context();
 }
 
 
@@ -864,7 +864,7 @@ void SproutletProxy::UASTsx::tx_response(SproutletWrapper* downstream,
         // manually for INVITE 2xx response, otherwise the
         // transaction layer will wait for an ACK).  This will also
         // cause all other pending UAC transactions to be cancelled.
-        LOG_DEBUG("%s - Terminate UAS INVITE transaction", _tsx->obj_name);
+        TRC_DEBUG("%s - Terminate UAS INVITE transaction", _tsx->obj_name);
         pjsip_tsx_terminate(_tsx, st_code);
       }
     }
@@ -891,7 +891,7 @@ void SproutletProxy::UASTsx::tx_response(SproutletWrapper* downstream,
     {
       // Failed to find the upstream Sproutlet, so discard the response.
       //LCOV_EXCL_START
-      LOG_DEBUG("Discard response %s (%s)", pjsip_tx_data_get_info(rsp), rsp->obj_name);
+      TRC_DEBUG("Discard response %s (%s)", pjsip_tx_data_get_info(rsp), rsp->obj_name);
       pjsip_tx_data_dec_ref(rsp);
       //LCOV_EXCL_STOP
     }
@@ -906,7 +906,7 @@ void SproutletProxy::UASTsx::tx_cancel(SproutletWrapper* upstream,
                                        int fork_id,
                                        pjsip_tx_data* cancel)
 {
-  LOG_DEBUG("Process CANCEL from %s on fork %d",
+  TRC_DEBUG("Process CANCEL from %s on fork %d",
             upstream->service_name().c_str(), fork_id);
   DMap<SproutletWrapper*>::iterator i =
                        _dmap_sproutlet.find(std::make_pair(upstream, fork_id));
@@ -915,7 +915,7 @@ void SproutletProxy::UASTsx::tx_cancel(SproutletWrapper* upstream,
   {
     // Pass the CANCEL request to the downstream Sproutlet.
     SproutletWrapper* downstream = i->second;
-    LOG_DEBUG("Route CANCEL to %s", downstream->service_name().c_str());
+    TRC_DEBUG("Route CANCEL to %s", downstream->service_name().c_str());
     downstream->rx_cancel(cancel);
   }
   else
@@ -924,13 +924,13 @@ void SproutletProxy::UASTsx::tx_cancel(SproutletWrapper* upstream,
     if (j != _dmap_uac.end())
     {
       // CANCEL the downstream UAC transaction.
-      LOG_DEBUG("Route CANCEL to downstream UAC transaction");
+      TRC_DEBUG("Route CANCEL to downstream UAC transaction");
       UACTsx* uac_tsx = j->second;
       uac_tsx->cancel_pending_tsx(0);
     }
 
     // Free the CANCEL request.
-    LOG_DEBUG("Free CANCEL request (%s)", cancel->obj_name);
+    TRC_DEBUG("Free CANCEL request (%s)", cancel->obj_name);
     pjsip_tx_data_dec_ref(cancel);
   }
 }
@@ -948,7 +948,7 @@ void SproutletProxy::UASTsx::check_destroy()
       (_tsx == NULL))
   {
     // UAS transaction has been destroyed and all Sproutlets are complete.
-    LOG_DEBUG("Safe for UASTsx to suicide");
+    TRC_DEBUG("Safe for UASTsx to suicide");
     _pending_destroy = true;
   }
 }
@@ -971,6 +971,7 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _service_name(""),
   _id(""),
   _req(req),
+  _req_type(),
   _packets(),
   _send_requests(),
   _send_responses(),
@@ -981,6 +982,8 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _forks(),
   _trail_id(trail_id)
 {
+  _req_type = SNMP::string_to_request_type(_req->msg->line.req.method.name.ptr,
+                                           _req->msg->line.req.method.name.slen);
   if (sproutlet != NULL)
   {
     // Offer the Sproutlet the chance to handle this transaction.
@@ -1000,18 +1003,29 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
     _sproutlet_tsx = new SproutletTsx(this);
   }
 
+  if ((_sproutlet != NULL) && 
+      (_sproutlet->_incoming_sip_transactions_tbl != NULL))
+  {
+    // Update SNMP SIP transactions statistics for the Sproutlet.
+    _sproutlet->_incoming_sip_transactions_tbl->increment_attempts(_req_type);
+    if (_req_type == SNMP::SIPRequestTypes::ACK)
+    {
+      _sproutlet->_incoming_sip_transactions_tbl->increment_successes(_req_type);
+    }
+  }
+  
   // Construct a unique identifier for this Sproutlet.
   std::ostringstream id;
   id << _service_name << "-" << (const void*)_sproutlet_tsx;
   _id = id.str();
-  LOG_VERBOSE("Created Sproutlet %s for %s",
+  TRC_VERBOSE("Created Sproutlet %s for %s",
               _id.c_str(), pjsip_tx_data_get_info(req));
 }
 
 SproutletWrapper::~SproutletWrapper()
 {
   // Destroy the SproutletTsx.
-  LOG_DEBUG("Destroying SproutletWrapper %p", this);
+  TRC_DEBUG("Destroying SproutletWrapper %p", this);
   if (_sproutlet_tsx != NULL)
   {
     delete _sproutlet_tsx;
@@ -1019,17 +1033,17 @@ SproutletWrapper::~SproutletWrapper()
 
   if (_req != NULL)
   {
-    LOG_DEBUG("Free original request %s (%s)",
+    TRC_DEBUG("Free original request %s (%s)",
               pjsip_tx_data_get_info(_req), _req->obj_name);
     pjsip_tx_data_dec_ref(_req);
   }
 
   if (!_packets.empty())
   {
-    LOG_WARNING("Sproutlet %s leaked %d messages - reclaiming", _id.c_str(), _packets.size());
+    TRC_WARNING("Sproutlet %s leaked %d messages - reclaiming", _id.c_str(), _packets.size());
     for (Packets::iterator it = _packets.begin(); it != _packets.end(); ++it)
     {
-      LOG_WARNING("  Leaked message - %s", pjsip_tx_data_get_info(it->second));
+      TRC_WARNING("  Leaked message - %s", pjsip_tx_data_get_info(it->second));
       pjsip_tx_data_dec_ref(it->second);
     }
   }
@@ -1053,7 +1067,7 @@ pjsip_msg* SproutletWrapper::original_request()
   if (clone == NULL)
   {
     //LCOV_EXCL_START
-    LOG_ERROR("Failed to clone original request for Sproutlet %s", _service_name.c_str());
+    TRC_ERROR("Failed to clone original request for Sproutlet %s", _service_name.c_str());
     return NULL;
     //LCOV_EXCL_STOP
   }
@@ -1066,7 +1080,7 @@ pjsip_msg* SproutletWrapper::original_request()
   if ((hr != NULL) &&
       (is_uri_local(hr->name_addr.uri)))
   {
-    LOG_DEBUG("Remove top Route header %s", PJUtils::hdr_to_string(hr).c_str());
+    TRC_DEBUG("Remove top Route header %s", PJUtils::hdr_to_string(hr).c_str());
     pj_list_erase(hr);
   }
 
@@ -1103,13 +1117,49 @@ const pjsip_route_hdr* SproutletWrapper::route_hdr() const
   return NULL;
 }
 
+pjsip_msg* SproutletWrapper::create_request()
+{
+  // Create a new tdata
+  pj_status_t status;
+  pjsip_tx_data* new_tdata;
+
+  status = pjsip_endpt_create_tdata(stack_data.endpt, &new_tdata);
+
+  if (status != PJ_SUCCESS)
+  {
+    //LCOV_EXCL_START
+    TRC_ERROR("Failed to create new request");
+    return NULL;
+    //LCOV_EXCL_STOP
+  }
+
+  pjsip_tx_data_add_ref(new_tdata);
+
+  // Create a message inside the tdata
+  new_tdata->msg = pjsip_msg_create(new_tdata->pool, PJSIP_REQUEST_MSG);
+
+  // Add any additional request headers from the endpoint
+  const pjsip_hdr* endpt_hdr = pjsip_endpt_get_request_headers(stack_data.endpt)->next;
+  while (endpt_hdr != pjsip_endpt_get_request_headers(stack_data.endpt))
+  {
+    pjsip_hdr* hdr = (pjsip_hdr*)pjsip_hdr_shallow_clone(new_tdata->pool, endpt_hdr);
+    pjsip_msg_add_hdr(new_tdata->msg, hdr);
+    endpt_hdr = endpt_hdr->next;
+  }
+
+  set_trail(new_tdata, trail());
+  register_tdata(new_tdata);
+
+  return new_tdata->msg;
+}
+
 pjsip_msg* SproutletWrapper::clone_request(pjsip_msg* req)
 {
   // Get the old tdata from the map of clones
   Packets::iterator it = _packets.find(req);
   if (it == _packets.end())
   {
-    LOG_WARNING("Sproutlet attempted to clone an unrecognised request");
+    TRC_WARNING("Sproutlet attempted to clone an unrecognised request");
     return NULL;
   }
 
@@ -1119,7 +1169,7 @@ pjsip_msg* SproutletWrapper::clone_request(pjsip_msg* req)
   if (new_tdata == NULL)
   {
     //LCOV_EXCL_START
-    LOG_ERROR("Failed to clone request for Sproutlet %s", _service_name.c_str());
+    TRC_ERROR("Failed to clone request for Sproutlet %s", _service_name.c_str());
     return NULL;
     //LCOV_EXCL_STOP
   }
@@ -1137,7 +1187,7 @@ pjsip_msg* SproutletWrapper::create_response(pjsip_msg* req,
   Packets::iterator it = _packets.find(req);
   if (it == _packets.end())
   {
-    LOG_WARNING("Sproutlet attempted to create a response from an unrecognised request");
+    TRC_WARNING("Sproutlet attempted to create a response from an unrecognised request");
     return NULL;
   }
 
@@ -1165,23 +1215,34 @@ pjsip_msg* SproutletWrapper::create_response(pjsip_msg* req,
 
 int SproutletWrapper::send_request(pjsip_msg*& req)
 {
-  LOG_DEBUG("Sproutlet send_request %p", req);
+  TRC_DEBUG("Sproutlet send_request %p", req);
 
   // Get the tdata from the map of clones
   Packets::iterator it = _packets.find(req);
   if (it == _packets.end())
   {
-    LOG_ERROR("Sproutlet attempted to forward an unrecognised request");
+    TRC_ERROR("Sproutlet attempted to forward an unrecognised request");
     return -1;
   }
 
   // Check that this actually is a request
   if (req->type != PJSIP_REQUEST_MSG)
   {
-    LOG_ERROR("Sproutlet attempted to forward a response as a request");
+    TRC_ERROR("Sproutlet attempted to forward a response as a request");
     return -1;
   }
 
+  if ((_sproutlet != NULL) && 
+      (_sproutlet->_outgoing_sip_transactions_tbl != NULL))
+  {
+    // Update SNMP SIP transactions statistics for the Sproutlet.
+    _sproutlet->_outgoing_sip_transactions_tbl->increment_attempts(_req_type);
+    if (_req_type == SNMP::SIPRequestTypes::ACK)
+    {
+      _sproutlet->_outgoing_sip_transactions_tbl->increment_successes(_req_type);
+    }
+  }
+  
   // We've found the tdata, move it to _send_requests under a new unique ID.
   int fork_id = _forks.size();
   _forks.resize(fork_id + 1);
@@ -1189,7 +1250,7 @@ int SproutletWrapper::send_request(pjsip_msg*& req)
   _forks[fork_id].state.error_state = NONE;
   _forks[fork_id].pending_cancel = false;
   _send_requests[fork_id] = it->second;
-  LOG_VERBOSE("%s sending %s on fork %d",
+  TRC_VERBOSE("%s sending %s on fork %d",
               _id.c_str(), pjsip_tx_data_get_info(it->second), fork_id);
 
   // Move the clone out of the clones list.
@@ -1206,18 +1267,18 @@ void SproutletWrapper::send_response(pjsip_msg*& rsp)
   Packets::iterator it = _packets.find(rsp);
   if (it == _packets.end())
   {
-    LOG_ERROR("Sproutlet attempted to send an unrecognised response");
+    TRC_ERROR("Sproutlet attempted to send an unrecognised response");
     return;
   }
 
   // Check that this actually is a response
   if (rsp->type != PJSIP_RESPONSE_MSG)
   {
-    LOG_ERROR("Sproutlet attempted to forward a request as a response");
+    TRC_ERROR("Sproutlet attempted to forward a request as a response");
     return;
   }
 
-  LOG_VERBOSE("%s sending %s", _id.c_str(), pjsip_tx_data_get_info(it->second));
+  TRC_VERBOSE("%s sending %s", _id.c_str(), pjsip_tx_data_get_info(it->second));
 
   // We've found the tdata, move it to _send_responses.
   _send_responses.push_back(it->second);
@@ -1231,7 +1292,7 @@ void SproutletWrapper::send_response(pjsip_msg*& rsp)
 
 void SproutletWrapper::cancel_fork(int fork_id, int reason)
 {
-  LOG_DEBUG("Request to cancel fork %d, reason = %d", fork_id, reason);
+  TRC_DEBUG("Request to cancel fork %d, reason = %d", fork_id, reason);
   if ((_forks.size() > (size_t)fork_id) &&
       (_forks[fork_id].state.tsx_state != PJSIP_TSX_STATE_TERMINATED))
   {
@@ -1239,7 +1300,7 @@ void SproutletWrapper::cancel_fork(int fork_id, int reason)
     {
       // The fork is still pending a final response to an INVITE request, so
       // we can CANCEL it.
-      LOG_VERBOSE("%s cancelling fork %d, reason = %d",
+      TRC_VERBOSE("%s cancelling fork %d, reason = %d",
                   _id.c_str(), fork_id, reason);
       _forks[fork_id].pending_cancel = true;
       _forks[fork_id].cancel_reason = reason;
@@ -1258,7 +1319,7 @@ void SproutletWrapper::cancel_pending_forks(int reason)
       {
         // The fork is still pending a final response to an INVITE request, so
         // we can CANCEL it.
-        LOG_VERBOSE("%s cancelling fork %d, reason = %d", _id.c_str(), ii, reason);
+        TRC_VERBOSE("%s cancelling fork %d, reason = %d", _id.c_str(), ii, reason);
         _forks[ii].pending_cancel = true;
         _forks[ii].cancel_reason = reason;
       }
@@ -1286,7 +1347,7 @@ void SproutletWrapper::free_msg(pjsip_msg*& msg)
   Packets::iterator it = _packets.find(msg);
   if (it == _packets.end())
   {
-    LOG_ERROR("Sproutlet attempted to free an unrecognised message");
+    TRC_ERROR("Sproutlet attempted to free an unrecognised message");
     return;
   }
 
@@ -1294,7 +1355,7 @@ void SproutletWrapper::free_msg(pjsip_msg*& msg)
 
   deregister_tdata(tdata);
 
-  LOG_DEBUG("Free message %s", tdata->obj_name);
+  TRC_DEBUG("Free message %s", tdata->obj_name);
   pjsip_tx_data_dec_ref(tdata);
 
   // Finish up
@@ -1307,7 +1368,7 @@ pj_pool_t* SproutletWrapper::get_pool(const pjsip_msg* msg)
   Packets::iterator it = _packets.find(msg);
   if (it == _packets.end())
   {
-    LOG_ERROR("Sproutlet attempted to get the pool for an unrecognised message");
+    TRC_ERROR("Sproutlet attempted to get the pool for an unrecognised message");
     return NULL;
   }
 
@@ -1379,13 +1440,13 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
 
   if (PJSIP_MSG_TO_HDR(clone)->tag.slen == 0)
   {
-    LOG_VERBOSE("%s pass initial request %s to Sproutlet",
+    TRC_VERBOSE("%s pass initial request %s to Sproutlet",
                 _id.c_str(), msg_info(clone));
     _sproutlet_tsx->on_rx_initial_request(clone);
   }
   else
   {
-    LOG_VERBOSE("%s pass in dialog request %s to Sproutlet",
+    TRC_VERBOSE("%s pass in dialog request %s to Sproutlet",
                 _id.c_str(), msg_info(clone));
     _sproutlet_tsx->on_rx_in_dialog_request(clone);
   }
@@ -1414,7 +1475,7 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
     // Provisional response on fork still in calling state, so move to
     // proceeding state.
     _forks[fork_id].state.tsx_state = PJSIP_TSX_STATE_PROCEEDING;
-    LOG_VERBOSE("%s received provisional response %s on fork %d, state = %s",
+    TRC_VERBOSE("%s received provisional response %s on fork %d, state = %s",
                 _id.c_str(), pjsip_tx_data_get_info(rsp),
                 fork_id, pjsip_tsx_state_str(_forks[fork_id].state.tsx_state));
   }
@@ -1425,10 +1486,24 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
     _forks[fork_id].state.tsx_state = PJSIP_TSX_STATE_TERMINATED;
     pjsip_tx_data_dec_ref(_forks[fork_id].req);
     _forks[fork_id].req = NULL;
-    LOG_VERBOSE("%s received final response %s on fork %d, state = %s",
+    TRC_VERBOSE("%s received final response %s on fork %d, state = %s",
                 _id.c_str(), pjsip_tx_data_get_info(rsp),
                 fork_id, pjsip_tsx_state_str(_forks[fork_id].state.tsx_state));
     --_pending_responses;
+  
+    if ((_sproutlet != NULL) && 
+      (_sproutlet->_outgoing_sip_transactions_tbl != NULL))
+    {
+      // Update SNMP SIP transactions statistics for the Sproutlet.
+      if (rsp->msg->line.status.code >= 200 && rsp->msg->line.status.code < 300)
+      {
+        _sproutlet->_outgoing_sip_transactions_tbl->increment_successes(_req_type);
+      }
+      else
+      {
+        _sproutlet->_outgoing_sip_transactions_tbl->increment_failures(_req_type);
+      }
+    }
   }
   _sproutlet_tsx->on_rx_response(rsp->msg, fork_id);
   process_actions(false);
@@ -1436,7 +1511,7 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
 
 void SproutletWrapper::rx_cancel(pjsip_tx_data* cancel)
 {
-  LOG_VERBOSE("%s received CANCEL request", _id.c_str());
+  TRC_VERBOSE("%s received CANCEL request", _id.c_str());
   _sproutlet_tsx->on_rx_cancel(PJSIP_SC_REQUEST_TERMINATED,
                            cancel->msg);
   pjsip_tx_data_dec_ref(cancel);
@@ -1446,7 +1521,7 @@ void SproutletWrapper::rx_cancel(pjsip_tx_data* cancel)
 
 void SproutletWrapper::rx_error(int status_code)
 {
-  LOG_VERBOSE("%s received error %d", _id.c_str(), status_code);
+  TRC_VERBOSE("%s received error %d", _id.c_str(), status_code);
   _sproutlet_tsx->on_rx_cancel(status_code, NULL);
   cancel_pending_forks();
 
@@ -1458,7 +1533,7 @@ void SproutletWrapper::rx_error(int status_code)
 
 void SproutletWrapper::rx_fork_error(pjsip_event_id_e event, int fork_id)
 {
-  LOG_VERBOSE("%s received error %s on fork %d, state = %s",
+  TRC_VERBOSE("%s received error %s on fork %d, state = %s",
               _id.c_str(), pjsip_event_str(event),
               fork_id, pjsip_tsx_state_str(_forks[fork_id].state.tsx_state));
 
@@ -1505,21 +1580,21 @@ void SproutletWrapper::rx_fork_error(pjsip_event_id_e event, int fork_id)
 
 void SproutletWrapper::on_timer_pop(void* context)
 {
-  LOG_DEBUG("Timer has popped");
+  TRC_DEBUG("Timer has popped");
   _sproutlet_tsx->on_timer_expiry(context);
   process_actions(false);
 }
 
 void SproutletWrapper::register_tdata(pjsip_tx_data* tdata)
 {
-  LOG_DEBUG("Adding message %p => txdata %p mapping",
+  TRC_DEBUG("Adding message %p => txdata %p mapping",
             tdata->msg, tdata);
   _packets[tdata->msg] = tdata;
 }
 
 void SproutletWrapper::deregister_tdata(pjsip_tx_data* tdata)
 {
-  LOG_DEBUG("Removing message %p => txdata %p mapping",
+  TRC_DEBUG("Removing message %p => txdata %p mapping",
             tdata->msg, tdata);
   _packets.erase(tdata->msg);
 }
@@ -1527,7 +1602,7 @@ void SproutletWrapper::deregister_tdata(pjsip_tx_data* tdata)
 /// Process actions required by a Sproutlet
 void SproutletWrapper::process_actions(bool complete_after_actions)
 {
-  LOG_DEBUG("Processing actions from sproutlet - %d responses, %d requests",
+  TRC_DEBUG("Processing actions from sproutlet - %d responses, %d requests",
             _send_responses.size(), _send_requests.size());
 
   // First increment the pending sends count by the number of requests waiting
@@ -1550,7 +1625,7 @@ void SproutletWrapper::process_actions(bool complete_after_actions)
     // There are no pending responses and no new forked requests waiting to
     // be sent, and the Sproutlet has sent at least one final response, so
     // send this best response upstream.
-    LOG_DEBUG("All UAC responded");
+    TRC_DEBUG("All UAC responded");
     tx_response(_best_rsp);
   }
 
@@ -1563,7 +1638,7 @@ void SproutletWrapper::process_actions(bool complete_after_actions)
     pjsip_tx_data* tdata = i->second;
     _send_requests.erase(i);
 
-    LOG_DEBUG("Processing request %p, fork = %d", tdata, fork_id);
+    TRC_DEBUG("Processing request %p, fork = %d", tdata, fork_id);
 
     tx_request(tdata, fork_id);
   }
@@ -1572,14 +1647,14 @@ void SproutletWrapper::process_actions(bool complete_after_actions)
   {
     if (_forks[ii].pending_cancel)
     {
-      LOG_VERBOSE("%s fork %d pending CANCEL, state = %s",
+      TRC_VERBOSE("%s fork %d pending CANCEL, state = %s",
                   _id.c_str(), ii, pjsip_tsx_state_str(_forks[ii].state.tsx_state));
 
       if (_forks[ii].state.tsx_state == PJSIP_TSX_STATE_PROCEEDING)
       {
         // Fork has been marked as pending cancel and we have received a
         // provisional response, so can send the CANCEL.
-        LOG_DEBUG("Send CANCEL for fork %d", ii);
+        TRC_DEBUG("Send CANCEL for fork %d", ii);
         tx_cancel(ii);
       }
     }
@@ -1589,13 +1664,13 @@ void SproutletWrapper::process_actions(bool complete_after_actions)
   {
     _complete = true;
   }
-
+  
   if ((_complete) &&
       (_pending_responses == 0))
   {
     // Sproutlet has sent a final response and has no downstream forks
     // waiting a response, so should destroy itself.
-    LOG_VERBOSE("%s suiciding", _id.c_str());
+    TRC_VERBOSE("%s suiciding", _id.c_str());
     delete this;
   }
 }
@@ -1603,13 +1678,13 @@ void SproutletWrapper::process_actions(bool complete_after_actions)
 void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
 {
   int status_code = rsp->msg->line.status.code;
-  LOG_DEBUG("Aggregating response with status code %d", status_code);
+  TRC_DEBUG("Aggregating response with status code %d", status_code);
 
   if (_complete)
   {
     // We've already sent a final response upstream (a 200 OK) so discard
     // this response.
-    LOG_DEBUG("Discard stale response %s (%s)",
+    TRC_DEBUG("Discard stale response %s (%s)",
               pjsip_tx_data_get_info(rsp), rsp->obj_name);
     deregister_tdata(rsp);
     pjsip_tx_data_dec_ref(rsp);
@@ -1620,7 +1695,7 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
   {
     // We will already have sent a locally generated 100 Trying response, so
     // don't forward this one.
-    LOG_DEBUG("Discard 100/INVITE response (%s)", rsp->obj_name);
+    TRC_DEBUG("Discard 100/INVITE response (%s)", rsp->obj_name);
     deregister_tdata(rsp);
     pjsip_tx_data_dec_ref(rsp);
     return;
@@ -1630,18 +1705,18 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
       (status_code < 199))
   {
     // Forward all provisional responses to INVITEs.
-    LOG_DEBUG("Forward 1xx response");
+    TRC_DEBUG("Forward 1xx response");
     tx_response(rsp);
   }
   else if (PJSIP_IS_STATUS_IN_CLASS(status_code, 200))
   {
     // 2xx response.
-    LOG_DEBUG("Forward 2xx response");
+    TRC_DEBUG("Forward 2xx response");
 
     // Send this response immediately as a final response.
     if (_best_rsp != NULL)
     {
-      LOG_DEBUG("Discard previous best response %s (%s)",
+      TRC_DEBUG("Discard previous best response %s (%s)",
                 pjsip_tx_data_get_info(_best_rsp), _best_rsp->obj_name);
       deregister_tdata(_best_rsp);
       pjsip_tx_data_dec_ref(_best_rsp);
@@ -1653,15 +1728,15 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
   else
   {
     // Final, non-OK response.  Is this the "best" response received so far?
-    LOG_DEBUG("3xx/4xx/5xx/6xx response");
+    TRC_DEBUG("3xx/4xx/5xx/6xx response");
     if ((_best_rsp == NULL) ||
         (compare_sip_sc(status_code, _best_rsp->msg->line.status.code) > 0))
     {
-      LOG_DEBUG("Best 3xx/4xx/5xx/6xx response so far");
+      TRC_DEBUG("Best 3xx/4xx/5xx/6xx response so far");
 
       if (_best_rsp != NULL)
       {
-        LOG_DEBUG("Discard previous best response %s (%s)",
+        TRC_DEBUG("Discard previous best response %s (%s)",
                   pjsip_tx_data_get_info(_best_rsp), _best_rsp->obj_name);
         deregister_tdata(_best_rsp);
         pjsip_tx_data_dec_ref(_best_rsp);
@@ -1671,7 +1746,7 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
     }
     else
     {
-      LOG_DEBUG("Discard response %s (%s) - we already have a better one",
+      TRC_DEBUG("Discard response %s (%s) - we already have a better one",
                 pjsip_tx_data_get_info(rsp), rsp->obj_name);
       deregister_tdata(rsp);
       pjsip_tx_data_dec_ref(rsp);
@@ -1681,7 +1756,7 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
 
 void SproutletWrapper::tx_request(pjsip_tx_data* req, int fork_id)
 {
-  LOG_DEBUG("%s transmitting request on fork %d", _id.c_str(), fork_id);
+  TRC_DEBUG("%s transmitting request on fork %d", _id.c_str(), fork_id);
   --_pending_sends;
 
   if (req->msg->line.req.method.id != PJSIP_ACK_METHOD)
@@ -1694,7 +1769,7 @@ void SproutletWrapper::tx_request(pjsip_tx_data* req, int fork_id)
     ++_pending_responses;
 
     // Store a reference to the request.
-    LOG_DEBUG("%s store reference to non-ACK request %s on fork %d",
+    TRC_DEBUG("%s store reference to non-ACK request %s on fork %d",
               _id.c_str(), pjsip_tx_data_get_info(req), fork_id);
     pjsip_tx_data_add_ref(req);
     _forks[fork_id].req = req;
@@ -1722,6 +1797,20 @@ void SproutletWrapper::tx_response(pjsip_tx_data* rsp)
   {
     _complete = true;
     cancel_pending_forks();
+    if ((_sproutlet != NULL) &&
+        (_sproutlet->_incoming_sip_transactions_tbl != NULL))
+    {
+      // Update SNMP SIP transactions statistics for the Sproutlet.
+      if ((_best_rsp != NULL) && 
+               (_best_rsp->msg->line.status.code >= 200 && _best_rsp->msg->line.status.code < 300))
+      {
+        _sproutlet->_incoming_sip_transactions_tbl->increment_successes(_req_type);
+      }
+      else
+      {
+        _sproutlet->_incoming_sip_transactions_tbl->increment_failures(_req_type);
+      }
+    }
   }
 
   // Forward the response upstream.
@@ -1750,7 +1839,7 @@ void SproutletWrapper::tx_cancel(int fork_id)
 int SproutletWrapper::compare_sip_sc(int sc1, int sc2)
 {
   // Order is: (best) 487, 300, 301, ..., 698, 699, 408 (worst).
-  LOG_DEBUG("Compare new status code %d with stored status code %d", sc1, sc2);
+  TRC_DEBUG("Compare new status code %d with stored status code %d", sc1, sc2);
   if (sc1 == sc2)
   {
     // Status codes are equal.
@@ -1805,7 +1894,7 @@ void SproutletWrapper::log_inter_sproutlet(pjsip_tx_data* tdata,
   // Defensively set size to zero if pjsip_msg_print failed
   size = std::max(0L, size);
 
-  LOG_VERBOSE("Routing %s (%d bytes) to %s sproutlet %s:\n"
+  TRC_VERBOSE("Routing %s (%d bytes) to %s sproutlet %s:\n"
               "--start msg--\n\n"
               "%.*s\n"
               "--end msg--",

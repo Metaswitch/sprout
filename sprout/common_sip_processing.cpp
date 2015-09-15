@@ -40,10 +40,8 @@
  */
 
 extern "C" {
-#include <pjsip.h>
 #include <pjlib-util.h>
 #include <pjlib.h>
-#include "pjsip-simple/evsub.h"
 }
 #include <arpa/inet.h>
 
@@ -56,6 +54,7 @@ extern "C" {
 #include <queue>
 #include <string>
 
+#include "common_sip_processing.h"
 #include "constants.h"
 #include "pjutils.h"
 #include "log.h"
@@ -66,18 +65,18 @@ extern "C" {
 #include "utils.h"
 #include "custom_headers.h"
 #include "utils.h"
-#include "accumulator.h"
 #include "load_monitor.h"
-#include "counter.h"
 #include "health_checker.h"
 
-static Counter* requests_counter = NULL;
-static Counter* overload_counter = NULL;
+static SNMP::CounterTable* requests_counter = NULL;
+static SNMP::CounterTable* overload_counter = NULL;
 static LoadMonitor* load_monitor = NULL;
 static HealthChecker* health_checker = NULL;
 
 static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata);
 static pj_status_t process_on_tx_msg(pjsip_tx_data* tdata);
+
+static SAS::TrailId DONT_LOG_TO_SAS = 0xFFFFFFFF;
 
 // Module handling common processing for all SIP messages - logging,
 // overload control, and rejection of bad requests.
@@ -107,7 +106,7 @@ static pjsip_module mod_common_processing =
 
 static void local_log_rx_msg(pjsip_rx_data* rdata)
 {
-  LOG_VERBOSE("RX %d bytes %s from %s %s:%d:\n"
+  TRC_VERBOSE("RX %d bytes %s from %s %s:%d:\n"
               "--start msg--\n\n"
               "%.*s\n"
               "--end msg--",
@@ -123,7 +122,7 @@ static void local_log_rx_msg(pjsip_rx_data* rdata)
 
 static void local_log_tx_msg(pjsip_tx_data* tdata)
 {
-  LOG_VERBOSE("TX %d bytes %s to %s %s:%d:\n"
+  TRC_VERBOSE("TX %d bytes %s to %s %s:%d:\n"
               "--start msg--\n\n"
               "%.*s\n"
               "--end msg--",
@@ -205,16 +204,34 @@ static void sas_log_rx_msg(pjsip_rx_data* rdata)
       trail = get_trail(tsx);
     }
   }
+  else if ((rdata->msg_info.msg->line.req.method.id == PJSIP_OPTIONS_METHOD) &&
+           PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri))
+  {
+    // This is an OPTIONS poll directed at this node. Don't log it to SAS, and set the trail ID to a sentinel value so we don't log the response either.
+    TRC_DEBUG("Skipping SAS logging for OPTIONS request");
+    set_trail(rdata, DONT_LOG_TO_SAS);
+    return;
+  }
 
   if (trail == 0)
   {
     // The message doesn't correlate to an existing trail, so create a new
     // one.
-    trail = SAS::new_trail(1u);
+
+    // If SAS::new_trail returns 0 or DONT_LOG_TO_SAS, keep going.
+    while ((trail == 0) || (trail == DONT_LOG_TO_SAS))
+    {
+      trail = SAS::new_trail(1u);
+    }
   }
 
   // Store the trail in the message as it gets passed up the stack.
   set_trail(rdata, trail);
+
+  PJUtils::report_sas_to_from_markers(trail, rdata->msg_info.msg);
+
+  pjsip_cid_hdr* cid = (pjsip_cid_hdr*)rdata->msg_info.cid;
+  PJUtils::mark_sas_call_branch_ids(trail, cid, rdata->msg_info.msg);
 
   // Log the message event.
   SAS::Event event(trail, SASEvent::RX_SIP_MSG, 0);
@@ -231,8 +248,17 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
   // For outgoing messages always use the trail identified in the module data
   SAS::TrailId trail = get_trail(tdata);
 
-  if (trail != 0)
+  if (trail == DONT_LOG_TO_SAS)
   {
+    TRC_DEBUG("Skipping SAS logging for OPTIONS response");
+    return;
+  }
+  else if (trail != 0)
+  {
+    PJUtils::report_sas_to_from_markers(trail, tdata->msg);
+
+    PJUtils::mark_sas_call_branch_ids(trail, NULL, tdata->msg);
+
     // Log the message event.
     SAS::Event event(trail, SASEvent::TX_SIP_MSG, 0);
     event.add_static_param(pjsip_transport_get_type_from_flag(tdata->tp_info.transport->flag));
@@ -245,7 +271,7 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
   }
   else
   {
-    LOG_ERROR("Transmitting message with no SAS trail identifier\n%.*s",
+    TRC_ERROR("Transmitting message with no SAS trail identifier\n%.*s",
               (int)(tdata->buf.cur - tdata->buf.start),
               tdata->buf.start);
   }
@@ -268,9 +294,7 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
     // Discard non-ACK requests if there are no available tokens.
     // Respond statelessly with a 503 Service Unavailable, including a
     // Retry-After header with a zero length timeout.
-    LOG_DEBUG("Rejected request due to overload");
-
-    pjsip_cid_hdr* cid = (pjsip_cid_hdr*)rdata->msg_info.cid;
+    TRC_DEBUG("Rejected request due to overload");
 
     // LCOV_EXCL_START - can't meaningfully verify SAS in UT
     SAS::TrailId trail = get_trail(rdata);
@@ -283,21 +307,6 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
     event.add_static_param(load_monitor->get_current_latency());
     event.add_static_param(load_monitor->get_rate_limit());
     SAS::report_event(event);
-
-    PJUtils::report_sas_to_from_markers(trail, rdata->msg_info.msg);
-
-    if ((rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
-        ((pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_subscribe_method())) == 0) ||
-        ((pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_notify_method())) == 0))
-    {
-      // Omit the Call-ID for these requests, as the same Call-ID can be
-      // reused over a long period of time and produce huge SAS trails.
-      PJUtils::mark_sas_call_branch_ids(trail, NULL, rdata->msg_info.msg);
-    }
-    else
-    {
-      PJUtils::mark_sas_call_branch_ids(trail, cid, rdata->msg_info.msg);
-    }
 
     SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
     SAS::report_marker(end_marker);
@@ -326,7 +335,7 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
   if (!pj_list_empty((pj_list_type*)&rdata->msg_info.parse_err))
   {
     SAS::TrailId trail = get_trail(rdata);
-    LOG_DEBUG("Report SAS start marker - trail (%llx)", trail);
+    TRC_DEBUG("Report SAS start marker - trail (%llx)", trail);
     SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
     SAS::report_marker(start_marker);
 
@@ -336,7 +345,7 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
     pjsip_parser_err_report *err = rdata->msg_info.parse_err.next;
     while (err != &rdata->msg_info.parse_err)
     {
-      LOG_VERBOSE("Error parsing header %.*s", (int)err->hname.slen, err->hname.ptr);
+      TRC_VERBOSE("Error parsing header %.*s", (int)err->hname.slen, err->hname.ptr);
       SAS::Event event(trail, SASEvent::UNPARSEABLE_HEADER, 0);
       event.add_var_param((int)err->hname.slen, err->hname.ptr);
       SAS::report_event(event);
@@ -345,7 +354,7 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
 
     if (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG)
     {
-      LOG_WARNING("Rejecting malformed request with a 400 error");
+      TRC_WARNING("Rejecting malformed request with a 400 error");
       PJUtils::respond_stateless(stack_data.endpt,
                                  rdata,
                                  PJSIP_SC_BAD_REQUEST,
@@ -355,7 +364,7 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
     }
     else
     {
-      LOG_WARNING("Dropping malformed response");
+      TRC_WARNING("Dropping malformed response");
     }
 
     // As this message is malformed, return PJ_TRUE to absorb it and
@@ -386,8 +395,8 @@ static pj_status_t process_on_tx_msg(pjsip_tx_data* tdata)
 
 pj_status_t
 init_common_sip_processing(LoadMonitor* load_monitor_arg,
-                           Counter* requests_counter_arg,
-                           Counter* overload_counter_arg,
+                           SNMP::CounterTable* requests_counter_arg,
+                           SNMP::CounterTable* overload_counter_arg,
                            HealthChecker* health_checker_arg)
 {
   // Register the stack modules.

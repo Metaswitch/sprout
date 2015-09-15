@@ -48,6 +48,7 @@ extern "C" {
 #include "regstore.h"
 #include "ifchandler.h"
 #include "hssconnection.h"
+#include "snmp_success_fail_count_table.h"
 
 namespace RegistrationUtils {
 
@@ -65,11 +66,13 @@ void register_with_application_servers(Ifcs& ifcs,
                                        int expires,
                                        bool is_initial_registration,
                                        const std::string& served_user,
+                                       SNMP::RegistrationStatsTables* third_party_reg_stats_tbls,
                                        SAS::TrailId trail);
 
 void deregister_with_application_servers(Ifcs&,
                                          RegStore* store,
                                          const std::string&,
+                                         SNMP::RegistrationStatsTables* third_party_reg_stats_tbls,
                                          SAS::TrailId trail);
 
 } // namespace RegistrationUtils

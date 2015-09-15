@@ -51,7 +51,7 @@ extern "C" {
 #include <string>
 #include <atomic>
 
-#include "statistic.h"
+#include "snmp_scalar.h"
 #include "stack.h"
 #include "quiescing_manager.h"
 
@@ -168,8 +168,8 @@ private:
 class FlowTable : public QuiesceFlowsInterface
 {
 public:
-  FlowTable(QuiescingManager* qm, LastValueCache *lvc);
-  ~FlowTable();
+  FlowTable(QuiescingManager* qm, SNMP::U32Scalar* connection_count);
+  virtual ~FlowTable();
 
   /// Create a flow corresponding to the specified received message.
   /// This may be called with parameters that match an existing flow, in
@@ -241,7 +241,7 @@ private:
 
   // Statistics
   void report_flow_count();
-  Statistic _statistic;
+  SNMP::U32Scalar* _conn_count;
   bool _quiescing;
   QuiescingManager* _qm;
 

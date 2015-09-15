@@ -43,9 +43,6 @@
 #include "aschain.h"
 #include "ifchandler.h"
 
-const int AsChainLink::AS_TIMEOUT_CONTINUE;
-const int AsChainLink::AS_TIMEOUT_TERMINATE;
-
 /// Create an AsChain.
 //
 // Ownership of `ifcs` passes to this object.
@@ -71,15 +68,15 @@ AsChain::AsChain(AsChainTable* as_chain_table,
   _ifcs(ifcs),
   _acr(acr)
 {
-  LOG_DEBUG("Creating AsChain %p with %d IFC and adding to map", this, ifcs.size());
+  TRC_DEBUG("Creating AsChain %p with %d IFC and adding to map", this, ifcs.size());
   _as_chain_table->register_(this, _odi_tokens);
-  LOG_DEBUG("Attached ACR (%p) to chain", _acr);
+  TRC_DEBUG("Attached ACR (%p) to chain", _acr);
 }
 
 
 AsChain::~AsChain()
 {
-  LOG_DEBUG("Destroying AsChain %p", this);
+  TRC_DEBUG("Destroying AsChain %p", this);
 
   if (_acr != NULL)
   {
@@ -97,7 +94,7 @@ AsChain::~AsChain()
     }
 
     // Send the ACR for this chain and destroy the ACR.
-    LOG_DEBUG("Sending ACR (%p) from AS chain", _acr);
+    TRC_DEBUG("Sending ACR (%p) from AS chain", _acr);
     _acr->send_message();
     delete _acr;
   }
@@ -181,11 +178,11 @@ void AsChainLink::on_initial_request(pjsip_msg* msg,
   if (_as_chain->trail() != msg_trail)
   {
     // Associate the two trails in SAS so B2BUA calls are displayed properly
-    LOG_DEBUG("Asssociating original SAS trail %ld with new message SAS trail %ld", _as_chain->trail(), msg_trail);
+    TRC_DEBUG("Asssociating original SAS trail %ld with new message SAS trail %ld", _as_chain->trail(), msg_trail);
     SAS::associate_trails(_as_chain->trail(), msg_trail);
   }
 
-  while (!complete()) 
+  while (!complete())
   {
     const Ifc& ifc = (_as_chain->_ifcs)[_index];
     if (ifc.filter_matches(_as_chain->session_case(),
@@ -194,7 +191,7 @@ void AsChainLink::on_initial_request(pjsip_msg* msg,
                             msg,
                             trail()))
     {
-      LOG_DEBUG("Matched iFC %s", to_string().c_str());
+      TRC_DEBUG("Matched iFC %s", to_string().c_str());
       AsInvocation application_server = ifc.as_invocation();
       server_name = application_server.server_name;
 
@@ -296,12 +293,20 @@ AsChainLink AsChainTable::lookup(const std::string& token)
   {
     // Found the AsChainLink.  Add a reference to the AsChain.
     const AsChainLink& as_chain_link = it->second;
-    as_chain_link._as_chain->inc_ref();
-
-    // Flag that the AS corresponding to the previous link in the chain has
-    // effectively responded.
-    as_chain_link._as_chain->_responsive[as_chain_link._index - 1] = true;
-    pthread_mutex_unlock(&_lock);
-    return as_chain_link;
+    if (as_chain_link._as_chain->inc_ref())
+    {
+      // Flag that the AS corresponding to the previous link in the chain has
+      // effectively responded.
+      as_chain_link._as_chain->_responsive[as_chain_link._index - 1] = true;
+      pthread_mutex_unlock(&_lock);
+      return as_chain_link;
+    } else {
+      // Failed to increment the count - AS chain must be in the process of
+      // being destroyed.  Pretend we didn't find it.
+      // LCOV_EXCL_START - Can't hit this window condition in UT.
+      pthread_mutex_unlock(&_lock);
+      return AsChainLink(NULL, 0);
+      // LCOV_EXCL_STOP
+    }
   }
 }

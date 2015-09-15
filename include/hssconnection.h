@@ -47,7 +47,7 @@
 #include "rapidxml/rapidxml.hpp"
 #include "ifchandler.h"
 #include "sas.h"
-#include "accumulator.h"
+#include "snmp_event_accumulator_table.h"
 #include "load_monitor.h"
 
 /// @class HSSConnection
@@ -61,9 +61,14 @@ public:
   HSSConnection(const std::string& server,
                 HttpResolver* resolver,
                 LoadMonitor *load_monitor,
-                LastValueCache *stats_aggregator,
+                SNMP::IPCountTable* homestead_count_tbl,
+                SNMP::EventAccumulatorTable* homestead_overall_latency_tbl,
+                SNMP::EventAccumulatorTable* homestead_mar_latency_tbl,
+                SNMP::EventAccumulatorTable* homestead_sar_latency_tbl,
+                SNMP::EventAccumulatorTable* homestead_uar_latency_tbl,
+                SNMP::EventAccumulatorTable* homestead_lir_latency_tbl,
                 CommunicationMonitor* comm_monitor);
-  ~HSSConnection();
+  virtual ~HSSConnection();
 
   HTTPCode get_auth_vector(const std::string& private_user_id,
                            const std::string& public_user_id,
@@ -150,11 +155,11 @@ private:
   virtual long put_for_xml_object(const std::string& path, std::string body, rapidxml::xml_document<>*& root, SAS::TrailId trail);
 
   HttpConnection* _http;
-  StatisticAccumulator _latency_stat;
-  StatisticAccumulator _digest_latency_stat;
-  StatisticAccumulator _subscription_latency_stat;
-  StatisticAccumulator _user_auth_latency_stat;
-  StatisticAccumulator _location_latency_stat;
+  SNMP::EventAccumulatorTable* _latency_tbl;
+  SNMP::EventAccumulatorTable* _mar_latency_tbl;
+  SNMP::EventAccumulatorTable* _sar_latency_tbl;
+  SNMP::EventAccumulatorTable* _uar_latency_tbl;
+  SNMP::EventAccumulatorTable* _lir_latency_tbl;
 };
 
 #endif

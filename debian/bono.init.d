@@ -80,6 +80,7 @@ log_directory=/var/log/$NAME
 #
 setup_environment()
 {
+        export MIBS=""
         export LD_LIBRARY_PATH=/usr/share/clearwater/sprout/lib
         ulimit -Hn 1000000
         ulimit -Sn 1000000
@@ -170,7 +171,8 @@ get_daemon_args()
                      $min_token_rate_arg
                      $ibcf_arg
                      $billing_cdf_arg
-                     $exception_max_ttl_arg"
+                     $exception_max_ttl_arg
+                     --non-registering-pbxes=$pbxes"
 
         [ "$additional_home_domains" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --additional-domains $additional_home_domains"
         [ "$sip_blacklist_duration" = "" ]  || DAEMON_ARGS="$DAEMON_ARGS --sip-blacklist-duration=$sip_blacklist_duration"

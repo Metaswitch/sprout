@@ -59,6 +59,7 @@ extern "C" {
 #include "hssconnection.h"
 #include "authentication.h"
 #include "avstore.h"
+#include "snmp_success_fail_count_table.h"
 
 
 //
@@ -103,13 +104,46 @@ static ACRFactory* acr_factory;
 // client to respond to a challenge.
 static AvStore* av_store;
 
-
 // Analytics logger.
 static AnalyticsLogger* analytics;
 
+// SNMP tables counting authentication successes and failures.
+static SNMP::AuthenticationStatsTables* auth_stats_tables;
 
 // PJSIP structure for control server authentication functions.
 pjsip_auth_srv auth_srv;
+pjsip_auth_srv auth_srv_proxy;
+
+// Controls when to challenge non-REGISTER messages.
+NonRegisterAuthentication non_register_auth_mode;
+
+// Retrieve the digest credentials (from the Authorization header for REGISTERs, and the
+// Proxy-Authorization header otherwise).
+static pjsip_digest_credential* get_credentials(const pjsip_rx_data* rdata)
+{
+  pjsip_authorization_hdr* auth_hdr;
+  pjsip_digest_credential* credentials = NULL;
+
+  if (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD)
+  {
+    auth_hdr = (pjsip_authorization_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg,
+                                                            PJSIP_H_AUTHORIZATION,
+                                                            NULL);
+  }
+  else
+  {
+    auth_hdr = (pjsip_proxy_authorization_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg,
+                                                                  PJSIP_H_PROXY_AUTHORIZATION,
+                                                                  NULL);
+  }
+
+  if (auth_hdr)
+  {
+    credentials = &auth_hdr->credential.digest;
+  }
+
+  return credentials;
+}
 
 
 /// Verifies that the supplied authentication vector is valid.
@@ -121,13 +155,13 @@ bool verify_auth_vector(rapidjson::Document* av, const std::string& impi, SAS::T
   rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
   av->Accept(writer);
   std::string av_str = buffer.GetString();
-  LOG_DEBUG("Verifying AV: %s", av_str.c_str());
+  TRC_DEBUG("Verifying AV: %s", av_str.c_str());
 
   // Check the AV is well formed.
   if (av->HasMember("aka"))
   {
     // AKA is specified, check all the expected parameters are present.
-    LOG_DEBUG("AKA specified");
+    TRC_DEBUG("AKA specified");
     rapidjson::Value& aka = (*av)["aka"];
     if (!(((aka.HasMember("challenge")) && (aka["challenge"].IsString())) &&
           ((aka.HasMember("response")) && (aka["response"].IsString())) &&
@@ -135,7 +169,7 @@ bool verify_auth_vector(rapidjson::Document* av, const std::string& impi, SAS::T
           ((aka.HasMember("integritykey")) && (aka["integritykey"].IsString()))))
     {
       // Malformed AKA entry
-      LOG_INFO("Badly formed AKA authentication vector for %s",
+      TRC_INFO("Badly formed AKA authentication vector for %s",
                impi.c_str());
       rc = false;
 
@@ -148,14 +182,14 @@ bool verify_auth_vector(rapidjson::Document* av, const std::string& impi, SAS::T
   else if (av->HasMember("digest"))
   {
     // Digest is specified, check all the expected parameters are present.
-    LOG_DEBUG("Digest specified");
+    TRC_DEBUG("Digest specified");
     rapidjson::Value& digest = (*av)["digest"];
     if (!(((digest.HasMember("realm")) && (digest["realm"].IsString())) &&
           ((digest.HasMember("qop")) && (digest["qop"].IsString())) &&
           ((digest.HasMember("ha1")) && (digest["ha1"].IsString()))))
     {
       // Malformed digest entry
-      LOG_INFO("Badly formed Digest authentication vector for %s",
+      TRC_INFO("Badly formed Digest authentication vector for %s",
                impi.c_str());
       rc = false;
 
@@ -168,7 +202,7 @@ bool verify_auth_vector(rapidjson::Document* av, const std::string& impi, SAS::T
   else
   {
     // Neither AKA nor Digest information present.
-    LOG_INFO("No AKA or Digest object in authentication vector for %s",
+    TRC_INFO("No AKA or Digest object in authentication vector for %s",
              impi.c_str());
     rc = false;
 
@@ -197,16 +231,15 @@ pj_status_t user_lookup(pj_pool_t *pool,
   // Get the impi and the nonce.  There must be an authorization header otherwise
   // PJSIP wouldn't have called this method.
   std::string impi = PJUtils::pj_str_to_string(acc_name);
-  pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
-           pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
-  std::string nonce = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.nonce);
+  pjsip_digest_credential* credentials = get_credentials(rdata);
+  std::string nonce = PJUtils::pj_str_to_string(&credentials->nonce);
 
   // Get the Authentication Vector from the store.
   rapidjson::Document* av = (rapidjson::Document*)av_param;
 
   if (av == NULL)
   {
-    LOG_WARNING("Received an authentication request for %s with nonce %s, but no matching AV found", impi.c_str(), nonce.c_str());
+    TRC_WARNING("Received an authentication request for %s with nonce %s, but no matching AV found", impi.c_str(), nonce.c_str());
   }
 
   if ((av != NULL) &&
@@ -227,8 +260,8 @@ pj_status_t user_lookup(pj_pool_t *pool,
       // into binary as this is what PJSIP is expecting.
       std::string response = "";
       if (((*av)["aka"].HasMember("response")) &&
-          ((*av)["aka"]["response"].IsString())) 
-      {     
+          ((*av)["aka"]["response"].IsString()))
+      {
         response = (*av)["aka"]["response"].GetString();
       }
 
@@ -240,7 +273,7 @@ pj_status_t user_lookup(pj_pool_t *pool,
       }
       cred_info->data_type = PJSIP_CRED_DATA_PLAIN_PASSWD;
       pj_strdup2(pool, &cred_info->data, xres.c_str());
-      LOG_DEBUG("Found AKA XRES = %.*s", cred_info->data.slen, cred_info->data.ptr);
+      TRC_DEBUG("Found AKA XRES = %.*s", cred_info->data.slen, cred_info->data.ptr);
 
       // Use default realm as it isn't specified in the AV.
       pj_strdup(pool, &cred_info->realm, realm);
@@ -268,7 +301,7 @@ pj_status_t user_lookup(pj_pool_t *pool,
 
         pj_strdup2(pool, &cred_info->data, digest_ha1.c_str());
         cred_info->realm = *realm;
-        LOG_DEBUG("Found Digest HA1 = %.*s", cred_info->data.slen, cred_info->data.ptr);
+        TRC_DEBUG("Found Digest HA1 = %.*s", cred_info->data.slen, cred_info->data.ptr);
         status = PJ_SUCCESS;
       }
       else
@@ -285,7 +318,7 @@ pj_status_t user_lookup(pj_pool_t *pool,
   return status;
 }
 
-void create_challenge(pjsip_authorization_hdr* auth_hdr,
+void create_challenge(pjsip_digest_credential* credentials,
                       pj_bool_t stale,
                       std::string resync,
                       pjsip_rx_data* rdata,
@@ -301,10 +334,10 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
   // only support AKA and SIP Digest, so only implement the subset of steps
   // required to distinguish between the two.
   std::string auth_type;
-  if (auth_hdr != NULL)
+  if (credentials != NULL)
   {
     pjsip_param* integrity =
-           pjsip_param_find(&auth_hdr->credential.digest.other_param,
+           pjsip_param_find(&credentials->other_param,
                             &STR_INTEGRITY_PROTECTED);
 
     if ((integrity != NULL) &&
@@ -331,14 +364,23 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
   if (av != NULL)
   {
     // Retrieved a valid authentication vector, so generate the challenge.
-    LOG_DEBUG("Valid AV - generate challenge");
+    TRC_DEBUG("Valid AV - generate challenge");
     char buf[16];
     pj_str_t random;
     random.ptr = buf;
     random.slen = sizeof(buf);
 
-    LOG_DEBUG("Create WWW-Authenticate header");
-    pjsip_www_authenticate_hdr* hdr = pjsip_www_authenticate_hdr_create(tdata->pool);
+    pjsip_www_authenticate_hdr* hdr;
+    if (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD)
+    {
+      TRC_DEBUG("Create WWW-Authenticate header");
+      hdr = pjsip_www_authenticate_hdr_create(tdata->pool);
+    }
+    else
+    {
+      TRC_DEBUG("Create Proxy-Authenticate header");
+      hdr = pjsip_proxy_authenticate_hdr_create(tdata->pool);
+    }
 
     // Set up common fields for Digest and AKA cases (both are considered
     // Digest authentication).
@@ -347,7 +389,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
     if (av->HasMember("aka"))
     {
       // AKA authentication.
-      LOG_DEBUG("Add AKA information");
+      TRC_DEBUG("Add AKA information");
 
       SAS::Event event(get_trail(rdata), SASEvent::AUTHENTICATION_CHALLENGE_AKA, 0);
       SAS::report_event(event);
@@ -399,7 +441,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
     else
     {
       // Digest authentication.
-      LOG_DEBUG("Add Digest information");
+      TRC_DEBUG("Add Digest information");
 
       SAS::Event event(get_trail(rdata), SASEvent::AUTHENTICATION_CHALLENGE_DIGEST, 0);
       SAS::report_event(event);
@@ -441,7 +483,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
     (*av).AddMember("branch", branch_value, (*av).GetAllocator());
 
     // Write the authentication vector (as a JSON string) into the AV store.
-    LOG_DEBUG("Write AV to store");
+    TRC_DEBUG("Write AV to store");
     uint64_t cas = 0;
     Store::Status status = av_store->set_av(impi, nonce, av, cas, get_trail(rdata));
     if (status == Store::OK)
@@ -451,7 +493,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
       // HSS when it expires.
       std::string timer_id;
       std::string chronos_body = "{\"impi\": \"" + impi + "\", \"impu\": \"" + impu +"\", \"nonce\": \"" + nonce +"\"}";
-      LOG_DEBUG("Sending %s to Chronos to set AV timer", chronos_body.c_str());
+      TRC_DEBUG("Sending %s to Chronos to set AV timer", chronos_body.c_str());
       chronos->send_post(timer_id, 30, "/authentication-timeout", chronos_body, 0);
     }
 
@@ -463,7 +505,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
     // a 4xx error to the client.
     if ((http_code == HTTP_SERVER_UNAVAILABLE) || (http_code == HTTP_GATEWAY_TIMEOUT))
     {
-      LOG_DEBUG("Downstream node is overloaded or unresponsive, unable to get Authentication vector");
+      TRC_DEBUG("Downstream node is overloaded or unresponsive, unable to get Authentication vector");
       tdata->msg->line.status.code = PJSIP_SC_SERVER_TIMEOUT;
       tdata->msg->line.status.reason = *pjsip_get_status_text(PJSIP_SC_SERVER_TIMEOUT);
       SAS::Event event(get_trail(rdata), SASEvent::AUTHENTICATION_FAILED_OVERLOAD, 0);
@@ -471,7 +513,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
     }
     else
     {
-      LOG_DEBUG("Failed to get Authentication vector");
+      TRC_DEBUG("Failed to get Authentication vector");
       tdata->msg->line.status.code = PJSIP_SC_FORBIDDEN;
       tdata->msg->line.status.reason = *pjsip_get_status_text(PJSIP_SC_FORBIDDEN);
       SAS::Event event(get_trail(rdata), SASEvent::AUTHENTICATION_FAILED_NO_AV, 0);
@@ -482,16 +524,12 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
   }
 }
 
-
-pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
+// Determine whether this request should be challenged (and SAS log appropriately).
+static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
 {
-  pj_status_t status;
-  std::string resync;
-
-  SAS::TrailId trail = get_trail(rdata);
-
   if (rdata->tp_info.transport->local_name.port != stack_data.scscf_port)
   {
+    TRC_DEBUG("Request does not need authentication - not on S-CSCF port");
     // Request not received on S-CSCF port, so don't authenticate it.
     SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_NOT_SCSCF_PORT, 0);
     SAS::report_event(event);
@@ -499,111 +537,215 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     return PJ_FALSE;
   }
 
-  if (rdata->msg_info.msg->line.req.method.id != PJSIP_REGISTER_METHOD)
+  if (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD)
   {
-    // Non-REGISTER request, so don't do authentication as it must have come
-    // from an authenticated or trusted source.
-    SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_NOT_REGISTER, 0);
-    SAS::report_event(event);
+    // Authentication isn't required for emergency registrations. An emergency
+    // registration is one where each Contact header contains 'sos' as the SIP
+    // URI parameter.
+    bool emergency_reg = true;
 
-    return PJ_FALSE;
-  }
+    pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
+      pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL);
 
-  // Authentication isn't required for emergency registrations. An emergency
-  // registration is one where each Contact header contains 'sos' as the SIP
-  // URI parameter.
-  bool emergency_reg = true;
-
-  pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
-                 pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL);
-
-  while ((contact_hdr != NULL) && (emergency_reg))
-  {
-    emergency_reg = PJUtils::is_emergency_registration(contact_hdr);
-    contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(rdata->msg_info.msg,
-                                                          PJSIP_H_CONTACT,
-                                                          contact_hdr->next);
-  }
-
-  if (emergency_reg)
-  {
-    SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_EMERGENCY_REGISTER, 0);
-    SAS::report_event(event);
-
-    return PJ_FALSE;
-  }
-
-  // Check to see if the request has already been integrity protected?
-  pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
-           pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
-
-  if (auth_hdr != NULL)
-  {
-    // There is an authorization header, so check for the integrity-protected
-    // indication.
-    LOG_DEBUG("Authorization header in request");
-    pjsip_param* integrity =
-           pjsip_param_find(&auth_hdr->credential.digest.other_param,
-                            &STR_INTEGRITY_PROTECTED);
-
-    if ((integrity != NULL) &&
-        ((pj_stricmp(&integrity->value, &STR_TLS_YES) == 0) ||
-         (pj_stricmp(&integrity->value, &STR_IP_ASSOC_YES) == 0)))
+    while ((contact_hdr != NULL) && (emergency_reg))
     {
-      // The integrity protected indicator is included and set to tls-yes or
-      // ip-assoc-yes.  This indicates the client has already been authenticated
-      // so we will accept this REGISTER even if there is a challenge response.
-      // (Values of tls-pending or ip-assoc-pending indicate the challenge
-      // should be checked.)
-      LOG_INFO("SIP Digest authenticated request integrity protected by edge proxy");
+      emergency_reg = PJUtils::is_emergency_registration(contact_hdr);
+      contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(rdata->msg_info.msg,
+                                                            PJSIP_H_CONTACT,
+                                                            contact_hdr->next);
+    }
 
-      SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_INTEGRITY_PROTECTED, 0);
+    if (emergency_reg)
+    {
+      SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_EMERGENCY_REGISTER, 0);
       SAS::report_event(event);
 
       return PJ_FALSE;
     }
-    else if ((integrity != NULL) &&
-             (pj_stricmp(&integrity->value, &STR_YES) == 0) &&
-             (auth_hdr->credential.digest.response.slen == 0))
+
+    // Check to see if the request has already been integrity protected?
+    pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
+      pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
+
+    if (auth_hdr != NULL)
     {
-      // The integrity protected indicator is include and set to yes.  This
-      // indicates that AKA authentication is in use and the REGISTER was
-      // received on an integrity protected channel, so we will let the
-      // request through if there is no challenge response, but must check
-      // the challenge response if included.
-      LOG_INFO("AKA authenticated request integrity protected by edge proxy");
+      // There is an authorization header, so check for the integrity-protected
+      // indication.
+      TRC_DEBUG("Authorization header in request");
+      pjsip_param* integrity =
+        pjsip_param_find(&auth_hdr->credential.digest.other_param,
+                         &STR_INTEGRITY_PROTECTED);
 
-      SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_INTEGRITY_PROTECTED, 0);
-      SAS::report_event(event);
+      if ((integrity != NULL) &&
+          ((pj_stricmp(&integrity->value, &STR_TLS_YES) == 0) ||
+           (pj_stricmp(&integrity->value, &STR_IP_ASSOC_YES) == 0)))
+      {
+        // The integrity protected indicator is included and set to tls-yes or
+        // ip-assoc-yes.  This indicates the client has already been authenticated
+        // so we will accept this REGISTER even if there is a challenge response.
+        // (Values of tls-pending or ip-assoc-pending indicate the challenge
+        // should be checked.)
+        TRC_INFO("SIP Digest authenticated request integrity protected by edge proxy");
 
+        SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_INTEGRITY_PROTECTED, 0);
+        SAS::report_event(event);
+
+        return PJ_FALSE;
+      }
+      else if ((integrity != NULL) &&
+               (pj_stricmp(&integrity->value, &STR_YES) == 0) &&
+               (auth_hdr->credential.digest.response.slen == 0))
+      {
+        // The integrity protected indicator is include and set to yes.  This
+        // indicates that AKA authentication is in use and the REGISTER was
+        // received on an integrity protected channel, so we will let the
+        // request through if there is no challenge response, but must check
+        // the challenge response if included.
+        TRC_INFO("AKA authenticated request integrity protected by edge proxy");
+
+        SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_INTEGRITY_PROTECTED, 1);
+        SAS::report_event(event);
+
+        return PJ_FALSE;
+      }
+    }
+
+    return PJ_TRUE;
+  }
+  else
+  {
+    if (PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->tag.slen != 0)
+    {
+      // This is an in-dialog request which needs no authentication.
       return PJ_FALSE;
     }
+
+    // Check to see if we should authenticate this non-REGISTER message - this
+    if (non_register_auth_mode == NonRegisterAuthentication::NEVER)
+    {
+      // Configured to never authenticate non-REGISTER requests.
+      SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_NEVER_AUTH_NON_REG, 0);
+      SAS::report_event(event);
+      return PJ_FALSE;
+    }
+    else if (non_register_auth_mode == NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT)
+    {
+      // Only authenticate the request if it has a Proxy-Authorization header.
+      pjsip_proxy_authorization_hdr* auth_hdr = (pjsip_proxy_authorization_hdr*)
+        pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_PROXY_AUTHORIZATION, NULL);
+
+      if (auth_hdr != NULL)
+      {
+        // Edge proxy has explicitly asked us to authenticate this non-REGISTER
+        // message
+        SAS::Event event(trail, SASEvent::AUTHENTICATION_NEEDED_PROXY_AUTHORIZATION, 0);
+        SAS::report_event(event);
+        return PJ_TRUE;
+      }
+      else
+      {
+        // No Proxy-Authorization header - this indicates the P-CSCF trusts this
+        // message so we don't need to perform further authentication.
+        SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_PROXY_AUTHORIZATION, 0);
+        SAS::report_event(event);
+        return PJ_FALSE;
+      }
+    }
+    else
+    {
+      // Unrecognized authentication mode - should never happen. LCOV_EXCL_START
+      assert(!"Unrecognized authentication mode");
+      return PJ_FALSE;
+      // LCOV_EXCL_STOP
+    }
+  }
+}
+
+pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
+{
+  TRC_DEBUG("Authentication module invoked");
+  pj_status_t status;
+  bool is_register = (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD);
+  SNMP::SuccessFailCountTable* auth_stats_table = NULL;
+  std::string resync;
+
+  SAS::TrailId trail = get_trail(rdata);
+
+  if (!needs_authentication(rdata, trail))
+  {
+    TRC_DEBUG("Request does not need authentication");
+    return PJ_FALSE;
   }
 
-  int sc = PJSIP_SC_UNAUTHORIZED;
+  TRC_DEBUG("Request needs authentication");
+  rapidjson::Document* av = NULL;
+
+  const int unauth_sc = is_register ? PJSIP_SC_UNAUTHORIZED : PJSIP_SC_PROXY_AUTHENTICATION_REQUIRED;
+  int sc = unauth_sc;
   status = PJSIP_EAUTHNOAUTH;
 
-  if ((auth_hdr != NULL) &&
-      (auth_hdr->credential.digest.response.slen != 0))
-  {
-    std::string impi = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username);
-    std::string nonce = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.nonce);
-    uint64_t cas = 0;
+  pjsip_digest_credential* credentials = get_credentials(rdata);
 
-    rapidjson::Document* av = av_store->get_av(impi, nonce, cas, trail);
+  if ((credentials != NULL) &&
+      (credentials->response.slen != 0))
+  {
+    std::string impi = PJUtils::pj_str_to_string(&credentials->username);
+    std::string nonce = PJUtils::pj_str_to_string(&credentials->nonce);
+    uint64_t cas = 0;
+    av = av_store->get_av(impi, nonce, cas, trail);
+    
+    if (!is_register)
+    {
+      // Challenged non-register requests must be SIP digest, so only one table
+      // needed for this case.
+      auth_stats_table = auth_stats_tables->non_register_auth_tbl;
+    }
+    else
+    {
+      if (!pj_strcmp2(&credentials->algorithm, "MD5"))
+      {
+        auth_stats_table = auth_stats_tables->sip_digest_auth_tbl;
+      }
+      else if (!pj_strcmp2(&credentials->algorithm, "AKAv1-MD5"))
+      {
+        auth_stats_table = auth_stats_tables->ims_aka_auth_tbl;
+      }
+    }
+    if (auth_stats_table == NULL)
+    {
+      // Authorization header did not specify an algorithm, so check the av for
+      // this information instead.
+      if (av->HasMember("digest"))
+      {
+        auth_stats_table = auth_stats_tables->sip_digest_auth_tbl;
+      }
+      else if (av->HasMember("aka"))
+      {
+        auth_stats_table = auth_stats_tables->ims_aka_auth_tbl;
+      }
+    }
+    if (auth_stats_table != NULL)
+    {
+      auth_stats_table->increment_attempts();
+    }
 
     // Request contains a response to a previous challenge, so pass it to
     // the authentication module to verify.
-    LOG_DEBUG("Verify authentication information in request");
-    status = pjsip_auth_srv_verify2(&auth_srv, rdata, &sc, (void*)av);
+    TRC_DEBUG("Verify authentication information in request");
+    status = pjsip_auth_srv_verify2((is_register ? &auth_srv : &auth_srv_proxy), rdata, &sc, (void*)av);
 
     if (status == PJ_SUCCESS)
     {
       // The authentication information in the request was verified.
-      LOG_DEBUG("Request authenticated successfully");
+      TRC_DEBUG("Request authenticated successfully");
 
       SAS::Event event(trail, SASEvent::AUTHENTICATION_SUCCESS, 0);
       SAS::report_event(event);
+
+      if (auth_stats_table != NULL)
+      {
+        auth_stats_table->increment_successes();
+      }
 
       // Write a tombstone flag back to the AV store, handling contention.
       // We don't actually expect anything else to be writing to this row in
@@ -624,7 +766,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
         if (store_status == Store::DATA_CONTENTION)
         {
           // LCOV_EXCL_START - No support for contention in UT
-          LOG_DEBUG("Data contention writing tombstone - retry");
+          TRC_DEBUG("Data contention writing tombstone - retry");
           delete av;
           av = av_store->get_av(impi, nonce, cas, trail);
           if (av == NULL)
@@ -639,7 +781,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       if (store_status != Store::OK)
       {
         // LCOV_EXCL_START
-        LOG_ERROR("Tried to tombstone AV for %s/%s after processing an authentication, but failed",
+        TRC_ERROR("Tried to tombstone AV for %s/%s after processing an authentication, but failed",
                   impi.c_str(),
                   nonce.c_str());
         // LCOV_EXCL_STOP
@@ -648,10 +790,10 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       // If doing AKA authentication, check for an AUTS parameter.  We only
       // check this if the request authenticated as actioning it otherwise
       // is a potential denial of service attack.
-      if (!pj_strcmp(&auth_hdr->credential.digest.algorithm, &STR_AKAV1_MD5))
+      if (!pj_strcmp(&credentials->algorithm, &STR_AKAV1_MD5))
       {
-        LOG_DEBUG("AKA authentication so check for client resync request");
-        pjsip_param* p = pjsip_param_find(&auth_hdr->credential.digest.other_param,
+        TRC_DEBUG("AKA authentication so check for client resync request");
+        pjsip_param* p = pjsip_param_find(&credentials->other_param,
                                           &STR_AUTS);
 
         if (p != NULL)
@@ -661,16 +803,16 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
           // comprising the first 16 octets of the nonce (RAND) and the 14
           // octets of the auts parameter.  (See TS 33.203 and table 6.3.3 of
           // TS 29.228 for details.)
-          LOG_DEBUG("AKA SQN resync request from UE");
+          TRC_DEBUG("AKA SQN resync request from UE");
           std::string auts = PJUtils::pj_str_to_string(&p->value);
-          std::string nonce = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.nonce);
+          std::string nonce = PJUtils::pj_str_to_string(&credentials->nonce);
           if ((auts.length() != 14) ||
               (nonce.length() != 32))
           {
             // AUTS and/or nonce are malformed, so reject the request.
-            LOG_WARNING("Invalid auts/nonce on resync request from private identity %.*s",
-                        auth_hdr->credential.digest.username.slen,
-                        auth_hdr->credential.digest.username.ptr);
+            TRC_WARNING("Invalid auts/nonce on resync request from private identity %.*s",
+                        credentials->username.slen,
+                        credentials->username.ptr);
             status = PJSIP_EAUTHINAKACRED;
             sc = PJSIP_SC_FORBIDDEN;
           }
@@ -681,7 +823,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
             // authentication information was received.
             resync = nonce.substr(0,16) + auts;
             status = PJSIP_EAUTHNOAUTH;
-            sc = PJSIP_SC_UNAUTHORIZED;
+            sc = unauth_sc;
           }
         }
       }
@@ -694,7 +836,6 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
         return PJ_FALSE;
       }
     }
-    delete av;
   }
 
 
@@ -704,9 +845,6 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   // add SAS markers so the trail will become searchable.
   SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
-
-  PJUtils::report_sas_to_from_markers(trail, rdata->msg_info.msg);
-  PJUtils::mark_sas_call_branch_ids(trail, NULL, rdata->msg_info.msg);
 
   // Add a SAS end marker
   SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
@@ -727,10 +865,16 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     // No authorization information in request, or no authentication vector
     // found in the store (so request is likely stale), so must issue
     // challenge.
-    LOG_DEBUG("No authentication information in request or stale nonce, so reject with challenge");
+    TRC_DEBUG("No authentication information in request or stale nonce, so reject with challenge");
     pj_bool_t stale = (status == PJSIP_EAUTHACCNOTFOUND);
 
-    sc = PJSIP_SC_UNAUTHORIZED;
+    sc = unauth_sc;
+
+    if (stale && auth_stats_table != NULL)
+    {
+      auth_stats_table->increment_failures();
+    }
+
     status = PJUtils::create_response(stack_data.endpt, rdata, sc, NULL, &tdata);
 
     if (status != PJ_SUCCESS)
@@ -743,20 +887,23 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       // LCOV_EXCL_STOP
     }
 
-    create_challenge(auth_hdr, stale, resync, rdata, tdata);
+    create_challenge(credentials, stale, resync, rdata, tdata);
   }
   else
   {
     // Authentication failed.
     std::string error_msg = PJUtils::pj_status_to_string(status);
 
-    LOG_ERROR("Authentication failed, %s", error_msg.c_str());
-
+    TRC_ERROR("Authentication failed, %s", error_msg.c_str());
+    if (auth_stats_table != NULL)
+    {
+      auth_stats_table->increment_failures();
+    }
     SAS::Event event(trail, SASEvent::AUTHENTICATION_FAILED, 0);
     event.add_var_param(error_msg);
     SAS::report_event(event);
 
-    if (sc != PJSIP_SC_UNAUTHORIZED)
+    if (sc != unauth_sc)
     {
       // Notify Homestead and the HSS that this authentication attempt
       // has definitively failed.
@@ -770,12 +917,9 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
     if (analytics != NULL)
     {
-      analytics->auth_failure(PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username),
-                              PJUtils::public_id_from_uri((pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri)));
+      analytics->auth_failure(PJUtils::pj_str_to_string(&credentials->username),
+      PJUtils::public_id_from_uri((pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri)));
     }
-
-    // @TODO - need more diagnostics here so we can identify and flag
-    // attacks.
 
     status = PJUtils::create_response(stack_data.endpt, rdata, sc, NULL, &tdata);
     if (status != PJ_SUCCESS)
@@ -791,12 +935,33 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
   acr->tx_response(tdata->msg);
 
-  status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
+  // Issue the challenge response transaction-statefully. This is so that:
+  //  * if we challenge an INVITE, the UE can ACK the 407
+  //  * if a challenged request gets retransmitted, we don't repeat the work
+  pjsip_transaction* tsx = NULL;
+  status = pjsip_tsx_create_uas2(NULL, rdata, NULL, &tsx);
+  set_trail(tsx, trail);
+  if (status != PJ_SUCCESS)
+  {
+    // LCOV_EXCL_START - defensive code not hit in UT
+    TRC_WARNING("Couldn't create PJSIP transaction for authentication response: %d"
+                " (sending statelessly instead)", status);
+    // Send the response statelessly in this case - it's better than nothing
+    pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
+    // LCOV_EXCL_STOP
+  }
+  else
+  {
+    // Let the tsx know about the original message
+    pjsip_tsx_recv_msg(tsx, rdata);
+    // Send our response in this transaction
+    pjsip_tsx_send_msg(tsx, tdata);
+  }
 
   // Send the ACR.
   acr->send_message();
   delete acr;
-
+  delete av;
   return PJ_TRUE;
 }
 
@@ -806,7 +971,9 @@ pj_status_t init_authentication(const std::string& realm_name,
                                 HSSConnection* hss_connection,
                                 ChronosConnection* chronos_connection,
                                 ACRFactory* rfacr_factory,
-                                AnalyticsLogger* analytics_logger)
+                                NonRegisterAuthentication non_register_auth_mode_param,
+                                AnalyticsLogger* analytics_logger,
+                                SNMP::AuthenticationStatsTables* auth_stats_tbls)
 {
   pj_status_t status;
 
@@ -816,6 +983,7 @@ pj_status_t init_authentication(const std::string& realm_name,
   chronos = chronos_connection;
   acr_factory = rfacr_factory;
   analytics = analytics_logger;
+  auth_stats_tables = auth_stats_tbls;
 
   // Register the authentication module.  This needs to be in the stack
   // before the transaction layer.
@@ -827,6 +995,11 @@ pj_status_t init_authentication(const std::string& realm_name,
   params.lookup3 = user_lookup;
   params.options = 0;
   status = pjsip_auth_srv_init2(stack_data.pool, &auth_srv, &params);
+
+  params.options = PJSIP_AUTH_SRV_IS_PROXY;
+  status = pjsip_auth_srv_init2(stack_data.pool, &auth_srv_proxy, &params);
+
+  non_register_auth_mode = non_register_auth_mode_param;
 
   return status;
 }

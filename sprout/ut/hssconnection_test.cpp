@@ -46,6 +46,8 @@
 #include "hssconnection.h"
 #include "basetest.hpp"
 #include "fakecurl.hpp"
+#include "fakesnmp.hpp"
+#include "sprout_alarmdefinition.h"
 
 using namespace std;
 
@@ -59,8 +61,17 @@ class HssConnectionTest : public BaseTest
   HssConnectionTest() :
     _resolver("10.42.42.42"),
     _cm(new Alarm("sprout", AlarmDef::SPROUT_HOMESTEAD_COMM_ERROR, AlarmDef::CRITICAL)),
-    _hss("narcissus", &_resolver, NULL, NULL, &_cm)
-  {
+    _hss("narcissus",
+         &_resolver,
+         NULL,
+         &SNMP::FAKE_IP_COUNT_TABLE,
+         &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+         &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+         &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+         &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+         &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+         &_cm)
+    {
     fakecurl_responses.clear();
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid42/reg-data", "{\"reqtype\": \"reg\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
@@ -471,7 +482,7 @@ TEST_F(HssConnectionTest, SimpleUserAuth)
   rapidjson::Document* actual;
   _hss.get_user_auth_status("privid69", "pubid44", "", "", actual, 0);
   ASSERT_TRUE(actual != NULL);
-  EXPECT_EQ(std::string("server-name"), (*actual)["scscf"].GetString()); 
+  EXPECT_EQ(std::string("server-name"), (*actual)["scscf"].GetString());
   delete actual;
 }
 

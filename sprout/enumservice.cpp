@@ -43,6 +43,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/types.h>
+#include <netdb.h>
 
 #include "enumservice.h"
 #include "dnsresolver.h"
@@ -69,7 +71,7 @@ bool EnumService::parse_regex_replace(const std::string& regex_replace, boost::r
 
   if (match_replace.size() == 2)
   {
-    LOG_DEBUG("Split regex into match=%s, replace=%s", match_replace[0].c_str(), match_replace[1].c_str());
+    TRC_DEBUG("Split regex into match=%s, replace=%s", match_replace[0].c_str(), match_replace[1].c_str());
     try
     {
       regex.assign(match_replace[0], boost::regex::extended);
@@ -97,13 +99,13 @@ JSONEnumService::JSONEnumService(std::string configuration)
   if ((stat(configuration.c_str(), &s) != 0) &&
       (errno == ENOENT))
   {
-    LOG_STATUS("No ENUM configuration (file %s does not exist)",
+    TRC_STATUS("No ENUM configuration (file %s does not exist)",
                configuration.c_str());
     CL_SPROUT_ENUM_FILE_MISSING.log(configuration.c_str());
     return;
   }
 
-  LOG_STATUS("Loading ENUM configuration from %s", configuration.c_str());
+  TRC_STATUS("Loading ENUM configuration from %s", configuration.c_str());
 
   // Read from the file
   std::ifstream fs(configuration.c_str());
@@ -113,7 +115,7 @@ JSONEnumService::JSONEnumService(std::string configuration)
   if (enum_str == "")
   {
     // LCOV_EXCL_START
-    LOG_ERROR("Failed to read ENUM configuration data from %s",
+    TRC_ERROR("Failed to read ENUM configuration data from %s",
               configuration.c_str());
     CL_SPROUT_ENUM_FILE_EMPTY.log(configuration.c_str());
     return;
@@ -126,7 +128,7 @@ JSONEnumService::JSONEnumService(std::string configuration)
 
   if (doc.HasParseError())
   {
-    LOG_ERROR("Failed to read ENUM configuration data: %s\nError: %s",
+    TRC_ERROR("Failed to read ENUM configuration data: %s\nError: %s",
               enum_str.c_str(),
               rapidjson::GetParseError_En(doc.GetParseError()));
     CL_SPROUT_ENUM_FILE_INVALID.log(configuration.c_str());
@@ -151,19 +153,19 @@ JSONEnumService::JSONEnumService(std::string configuration)
         JSON_GET_STRING_MEMBER(*nb_it, "regex", regex);
 
         // Entry is well-formed, so add it.
-        LOG_DEBUG("Found valid number prefix block %s", prefix.c_str());
+        TRC_DEBUG("Found valid number prefix block %s", prefix.c_str());
         NumberPrefix *pfix = new NumberPrefix;
         pfix->prefix = prefix;
 
         if (parse_regex_replace(regex, pfix->match, pfix->replace))
         {
           _number_prefixes.push_back(pfix);
-          LOG_STATUS("  Adding number prefix %s, regex=%s",
+          TRC_STATUS("  Adding number prefix %s, regex=%s",
                      pfix->prefix.c_str(), regex.c_str());
         }
         else
         {
-          LOG_WARNING("Badly formed regular expression in ENUM number block %s",
+          TRC_WARNING("Badly formed regular expression in ENUM number block %s",
                       regex.c_str());
           delete pfix;
         }
@@ -171,7 +173,7 @@ JSONEnumService::JSONEnumService(std::string configuration)
       catch (JsonFormatError err)
       {
         // Badly formed number block.
-        LOG_WARNING("Badly formed ENUM number block (hit error at %s:%d)",
+        TRC_WARNING("Badly formed ENUM number block (hit error at %s:%d)",
                     err._file, err._line);
         CL_SPROUT_ENUM_FILE_INVALID.log(configuration.c_str());
       }
@@ -179,7 +181,7 @@ JSONEnumService::JSONEnumService(std::string configuration)
   }
   catch (JsonFormatError err)
   {
-    LOG_ERROR("Badly formed ENUM configuration data - missing number_blocks object");
+    TRC_ERROR("Badly formed ENUM configuration data - missing number_blocks object");
     CL_SPROUT_ENUM_FILE_INVALID.log(configuration.c_str());
   }
 }
@@ -200,11 +202,11 @@ std::string JSONEnumService::lookup_uri_from_user(const std::string &user, SAS::
 {
   std::string uri;
 
-  LOG_DEBUG("Translating URI via JSON ENUM lookup");
+  TRC_DEBUG("Translating URI via JSON ENUM lookup");
 
   if (user.empty())
   {
-    LOG_INFO("No dial string supplied, so don't do ENUM lookup");
+    TRC_INFO("No dial string supplied, so don't do ENUM lookup");
     return std::string();
   }
 
@@ -213,7 +215,7 @@ std::string JSONEnumService::lookup_uri_from_user(const std::string &user, SAS::
 
   if (pfix == NULL)
   {
-    LOG_INFO("No matching number range %s from ENUM lookup", user.c_str());
+    TRC_INFO("No matching number range %s from ENUM lookup", user.c_str());
     return uri;
   }
 
@@ -225,12 +227,12 @@ std::string JSONEnumService::lookup_uri_from_user(const std::string &user, SAS::
   }
   catch(...) // LCOV_EXCL_START Only throws if expression too complex or similar hard-to-hit conditions
   {
-    LOG_ERROR("Failed to translate number with regex");
+    TRC_ERROR("Failed to translate number with regex");
     return uri;
     // LCOV_EXCL_STOP
   }
 
-  LOG_INFO("Number %s found, translated URI = %s", user.c_str(), uri.c_str());
+  TRC_INFO("Number %s found, translated URI = %s", user.c_str(), uri.c_str());
 
   return uri;
 }
@@ -246,7 +248,7 @@ JSONEnumService::NumberPrefix* JSONEnumService::prefix_match(const std::string& 
   {
     int len = std::min(number.size(), (*it)->prefix.size());
 
-    LOG_DEBUG("Comparing first %d numbers of %s against prefix %s",
+    TRC_DEBUG("Comparing first %d numbers of %s against prefix %s",
               len, number.c_str(), (*it)->prefix.c_str());
 
     if (number.compare(0, len, (*it)->prefix, 0, len) == 0)
@@ -254,7 +256,7 @@ JSONEnumService::NumberPrefix* JSONEnumService::prefix_match(const std::string& 
       // Found a match, so return it (at the moment we assume the entries are
       // ordered with most specific matches first so we can stop as soon as we
       // have one match).
-      LOG_DEBUG("Match found");
+      TRC_DEBUG("Match found");
       return *it;
     }
   }
@@ -273,6 +275,7 @@ DNSEnumService::DNSEnumService(const std::vector<std::string>& dns_servers,
   // Initialize the ares library.  This might have already been done by curl
   // but it's safe to do it twice.
   ares_library_init(ARES_LIB_INIT_ALL);
+  struct addrinfo* res;
 
   for (std::vector<std::string>::const_iterator server = dns_servers.begin();
        server != dns_servers.end();
@@ -288,9 +291,22 @@ DNSEnumService::DNSEnumService(const std::vector<std::string>& dns_servers,
     {
       dns_server_addr.af = AF_INET6;
     }
+    else if ((getaddrinfo(server->c_str(), NULL, NULL, &res)) == 0)
+    {
+      dns_server_addr.af = res->ai_family;
+      if (dns_server_addr.af == AF_INET)
+      {
+        dns_server_addr.addr.ipv4 = ((struct sockaddr_in*)res->ai_addr)->sin_addr;   
+      }
+      else if (dns_server_addr.af == AF_INET6)
+      {
+        dns_server_addr.addr.ipv6 = ((struct sockaddr_in6*)res->ai_addr)->sin6_addr;
+      }
+      freeaddrinfo(res);
+    }
     else
     {
-      LOG_ERROR("Failed to parse '%s' as IP address - defaulting to 127.0.0.1", server->c_str());
+      TRC_ERROR("Failed to parse '%s' as IP address or resolve host name - defaulting to 127.0.0.1", server->c_str());
       dns_server_addr.af = AF_INET;
       (void)inet_aton("127.0.0.1", &dns_server_addr.addr.ipv4);
     }
@@ -324,7 +340,7 @@ std::string DNSEnumService::lookup_uri_from_user(const std::string& user, SAS::T
 {
   if (user.empty())
   {
-    LOG_INFO("No dial string supplied, so don't do ENUM lookup");
+    TRC_INFO("No dial string supplied, so don't do ENUM lookup");
     return std::string();
   }
 
@@ -379,7 +395,7 @@ std::string DNSEnumService::lookup_uri_from_user(const std::string& user, SAS::T
           }
           catch(...) // LCOV_EXCL_START Only throws if expression too complex or similar hard-to-hit conditions
           {
-            LOG_ERROR("Failed to translate number with regex");
+            TRC_ERROR("Failed to translate number with regex");
             failed = true;
             // LCOV_EXCL_STOP
           }
@@ -417,7 +433,7 @@ std::string DNSEnumService::lookup_uri_from_user(const std::string& user, SAS::T
   // Log that we've finished processing (and whether it was successful or not).
   if (complete)
   {
-    LOG_DEBUG("Enum lookup completes: %s", string.c_str());
+    TRC_DEBUG("Enum lookup completes: %s", string.c_str());
     SAS::Event event(trail, SASEvent::ENUM_COMPLETE, 0);
     event.add_var_param(user);
     event.add_var_param(string);
@@ -425,7 +441,7 @@ std::string DNSEnumService::lookup_uri_from_user(const std::string& user, SAS::T
   }
   else
   {
-    LOG_WARNING("Enum lookup did not complete for user %s", user.c_str());
+    TRC_WARNING("Enum lookup did not complete for user %s", user.c_str());
     SAS::Event event(trail, SASEvent::ENUM_INCOMPLETE, 0);
     event.add_var_param(user);
     SAS::report_event(event);
@@ -491,7 +507,7 @@ void DNSEnumService::parse_naptr_reply(const struct ares_naptr_reply* naptr_repl
 {
   for (const struct ares_naptr_reply* record = naptr_reply; record != NULL; record = record->next)
   {
-    LOG_DEBUG("Got NAPTR record: %u %u \"%s\" \"%s\" \"%s\" %s", record->order, record->preference, record->service, record->flags, record->regexp, record->replacement);
+    TRC_DEBUG("Got NAPTR record: %u %u \"%s\" \"%s\" \"%s\" %s", record->order, record->preference, record->service, record->flags, record->regexp, record->replacement);
     if ((strcasecmp((char*)record->service, "e2u+sip") == 0) ||
         (strcasecmp((char*)record->service, "e2u+pstn:sip") == 0) || 
         (strcasecmp((char*)record->service, "e2u+pstn:tel") == 0))
@@ -502,7 +518,7 @@ void DNSEnumService::parse_naptr_reply(const struct ares_naptr_reply* naptr_repl
 
       if (!EnumService::parse_regex_replace(std::string((char*)record->regexp), regex, replace))
       {
-        LOG_WARNING("DNS ENUM record contains unparseable regular expression: %s", record->regexp);
+        TRC_WARNING("DNS ENUM record contains unparseable regular expression: %s", record->regexp);
         // As above, we don't give up totally here.
         continue;
       }
@@ -515,7 +531,7 @@ void DNSEnumService::parse_naptr_reply(const struct ares_naptr_reply* naptr_repl
       }
       else if (strcmp((char*)record->flags, "") != 0)
       {
-        LOG_WARNING("DNS ENUM record contains unknown flags: %s", record->flags);
+        TRC_WARNING("DNS ENUM record contains unknown flags: %s", record->flags);
         // Note that we don't give up totally here.  If we end up with an empty
         // list, we'll break out then.  Otherwise, we'll just try and push on.
         continue;

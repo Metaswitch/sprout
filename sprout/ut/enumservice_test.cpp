@@ -38,6 +38,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
+#include "test_interposer.hpp"
 #include "utils.h"
 #include "sas.h"
 #include "enumservice.h"
@@ -45,6 +46,7 @@
 #include "fakelogger.h"
 #include "test_utils.hpp"
 #include "mockcommunicationmonitor.h"
+#include "sprout_alarmdefinition.h"
 
 using namespace std;
 using ::testing::_;
@@ -343,6 +345,18 @@ TEST_F(DNSEnumServiceTest, IPv6ServerTest)
 TEST_F(DNSEnumServiceTest, InvalidServerTest)
 {
   DNSEnumService enum_(_bad_servers, ".e164.arpa", new FakeDNSResolverFactory());
+}
+
+TEST_F(DNSEnumServiceTest, HostNameIPv4Test)
+{
+  cwtest_add_host_mapping("enumserver", "1.2.3.4");
+  DNSEnumService enum_({"enumserver"}, ".e164.arpa", new FakeDNSResolverFactory());
+}
+
+TEST_F(DNSEnumServiceTest, HostNameIPv6Test)
+{
+  cwtest_add_host_mapping("enumserver", "2001:0db8:0a0b:12f0:0000:0000:0000:0001");
+  DNSEnumService enum_({"enumserver"}, ".e164.arpa", new FakeDNSResolverFactory());
 }
 
 TEST_F(DNSEnumServiceTest, DifferentSuffixTest)

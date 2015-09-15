@@ -50,14 +50,13 @@ extern "C" {
 #include "pjutils.h"
 #include "connection_pool.h"
 
-
 ConnectionPool::ConnectionPool(pjsip_host_port* target,
                                int num_connections,
                                int recycle_period,
                                pj_pool_t* pool,
                                pjsip_endpoint* endpt,
                                pjsip_tpfactory* tp_factory,
-                               LastValueCache* lvc) :
+                               SNMP::IPCountTable* sprout_count_tbl) :
   _target(*target),
   _num_connections(num_connections),
   _recycle_period(recycle_period),
@@ -68,15 +67,13 @@ ConnectionPool::ConnectionPool(pjsip_host_port* target,
   _recycler(NULL),
   _terminated(false),
   _active_connections(0),
-  _statistic("connected_sprouts", lvc)
+  _sprout_count_tbl(sprout_count_tbl)
 {
-  LOG_STATUS("Creating connection pool to %.*s:%d", _target.host.slen, _target.host.ptr, _target.port);
-  LOG_STATUS("  connections = %d, recycle time = %d +/- %d seconds", _num_connections, _recycle_period, _recycle_margin);
+  TRC_STATUS("Creating connection pool to %.*s:%d", _target.host.slen, _target.host.ptr, _target.port);
+  TRC_STATUS("  connections = %d, recycle time = %d +/- %d seconds", _num_connections, _recycle_period, _recycle_margin);
 
   pthread_mutex_init(&_tp_hash_lock, NULL);
   _tp_hash.resize(_num_connections);
-
-  report_sprout_counts();
 }
 
 
@@ -112,12 +109,12 @@ void ConnectionPool::init()
                                           (void*)this, 0, 0, &_recycler);
     if (status != PJ_SUCCESS)
     {
-      LOG_ERROR("Error creating recycler thread, %s",
+      TRC_ERROR("Error creating recycler thread, %s",
                 PJUtils::pj_status_to_string(status).c_str());
     }
   }
 
-  LOG_DEBUG("Started %d connections to %.*s:%d", _num_connections, _target.host.slen, _target.host.ptr, _target.port);
+  TRC_DEBUG("Started %d connections to %.*s:%d", _num_connections, _target.host.slen, _target.host.ptr, _target.port);
 }
 
 
@@ -178,7 +175,7 @@ pj_status_t ConnectionPool::resolve_host(const pj_str_t* host,
   {
     if (servers[0].address.af == AF_INET)
     {
-      LOG_DEBUG("Successfully resolved %.*s to IPv4 address", host->slen, host->ptr);
+      TRC_DEBUG("Successfully resolved %.*s to IPv4 address", host->slen, host->ptr);
       addr->ipv4.sin_family = AF_INET;
       addr->ipv4.sin_addr.s_addr = servers[0].address.addr.ipv4.s_addr;
       pj_sockaddr_set_port(addr, servers[0].port);
@@ -186,7 +183,7 @@ pj_status_t ConnectionPool::resolve_host(const pj_str_t* host,
     }
     else if (servers[0].address.af == AF_INET6)
     {
-      LOG_DEBUG("Successfully resolved %.*s to IPv6 address", host->slen, host->ptr);
+      TRC_DEBUG("Successfully resolved %.*s to IPv6 address", host->slen, host->ptr);
       addr->ipv6.sin6_family = AF_INET6;
       memcpy((char*)&addr->ipv6.sin6_addr,
              (char*)&servers[0].address.addr.ipv6,
@@ -196,7 +193,7 @@ pj_status_t ConnectionPool::resolve_host(const pj_str_t* host,
     }
     else
     {
-      LOG_ERROR("Resolved %.*s to address of unknown family %d - failing connection!", host->slen, host->ptr); //LCOV_EXCL_LINE
+      TRC_ERROR("Resolved %.*s to address of unknown family %d - failing connection!", host->slen, host->ptr); //LCOV_EXCL_LINE
     }
   }
 
@@ -212,7 +209,7 @@ pj_status_t ConnectionPool::create_connection(int hash_slot)
 
   if (status != PJ_SUCCESS)
   {
-    LOG_ERROR("Failed to resolve %.*s to an IP address - %s",
+    TRC_ERROR("Failed to resolve %.*s to an IP address - %s",
               _target.host.slen, _target.host.ptr,
               PJUtils::pj_status_to_string(status).c_str());
     return status;
@@ -240,7 +237,7 @@ pj_status_t ConnectionPool::create_connection(int hash_slot)
   // TPMGR will have already added a reference to the new transport to stop it
   // being destroyed while we have pointers referencing it.
 
-  LOG_DEBUG("Created transport %s in slot %d (%.*s:%d to %.*s:%d)",
+  TRC_DEBUG("Created transport %s in slot %d (%.*s:%d to %.*s:%d)",
             tp->obj_name,
             hash_slot,
             (int)tp->local_name.host.slen,
@@ -336,7 +333,7 @@ void ConnectionPool::transport_state_update(pjsip_transport* tp, pjsip_transport
     if ((state == PJSIP_TP_STATE_CONNECTED) && (!_tp_hash[hash_slot].connected))
     {
       // New connection has connected successfully, so update the statistics.
-      LOG_DEBUG("Transport %s in slot %d has connected", tp->obj_name, hash_slot);
+      TRC_DEBUG("Transport %s in slot %d has connected", tp->obj_name, hash_slot);
       _tp_hash[hash_slot].connected = PJ_TRUE;
       ++_active_connections;
       increment_connection_count(tp);
@@ -360,7 +357,7 @@ void ConnectionPool::transport_state_update(pjsip_transport* tp, pjsip_transport
     {
       // Either a connection has failed or been shutdown, or a new connection
       // failed to connect.
-      LOG_DEBUG("Transport %s in slot %d has failed", tp->obj_name, hash_slot);
+      TRC_DEBUG("Transport %s in slot %d has failed", tp->obj_name, hash_slot);
 
       if (_tp_hash[hash_slot].connected)
       {
@@ -450,7 +447,7 @@ void ConnectionPool::recycle_connections()
       {
         // This slot is due to be recycled, so quiesce the existing
         // connection and create a new one.
-        LOG_STATUS("Recycle TCP connection slot %d", ii);
+        TRC_STATUS("Recycle TCP connection slot %d", ii);
         quiesce_connection(ii);
         create_connection(ii);
       }
@@ -471,53 +468,18 @@ int ConnectionPool::recycle_thread(void* p)
   return 0;
 }
 
-
-void ConnectionPool::report_sprout_counts()
-{
-  std::map<std::string, int>::iterator it = _host_conn_count.begin();
-  std::vector<std::string> reported_value;
-  for (; it != _host_conn_count.end(); ++it)
-  {
-    std::string host = it->first;
-    std::string connection_count = std::to_string(it->second);
-    LOG_DEBUG("Reporting %s:%s", host.c_str(), connection_count.c_str());
-    reported_value.push_back(host);
-    reported_value.push_back(connection_count);
-  }
-  _statistic.report_change(reported_value);
-}
-
-
 void ConnectionPool::decrement_connection_count(pjsip_transport *trans)
 {
   std::string host = PJUtils::pj_str_to_string(&trans->remote_name.host);
-  assert(_host_conn_count.find(host) != _host_conn_count.end());
-
-  if (_host_conn_count[host] == 1)
+  if (_sprout_count_tbl->get(host)->decrement() == 0)
   {
-    _host_conn_count.erase(host);
+    _sprout_count_tbl->remove(host);
   }
-  else
-  {
-    --_host_conn_count[host];
-  }
-
-  report_sprout_counts();
 }
 
 
 void ConnectionPool::increment_connection_count(pjsip_transport *trans)
 {
-  std::string hostname = PJUtils::pj_str_to_string(&trans->remote_name.host);
-  if (_host_conn_count.find(hostname) == _host_conn_count.end())
-  {
-    // This is the first connection to this remote host, create an entry now.
-    _host_conn_count[hostname] = 1;
-  }
-  else
-  {
-    ++_host_conn_count[hostname];
-  }
-
-  report_sprout_counts();
+  std::string host = PJUtils::pj_str_to_string(&trans->remote_name.host);
+  _sprout_count_tbl->get(host)->increment();
 }

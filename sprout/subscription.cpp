@@ -101,14 +101,14 @@ pjsip_module mod_subscription =
 
 void log_subscriptions(const std::string& aor_name, RegStore::AoR* aor_data)
 {
-  LOG_DEBUG("Subscriptions for %s", aor_name.c_str());
+  TRC_DEBUG("Subscriptions for %s", aor_name.c_str());
   for (RegStore::AoR::Subscriptions::const_iterator i = aor_data->subscriptions().begin();
        i != aor_data->subscriptions().end();
        ++i)
   {
     RegStore::AoR::Subscription* subscription = i->second;
 
-    LOG_DEBUG("%s URI=%s expires=%d from_uri=%s from_tag=%s to_uri=%s to_tag=%s call_id=%s",
+    TRC_DEBUG("%s URI=%s expires=%d from_uri=%s from_tag=%s to_uri=%s to_tag=%s call_id=%s",
               i->first.c_str(),
               subscription->_req_uri.c_str(),
               subscription->_expires,
@@ -157,14 +157,14 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
 
     // Find the current subscriptions for the AoR.
     (*aor_data) = primary_store->get_aor_data(aor, trail);
-    LOG_DEBUG("Retrieved AoR data %p", (*aor_data));
+    TRC_DEBUG("Retrieved AoR data %p", (*aor_data));
 
     if ((*aor_data) == NULL)
     {
       // Failed to get data for the AoR because there is no connection
       // to the store.
       // LCOV_EXCL_START - local store (used in testing) never fails
-      LOG_ERROR("Failed to get AoR subscriptions for %s from store", aor.c_str());
+      TRC_ERROR("Failed to get AoR subscriptions for %s from store", aor.c_str());
       break;
       // LCOV_EXCL_STOP
     }
@@ -216,7 +216,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
         subscription_id = std::to_string(Utils::generate_unique_integer(id_deployment, id_instance));
       }
 
-      LOG_DEBUG("Subscription identifier = %s", subscription_id.c_str());
+      TRC_DEBUG("Subscription identifier = %s", subscription_id.c_str());
 
       // Find the appropriate subscription in the subscription list for this AoR. If it can't
       // be found a new empty subscription is created.
@@ -231,7 +231,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
       while (route_hdr)
       {
         std::string route = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, route_hdr->name_addr.uri);
-        LOG_DEBUG("Route header %s", route.c_str());
+        TRC_DEBUG("Route header %s", route.c_str());
         // Add the route.
         subscription->_route_uris.push_back(route);
         // Look for the next header.
@@ -363,7 +363,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
     // Reject a non-SIP/TEL URI with 404 Not Found (RFC3261 isn't clear
     // whether 404 is the right status code - it says 404 should be used if
     // the AoR isn't valid for the domain in the RequestURI).
-    LOG_ERROR("Rejecting subscribe request using invalid URI scheme");
+    TRC_ERROR("Rejecting subscribe request using invalid URI scheme");
 
     SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_URLSCHEME, 0);
     SAS::report_event(event);
@@ -400,7 +400,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
   {
     // Reject a subscription with a Contact header containing a contact address
     // that's been registered for emergency service.
-    LOG_ERROR("Rejecting subscribe request from emergency registration");
+    TRC_ERROR("Rejecting subscribe request from emergency registration");
 
     SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_EMERGENCY, 0);
     SAS::report_event(event);
@@ -427,7 +427,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
   // Canonicalize the public ID from the URI in the To header.
   std::string public_id = PJUtils::public_id_from_uri(uri);
 
-  LOG_DEBUG("Process SUBSCRIBE for public ID %s", public_id.c_str());
+  TRC_DEBUG("Process SUBSCRIBE for public ID %s", public_id.c_str());
 
   // Get the call identifier from the headers.
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);;
@@ -438,12 +438,9 @@ void process_subscription_request(pjsip_rx_data* rdata)
   event.add_var_param(public_id);
   SAS::report_event(event);
 
-  LOG_DEBUG("Report SAS start marker - trail (%llx)", trail);
+  TRC_DEBUG("Report SAS start marker - trail (%llx)", trail);
   SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
-
-  PJUtils::report_sas_to_from_markers(trail, rdata->msg_info.msg);
-  PJUtils::mark_sas_call_branch_ids(trail, NULL, rdata->msg_info.msg);
 
   // Query the HSS for the associated URIs.
   std::vector<std::string> uris;
@@ -479,7 +476,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
       st_code = PJSIP_SC_FORBIDDEN;
     }
 
-    LOG_ERROR("Rejecting SUBSCRIBE request");
+    TRC_ERROR("Rejecting SUBSCRIBE request");
 
     PJUtils::respond_stateless(stack_data.endpt,
                                rdata,
@@ -494,8 +491,8 @@ void process_subscription_request(pjsip_rx_data* rdata)
   // Determine the AOR from the first entry in the uris array.
   std::string aor = uris.front();
 
-  LOG_DEBUG("aor = %s", aor.c_str());
-  LOG_DEBUG("SUBSCRIBE for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
+  TRC_DEBUG("aor = %s", aor.c_str());
+  TRC_DEBUG("SUBSCRIBE for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
 
   // Get the system time in seconds for calculating absolute expiry times.
   int now = time(NULL);
@@ -547,7 +544,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
   if (status != PJ_SUCCESS)
   {
     // LCOV_EXCL_START - don't know how to get PJSIP to fail to create a response
-    LOG_ERROR("Error building SUBSCRIBE %d response %s", st_code,
+    TRC_ERROR("Error building SUBSCRIBE %d response %s", st_code,
               PJUtils::pj_status_to_string(status).c_str());
 
     SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED, 0);
@@ -623,7 +620,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
     }
   }
 
-  LOG_DEBUG("Report SAS end marker - trail (%llx)", trail);
+  TRC_DEBUG("Report SAS end marker - trail (%llx)", trail);
   SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
 
@@ -651,7 +648,7 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
          (PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri))) &&
         PJUtils::check_route_headers(rdata)))
   {
-    LOG_DEBUG("Not processing subscription request not targeted at this domain or node");
+    TRC_DEBUG("Not processing subscription request not targeted at this domain or node");
     SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_DOMAIN, 0);
     SAS::report_event(event);
     return PJ_FALSE;
@@ -668,7 +665,7 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
   if (!event || (PJUtils::pj_str_to_string(&event->event_type) != "reg"))
   {
     // The Event header is missing or doesn't match "reg"
-    LOG_DEBUG("Not processing subscription request that's not for the 'reg' package");
+    TRC_DEBUG("Not processing subscription request that's not for the 'reg' package");
 
     SAS::Event sas_event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_EVENT, 0);
     if (event)
@@ -700,7 +697,7 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
     if (!found)
     {
       // The Accept header (if it exists) doesn't contain "application/reginfo+xml"
-      LOG_DEBUG("Not processing subscription request that doesn't "
+      TRC_DEBUG("Not processing subscription request that doesn't "
                 "accept reginfo notifications");
       char accept_hdr_str[256];
       memset(accept_hdr_str, 0, 256);

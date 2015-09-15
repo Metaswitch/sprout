@@ -42,10 +42,12 @@
 #include "utils.h"
 #include "fakexdmconnection.hpp"
 
+#include "fakesnmp.hpp"
+
 using namespace std;
 
 FakeXDMConnection::FakeXDMConnection() :
-  XDMConnection(new FakeHttpConnection(), NULL),
+  XDMConnection(new FakeHttpConnection(), &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE),
   _fakehttp((FakeHttpConnection*)_http)
 {
 }

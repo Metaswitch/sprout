@@ -49,6 +49,7 @@
 #include "xdmconnection.h"
 #include "basetest.hpp"
 #include "fakecurl.hpp"
+#include "fakesnmp.hpp"
 #include "test_utils.hpp"
 
 using namespace std;
@@ -61,7 +62,7 @@ class XdmConnectionTest : public BaseTest
 
   XdmConnectionTest() :
     _resolver("10.42.42.42"),
-    _xdm("cyrus", &_resolver, NULL, NULL)
+    _xdm("cyrus", &_resolver, NULL, &SNMP::FAKE_IP_COUNT_TABLE, &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE)
   {
     fakecurl_responses.clear();
     fakecurl_responses["http://10.42.42.42:80/org.etsi.ngn.simservs/users/gand%2Falf/simservs.xml"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Still</boring>";

@@ -64,13 +64,16 @@ extern "C" {
 #include "aschain.h"
 #include "acr.h"
 #include "sproutlet.h"
-
+#include "snmp_counter_table.h"
 
 class SCSCFSproutletTsx;
 
 class SCSCFSproutlet : public Sproutlet
 {
 public:
+  static const int DEFAULT_SESSION_CONTINUED_TIMEOUT = 2000;
+  static const int DEFAULT_SESSION_TERMINATED_TIMEOUT = 4000;
+
   SCSCFSproutlet(const std::string& scscf_cluster_uri,
                  const std::string& scscf_node_uri,
                  const std::string& icscf_uri,
@@ -83,7 +86,9 @@ public:
                  ACRFactory* acr_factory,
                  bool user_phone,
                  bool global_only_lookups,
-                 bool override_npdi);
+                 bool override_npdi,
+                 int session_continued_timeout = DEFAULT_SESSION_CONTINUED_TIMEOUT,
+                 int session_terminated_timeout = DEFAULT_SESSION_TERMINATED_TIMEOUT);
   ~SCSCFSproutlet();
 
   bool init();
@@ -91,9 +96,13 @@ public:
                         const std::string& alias,
                         pjsip_msg* req);
 
+  // Methods used to change the values of internal configuration during unit
+  // test.
   void set_enforce_user_phone(bool v) { _user_phone = v; }
   void set_global_only_lookups(bool v) { _global_only_lookups = v; }
   void set_override_npdi(bool v) { _override_npdi = v; }
+  void set_session_continued_timeout(int timeout) { _session_continued_timeout_ms = timeout; }
+  void set_session_terminated_timeout(int timeout) { _session_terminated_timeout_ms = timeout; }
 
   inline bool should_require_user_phone() const
   {
@@ -185,18 +194,26 @@ private:
   bool _user_phone;
   bool _override_npdi;
 
+  /// Timeouts related to default handling of unresponsive application servers.
+  int _session_continued_timeout_ms;
+  int _session_terminated_timeout_ms;
+
   /// String versions of the cluster URIs
   std::string _scscf_cluster_uri_str;
   std::string _scscf_node_uri_str;
   std::string _icscf_uri_str;
   std::string _bgcf_uri_str;
+
+  SNMP::CounterTable* _routed_by_preloaded_route_tbl = NULL;
+  SNMP::CounterTable* _invites_cancelled_before_1xx_tbl = NULL;
+  SNMP::CounterTable* _invites_cancelled_after_1xx_tbl = NULL;
 };
 
 
 class SCSCFSproutletTsx : public SproutletTsx
 {
 public:
-  SCSCFSproutletTsx(SproutletTsxHelper* helper, SCSCFSproutlet* scscf);
+  SCSCFSproutletTsx(SproutletTsxHelper* helper, SCSCFSproutlet* scscf, pjsip_method_e req_type);
   ~SCSCFSproutletTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req);
@@ -212,7 +229,7 @@ private:
   /// (from the ODI token) and the session case (based on the presence of
   /// the 'orig' param), and sets those as member variables.
   void retrieve_odi_and_sesscase(pjsip_msg* req);
-  
+
   /// Determines the served user for the request.
   pjsip_status_code determine_served_user(pjsip_msg* req);
 
@@ -221,7 +238,7 @@ private:
 
   /// Creates an AS chain for this service role and links this service hop to
   /// it.
-  AsChainLink create_as_chain(Ifcs ifcs, std::string served_user);
+  AsChainLink create_as_chain(Ifcs ifcs, std::string served_user, ACR*& acr);
 
   /// Apply originating services for this request.
   void apply_originating_services(pjsip_msg* req);
@@ -291,6 +308,11 @@ private:
                                     const SessionCase* session_case,
                                     const std::string& served_user);
 
+  /// Fetch the ACR for the current transaction, ACRs should always be retrived
+  /// through this API, not by inspecting _acr directly, since the ACR may be
+  /// owned by the AsChain as a whole.  May return NULL in some cases.
+  ACR* get_acr();
+
   /// Pointer to the parent SCSCFSproutlet object - used for various operations
   /// that require access to global configuration or services.
   SCSCFSproutlet* _scscf;
@@ -314,8 +336,18 @@ private:
   std::deque<std::string> _ccfs;
   std::deque<std::string> _ecfs;
 
-  /// The ACR allocated for this service hop.
-  ACR* _acr;
+  /// ACRs used where the S-CSCF will only process a single transaction (no
+  /// AsChain is created).  There are two cases where this might be true:
+  ///
+  ///  - An OOD/Session-initializing request that is rejected before the
+  ///    AsChain is created (e.g. subscriber not found).
+  ///  - An in-dialog request, where the S-CSCF will simply forward the
+  ///    request following the route-set.
+  ///
+  /// These fields should not be used to update the ACR information, get_acr()
+  /// should be used instead.
+  ACR* _in_dialog_acr;
+  ACR* _failed_ood_acr;
 
   /// State information when the request is routed to UE bindings.  This is
   /// used in cases where a request fails with a Flow Failed status code
@@ -330,6 +362,11 @@ private:
   /// Track if this transaction has already record-routed itself to prevent
   /// us accidentally record routing twice.
   bool _record_routed;
+
+  /// Track request type and whether a 1xx response has been seen so that the
+  /// correct stats can be updated.
+  pjsip_method_e _req_type;
+  bool _seen_1xx;
 
   static const int MAX_FORKING = 10;
 };

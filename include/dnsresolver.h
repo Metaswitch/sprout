@@ -56,7 +56,7 @@ class DNSResolver
 {
 public:
   DNSResolver(const std::vector<struct IP46Address>& servers);
-  ~DNSResolver();
+  virtual ~DNSResolver();
   // Helper function wrapping the destructor for use as thread-local callbacks.
   static void destroy(DNSResolver* resolver);
   // Perform a NAPTR query for the specified domain, returning the results in
@@ -112,6 +112,7 @@ class DNSResolverFactory
 {
 public:
   inline DNSResolverFactory() {};
+  virtual ~DNSResolverFactory() {}
   // Create a new resolver.
   virtual DNSResolver* new_resolver(const std::vector<struct IP46Address>& servers) const;
 

@@ -154,14 +154,14 @@ static int pjsip_thread_func(void *p)
 
   PJ_UNUSED_ARG(p);
 
-  LOG_DEBUG("PJSIP thread started");
+  TRC_DEBUG("PJSIP thread started");
 
   while (!quit_flag)
   {
     pjsip_endpt_handle_events(stack_data.endpt, &delay);
   }
 
-  LOG_DEBUG("PJSIP thread ended");
+  TRC_DEBUG("PJSIP thread ended");
 
   return 0;
 }
@@ -214,7 +214,7 @@ pj_status_t fill_transport_details(int port,
   status = pj_getaddrinfo(af, &stack_data.local_host, &count, addr_info);
   if (status != PJ_SUCCESS)
   {
-    LOG_ERROR("Failed to decode IP address %.*s (%s)",
+    TRC_ERROR("Failed to decode IP address %.*s (%s)",
               stack_data.local_host.slen,
               stack_data.local_host.ptr,
               PJUtils::pj_status_to_string(status).c_str());
@@ -282,7 +282,7 @@ pj_status_t create_udp_transport(int port, pj_str_t& host)
   if (status != PJ_SUCCESS)
   {
     CL_SPROUT_SIP_UDP_INTERFACE_START_FAIL.log(port, PJUtils::pj_status_to_string(status).c_str());
-    LOG_ERROR("Failed to start UDP transport for port %d (%s)", port, PJUtils::pj_status_to_string(status).c_str());
+    TRC_ERROR("Failed to start UDP transport for port %d (%s)", port, PJUtils::pj_status_to_string(status).c_str());
   }
 
   return status;
@@ -320,7 +320,7 @@ pj_status_t create_tcp_listener_transport(int port, pj_str_t& host, pjsip_tpfact
     status = PJ_EAFNOTSUP;
     CL_SPROUT_SIP_TCP_START_FAIL.log(port,
                                      PJUtils::pj_status_to_string(status).c_str());
-    LOG_ERROR("Failed to start TCP transport for port %d  (%s)",
+    TRC_ERROR("Failed to start TCP transport for port %d  (%s)",
               port,
               PJUtils::pj_status_to_string(status).c_str());
     return status;
@@ -338,7 +338,7 @@ pj_status_t create_tcp_listener_transport(int port, pj_str_t& host, pjsip_tpfact
   {
     CL_SPROUT_SIP_TCP_SERVICE_START_FAIL.log(port,
                                              PJUtils::pj_status_to_string(status).c_str());
-    LOG_ERROR("Failed to start TCP transport for port %d (%s)",
+    TRC_ERROR("Failed to start TCP transport for port %d (%s)",
               port,
               PJUtils::pj_status_to_string(status).c_str());
   }
@@ -349,7 +349,7 @@ pj_status_t create_tcp_listener_transport(int port, pj_str_t& host, pjsip_tpfact
 
 void destroy_tcp_listener_transport(int port, pjsip_tpfactory *tcp_factory)
 {
-  LOG_STATUS("Destroyed TCP transport for port %d", port);
+  TRC_STATUS("Destroyed TCP transport for port %d", port);
   tcp_factory->destroy(tcp_factory);
 }
 
@@ -370,7 +370,7 @@ pj_status_t start_transports(int port, pj_str_t& host, pjsip_tpfactory** tcp_fac
     return status;
   }
 
-  LOG_STATUS("Listening on port %d", port);
+  TRC_STATUS("Listening on port %d", port);
 
   return PJ_SUCCESS;
 }
@@ -384,6 +384,8 @@ class StackQuiesceHandler :
   public ConnectionsQuiescedInterface
 {
 public:
+
+  virtual ~StackQuiesceHandler(){};
 
   //
   // The following methods are from QuiesceConnectionsInterface.
@@ -510,7 +512,7 @@ pj_status_t init_pjsip()
 
   status = register_custom_headers();
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
-  
+
   return PJ_SUCCESS;
 }
 
@@ -526,13 +528,13 @@ pj_status_t start_pjsip_threads()
                               NULL, 0, 0, &thread);
     if (status != PJ_SUCCESS)
     {
-        LOG_ERROR("Error creating PJSIP thread, %s",
+        TRC_ERROR("Error creating PJSIP thread, %s",
                   PJUtils::pj_status_to_string(status).c_str());
         return 1;
     }
     pjsip_threads[ii] = thread;
   }
-  
+
   return PJ_SUCCESS;
 }
 
@@ -627,7 +629,7 @@ pj_status_t init_stack(const std::string& system_name,
   struct in6_addr dummy_addr;
   if (inet_pton(AF_INET6, local_host_cstr, &dummy_addr) == 1)
   {
-    LOG_DEBUG("Local host is an IPv6 address - enabling IPv6 mode");
+    TRC_DEBUG("Local host is an IPv6 address - enabling IPv6 mode");
     stack_data.addr_family = AF_INET6;
   }
 
@@ -662,7 +664,7 @@ pj_status_t init_stack(const std::string& system_name,
       stack_data.record_route_on_diversion = true;
       break;
     default:
-      LOG_ERROR("Record-Route setting should be 1, 2, or 3, is %d. Defaulting to Record-Route on every hop.", record_routing_model);
+      TRC_ERROR("Record-Route setting should be 1, 2, or 3, is %d. Defaulting to Record-Route on every hop.", record_routing_model);
       stack_data.record_route_on_every_hop = true;
     }
   }
@@ -810,10 +812,10 @@ pj_status_t init_stack(const std::string& system_name,
     }
   }
 
-  LOG_STATUS("Local host aliases:");
+  TRC_STATUS("Local host aliases:");
   for (i = 0; i < stack_data.name_cnt; ++i)
   {
-    LOG_STATUS(" %.*s",
+    TRC_STATUS(" %.*s",
                (int)stack_data.name[i].slen,
                stack_data.name[i].ptr);
   }

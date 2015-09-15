@@ -44,6 +44,7 @@
 #include "alarm.h"
 #include "fakezmq.h"
 #include "fakelogger.h"
+#include "sprout_alarmdefinition.h"
 
 using ::testing::_;
 using ::testing::Return;
@@ -82,7 +83,7 @@ public:
       .Times(1)
       .WillOnce(Return(0));
 
-    EXPECT_CALL(_mz, zmq_connect(VoidPointeeEqualsInt(_s),StrEq("tcp://127.0.0.1:6664")))
+    EXPECT_CALL(_mz, zmq_connect(VoidPointeeEqualsInt(_s),StrEq("ipc:///var/run/clearwater/alarms"))) 
       .Times(1)
       .WillOnce(Return(0));
 

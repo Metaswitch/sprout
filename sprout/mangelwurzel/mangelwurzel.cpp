@@ -116,7 +116,7 @@ SproutletTsx* Mangelwurzel::get_tsx(SproutletTsxHelper* helper,
       }
       else if (mangalgorithm != ROT_13_MANGALGORITHM)
       {
-        LOG_ERROR("Invalid mangalgorithm specified: %s",
+        TRC_ERROR("Invalid mangalgorithm specified: %s",
                   mangalgorithm.c_str());
         SAS::Event event(helper->trail(), SASEvent::INVALID_MANGALGORITHM, 0);
         event.add_var_param(mangalgorithm);
@@ -128,7 +128,7 @@ SproutletTsx* Mangelwurzel::get_tsx(SproutletTsxHelper* helper,
   }
   else
   {
-    LOG_DEBUG("Failed to find Route header - not invoking mangelwurzel");
+    TRC_DEBUG("Failed to find Route header - not invoking mangelwurzel");
     return NULL;
   }
 }
@@ -286,7 +286,7 @@ void MangelwurzelTsx::mangle_dialog_identifiers(pjsip_msg* req, pj_pool_t* pool)
   {
     std::string from_tag = PJUtils::pj_str_to_string(&from_hdr->tag);
     mangle_string(from_tag);
-    LOG_DEBUG("From tag mangled to %s", from_tag.c_str());
+    TRC_DEBUG("From tag mangled to %s", from_tag.c_str());
     from_hdr->tag = pj_strdup3(pool, from_tag.c_str());
   }
 
@@ -296,7 +296,7 @@ void MangelwurzelTsx::mangle_dialog_identifiers(pjsip_msg* req, pj_pool_t* pool)
   {
     std::string to_tag = PJUtils::pj_str_to_string(&to_hdr->tag);
     mangle_string(to_tag);
-    LOG_DEBUG("To tag mangled to %s", to_tag.c_str());
+    TRC_DEBUG("To tag mangled to %s", to_tag.c_str());
     to_hdr->tag = pj_strdup3(pool, to_tag.c_str());
   }
 
@@ -307,12 +307,12 @@ void MangelwurzelTsx::mangle_dialog_identifiers(pjsip_msg* req, pj_pool_t* pool)
   {
     std::string call_id = PJUtils::pj_str_to_string(&cid_hdr->id);
     mangle_string(call_id);
-    LOG_DEBUG("Call ID manged to %s", call_id.c_str());
+    TRC_DEBUG("Call ID manged to %s", call_id.c_str());
     cid_hdr->id = pj_strdup3(pool, call_id.c_str());
 
     // Report a SAS marker for the new call ID so that the two dialogs can be
     // correlated in SAS.
-    LOG_DEBUG("Logging SAS Call-ID marker, Call-ID %.*s",
+    TRC_DEBUG("Logging SAS Call-ID marker, Call-ID %.*s",
               cid_hdr->id.slen,
               cid_hdr->id.ptr);
     SAS::Marker cid_marker(trail(), MARKER_ID_SIP_CALL_ID, 1u);
@@ -488,7 +488,7 @@ void MangelwurzelTsx::edit_scscf_route_hdr(pjsip_msg* req, pj_pool_t* pool)
 
     if ((_config.orig) && (orig_param == NULL))
     {
-      LOG_DEBUG("Add orig param to S-CSCF Route header");
+      TRC_DEBUG("Add orig param to S-CSCF Route header");
       orig_param = PJ_POOL_ALLOC_T(pool, pjsip_param);
       pj_strdup(pool, &orig_param->name, &STR_ORIG);
       orig_param->value.slen = 0;
@@ -496,14 +496,14 @@ void MangelwurzelTsx::edit_scscf_route_hdr(pjsip_msg* req, pj_pool_t* pool)
     }
     else if ((!_config.orig) && (orig_param != NULL))
     {
-      LOG_DEBUG("Remove orig param from S-CSCF Route header");
+      TRC_DEBUG("Remove orig param from S-CSCF Route header");
       pj_list_erase(orig_param);
     }
 
     // Ensure there is no ODI token by clearing the user part of the URI.
     if (_config.ootb)
     {
-      LOG_DEBUG("Remove ODI token from S-CSCF Route header");
+      TRC_DEBUG("Remove ODI token from S-CSCF Route header");
       scscf_uri->user.ptr = NULL;
       scscf_uri->user.slen = 0;
     }

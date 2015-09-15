@@ -44,6 +44,8 @@
 extern "C" {
 #include <pjlib-util.h>
 #include <pjlib.h>
+#include <pjsip.h>
+#include "pjsip-simple/evsub.h"
 }
 
 #include "sprout_pd_definitions.h"
@@ -133,7 +135,7 @@ pj_bool_t PJUtils::is_uri_local(const pjsip_uri* uri)
   }
   else
   {
-    LOG_INFO("URI scheme is not SIP - treating as not locally hosted");
+    TRC_INFO("URI scheme is not SIP - treating as not locally hosted");
   }
 
   /* Doesn't match */
@@ -163,7 +165,20 @@ std::string PJUtils::uri_to_string(pjsip_uri_context_e context,
   {
     uri_clen = pjsip_uri_print(context, uri, uri_cstr, sizeof(uri_cstr));
   }
+
   return std::string(uri_cstr, uri_clen);
+}
+
+
+std::string PJUtils::strip_uri_scheme(const std::string& uri)
+{
+  std::string s(uri);
+  size_t colon = s.find(':');
+  if (colon != std::string::npos)
+  {
+    s.erase(0, colon + 1);
+  }
+  return s;
 }
 
 
@@ -282,7 +297,7 @@ std::string PJUtils::default_private_id_from_uri(const pjsip_uri* uri)
   else
   {
     const pj_str_t* scheme = pjsip_uri_get_scheme(uri);
-    LOG_WARNING("Unsupported scheme \"%.*s\" in To header when determining private ID - ignoring",
+    TRC_WARNING("Unsupported scheme \"%.*s\" in To header when determining private ID - ignoring",
                 scheme->slen, scheme->ptr);
   }
 
@@ -319,7 +334,7 @@ pjsip_uri* PJUtils::orig_served_user(pjsip_msg* msg)
   if (served_user != NULL)
   {
     uri = (pjsip_uri*)pjsip_uri_get_uri(&served_user->name_addr);
-    LOG_DEBUG("Served user from P-Served-User header");
+    TRC_DEBUG("Served user from P-Served-User header");
   }
 
   if (uri == NULL)
@@ -332,7 +347,7 @@ pjsip_uri* PJUtils::orig_served_user(pjsip_msg* msg)
     if (asserted_id != NULL)
     {
       uri = (pjsip_uri*)pjsip_uri_get_uri(&asserted_id->name_addr);
-      LOG_DEBUG("Served user from P-Asserted-Identity header");
+      TRC_DEBUG("Served user from P-Asserted-Identity header");
     }
   }
 
@@ -340,9 +355,9 @@ pjsip_uri* PJUtils::orig_served_user(pjsip_msg* msg)
   {
     // Neither IMS header is present, so use the From header.  This isn't
     // strictly speaking IMS compliant.
-    LOG_DEBUG("From header %p", PJSIP_MSG_FROM_HDR(msg));
+    TRC_DEBUG("From header %p", PJSIP_MSG_FROM_HDR(msg));
     uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_FROM_HDR(msg)->uri);
-    LOG_DEBUG("Served user from From header (%p)", uri);
+    TRC_DEBUG("Served user from From header (%p)", uri);
   }
 
   return uri;
@@ -375,7 +390,7 @@ void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity
     auth_hdr = pjsip_authorization_hdr_create(tdata->pool);
     auth_hdr->scheme = pj_str("Digest");
     // Construct a default private identifier from the URI in the To header.
-    LOG_DEBUG("Construct default private identity");
+    TRC_DEBUG("Construct default private identity");
     pjsip_uri* to_uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(tdata->msg)->uri);
     std::string private_id = PJUtils::default_private_id_from_uri(to_uri);
     pj_strdup2(tdata->pool, &auth_hdr->credential.digest.username, private_id.c_str());
@@ -416,33 +431,71 @@ void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity
   default:
     break;
   }
-  LOG_INFO("Adding integrity-protected=%.*s indicator to message",
+  TRC_INFO("Adding integrity-protected=%.*s indicator to message",
            new_param->value.slen, new_param->value.ptr);
   pj_list_insert_before(&auth_hdr->credential.common.other_param, new_param);
 }
 
-void PJUtils::get_impi_and_impu(pjsip_rx_data* rdata, std::string& impi_out, std::string& impu_out)
+// Add an empty Proxy-Authorization header to signal to Sprout that this needs to be challenged
+void PJUtils::add_proxy_auth_for_pbx(pjsip_tx_data* tdata)
 {
-  // Check to see if the request has already been integrity protected?
-  pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
-           pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
+  pjsip_proxy_authorization_hdr* auth_hdr = (pjsip_proxy_authorization_hdr*)
+                                      pjsip_msg_find_hdr(tdata->msg, PJSIP_H_PROXY_AUTHORIZATION, NULL);
 
-  pjsip_uri* to_uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri);
-  impu_out = PJUtils::public_id_from_uri(to_uri);
+  if (auth_hdr == NULL)
+  {
+    // Creates a minimal Authorization header (which PJSIP prints with just an empty 'nonce' and
+    // 'response' field).
+    auth_hdr = pjsip_proxy_authorization_hdr_create(tdata->pool);
+    auth_hdr->scheme = pj_str("Digest");
+    pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)auth_hdr);
+  }
+}
+
+std::string PJUtils::extract_username(pjsip_authorization_hdr* auth_hdr, pjsip_uri* impu_uri)
+{
+  std::string impi;
+  // Check to see if the request has an explicit IMPI in the Proxy-Authorization header
   if ((auth_hdr != NULL) &&
       (auth_hdr->credential.digest.username.slen != 0))
   {
-    // private user identity is supplied in the Authorization header so use it.
-    impi_out = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username);
-    LOG_DEBUG("Private identity from authorization header = %s", impi_out.c_str());
+    impi = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username);
+    TRC_DEBUG("Private identity from authorization header = %s", impi.c_str());
   }
   else
   {
-    // private user identity not supplied, so construct a default from the
-    // public user identity by stripping the sip: prefix.
-    impi_out = PJUtils::default_private_id_from_uri(to_uri);
-    LOG_DEBUG("Private identity defaulted from public identity = %s", impi_out.c_str());
+    // IMPI not supplied, so construct a default from the IMPU by stripping the sip: prefix.
+    impi = PJUtils::default_private_id_from_uri(impu_uri);
+    TRC_DEBUG("Private identity defaulted from public identity = %s", impi.c_str());
   }
+  return impi;
+}
+
+void PJUtils::get_impi_and_impu(pjsip_rx_data* rdata, std::string& impi_out, std::string& impu_out)
+{
+  pjsip_authorization_hdr* auth_hdr;
+  pjsip_uri* impu_uri;
+  if (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD)
+  {
+    impu_uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri);
+
+    auth_hdr = (pjsip_authorization_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg,
+                                                            PJSIP_H_AUTHORIZATION,
+                                                            NULL);
+  }
+  else
+  {
+    // Retrieve the IMPU for a non-REGISTER request by determining the originating served user, and
+    // the IMPI from the Proxy-Authorization header.
+    impu_uri = orig_served_user(rdata->msg_info.msg);
+
+    auth_hdr = (pjsip_proxy_authorization_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg,
+                                                                  PJSIP_H_PROXY_AUTHORIZATION,
+                                                                  NULL);
+  }
+
+  impu_out = PJUtils::public_id_from_uri(impu_uri);
+  impi_out = PJUtils::extract_username(auth_hdr, impu_uri);
 }
 
 /// Adds a P-Asserted-Identity header to the message.
@@ -451,7 +504,7 @@ void PJUtils::add_asserted_identity(pjsip_msg* msg,
                                     const std::string& aid,
                                     const pj_str_t& display_name)
 {
-  LOG_DEBUG("Adding P-Asserted-Identity header: %s", aid.c_str());
+  TRC_DEBUG("Adding P-Asserted-Identity header: %s", aid.c_str());
   pjsip_routing_hdr* p_asserted_id =
                      identity_hdr_create(pool, STR_P_ASSERTED_IDENTITY);
 
@@ -480,7 +533,7 @@ void PJUtils::add_asserted_identity(pjsip_tx_data* tdata,
 pjsip_uri* PJUtils::next_hop(pjsip_msg* msg)
 {
   pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, NULL);
-  LOG_DEBUG("Next hop node is encoded in %s", (route_hdr != NULL) ? "top route header" : "Request-URI");
+  TRC_DEBUG("Next hop node is encoded in %s", (route_hdr != NULL) ? "top route header" : "Request-URI");
   return (route_hdr != NULL) ? route_hdr->name_addr.uri : msg->line.req.uri;
 }
 
@@ -498,10 +551,10 @@ pj_bool_t PJUtils::is_next_route_local(const pjsip_msg* msg, pjsip_route_hdr* st
     // Found the next Route header, so check whether the URI corresponds to
     // this node or one of its aliases.
     pjsip_uri* uri = route_hdr->name_addr.uri;
-    LOG_DEBUG("Found Route header, URI = %s", uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri).c_str());
+    TRC_DEBUG("Found Route header, URI = %s", uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri).c_str());
     if ((is_home_domain(uri)) || (is_uri_local(uri)))
     {
-      LOG_DEBUG("Route header is local");
+      TRC_DEBUG("Route header is local");
       rc = true;
       if (hdr != NULL)
       {
@@ -538,7 +591,18 @@ void PJUtils::add_record_route(pjsip_tx_data* tdata,
   rr->name_addr.uri = (pjsip_uri*)uri;
   pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*)rr);
 
-  LOG_DEBUG("Added Record-Route header, URI = %s", uri_to_string(PJSIP_URI_IN_ROUTING_HDR, rr->name_addr.uri).c_str());
+  TRC_DEBUG("Added Record-Route header, URI = %s", uri_to_string(PJSIP_URI_IN_ROUTING_HDR, rr->name_addr.uri).c_str());
+}
+
+/// Add a Route header with the specified URI.
+void PJUtils::add_top_route_header(pjsip_msg* msg,
+                                   pjsip_sip_uri* uri,
+                                   pj_pool_t* pool)
+{
+  pjsip_route_hdr* hroute = pjsip_route_hdr_create(pool);
+  hroute->name_addr.uri = (pjsip_uri*)uri;
+  uri->lr_param = 1;            // Always use loose routing.
+  pjsip_msg_insert_first_hdr(msg, (pjsip_hdr*)hroute);
 }
 
 /// Add a Route header with the specified URI.
@@ -651,7 +715,7 @@ pjsip_tx_data* PJUtils::clone_msg(pjsip_endpoint* endpt,
     pjsip_tx_data_add_ref(clone);
     clone->msg = pjsip_msg_clone(clone->pool, rdata->msg_info.msg);
     set_trail(clone, get_trail(rdata));
-    LOG_DEBUG("Cloned %s to %s", pjsip_rx_data_get_info(rdata), clone->obj_name);
+    TRC_DEBUG("Cloned %s to %s", pjsip_rx_data_get_info(rdata), clone->obj_name);
 
   }
   return clone;
@@ -668,7 +732,7 @@ pjsip_tx_data* PJUtils::clone_msg(pjsip_endpoint* endpt,
     pjsip_tx_data_add_ref(clone);
     clone->msg = pjsip_msg_clone(clone->pool, tdata->msg);
     set_trail(clone, get_trail(tdata));
-    LOG_DEBUG("Cloned %s to %s", tdata->obj_name, clone->obj_name);
+    TRC_DEBUG("Cloned %s to %s", tdata->obj_name, clone->obj_name);
   }
   return clone;
 }
@@ -912,7 +976,7 @@ void PJUtils::resolve_next_hop(pjsip_tx_data* tdata,
                                   servers,
                                   trail);
 
-  LOG_INFO("Resolved destination URI %s to %d servers",
+  TRC_INFO("Resolved destination URI %s to %d servers",
            PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                   (pjsip_uri*)next_hop).c_str(),
            servers.size());
@@ -1041,7 +1105,7 @@ static void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event)
       {
         // Either transaction failed on a timeout, transport error or received
         // 5xx error, so blacklist the failed target.
-        LOG_DEBUG("Transaction failed with retriable error");
+        TRC_DEBUG("Transaction failed with retriable error");
         if ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
             (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR))
         {
@@ -1056,8 +1120,23 @@ static void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event)
         if (sss->current_server < (int)sss->servers.size())
         {
           // More servers to try, so allocate a new branch ID and transaction.
-          LOG_DEBUG("Attempt to resend request to next destination server");
+          TRC_DEBUG("Attempt to resend request to next destination server");
           pjsip_tx_data* tdata = sss->tdata;
+
+          // In congestion cases, the old tdata might still be held by PJSIP's
+          // transport layer waiting to be sent.  Therefore it's not safe to re-send
+          // the same tdata, so we should clone it first.
+          // LCOV_EXCL_START - No congestion in UTs
+          if (tdata->is_pending)
+          {
+            pjsip_tx_data* old_tdata = tdata;
+            tdata = PJUtils::clone_tdata(tdata);
+
+            // We no longer care about the old tdata.
+            pjsip_tx_data_dec_ref(old_tdata);
+          }
+          // LCOV_EXCL_STOP
+
           pjsip_transaction* retry_tsx;
           PJUtils::generate_new_branch_id(tdata);
           pj_status_t status = pjsip_tsx_create_uac(&mod_sprout_util,
@@ -1102,7 +1181,7 @@ static void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event)
   {
     // Call the user callback, if any, and prevent the callback to be called again
     // by clearing the transaction's module_data.
-    LOG_DEBUG("Request transaction completed, status code = %d", tsx->status_code);
+    TRC_DEBUG("Request transaction completed, status code = %d", tsx->status_code);
     tsx->mod_data[mod_sprout_util.id] = NULL;
 
     if (sss->user_cb != NULL)
@@ -1129,7 +1208,7 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
   pjsip_transaction* tsx;
   pj_status_t status = PJ_SUCCESS;
 
-  LOG_DEBUG("Sending standalone request statefully");
+  TRC_DEBUG("Sending standalone request statefully");
 
   // Allocate temporary storage for the request.
   StatefulSendState* sss = new StatefulSendState;
@@ -1179,7 +1258,7 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
     {
       // Transport has already been determined, so copy it across to the
       // transaction.
-      LOG_DEBUG("Transport already determined");
+      TRC_DEBUG("Transport already determined");
       pjsip_tsx_set_transport(tsx, &tdata->tp_sel);
     }
 
@@ -1188,7 +1267,7 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
     sss->tdata = tdata;
     pjsip_tx_data_add_ref(tdata);
 
-    LOG_DEBUG("Sending request");
+    TRC_DEBUG("Sending request");
     status = pjsip_tsx_send_msg(tsx, tdata);
 
     if (status != PJ_SUCCESS)
@@ -1210,7 +1289,7 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
                                        PJUtils::next_hop(tdata->msg)).c_str(),
                                        PJUtils::pj_status_to_string(status).c_str());
 
-    LOG_ERROR("Failed to send request to %s",
+    TRC_ERROR("Failed to send request to %s",
               PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                      PJUtils::next_hop(tdata->msg)).c_str());
 
@@ -1340,7 +1419,7 @@ pj_status_t PJUtils::send_request_stateless(pjsip_tx_data* tdata, int retries)
     CL_SPROUT_SIP_SEND_REQUEST_ERR.log(PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                        PJUtils::next_hop(tdata->msg)).c_str(),
                                        PJUtils::pj_status_to_string(status).c_str());
-    LOG_ERROR("Failed to send request to %s",
+    TRC_ERROR("Failed to send request to %s",
               PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                      PJUtils::next_hop(tdata->msg)).c_str());
     pjsip_tx_data_dec_ref(tdata);
@@ -1555,7 +1634,7 @@ void PJUtils::clone_header(const pj_str_t* hdr_name, pjsip_msg* old_msg, pjsip_m
   pjsip_hdr* last_hdr = NULL;
   while ((original_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(old_msg, hdr_name, original_hdr)) && (last_hdr != original_hdr))
   {
-    LOG_INFO("Cloning header! %ld", (long int)original_hdr);
+    TRC_INFO("Cloning header! %ld", (long int)original_hdr);
     pjsip_hdr* new_hdr = (pjsip_hdr*)pjsip_hdr_clone(pool, original_hdr);
     pjsip_msg_add_hdr(new_msg, new_hdr);
     last_hdr = original_hdr;
@@ -1583,13 +1662,26 @@ std::string PJUtils::get_header_value(pjsip_hdr* header)
 /// Add SAS markers for the specified call ID and branch IDs on the message (either may be omitted).
 void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* cid_hdr, pjsip_msg* msg)
 {
-  // If we have a call ID, log it.
+    SAS::Marker::Scope scope;
+    if ((msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
+      ((pjsip_method_cmp(&msg->line.req.method, pjsip_get_subscribe_method())) == 0) ||
+      ((pjsip_method_cmp(&msg->line.req.method, pjsip_get_notify_method())) == 0))
+  {
+    // Don't correlate flows based on Call-ID for REGISTER/SUBSCRIBE/NOTIFY - you get massive trace
+    // files.
+    scope = SAS::Marker::Scope::None;
+  }
+  else
+  {
+    scope = SAS::Marker::Scope::Trace;
+  }
+
   if (cid_hdr != NULL)
   {
-    LOG_DEBUG("Logging SAS Call-ID marker, Call-ID %.*s", cid_hdr->id.slen, cid_hdr->id.ptr);
+    TRC_DEBUG("Logging SAS Call-ID marker, Call-ID %.*s", cid_hdr->id.slen, cid_hdr->id.ptr);
     SAS::Marker cid_marker(trail, MARKER_ID_SIP_CALL_ID, 1u);
     cid_marker.add_var_param(cid_hdr->id.slen, cid_hdr->id.ptr);
-    SAS::report_marker(cid_marker, SAS::Marker::Scope::Trace);
+    SAS::report_marker(cid_marker, scope);
   }
 
   // If we have a message, look for branch IDs too.
@@ -1604,16 +1696,6 @@ void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* 
       {
         SAS::Marker via_marker(trail, MARKER_ID_VIA_BRANCH_PARAM, 1u);
         via_marker.add_var_param(top_via->branch_param.slen, top_via->branch_param.ptr);
-        SAS::report_marker(via_marker, SAS::Marker::Scope::Trace);
-      }
-
-      // Now see if we can find the next Via header and log it if so.  This will have been added by
-      // the previous server.  This means we'll be able to correlate with its trail.
-      pjsip_via_hdr* second_via = (pjsip_via_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_VIA, top_via->next);
-      if (second_via != NULL)
-      {
-        SAS::Marker via_marker(trail, MARKER_ID_VIA_BRANCH_PARAM, 2u);
-        via_marker.add_var_param(second_via->branch_param.slen, second_via->branch_param.ptr);
         SAS::report_marker(via_marker, SAS::Marker::Scope::Trace);
       }
     }
@@ -1895,11 +1977,16 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
     // For REGISTERs, report the To URI in the SIP_ALL_REGISTER marker.
     if (to_uri != NULL)
     {
-      std::string to_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, to_uri);
+      std::string to_uri_str = uri_to_string(PJSIP_URI_IN_FROMTO_HDR, to_uri);
       pj_str_t to_user = user_from_uri(to_uri);
+
       SAS::Marker sip_all_register(trail, MARKER_ID_SIP_ALL_REGISTER, 1u);
-      sip_all_register.add_var_param(to_uri_str);
-      sip_all_register.add_var_param(to_user.slen, to_user.ptr);
+      sip_all_register.add_var_param(strip_uri_scheme(to_uri_str));
+      // Add the DN parameter. If the user part is not numeric just log it in
+      // its entirety.
+      sip_all_register.add_var_param(is_user_numeric(to_user) ?
+                                     remove_visual_separators(to_user) :
+                                     pj_str_to_string(&to_user));
       SAS::report_marker(sip_all_register);
     }
   }
@@ -1908,16 +1995,21 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
     // For SUBSCRIBEs and NOTIFYs, report the To URI in the SIP_SUBSCRIBE_NOTIFY marker.
     if (to_uri != NULL)
     {
-      std::string to_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, to_uri);
+      std::string to_uri_str = uri_to_string(PJSIP_URI_IN_FROMTO_HDR, to_uri);
       pj_str_t to_user = user_from_uri(to_uri);
+
       SAS::Marker sip_subscribe_notify(trail, MARKER_ID_SIP_SUBSCRIBE_NOTIFY, 1u);
       // The static parameter contains the type of request - 1 for SUBSCRIBE and 2 for
       // NOTIFY.
       sip_subscribe_notify.add_static_param(is_subscribe ?
                                             SASEvent::SubscribeNotifyType::SUBSCRIBE :
                                             SASEvent::SubscribeNotifyType::NOTIFY);
-      sip_subscribe_notify.add_var_param(to_uri_str);
-      sip_subscribe_notify.add_var_param(to_user.slen, to_user.ptr);
+      sip_subscribe_notify.add_var_param(strip_uri_scheme(to_uri_str));
+      // Add the DN parameter. If the user part is not numeric just log it in
+      // its entirety.
+      sip_subscribe_notify.add_var_param(is_user_numeric(to_user) ?
+                                         remove_visual_separators(to_user) :
+                                         pj_str_to_string(&to_user));
       SAS::report_marker(sip_subscribe_notify);
     }
   }
@@ -1931,16 +2023,33 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
       if (to_uri != NULL)
       {
         pj_str_t to_user = user_from_uri(to_uri);
-        SAS::Marker called_dn(trail, MARKER_ID_CALLED_DN, 1u);
-        called_dn.add_var_param(to_user.slen, to_user.ptr);
-        SAS::report_marker(called_dn);
+        if (is_user_numeric(to_user))
+        {
+          SAS::Marker called_dn(trail, MARKER_ID_CALLED_DN, 1u);
+          called_dn.add_var_param(remove_visual_separators(to_user));
+          SAS::report_marker(called_dn);
+        }
+
+        SAS::Marker called_uri(trail, MARKER_ID_INBOUND_CALLED_URI, 1u);
+        called_uri.add_var_param(strip_uri_scheme(
+                                   uri_to_string(PJSIP_URI_IN_FROMTO_HDR, to_uri)));
+        SAS::report_marker(called_uri);
       }
+
       if (from_uri != NULL)
       {
         pj_str_t from_user = user_from_uri(from_uri);
-        SAS::Marker calling_dn(trail, MARKER_ID_CALLING_DN, 1u);
-        calling_dn.add_var_param(from_user.slen, from_user.ptr);
-        SAS::report_marker(calling_dn);
+        if (is_user_numeric(from_user))
+        {
+          SAS::Marker calling_dn(trail, MARKER_ID_CALLING_DN, 1u);
+          calling_dn.add_var_param(remove_visual_separators(from_user));
+          SAS::report_marker(calling_dn);
+        }
+
+        SAS::Marker calling_uri(trail, MARKER_ID_INBOUND_CALLING_URI, 1u);
+        calling_uri.add_var_param(strip_uri_scheme(
+                                    uri_to_string(PJSIP_URI_IN_FROMTO_HDR, from_uri)));
+        SAS::report_marker(calling_uri);
       }
     }
   }
@@ -1963,13 +2072,13 @@ void PJUtils::add_pcfa_header(pjsip_msg* msg,
   {
     if (pcfa_hdr != NULL)
     {
-      LOG_INFO("Replacing existing PCFA header");
+      TRC_INFO("Replacing existing PCFA header");
       PJUtils::remove_hdr(msg, &STR_P_C_F_A);
       pcfa_hdr = NULL;
     }
     else
     {
-      LOG_INFO("Adding new PCFA header");
+      TRC_INFO("Adding new PCFA header");
     }
 
     pcfa_hdr = pjsip_p_c_f_a_hdr_create(pool);
@@ -1978,7 +2087,7 @@ void PJUtils::add_pcfa_header(pjsip_msg* msg,
          it != ccfs.end();
          ++it)
     {
-      LOG_DEBUG("Adding CCF %s to PCFA header", it->c_str());
+      TRC_DEBUG("Adding CCF %s to PCFA header", it->c_str());
       pjsip_param* new_param =
         (pjsip_param*)pj_pool_alloc(pool, sizeof(pjsip_param));
       new_param->name = STR_CCF;
@@ -1991,7 +2100,7 @@ void PJUtils::add_pcfa_header(pjsip_msg* msg,
          it != ecfs.end();
          ++it)
     {
-      LOG_DEBUG("Adding ECF %s to PCFA header", it->c_str());
+      TRC_DEBUG("Adding ECF %s to PCFA header", it->c_str());
       pjsip_param* new_param =
         (pjsip_param*)pj_pool_alloc(pool, sizeof(pjsip_param));
       new_param->name = STR_ECF;
@@ -2048,7 +2157,7 @@ pj_bool_t PJUtils::is_user_global(const std::string& user)
 
   if ((!user.empty()) && (user[0] == '+'))
   {
-    LOG_DEBUG("Global user %s", user.c_str());
+    TRC_DEBUG("Global user %s", user.c_str());
     rc = PJ_TRUE;
   }
 
@@ -2066,8 +2175,15 @@ static const boost::regex CHARS_TO_STRIP = boost::regex("[.)(-]");
 
 // Strip any visual separators from the number
 std::string PJUtils::remove_visual_separators(const std::string& number)
-{ 
-  return boost::regex_replace(number, CHARS_TO_STRIP, std::string("")); 
+{
+  return boost::regex_replace(number, CHARS_TO_STRIP, std::string(""));
+};
+
+// Strip any visual separators from the number
+std::string PJUtils::remove_visual_separators(const pj_str_t& number)
+{
+  std::string s = pj_str_to_string(&number);
+  return remove_visual_separators(s);
 };
 
 /// Determines whether a user string is a valid phone number
@@ -2141,15 +2257,15 @@ bool PJUtils::get_rn(pjsip_uri* uri, std::string& routing_value)
   return rn_set;
 }
 
-bool PJUtils::does_uri_represent_number(pjsip_uri* uri, 
+bool PJUtils::does_uri_represent_number(pjsip_uri* uri,
                                         bool enforce_user_phone)
 {
   // A URI represents a telephone number if:
-  // - It's a Tel URI, or 
+  // - It's a Tel URI, or
   // - It's a SIP URI where
   //    - user=phone is set or enforce_user_phone is false
   //    - The user part is numeric
-  //    - It's not a gruu. 
+  //    - It's not a gruu.
   return ((is_uri_phone_number(uri)) ||
           ((!enforce_user_phone) &&
            (is_user_numeric(user_from_uri(uri))) &&
@@ -2157,14 +2273,14 @@ bool PJUtils::does_uri_represent_number(pjsip_uri* uri,
 }
 
 // Adds/updates a Session-Expires header to/in the request.
-// We use the value of the Min-SE header if it's set (and valid), 
+// We use the value of the Min-SE header if it's set (and valid),
 // or the default session expiry value otherwise (which comes from
-// configuration. 
+// configuration.
 //
-// Returns success if we could set the Session-Expires header to a 
+// Returns success if we could set the Session-Expires header to a
 // valid value
 bool PJUtils::add_update_session_expires(pjsip_msg* req,
-                                         pj_pool_t* pool, 
+                                         pj_pool_t* pool,
                                          SAS::TrailId trail)
 {
   bool added_se = true;
@@ -2183,9 +2299,9 @@ bool PJUtils::add_update_session_expires(pjsip_msg* req,
 
   if (session_expires == NULL)
   {
-    // No session expiry header, so add one with the default session 
+    // No session expiry header, so add one with the default session
     // expiry value
-    LOG_DEBUG("Adding session expires header with default value");
+    TRC_DEBUG("Adding session expires header with default value");
     session_expires = pjsip_session_expires_hdr_create(pool);
     pjsip_msg_add_hdr(req, (pjsip_hdr*)session_expires);
     session_expires->expires = stack_data.default_session_expires;
@@ -2196,9 +2312,9 @@ bool PJUtils::add_update_session_expires(pjsip_msg* req,
     {
       if (min_se->expires > stack_data.max_session_expires)
       {
-        // Min SE header is requesting a session expiry that is too 
-        // large. Reject the request. 
-        LOG_INFO("Requested session expiry is too large");
+        // Min SE header is requesting a session expiry that is too
+        // large. Reject the request.
+        TRC_INFO("Requested session expiry is too large");
 
         SAS::Event event(trail, SASEvent::INVALID_SESSION_EXPIRES_HEADER, 0);
         event.add_static_param(min_se->expires);
@@ -2209,7 +2325,7 @@ bool PJUtils::add_update_session_expires(pjsip_msg* req,
       }
       else
       {
-        LOG_DEBUG("Setting session expires value from Min-SE header: %d", 
+        TRC_DEBUG("Setting session expires value from Min-SE header: %d",
                   min_se->expires);
         session_expires->expires = min_se->expires;
       }
@@ -2220,7 +2336,7 @@ bool PJUtils::add_update_session_expires(pjsip_msg* req,
       {
         // Session Expiry header is requesting a session expiry that is too
         // large. Reject the request.
-        LOG_INFO("Requested session expiry is too large");
+        TRC_INFO("Requested session expiry is too large");
 
         SAS::Event event(trail, SASEvent::INVALID_SESSION_EXPIRES_HEADER, 0);
         event.add_static_param(session_expires->expires);

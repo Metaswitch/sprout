@@ -74,6 +74,8 @@ pj_str_t uri_to_pj_str(pjsip_uri_context_e context,
 std::string uri_to_string(pjsip_uri_context_e context,
                           const pjsip_uri* uri);
 
+std::string strip_uri_scheme(const std::string& uri);
+
 pjsip_uri* uri_from_string(const std::string& uri_s,
                            pj_pool_t* pool,
                            pj_bool_t force_name_addr=false);
@@ -85,6 +87,8 @@ std::string pj_str_to_unquoted_string(const pj_str_t* pjstr);
 std::string pj_status_to_string(const pj_status_t status);
 
 std::string hdr_to_string(void* hdr);
+
+std::string extract_username(pjsip_authorization_hdr* auth_hdr, pjsip_uri* impu_uri);
 
 std::string public_id_from_uri(const pjsip_uri* uri);
 
@@ -98,6 +102,7 @@ pjsip_uri* term_served_user(pjsip_msg* msg);
 
 typedef enum {NO, YES, TLS_YES, TLS_PENDING, IP_ASSOC_YES, IP_ASSOC_PENDING, AUTH_DONE} Integrity;
 void add_integrity_protected_indication(pjsip_tx_data* tdata, PJUtils::Integrity integrity);
+void add_proxy_auth_for_pbx(pjsip_tx_data* tdata);
 void add_pvni(pjsip_tx_data* tdata, pj_str_t* network_id);
 
 void add_asserted_identity(pjsip_msg* msg, pj_pool_t* pool, const std::string& aid, const pj_str_t& display_name);
@@ -120,6 +125,8 @@ inline pj_bool_t is_top_route_local(const pjsip_msg* msg, pjsip_route_hdr** hdr)
 }
 
 void add_record_route(pjsip_tx_data* tdata, const char* transport, int port, const char* user, const pj_str_t& host);
+
+void add_top_route_header(pjsip_msg* msg, pjsip_sip_uri* uri, pj_pool_t* pool);
 
 void add_route_header(pjsip_msg* msg, pjsip_sip_uri* uri, pj_pool_t* pool);
 
@@ -266,6 +273,7 @@ pj_bool_t is_user_global(const std::string& user);
 pj_bool_t is_user_global(const pj_str_t& user);
 
 std::string remove_visual_separators(const std::string& user);
+std::string remove_visual_separators(const pj_str_t& number);
 
 pj_bool_t is_user_numeric(const std::string& user);
 pj_bool_t is_user_numeric(const pj_str_t& user);
@@ -275,8 +283,8 @@ bool does_uri_represent_number(pjsip_uri* uri,
 bool get_npdi(pjsip_uri* uri);
 bool get_rn(pjsip_uri* uri, std::string& routing_value);
 
-bool add_update_session_expires(pjsip_msg* req, 
-                                pj_pool_t* pool, 
+bool add_update_session_expires(pjsip_msg* req,
+                                pj_pool_t* pool,
                                 SAS::TrailId trail);
 
 } // namespace PJUtils

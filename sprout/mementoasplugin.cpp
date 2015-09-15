@@ -44,6 +44,7 @@
 #include "mementoappserver.h"
 #include "call_list_store.h"
 #include "sproutletappserver.h"
+#include "memento_as_alarmdefinition.h"
 
 class MementoPlugin : public SproutletPlugin
 {
@@ -86,10 +87,14 @@ bool MementoPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
   bool plugin_loaded = true;
 
+  SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("memento_as_incoming_sip_transactions",
+                                                                                                                             "1.2.826.0.1.1578918.9.8.1.4");
+  SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("memento_as_outgoing_sip_transactions",
+                                                                                                                             "1.2.826.0.1.1578918.9.8.1.5");
   if (((opt.max_call_list_length == 0) &&
        (opt.call_list_ttl == 0)))
   {
-    LOG_ERROR("Can't have an unlimited maximum call length and a unlimited TTL for the call list store - disabling Memento");
+    TRC_ERROR("Can't have an unlimited maximum call length and a unlimited TTL for the call list store - disabling Memento");
   }
   else
   {
@@ -117,7 +122,7 @@ bool MementoPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                     opt.min_token_rate,
                                     exception_handler);
 
-    _memento_sproutlet = new SproutletAppServerShim(_memento);
+    _memento_sproutlet = new SproutletAppServerShim(_memento, incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl);
     sproutlets.push_back(_memento_sproutlet);
   }
 

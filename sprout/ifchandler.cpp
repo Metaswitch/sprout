@@ -206,7 +206,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
               break;
             default:
               // LCOV_EXCL_START Unreachable
-              LOG_WARNING("Impossible case %d", reg_type);
+              TRC_WARNING("Impossible case %d", reg_type);
               ret = false;
               break;
               // LCOV_EXCL_STOP
@@ -308,7 +308,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
       break;
     default:
       // LCOV_EXCL_START Unreachable
-      LOG_WARNING("Impossible case %d", direction);
+      TRC_WARNING("Impossible case %d", direction);
       ret = false;
       break;
     // LCOV_EXCL_STOP
@@ -419,7 +419,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
               }
               else
               {
-                LOG_WARNING("Found badly formatted SDP line: %s", sdp_line.c_str());
+                TRC_WARNING("Found badly formatted SDP line: %s", sdp_line.c_str());
               }
             }
           }
@@ -429,11 +429,11 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
   }
   else
   {
-    LOG_WARNING("Unimplemented iFC service point trigger class: %s", name);
+    TRC_WARNING("Unimplemented iFC service point trigger class: %s", name);
     ret = false;
   }
 
-  LOG_DEBUG("SPT class %s: result %s", name, ret ? "true" : "false");
+  TRC_DEBUG("SPT class %s: result %s", name, ret ? "true" : "false");
   return ret;
 }
 
@@ -488,7 +488,7 @@ bool Ifc::filter_matches(const SessionCase& session_case,
       {
         std::string reg_state = reg ? "reg" : "unreg";
         std::string reason = "iFC ProfilePartIndicator " + reg_state + " doesn't match";
-        LOG_DEBUG(reason.c_str());
+        TRC_DEBUG(reason.c_str());
 
         SAS::Event event(trail, SASEvent::IFC_NOT_MATCHED_PPI, 0);
         event.add_var_param(server_name);
@@ -508,7 +508,7 @@ bool Ifc::filter_matches(const SessionCase& session_case,
     xml_node<>* trigger = _ifc->first_node("TriggerPoint");
     if (!trigger)
     {
-      LOG_DEBUG("iFC has no trigger point - unconditional match");  // 3GPP TS 29.228 sB.2.2
+      TRC_DEBUG("iFC has no trigger point - unconditional match");  // 3GPP TS 29.228 sB.2.2
 
       SAS::Event event(trail, SASEvent::IFC_MATCHED, 0);
       event.add_var_param(server_name);
@@ -537,7 +537,7 @@ bool Ifc::filter_matches(const SessionCase& session_case,
            group_node = group_node->next_sibling("Group"))
       {
         int32_t group = parse_integer(group_node, "Group ID", 0, std::numeric_limits<int32_t>::max());
-        LOG_DEBUG("Add to group %d val %s", (int)group, val ? "true" : "false");
+        TRC_DEBUG("Add to group %d val %s", (int)group, val ? "true" : "false");
         if (groups.find(group) == groups.end())
         {
           groups[group] = val;
@@ -555,20 +555,20 @@ bool Ifc::filter_matches(const SessionCase& session_case,
          it != groups.end();
          ++it)
     {
-      LOG_DEBUG("Result group %d val %s", (int)it->first, it->second ? "true" : "false");
+      TRC_DEBUG("Result group %d val %s", (int)it->first, it->second ? "true" : "false");
       ret = cnf ? (ret && it->second) : (ret || it->second);
     }
 
     if (ret)
     {
-      LOG_DEBUG("iFC matches");
+      TRC_DEBUG("iFC matches");
       SAS::Event event(trail, SASEvent::IFC_MATCHED, 0);
       event.add_var_param(server_name);
       SAS::report_event(event);
     }
     else
     {
-      LOG_DEBUG("iFC does not match");
+      TRC_DEBUG("iFC does not match");
       SAS::Event event(trail, SASEvent::IFC_NOT_MATCHED, 0);
       event.add_var_param(server_name);
       SAS::report_event(event);
@@ -581,7 +581,7 @@ bool Ifc::filter_matches(const SessionCase& session_case,
     // Ignore individual criteria which can't be parsed. SAS logging
     // should already have happened by this point.
     std::string err_str = "iFC evaluation error: " + std::string(err.what());
-    LOG_ERROR(err_str.c_str());
+    TRC_ERROR(err_str.c_str());
     return false;
   }
 }
@@ -662,7 +662,7 @@ AsInvocation Ifc::as_invocation() const
   {
     // If the DefaultHandling attribute isn't present, or is malformed, default
     // to SESSION_CONTINUED.
-    LOG_WARNING("Badly formed DefaultHandling element in IFC (%s), defaulting to SESSION_CONTINUED",
+    TRC_WARNING("Badly formed DefaultHandling element in IFC (%s), defaulting to SESSION_CONTINUED",
                 default_handling.c_str());
     as_invocation.default_handling = SESSION_CONTINUED;
   }
@@ -680,7 +680,7 @@ AsInvocation Ifc::as_invocation() const
     as_invocation.include_register_response = false;
   };
 
-  LOG_INFO("Found (triggered) server %s", as_invocation.server_name.c_str());
+  TRC_INFO("Found (triggered) server %s", as_invocation.server_name.c_str());
   return as_invocation;
 }
 
@@ -722,7 +722,7 @@ Ifcs::Ifcs(std::shared_ptr<xml_document<> > ifc_doc, xml_node<>* sp) :
       {
         // Ignore individual criteria which can't be parsed, and keep
         // going with the rest.
-        LOG_ERROR("iFC evaluation error %s", err.what());
+        TRC_ERROR("iFC evaluation error %s", err.what());
       }
     }
 
@@ -735,7 +735,7 @@ Ifcs::Ifcs(std::shared_ptr<xml_document<> > ifc_doc, xml_node<>* sp) :
   }
   else
   {
-    LOG_ERROR("No ServiceProfile node in iFC!");
+    TRC_ERROR("No ServiceProfile node in iFC!");
   }
 }
 
@@ -759,7 +759,7 @@ void Ifcs::interpret(const SessionCase& session_case,  //< The session case
                      std::vector<AsInvocation>& application_servers, //< OUT: the list of application servers
                      SAS::TrailId trail) const  //< SAS trail
 {
-  LOG_DEBUG("Interpreting %s IFC information", session_case.to_string().c_str());
+  TRC_DEBUG("Interpreting %s IFC information", session_case.to_string().c_str());
   for (std::vector<Ifc>::const_iterator it = _ifcs.begin();
        it != _ifcs.end();
        ++it)
@@ -836,7 +836,7 @@ std::string IfcHandler::served_user_from_msg(const SessionCase& session_case,
   }
   else
   {
-    LOG_DEBUG("URI is not locally hosted");
+    TRC_DEBUG("URI is not locally hosted");
   }
 
   return user;

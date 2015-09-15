@@ -35,8 +35,6 @@ from metaswitch.clearwater.cluster_manager.plugin_base import \
     SynchroniserPluginBase
 from metaswitch.clearwater.cluster_manager.plugin_utils import \
     run_command, write_memcached_cluster_settings
-from metaswitch.clearwater.cluster_manager.alarms import issue_alarm
-from metaswitch.clearwater.cluster_manager import constants
 import subprocess
 import logging
 import os
@@ -46,7 +44,7 @@ _log = logging.getLogger("sprout_remote_memcached_plugin")
 
 class SproutRemoteMemcachedPlugin(SynchroniserPluginBase):
     def __init__(self, params):
-        self._key = "/clearwater/{}/sprout/clustering/memcached".format(params.remote_site)
+        self._key = "/{}/{}/sprout/clustering/memcached".format(params.etcd_key, params.remote_site)
         self._remote_site = params.remote_site
 
     def key(self):

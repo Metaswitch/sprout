@@ -121,7 +121,7 @@ public:
 
       EXPECT_LT(n, (int)sizeof(buf));
 
-      LOG_DEBUG("Request\n%s", buf);
+      TRC_DEBUG("Request\n%s", buf);
 
       string ret(buf, n);
       return ret;
@@ -151,7 +151,7 @@ public:
 
       EXPECT_LT(n, (int)sizeof(buf));
 
-      LOG_DEBUG("Response\n%s", buf);
+      TRC_DEBUG("Response\n%s", buf);
 
       string ret(buf, n);
       return ret;
@@ -167,7 +167,7 @@ MATCHER_P(ReqUriEquals, req_uri, "")
 {
   std::string arg_req_uri = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI,
                                                    arg->line.req.uri);
-  LOG_DEBUG("arg_req_uri %s", arg_req_uri.c_str());
+  TRC_DEBUG("arg_req_uri %s", arg_req_uri.c_str());
   return arg_req_uri == req_uri;
 }
 

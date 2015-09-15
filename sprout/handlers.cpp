@@ -64,13 +64,13 @@ static bool reg_store_access_common(RegStore::AoR** aor_data,
   // Find the current bindings for the AoR.
   delete *aor_data;
   *aor_data = current_store->get_aor_data(aor_id, trail);
-  LOG_DEBUG("Retrieved AoR data %p", *aor_data);
+  TRC_DEBUG("Retrieved AoR data %p", *aor_data);
 
   if (*aor_data == NULL)
   {
     // Failed to get data for the AoR because there is no connection
     // to the store.
-    LOG_ERROR("Failed to get AoR binding for %s from store", aor_id.c_str());
+    TRC_ERROR("Failed to get AoR binding for %s from store", aor_id.c_str());
     return false;
   }
 
@@ -125,13 +125,17 @@ static void report_sip_all_register_marker(SAS::TrailId trail, std::string uri_s
 
     // Create and report the marker.
     SAS::Marker sip_all_register(trail, MARKER_ID_SIP_ALL_REGISTER, 1u);
-    sip_all_register.add_var_param(uri_str);
-    sip_all_register.add_var_param(user.slen, user.ptr);
+    sip_all_register.add_var_param(PJUtils::strip_uri_scheme(uri_str));
+    // Add the DN parameter. If the user part is not numeric just log it in
+    // its entirety.
+    sip_all_register.add_var_param(PJUtils::is_user_numeric(user) ?
+                                   PJUtils::remove_visual_separators(user) :
+                                   PJUtils::pj_str_to_string(&user));
     SAS::report_marker(sip_all_register);
   }
   else
   {
-    LOG_WARNING("Could not raise SAS REGISTER marker for unparseable URI '%s'", uri_str.c_str());
+    TRC_WARNING("Could not raise SAS REGISTER marker for unparseable URI '%s'", uri_str.c_str());
   }
 
   // Remember to release the temporary pool.
@@ -152,7 +156,7 @@ void RegistrationTimeoutTask::run()
 
   if (rc != HTTP_OK)
   {
-    LOG_DEBUG("Unable to parse response from Chronos");
+    TRC_DEBUG("Unable to parse response from Chronos");
     send_http_reply(rc);
     delete this;
     return;
@@ -190,7 +194,7 @@ void AuthTimeoutTask::run()
 
   if (rc != HTTP_OK)
   {
-    LOG_DEBUG("Unable to handle callback from Chronos");
+    TRC_DEBUG("Unable to handle callback from Chronos");
     send_http_reply(rc);
     delete this;
     return;
@@ -206,7 +210,7 @@ void DeregistrationTask::run()
   // HTTP method must be a DELETE
   if (_req.method() != htp_method_DELETE)
   {
-    LOG_WARNING("HTTP method isn't delete");
+    TRC_WARNING("HTTP method isn't delete");
     send_http_reply(HTTP_BADMETHOD);
     delete this;
     return;
@@ -217,7 +221,7 @@ void DeregistrationTask::run()
 
   if (_notify != "true" && _notify != "false")
   {
-    LOG_WARNING("Mandatory send-notifications param is missing or invalid, send 400");
+    TRC_WARNING("Mandatory send-notifications param is missing or invalid, send 400");
     send_http_reply(HTTP_BAD_REQUEST);
     delete this;
     return;
@@ -228,7 +232,7 @@ void DeregistrationTask::run()
 
   if (rc != HTTP_OK)
   {
-    LOG_WARNING("Request body is invalid, send %d", rc);
+    TRC_WARNING("Request body is invalid, send %d", rc);
     send_http_reply(rc);
     delete this;
     return;
@@ -258,7 +262,7 @@ void RegistrationTimeoutTask::handle_response()
 
     if (all_bindings_expired)
     {
-      LOG_DEBUG("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS");
+      TRC_DEBUG("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS");
       _cfg->_hss->update_registration_state(_aor_id, "", HSSConnection::DEREG_TIMEOUT, 0);
     }
   }
@@ -266,7 +270,7 @@ void RegistrationTimeoutTask::handle_response()
   {
     // We couldn't update the RegStore but there is nothing else we can do to
     // recover from this.
-    LOG_INFO("Could not update update RegStore on registration timeout for AoR: %s",
+    TRC_INFO("Could not update update RegStore on registration timeout for AoR: %s",
              _aor_id.c_str());
   }
 
@@ -330,8 +334,8 @@ HTTPCode RegistrationTimeoutTask::parse_response(std::string body)
 
   if (doc.HasParseError())
   {
-    LOG_INFO("Failed to parse opaque data as JSON: %s\nError: %s",
-             json_str.c_str(), 
+    TRC_INFO("Failed to parse opaque data as JSON: %s\nError: %s",
+             json_str.c_str(),
              rapidjson::GetParseError_En(doc.GetParseError()));
     return HTTP_BAD_REQUEST;
   }
@@ -343,7 +347,7 @@ HTTPCode RegistrationTimeoutTask::parse_response(std::string body)
   }
   catch (JsonFormatError err)
   {
-    LOG_INFO("Badly formed opaque data (missing aor_id or binding_id)");
+    TRC_INFO("Badly formed opaque data (missing aor_id or binding_id)");
     return HTTP_BAD_REQUEST;
   }
 
@@ -358,7 +362,7 @@ HTTPCode DeregistrationTask::parse_request(std::string body)
 
   if (doc.HasParseError())
   {
-    LOG_INFO("Failed to parse data as JSON: %s\nError: %s",
+    TRC_INFO("Failed to parse data as JSON: %s\nError: %s",
              body.c_str(),
              rapidjson::GetParseError_En(doc.GetParseError()));
     return HTTP_BAD_REQUEST;
@@ -374,7 +378,7 @@ HTTPCode DeregistrationTask::parse_request(std::string body)
          reg_it != reg_arr.End();
          ++reg_it)
     {
-      try 
+      try
       {
         std::string primary_impu;
         std::string impi = "";
@@ -390,18 +394,18 @@ HTTPCode DeregistrationTask::parse_request(std::string body)
       }
       catch (JsonFormatError err)
       {
-        LOG_WARNING("Invalid JSON - registration doesn't contain primary-impu");
+        TRC_WARNING("Invalid JSON - registration doesn't contain primary-impu");
         return HTTP_BAD_REQUEST;
       }
     }
   }
   catch (JsonFormatError err)
   {
-    LOG_INFO("Registrations not available in JSON");
+    TRC_INFO("Registrations not available in JSON");
     return HTTP_BAD_REQUEST;
   }
 
-  LOG_DEBUG("HTTP request successfully parsed");
+  TRC_DEBUG("HTTP request successfully parsed");
   return HTTP_OK;
 }
 
@@ -427,7 +431,7 @@ HTTPCode DeregistrationTask::handle_request()
       // then this will lead to an inconsistency between the HSS and Sprout, as
       // Sprout will have changed some of the AoRs, but HSS will believe they all failed.
       // Sprout accepts changes to AoRs that don't exist though.
-      LOG_WARNING("Unable to connect to memcached for AoR %s", it->first.c_str());
+      TRC_WARNING("Unable to connect to memcached for AoR %s", it->first.c_str());
       delete aor_data;
       return HTTP_SERVER_ERROR;
     }
@@ -519,13 +523,14 @@ RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
     std::vector<std::string> uris;
     std::map<std::string, Ifcs> ifc_map;
     std::string state;
-    LOG_INFO("ID %s", aor_id.c_str());
+    TRC_INFO("ID %s", aor_id.c_str());
 
     if (_cfg->_hss->get_registration_data(aor_id, state, ifc_map, uris, trail()) == HTTP_OK)
     {
       RegistrationUtils::deregister_with_application_servers(ifc_map[aor_id],
                                                              current_store,
                                                              aor_id,
+                                                             NULL,
                                                              trail());
     }
   }
@@ -547,7 +552,7 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
 
   if (doc.HasParseError())
   {
-    LOG_INFO("Failed to parse opaque data as JSON: %s\nError: %s",
+    TRC_INFO("Failed to parse opaque data as JSON: %s\nError: %s",
              json_str.c_str(),
              rapidjson::GetParseError_En(doc.GetParseError()));
     return HTTP_BAD_REQUEST;
@@ -562,7 +567,7 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
   }
   catch (JsonFormatError err)
   {
-    LOG_INFO("Badly formed opaque data (missing impu, impi or nonce");
+    TRC_INFO("Badly formed opaque data (missing impu, impi or nonce");
     return HTTP_BAD_REQUEST;
   }
 
@@ -580,7 +585,7 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
     // indicate that. Look for it.
     if (!av->HasMember("tombstone"))
     {
-      LOG_DEBUG("AV for %s:%s has timed out", _impi.c_str(), _nonce.c_str());
+      TRC_DEBUG("AV for %s:%s has timed out", _impi.c_str(), _nonce.c_str());
 
       // The AUTHENTICATION_TIMEOUT SAR is idempotent, so there's no
       // problem if Chronos' timer pops twice (e.g. if we have high
@@ -601,13 +606,13 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
       SAS::Event event(trail(), SASEvent::AUTHENTICATION_TIMER_POP_IGNORED, 0);
       SAS::report_event(event);
 
-      LOG_DEBUG("Tombstone record indicates Authentication Vector has been used successfully - ignoring timer pop");
+      TRC_DEBUG("Tombstone record indicates Authentication Vector has been used successfully - ignoring timer pop");
       success = true;
     }
   }
   else
   {
-    LOG_WARNING("Could not find AV for %s:%s when checking authentication timeout", _impi.c_str(), _nonce.c_str()); // LCOV_EXCL_LINE
+    TRC_WARNING("Could not find AV for %s:%s when checking authentication timeout", _impi.c_str(), _nonce.c_str()); // LCOV_EXCL_LINE
   }
   delete av;
 

@@ -189,7 +189,7 @@ public:
 
     EXPECT_LT(n, (int)sizeof(buf));
 
-    LOG_DEBUG("Request\n%s", buf);
+    TRC_DEBUG("Request\n%s", buf);
 
     return string(buf, n);
   }
@@ -255,7 +255,7 @@ public:
 
     EXPECT_LT(n, (int)sizeof(buf));
 
-    LOG_DEBUG("Response\n%s", buf);
+    TRC_DEBUG("Response\n%s", buf);
 
     return string(buf, n);
   }

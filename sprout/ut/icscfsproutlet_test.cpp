@@ -91,7 +91,8 @@ public:
                                       PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                       "sip:homedomain:" + std::to_string(stack_data.icscf_port),
                                       std::unordered_set<std::string>(),
-                                      sproutlets);
+                                      sproutlets,
+                                      std::set<std::string>());
 
     // Schedule timers.
     SipTest::poll();
@@ -338,6 +339,37 @@ public:
   }
 
 protected:
+  // Common test setup for the RouteTermInviteLocalUserPhone tests
+  TransportFlow *RouteTermInviteLocalUserPhoneSetup()
+  {
+    // Create a TCP connection to the I-CSCF listening port.
+    TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                          stack_data.icscf_port,
+                                          "1.2.3.4",
+                                          49152);
+
+    // Set up the HSS responses for the terminating location query.
+    _hss_connection->set_result("/impu/tel%3A16505551234/location",
+                                "{\"result-code\": 2001,"
+                                " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+
+    // Inject an INVITE request to a sip URI representing a telephone number with a
+    // P-Served-User header.
+    Message msg1;
+    msg1._method = "INVITE";
+    msg1._requri = "sip:16505551234@homedomain;user=phone;isub=1234;ext=4321";
+    msg1._to = "16505551234";
+    msg1._via = tp->to_string(false);
+    msg1._extra = "Contact: sip:16505551000@" +
+                  tp->to_string(true) +
+                  ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+    msg1._extra += "P-Served-User: <sip:16505551000@homedomain>";
+    msg1._route = "Route: <sip:homedomain>";
+    inject_msg(msg1.get_request(), tp);
+
+    return tp;
+  }
+
 };
 
 
@@ -2184,7 +2216,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteNoUnregisteredServices)
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 5003}");
 
-  // Inject a INVITE request 
+  // Inject a INVITE request
   Message msg1;
   msg1._method = "INVITE";
   msg1._via = tp->to_string(false);
@@ -2541,7 +2573,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnumBgcf)
 }
 
 // Test the case where the I-CSCF does an ENUM lookup which returns
-// NP data. The requ URI should be rewritten to include the NP data, 
+// NP data. The requ URI should be rewritten to include the NP data,
 // and the request should be forwarded to the BGCF
 TEST_F(ICSCFSproutletTest, RouteTermInviteEnumNP)
 {
@@ -2574,7 +2606,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnumNP)
   ReqMatcher r1("INVITE");
   r1.matches(tdata->msg);
 
-  // Check the RequestURI has been altered 
+  // Check the RequestURI has been altered
   ASSERT_EQ("tel:+1690100001;npdi;rn=16901", str_uri(tdata->msg->line.req.uri));
 
   // Send a 200 OK response.
@@ -2715,6 +2747,96 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteUserPhone)
   delete tp;
 }
 
+// The following test (similar to RouteTermInviteUserPhone apart from the
+// absence of leading "+" characters on the user) verifies that I-CSCF doesn't
+// perform a Tel URI conversion if the number is not globally specified (i.e.
+// doesn't start with a "+") AND enforce_global_lookups is on.
+TEST_F(ICSCFSproutletTest, RouteTermInviteLocalUserPhoneFailure)
+{
+  pjsip_tx_data* tdata;
+
+  // Turn on enforcement of global-only user=phone to Tel URI lookups in I-CSCF
+  _icscf_sproutlet->set_global_only_lookups_enforced(true);
+
+  // Setup common config and submit test INVITE
+  TransportFlow* tp = RouteTermInviteLocalUserPhoneSetup();
+
+  // Expecting 100 Trying and final 404 responses.  I-CSCF shouldn't perform
+  // a TelURI conversion and therefore shouldn't match on the HSS result
+  // inserted above.
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Check the 404 Not Found.
+  tdata = current_txdata();
+  RespMatcher(404).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  _hss_connection->delete_result("/impu/tel%3A16505551234/location");
+
+  delete tp;
+}
+
+// The following test checks that the user=phone => Tel URI conversion IS
+// performed for location lookup for local numbers if enforce_global_lookups
+// is OFF
+TEST_F(ICSCFSproutletTest, RouteTermInviteLocalUserPhoneSuccess)
+{
+  pjsip_tx_data* tdata;
+
+  // Turn off enforcement of global-only user=phone to Tel URI lookups in I-CSCF
+  _icscf_sproutlet->set_global_only_lookups_enforced(false);
+
+  // Setup common config and submit test INVITE
+  TransportFlow* tp = RouteTermInviteLocalUserPhoneSetup();
+
+  // Expecting 100 Trying and forwarded INVITE
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // INVITE request should be forwarded to the server named in the HSS
+  // response, scscf1.homedomain.
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.1", 5058, tdata);
+  ReqMatcher r1("INVITE");
+  r1.matches(tdata->msg);
+
+  // Check that a Route header has been added routing the INVITE to the
+  // selected S-CSCF.  This must include the orig parameter.
+  string route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("Route: <sip:scscf1.homedomain:5058;transport=TCP;lr>", route);
+
+  // Check that no Record-Route headers have been added.
+  string rr = get_headers(tdata->msg, "Record-Route");
+  ASSERT_EQ("", rr);
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher r2(200);
+  r2.matches(tdata->msg);
+
+  free_txdata();
+
+  _hss_connection->delete_result("/impu/tel%3A16505551234/location");
+
+  delete tp;
+}
 
 TEST_F(ICSCFSproutletTest, RouteTermInviteNumericSIPURI)
 {
@@ -2994,4 +3116,82 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteBadServerName)
   _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true");
 
   delete tp;
+}
+
+TEST_F(ICSCFSproutletTest, INVITEWithTwoRouteHeaders)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.icscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a INVITE request with orig in the Route header and a P-Served-User
+  // header.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:icscf.homedomain;lr>, <sip:scscf1.homedomain:5059;transport=TCP;lr;orig>";
+  inject_msg(msg1.get_request(), tp);
+
+  ASSERT_EQ(2, txdata_count());
+
+  // Ignore the 100 Trying
+  free_txdata();
+
+  // INVITE request should be forwarded to the server named in the Route header, scscf1.homedomain.
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.1", 5059, tdata);
+  ReqMatcher r1("INVITE");
+  r1.matches(tdata->msg);
+
+  // Check that no additional Route header has been added
+  string route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("Route: <sip:scscf1.homedomain:5059;transport=TCP;lr;orig>", route);
+
+  // Check that no Record-Route headers have been added.
+  string rr = get_headers(tdata->msg, "Record-Route");
+  ASSERT_EQ("", rr);
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher r2(200);
+  r2.matches(tdata->msg);
+
+  free_txdata();
+
+  delete tp;
+}
+
+// Test the case where the I-CSCF receives an ACK. This is not valid and should be dropped.
+TEST_F(ICSCFSproutletTest, RouteOutOfDialogAck)
+{
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.icscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+ 
+  // Inject an ACK request to a local URI
+  Message msg1;
+  msg1._method = "ACK";
+  msg1._requri = "sip:3196914123@homedomain;transport=UDP";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expect it to just be dropped
+  ASSERT_EQ(0, txdata_count());
+  free_txdata(); 
+
+  // Allow the transaction to time out so we don't leak PJSIP memory.
+  cwtest_advance_time_ms(33000L);
+  poll();
+  delete tp;   
 }

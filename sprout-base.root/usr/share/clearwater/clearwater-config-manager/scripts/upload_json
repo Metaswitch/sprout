@@ -49,7 +49,7 @@ fi
 # Check we can contact `etcd`
 local_site_name=site1
 . /etc/clearwater/config
-nc -z $local_ip 4000
+nc -z ${management_local_ip:-$local_ip} 4000
 if [[ $? != 0 ]]
 then
   echo "The Clearwater Configuration store (etcd) is not running"
@@ -64,7 +64,16 @@ then
 fi
 
 # Upload the file to etcd
-curl -X PUT \
-     http://$local_ip:4000/v2/keys/clearwater/$local_site_name/configuration/$KEY \
-     --data-urlencode \
-     value@$CONFPATH/$FILENAME > /dev/null
+keypath=http://${management_local_ip:-$local_ip}:4000/v2/keys/clearwater/$local_site_name/configuration/$KEY
+curl -X PUT $keypath --data-urlencode value@$CONFPATH/$FILENAME 2> /tmp/upload-json-file.stderr.$$ | tee /tmp/upload-json-file.stdout.$$ | egrep -q "\"action\":\"set\""
+rc=$?
+
+# Check the return code and log if appropriate.
+if [ $rc != 0 ] ; then
+  echo Upload JSON configuration file failed to $keypath  >&2
+  cat /tmp/upload-json-file.stderr.$$                     >&2
+  cat /tmp/upload-json-file.stdout.$$                     >&2
+fi
+rm -f /tmp/upload-json-file.stderr.$$ /tmp/upload-json-file.stdout.$$
+
+exit $rc

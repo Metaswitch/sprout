@@ -98,7 +98,7 @@ static pj_status_t ws_send_msg(pjsip_transport *transport,
                                pjsip_transport_callback callback)
 {
   std::string body(tdata->buf.start);
-  LOG_DEBUG("Sending message over WS");
+  TRC_DEBUG("Sending message over WS");
 
   struct ws_transport *ws = (struct ws_transport*)transport;
   server::handler::connection_ptr con = ws->con;
@@ -199,7 +199,7 @@ static pj_status_t ws_transport_create(pjsip_endpoint *endpt,
   pj_strdup2(pool, &tp->base.local_name.host, local_endpoint.address().to_string().c_str());
   tp->base.local_name.port = local_endpoint.port();
 
-  LOG_DEBUG("Incoming connection from %.*s:%d",
+  TRC_DEBUG("Incoming connection from %.*s:%d",
             tp->base.remote_name.host.slen,
             tp->base.remote_name.host.ptr,
             tp->base.remote_name.port);
@@ -213,7 +213,7 @@ static pj_status_t ws_transport_create(pjsip_endpoint *endpt,
 
   if (status != PJ_SUCCESS)
   {
-    LOG_ERROR("Failed to parse remote address for transport key");
+    TRC_ERROR("Failed to parse remote address for transport key");
     goto on_error;
   }
 
@@ -221,7 +221,7 @@ static pj_status_t ws_transport_create(pjsip_endpoint *endpt,
 
   if (status != PJ_SUCCESS)
   {
-    LOG_ERROR("Failed to set port in transport key");
+    TRC_ERROR("Failed to set port in transport key");
     goto on_error;
   }
 
@@ -302,7 +302,7 @@ static pj_bool_t on_ws_data(ws_transport *ws,
       PJSIP_POOL_RDATA_LEN,
       PJSIP_POOL_RDATA_INC);
   if (!pool) {
-    LOG_ERROR("Unable to create pool");
+    TRC_ERROR("Unable to create pool");
     return PJ_ENOMEM;
   }
 
@@ -324,7 +324,7 @@ static pj_bool_t on_ws_data(ws_transport *ws,
     ws->rdata.pkt_info.packet = (char*)pj_pool_alloc(ws->rdata.tp_info.pool, strlen(msg_str) + 1);
     strcpy(ws->rdata.pkt_info.packet, msg_str);
   } else {
-    LOG_ERROR("Dropping incoming websocket message as it is larger than PJSIP_MAX_PKT_LEN, %d", strlen(msg_str));
+    TRC_ERROR("Dropping incoming websocket message as it is larger than PJSIP_MAX_PKT_LEN, %d", strlen(msg_str));
     return PJ_FALSE;
   }
 
@@ -360,13 +360,13 @@ static pj_bool_t on_ws_data(ws_transport *ws,
 
 static pj_status_t ws_shutdown_transport(pjsip_transport *transport)
 {
-  LOG_DEBUG("Shutting down WS transport...");
+  TRC_DEBUG("Shutting down WS transport...");
   return PJ_SUCCESS;
 }
 
 static pj_status_t ws_destroy_transport(pjsip_transport *transport)
 {
-  LOG_DEBUG("Destroying WS transport...");
+  TRC_DEBUG("Destroying WS transport...");
   struct ws_transport *ws = (struct ws_transport*)transport;
 
   if (ws->rdata.tp_info.pool) {
@@ -405,11 +405,11 @@ class sip_server_handler : public server::handler {
       // client requested.  This should include "sip", in which case we'll
       // select "sip" too.  If "sip" was not offered, we offer nothing and the
       // connection will probably fail.
-      LOG_DEBUG("Validating incoming web socket connection");
+      TRC_DEBUG("Validating incoming web socket connection");
       const std::vector<std::string>& subprotocols = con->get_subprotocols();
       if (std::find(subprotocols.begin(), subprotocols.end(), SUBPROTOCOL) != subprotocols.end())
       {
-        LOG_DEBUG("Client requested subprotocol sip - agreeing");
+        TRC_DEBUG("Client requested subprotocol sip - agreeing");
         con->select_subprotocol("sip");
       }
       else
@@ -423,22 +423,22 @@ class sip_server_handler : public server::handler {
           // The above added a trailing comma.  Strip it.
           str = str.substr(0, str.length() - 1);
         }
-        LOG_INFO("Client requested subprotocols %s - connection will probably fail", str.c_str());
+        TRC_INFO("Client requested subprotocols %s - connection will probably fail", str.c_str());
       }
     }
 
     void on_open(connection_ptr con) {
-      LOG_DEBUG("New web socket connection, creating PJSIP transport");
+      TRC_DEBUG("New web socket connection, creating PJSIP transport");
       pjsip_transport *transport;
       pj_status_t status = ws_transport_create(stack_data.endpt,
           con,
           50,
           &transport);
       if (status == PJ_SUCCESS){
-        LOG_DEBUG("Created WS transport");
+        TRC_DEBUG("Created WS transport");
       }
       else{
-        LOG_DEBUG("Failed to create WS transport");
+        TRC_DEBUG("Failed to create WS transport");
       }
 
       connectionMap.insert(
@@ -448,16 +448,16 @@ class sip_server_handler : public server::handler {
     void on_message(connection_ptr con, message_ptr msg) {
       ws_transport *transport;
 
-      LOG_DEBUG("Received message from websockets");
+      TRC_DEBUG("Received message from websockets");
 
       transport = connectionMap.find(con)->second;
-      LOG_DEBUG("Sending message to PJSIP...");
+      TRC_DEBUG("Sending message to PJSIP...");
       pj_status_t status = on_ws_data(transport, msg);
       if (status == PJ_TRUE){
-        LOG_DEBUG("Passed message to PJSIP successfully");
+        TRC_DEBUG("Passed message to PJSIP successfully");
       }
       else{
-        LOG_DEBUG("Failed to pass message to PJSIP");
+        TRC_DEBUG("Failed to pass message to PJSIP");
       }
     }
 
@@ -465,7 +465,7 @@ class sip_server_handler : public server::handler {
       ws_transport *transport;
       pjsip_tp_state_callback state_cb;
 
-      LOG_DEBUG("Closing websocket...");
+      TRC_DEBUG("Closing websocket...");
       transport = connectionMap.find(con)->second;
 
       /* Notify application of transport disconnected state */
@@ -495,10 +495,10 @@ std::string sip_server_handler::SUBPROTOCOL = "sip";
 
 static int websocket_thread(void* p)
 {
-  LOG_DEBUG("Started Websockets thread");
+  TRC_DEBUG("Started Websockets thread");
 
   PJSIP_TRANSPORT_WS = ws_transport_register_type(ws_port);
-  LOG_DEBUG("Registered websockets transport with PJSIP, type %d", PJSIP_TRANSPORT_WS);
+  TRC_DEBUG("Registered websockets transport with PJSIP, type %d", PJSIP_TRANSPORT_WS);
   try {
     server::handler::ptr h(new sip_server_handler());
     server sip_endpoint(h);
@@ -510,11 +510,11 @@ static int websocket_thread(void* p)
     sip_endpoint.elog().set_level(websocketpp::log::elevel::RERROR);
     sip_endpoint.elog().set_level(websocketpp::log::elevel::FATAL);
 
-    LOG_DEBUG("Starting WebSocket SIP server on port %hu", ws_port);
+    TRC_DEBUG("Starting WebSocket SIP server on port %hu", ws_port);
     boost::asio::ip::tcp::endpoint ep(boost::asio::ip::tcp::v4(), ws_port);
     sip_endpoint.listen(ep);
   } catch (std::exception& e) {
-    LOG_ERROR("Exception: %s", e.what());
+    TRC_ERROR("Exception: %s", e.what());
   }
 
   return 0;
@@ -529,7 +529,7 @@ static pj_bool_t ws_transport_on_start()
       NULL, 0, 0, &thread);
   if (status != PJ_SUCCESS)
   {
-    LOG_ERROR("Error creating Websockets thread, %s",
+    TRC_ERROR("Error creating Websockets thread, %s",
         PJUtils::pj_status_to_string(status).c_str());
     return status;
   }
