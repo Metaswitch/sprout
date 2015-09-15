@@ -44,7 +44,7 @@
 
 #include "fakelogger.h"
 #include "stack.h"
-#include "snmp_accumulator_table.h"
+#include "snmp_event_accumulator_table.h"
 
 /// Fixture for test.
 class BaseTest : public ::testing::Test

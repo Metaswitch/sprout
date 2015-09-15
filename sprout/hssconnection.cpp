@@ -46,6 +46,7 @@
 #include "httpconnection.h"
 #include "hssconnection.h"
 #include "rapidjson/error/en.h"
+#include "snmp_continuous_accumulator_table.h"
 
 const std::string HSSConnection::REG = "reg";
 const std::string HSSConnection::CALL = "call";
@@ -62,11 +63,11 @@ HSSConnection::HSSConnection(const std::string& server,
                              HttpResolver* resolver,
                              LoadMonitor *load_monitor,
                              SNMP::IPCountTable* homestead_count_tbl,
-                             SNMP::AccumulatorTable* homestead_overall_latency_tbl,
-                             SNMP::AccumulatorTable* homestead_mar_latency_tbl,
-                             SNMP::AccumulatorTable* homestead_sar_latency_tbl,
-                             SNMP::AccumulatorTable* homestead_uar_latency_tbl,
-                             SNMP::AccumulatorTable* homestead_lir_latency_tbl,
+                             SNMP::EventAccumulatorTable* homestead_overall_latency_tbl,
+                             SNMP::EventAccumulatorTable* homestead_mar_latency_tbl,
+                             SNMP::EventAccumulatorTable* homestead_sar_latency_tbl,
+                             SNMP::EventAccumulatorTable* homestead_uar_latency_tbl,
+                             SNMP::EventAccumulatorTable* homestead_lir_latency_tbl,
                              CommunicationMonitor* comm_monitor) :
   _http(new HttpConnection(server,
                            false,
@@ -165,9 +166,9 @@ HTTPCode HSSConnection::get_json_object(const std::string& path,
 
     if (json_object->HasParseError())
     {
-      TRC_INFO("Failed to parse Homestead response:\nPath: %s\nData: %s\nError: %s\n", 
-               path.c_str(), 
-               json_data.c_str(), 
+      TRC_INFO("Failed to parse Homestead response:\nPath: %s\nData: %s\nError: %s\n",
+               path.c_str(),
+               json_data.c_str(),
                rapidjson::GetParseError_En(json_object->GetParseError()));
       delete json_object;
       json_object = NULL;

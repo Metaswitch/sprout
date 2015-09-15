@@ -121,6 +121,14 @@ public:
   /// @param  uri          - The URI to check.
   virtual bool is_uri_reflexive(const pjsip_uri* uri) const = 0;
 
+  /// Creates a new, blank request.  This is typically used when creating
+  /// a downstream request to another SIP server as part of handling a
+  /// request.
+  ///
+  /// @returns             - A new, blank request message.
+  ///
+  virtual pjsip_msg* create_request() = 0;
+
   /// Clones the request.  This is typically used when forking a request if
   /// different request modifications are required on each fork or for storing
   /// off to handle late forking.
@@ -375,6 +383,15 @@ protected:
   ///
   const pjsip_route_hdr* route_hdr() const
     {return _helper->route_hdr();}
+
+  /// Creates a new, blank request.  This is typically used when creating
+  /// a downstream request to another SIP server as part of handling a
+  /// request.
+  ///
+  /// @returns             - A new, blank request message.
+  ///
+  pjsip_msg* create_request()
+    {return _helper->create_request();}
 
   /// Clones the request.  This is typically used when forking a request if
   /// different request modifications are required on each fork.

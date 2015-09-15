@@ -44,6 +44,8 @@
 extern "C" {
 #include <pjlib-util.h>
 #include <pjlib.h>
+#include <pjsip.h>
+#include "pjsip-simple/evsub.h"
 }
 
 #include "sprout_pd_definitions.h"
@@ -1641,13 +1643,26 @@ std::string PJUtils::get_header_value(pjsip_hdr* header)
 /// Add SAS markers for the specified call ID and branch IDs on the message (either may be omitted).
 void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* cid_hdr, pjsip_msg* msg)
 {
-  // If we have a call ID, log it.
+    SAS::Marker::Scope scope;
+    if ((msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
+      ((pjsip_method_cmp(&msg->line.req.method, pjsip_get_subscribe_method())) == 0) ||
+      ((pjsip_method_cmp(&msg->line.req.method, pjsip_get_notify_method())) == 0))
+  {
+    // Don't correlate flows based on Call-ID for REGISTER/SUBSCRIBE/NOTIFY - you get massive trace
+    // files.
+    scope = SAS::Marker::Scope::None;
+  }
+  else
+  {
+    scope = SAS::Marker::Scope::Trace;
+  }
+
   if (cid_hdr != NULL)
   {
     TRC_DEBUG("Logging SAS Call-ID marker, Call-ID %.*s", cid_hdr->id.slen, cid_hdr->id.ptr);
     SAS::Marker cid_marker(trail, MARKER_ID_SIP_CALL_ID, 1u);
     cid_marker.add_var_param(cid_hdr->id.slen, cid_hdr->id.ptr);
-    SAS::report_marker(cid_marker, SAS::Marker::Scope::Trace);
+    SAS::report_marker(cid_marker, scope);
   }
 
   // If we have a message, look for branch IDs too.
@@ -1662,16 +1677,6 @@ void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* 
       {
         SAS::Marker via_marker(trail, MARKER_ID_VIA_BRANCH_PARAM, 1u);
         via_marker.add_var_param(top_via->branch_param.slen, top_via->branch_param.ptr);
-        SAS::report_marker(via_marker, SAS::Marker::Scope::Trace);
-      }
-
-      // Now see if we can find the next Via header and log it if so.  This will have been added by
-      // the previous server.  This means we'll be able to correlate with its trail.
-      pjsip_via_hdr* second_via = (pjsip_via_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_VIA, top_via->next);
-      if (second_via != NULL)
-      {
-        SAS::Marker via_marker(trail, MARKER_ID_VIA_BRANCH_PARAM, 2u);
-        via_marker.add_var_param(second_via->branch_param.slen, second_via->branch_param.ptr);
         SAS::report_marker(via_marker, SAS::Marker::Scope::Trace);
       }
     }

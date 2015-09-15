@@ -256,6 +256,7 @@ public:
   const char* msg_info(pjsip_msg*);
   const pjsip_route_hdr* route_hdr() const;
   const std::string& dialog_id() const;
+  pjsip_msg* create_request();
   pjsip_msg* clone_request(pjsip_msg* req);
   pjsip_msg* create_response(pjsip_msg* req,
                              pjsip_status_code status_code,

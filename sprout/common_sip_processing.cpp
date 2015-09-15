@@ -40,10 +40,8 @@
  */
 
 extern "C" {
-#include <pjsip.h>
 #include <pjlib-util.h>
 #include <pjlib.h>
-#include "pjsip-simple/evsub.h"
 }
 #include <arpa/inet.h>
 
@@ -231,6 +229,11 @@ static void sas_log_rx_msg(pjsip_rx_data* rdata)
   // Store the trail in the message as it gets passed up the stack.
   set_trail(rdata, trail);
 
+  PJUtils::report_sas_to_from_markers(trail, rdata->msg_info.msg);
+
+  pjsip_cid_hdr* cid = (pjsip_cid_hdr*)rdata->msg_info.cid;
+  PJUtils::mark_sas_call_branch_ids(trail, cid, rdata->msg_info.msg);
+
   // Log the message event.
   SAS::Event event(trail, SASEvent::RX_SIP_MSG, 0);
   event.add_static_param(pjsip_transport_get_type_from_flag(rdata->tp_info.transport->flag));
@@ -253,6 +256,10 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
   }
   else if (trail != 0)
   {
+    PJUtils::report_sas_to_from_markers(trail, tdata->msg);
+
+    PJUtils::mark_sas_call_branch_ids(trail, NULL, tdata->msg);
+
     // Log the message event.
     SAS::Event event(trail, SASEvent::TX_SIP_MSG, 0);
     event.add_static_param(pjsip_transport_get_type_from_flag(tdata->tp_info.transport->flag));
@@ -290,8 +297,6 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
     // Retry-After header with a zero length timeout.
     TRC_DEBUG("Rejected request due to overload");
 
-    pjsip_cid_hdr* cid = (pjsip_cid_hdr*)rdata->msg_info.cid;
-
     // LCOV_EXCL_START - can't meaningfully verify SAS in UT
     SAS::TrailId trail = get_trail(rdata);
 
@@ -303,21 +308,6 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
     event.add_static_param(load_monitor->get_current_latency());
     event.add_static_param(load_monitor->get_rate_limit());
     SAS::report_event(event);
-
-    PJUtils::report_sas_to_from_markers(trail, rdata->msg_info.msg);
-
-    if ((rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
-        ((pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_subscribe_method())) == 0) ||
-        ((pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_notify_method())) == 0))
-    {
-      // Omit the Call-ID for these requests, as the same Call-ID can be
-      // reused over a long period of time and produce huge SAS trails.
-      PJUtils::mark_sas_call_branch_ids(trail, NULL, rdata->msg_info.msg);
-    }
-    else
-    {
-      PJUtils::mark_sas_call_branch_ids(trail, cid, rdata->msg_info.msg);
-    }
 
     SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
     SAS::report_marker(end_marker);

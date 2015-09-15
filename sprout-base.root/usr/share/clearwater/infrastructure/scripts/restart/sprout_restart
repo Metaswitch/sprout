@@ -1,9 +1,9 @@
-#!/bin/sh
+#!/bin/bash
 
-# @file memento-as.postinst
+# @file sprout_restart
 #
 # Project Clearwater - IMS in the Cloud
-# Copyright (C) 2014  Metaswitch Networks Ltd
+# Copyright (C) 2015  Metaswitch Networks Ltd
 #
 # This program is free software: you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -34,44 +34,4 @@
 # under which the OpenSSL Project distributes the OpenSSL toolkit software,
 # as those licenses appear in the file LICENSE-OPENSSL.
 
-#
-# see: dh_installdeb(1)
-
-set -e
-
-# summary of how this script can be called:
-#        * <postinst> `configure' <most-recently-configured-version>
-#        * <old-postinst> `abort-upgrade' <new version>
-#        * <conflictor's-postinst> `abort-remove' `in-favour' <package>
-#          <new-version>
-#        * <postinst> `abort-remove'
-#        * <deconfigured's-postinst> `abort-deconfigure' `in-favour'
-#          <failed-install-package> <version> `removing'
-#          <conflicting-package> <version>
-# for details, see http://www.debian.org/doc/debian-policy/ or
-# the debian-policy package
-
-case "$1" in
-    configure)
-        # Restart the alarm agent
-        if [ -x "/etc/init.d/clearwater-snmp-alarm-agent" ]; then
-          service clearwater-snmp-alarm-agent stop || /bin/true
-        fi
-
-        # Restart sprout to force reload of new plug-in.  Always do this by
-        # terminating sprout so monit will restart it more-or-less immediately.
-        # (monit restart seems to have significant lag.)
-        # Don't fail if it's already stopped.
-        service sprout stop || /bin/true
-    ;;
-
-    abort-upgrade|abort-remove|abort-deconfigure)
-    ;;
-
-    *)
-        echo "postinst called with unknown argument \`$1'" >&2
-        exit 1
-    ;;
-esac
-
-exit 0
+service sprout quiesce

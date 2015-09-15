@@ -1117,6 +1117,42 @@ const pjsip_route_hdr* SproutletWrapper::route_hdr() const
   return NULL;
 }
 
+pjsip_msg* SproutletWrapper::create_request()
+{
+  // Create a new tdata
+  pj_status_t status;
+  pjsip_tx_data* new_tdata;
+
+  status = pjsip_endpt_create_tdata(stack_data.endpt, &new_tdata);
+
+  if (status != PJ_SUCCESS)
+  {
+    //LCOV_EXCL_START
+    TRC_ERROR("Failed to create new request");
+    return NULL;
+    //LCOV_EXCL_STOP
+  }
+
+  pjsip_tx_data_add_ref(new_tdata);
+
+  // Create a message inside the tdata
+  new_tdata->msg = pjsip_msg_create(new_tdata->pool, PJSIP_REQUEST_MSG);
+
+  // Add any additional request headers from the endpoint
+  const pjsip_hdr* endpt_hdr = pjsip_endpt_get_request_headers(stack_data.endpt)->next;
+  while (endpt_hdr != pjsip_endpt_get_request_headers(stack_data.endpt))
+  {
+    pjsip_hdr* hdr = (pjsip_hdr*)pjsip_hdr_shallow_clone(new_tdata->pool, endpt_hdr);
+    pjsip_msg_add_hdr(new_tdata->msg, hdr);
+    endpt_hdr = endpt_hdr->next;
+  }
+
+  set_trail(new_tdata, trail());
+  register_tdata(new_tdata);
+
+  return new_tdata->msg;
+}
+
 pjsip_msg* SproutletWrapper::clone_request(pjsip_msg* req)
 {
   // Get the old tdata from the map of clones

@@ -185,6 +185,31 @@ public:
   }
 };
 
+class FakeSproutletTsxDownstreamRequest : public SproutletTsx
+{
+public:
+  FakeSproutletTsxDownstreamRequest(SproutletTsxHelper* helper) :
+    SproutletTsx(helper)
+  {
+  }
+
+  void on_rx_initial_request(pjsip_msg* req)
+  {
+    pjsip_msg* ds_req = create_request();
+    free_msg(ds_req);
+    send_request(req);
+  }
+
+  void on_rx_in_dialog_request(pjsip_msg* req)
+  {
+    send_request(req);
+  }
+
+  void on_rx_response(pjsip_msg* rsp, int fork_id)
+  {
+    send_response(rsp);
+  }
+};
 template <int N>
 class FakeSproutletTsxForker : public SproutletTsx
 {
@@ -462,6 +487,7 @@ public:
     // Create the Test Sproutlets.
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForwarder<false> >("fwd", 0, ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForwarder<true> >("fwdrr", 0, ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDownstreamRequest>("dsreq", 0, ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForker<NUM_FORKS> >("forker", 0, ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDelayRedirect<1> >("delayredirect", 0, ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxBad >("bad", 0, ""));
@@ -792,6 +818,60 @@ TEST_F(SproutletProxyTest, NullSproutlet)
   // Check no Record-Route headers have been added.
   rr = get_headers(tdata->msg, "Record-Route");
   EXPECT_EQ("", rr);
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
+  // All done!
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+TEST_F(SproutletProxyTest, DownstreamRequestSproutlet)
+{
+  // Tests standard routing of a request that doesn't match any Sproutlets.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with two Route headers, the first refering to the
+  // home domain and the second refering to an external domain.
+  Message msg;
+  msg._method = "INVITE";
+  msg._requri = "sip:bob@awaydomain";
+  msg._from = "sip:alice@homedomain";
+  msg._to = "sip:bob@awaydomain";
+  msg._via = tp->to_string(false);
+  msg._route = "Route: <sip:proxy1.homedomain;transport=TCP;service=dsreq;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  inject_msg(msg.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE
+
+  // Check the 100 Trying.
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
+  free_txdata();
+
+  // Request is forwarded to the node in the second Route header.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  ReqMatcher("INVITE").matches(tdata->msg);
 
   // Send a 200 OK response.
   inject_msg(respond_to_current_txdata(200));

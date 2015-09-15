@@ -227,10 +227,9 @@ static void send_register_cb(void* token, pjsip_event *event)
     third_party_register_failed(tsxdata->public_id, tsxdata->trail);
   }
   
-  // printf("Expiry: %d, Is_initial_registration: %d\n", tsxdata->expires, tsxdata->is_initial_registration);
-  if (tsx->status_code == 200)
-  {  
-    if (third_party_reg_stats_tables != NULL)
+  if (third_party_reg_stats_tables != NULL)
+  {
+    if (tsx->status_code == 200)
     {
       if (tsxdata->expires == 0)
       {
@@ -245,22 +244,22 @@ static void send_register_cb(void* token, pjsip_event *event)
         third_party_reg_stats_tables->re_reg_tbl->increment_successes();
       }
     }
-  }
-  else
-  // Count all failed registration attempts, not just ones that result in user
-  // being unsubscribed.
-  {
-    if (tsxdata->expires == 0)
-    {
-      third_party_reg_stats_tables->de_reg_tbl->increment_failures();
-    }
-    else if (tsxdata->is_initial_registration)
-    {
-      third_party_reg_stats_tables->init_reg_tbl->increment_failures();
-    }
     else
+    // Count all failed registration attempts, not just ones that result in user
+    // being unsubscribed.
     {
-      third_party_reg_stats_tables->re_reg_tbl->increment_failures();
+      if (tsxdata->expires == 0)
+      {
+        third_party_reg_stats_tables->de_reg_tbl->increment_failures();
+      }
+      else if (tsxdata->is_initial_registration)
+      {
+        third_party_reg_stats_tables->init_reg_tbl->increment_failures();
+      }
+      else
+      {
+        third_party_reg_stats_tables->re_reg_tbl->increment_failures();
+      }
     }
   }
 

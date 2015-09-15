@@ -3,30 +3,32 @@
 # Read the configuration in.
 . /etc/clearwater/config
 
-# Add square brackets around the address iff it is an IPv6 address
-bracketed_ip=$(python /usr/share/clearwater/bin/bracket_ipv6_address.py $local_ip)
-
-# Set up local_ipv*, defaulting the entry that is not applicable.
-if /usr/share/clearwater/bin/is_address_ipv6.py $local_ip
+if [ -n "$local_ip" ] && [ -n "$home_domain" ] && [ -n "$public_ip" ]
 then
-  local_ipv4=127.0.0.1
-  local_ipv6=$local_ip
-else
-  local_ipv4=$local_ip
-  local_ipv6=::1
-fi
+  # Add square brackets around the address iff it is an IPv6 address
+  bracketed_ip=$(python /usr/share/clearwater/bin/bracket_ipv6_address.py $local_ip)
 
-# Set up public_ipv4 if we're using an IPv4 address, or default it if not.
-if /usr/share/clearwater/bin/is_address_ipv6.py $public_ip
-then
-  public_ipv4=127.0.0.1
-else
-  public_ipv4=$public_ip
-fi
+  # Set up local_ipv*, defaulting the entry that is not applicable.
+  if /usr/share/clearwater/bin/is_address_ipv6.py $local_ip
+  then
+    local_ipv4=127.0.0.1
+    local_ipv6=$local_ip
+  else
+    local_ipv4=$local_ip
+    local_ipv6=::1
+  fi
 
-# Build the restund configuration file.
-CONF=/etc/clearwater/restund.conf
-cat >$CONF <<EOF
+  # Set up public_ipv4 if we're using an IPv4 address, or default it if not.
+  if /usr/share/clearwater/bin/is_address_ipv6.py $public_ip
+  then
+    public_ipv4=127.0.0.1
+  else
+    public_ipv4=$public_ip
+  fi
+
+  # Build the restund configuration file.
+  CONF=/etc/clearwater/restund.conf
+  cat >$CONF <<EOF
 # restund.conf
 # core
 daemon                  yes
@@ -68,6 +70,7 @@ status_udp_port         33000
 status_http_addr        127.0.0.1
 status_http_port        8080
 EOF
+fi
 
 # Set up the monit configuration for restund
 cat > /etc/monit/conf.d/restund.monit <<EOF
