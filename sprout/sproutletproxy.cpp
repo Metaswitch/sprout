@@ -409,7 +409,8 @@ bool SproutletProxy::cancel_timer(pj_timer_entry* tentry)
   }
   else
   {
-    TRC_DEBUG("Unable to cancel Sproutlet timer, id = %ld", (TimerID)tentry);
+    TRC_DEBUG("Unable to cancel Sproutlet timer, id = %ld "
+              "(already popped or cancelled?)", (TimerID)tentry);
     return false;
   }
 }

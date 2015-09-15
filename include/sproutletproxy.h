@@ -345,7 +345,10 @@ private:
     int cancel_reason;
   } ForkStatus;
   std::vector<ForkStatus> _forks;
-  
+
+  /// Set keeping track of pending timers for this SproutletWrapper.  The
+  /// SproutletWrapper (and the SproutletTsx it wraps) won't be deleted
+  /// until all these timers have popped or been cancelled.
   std::set<TimerID> _pending_timers;
 
   SAS::TrailId _trail_id;

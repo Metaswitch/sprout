@@ -43,6 +43,9 @@
 #include "siptest.hpp"
 #include "test_interposer.hpp"
 #include "sproutletproxy.h"
+#include "pjutils.h"
+
+#include <mutex>
 
 using namespace std;
 using testing::InSequence;
@@ -53,6 +56,8 @@ using testing::WithArg;
 using testing::_;
 
 #define NUM_FORKS 3
+
+const pj_str_t STR_UT_TSX_ID_HDR = pj_str((char*)"X-UT-TsxId");
 
 /// Mock class for Sproutlet.
 class MockSproutlet : public Sproutlet
@@ -468,6 +473,95 @@ class FakeSproutletTsxDelayAfterRsp : public SproutletTsx
 {
   FakeSproutletTsxDelayAfterRsp(SproutletTsxHelper* helper) :
     SproutletTsx(helper),
+    _tsx_from_tag(),
+    _tid(0)
+  {
+  }
+
+  ~FakeSproutletTsxDelayAfterRsp()
+  {
+    deleted(_tsx_from_tag);
+  }
+
+  void on_rx_initial_request(pjsip_msg* req)
+  {
+    TRC_DEBUG("Initial request.  Forward on.");
+    pjsip_from_hdr* from_hdr = PJSIP_MSG_FROM_HDR(req);
+    if (from_hdr != NULL)
+    {
+      _tsx_from_tag = PJUtils::pj_str_to_string(&from_hdr->tag);
+      created(_tsx_from_tag);
+    }
+    pjsip_msg* rsp = create_response(req, PJSIP_SC_OK);
+    send_response(rsp);
+    schedule_timer(NULL, _tid, T * 1000);
+    free_msg(req);
+  }
+
+  void on_rx_response(pjsip_msg* rsp, int fork_id)
+  {
+    TRC_DEBUG("Response.  Ignore.");
+
+    // Swallow this response
+    free_msg(rsp);
+  }
+
+  void on_timer_expiry(void* context)
+  {
+    TRC_DEBUG("Timer expiry (%ld)", _tid);
+    if (_tid != 0)
+    {
+      // Check concurrent cancellation of timer doesn't break
+      cancel_timer(_tid);
+
+      _tid = 0;
+    }
+  }
+
+  std::string _tsx_from_tag;
+  TimerID _tid;
+
+  static std::set<std::string> _live_tsxs;
+  static std::mutex _live_tsxs_mutex;
+
+  static void created(std::string& tsx_from_tag)
+  {
+    if (!tsx_from_tag.empty())
+    {
+      _live_tsxs_mutex.lock();
+      _live_tsxs.insert(tsx_from_tag);
+      _live_tsxs_mutex.unlock();
+    }
+  }
+
+  static void deleted(std::string& tsx_from_tag)
+  {
+    if (!tsx_from_tag.empty())
+    {
+      _live_tsxs_mutex.lock();
+      _live_tsxs.erase(tsx_from_tag);
+      _live_tsxs_mutex.unlock();
+    }
+  }
+
+  static bool is_live(const std::string& tsx_from_tag)
+  {
+    bool live;
+    _live_tsxs_mutex.lock();
+    live = _live_tsxs.count(tsx_from_tag) > 0;
+    _live_tsxs_mutex.unlock();
+    return live;
+  }
+};
+
+template<int T> std::set<std::string> FakeSproutletTsxDelayAfterRsp<T>::_live_tsxs;
+template<int T> std::mutex FakeSproutletTsxDelayAfterRsp<T>::_live_tsxs_mutex;
+
+template <int T>
+class FakeSproutletTsxDelayAfterFwd : public SproutletTsx
+{
+  FakeSproutletTsxDelayAfterFwd(SproutletTsxHelper* helper) :
+    SproutletTsx(helper),
     _tid(0),
     _response(0)
   {
@@ -549,6 +643,7 @@ public:
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxBad >("bad", 0, ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxB2BUA >("b2bua", 0, ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDelayAfterRsp<1> >("delayafterrsp", 0, ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDelayAfterFwd<1> >("delayafterfwd", 0, ""));
 
     // Create a host alias.
     std::unordered_set<std::string> host_aliases;
@@ -2022,13 +2117,70 @@ TEST_F(SproutletProxyTest, DelayAfterReponse)
 
   // Inject a request with two Route headers - the first referencing the
   // forwarder Sproutlet and the second referencing an external node.
+  // Use the address of this message as a unique From tag.
+  Message msg1;
+  std::string tsx_from_tag = std::to_string((intptr_t)&msg1);
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@awaydomain";
+  msg1._from = "sip:alice@homedomain";
+  msg1._from_tag = tsx_from_tag;
+  msg1._to = "sip:bob@awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:delayafterrsp.proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and 200 OK
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  free_txdata();
+
+  // Check the 200 OK.
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
+  // No outstanding messages.
+  ASSERT_EQ(0, txdata_count());
+
+  // SproutletTsx is live
+  ASSERT_TRUE(FakeSproutletTsxDelayAfterRsp<1>::is_live(tsx_from_tag));
+
+  // Advance time to allow the timer to run out and the Tsx to suicide
+  cwtest_advance_time_ms(1100L);
+  poll();
+
+  ASSERT_FALSE(FakeSproutletTsxDelayAfterRsp<1>::is_live(tsx_from_tag));
+
+  // All done!
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+TEST_F(SproutletProxyTest, DelayAfterForward)
+{
+  // Tests lifetime of a sproutlet that runs a timer after it responds
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with two Route headers - the first referencing the
+  // forwarder Sproutlet and the second referencing an external node.
   Message msg1;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@awaydomain";
   msg1._from = "sip:alice@homedomain";
   msg1._to = "sip:bob@awaydomain";
   msg1._via = tp->to_string(false);
-  msg1._route = "Route: <sip:delayafterrsp.proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  msg1._route = "Route: <sip:delayafterfwd.proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
   // Expecting 100 Trying, 200 OK and forwarded INVITE.
@@ -2037,8 +2189,6 @@ TEST_F(SproutletProxyTest, DelayAfterReponse)
   // Check the 100 Trying.
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
-  tp->expect_target(tdata);
-  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // Check the 200 OK.
@@ -2052,16 +2202,6 @@ TEST_F(SproutletProxyTest, DelayAfterReponse)
   tdata = current_txdata();
   expect_target("TCP", "10.10.20.1", 5060, tdata);
   ReqMatcher("INVITE").matches(tdata->msg);
-
-  // Check the RequestURI has not been altered.
-  EXPECT_EQ("sip:bob@awaydomain", str_uri(tdata->msg->line.req.uri));
-
-  // Check the first Route header has been removed.
-  EXPECT_EQ("Route: <sip:proxy1.awaydomain;transport=TCP;lr>",
-            get_headers(tdata->msg, "Route"));
-
-  // Check no Record-Route headers have been added.
-  EXPECT_EQ("", get_headers(tdata->msg, "Record-Route"));
 
   // Send a 200 OK response.
   inject_msg(respond_to_current_txdata(200));
@@ -2078,16 +2218,6 @@ TEST_F(SproutletProxyTest, DelayAfterReponse)
   tdata = current_txdata();
   expect_target("TCP", "10.10.20.1", 5060, tdata);
   ReqMatcher("INVITE").matches(tdata->msg);
-
-  // Check the RequestURI has not been altered.
-  EXPECT_EQ("sip:bob@awaydomain", str_uri(tdata->msg->line.req.uri));
-
-  // Check the first Route header has been removed.
-  EXPECT_EQ("Route: <sip:proxy1.awaydomain;transport=TCP;lr>",
-            get_headers(tdata->msg, "Route"));
-
-  // Check no Record-Route headers have been added.
-  EXPECT_EQ("", get_headers(tdata->msg, "Record-Route"));
 
   // Send a 200 OK response.
   inject_msg(respond_to_current_txdata(200));
