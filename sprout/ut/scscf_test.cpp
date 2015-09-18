@@ -352,7 +352,7 @@ public:
     _scscf_sproutlet = new SCSCFSproutlet("sip:homedomain:5058",
                                           "sip:127.0.0.1:5058",
                                           "",
-                                          "sip:bgcf.homedomain:5058",
+                                          "sip:bgcf@homedomain:5058",
                                           5058,
                                           _store,
                                           NULL,
