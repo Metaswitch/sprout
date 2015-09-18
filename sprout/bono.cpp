@@ -2684,7 +2684,7 @@ void set_target_on_tdata(const struct Target& target, pjsip_tx_data* tdata)
     {
       pj_list_erase(hdr);
     }
-    std::string name_addr_str("<" + PJUtils::aor_from_uri((pjsip_sip_uri*)tdata->msg->line.req.uri) + ">");
+    std::string name_addr_str("<" + PJUtils::public_id_from_uri(tdata->msg->line.req.uri) + ">");
     pj_str_t called_party_id;
     pj_strdup2(tdata->pool,
                &called_party_id,

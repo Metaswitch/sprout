@@ -208,7 +208,7 @@ private:
         // No targets set up by default function, so see if any have been
         // manually configured in the test case
         TRC_DEBUG("Check for test targets");
-        std::string aor = PJUtils::aor_from_uri((pjsip_sip_uri*)_req->msg->line.req.uri);
+        std::string aor = PJUtils::public_id_from_uri(_req->msg->line.req.uri);
         std::list<BasicProxyUT::TestTarget> test_targets = ((BasicProxyUT*)_proxy)->find_test_targets(aor);
         TRC_DEBUG("Found %d targets for %s", test_targets.size(), aor.c_str());
 
@@ -2001,6 +2001,75 @@ TEST_F(BasicProxyTest, StrictRouterDownstream)
   // rewritten with the RequestURI
   string route = get_headers(tdata->msg, "Route");
   EXPECT_EQ("Route: <sip:bob@awaydomain>", route);
+
+  // Check no Record-Route headers have been added.
+  string rr = get_headers(tdata->msg, "Record-Route");
+  EXPECT_EQ("", rr);
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
+  delete tp;
+}
+
+
+TEST_F(BasicProxyTest, StrictRouterTelUri)
+{
+  // Tests routing of TEL URI requests when downstream proxy is a "strict
+  // router".
+
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with this node in the first Route header and another
+  // domain in the second Route headers, with no lr parameter in the second
+  // Route header.  This is the form of request expected if the downstream
+  // proxy is a strict router.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "tel:+1234";
+  msg1._from = "alice";
+  msg1._to = "bob";
+  msg1._todomain = "awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE
+
+  // Check the 100 Trying.
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Request is forwarded to the node in the second Route header.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Check the RequestURI has been rewritten with the URI from the second Route
+  // header.
+  EXPECT_EQ("sip:proxy1.awaydomain;transport=TCP", str_uri(tdata->msg->line.req.uri));
+
+  // Check the first Route header has been removed and the second Route header
+  // rewritten with the RequestURI
+  string route = get_headers(tdata->msg, "Route");
+  EXPECT_EQ("Route: <tel:+1234>", route);
 
   // Check no Record-Route headers have been added.
   string rr = get_headers(tdata->msg, "Record-Route");

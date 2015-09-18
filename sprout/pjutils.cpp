@@ -186,32 +186,6 @@ std::string PJUtils::hdr_to_string(void* hdr)
 }
 
 
-/// Returns a canonical SIP address of record from a URI, as per the rules
-/// in RFC3261 s10.3 step 5.  In particular, strip all parameters and the
-/// password before rendering the URI to a string.
-std::string PJUtils::aor_from_uri(const pjsip_sip_uri* uri)
-{
-  std::string input_uri = uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)uri);
-  std::string returned_aor;
-  pjsip_sip_uri aor;
-  memcpy((char*)&aor, (char*)uri, sizeof(pjsip_sip_uri));
-  aor.passwd.slen = 0;
-  aor.port = 0;
-  aor.user_param.slen = 0;
-  aor.method_param.slen = 0;
-  aor.transport_param.slen = 0;
-  aor.ttl_param = -1;
-  aor.lr_param = 0;
-  aor.maddr_param.slen = 0;
-  aor.other_param.next = NULL;
-  aor.header_param.next = NULL;
-  aor.userinfo_param.next = NULL;
-  returned_aor = uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)&aor);
-  TRC_DEBUG("aor_from_uri converted %s to %s", input_uri.c_str(), returned_aor.c_str());
-  return returned_aor;
-}
-
-
 /// Returns a canonical IMS public user identity from a URI as per TS 23.003
 /// 13.4.
 std::string PJUtils::public_id_from_uri(const pjsip_uri* uri)
