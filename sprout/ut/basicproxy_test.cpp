@@ -208,7 +208,7 @@ private:
         // No targets set up by default function, so see if any have been
         // manually configured in the test case
         TRC_DEBUG("Check for test targets");
-        std::string aor = PJUtils::aor_from_uri((pjsip_sip_uri*)_req->msg->line.req.uri);
+        std::string aor = PJUtils::public_id_from_uri(_req->msg->line.req.uri);
         std::list<BasicProxyUT::TestTarget> test_targets = ((BasicProxyUT*)_proxy)->find_test_targets(aor);
         TRC_DEBUG("Found %d targets for %s", test_targets.size(), aor.c_str());
 
