@@ -742,7 +742,7 @@ void process_register_request(pjsip_rx_data* rdata)
     return;
   }
 
-  std::vector<std::string> tags = {"REGISTRATION"};
+  std::vector<std::string> tags = {"REG"};
 
   // Write to the local store, checking the remote store if there is no entry locally.
   RegStore::AoR* aor_data = write_to_store(store, aor, rdata, now, expiry,
