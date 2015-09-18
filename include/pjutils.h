@@ -54,15 +54,13 @@ extern "C" {
 #include <deque>
 #include "sas.h"
 #include "sipresolver.h"
+#include "enumservice.h"
+#include "uri_classifier.h"
 
 namespace PJUtils {
 
 pj_status_t init();
 void term();
-
-pj_bool_t is_home_domain(const pjsip_uri* uri);
-pj_bool_t is_home_domain(const std::string& domain);
-pj_bool_t is_uri_local(const pjsip_uri* uri);
 
 pj_bool_t is_e164(const pj_str_t* user);
 pj_bool_t is_e164(const pjsip_uri* uri);
@@ -239,8 +237,6 @@ void mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* cid_hdr, 
 
 bool is_emergency_registration(pjsip_contact_hdr* contact_hdr);
 
-bool is_uri_phone_number(pjsip_uri* uri);
-
 bool check_route_headers(pjsip_rx_data* rdata);
 
 void put_unary_param(pjsip_param* params_list,
@@ -256,8 +252,6 @@ void update_history_info_reason(pjsip_uri* history_info_uri, pj_pool_t* pool, in
 
 pj_str_t user_from_uri(pjsip_uri* uri);
 
-bool is_uri_gruu(pjsip_uri* uri);
-
 void report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg);
 
 void add_pcfa_header(pjsip_msg* msg,
@@ -269,17 +263,9 @@ void add_pcfa_header(pjsip_msg* msg,
 pjsip_uri* translate_sip_uri_to_tel_uri(const pjsip_sip_uri* sip_uri,
                                         pj_pool_t* pool);
 
-pj_bool_t is_user_global(const std::string& user);
-pj_bool_t is_user_global(const pj_str_t& user);
-
 std::string remove_visual_separators(const std::string& user);
 std::string remove_visual_separators(const pj_str_t& number);
 
-pj_bool_t is_user_numeric(const std::string& user);
-pj_bool_t is_user_numeric(const pj_str_t& user);
-
-bool does_uri_represent_number(pjsip_uri* uri,
-                               bool enforce_user_phone);
 bool get_npdi(pjsip_uri* uri);
 bool get_rn(pjsip_uri* uri, std::string& routing_value);
 
@@ -287,6 +273,23 @@ bool add_update_session_expires(pjsip_msg* req,
                                 pj_pool_t* pool,
                                 SAS::TrailId trail);
 
+void translate_request_uri(pjsip_msg* req,
+                           pj_pool_t* pool,
+                           EnumService* enum_service,
+                           bool should_override_npdi,
+                           SAS::TrailId trail);
+
+void update_request_uri_np_data(pjsip_msg* req,
+                                pj_pool_t* pool,
+                                EnumService* enum_service,
+                                bool should_override_npdi,
+                                SAS::TrailId trail);
+
+bool should_update_np_data(URIClass old_uri_class,
+                           URIClass new_uri_class,
+                           std::string& new_uri_str,
+                           bool should_override_npdi,
+                           SAS::TrailId trail);
 } // namespace PJUtils
 
 #endif

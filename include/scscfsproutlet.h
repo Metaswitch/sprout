@@ -84,8 +84,6 @@ public:
                  HSSConnection* hss,
                  EnumService* enum_service,
                  ACRFactory* acr_factory,
-                 bool user_phone,
-                 bool global_only_lookups,
                  bool override_npdi,
                  int session_continued_timeout = DEFAULT_SESSION_CONTINUED_TIMEOUT,
                  int session_terminated_timeout = DEFAULT_SESSION_TERMINATED_TIMEOUT);
@@ -98,16 +96,9 @@ public:
 
   // Methods used to change the values of internal configuration during unit
   // test.
-  void set_enforce_user_phone(bool v) { _user_phone = v; }
-  void set_global_only_lookups(bool v) { _global_only_lookups = v; }
   void set_override_npdi(bool v) { _override_npdi = v; }
   void set_session_continued_timeout(int timeout) { _session_continued_timeout_ms = timeout; }
   void set_session_terminated_timeout(int timeout) { _session_terminated_timeout_ms = timeout; }
-
-  inline bool should_require_user_phone() const
-  {
-    return _user_phone;
-  }
 
   inline bool should_override_npdi() const
   {
@@ -154,8 +145,7 @@ private:
                      SAS::TrailId trail);
 
   /// Translate RequestURI using ENUM service if appropriate.
-  std::string translate_request_uri(pjsip_msg* req,
-                                    SAS::TrailId trail);
+  void translate_request_uri(pjsip_msg* req, pj_pool_t* pool, SAS::TrailId trail);
 
   /// Get an ACR instance from the factory.
   /// @param trail                SAS trail identifier to use for the ACR.
@@ -190,8 +180,6 @@ private:
 
   AsChainTable* _as_chain_table;
 
-  bool _global_only_lookups;
-  bool _user_phone;
   bool _override_npdi;
 
   /// Timeouts related to default handling of unresponsive application servers.
@@ -268,9 +256,8 @@ private:
   /// Add a Route header with the specified URI.
   void add_route_uri(pjsip_msg* msg, pjsip_sip_uri* uri);
 
-  /// Does URI translation if required. Returns whether the routing
-  /// decision for the request has already been made
-  bool uri_translation_and_route(pjsip_msg* req);
+  /// Does URI translation if required.
+  void uri_translation(pjsip_msg* req);
 
   /// Gets the subscriber's associated URIs and iFCs for each URI from
   /// the HSS. Returns true on success, false on failure.

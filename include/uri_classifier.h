@@ -1,8 +1,6 @@
 /**
- * @file pjutils_test.cpp UT for PJUtils.
- *
  * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2015 Metaswitch Networks Ltd
+ * Copyright (C) 2015  Metaswitch Networks Ltd
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -34,33 +32,36 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///----------------------------------------------------------------------------
+#ifndef URI_CLASSIFIER_H
+#define URI_CLASSIFIER_H
 
-#include <string>
-#include "gtest/gtest.h"
-#include "gmock/gmock.h"
+extern "C" {
+#include <pjsip.h>
+#include <pjlib-util.h>
+#include <pjlib.h>
+}
 
-#include "basetest.hpp"
-#include "pjutils.h"
-
-class PJUtilsTest : public BaseTest
+enum URIClass
 {
-
-  PJUtilsTest() 
-  {
-  }
-
-  virtual ~PJUtilsTest()
-  {
-  }
+  UNKNOWN = 0,
+  LOCAL_PHONE_NUMBER,
+  GLOBAL_PHONE_NUMBER,
+  NODE_LOCAL_SIP_URI,
+  HOME_DOMAIN_SIP_URI,
+  OFFNET_SIP_URI,
+  NP_DATA,
+  FINAL_NP_DATA
 };
 
-TEST_F(PJUtilsTest, IsUserNumeric)
+namespace URIClassifier
 {
-  EXPECT_TRUE(PJUtils::is_user_numeric("+1234"));
-  EXPECT_TRUE(PJUtils::is_user_numeric("1234"));
-  EXPECT_TRUE(PJUtils::is_user_numeric("(1)-23-4"));
-  EXPECT_TRUE(PJUtils::is_user_numeric("1-23-4"));
-  EXPECT_TRUE(PJUtils::is_user_numeric("+1.23.4"));
-}
+  URIClass classify_uri(pjsip_uri* uri, bool prefer_sip = true);
+
+  bool is_user_numeric(pj_str_t user);
+
+  extern bool enforce_user_phone;
+  extern bool enforce_global;
+  extern std::vector<pj_str_t*> home_domains;
+};
+
+#endif

@@ -51,7 +51,7 @@ extern "C" {
 #include "sproutsasevent.h"
 #include "icscfrouter.h"
 #include "pjutils.h"
-
+#include "uri_classifier.h"
 
 ICSCFRouter::ICSCFRouter(HSSConnection* hss,
                          SCSCFSelector* scscf_selector,
@@ -156,9 +156,11 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool, pjsip_sip_uri*& scscf_sip_uri)
         // S-CSCF back to itself (with subtly changed headers) for various
         // reasons.  Max Forwards checking should catch these instances.
         pjsip_sip_uri *sip_uri = (pjsip_sip_uri*)scscf_uri;
+        URIClass uri_class = URIClassifier::classify_uri(scscf_uri);
 
-        if ((PJUtils::is_uri_local(scscf_uri) || PJUtils::is_home_domain(scscf_uri)) &&
-            (sip_uri->port == _port))
+        if ((uri_class == NODE_LOCAL_SIP_URI) ||
+            ((uri_class == HOME_DOMAIN_SIP_URI) &&
+             (sip_uri->port == _port)))
         {
           TRC_WARNING("SCSCF URI %s points back to ICSCF", scscf.c_str());
           status_code = PJSIP_SC_LOOP_DETECTED;

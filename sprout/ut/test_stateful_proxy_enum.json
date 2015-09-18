@@ -12,13 +12,13 @@
             "prefix" : "+15108580273",
             "regex"  : "!(^.*$)!sip:\\1@ut.cw-ngv.com!"
         },
-        {   "name" : "NP data - no routing number +151085803",
-            "prefix" : "+151085803",
-            "regex"  : "!(^.*$)!sip:\\1;npdi@ut.cw-ngv.com!"
-        },
         {   "name" : "NP data - SIP - routing number +151085804",
             "prefix" : "+151085804",
-            "regex"  : "!(^.*$)!sip:\\1;npdi;rn=+151085804@homedomain!"
+            "regex"  : "!(^.*$)!sip:\\1;npdi;rn=+151085804@homedomain;user=phone!"
+        },
+        {   "name" : "NP data - cic",
+            "prefix" : "+151085805",
+            "regex"  : "!(^.*$)!sip:\\1;cic=12345@homedomain;user=phone!"
         },
         {   "name" : "Clearwater internal numbers",
             "prefix" : "650555",

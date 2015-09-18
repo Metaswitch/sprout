@@ -189,7 +189,7 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
        as_iter != as_list.end();
        as_iter++)
   {
-    if (third_party_reg_stats_tables != NULL)
+    if (third_party_reg_stats_tbls != NULL)
     {
       if (expires == 0)
       {
@@ -226,10 +226,9 @@ static void send_register_cb(void* token, pjsip_event *event)
 
     third_party_register_failed(tsxdata->public_id, tsxdata->trail);
   }
-
+  
   if (third_party_reg_stats_tables != NULL)
   {
-    // printf("Expiry: %d, Is_initial_registration: %d\n", tsxdata->expires, tsxdata->is_initial_registration);
     if (tsx->status_code == 200)
     {
       if (tsxdata->expires == 0)
