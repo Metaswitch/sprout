@@ -67,7 +67,9 @@ extern "C" {
 #include "json_parse_utils.h"
 #include "rapidjson/error/en.h"
 
-const std::vector<std::string> RegStore::EMPTY_TAGS = std::vector<std::string>();
+const std::vector<std::string> RegStore::TAGS_NONE = {};
+const std::vector<std::string> RegStore::TAGS_REG = {"REG"};
+const std::vector<std::string> RegStore::TAGS_SUB = {"SUB"};
 
 RegStore::RegStore(Store* data_store,
                    SerializerDeserializer*& serializer,

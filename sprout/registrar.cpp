@@ -217,8 +217,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
                               RegStore* backup_store,        ///<backup store to read from if no entry in store and no backup data
                               bool send_notify,              ///<whether to send notifies (only send when writing to the local store)
                               std::string private_id,        ///<private id that the binding was registered with
-                              SAS::TrailId trail,
-                              std::vector<std::string> tags) ///<type of request
+                              SAS::TrailId trail)
 {
   // Get the call identifier and the cseq number from the respective headers.
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);
@@ -442,7 +441,8 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
                                          aor_data,
                                          send_notify,
                                          trail,
-                                         all_bindings_expired);
+                                         all_bindings_expired,
+                                         RegStore::TAGS_REG);
     if (set_rc != Store::OK)
     {
       delete aor_data; aor_data = NULL;
@@ -742,12 +742,10 @@ void process_register_request(pjsip_rx_data* rdata)
     return;
   }
 
-  std::vector<std::string> tags = {"REG"};
-
   // Write to the local store, checking the remote store if there is no entry locally.
   RegStore::AoR* aor_data = write_to_store(store, aor, rdata, now, expiry,
                                            is_initial_registration, NULL, remote_store,
-                                           true, private_id_for_binding, trail, tags);
+                                           true, private_id_for_binding, trail);
   if (aor_data != NULL)
   {
     // Log the bindings.
@@ -762,7 +760,7 @@ void process_register_request(pjsip_rx_data* rdata)
       RegStore::AoR* remote_aor_data = write_to_store(remote_store, aor, rdata, now,
                                                       tmp_expiry, ignored, aor_data,
                                                       NULL, false, private_id_for_binding,
-                                                      trail, tags);
+                                                      trail);
       delete remote_aor_data;
     }
   }

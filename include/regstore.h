@@ -316,6 +316,11 @@ public:
     std::vector<SerializerDeserializer*> _deserializers;
   };
 
+  /// Tags to use when setting timers for nothing, for registration and for subscription.
+  static const std::vector<std::string> TAGS_NONE;
+  static const std::vector<std::string> TAGS_REG;
+  static const std::vector<std::string> TAGS_SUB;
+
   /// RegStore constructor that allows the user to specify which serializer and
   /// deserializers to use.
   ///
@@ -363,13 +368,13 @@ public:
                                      AoR* data,
                                      bool update_timers,
                                      SAS::TrailId trail,
-                                     const std::vector<std::string> tags = EMPTY_TAGS);
+                                     const std::vector<std::string> tags = TAGS_NONE);
   virtual Store::Status set_aor_data(const std::string& aor_id,
                                      AoR* data,
                                      bool update_timers,
                                      SAS::TrailId trail,
                                      bool& all_bindings_expired,
-                                     const std::vector<std::string> tags = EMPTY_TAGS);
+                                     const std::vector<std::string> tags = TAGS_NONE);
 
   // Send a SIP NOTIFY
   virtual void send_notify(AoR::Subscription* s,
@@ -384,7 +389,6 @@ private:
 
   ChronosConnection* _chronos;
   Connector* _connector;
-  static const std::vector<std::string> EMPTY_TAGS;
 };
 
 #endif
