@@ -252,6 +252,9 @@ void SCSCFSproutlet::remove_binding(const std::string& aor,
 
 /// Read data for a public user identity from the HSS.
 bool SCSCFSproutlet::read_hss_data(const std::string& public_id,
+                                   const std::string& private_id,
+                                   const std::string& req_type,
+                                   bool cache_allowed,
                                    bool& registered,
                                    std::vector<std::string>& uris,
                                    std::vector<std::string>& aliases,
@@ -264,14 +267,15 @@ bool SCSCFSproutlet::read_hss_data(const std::string& public_id,
   std::map<std::string, Ifcs> ifc_map;
 
   long http_code = _hss->update_registration_state(public_id,
-                                                   "",
-                                                   HSSConnection::CALL,
+                                                   private_id,
+                                                   req_type,
                                                    regstate,
                                                    ifc_map,
                                                    uris,
                                                    aliases,
                                                    ccfs,
                                                    ecfs,
+                                                   cache_allowed,
                                                    trail);
   if (http_code == 200)
   {
@@ -326,7 +330,9 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
   _liveness_timer(0),
   _record_routed(false),
   _req_type(req_type),
-  _seen_1xx(false)
+  _seen_1xx(false),
+  _impi(),
+  _auto_reg(false)
 {
   TRC_DEBUG("S-CSCF Transaction (%p) created", this);
 }
@@ -385,6 +391,27 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     send_response(rsp);
     free_msg(req);
     return;
+  }
+
+  // Work out if we should be auto-registering the user based on this
+  // request and if we are, also work out the IMPI to register them with.
+  const pjsip_route_hdr* top_route = route_hdr();
+  if (top_route != NULL)
+  {
+    pjsip_sip_uri* uri = (pjsip_sip_uri*)top_route->name_addr.uri;
+
+    if ((pjsip_param_find(&uri->other_param, &STR_ORIG) != NULL) &&
+        (pjsip_param_find(&uri->other_param, &STR_AUTO_REG) != NULL))
+    {
+      _auto_reg = true;
+
+      pjsip_proxy_authorization_hdr* proxy_auth_hdr =
+        (pjsip_proxy_authorization_hdr*)pjsip_msg_find_hdr(req,
+                                                           PJSIP_H_PROXY_AUTHORIZATION,
+                                                           NULL);
+      _impi = PJUtils::extract_username(proxy_auth_hdr,
+                                        PJUtils::orig_served_user(req));
+    }
   }
 
   // Determine the session case and the served user.  This will link to
@@ -610,7 +637,7 @@ void SCSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
 void SCSCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
 {
   TRC_INFO("S-CSCF received CANCEL");
-   
+
   if (_req_type == PJSIP_INVITE_METHOD)
   // If an INVITE is being cancelled, then update INVITE cancellation stats.
   {
@@ -854,6 +881,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       sas_log_start_of_sesion_case(req, _session_case, served_user);
 
       TRC_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
+
       Ifcs ifcs;
       if (lookup_ifcs(served_user, ifcs))
       {
@@ -1036,7 +1064,7 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
     // Attempt to translate the RequestURI using ENUM or an alternative
     // database.
     _scscf->translate_request_uri(req, get_pool(req), trail());
-    
+
     URIClass uri_class = URIClassifier::classify_uri(req->line.req.uri);
     std::string new_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req->line.req.uri);
     TRC_INFO("New URI string is %s", new_uri_str.c_str());
@@ -1449,8 +1477,14 @@ bool SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
 {
   if (!_hss_data_cached)
   {
+    std::string req_type = _auto_reg ? HSSConnection::REG : HSSConnection::CALL;
+    bool cache_allowed = !_auto_reg;
+
     // We haven't previous read data from the HSS, so read it now.
     if (_scscf->read_hss_data(public_id,
+                              _impi,
+                              req_type,
+                              cache_allowed,
                               _registered,
                               _uris,
                               _aliases,

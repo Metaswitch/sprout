@@ -136,6 +136,7 @@ enum OptionTypes
   OPT_SESSION_TERMINATED_TIMEOUT_MS,
   OPT_STATELESS_PROXIES,
   OPT_NON_REGISTERING_PBXES,
+  OPT_PBX_SERVICE_ROUTE,
   OPT_NON_REGISTER_AUTHENTICATION
 };
 
@@ -208,6 +209,7 @@ const static struct pj_getopt_option long_opt[] =
   { "stateless-proxies",            required_argument, 0, OPT_STATELESS_PROXIES},
   { "non-registering-pbxes",        required_argument, 0, OPT_NON_REGISTERING_PBXES},
   { "non-register-authentication",  required_argument, 0, OPT_NON_REGISTER_AUTHENTICATION},
+  { "pbx-service-route",            required_argument, 0, OPT_PBX_SERVICE_ROUTE},
   { NULL,                           0,                 0, 0}
 };
 
@@ -369,6 +371,9 @@ static void usage(void)
        "                            A comma separated list of IP addresses that are treated as\n"
        "                            non-registering PBXes (i.e. INVITEs should be allowed by the \n"
        "                            P-CSCF, but challenged by the core)\n"
+       "     --pbx-service-route <URI>\n"
+       "                            The URI of the S-CSCF used to provide services for originating\n"
+       "                            services to non-registering PBXes\n"
        "     --non-register-authentication <option>\n"
        "                            Controls when sprout will challenge the sender of a non-REGISTER\n"
        "                            message to provide authentication. Takes one of the following values:\n"
@@ -974,6 +979,14 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
         options->pbxes = std::string(pj_optarg);
         TRC_INFO("Non-registering PBX IP addresses are %s",
                  options->pbxes.c_str());
+      }
+      break;
+
+    case OPT_PBX_SERVICE_ROUTE:
+      {
+        options->pbx_service_route = std::string(pj_optarg);
+        TRC_INFO("PBX service route is: %s",
+                 options->pbx_service_route.c_str());
       }
       break;
 
@@ -1816,6 +1829,7 @@ int main(int argc, char* argv[])
                                  opt.ibcf,
                                  opt.trusted_hosts,
                                  opt.pbxes,
+                                 opt.pbx_service_route,
                                  analytics_logger,
                                  NULL,
                                  NULL,

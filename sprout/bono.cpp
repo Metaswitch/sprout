@@ -167,6 +167,7 @@ static bool allow_emergency_reg = false;
 
 PJUtils::host_list_t trusted_hosts(&PJUtils::compare_pj_sockaddr);
 PJUtils::host_list_t pbx_hosts(&PJUtils::compare_pj_sockaddr);
+std::string pbx_service_route;
 
 //
 // mod_stateful_proxy is the module to receive SIP request and
@@ -884,7 +885,8 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
                                  pjsip_tx_data* tdata,
                                  Flow* src_flow,
                                  TrustBoundary **trust,
-                                 Target** target)
+                                 Target** target,
+                                 const std::string& configured_service_route = "")
 {
   // Forward it to the upstream proxy to deal with.  We do this by creating
   // a target with the existing request URI and a path to the upstream
@@ -912,9 +914,9 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
     target_p->uri = (pjsip_uri*)tdata->msg->line.req.uri;
   }
 
-  std::string service_route;
+  std::string service_route = configured_service_route;
 
-  if (src_flow != NULL)
+  if ((service_route == "") && (src_flow != NULL))
   {
     // See if we have a service route for the served user of the request.
     TRC_DEBUG("Request received on authentication flow - check for Service-Route");
@@ -1187,7 +1189,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
           // to Sprout
           TRC_DEBUG("Routing initial request from PBX to upstream Sprout");
           PJUtils::add_proxy_auth_for_pbx(tdata);
-          proxy_route_upstream(rdata, tdata, src_flow, trust, target);
+          proxy_route_upstream(rdata, tdata, NULL, trust, target, pbx_service_route);
         }
       }
       else
@@ -1423,7 +1425,8 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
       PJUtils::add_record_route(tdata, "TCP", stack_data.pcscf_trusted_port, NULL, stack_data.local_host);
       PJUtils::add_record_route(tdata, tgt_flow->transport()->type_name, tgt_flow->transport()->local_name.port, tgt_flow->token().c_str(), stack_data.public_host);
     }
-    else if ((ibcf) && (*trust == &TrustBoundary::INBOUND_TRUNK))
+    else if (((ibcf) && (*trust == &TrustBoundary::INBOUND_TRUNK)) ||
+             (*trust == &TrustBoundary::INBOUND_EDGE_CLIENT))
     {
       // Received message on a trunk, so add separate Record-Route headers for
       // the ingress and egress hops.
@@ -3199,6 +3202,7 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 pj_bool_t enable_ibcf,
                                 const std::string& ibcf_trusted_hosts,
                                 const std::string& pbx_host_str,
+                                const std::string& pbx_service_route_arg,
                                 AnalyticsLogger* analytics,
                                 EnumService *enumService,
                                 BgcfService *bgcfService,
@@ -3311,6 +3315,17 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
     char buf[100];
     TRC_STATUS("Adding PBX %s to list", pj_sockaddr_print(&sockaddr, buf, sizeof(buf), 1));
     pbx_hosts.insert(std::make_pair(sockaddr, true));
+  }
+
+  // If present, check the PBX service route is valid.
+  pbx_service_route = pbx_service_route_arg;
+  if (pbx_service_route != "")
+  {
+    if (PJUtils::uri_from_string(pbx_service_route, stack_data.pool, PJ_FALSE) == NULL)
+    {
+      TRC_ERROR("PBX service route (%s) is invalid", pbx_service_route.c_str());
+      return -1;
+    }
   }
 
   enum_service = enumService;

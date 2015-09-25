@@ -97,6 +97,7 @@ public:
                                      std::vector<std::string>& aliases,
                                      std::deque<std::string>& ccfs,
                                      std::deque<std::string>& ecfs,
+                                     bool cache_allowed,
                                      SAS::TrailId trail);
   HTTPCode update_registration_state(const std::string& public_user_identity,
                                      const std::string& private_user_identity,
@@ -150,9 +151,17 @@ public:
   static const std::string STATE_NOT_REGISTERED;
 
 private:
-  virtual long get_json_object(const std::string& path, rapidjson::Document*& object, SAS::TrailId trail);
-  virtual long get_xml_object(const std::string& path, rapidxml::xml_document<>*& root, SAS::TrailId trail);
-  virtual long put_for_xml_object(const std::string& path, std::string body, rapidxml::xml_document<>*& root, SAS::TrailId trail);
+  virtual long get_json_object(const std::string& path,
+                               rapidjson::Document*& object,
+                               SAS::TrailId trail);
+  virtual long get_xml_object(const std::string& path,
+                              rapidxml::xml_document<>*& root,
+                              SAS::TrailId trail);
+  virtual long put_for_xml_object(const std::string& path,
+                                  std::string body,
+                                  bool cache_allowed,
+                                  rapidxml::xml_document<>*& root,
+                                  SAS::TrailId trail);
 
   HttpConnection* _http;
   SNMP::EventAccumulatorTable* _latency_tbl;

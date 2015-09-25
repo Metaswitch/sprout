@@ -136,6 +136,9 @@ private:
 
   /// Read data for a public user identity from the HSS.
   bool read_hss_data(const std::string& public_id,
+                     const std::string& private_id,
+                     const std::string& req_type,
+                     bool cache_allowed,
                      bool& registered,
                      std::vector<std::string>& uris,
                      std::vector<std::string>& aliases,
@@ -356,6 +359,22 @@ private:
   bool _seen_1xx;
 
   static const int MAX_FORKING = 10;
+
+  /// The private identity associated with the request. Empty unless the
+  /// request had a Proxy-Authorization header.
+  std::string _impi;
+
+  /// Whether this request should cause the user to be automatically
+  /// registered in the HSS. This is set if there is an `auto-reg` parameter
+  /// in the S-CSCF's route header.
+  ///
+  /// This has the following impacts:
+  /// - It causes registration state updates to have a type of REG rather than
+  ///   CALL.
+  /// - If there is a real HSS it forces registration state updates to flow all
+  ///   the way to the HSS (i.e. Homestead may not answer the response solely
+  ///   from its cache).
+  bool _auto_reg;
 };
 
 #endif
