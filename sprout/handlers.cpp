@@ -248,7 +248,8 @@ void DeregistrationTask::run()
 void RegistrationTimeoutTask::handle_response()
 {
   bool all_bindings_expired = false;
-  RegStore::AoR* aor_data = set_aor_data(_cfg->_store, _aor_id, NULL, _cfg->_remote_store, true, all_bindings_expired);
+  RegStore::AoR* aor_data = set_aor_data(_cfg->_store, _aor_id, NULL, _cfg->_remote_store, true,
+                                         all_bindings_expired);
 
   if (aor_data != NULL)
   {
@@ -257,7 +258,8 @@ void RegistrationTimeoutTask::handle_response()
     if ((_cfg->_remote_store != NULL) && (_cfg->_remote_store->has_servers()))
     {
       bool ignored;
-      RegStore::AoR* remote_aor_data = set_aor_data(_cfg->_remote_store, _aor_id, aor_data, NULL, false, ignored);
+      RegStore::AoR* remote_aor_data = set_aor_data(_cfg->_remote_store, _aor_id, aor_data, NULL,
+                                                    false, ignored);
       delete remote_aor_data;
     }
 
@@ -309,7 +311,8 @@ RegStore::AoR* RegistrationTimeoutTask::set_aor_data(RegStore* current_store,
                                          aor_data,
                                          is_primary,
                                          trail(),
-                                         all_bindings_expired);
+                                         all_bindings_expired,
+                                         RegStore::TAGS_REG);
     if (set_rc != Store::OK)
     {
       delete aor_data; aor_data = NULL;
@@ -510,7 +513,8 @@ RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
                                          aor_data,
                                          is_primary,
                                          trail(),
-                                         all_bindings_expired);
+                                         all_bindings_expired,
+                                         RegStore::TAGS_REG);
     if (set_rc != Store::OK)
     {
       delete aor_data; aor_data = NULL;

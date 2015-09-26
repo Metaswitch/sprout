@@ -95,6 +95,19 @@ TEST_F(ChronosConnectionTest, SendPost)
   EXPECT_EQ(post_identity, "abcd");
 }
 
+TEST_F(ChronosConnectionTest, SendPostWithTags)
+{
+  std::list<std::string> headers = {"Location: http://localhost:7253/timers/abcd"};
+  fakecurl_responses["http://10.42.42.42:80/timers"] = Response(headers);
+
+  std::string opaque = "{\"aor_id\": \"aor_id\", \"binding_id\": \"binding_id\"}";
+  std::vector<std::string> tags {"TAG1", "TAG2"};
+  std::string post_identity = "";
+  HTTPCode status = _chronos.send_post(post_identity, 300, "/timers", opaque,  0, tags);
+  EXPECT_EQ(status, 200);
+  EXPECT_EQ(post_identity, "abcd");
+}
+
 TEST_F(ChronosConnectionTest, SendPostWithNoLocationHeader)
 {
   std::list<std::string> headers = {"Header: header"};
@@ -129,6 +142,21 @@ TEST_F(ChronosConnectionTest, SendPut)
   std::string opaque = "{\"aor_id\": \"aor_id\", \"binding_id\": \"binding_id\"}";
   std::string put_identity = "abcd";
   HTTPCode status = _chronos.send_put(put_identity, 300, "/timers", opaque,  0);
+  EXPECT_EQ(status, 200);
+  EXPECT_EQ(put_identity, "efgh");
+}
+
+TEST_F(ChronosConnectionTest, SendPutWithTags)
+{
+  std::list<std::string> headers = {"Location: http://localhost:7253/timers/efgh"};
+  fakecurl_responses["http://10.42.42.42:80/timers/abcd"] = Response(headers);
+
+  // We expect Chronos to change the put identity to the value in the Location
+  // header.
+  std::string opaque = "{\"aor_id\": \"aor_id\", \"binding_id\": \"binding_id\"}";
+  std::vector<std::string> tags = {"TAG1", "TAG2"};
+  std::string put_identity = "abcd";
+  HTTPCode status = _chronos.send_put(put_identity, 300, "/timers", opaque,  0, tags);
   EXPECT_EQ(status, 200);
   EXPECT_EQ(put_identity, "efgh");
 }
