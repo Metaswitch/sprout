@@ -50,15 +50,11 @@ BGCFSproutlet::BGCFSproutlet(int port,
                              BgcfService* bgcf_service,
                              EnumService* enum_service,
                              ACRFactory* acr_factory,
-                             bool user_phone,
-                             bool global_only_lookups,
                              bool override_npdi) :
   Sproutlet("bgcf", port),
   _bgcf_service(bgcf_service),
   _enum_service(enum_service),
   _acr_factory(acr_factory),
-  _global_only_lookups(global_only_lookups),
-  _user_phone(user_phone),
   _override_npdi(override_npdi)
 {
   _incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("bgcf_incoming_sip_transactions",
@@ -116,48 +112,6 @@ ACR* BGCFSproutlet::get_acr(SAS::TrailId trail)
   return _acr_factory->get_acr(trail, CALLING_PARTY, NODE_ROLE_TERMINATING);
 }
 
-std::string BGCFSproutlet::enum_lookup(pjsip_uri* uri, SAS::TrailId trail)
-{
-  std::string new_uri;
-
-  if (_enum_service != NULL)
-  {
-    // ENUM is enabled.
-    TRC_DEBUG("ENUM is enabled");
-    std::string user;
-
-    // Determine whether we have a SIP URI or a tel URI
-    if (PJSIP_URI_SCHEME_IS_SIP(uri))
-    {
-      user = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)uri)->user);
-    }
-    else if (PJSIP_URI_SCHEME_IS_TEL(uri))
-    {
-      user = PJUtils::pj_str_to_string(&((pjsip_tel_uri*)uri)->number);
-    }
-
-    if ((!user.empty()) && 
-        ((PJUtils::is_user_global(user)) || 
-         (!_global_only_lookups)))
-    {
-      TRC_DEBUG("Performing ENUM lookup for user %s", user.c_str());
-      new_uri = _enum_service->lookup_uri_from_user(user, trail);
-    }
-    else
-    {
-      TRC_DEBUG("Not doing an ENUM lookup");
-    }
-  }
-  else
-  {
-    TRC_DEBUG("ENUM isn't enabled");
-    SAS::Event event(trail, SASEvent::ENUM_NOT_ENABLED, 0);
-    SAS::report_event(event);
-  }
-
-  return new_uri;
-}
-
 /// Individual Tsx constructor.
 BGCFSproutletTsx::BGCFSproutletTsx(SproutletTsxHelper* helper,
                                    BGCFSproutlet* bgcf) :
@@ -184,51 +138,16 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   _acr = _bgcf->get_acr(trail());
   _acr->rx_request(req);
 
-  pjsip_uri* req_uri = (pjsip_uri*)req->line.req.uri;
   std::vector<std::string> bgcf_routes;
   std::string routing_value;
   bool routing_with_number = false;
-
-  if ((PJUtils::does_uri_represent_number(req_uri, 
-                _bgcf->should_require_user_phone())) && 
-      ((!PJUtils::get_npdi(req_uri)) || 
-       (_bgcf->should_override_npdi())))
-  {
-    std::string new_uri = _bgcf->enum_lookup(req_uri, trail());
-
-    // If we got a new_uri, then the ENUM lookup returned something. Check it's
-    // a valid URI
-    if (!new_uri.empty())
-    {
-      req_uri = (pjsip_uri*)PJUtils::uri_from_string(new_uri, get_pool(req));
- 
-      if (req_uri != NULL)
-      {
-        TRC_DEBUG("Rewrite request URI to %s", new_uri.c_str());
-        req->line.req.uri = req_uri;
-      }
-      else
-      {
-        // The ENUM lookup has returned an invalid URI. Reject the 
-        // request. 
-        TRC_DEBUG("Invalid ENUM response: %s", new_uri.c_str());
-        SAS::Event event(trail(), SASEvent::ENUM_INVALID, 0);
-        event.add_var_param(new_uri);
-        SAS::report_event(event);
-  
-        pjsip_msg* rsp = create_response(req,
-                                         PJSIP_SC_NOT_FOUND,
-                                         "ENUM failure");
-        send_response(rsp);
-        free_msg(req);
-        return;
-      }
-    }
-    else
-    {
-      TRC_DEBUG("ENUM lookup was unsuccessful");
-    }
-  }
+  PJUtils::update_request_uri_np_data(req,
+                                      get_pool(req),
+                                      _bgcf->_enum_service,
+                                      _bgcf->_override_npdi,
+                                      trail());
+  pjsip_uri* req_uri = (pjsip_uri*)req->line.req.uri;
+  URIClass uri_class = URIClassifier::classify_uri(req_uri);
 
   if (PJUtils::get_rn(req_uri, routing_value))
   {
@@ -236,14 +155,9 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     bgcf_routes = _bgcf->get_route_from_number(routing_value, trail());
     routing_with_number = true;
   }
-  else
+  else if (uri_class == OFFNET_SIP_URI)
   {
-    // Extract the domain from the ReqURI if this is a SIP URI.
-    if (!PJUtils::is_uri_phone_number(req_uri))
-    {
-      routing_value = 
-                    PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req_uri)->host);
-    }
+    routing_value = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req_uri)->host);
 
     // Find the downstream routes based on the domain.
     bgcf_routes = _bgcf->get_route_from_domain(routing_value, trail());

@@ -204,12 +204,25 @@ rapidxml::xml_document<>* HSSConnection::parse_xml(std::string raw_data, const s
 /// responsible for deleting the filled-in "root" pointer.
 HTTPCode HSSConnection::put_for_xml_object(const std::string& path,
                                            std::string body,
+                                           bool cache_allowed,
                                            rapidxml::xml_document<>*& root,
                                            SAS::TrailId trail)
 {
   std::string raw_data;
+  std::map<std::string, std::string> rsp_headers;
+  std::vector<std::string> req_headers;
 
-  HTTPCode http_code = _http->send_put(path, raw_data, body, trail);
+  if (!cache_allowed)
+  {
+    req_headers.push_back("Cache-control: no-cache");
+  }
+
+  HTTPCode http_code = _http->send_put(path,
+                                       rsp_headers,
+                                       raw_data,
+                                       body,
+                                       req_headers,
+                                       trail);
 
   if (http_code == HTTP_OK)
   {
@@ -466,6 +479,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                    unused_aliases,
                                    unused_ccfs,
                                    unused_ecfs,
+                                   true,
                                    trail);
 }
 
@@ -489,6 +503,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                    unused_aliases,
                                    unused_ccfs,
                                    unused_ecfs,
+                                   true,
                                    trail);
 }
 
@@ -512,6 +527,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                    unused_aliases,
                                    unused_ccfs,
                                    unused_ecfs,
+                                   true,
                                    trail);
 }
 
@@ -535,6 +551,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                    unused_aliases,
                                    ccfs,
                                    ecfs,
+                                   true,
                                    trail);
 }
 
@@ -547,6 +564,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                                   std::vector<std::string>& aliases,
                                                   std::deque<std::string>& ccfs,
                                                   std::deque<std::string>& ecfs,
+                                                  bool cache_allowed,
                                                   SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
@@ -570,7 +588,11 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
   // of scope.
 
   rapidxml::xml_document<>* root_underlying_ptr = NULL;
-  HTTPCode http_code = put_for_xml_object(path, "{\"reqtype\": \""+type+"\"}", root_underlying_ptr, trail);
+  HTTPCode http_code = put_for_xml_object(path,
+                                          "{\"reqtype\": \""+type+"\"}",
+                                          cache_allowed,
+                                          root_underlying_ptr,
+                                          trail);
   std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
 
   unsigned long latency_us = 0;

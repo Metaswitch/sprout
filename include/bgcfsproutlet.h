@@ -72,19 +72,12 @@ public:
                 BgcfService* bgcf_service,
                 EnumService* enum_service,
                 ACRFactory* acr_factory,
-                bool user_phone,
-                bool global_only_lookups,
                 bool override_npdi);
   ~BGCFSproutlet();
 
   SproutletTsx* get_tsx(SproutletTsxHelper* helper,
                         const std::string& alias,
                         pjsip_msg* req);
-
-  inline bool should_require_user_phone() const
-  {
-    return _user_phone;
-  }
 
   inline bool should_override_npdi() const
   {
@@ -125,8 +118,6 @@ private:
 
   ACRFactory* _acr_factory;
 
-  bool _global_only_lookups;
-  bool _user_phone;
   bool _override_npdi;
 };
 

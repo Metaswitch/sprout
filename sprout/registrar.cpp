@@ -63,6 +63,7 @@ extern "C" {
 #include "log.h"
 #include "notify_utils.h"
 #include "snmp_success_fail_count_table.h"
+#include "uri_classifier.h"
 
 static RegStore* store;
 static RegStore* remote_store;
@@ -1093,10 +1094,11 @@ void third_party_register_failed(const std::string& public_id,
 
 pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 {
+  URIClass uri_class = URIClassifier::classify_uri(rdata->msg_info.msg->line.req.uri);
   if ((rdata->tp_info.transport->local_name.port == stack_data.scscf_port) &&
       (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD) &&
-      ((PJUtils::is_home_domain(rdata->msg_info.msg->line.req.uri)) ||
-       (PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri))) &&
+      ((uri_class == NODE_LOCAL_SIP_URI) ||
+       (uri_class == HOME_DOMAIN_SIP_URI)) &&
       (PJUtils::check_route_headers(rdata)))
   {
     // REGISTER request targeted at the home domain or specifically at this node.

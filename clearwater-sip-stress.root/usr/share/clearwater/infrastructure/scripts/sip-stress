@@ -14,7 +14,7 @@ password=7kkzTyGW
 . /etc/clearwater/config
 
 # Clear out old configuration files.
-rm /usr/share/clearwater/sip-stress/users.csv.*
+rm -f /usr/share/clearwater/sip-stress/users.csv.*
 
 # Figure out how many targets we have.  Due to TCP port limitations, we can't
 # run more than one sipp instance per target.

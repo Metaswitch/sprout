@@ -24,5 +24,6 @@
             "number" : "+1",
             "route" : ["<sip:10.0.0.1:5060;transport=TCP>"]
         }
+
     ]
 }

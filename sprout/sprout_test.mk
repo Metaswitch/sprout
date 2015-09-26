@@ -88,6 +88,7 @@ TARGET_SOURCES := logger.cpp \
                   thread_dispatcher.cpp \
                   common_sip_processing.cpp \
                   exception_handler.cpp \
+                  uri_classifier.cpp \
                   snmp_scalar.cpp \
                   snmp_row.cpp \
                   sip_string_to_request_type.cpp
@@ -148,8 +149,8 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        alarm_test.cpp \
                        communicationmonitor_test.cpp \
                        common_sip_processing_test.cpp \
-                       pjutils_test.cpp \
                        fakesnmp.cpp \
+                       uriclassifier_test.cpp \
 
 
 # Put the interposer in here, so it will be loaded before pjsip.

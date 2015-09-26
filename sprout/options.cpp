@@ -44,6 +44,7 @@ extern "C" {
 #include "stack.h"
 #include "sproutsasevent.h"
 #include "pjutils.h"
+#include "uri_classifier.h"
 
 //
 // mod_options handles SIP OPTIONS polls targeted at this system.
@@ -70,9 +71,10 @@ pjsip_module mod_options =
 
 pj_bool_t on_rx_request(pjsip_rx_data* rdata)
 {
+  URIClass uri_class = URIClassifier::classify_uri(rdata->msg_info.msg->line.req.uri);
   if (rdata->msg_info.msg->line.req.method.id == PJSIP_OPTIONS_METHOD)
   {
-    if (PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri) &&
+    if ((uri_class == NODE_LOCAL_SIP_URI) &&
         PJUtils::check_route_headers(rdata))
     {
       // OPTIONS targetted at this node/home domain, and there's either no route

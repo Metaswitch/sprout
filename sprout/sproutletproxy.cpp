@@ -979,6 +979,7 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _pending_responses(0),
   _best_rsp(NULL),
   _complete(false),
+  _process_actions_entered(0),
   _forks(),
   _trail_id(trail_id)
 {
@@ -1605,6 +1606,11 @@ void SproutletWrapper::process_actions(bool complete_after_actions)
   TRC_DEBUG("Processing actions from sproutlet - %d responses, %d requests",
             _send_responses.size(), _send_requests.size());
 
+  // We've entered process_actions again.  We track this counter because
+  // process_actions can be re-entered, and we must never delete the
+  // SproutletWrapper if so.
+  _process_actions_entered++;
+
   // First increment the pending sends count by the number of requests waiting
   // to be sent.  This must happen first to avoid the response aggregation
   // code incorrectly triggering on the count of error responses.
@@ -1664,9 +1670,14 @@ void SproutletWrapper::process_actions(bool complete_after_actions)
   {
     _complete = true;
   }
+
+  // We've now finished (almost) the process_actions method, so we're free to
+  // delete this SproutletWrapper once more (if it's appropriate to do so).
+  _process_actions_entered--;
   
   if ((_complete) &&
-      (_pending_responses == 0))
+      (_pending_responses == 0) &&
+      (_process_actions_entered == 0))
   {
     // Sproutlet has sent a final response and has no downstream forks
     // waiting a response, so should destroy itself.
