@@ -38,9 +38,11 @@
 
 /// Constructor.
 RalfProcessor::RalfProcessor(HttpConnection* ralf_connection,
+                             LoadMonitor* load_monitor,
                              ExceptionHandler* exception_handler,
                              const int ralf_threads) :
   _thread_pool(new Pool(ralf_connection,
+                        load_monitor,
                         exception_handler,
                         &exception_callback,
                         ralf_threads))
@@ -77,20 +79,27 @@ void RalfProcessor::Pool::process_work(RalfProcessor::RalfRequest*& rr)
   if (rc != HTTP_OK)
   {
     TRC_INFO("Sending Ralf message failed with rc = %ld", rc);
+    if ((rc == HTTP_SERVER_UNAVAILABLE) ||
+        (rc == HTTP_GATEWAY_TIMEOUT))
+    {
+      _load_monitor->incr_penalties();
+    }
   }
 
   delete rr; rr = NULL;
 }
 
 RalfProcessor::Pool::Pool(HttpConnection* ralf_connection,
+                          LoadMonitor* load_monitor,
                           ExceptionHandler* exception_handler, 
                           void (*callback)(RalfProcessor::RalfRequest*),
                           unsigned int num_threads) :
   ThreadPool<RalfProcessor::RalfRequest*>(num_threads, 
                                           exception_handler, 
                                           callback, 
-                                          0), // No maximum queue size for Ralf
-  _ralf_connection(ralf_connection)
+                                          100),
+  _ralf_connection(ralf_connection),
+  _load_monitor(load_monitor)
 {}
 
 RalfProcessor::Pool::~Pool()

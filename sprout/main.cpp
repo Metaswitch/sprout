@@ -137,7 +137,7 @@ enum OptionTypes
   OPT_SESSION_TERMINATED_TIMEOUT_MS,
   OPT_STATELESS_PROXIES,
   OPT_NON_REGISTERING_PBXES,
-  OPT_RALF_THREADS
+  OPT_RALF_THREADS,
   OPT_NON_REGISTER_AUTHENTICATION
 };
 
@@ -1747,6 +1747,7 @@ int main(int argc, char* argv[])
                                          SASEvent::HttpLogLevel::PROTOCOL,
                                          ralf_comm_monitor);
     ralf_processor = new RalfProcessor(ralf_connection,
+                                       load_monitor,
                                        exception_handler,
                                        opt.ralf_threads);
   }
