@@ -88,7 +88,8 @@ TARGET_SOURCES := logger.cpp \
                   sip_string_to_request_type.cpp \
                   snmp_row.cpp \
                   snmp_scalar.cpp \
-                  ralf_processor.cpp
+                  ralf_processor.cpp \
+                  uri_classifier.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 

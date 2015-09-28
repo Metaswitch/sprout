@@ -56,6 +56,7 @@ extern "C" {
 #include "constants.h"
 #include "sas.h"
 #include "sproutsasevent.h"
+#include "uri_classifier.h"
 
 static RegStore* store;
 static RegStore* remote_store;
@@ -269,7 +270,8 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
     }
 
     // Try to write the AoR back to the store.
-    set_rc = primary_store->set_aor_data(aor, (*aor_data), false, trail);
+    set_rc = primary_store->set_aor_data(aor, (*aor_data), false, trail,
+                                         RegStore::TAGS_SUB);
 
     if (set_rc != Store::OK)
     {
@@ -644,9 +646,11 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
     return PJ_FALSE;
   }
 
-  if (!((PJUtils::is_home_domain(rdata->msg_info.msg->line.req.uri) ||
-         (PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri))) &&
-        PJUtils::check_route_headers(rdata)))
+  URIClass uri_class = URIClassifier::classify_uri(rdata->msg_info.msg->line.req.uri);
+  TRC_INFO("URI class is %d", uri_class);
+  if (((uri_class != NODE_LOCAL_SIP_URI) &&
+       (uri_class != HOME_DOMAIN_SIP_URI)) ||
+      !PJUtils::check_route_headers(rdata))
   {
     TRC_DEBUG("Not processing subscription request not targeted at this domain or node");
     SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_DOMAIN, 0);

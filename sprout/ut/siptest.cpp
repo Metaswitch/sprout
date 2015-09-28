@@ -114,6 +114,7 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
   stack_data.public_host = pj_str("127.0.0.1");
   stack_data.home_domains.insert("homedomain");
   stack_data.default_home_domain = pj_str("homedomain");
+  URIClassifier::home_domains.push_back(&stack_data.default_home_domain);
   stack_data.scscf_uri = pj_str("sip:sprout.homedomain:5058;transport=TCP");
   stack_data.cdf_domain = pj_str("cdfdomain");
   stack_data.name_cnt = 0;

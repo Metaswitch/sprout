@@ -189,17 +189,20 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
        as_iter != as_list.end();
        as_iter++)
   {
-    if (expires == 0)
+    if (third_party_reg_stats_tbls != NULL)
     {
-      third_party_reg_stats_tables->de_reg_tbl->increment_attempts();
-    }
-    else if (is_initial_registration)
-    {
-      third_party_reg_stats_tables->init_reg_tbl->increment_attempts();
-    }
-    else
-    {
-      third_party_reg_stats_tables->re_reg_tbl->increment_attempts();
+      if (expires == 0)
+      {
+        third_party_reg_stats_tables->de_reg_tbl->increment_attempts();
+      }
+      else if (is_initial_registration)
+      {
+        third_party_reg_stats_tables->init_reg_tbl->increment_attempts();
+      }
+      else
+      {
+        third_party_reg_stats_tables->re_reg_tbl->increment_attempts();
+      }
     }
     send_register_to_as(received_register, ok_response, *as_iter, expires, is_initial_registration, served_user, trail);
   }
@@ -224,37 +227,39 @@ static void send_register_cb(void* token, pjsip_event *event)
     third_party_register_failed(tsxdata->public_id, tsxdata->trail);
   }
   
-  // printf("Expiry: %d, Is_initial_registration: %d\n", tsxdata->expires, tsxdata->is_initial_registration);
-  if (tsx->status_code == 200)
-  {  
-    if (tsxdata->expires == 0)
-    {
-      third_party_reg_stats_tables->de_reg_tbl->increment_successes();
-    }
-    else if (tsxdata->is_initial_registration)
-    {
-      third_party_reg_stats_tables->init_reg_tbl->increment_successes();
-    }
-    else
-    {
-      third_party_reg_stats_tables->re_reg_tbl->increment_successes();
-    }
-  }
-  else
-  // Count all failed registration attempts, not just ones that result in user
-  // being unsubscribed.
+  if (third_party_reg_stats_tables != NULL)
   {
-    if (tsxdata->expires == 0)
+    if (tsx->status_code == 200)
     {
-      third_party_reg_stats_tables->de_reg_tbl->increment_failures();
-    }
-    else if (tsxdata->is_initial_registration)
-    {
-      third_party_reg_stats_tables->init_reg_tbl->increment_failures();
+      if (tsxdata->expires == 0)
+      {
+        third_party_reg_stats_tables->de_reg_tbl->increment_successes();
+      }
+      else if (tsxdata->is_initial_registration)
+      {
+        third_party_reg_stats_tables->init_reg_tbl->increment_successes();
+      }
+      else
+      {
+        third_party_reg_stats_tables->re_reg_tbl->increment_successes();
+      }
     }
     else
+    // Count all failed registration attempts, not just ones that result in user
+    // being unsubscribed.
     {
-      third_party_reg_stats_tables->re_reg_tbl->increment_failures();
+      if (tsxdata->expires == 0)
+      {
+        third_party_reg_stats_tables->de_reg_tbl->increment_failures();
+      }
+      else if (tsxdata->is_initial_registration)
+      {
+        third_party_reg_stats_tables->init_reg_tbl->increment_failures();
+      }
+      else
+      {
+        third_party_reg_stats_tables->re_reg_tbl->increment_failures();
+      }
     }
   }
 
@@ -441,7 +446,8 @@ static bool expire_bindings(RegStore *store, const std::string& aor, const std::
                                             // single binding (flow failed).
     }
 
-    set_rc = store->set_aor_data(aor, aor_data, false, trail, all_bindings_expired);
+    set_rc = store->set_aor_data(aor, aor_data, false, trail, all_bindings_expired,
+                                 RegStore::TAGS_REG);
     delete aor_data; aor_data = NULL;
 
     // We can only say for sure that the bindings were expired if we were able

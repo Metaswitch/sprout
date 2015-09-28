@@ -67,6 +67,10 @@ extern "C" {
 #include "json_parse_utils.h"
 #include "rapidjson/error/en.h"
 
+const std::vector<std::string> RegStore::TAGS_NONE = {};
+const std::vector<std::string> RegStore::TAGS_REG = {"REG"};
+const std::vector<std::string> RegStore::TAGS_SUB = {"SUB"};
+
 RegStore::RegStore(Store* data_store,
                    SerializerDeserializer*& serializer,
                    std::vector<SerializerDeserializer*>& deserializers,
@@ -174,10 +178,11 @@ RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id, SAS:
 Store::Status RegStore::set_aor_data(const std::string& aor_id,
                                      AoR* aor_data,
                                      bool set_chronos,
-                                     SAS::TrailId trail)
+                                     SAS::TrailId trail,
+                                     std::vector<std::string> tags)
 {
   bool unused;
-  return set_aor_data(aor_id, aor_data, set_chronos, trail, unused);
+  return set_aor_data(aor_id, aor_data, set_chronos, trail, unused, tags);
 }
 
 
@@ -200,7 +205,8 @@ Store::Status RegStore::set_aor_data(const std::string& aor_id,
                                      AoR* aor_data,
                                      bool set_chronos,
                                      SAS::TrailId trail,
-                                     bool& all_bindings_expired)
+                                     bool& all_bindings_expired,
+                                     std::vector<std::string> tags)
 {
   all_bindings_expired = false;
   // Expire any old bindings before writing to the server.  In theory, if
@@ -255,12 +261,12 @@ Store::Status RegStore::set_aor_data(const std::string& aor_id,
       // If a timer has been previously set for this binding, send a PUT. Otherwise sent a POST.
       if (b->_timer_id == "")
       {
-        status = _chronos->send_post(timer_id, expiry, callback_uri, opaque, trail);
+        status = _chronos->send_post(timer_id, expiry, callback_uri, opaque, trail, tags);
       }
       else
       {
         timer_id = b->_timer_id;
-        status = _chronos->send_put(timer_id, expiry, callback_uri, opaque, trail);
+        status = _chronos->send_put(timer_id, expiry, callback_uri, opaque, trail, tags);
       }
 
       // Update the timer id. If the update to Chronos failed, that's OK, don't reject the register
@@ -957,7 +963,7 @@ RegStore::AoR* RegStore::JsonSerializerDeserializer::
 
   if (doc.HasParseError())
   {
-    TRC_DEBUG("Failed to parse document: %s\nError: %s", 
+    TRC_DEBUG("Failed to parse document: %s\nError: %s",
               s.c_str(),
               rapidjson::GetParseError_En(doc.GetParseError()));
     return NULL;

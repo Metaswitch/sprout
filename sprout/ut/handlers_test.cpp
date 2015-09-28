@@ -215,7 +215,7 @@ TEST_F(RegistrationTimeoutTasksMockStoreTest, RegStoreWritesFail)
   // found.
   RegStore::AoR* aor = new RegStore::AoR("sip:6505550231@homedomain");
   EXPECT_CALL(*store, get_aor_data(_, _)).WillOnce(Return(aor));
-  EXPECT_CALL(*store, set_aor_data(_, _, _, _, _)).WillOnce(Return(Store::ERROR));
+  EXPECT_CALL(*store, set_aor_data(_, _, _, _, _, _)).WillOnce(Return(Store::ERROR));
 
   // Parse and handle the request
   std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1\"}";
@@ -288,13 +288,13 @@ class DeregistrationTaskTest : public SipTest
       if (aors[ii] != NULL)
       {
         // Write the information to the local store
-        EXPECT_CALL(*_regstore, set_aor_data(aor_ids[ii], _, _, _, _)).WillOnce(Return(Store::OK));
+        EXPECT_CALL(*_regstore, set_aor_data(aor_ids[ii], _, _, _, _, _)).WillOnce(Return(Store::OK));
 
         // Write the information to the remote store
         EXPECT_CALL(*_remotestore, get_aor_data(aor_ids[ii], _)).WillRepeatedly(Return(remote_aor));
         if (remote_aor != NULL)
         {
-          EXPECT_CALL(*_remotestore, set_aor_data(aor_ids[ii], _, _, _, _)).WillOnce(Return(Store::OK));
+          EXPECT_CALL(*_remotestore, set_aor_data(aor_ids[ii], _, _, _, _, _)).WillOnce(Return(Store::OK));
         }
       }
     }
@@ -476,7 +476,7 @@ TEST_F(DeregistrationTaskTest, RegStoreWritesFail)
 
   RegStore::AoR* aor = new RegStore::AoR("sip:6505550231@homedomain");
   EXPECT_CALL(*_regstore, get_aor_data(_, _)).WillOnce(Return(aor));
-  EXPECT_CALL(*_regstore, set_aor_data(_, _, _, _, _)).WillOnce(Return(Store::ERROR));
+  EXPECT_CALL(*_regstore, set_aor_data(_, _, _, _, _, _)).WillOnce(Return(Store::ERROR));
 
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 500, _));

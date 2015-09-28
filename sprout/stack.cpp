@@ -75,6 +75,7 @@ extern "C" {
 #include "quiescing_manager.h"
 #include "counter.h"
 #include "sprout_pd_definitions.h"
+#include "uri_classifier.h"
 
 class StackQuiesceHandler;
 
@@ -617,11 +618,22 @@ pj_status_t init_stack(const std::string& system_name,
   // Build a set of home domains
   stack_data.home_domains = std::unordered_set<std::string>();
   stack_data.home_domains.insert(PJUtils::pj_str_to_string(&stack_data.default_home_domain));
+  URIClassifier::home_domains.push_back(&stack_data.default_home_domain);
   if (additional_home_domains != "")
   {
     std::list<std::string> domains;
     Utils::split_string(additional_home_domains, ',', domains, 0, true);
-    stack_data.home_domains.insert(domains.begin(), domains.end());
+    
+    for (std::list<std::string>::iterator ii = domains.begin();
+         ii != domains.end();
+         ii++)
+    {
+      stack_data.home_domains.insert(*ii);
+
+      pj_str_t* domain;
+      pj_strdup2(stack_data.pool, domain, ii->c_str());
+      URIClassifier::home_domains.push_back(domain);
+    }
   }
 
   // Set up the default address family.  This is IPv4 unless our local host is an IPv6 address.

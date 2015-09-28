@@ -97,8 +97,6 @@ bool BGCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                         _bgcf_service, 
                                         enum_service, 
                                         _acr_factory, 
-                                        opt.enforce_user_phone,
-                                        opt.enforce_global_only_lookups,
                                         opt.override_npdi);
 
     sproutlets.push_back(_bgcf_sproutlet);
