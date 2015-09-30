@@ -791,7 +791,7 @@ bool is_retarget(std::string a, std::string b, pj_pool_t* pool)
     if ((a.compare(0, 4, "tel:") == 0) ||
         (b.compare(0, 4, "tel:") == 0))
     {
-      TRC_DEBUG("One URI is a tel: URI and one is not - checking user-parts");
+      LOG_DEBUG("One URI is a tel: URI and one is not - checking user-parts");
 
       pjsip_uri* a_uri = PJUtils::uri_from_string(a, pool);
       pjsip_uri* b_uri = PJUtils::uri_from_string(b, pool);
