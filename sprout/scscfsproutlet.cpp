@@ -745,6 +745,64 @@ void SCSCFSproutletTsx::retrieve_odi_and_sesscase(pjsip_msg* req)
 
 }
 
+pj_str_t get_userpart(pjsip_uri* uri)
+{
+  if PJSIP_URI_SCHEME_IS_TEL(uri)
+  {
+    return ((pjsip_tel_uri*)uri)->number;
+  }
+  else if PJSIP_URI_SCHEME_IS_SIP(uri)
+  {
+    return ((pjsip_sip_uri*)uri)->user;
+  }
+  else
+  {
+    return {0, 0};
+  }
+  
+}
+
+bool is_retarget(std::string a, std::string b, pj_pool_t* pool)
+{
+  if (a == b)
+  {
+    // URIs match exactly - this is not a retarget
+    return false;
+  }
+  else
+  {
+    // Handle the case where an AS has converted sip:+1234@example.com and tel:+1234 - this is not considered a retarget that should trigger orig-cdiv
+    if (((a.compare(0, 4, "tel:") == 0) && (b.compare(0, 4, "tel:") != 0)) ||
+        ((a.compare(0, 4, "tel:") != 0) && (b.compare(0, 4, "tel:") == 0)))
+    {
+      TRC_DEBUG("One URI is a tel: URI and one is not - checking user-parts");
+
+      pjsip_uri* a_uri = PJUtils::uri_from_string(a, pool);
+      pjsip_uri* b_uri = PJUtils::uri_from_string(b, pool);
+      pj_str_t a_user = get_userpart(a_uri);
+      pj_str_t b_user = get_userpart(b_uri);
+      URIClass a_uri_class = URIClassifier::classify_uri(a_uri, false);
+      URIClass b_uri_class = URIClassifier::classify_uri(b_uri, false);
+ 
+      // Check that both URIs are ones we'd treat as phone numbers - for example, if user=phone is
+      // enforced, sip:+1234@example.com to tel:+1234 would be a retarget, but sip:+1234@example.com;userr=phone to tel:+1234 wouldn't).
+
+      if (((a_uri_class == GLOBAL_PHONE_NUMBER) ||
+           (a_uri_class == LOCAL_PHONE_NUMBER)) &&
+          ((b_uri_class == GLOBAL_PHONE_NUMBER) ||
+           (b_uri_class == LOCAL_PHONE_NUMBER)) &&
+          (pj_strcmp(&a_user, &b_user) == 0))
+      {
+        // Not a retarget
+        return false;
+      }
+    } 
+  }
+
+  // The URIs are not identical and are not an aliased SIP and TEL URI - the request has been retargeted
+  return true;
+}
+
 pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
 {
   pjsip_status_code status_code = PJSIP_SC_OK;
@@ -757,7 +815,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
     std::string served_user = served_user_from_msg(req);
 
     if ((_session_case->is_terminating()) &&
-        (served_user != _as_chain_link.served_user()))
+        is_retarget(served_user, _as_chain_link.served_user(), get_pool(req)))
     {
       if (pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL) != NULL)
       {
