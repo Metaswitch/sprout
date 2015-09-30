@@ -761,6 +761,41 @@ void SCSCFSproutletTsx::retrieve_odi_and_sesscase(pjsip_msg* req)
 
 }
 
+pj_str_t* get_userpart(pjsip_uri* uri)
+{
+  if PJSIP_URI_SCHEME_IS_TEL(uri)
+  {
+    return &(((pjsip_tel_uri*)uri)->number);
+  }
+  else //if PJSIP_URI_SCHEME_IS_SIP(uri)
+  {
+    return &(((pjsip_sip_uri*)uri)->user);
+  }
+  
+}
+
+bool compare_served_users(std::string a, std::string b, pj_pool_t* pool)
+{
+  if (a == b)
+  {
+    return true;
+  }
+  else
+  {
+    pjsip_uri* a_uri = PJUtils::uri_from_string(a, pool);
+    pjsip_uri* b_uri = PJUtils::uri_from_string(b, pool);
+
+    // If one URI is a tel: URI, compare the user-parts (so that sip:+1234@example.com and tel:+1234 aren't treated differently).
+
+    if (PJSIP_URI_SCHEME_IS_TEL(a_uri) || PJSIP_URI_SCHEME_IS_TEL(b_uri))
+    {
+      return (pj_strcmp(get_userpart(a_uri), get_userpart(b_uri)) == 0);
+    } 
+  }
+
+  return false;
+}
+
 pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
 {
   pjsip_status_code status_code = PJSIP_SC_OK;
@@ -772,7 +807,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
     std::string served_user = served_user_from_msg(req);
 
     if ((_session_case->is_terminating()) &&
-        (served_user != _as_chain_link.served_user()))
+        (compare_served_users(served_user, _as_chain_link.served_user(), get_pool(req)) == false))
     {
       // AS is retargeting per 3GPP TS 24.229 s5.4.3.3 step 3, so
       // create new AS chain with session case orig-cdiv and the
