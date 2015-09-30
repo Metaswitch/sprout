@@ -297,7 +297,8 @@ void send_register_to_as(pjsip_rx_data *received_register,
                                request_part);
     }
 
-    if (as.include_register_response)
+    //if (as.include_register_response)
+    if (true)
     {
       pjsip_multipart_part *response_part = pjsip_multipart_create_part(tdata->pool);
       pjsip_msg_print(ok_response->msg, buf, sizeof(buf));
