@@ -761,39 +761,53 @@ void SCSCFSproutletTsx::retrieve_odi_and_sesscase(pjsip_msg* req)
 
 }
 
-pj_str_t* get_userpart(pjsip_uri* uri)
+pj_str_t get_userpart(pjsip_uri* uri)
 {
   if PJSIP_URI_SCHEME_IS_TEL(uri)
   {
-    return &(((pjsip_tel_uri*)uri)->number);
+    return ((pjsip_tel_uri*)uri)->number;
   }
-  else //if PJSIP_URI_SCHEME_IS_SIP(uri)
+  else if PJSIP_URI_SCHEME_IS_SIP(uri)
   {
-    return &(((pjsip_sip_uri*)uri)->user);
+    return ((pjsip_sip_uri*)uri)->user;
+  }
+  else
+  {
+    return {0, 0};
   }
   
 }
 
-bool compare_served_users(std::string a, std::string b, pj_pool_t* pool)
+bool is_retarget(std::string a, std::string b, pj_pool_t* pool)
 {
   if (a == b)
   {
-    return true;
+    // URIs match exactly - this is not a retarget
+    return false;
   }
   else
   {
-    pjsip_uri* a_uri = PJUtils::uri_from_string(a, pool);
-    pjsip_uri* b_uri = PJUtils::uri_from_string(b, pool);
-
-    // If one URI is a tel: URI, compare the user-parts (so that sip:+1234@example.com and tel:+1234 aren't treated differently).
-
-    if (PJSIP_URI_SCHEME_IS_TEL(a_uri) || PJSIP_URI_SCHEME_IS_TEL(b_uri))
+    // Handle the case where an AS has converted sip:+1234@example.com and tel:+1234 - this is not considered a retarget that should trigger orig-cdiv
+    if ((a.compare(0, 4, "tel:") == 0) ||
+        (b.compare(0, 4, "tel:") == 0))
     {
-      return (pj_strcmp(get_userpart(a_uri), get_userpart(b_uri)) == 0);
+      TRC_DEBUG("One URI is a tel: URI and one is not - checking user-parts");
+
+      pjsip_uri* a_uri = PJUtils::uri_from_string(a, pool);
+      pjsip_uri* b_uri = PJUtils::uri_from_string(b, pool);
+      pj_str_t a_user = get_userpart(a_uri);
+      pj_str_t b_user = get_userpart(b_uri);
+
+      if (pj_strcmp(&a_user, &b_user) == 0)
+      {
+        // Not a retarget
+        return false;
+      }
     } 
   }
 
-  return false;
+  // The URIs are not identical and are not an aliased SIP and TEL URI - the request has been retargeted
+  return true;
 }
 
 pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
@@ -807,7 +821,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
     std::string served_user = served_user_from_msg(req);
 
     if ((_session_case->is_terminating()) &&
-        (compare_served_users(served_user, _as_chain_link.served_user(), get_pool(req)) == false))
+        is_retarget(served_user, _as_chain_link.served_user(), get_pool(req)))
     {
       // AS is retargeting per 3GPP TS 24.229 s5.4.3.3 step 3, so
       // create new AS chain with session case orig-cdiv and the
