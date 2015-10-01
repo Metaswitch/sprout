@@ -1735,7 +1735,8 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
   _in_dialog(false),
   _icscf_router(NULL),
   _icscf_acr(NULL),
-  _bgcf_acr(NULL)
+  _bgcf_acr(NULL),
+  _se_helper(stack_data.default_session_expires)
 {
   TRC_DEBUG("UASTransaction constructor (%p)", this);
   TRC_DEBUG("ACR (%p)", acr);
@@ -1974,16 +1975,7 @@ void UASTransaction::handle_outgoing_non_cancel(Target* target)
   // Already have a target, so use it.
   targets.push_back(*target);
 
-  // Try to add the session_expires header
-  if (!PJUtils::add_update_session_expires(_req->msg,
-                                           _req->pool,
-                                           trail()))
-  {
-    // Session expires header is invalid, so reject the request
-    // This has been logged in PJUtils
-    send_response(PJSIP_SC_TEMPORARILY_UNAVAILABLE);
-    return;
-  }
+  _se_helper.process_request(_req->msg, _req->pool, trail());
 
   // Now set up the data structures and transactions required to
   // process the request.
@@ -2029,6 +2021,8 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
       exit_context();
       return;
     }
+
+    _se_helper.process_response(tdata->msg, tdata->pool, trail());
 
     // Strip any untrusted headers as required, so we don't pass them on.
     _trust->process_response(tdata);

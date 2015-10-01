@@ -65,6 +65,7 @@ extern "C" {
 #include "acr.h"
 #include "sproutlet.h"
 #include "snmp_counter_table.h"
+#include "session_expires_helper.h"
 
 class SCSCFSproutletTsx;
 
@@ -375,6 +376,9 @@ private:
   ///   the way to the HSS (i.e. Homestead may not answer the response solely
   ///   from its cache).
   bool _auto_reg;
+
+  /// Class to handle session-expires processing.
+  SessionExpiresHelper _se_helper;
 };
 
 #endif
