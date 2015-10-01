@@ -177,11 +177,11 @@ void SessionExpiresHelper::process_response(pjsip_msg* rsp,
 
       if (require_hdr == NULL)
       {
-        se_hdr = (pjsip_session_expires_hdr*)pjsip_require_hdr_create(pool);
+        require_hdr = (pjsip_require_hdr*)pjsip_require_hdr_create(pool);
         pjsip_msg_add_hdr(rsp, (pjsip_hdr*)require_hdr);
       }
 
-      pj_strcpy(&require_hdr->values[require_hdr->count], &STR_TIMER);
+      pj_strdup(pool, &require_hdr->values[require_hdr->count], &STR_TIMER);
       require_hdr->count++;
     }
   }

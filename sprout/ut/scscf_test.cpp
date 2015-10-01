@@ -7026,42 +7026,6 @@ TEST_F(SCSCFTest, TestNoSecondPAIHdrTerm)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
 }
 
-// Test that the Session-Expires header is correctly altered by the Min-SE
-// header
-TEST_F(SCSCFTest, TestMinSEOverride)
-{
-  SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  Message msg;
-  msg._extra = "Session-Expires: 600\nMin-SE: 800";
-  list<HeaderMatcher> hdrs;
-  hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires: 800"));
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
-}
-
-// Test that a request where the Min-SE header is too large is rejected
-TEST_F(SCSCFTest, TestMinSETooLarge)
-{
-  SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  Message msg;
-  msg._extra = "Session-Expires: 600\nMin-SE: 1000";
-  doSlowFailureFlow(msg, 480);
-}
-
-// Test that a request where the Session-Expiry header is too large is rejected
-TEST_F(SCSCFTest, TestSessionExpiresTooLarge)
-{
-  SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  Message msg;
-  msg._extra = "Session-Expires: 1000";
-  doSlowFailureFlow(msg, 480);
-}
-
 /// Test handling of 430 Flow Failed response
 TEST_F(SCSCFTest, FlowFailedResponse)
 {
