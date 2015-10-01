@@ -2,7 +2,7 @@
 
 This document describes how to build and test Sprout and Bono.
 
-Sprout development is ongoing on Ubuntu 14.04, so the processes described
+Sprout/Bono development is ongoing on Ubuntu 14.04, so the processes described
 below are targetted for (and tested on) this platform.  The code has been
 written to be portable, though, and should compile on other platforms once the
 required dependencies are installed.
@@ -24,7 +24,7 @@ On Ubuntu 14.04,
 
 ## Getting the Code
 
-The sprout code is all in the `sprout` repository, and its submodules, which
+The sprout/bono code is all in the `sprout` repository, and its submodules, which
 are in the `modules` subdirectory.
 
 To get all the code, clone the sprout repository with the `--recursive` flag to
@@ -42,7 +42,7 @@ This accesses the repository over SSH on Github, and will not work unless you ha
 Note that the first build can take a long time - up to an hour on a slow
 machine. It takes 20-30 minutes on an EC2 m1.medium instance.
 
-To build sprout and all its dependencies, change to the top-level `sprout`
+To build sprout, bono, and all their dependencies, change to the top-level `sprout`
 directory and issue `make`.  Both the sprout and bono functions are
 provided by the same "sprout" binary - command-line parameters control which
 behavior the binary performs.
@@ -117,15 +117,19 @@ The sprout makefile offers the following additional options and targets.
 *   `make debug` runs the tests under gdb.
 *   `make vg_raw` just runs the memory leak checks.
 
-## Running Sprout Locally
+## Running Sprout and Bono Locally
 
-To run sprout on the machine it was built on, change to the top-level `sprout` directory and then run the following command, passing in the appropriate parameters
+To run sprout or bono on the machine it was built on, change to the top-level `sprout` directory and then run the following command, passing in the appropriate parameters
 
     MIBS="" LD_LIBRARY_PATH=usr/lib:$LD_LIBRARY_PATH build/bin/sprout <parameters>
 
-As an example, to run Sprout as a basic S-CSCF on port 5054 run the following command.
+As an example, to run Sprout as a basic S-CSCF on port 5054 run the following command:
 
-    MIBS="" LD_LIBRARY_PATH=usr/lib:$LD_LIBRARY_PATH build/bin/sprout -t --domain=<Home Domain> --scscf=5054 --scscf-uri=sip:<Sprout cluster>:5054;transport=TCP --hss=<Homestead cluster> 
+    MIBS="" LD_LIBRARY_PATH=usr/lib:$LD_LIBRARY_PATH build/bin/sprout -t --domain=<Home Domain> --scscf=5054 --scscf-uri="sip:<Sprout cluster>:5054;transport=TCP" --hss=<Homestead cluster> 
+
+To run bono as a basic P-CSCF on port 5060 run the following command:
+
+    MIBS="" LD_LIBRARY_PATH=usr/lib:$LD_LIBRARY_PATH build/bin/sprout -t --pcscf=5058,5060 --routing-proxy=<I-CSCF address, or S-CSCF if there's no I-CSCF>,0,50,600
 
 For all command-line options, use the `-h` option.
 
