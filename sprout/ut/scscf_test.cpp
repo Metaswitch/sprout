@@ -497,7 +497,11 @@ protected:
   void doAsOriginated(SP::Message& msg, bool expect_orig);
   void doAsOriginated(const std::string& msg, bool expect_orig);
   void doFourAppServerFlow(std::string record_route_regex, bool app_servers_record_route=false);
-  void doSuccessfulFlow(SP::Message& msg, testing::Matcher<string> uri_matcher, list<HeaderMatcher> headers, bool include_ack_and_bye=true, bool session_expires=false);
+  void doSuccessfulFlow(SP::Message& msg,
+                        testing::Matcher<string> uri_matcher,
+                        list<HeaderMatcher> headers,
+                        bool include_ack_and_bye=true,
+                        list<HeaderMatcher> rsp_hdrs = list<HeaderMatcher>());
   void doFastFailureFlow(SP::Message& msg, int st_code);
   void doSlowFailureFlow(SP::Message& msg, int st_code, std::string body = "", std::string reason = "");
   void setupForkedFlow(SP::Message& msg);
@@ -1125,7 +1129,7 @@ void SCSCFTest::doSuccessfulFlow(Message& msg,
                                  testing::Matcher<string> uri_matcher,
                                  list<HeaderMatcher> headers,
                                  bool include_ack_and_bye,
-                                 bool session_expires)
+                                 list<HeaderMatcher> rsp_headers)
 {
   SCOPED_TRACE("");
   pjsip_msg* out;
@@ -1144,14 +1148,6 @@ void SCSCFTest::doSuccessfulFlow(Message& msg,
   ReqMatcher req("INVITE");
   ASSERT_NO_FATAL_FAILURE(req.matches(out));
 
-  if (session_expires)
-  {
-    // In general proxied messages should have Session-Expires headers added,
-    // except if we are simply forwarding without applying any services.
-    std::string session_expires = get_headers(out, "Session-Expires");
-    EXPECT_EQ("Session-Expires: 600", session_expires);
-  }
-
   // Do checks on what gets passed through:
   EXPECT_THAT(req.uri(), uri_matcher);
   for (list<HeaderMatcher>::iterator iter = headers.begin(); iter != headers.end(); ++iter)
@@ -1166,6 +1162,13 @@ void SCSCFTest::doSuccessfulFlow(Message& msg,
   // OK goes back
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
+  for (list<HeaderMatcher>::iterator iter = rsp_headers.begin();
+       iter != rsp_headers.end();
+       ++iter)
+  {
+    iter->match(out);
+  }
+
   msg.set_route(out);
   msg._cseq++;
   free_txdata();
@@ -1426,7 +1429,7 @@ TEST_F(SCSCFTest, TestStrictRouteThrough)
   msg._requri = "sip:6505551234@nonlocaldomain";
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("Route", ".*lasthop@destination.com.*", ".*6505551234@nonlocaldomain.*"));
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*nexthop@intermediate.com.*"), hdrs, false, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*nexthop@intermediate.com.*"), hdrs, false);
 }
 
 TEST_F(SCSCFTest, TestNonLocal)
@@ -7530,4 +7533,26 @@ TEST_F(SCSCFTest, AutomaticRegistrationDerivedIMPI)
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("Route", "Route: <sip:10.0.0.1:5060;transport=TCP;lr>"));
   doSuccessfulFlow(msg, testing::MatchesRegex("sip:newuser@domainvalid"), hdrs);
+}
+
+TEST_F(SCSCFTest, TestSessionExpires)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+
+  // Send an INVITE where the client supports session timers. This means that
+  // if the server does not support timers, there should still be a
+  // Session-Expires header on the response.
+  //
+  // Most of the session timer logic is tested in
+  // `session_expires_helper_test.cpp`. This is just to check that the S-CSCF
+  // invokes the logic correctly.
+  Message msg;
+  msg._extra = "Session-Expires: 600\r\nSupported: timer";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires:.*"));
+  list<HeaderMatcher> rsp_hdrs;
+  rsp_hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires: .*"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false, rsp_hdrs);
 }
