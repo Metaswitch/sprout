@@ -765,11 +765,19 @@ bool SCSCFSproutletTsx::is_retarget(std::string new_served_user)
               "not treating as a retarget, not invoking originating-cdiv processing",
               old_served_user.c_str(),
               new_served_user.c_str());
+    SAS::Event event(trail(), SASEvent::AS_RETARGETED_TO_ALIAS, 1);
+    event.add_var_param(old_served_user);
+    event.add_var_param(new_served_user);
+    SAS::report_event(event);
     return false;
   }
   else
   {
     // The new URI is not identical to the old one and is not an aliased URI - the request has been retargeted
+    SAS::Event event(trail(), SASEvent::AS_RETARGETED_CDIV, 1);
+    event.add_var_param(old_served_user);
+    event.add_var_param(new_served_user);
+    SAS::report_event(event);
     return true;
   }
 }
