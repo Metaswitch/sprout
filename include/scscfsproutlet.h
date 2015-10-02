@@ -230,7 +230,10 @@ private:
 
   /// Creates an AS chain for this service role and links this service hop to
   /// it.
-  AsChainLink create_as_chain(Ifcs ifcs, std::string served_user, ACR*& acr);
+  AsChainLink create_as_chain(Ifcs ifcs,
+                              std::string served_user,
+                              ACR*& acr,
+                              SAS::TrailId chain_trail);
 
   /// Apply originating services for this request.
   void apply_originating_services(pjsip_msg* req);
