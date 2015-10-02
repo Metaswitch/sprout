@@ -233,7 +233,7 @@ private:
   AsChainLink create_as_chain(Ifcs ifcs,
                               std::string served_user,
                               ACR*& acr,
-                              SAS::TrailId old_chain_trail = 0);
+                              SAS::TrailId chain_trail);
 
   /// Apply originating services for this request.
   void apply_originating_services(pjsip_msg* req);

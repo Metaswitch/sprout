@@ -871,7 +871,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       if (lookup_ifcs(served_user, ifcs))
       {
         TRC_DEBUG("Successfully looked up iFCs");
-        _as_chain_link = create_as_chain(ifcs, served_user, acr);
+        _as_chain_link = create_as_chain(ifcs, served_user, acr, trail());
       }
       else
       {
@@ -989,7 +989,7 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
 AsChainLink SCSCFSproutletTsx::create_as_chain(Ifcs ifcs,
                                                std::string served_user,
                                                ACR*& acr,
-                                               SAS::TrailId old_chain_trail)
+                                               SAS::TrailId chain_trail)
 {
   if (served_user.empty())
   {
@@ -1001,7 +1001,7 @@ AsChainLink SCSCFSproutletTsx::create_as_chain(Ifcs ifcs,
                                                  *_session_case,
                                                  served_user,
                                                  is_registered,
-                                                 old_chain_trail ? old_chain_trail : trail(),
+                                                 chain_trail,
                                                  ifcs,
                                                  acr);
   acr = NULL;
