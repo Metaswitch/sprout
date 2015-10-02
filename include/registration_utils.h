@@ -52,6 +52,9 @@ extern "C" {
 
 namespace RegistrationUtils {
 
+void init(SNMP::RegistrationStatsTables* _third_party_reg_stats_tables,
+          bool _force_third_party_register_body);
+
 void remove_bindings(RegStore* store,
                      HSSConnection* hss,
                      const std::string& aor,
@@ -66,13 +69,11 @@ void register_with_application_servers(Ifcs& ifcs,
                                        int expires,
                                        bool is_initial_registration,
                                        const std::string& served_user,
-                                       SNMP::RegistrationStatsTables* third_party_reg_stats_tbls,
                                        SAS::TrailId trail);
 
 void deregister_with_application_servers(Ifcs&,
                                          RegStore* store,
                                          const std::string&,
-                                         SNMP::RegistrationStatsTables* third_party_reg_stats_tbls,
                                          SAS::TrailId trail);
 
 } // namespace RegistrationUtils

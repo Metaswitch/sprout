@@ -60,6 +60,7 @@ extern pj_status_t init_registrar(RegStore* registrar_store,
                                   AnalyticsLogger* analytics_logger,
                                   ACRFactory* rfacr_factory,
                                   int cfg_max_expires,
+                                  bool force_third_party_register_body,
                                   SNMP::RegistrationStatsTables* reg_stats_tbls,
                                   SNMP::RegistrationStatsTables* third_party_reg_stats_tbls);
 
