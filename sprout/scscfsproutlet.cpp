@@ -332,7 +332,8 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
   _req_type(req_type),
   _seen_1xx(false),
   _impi(),
-  _auto_reg(false)
+  _auto_reg(false),
+  _se_helper(stack_data.default_session_expires)
 {
   TRC_DEBUG("S-CSCF Transaction (%p) created", this);
 }
@@ -380,18 +381,7 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
   pjsip_status_code status_code = PJSIP_SC_OK;
 
-  // Try to add a Session-Expires header
-  if (!PJUtils::add_update_session_expires(req,
-                                           get_pool(req),
-                                           trail()))
-  {
-    // Session expires header is invalid, so reject the request
-    // This has been logged in PJUtils
-    pjsip_msg* rsp = create_response(req, PJSIP_SC_TEMPORARILY_UNAVAILABLE);
-    send_response(rsp);
-    free_msg(req);
-    return;
-  }
+  _se_helper.process_request(req, get_pool(req), trail());
 
   // Work out if we should be auto-registering the user based on this
   // request and if we are, also work out the IMPI to register them with.
@@ -481,18 +471,7 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
 {
   TRC_INFO("S-CSCF received in-dialog request");
 
-  // Try to add a Session-Expires header
-  if (!PJUtils::add_update_session_expires(req,
-                                           get_pool(req),
-                                           trail()))
-  {
-    // Session expires header is invalid, so reject the request
-    // This has been logged in PJUtils
-    pjsip_msg* rsp = create_response(req, PJSIP_SC_TEMPORARILY_UNAVAILABLE);
-    send_response(rsp);
-    free_msg(req);
-    return;
-  }
+  _se_helper.process_request(req, get_pool(req), trail());
 
   // Create an ACR for this request and pass the request to it.
   _in_dialog_acr = _scscf->get_acr(trail(),
@@ -521,6 +500,8 @@ void SCSCFSproutletTsx::on_tx_request(pjsip_msg* req)
 void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 {
   TRC_INFO("S-CSCF received response");
+
+  _se_helper.process_response(rsp, get_pool(rsp), trail());
 
   // Pass the received response to the ACR.
   // @TODO - timestamp from response???

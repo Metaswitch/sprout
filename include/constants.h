@@ -121,6 +121,7 @@ const pj_str_t STR_NO_REPLY_TIMER = pj_str((char*)"no-reply-timer");
 const pj_str_t STR_NPDI = pj_str((char*)"npdi");
 const pj_str_t STR_RN = pj_str((char*)"rn");
 const pj_str_t STR_AUTO_REG = pj_str((char*)"auto-reg");
+const pj_str_t STR_TIMER = pj_str((char*)"timer");
 
 /// Prefix of ODI tokens we generate.
 const pj_str_t STR_ODI_PREFIX = pj_str((char*)"odi_");
@@ -179,5 +180,8 @@ const pj_str_t STR_XMLNS_XSI_VAL = pj_str((char*)"http://www.w3.org/2001/XMLSche
 // XML schema location
 const pj_str_t STR_XSI_SLOC_NAME = pj_str((char*)"xsi:schemaLocation");
 const pj_str_t STR_XSI_SLOC_VAL = pj_str((char*)"http://www.w3.org/2001/03/xml.xsd");
+
+// SIP methods not defined in PJSIP core.
+const static pjsip_method METHOD_UPDATE = { PJSIP_OTHER_METHOD, pj_str((char*)"UPDATE") };
 
 #endif /* CONSTANTS_H_ */

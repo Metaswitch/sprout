@@ -1302,6 +1302,7 @@ TEST_F(StatefulEdgeProxyTest, TestPreferredAssertedIdentities)
   msg._extra = "Route: ";
   msg._extra.append(token);
   msg._extra.append("\r\nP-Preferred-Identity: <sip:+16505551000@homedomain>");
+  msg._extra.append("\r\nSupported: timer");
   inject_msg(msg.get_request(), tp);
 
   // Check that the message is forwarded as expected.
@@ -1334,6 +1335,7 @@ TEST_F(StatefulEdgeProxyTest, TestPreferredAssertedIdentities)
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
+  EXPECT_NE(get_headers(out, "Session-Expires"), "");
   free_txdata();
 
   // Send an INVITE from the client with no P-Preferred-Identity header.
@@ -2314,4 +2316,56 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfUntrusted)
 
   free_txdata();
   delete tp;
+}
+
+TEST_F(StatefulEdgeProxyTest, TestSessionExpires)
+{
+  SCOPED_TRACE("");
+  Message msg;
+  pjsip_msg* out;
+  string actual;
+
+  // Register client.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.pcscf_untrusted_port,
+                                        "1.2.3.4",
+                                        49150);
+  string token;
+  string baretoken;
+  doRegisterEdge(tp, token, baretoken, 300, "1234123412341234", "ip-assoc-pending");
+
+  // Send an INVITE where the client supports session timers. This means that
+  // if the server does not support timers, there should still be a
+  // Session-Expires header on the response.
+  //
+  // Most of the session timer logic is tested in
+  // `session_expires_helper_test.cpp`. This is just to check that Bono invokes
+  // the logic correctly.
+  SCOPED_TRACE("");
+  msg._extra = "Route: ";
+  msg._extra.append(token);
+  msg._extra.append("\r\nSupported: timer");
+  inject_msg(msg.get_request(), tp);
+
+  // Check that the message is forwarded as expected.
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  r1.matches(out);
+
+  // Check the request has a Session-Expires.
+  EXPECT_NE(get_headers(out, "Session-Expires"), "");
+
+  // Send 200 OK to close our transaction.
+  inject_msg(respond_to_current_txdata(200));
+  poll();
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(200).matches(out);
+
+  // Check the response has a Session-Expires.
+  EXPECT_NE(get_headers(out, "Session-Expires"), "");
+  free_txdata();
+
+  delete tp; tp = NULL;
 }
