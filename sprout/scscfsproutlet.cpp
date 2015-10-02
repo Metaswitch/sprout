@@ -807,8 +807,12 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         if (lookup_ifcs(served_user, ifcs))
         {
           TRC_DEBUG("Creating originating CDIV AS chain");
+
+          // Preserve the SAS trail ID of the AS chain, to allow us to correlate even when a B2BUA
+          // retargets the call
+          SAS::TrailId old_chain_trail = _as_chain_link.trail();
           _as_chain_link.release();
-          _as_chain_link = create_as_chain(ifcs, served_user, acr);
+          _as_chain_link = create_as_chain(ifcs, served_user, acr, old_chain_trail);
 
           if (stack_data.record_route_on_diversion)
           {
@@ -984,7 +988,8 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
 /// Factory method: create AsChain by looking up iFCs.
 AsChainLink SCSCFSproutletTsx::create_as_chain(Ifcs ifcs,
                                                std::string served_user,
-                                               ACR*& acr)
+                                               ACR*& acr,
+                                               SAS::TrailId old_chain_trail)
 {
   if (served_user.empty())
   {
@@ -996,7 +1001,7 @@ AsChainLink SCSCFSproutletTsx::create_as_chain(Ifcs ifcs,
                                                  *_session_case,
                                                  served_user,
                                                  is_registered,
-                                                 trail(),
+                                                 old_chain_trail ? old_chain_trail : trail(),
                                                  ifcs,
                                                  acr);
   acr = NULL;
