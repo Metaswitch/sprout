@@ -748,6 +748,9 @@ void SCSCFSproutletTsx::retrieve_odi_and_sesscase(pjsip_msg* req)
 bool SCSCFSproutletTsx::is_retarget(std::string new_served_user)
 {
   std::string old_served_user = _as_chain_link.served_user();
+
+  // TS 24.229 section 5.4.3.3 says that changing the Request-URI to an alias of the original URI
+  // doesn't count as a retarget, so get the aliases ready to check
   std::vector<std::string> aliases;
   get_aliases(old_served_user, aliases);
 
