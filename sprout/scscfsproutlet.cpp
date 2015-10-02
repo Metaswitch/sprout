@@ -1531,7 +1531,7 @@ bool SCSCFSproutletTsx::is_user_registered(std::string public_id)
 /// Look up the associated URIs for the given public ID, using the cache if
 /// possible (and caching them and the iFC otherwise).
 /// The uris parameter is only filled in correctly if this function
-/// returns true,
+/// returns true.
 bool SCSCFSproutletTsx::get_associated_uris(std::string public_id,
                                             std::vector<std::string>& uris)
 {
@@ -1545,8 +1545,8 @@ bool SCSCFSproutletTsx::get_associated_uris(std::string public_id,
 
 /// Look up the aliases for the given public ID, using the cache if
 /// possible (and caching them and the iFC otherwise).
-/// The uris parameter is only filled in correctly if this function
-/// returns true,
+/// The aliases parameter is only filled in correctly if this function
+/// returns true.
 bool SCSCFSproutletTsx::get_aliases(std::string public_id,
                                     std::vector<std::string>& aliases)
 {
