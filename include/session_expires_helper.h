@@ -74,7 +74,6 @@ public:
   /// Do session expiry processing on a response. This carries out the
   /// processing required by the RFC.
   ///
-  ///
   /// @param rsp   - The response to process. This method mutates the response
   ///                in place.
   /// @param pool  - The pool associated with the response.
@@ -95,7 +94,7 @@ private:
   // affects what SAS logging we produce.
   bool _initial_request;
 
-  // Whether the UAC support session timers.
+  // Whether the UAC supports session timers.
   bool _uac_supports_timer;
 
   // The value of the session expires header on the request when we had

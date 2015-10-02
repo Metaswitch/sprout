@@ -105,28 +105,28 @@ void SessionExpiresHelper::process_request(pjsip_msg* req,
   if ((se_hdr != NULL) && (se_hdr->expires < _target_se))
   {
     // The request already has a session expires that is below our target. We
-    // don't need to change the value, but we do make a note of it (which is
-    // needed when processing the response).
+    // don't need to change the value.
     TRC_DEBUG("Session expires already set to %d", se_hdr->expires);
-    _se_on_req = se_hdr->expires;
   }
   else
   {
     // No pre-existing session expires, or the current value is greater than
     // our target. Set it to as close to our target as possible, but don't set
     // it below the min-SE.
-    _se_on_req = std::max(_target_se, min_se);
-
     if (se_hdr == NULL)
     {
       se_hdr = pjsip_session_expires_hdr_create(pool);
       pjsip_msg_add_hdr(req, (pjsip_hdr*)se_hdr);
     }
 
-    se_hdr->expires = _se_on_req;
+    se_hdr->expires = std::max(_target_se, min_se);
 
     TRC_DEBUG("Set session expires to %d", se_hdr->expires);
   }
+
+  // Make a note of the session expires (we may need it when processing the
+  // response)
+  _se_on_req = se_hdr->expires;
 }
 
 
