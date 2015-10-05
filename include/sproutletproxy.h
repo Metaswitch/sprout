@@ -114,7 +114,7 @@ protected:
   };
 
   bool schedule_timer(pj_timer_entry* tentry, int duration);
-  void cancel_timer(pj_timer_entry* tentry);
+  bool cancel_timer(pj_timer_entry* tentry);
   bool timer_running(pj_timer_entry* tentry);
 
   class UASTsx : public BasicProxy::UASTsx
@@ -159,7 +159,7 @@ protected:
 
     void process_timer_pop(pj_timer_entry* tentry);
     bool schedule_timer(SproutletWrapper* tsx, void* context, TimerID& id, int duration);
-    void cancel_timer(TimerID id);
+    bool cancel_timer(TimerID id);
     bool timer_running(TimerID id);
 
     void tx_response(SproutletWrapper* sproutlet,
@@ -216,6 +216,11 @@ protected:
     /// This prevents race conditions (such as a double free caused by one
     /// thread popping a timer and another thread cancelling it).
     std::set<pj_timer_entry*> _timers;
+
+    /// This set holds all the timers created by sproutlet tsx that are
+    /// children of this UASTsx that have not popped or been cancelled yet.
+    /// The UASTsx will persist while there are pending timers.
+    std::set<pj_timer_entry*> _pending_timers;
 
     friend class SproutletWrapper;
   };
@@ -281,7 +286,7 @@ private:
   void rx_cancel(pjsip_tx_data* cancel);
   void rx_error(int status_code);
   void rx_fork_error(pjsip_event_id_e event, int fork_id);
-  void on_timer_pop(void* context);
+  void on_timer_pop(TimerID id, void* context);
   void register_tdata(pjsip_tx_data* tdata);
   void deregister_tdata(pjsip_tx_data* tdata);
 
@@ -348,7 +353,12 @@ private:
     int cancel_reason;
   } ForkStatus;
   std::vector<ForkStatus> _forks;
-  
+
+  /// Set keeping track of pending timers for this SproutletWrapper.  The
+  /// SproutletWrapper (and the SproutletTsx it wraps) won't be deleted
+  /// until all these timers have popped or been cancelled.
+  std::set<TimerID> _pending_timers;
+
   SAS::TrailId _trail_id;
 
   friend class SproutletProxy::UASTsx;
