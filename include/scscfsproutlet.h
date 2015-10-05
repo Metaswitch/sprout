@@ -65,6 +65,7 @@ extern "C" {
 #include "acr.h"
 #include "sproutlet.h"
 #include "snmp_counter_table.h"
+#include "session_expires_helper.h"
 
 class SCSCFSproutletTsx;
 
@@ -84,8 +85,6 @@ public:
                  HSSConnection* hss,
                  EnumService* enum_service,
                  ACRFactory* acr_factory,
-                 bool user_phone,
-                 bool global_only_lookups,
                  bool override_npdi,
                  int session_continued_timeout = DEFAULT_SESSION_CONTINUED_TIMEOUT,
                  int session_terminated_timeout = DEFAULT_SESSION_TERMINATED_TIMEOUT);
@@ -98,16 +97,9 @@ public:
 
   // Methods used to change the values of internal configuration during unit
   // test.
-  void set_enforce_user_phone(bool v) { _user_phone = v; }
-  void set_global_only_lookups(bool v) { _global_only_lookups = v; }
   void set_override_npdi(bool v) { _override_npdi = v; }
   void set_session_continued_timeout(int timeout) { _session_continued_timeout_ms = timeout; }
   void set_session_terminated_timeout(int timeout) { _session_terminated_timeout_ms = timeout; }
-
-  inline bool should_require_user_phone() const
-  {
-    return _user_phone;
-  }
 
   inline bool should_override_npdi() const
   {
@@ -145,6 +137,9 @@ private:
 
   /// Read data for a public user identity from the HSS.
   bool read_hss_data(const std::string& public_id,
+                     const std::string& private_id,
+                     const std::string& req_type,
+                     bool cache_allowed,
                      bool& registered,
                      std::vector<std::string>& uris,
                      std::vector<std::string>& aliases,
@@ -154,8 +149,7 @@ private:
                      SAS::TrailId trail);
 
   /// Translate RequestURI using ENUM service if appropriate.
-  std::string translate_request_uri(pjsip_msg* req,
-                                    SAS::TrailId trail);
+  void translate_request_uri(pjsip_msg* req, pj_pool_t* pool, SAS::TrailId trail);
 
   /// Get an ACR instance from the factory.
   /// @param trail                SAS trail identifier to use for the ACR.
@@ -190,8 +184,6 @@ private:
 
   AsChainTable* _as_chain_table;
 
-  bool _global_only_lookups;
-  bool _user_phone;
   bool _override_npdi;
 
   /// Timeouts related to default handling of unresponsive application servers.
@@ -238,7 +230,10 @@ private:
 
   /// Creates an AS chain for this service role and links this service hop to
   /// it.
-  AsChainLink create_as_chain(Ifcs ifcs, std::string served_user, ACR*& acr);
+  AsChainLink create_as_chain(Ifcs ifcs,
+                              std::string served_user,
+                              ACR*& acr,
+                              SAS::TrailId chain_trail);
 
   /// Apply originating services for this request.
   void apply_originating_services(pjsip_msg* req);
@@ -268,9 +263,8 @@ private:
   /// Add a Route header with the specified URI.
   void add_route_uri(pjsip_msg* msg, pjsip_sip_uri* uri);
 
-  /// Does URI translation if required. Returns whether the routing
-  /// decision for the request has already been made
-  bool uri_translation_and_route(pjsip_msg* req);
+  /// Does URI translation if required.
+  void uri_translation(pjsip_msg* req);
 
   /// Gets the subscriber's associated URIs and iFCs for each URI from
   /// the HSS. Returns true on success, false on failure.
@@ -369,6 +363,25 @@ private:
   bool _seen_1xx;
 
   static const int MAX_FORKING = 10;
+
+  /// The private identity associated with the request. Empty unless the
+  /// request had a Proxy-Authorization header.
+  std::string _impi;
+
+  /// Whether this request should cause the user to be automatically
+  /// registered in the HSS. This is set if there is an `auto-reg` parameter
+  /// in the S-CSCF's route header.
+  ///
+  /// This has the following impacts:
+  /// - It causes registration state updates to have a type of REG rather than
+  ///   CALL.
+  /// - If there is a real HSS it forces registration state updates to flow all
+  ///   the way to the HSS (i.e. Homestead may not answer the response solely
+  ///   from its cache).
+  bool _auto_reg;
+
+  /// Class to handle session-expires processing.
+  SessionExpiresHelper _se_helper;
 };
 
 #endif

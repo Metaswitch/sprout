@@ -86,7 +86,7 @@ bool ICSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     // Determine the S-CSCF and hence BGCF URIs.
     std::string scscf_cluster_uri = std::string(stack_data.scscf_uri.ptr,
                                                 stack_data.scscf_uri.slen);
-    std::string bgcf_uri = "sip:bgcf." + scscf_cluster_uri.substr(4);
+    std::string bgcf_uri = "sip:bgcf@" + scscf_cluster_uri.substr(4);
 
     // Create the S-CSCF selector.
     _scscf_selector = new SCSCFSelector();
@@ -103,8 +103,6 @@ bool ICSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           _acr_factory,
                                           _scscf_selector,
                                           enum_service,
-                                          opt.enforce_global_only_lookups,
-                                          opt.enforce_user_phone,
                                           opt.override_npdi);
     _icscf_sproutlet->init();
     

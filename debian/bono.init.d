@@ -179,6 +179,7 @@ get_daemon_args()
         [ "$http_blacklist_duration" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --http-blacklist-duration=$http_blacklist_duration"
         [ "$sip_tcp_connect_timeout" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --sip-tcp-connect-timeout=$sip_tcp_connect_timeout"
         [ "$sip_tcp_send_timeout" = "" ]    || DAEMON_ARGS="$DAEMON_ARGS --sip-tcp-send-timeout=$sip_tcp_send_timeout"
+        [ "$pbx_service_route" = "" ]       || DAEMON_ARGS="$DAEMON_ARGS --pbx-service-route=$pbx_service_route"
 }
 
 #

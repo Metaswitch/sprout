@@ -328,6 +328,7 @@ public:
   static void SetUpTestCase(const string& edge_upstream_proxy,
                             const string& ibcf_trusted_hosts,
                             const string& pbx_hosts,
+                            const string& pbx_service_routes,
                             bool ifcs,
                             bool icscf_enabled = false,
                             bool scscf_enabled = false,
@@ -354,7 +355,6 @@ public:
     _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_stateful_proxy_scscf.json"));
     _edge_upstream_proxy = edge_upstream_proxy;
     _ibcf_trusted_hosts = ibcf_trusted_hosts;
-    _pbx_hosts = pbx_hosts;
     _icscf_uri_str = icscf_uri_str;
     _icscf = icscf_enabled;
     _scscf = scscf_enabled;
@@ -370,11 +370,10 @@ public:
                                           86400,
                                           !_ibcf_trusted_hosts.empty(),
                                           _ibcf_trusted_hosts.c_str(),
-                                          _pbx_hosts.c_str(),
+                                          pbx_hosts.c_str(),
+                                          pbx_service_routes,
                                           _analytics,
                                           _enum_service,
-                                          false,
-                                          false,
                                           _bgcf_service,
                                           _hss_connection,
                                           _acr_factory,
@@ -475,7 +474,6 @@ protected:
   static ACRFactory* _acr_factory;
   static string _edge_upstream_proxy;
   static string _ibcf_trusted_hosts;
-  static string _pbx_hosts;
   static string _icscf_uri_str;
   static bool _icscf;
   static bool _scscf;
@@ -507,7 +505,6 @@ SCSCFSelector* StatefulProxyTestBase::_scscf_selector;
 ACRFactory* StatefulProxyTestBase::_acr_factory;
 string StatefulProxyTestBase::_edge_upstream_proxy;
 string StatefulProxyTestBase::_ibcf_trusted_hosts;
-string StatefulProxyTestBase::_pbx_hosts;
 string StatefulProxyTestBase::_icscf_uri_str;
 bool StatefulProxyTestBase::_icscf;
 bool StatefulProxyTestBase::_scscf;
@@ -519,7 +516,7 @@ class StatefulEdgeProxyTest : public StatefulProxyTestBase
 public:
   static void SetUpTestCase()
   {
-    StatefulProxyTestBase::SetUpTestCase("upstreamnode", "", "", false);
+    StatefulProxyTestBase::SetUpTestCase("upstreamnode", "", "", "", false);
     add_host_mapping("upstreamnode", "10.6.6.8");
   }
 
@@ -556,7 +553,7 @@ class StatefulEdgeProxyAcceptRegisterTest : public StatefulProxyTestBase
 public:
   static void SetUpTestCase()
   {
-    StatefulProxyTestBase::SetUpTestCase("upstreamnode", "", "", false, false, false, "", true);
+    StatefulProxyTestBase::SetUpTestCase("upstreamnode", "", "", "", false, false, false, "", true);
     add_host_mapping("upstreamnode", "10.6.6.8");
   }
 
@@ -581,8 +578,12 @@ class StatefulEdgeProxyPBXTest : public StatefulProxyTestBase
 public:
   static void SetUpTestCase()
   {
-    StatefulProxyTestBase::SetUpTestCase("upstreamnode", "", "1.2.3.4", false);
-    add_host_mapping("upstreamnode", "10.6.6.8");
+    StatefulProxyTestBase::SetUpTestCase("upstreamnode",
+                                         "",
+                                         "1.2.3.4",
+                                         "sip:scscfnode:5054;lr;transport=tcp;orig;auto-reg",
+                                         false);
+    add_host_mapping("scscfnode", "10.6.6.8");
   }
 
   static void TearDownTestCase()
@@ -610,7 +611,7 @@ public:
     add_host_mapping("upstreamnode", "10.6.6.8");
     add_host_mapping("trunknode", "10.7.7.10");
     add_host_mapping("trunknode2", "10.7.7.11");
-    StatefulProxyTestBase::SetUpTestCase("upstreamnode", "10.7.7.10,10.7.7.11", "", false);
+    StatefulProxyTestBase::SetUpTestCase("upstreamnode", "10.7.7.10,10.7.7.11", "", "", false);
   }
 
   static void TearDownTestCase()
@@ -1301,6 +1302,7 @@ TEST_F(StatefulEdgeProxyTest, TestPreferredAssertedIdentities)
   msg._extra = "Route: ";
   msg._extra.append(token);
   msg._extra.append("\r\nP-Preferred-Identity: <sip:+16505551000@homedomain>");
+  msg._extra.append("\r\nSupported: timer");
   inject_msg(msg.get_request(), tp);
 
   // Check that the message is forwarded as expected.
@@ -1333,6 +1335,7 @@ TEST_F(StatefulEdgeProxyTest, TestPreferredAssertedIdentities)
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
+  EXPECT_NE(get_headers(out, "Session-Expires"), "");
   free_txdata();
 
   // Send an INVITE from the client with no P-Preferred-Identity header.
@@ -2069,14 +2072,13 @@ TEST_F(StatefulEdgeProxyPBXTest, AcceptInvite)
   poll();
   ASSERT_EQ(1, txdata_count());
 
-
   // INVITE should be passed to Sprout despite the lack of a REGISTER
   SCOPED_TRACE("INVITE (S)");
   out = current_txdata()->msg;
   ASSERT_NO_FATAL_FAILURE(ReqMatcher("INVITE").matches(out));
 
-  // Goes to the configured upstream proxy ("upstreamnode", "10.6.6.8")
-  expect_target("TCP", "10.6.6.8", stack_data.pcscf_trusted_port, current_txdata());
+  // Goes to the configured service route ("scscfnode", "10.6.6.8", port 5054)
+  expect_target("TCP", "10.6.6.8", 5054, current_txdata());
 
   // Check that a Proxy-Authorization header gets added.
   std::string actual = get_headers(out, "Proxy-Authorization");
@@ -2314,4 +2316,56 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfUntrusted)
 
   free_txdata();
   delete tp;
+}
+
+TEST_F(StatefulEdgeProxyTest, TestSessionExpires)
+{
+  SCOPED_TRACE("");
+  Message msg;
+  pjsip_msg* out;
+  string actual;
+
+  // Register client.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.pcscf_untrusted_port,
+                                        "1.2.3.4",
+                                        49150);
+  string token;
+  string baretoken;
+  doRegisterEdge(tp, token, baretoken, 300, "1234123412341234", "ip-assoc-pending");
+
+  // Send an INVITE where the client supports session timers. This means that
+  // if the server does not support timers, there should still be a
+  // Session-Expires header on the response.
+  //
+  // Most of the session timer logic is tested in
+  // `session_expires_helper_test.cpp`. This is just to check that Bono invokes
+  // the logic correctly.
+  SCOPED_TRACE("");
+  msg._extra = "Route: ";
+  msg._extra.append(token);
+  msg._extra.append("\r\nSupported: timer");
+  inject_msg(msg.get_request(), tp);
+
+  // Check that the message is forwarded as expected.
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  r1.matches(out);
+
+  // Check the request has a Session-Expires.
+  EXPECT_NE(get_headers(out, "Session-Expires"), "");
+
+  // Send 200 OK to close our transaction.
+  inject_msg(respond_to_current_txdata(200));
+  poll();
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(200).matches(out);
+
+  // Check the response has a Session-Expires.
+  EXPECT_NE(get_headers(out, "Session-Expires"), "");
+  free_txdata();
+
+  delete tp; tp = NULL;
 }

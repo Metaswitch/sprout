@@ -52,6 +52,7 @@ extern "C" {
 #include "stack.h"
 #include "pjutils.h"
 #include "sproutsasevent.h"
+#include "uri_classifier.h"
 
 static bool reg_store_access_common(RegStore::AoR** aor_data,
                                     bool& previous_aor_data_alloced,
@@ -128,7 +129,7 @@ static void report_sip_all_register_marker(SAS::TrailId trail, std::string uri_s
     sip_all_register.add_var_param(PJUtils::strip_uri_scheme(uri_str));
     // Add the DN parameter. If the user part is not numeric just log it in
     // its entirety.
-    sip_all_register.add_var_param(PJUtils::is_user_numeric(user) ?
+    sip_all_register.add_var_param(URIClassifier::is_user_numeric(user) ?
                                    PJUtils::remove_visual_separators(user) :
                                    PJUtils::pj_str_to_string(&user));
     SAS::report_marker(sip_all_register);
@@ -247,7 +248,8 @@ void DeregistrationTask::run()
 void RegistrationTimeoutTask::handle_response()
 {
   bool all_bindings_expired = false;
-  RegStore::AoR* aor_data = set_aor_data(_cfg->_store, _aor_id, NULL, _cfg->_remote_store, true, all_bindings_expired);
+  RegStore::AoR* aor_data = set_aor_data(_cfg->_store, _aor_id, NULL, _cfg->_remote_store, true,
+                                         all_bindings_expired);
 
   if (aor_data != NULL)
   {
@@ -256,7 +258,8 @@ void RegistrationTimeoutTask::handle_response()
     if ((_cfg->_remote_store != NULL) && (_cfg->_remote_store->has_servers()))
     {
       bool ignored;
-      RegStore::AoR* remote_aor_data = set_aor_data(_cfg->_remote_store, _aor_id, aor_data, NULL, false, ignored);
+      RegStore::AoR* remote_aor_data = set_aor_data(_cfg->_remote_store, _aor_id, aor_data, NULL,
+                                                    false, ignored);
       delete remote_aor_data;
     }
 
@@ -308,7 +311,8 @@ RegStore::AoR* RegistrationTimeoutTask::set_aor_data(RegStore* current_store,
                                          aor_data,
                                          is_primary,
                                          trail(),
-                                         all_bindings_expired);
+                                         all_bindings_expired,
+                                         RegStore::TAGS_REG);
     if (set_rc != Store::OK)
     {
       delete aor_data; aor_data = NULL;
@@ -509,7 +513,8 @@ RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
                                          aor_data,
                                          is_primary,
                                          trail(),
-                                         all_bindings_expired);
+                                         all_bindings_expired,
+                                         RegStore::TAGS_REG);
     if (set_rc != Store::OK)
     {
       delete aor_data; aor_data = NULL;

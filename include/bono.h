@@ -63,6 +63,7 @@ class UACTransaction;
 #include "scscfselector.h"
 #include "icscfrouter.h"
 #include "acr.h"
+#include "session_expires_helper.h"
 
 /// Short-lived data structure holding details of how we are to serve
 // this request.
@@ -282,6 +283,9 @@ private:
   /// Stores a BGCF ACR if BGCF processing was performed in this transaction.
   ACR*                 _bgcf_acr;
 
+  /// Object to handle session expires processing.
+  SessionExpiresHelper _se_helper;
+
 public:
   pj_timer_entry       _trying_timer;
   static const int     TRYING_TIMER = 1;
@@ -362,10 +366,9 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 pj_bool_t enable_ibcf,
                                 const std::string& trusted_hosts,
                                 const std::string& pbx_host_str,
+                                const std::string& pbx_service_route_arg,
                                 AnalyticsLogger* analytics_logger,
                                 EnumService *enumService,
-                                bool enforce_user_phone,
-                                bool enforce_global_only_lookups,
                                 BgcfService *bgcfService,
                                 HSSConnection* hss_connection,
                                 ACRFactory* cscf_rfacr_factory,
@@ -377,11 +380,6 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 bool icscf_enabled,
                                 bool scscf_enabled,
                                 bool emerg_reg_accepted);
-
-#ifdef UNIT_TEST
-void set_user_phone(bool enforce_user_phone);
-void set_global_only_lookups(bool enforce_global_only_lookups);
-#endif
 
 void destroy_stateful_proxy();
 

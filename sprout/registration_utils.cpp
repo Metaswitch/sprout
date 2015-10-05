@@ -189,7 +189,7 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
        as_iter != as_list.end();
        as_iter++)
   {
-    if (third_party_reg_stats_tables != NULL)
+    if (third_party_reg_stats_tbls != NULL)
     {
       if (expires == 0)
       {
@@ -226,10 +226,9 @@ static void send_register_cb(void* token, pjsip_event *event)
 
     third_party_register_failed(tsxdata->public_id, tsxdata->trail);
   }
-
+  
   if (third_party_reg_stats_tables != NULL)
   {
-    // printf("Expiry: %d, Is_initial_registration: %d\n", tsxdata->expires, tsxdata->is_initial_registration);
     if (tsx->status_code == 200)
     {
       if (tsxdata->expires == 0)
@@ -447,7 +446,8 @@ static bool expire_bindings(RegStore *store, const std::string& aor, const std::
                                             // single binding (flow failed).
     }
 
-    set_rc = store->set_aor_data(aor, aor_data, false, trail, all_bindings_expired);
+    set_rc = store->set_aor_data(aor, aor_data, false, trail, all_bindings_expired,
+                                 RegStore::TAGS_REG);
     delete aor_data; aor_data = NULL;
 
     // We can only say for sure that the bindings were expired if we were able

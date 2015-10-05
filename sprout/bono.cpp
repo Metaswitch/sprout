@@ -131,6 +131,7 @@ extern "C" {
 #include "quiescing_manager.h"
 #include "scscfselector.h"
 #include "contact_filtering.h"
+#include "uri_classifier.h"
 
 static RegStore* store;
 static RegStore* remote_store;
@@ -140,8 +141,6 @@ static IfcHandler* ifc_handler;
 static AnalyticsLogger* analytics_logger;
 
 static EnumService *enum_service;
-static bool user_phone = false;
-static bool global_only_lookups = false;
 static BgcfService *bgcf_service;
 static SCSCFSelector *scscf_selector;
 
@@ -168,6 +167,7 @@ static bool allow_emergency_reg = false;
 
 PJUtils::host_list_t trusted_hosts(&PJUtils::compare_pj_sockaddr);
 PJUtils::host_list_t pbx_hosts(&PJUtils::compare_pj_sockaddr);
+std::string pbx_service_route;
 
 //
 // mod_stateful_proxy is the module to receive SIP request and
@@ -885,7 +885,8 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
                                  pjsip_tx_data* tdata,
                                  Flow* src_flow,
                                  TrustBoundary **trust,
-                                 Target** target)
+                                 Target** target,
+                                 const std::string& configured_service_route = "")
 {
   // Forward it to the upstream proxy to deal with.  We do this by creating
   // a target with the existing request URI and a path to the upstream
@@ -894,13 +895,13 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   *target = new Target();
   Target* target_p = *target;
   target_p->upstream_route = PJ_TRUE;
+  URIClass uri_class = URIClassifier::classify_uri(tdata->msg->line.req.uri);
 
   // Some trunks will send incoming requests directed at the IBCF node,
   // rather than determining the correct domain for the subscriber first.
   // In this case, we'll re-write the ReqURI to the default home domain.
   if ((*trust == &TrustBoundary::INBOUND_TRUNK) &&
-      (PJSIP_URI_SCHEME_IS_SIP(tdata->msg->line.req.uri)) &&
-      (PJUtils::is_uri_local((pjsip_uri*)tdata->msg->line.req.uri)))
+      uri_class == NODE_LOCAL_SIP_URI)
   {
     // Change host/domain in target to use default home domain.
     target_p->uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool,
@@ -913,9 +914,9 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
     target_p->uri = (pjsip_uri*)tdata->msg->line.req.uri;
   }
 
-  std::string service_route;
+  std::string service_route = configured_service_route;
 
-  if (src_flow != NULL)
+  if ((service_route == "") && (src_flow != NULL))
   {
     // See if we have a service route for the served user of the request.
     TRC_DEBUG("Request received on authentication flow - check for Service-Route");
@@ -1188,7 +1189,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
           // to Sprout
           TRC_DEBUG("Routing initial request from PBX to upstream Sprout");
           PJUtils::add_proxy_auth_for_pbx(tdata);
-          proxy_route_upstream(rdata, tdata, src_flow, trust, target);
+          proxy_route_upstream(rdata, tdata, NULL, trust, target, pbx_service_route);
         }
       }
       else
@@ -1355,9 +1356,9 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
       // Check if we have any Route headers.  If so, we'll follow them.  If not,
       // we get to choose where to route to, so route upstream to sprout.
       void* top_route = pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
+      URIClass uri_class = URIClassifier::classify_uri(tdata->msg->line.req.uri);
       if ((top_route == NULL) &&
-          (PJUtils::is_home_domain(tdata->msg->line.req.uri) ||
-           PJUtils::is_uri_local(tdata->msg->line.req.uri)))
+          (uri_class != OFFNET_SIP_URI))
       {
         // Route the request upstream to Sprout.
         proxy_route_upstream(rdata, tdata, src_flow, trust, target);
@@ -1424,7 +1425,8 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
       PJUtils::add_record_route(tdata, "TCP", stack_data.pcscf_trusted_port, NULL, stack_data.local_host);
       PJUtils::add_record_route(tdata, tgt_flow->transport()->type_name, tgt_flow->transport()->local_name.port, tgt_flow->token().c_str(), stack_data.public_host);
     }
-    else if ((ibcf) && (*trust == &TrustBoundary::INBOUND_TRUNK))
+    else if (((ibcf) && (*trust == &TrustBoundary::INBOUND_TRUNK)) ||
+             (*trust == &TrustBoundary::INBOUND_EDGE_CLIENT))
     {
       // Received message on a trunk, so add separate Record-Route headers for
       // the ingress and egress hops.
@@ -1497,6 +1499,7 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
   // RFC 3261 Section 16.4 Route Information Preprocessing
 
   target = tdata->msg->line.req.uri;
+  URIClass uri_class = URIClassifier::classify_uri(target);
 
   // The proxy MUST inspect the Request-URI of the request.  If the
   // Request-URI of the request contains a value this proxy previously
@@ -1505,7 +1508,7 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
   // value from the Route header field, and remove that value from the
   // Route header field.  The proxy MUST then proceed as if it received
   // this modified request.
-  if (PJUtils::is_uri_local((pjsip_uri*)target))
+  if (uri_class == NODE_LOCAL_SIP_URI)
   {
     pjsip_route_hdr *r;
     pjsip_sip_uri *uri;
@@ -1732,7 +1735,8 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
   _in_dialog(false),
   _icscf_router(NULL),
   _icscf_acr(NULL),
-  _bgcf_acr(NULL)
+  _bgcf_acr(NULL),
+  _se_helper(stack_data.default_session_expires)
 {
   TRC_DEBUG("UASTransaction constructor (%p)", this);
   TRC_DEBUG("ACR (%p)", acr);
@@ -1971,16 +1975,7 @@ void UASTransaction::handle_outgoing_non_cancel(Target* target)
   // Already have a target, so use it.
   targets.push_back(*target);
 
-  // Try to add the session_expires header
-  if (!PJUtils::add_update_session_expires(_req->msg,
-                                           _req->pool,
-                                           trail()))
-  {
-    // Session expires header is invalid, so reject the request
-    // This has been logged in PJUtils
-    send_response(PJSIP_SC_TEMPORARILY_UNAVAILABLE);
-    return;
-  }
+  _se_helper.process_request(_req->msg, _req->pool, trail());
 
   // Now set up the data structures and transactions required to
   // process the request.
@@ -2026,6 +2021,8 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
       exit_context();
       return;
     }
+
+    _se_helper.process_response(tdata->msg, tdata->pool, trail());
 
     // Strip any untrusted headers as required, so we don't pass them on.
     _trust->process_response(tdata);
@@ -2684,7 +2681,7 @@ void set_target_on_tdata(const struct Target& target, pjsip_tx_data* tdata)
     {
       pj_list_erase(hdr);
     }
-    std::string name_addr_str("<" + PJUtils::aor_from_uri((pjsip_sip_uri*)tdata->msg->line.req.uri) + ">");
+    std::string name_addr_str("<" + PJUtils::public_id_from_uri(tdata->msg->line.req.uri) + ">");
     pj_str_t called_party_id;
     pj_strdup2(tdata->pool,
                &called_party_id,
@@ -3199,10 +3196,9 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 pj_bool_t enable_ibcf,
                                 const std::string& ibcf_trusted_hosts,
                                 const std::string& pbx_host_str,
+                                const std::string& pbx_service_route_arg,
                                 AnalyticsLogger* analytics,
                                 EnumService *enumService,
-                                bool enforce_user_phone,
-                                bool enforce_global_only_lookups,
                                 BgcfService *bgcfService,
                                 HSSConnection* hss_connection,
                                 ACRFactory* cscf_rfacr_factory,
@@ -3315,9 +3311,18 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
     pbx_hosts.insert(std::make_pair(sockaddr, true));
   }
 
+  // If present, check the PBX service route is valid.
+  pbx_service_route = pbx_service_route_arg;
+  if (pbx_service_route != "")
+  {
+    if (PJUtils::uri_from_string(pbx_service_route, stack_data.pool, PJ_FALSE) == NULL)
+    {
+      TRC_ERROR("PBX service route (%s) is invalid", pbx_service_route.c_str());
+      return -1;
+    }
+  }
+
   enum_service = enumService;
-  user_phone = enforce_user_phone;
-  global_only_lookups = enforce_global_only_lookups;
   bgcf_service = bgcfService;
   hss = hss_connection;
   scscf_selector = scscfSelector;
@@ -3341,19 +3346,6 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
 
   return PJ_SUCCESS;
 }
-
-#ifdef UNIT_TEST
-// These setter functions are for unit test purposes only
-void set_user_phone(bool enforce_user_phone)
-{
-  user_phone = enforce_user_phone;
-}
-
-void set_global_only_lookups(bool enforce_global_only_lookups)
-{
-  global_only_lookups = enforce_global_only_lookups;
-}
-#endif
 
 void destroy_stateful_proxy()
 {

@@ -60,11 +60,13 @@ private:
                      uint32_t timer_interval,
                      const std::string& callback_uri,
                      const std::string& opaque_data,
-                     SAS::TrailId trail);
+                     SAS::TrailId trail,
+                     const std::vector<std::string>& tags);
   HTTPCode send_put(std::string& put_identity,
                     uint32_t timer_interval,
                     const std::string& callback_uri,
                     const std::string& opaque_data,
-                    SAS::TrailId trail);
+                    SAS::TrailId trail,
+                    const std::vector<std::string>& tags);
   HTTPCode get_result(std::string identity);
 };

@@ -352,15 +352,13 @@ public:
     _scscf_sproutlet = new SCSCFSproutlet("sip:homedomain:5058",
                                           "sip:127.0.0.1:5058",
                                           "",
-                                          "sip:bgcf.homedomain:5058",
+                                          "sip:bgcf@homedomain:5058",
                                           5058,
                                           _store,
                                           NULL,
                                           _hss_connection,
                                           _enum_service,
                                           _acr_factory,
-                                          false,
-                                          false,
                                           false,
                                           3000, // Session continue timeout - different from default
                                           6000  // Session terminated timeout - different from default
@@ -372,8 +370,6 @@ public:
                                         _bgcf_service,
                                         _enum_service,
                                         _acr_factory,
-                                        false,
-                                        false,
                                         false);
 
     // Create the MMTEL AppServer.
@@ -462,8 +458,8 @@ public:
     pjsip_tsx_layer_instance()->start();
 
     // Reset any configuration changes
-    _scscf_sproutlet->set_global_only_lookups(false);
-    _scscf_sproutlet->set_enforce_user_phone(false);
+    URIClassifier::enforce_user_phone = false;
+    URIClassifier::enforce_global = false;
     _scscf_sproutlet->set_override_npdi(false);
     _scscf_sproutlet->set_session_continued_timeout(3000);
     _scscf_sproutlet->set_session_terminated_timeout(6000);
@@ -501,7 +497,11 @@ protected:
   void doAsOriginated(SP::Message& msg, bool expect_orig);
   void doAsOriginated(const std::string& msg, bool expect_orig);
   void doFourAppServerFlow(std::string record_route_regex, bool app_servers_record_route=false);
-  void doSuccessfulFlow(SP::Message& msg, testing::Matcher<string> uri_matcher, list<HeaderMatcher> headers, bool include_ack_and_bye=true, bool session_expires=false);
+  void doSuccessfulFlow(SP::Message& msg,
+                        testing::Matcher<string> uri_matcher,
+                        list<HeaderMatcher> headers,
+                        bool include_ack_and_bye=true,
+                        list<HeaderMatcher> rsp_hdrs = list<HeaderMatcher>());
   void doFastFailureFlow(SP::Message& msg, int st_code);
   void doSlowFailureFlow(SP::Message& msg, int st_code, std::string body = "", std::string reason = "");
   void setupForkedFlow(SP::Message& msg);
@@ -1129,7 +1129,7 @@ void SCSCFTest::doSuccessfulFlow(Message& msg,
                                  testing::Matcher<string> uri_matcher,
                                  list<HeaderMatcher> headers,
                                  bool include_ack_and_bye,
-                                 bool session_expires)
+                                 list<HeaderMatcher> rsp_headers)
 {
   SCOPED_TRACE("");
   pjsip_msg* out;
@@ -1148,14 +1148,6 @@ void SCSCFTest::doSuccessfulFlow(Message& msg,
   ReqMatcher req("INVITE");
   ASSERT_NO_FATAL_FAILURE(req.matches(out));
 
-  if (session_expires)
-  {
-    // In general proxied messages should have Session-Expires headers added,
-    // except if we are simply forwarding without applying any services.
-    std::string session_expires = get_headers(out, "Session-Expires");
-    EXPECT_EQ("Session-Expires: 600", session_expires);
-  }
-
   // Do checks on what gets passed through:
   EXPECT_THAT(req.uri(), uri_matcher);
   for (list<HeaderMatcher>::iterator iter = headers.begin(); iter != headers.end(); ++iter)
@@ -1170,6 +1162,13 @@ void SCSCFTest::doSuccessfulFlow(Message& msg,
   // OK goes back
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
+  for (list<HeaderMatcher>::iterator iter = rsp_headers.begin();
+       iter != rsp_headers.end();
+       ++iter)
+  {
+    iter->match(out);
+  }
+
   msg.set_route(out);
   msg._cseq++;
   free_txdata();
@@ -1314,6 +1313,50 @@ TEST_F(SCSCFTest, TestSimpleTelURI)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*16505551234@ut.cw-ngv.com.*"), hdrs, false);
 }
 
+
+TEST_F(SCSCFTest, TestTerminatingTelURI)
+{
+  //register_uri(_store, _hss_connection, "6505551000", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("tel:6505551235", "call", "REGISTERED",
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
+                                "<PublicIdentity><Identity>tel:6505551235</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>1</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+
+  // Send a terminating INVITE for a subscriber with a tel: URI
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain>";
+  msg._todomain = "";
+  msg._requri = "tel:6505551235";
+
+  msg._method = "INVITE";
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob"), hdrs, false);
+}
+
+
+
 TEST_F(SCSCFTest, TestNoMoreForwards)
 {
   SCOPED_TRACE("");
@@ -1386,7 +1429,7 @@ TEST_F(SCSCFTest, TestStrictRouteThrough)
   msg._requri = "sip:6505551234@nonlocaldomain";
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("Route", ".*lasthop@destination.com.*", ".*6505551234@nonlocaldomain.*"));
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*nexthop@intermediate.com.*"), hdrs, false, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*nexthop@intermediate.com.*"), hdrs, false);
 }
 
 TEST_F(SCSCFTest, TestNonLocal)
@@ -1562,7 +1605,7 @@ TEST_F(SCSCFTest, TestEnumUserPhone)
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
-  _scscf_sproutlet->set_enforce_user_phone(true);
+  URIClassifier::enforce_user_phone = true;
   Message msg;
   msg._to = "+15108580271";
   msg._requri = "sip:+15108580271@homedomain;user=phone";
@@ -1581,7 +1624,7 @@ TEST_F(SCSCFTest, TestEnumNoUserPhone)
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
-  _scscf_sproutlet->set_enforce_user_phone(true);
+  URIClassifier::enforce_user_phone = true;
   Message msg;
   msg._to = "+15108580271";
   // We only do ENUM on originating calls
@@ -1597,7 +1640,7 @@ TEST_F(SCSCFTest, TestEnumLocalNumber)
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
-  _scscf_sproutlet->set_global_only_lookups(true);
+  URIClassifier::enforce_global = true;
   Message msg;
   msg._to = "15108580271";
   // We only do ENUM on originating calls
@@ -1613,7 +1656,7 @@ TEST_F(SCSCFTest, TestEnumLocalTelURI)
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
-  _scscf_sproutlet->set_global_only_lookups(true);
+  URIClassifier::enforce_global = true;
   Message msg;
   msg._to = "16505551234;npdi";
   msg._toscheme = "tel";
@@ -1633,7 +1676,7 @@ TEST_F(SCSCFTest, TestEnumLocalSIPURINumber)
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
-  _scscf_sproutlet->set_global_only_lookups(true);
+  URIClassifier::enforce_global = true;
   Message msg;
   msg._to = "15108580271;npdi";
   msg._requri = "sip:15108580271;npdi@homedomain;user=phone";
@@ -1671,12 +1714,12 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPData)
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
   Message msg;
-  msg._to = "+15108580301;npdi";
+  msg._to = "+15108580401;npdi;rn=+16";
   msg._route = "Route: <sip:homedomain;orig>";
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580301;npdi@homedomain.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*15108580401;rn.*+16;npdi@homedomain"), hdrs, false);
 }
 
 // Test where the request URI represents a number and has NP data. The ENUM
@@ -1689,12 +1732,12 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPDataOverride)
 
   _scscf_sproutlet->set_override_npdi(true);
   Message msg;
-  msg._to = "+15108580301;npdi";
+  msg._to = "+15108580401;npdi;rn=+16";
   msg._route = "Route: <sip:homedomain;orig>";
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580301;npdi@ut.cw-ngv.com.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580401;rn.*+151085804;npdi@homedomain.*"), hdrs, false);
 }
 
 // Test where the request URI represents a number and has NP data. The ENUM
@@ -1705,16 +1748,36 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPDataToSIP)
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
-  _scscf_sproutlet->set_enforce_user_phone(true);
+  URIClassifier::enforce_user_phone = true;
   Message msg;
-  msg._to = "+15108580301;npdi";
-  msg._requri = "sip:+15108580301;npdi@homedomain;user=phone";
+  msg._to = "+15108580272;rn=+16";
+  msg._requri = "sip:+15108580272;rn=+16@homedomain;user=phone";
   msg._route = "Route: <sip:homedomain;orig>";
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580301;npdi@ut.cw-ngv.com.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580272@ut.cw-ngv.com"), hdrs, false);
 }
+
+// Test where the request URI represents a number and has NP data. The ENUM
+// lookup returns a URI that doesn't represent a number so the request URI
+// is rewritten
+TEST_F(SCSCFTest, DISABLED_TestEnumToCIC)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+
+  URIClassifier::enforce_user_phone = true;
+  Message msg;
+  msg._to = "+15108580501";
+  msg._requri = "sip:+15108580501@homedomain;user=phone";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580501;cic=12345@homedomain.*"), hdrs, false);
+}
+
 
 // Test where the BGCF receives a SIP request URI represents a number and has NP data.
 // The ENUM lookup returns a rn which the BGCF routes on.
@@ -1752,25 +1815,6 @@ TEST_F(SCSCFTest, TestEnumNPBGCFTel)
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("Route", "Route: <sip:10.0.0.1:5060;transport=TCP;lr>"));
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580401;rn.*+151085804;npdi@homedomain.*"), hdrs, false);
-}
-
-// Test where the BGCF does an ENUM lookup which returns an invalid rule. This
-// test uses two ENUM rules. The first one is invoked by the S-CSCF before
-// routing to the BGCF. The BGCF does the second lookup. At this point an
-// invalid rule is returned and we reply with a 404 ENUM failure.
-TEST_F(SCSCFTest, TestBGCFInvalidEnumRule)
-{
-  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
-  SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551239", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  Message msg;
-  msg._toscheme = "tel";
-  msg._to = "16505551239";
-  msg._route = "Route: <sip:homedomain;orig>";
-  msg._todomain = "";
-  list<HeaderMatcher> hdrs;
-  doSlowFailureFlow(msg, 404, "", "ENUM failure");
 }
 
 TEST_F(SCSCFTest, TestValidBGCFRoute)
@@ -2294,6 +2338,57 @@ TEST_F(SCSCFTest, SimpleISCMainline)
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
 
+  free_txdata();
+}
+
+TEST_F(SCSCFTest, URINotIncludedInUserData)
+{
+  register_uri(_store, _hss_connection, "6505551000", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("tel:8886505551234", "call", "UNREGISTERED",
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+
+  // Send a terminating INVITE for a subscriber with invalid HSS data
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain>";
+  msg._todomain = "";
+  msg._requri = "tel:8886505551234";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  free_txdata();
+
+  // Message is rejected with a 4xx-class response
+  out = current_txdata()->msg;
+  RespMatcher(480).matches(out);
   free_txdata();
 }
 
@@ -4439,8 +4534,8 @@ TEST_F(SCSCFTest, BothEndsWithEnumRewrite)
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
 
-  _scscf_sproutlet->set_enforce_user_phone(false);
-  _scscf_sproutlet->set_global_only_lookups(false);
+  URIClassifier::enforce_global = false;
+  URIClassifier::enforce_user_phone = false;
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -6934,42 +7029,6 @@ TEST_F(SCSCFTest, TestNoSecondPAIHdrTerm)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
 }
 
-// Test that the Session-Expires header is correctly altered by the Min-SE
-// header
-TEST_F(SCSCFTest, TestMinSEOverride)
-{
-  SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  Message msg;
-  msg._extra = "Session-Expires: 600\nMin-SE: 800";
-  list<HeaderMatcher> hdrs;
-  hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires: 800"));
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
-}
-
-// Test that a request where the Min-SE header is too large is rejected
-TEST_F(SCSCFTest, TestMinSETooLarge)
-{
-  SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  Message msg;
-  msg._extra = "Session-Expires: 600\nMin-SE: 1000";
-  doSlowFailureFlow(msg, 480);
-}
-
-// Test that a request where the Session-Expiry header is too large is rejected
-TEST_F(SCSCFTest, TestSessionExpiresTooLarge)
-{
-  SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  Message msg;
-  msg._extra = "Session-Expires: 1000";
-  doSlowFailureFlow(msg, 480);
-}
-
 /// Test handling of 430 Flow Failed response
 TEST_F(SCSCFTest, FlowFailedResponse)
 {
@@ -7432,4 +7491,68 @@ TEST_F(SCSCFTest, PreloadedRouteNotLastAs)
 
   EXPECT_EQ(1, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_routed_by_preloaded_route_tbl)->_count);
   free_txdata();
+}
+
+TEST_F(SCSCFTest, AutomaticRegistration)
+{
+  SCOPED_TRACE("");
+
+  // Create an originating request that has a proxy-authorization header and
+  // requires automatic registration.
+  Message msg;
+  msg._to = "newuser";
+  msg._todomain = "domainvalid";
+  msg._route = "Route: <sip:homedomain;orig;auto-reg>";
+  msg._extra = "Proxy-Authorization: Digest username=\"kermit\", realm=\"homedomain\", uri=\"sip:6505551000@homedomain\", algorithm=MD5";
+
+  // The HSS expects to be invoked with a request type of "reg" and with the
+  // right private ID.
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=kermit");
+
+  add_host_mapping("domainvalid", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Route", "Route: <sip:10.0.0.1:5060;transport=TCP;lr>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex("sip:newuser@domainvalid"), hdrs);
+}
+
+TEST_F(SCSCFTest, AutomaticRegistrationDerivedIMPI)
+{
+  SCOPED_TRACE("");
+
+  // Create an originating request that requires automatic registration.
+  Message msg;
+  msg._to = "newuser";
+  msg._todomain = "domainvalid";
+  msg._route = "Route: <sip:homedomain;orig;auto-reg>";
+
+  // The HSS expects to be invoked with a request type of "reg". No
+  // Proxy-Authorization present, so derive the IMPI from the IMPU.
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=6505551000%40homedomain");
+
+  add_host_mapping("domainvalid", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Route", "Route: <sip:10.0.0.1:5060;transport=TCP;lr>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex("sip:newuser@domainvalid"), hdrs);
+}
+
+TEST_F(SCSCFTest, TestSessionExpires)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+
+  // Send an INVITE where the client supports session timers. This means that
+  // if the server does not support timers, there should still be a
+  // Session-Expires header on the response.
+  //
+  // Most of the session timer logic is tested in
+  // `session_expires_helper_test.cpp`. This is just to check that the S-CSCF
+  // invokes the logic correctly.
+  Message msg;
+  msg._extra = "Session-Expires: 600\r\nSupported: timer";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires:.*"));
+  list<HeaderMatcher> rsp_hdrs;
+  rsp_hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires: .*"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false, rsp_hdrs);
 }

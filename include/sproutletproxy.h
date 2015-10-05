@@ -334,6 +334,14 @@ private:
 
   bool _complete;
 
+  // All the actions are performed within SproutletWrapper::process_actions,
+  // including deleting the SproutletWrapper itself.  However, process_actions
+  // can be re-entered - it sends messages, which can fail and call back into
+  // the SproutletWrapper synchronously.  This counter counts how many times
+  // the method has currently been entered - if it is non-zero, the
+  // SproutletWrapper must not be destroyed.
+  int _process_actions_entered;
+
   /// Vector keeping track of the status of each fork.  The state field can
   /// only ever take a subset of the values defined by PJSIP - NULL, CALLING,
   /// PROCEEDING and TERMINATED.
