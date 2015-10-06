@@ -1,0 +1,9 @@
+{
+  "routes" : [
+    {
+      "name": "Default route",
+      "domain": "*",
+      "routes": [ "sip:trunk.cw-ngv.com:5060;transport=tcp;lr" ]
+    }
+  ]
+}
