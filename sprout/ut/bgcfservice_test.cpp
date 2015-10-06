@@ -133,17 +133,13 @@ TEST_F(BgcfServiceTest, DefaultRoute)
 
 TEST_F(BgcfServiceTest, ParseError)
 {
-  CapturingTestLogger log;
   BgcfService bgcf_(string(UT_DIR).append("/test_bgcf_parse_error.json"));
-  EXPECT_TRUE(log.contains("Failed to read BGCF configuration data"));
   ET("+15108580271", "").test(bgcf_, RoutingType::DOMAIN_ROUTE);
 }
 
 TEST_F(BgcfServiceTest, MissingParts)
 {
-  CapturingTestLogger log;
   BgcfService bgcf_(string(UT_DIR).append("/test_bgcf_missing_parts.json"));
-  EXPECT_TRUE(log.contains("Badly formed BGCF route entry"));
   ET("foreign-domain.example.com", "").test(bgcf_, RoutingType::DOMAIN_ROUTE);
   ET("198.147.226.99", "").test(bgcf_, RoutingType::DOMAIN_ROUTE);
   ET("198.147.226.98", "fd4.amazonaws.com").test(bgcf_, RoutingType::DOMAIN_ROUTE);
@@ -152,26 +148,26 @@ TEST_F(BgcfServiceTest, MissingParts)
 TEST_F(BgcfServiceTest, ExtraParts)
 {
   // Test that entries with both domain and number values are invalid
-  CapturingTestLogger log;
   BgcfService bgcf_(string(UT_DIR).append("/test_bgcf_extra_parts.json"));
-  EXPECT_TRUE(log.contains("Badly formed BGCF route entry"));
   ET("198.147.226.98", "").test(bgcf_, RoutingType::DOMAIN_ROUTE);
   ET("198.147.226.98", "").test(bgcf_, RoutingType::NUMBER_ROUTE);
 }
 
 TEST_F(BgcfServiceTest, MissingBlock)
 {
-  CapturingTestLogger log;
   BgcfService bgcf_(string(UT_DIR).append("/test_bgcf_missing_block.json"));
-  EXPECT_TRUE(log.contains("Badly formed BGCF configuration file - missing routes object"));
+  ET("+15108580271", "").test(bgcf_, RoutingType::DOMAIN_ROUTE);
+}
+
+TEST_F(BgcfServiceTest, MisspeltRoute)
+{
+  BgcfService bgcf_(string(UT_DIR).append("/test_bgcf_misspelt_route.json"));
   ET("+15108580271", "").test(bgcf_, RoutingType::DOMAIN_ROUTE);
 }
 
 TEST_F(BgcfServiceTest, MissingFile)
 {
-  CapturingTestLogger log;
   BgcfService bgcf_(string(UT_DIR).append("/NONEXISTENT_FILE.json"));
-  EXPECT_TRUE(log.contains("No BGCF configuration"));
   ET("+15108580271", "").test(bgcf_, RoutingType::DOMAIN_ROUTE);
 }
 
