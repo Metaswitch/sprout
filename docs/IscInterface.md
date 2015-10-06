@@ -8,7 +8,7 @@ it works, and then walks through the design and implementation of this
 interface in Sprout.
 
 For specification details, see the
-[Application Server Guide](http://clearwater.readthedocs.org/en/latest/Application_Server_Guide/index.html).
+[Application Server Guide](http://clearwater.readthedocs.org/en/stable/Application_Server_Guide/index.html).
 
 Contents
 --------
