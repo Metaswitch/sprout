@@ -306,7 +306,42 @@ TEST_F(ACRTest, SCSCFRegister)
   acr_message = acr->get_message(ts);
   EXPECT_TRUE(compare_acr(acr_message, "acr_scscfregister.json"));
   delete acr;
+}
 
+TEST_F(ACRTest, CancelledACR)
+{
+  // Tests mainline Rf message generation for a successful registration transaction
+  // at the S-CSCF.
+  pj_time_val ts;
+  ACR* acr;
+  std::string acr_message;
+
+  // Create a Ralf ACR factory for S-CSCF ACRs.
+  RalfACRFactory f(NULL, SCSCF);
+
+  // Create an ACR instance for the ACR[EVENT] triggered by the REGISTER.
+  acr = f.get_acr(0, CALLING_PARTY, NODE_ROLE_ORIGINATING);
+
+  // Build the original REGISTER request.
+  SIPRequest reg("REGISTER");
+  reg._requri = "sip:homedomain";
+  reg._routes = "Route: <sip:sprout.homedomain:5054;transport=TCP;orig;lr>\r\n";
+  reg._from = "\"6505550000\" <sip:6505550000@homedomain>";   // Strip tag.
+  reg._to = "\"6505550000\" <sip:6505550000@homedomain>";   // Strip tag.
+  reg._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+
+  // Pass the request to the ACR as a received request.
+  ts.sec = 1;
+  ts.msec = 0;
+  acr->rx_request(parse_msg(reg.get()), ts);
+
+  // Cancel the ACR.
+  acr->cancel();
+
+  // Build and checked the resulting Rf ACR message.
+  acr_message = acr->get_message(ts);
+  EXPECT_EQ(acr_message, "Cancelled ACR");
+  delete acr;
 }
 
 TEST_F(ACRTest, SCSCFOrigCall)

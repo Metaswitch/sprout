@@ -536,12 +536,12 @@ void process_tsx_request(pjsip_rx_data* rdata)
     }
 
     // Send Rf messages and clean up the ACRs.
-    acr->send_message();
+    acr->send();
     delete acr; acr = NULL;
 
     if (downstream_acr)
     {
-      downstream_acr->send_message();
+      downstream_acr->send();
       delete downstream_acr; downstream_acr = NULL;
     }
 
@@ -638,7 +638,7 @@ void process_cancel_request(pjsip_rx_data* rdata)
                                        acr_node_role(rdata->msg_info.msg));
   acr->set_default_ccf(PJUtils::pj_str_to_string(&stack_data.cdf_domain));
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
-  acr->send_message();
+  acr->send();
   delete acr;
 
   // Unlock UAS tsx because it is locked in find_tsx()
@@ -752,7 +752,7 @@ static void reject_request(pjsip_rx_data* rdata, int status_code)
   }
 
   // Send the ACR and delete it.
-  acr->send_message();
+  acr->send();
   delete acr;
 }
 
@@ -1818,7 +1818,7 @@ UASTransaction::~UASTransaction()
     // I-CSCF ACR has been created for this transaction, so send the message
     // and delete the ACR.
     TRC_DEBUG("I-CSCF ACR = %p", _icscf_acr);
-    _icscf_acr->send_message();
+    _icscf_acr->send();
 
     if (_downstream_acr == _icscf_acr)
     {
@@ -1836,7 +1836,7 @@ UASTransaction::~UASTransaction()
     // BGCF ACR has been created for this transaction, so send the message
     // and delete the ACR.
     TRC_DEBUG("BGCF ACR = %p", _bgcf_acr);
-    _bgcf_acr->send_message();
+    _bgcf_acr->send();
 
     if (_downstream_acr == _bgcf_acr)
     {
@@ -1856,12 +1856,12 @@ UASTransaction::~UASTransaction()
   {
     // The downstream ACR is not the same as the upstream one, so send the
     // message and destroy the object.
-    _downstream_acr->send_message();
+    _downstream_acr->send();
     delete _downstream_acr;
   }
 
   // Send the ACR for the upstream side.
-  _upstream_acr->send_message();
+  _upstream_acr->send();
   delete _upstream_acr;
   _upstream_acr = NULL;
   _downstream_acr = NULL;
@@ -2041,7 +2041,7 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
       {
         // This is a provisional response to a mid-dialog message, so we
         // should send an ACR now.
-        _downstream_acr->send_message();
+        _downstream_acr->send();
 
         // Don't delete the ACR as we will send another on any subsequent
         // provisional responses, and also when the transaction completes.
@@ -2065,7 +2065,7 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
         {
           // This is a provisional response to a mid-dialog message, so we
           // should send an ACR now.
-          _upstream_acr->send_message();
+          _upstream_acr->send();
 
           // Don't delete the ACR as we will send another on any subsequent
           // provisional responses, and also when the transaction completes.
