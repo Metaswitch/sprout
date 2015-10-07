@@ -798,10 +798,11 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
           pcv->term_ioi = pj_str("");
         }
 
-        // Create a new ACR for this request.
-        ACR* acr = _scscf->get_acr(trail(),
-                                   CALLING_PARTY,
-                                   NODE_ROLE_ORIGINATING);
+        // Abandon the `term` ACR we're building up as we're about to perform CDIV.
+        if (_as_chain_link.acr())
+        {
+          _as_chain_link.acr()->cancel();
+        }
 
         Ifcs ifcs;
         if (lookup_ifcs(served_user, ifcs))
@@ -812,7 +813,10 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
           // retargets the call
           SAS::TrailId old_chain_trail = _as_chain_link.trail();
           _as_chain_link.release();
-          _as_chain_link = create_as_chain(ifcs, served_user, acr, old_chain_trail);
+
+          // Don't provide an ACR for the CDIV orig processing.
+          ACR* cdiv_acr = NULL;
+          _as_chain_link = create_as_chain(ifcs, served_user, cdiv_acr, old_chain_trail);
 
           if (stack_data.record_route_on_diversion)
           {
@@ -826,9 +830,6 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
           status_code = PJSIP_SC_NOT_FOUND;
           SAS::Event no_ifcs(trail(), SASEvent::IFC_GET_FAILURE, 0);
           SAS::report_event(no_ifcs);
-
-          // No AsChain, store ACR locally.
-          _failed_ood_acr = acr;
         }
       }
     }
