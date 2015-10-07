@@ -1545,25 +1545,28 @@ void SCSCFSproutletTsx::add_record_route(pjsip_msg* msg,
 {
   pj_pool_t* pool = get_pool(msg);
 
+  pjsip_route_hdr* rr = NULL;
   if (!_record_routed)
   {
     pjsip_sip_uri* uri = get_reflexive_uri(pool);
 
-    pjsip_route_hdr* rr = pjsip_rr_hdr_create(pool);
+    rr = pjsip_rr_hdr_create(pool);
     rr->name_addr.uri = (pjsip_uri*)uri;
 
     pjsip_msg_insert_first_hdr(msg, (pjsip_hdr*)rr);
 
     _record_routed = true;
   }
+  else
+  {
+    rr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg,
+                                              PJSIP_H_RECORD_ROUTE,
+                                              NULL);
+  }
 
   // Ensure the billing scope flag is set on the RR header.
   if (billing_rr)
   {
-    pjsip_route_hdr* rr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg,
-                                                               PJSIP_H_RECORD_ROUTE,
-                                                               NULL);
-
     // We've records routed before (either earlier in this function or in a
     // previous call to this function within this transaction).  Therefore the
     // Record-Route header we added then must be present (and must be the top

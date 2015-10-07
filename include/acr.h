@@ -149,7 +149,8 @@ public:
 
   /// Returns the JSON encoded message in string form.
   ///
-  /// See comments for `_cancelled`.
+  /// If the ACR has been cancelled, this function's behaviour is unspecified
+  /// (though the UTs expect it to return "Cancelled ACR").
   ///
   /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
   virtual std::string get_message(pj_time_val timestamp=unspec);
@@ -167,7 +168,8 @@ public:
   /// cancelled.  In general this will be when the relevant transaction or AS
   /// chain has ended.
   /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
-  inline void send(pj_time_val timestamp=unspec) {
+  inline void send(pj_time_val timestamp=unspec)
+  {
     if (!_cancelled)
     {
       send_message(timestamp);
@@ -182,13 +184,13 @@ protected:
   /// Tracks if the ACR has been cancelled.
   ///
   /// `send_message()` will not be called if this is true.
-  /// `get_message()` should return an appropriate error string if this is true
+  /// `get_message()` is undefined if this is true
   bool _cancelled;
 
 private:
   /// Called when the ACR message should be triggered.
   ///
-  /// See comments for `_cancelled`.
+  /// This will never be called on a cancelled ACR.
   ///
   /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
   virtual void send_message(pj_time_val timestamp=unspec);
