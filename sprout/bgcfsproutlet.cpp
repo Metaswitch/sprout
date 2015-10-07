@@ -125,7 +125,7 @@ BGCFSproutletTsx::~BGCFSproutletTsx()
 {
   if (_acr != NULL)
   {
-    _acr->send_message();
+    _acr->send();
   }
 
   delete _acr;
@@ -263,7 +263,7 @@ void BGCFSproutletTsx::on_cancel(int status_code, pjsip_msg* cancel_req)
 
     // @TODO - timestamp from request.
     acr->rx_request(cancel_req);
-    acr->send_message();
+    acr->send();
 
     delete acr;
   }

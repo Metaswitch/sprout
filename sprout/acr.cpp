@@ -44,7 +44,7 @@
 
 const pj_time_val ACR::unspec = {-1,0};
 
-ACR::ACR()
+ACR::ACR() : _cancelled(false)
 {
   TRC_DEBUG("Created ACR (%p)", this);
 }
@@ -617,6 +617,11 @@ void RalfACR::server_capabilities(const ServerCapabilities& caps)
 
 void RalfACR::send_message(pj_time_val timestamp)
 {
+  // Calls to this function are always made through calls to `ACR::send()` which
+  // ensures that the ACR has not been cancelled.  This means it is safe to
+  // call `get_message()` to produce our request body.
+  assert(!_cancelled);
+
   // If we have a CCF or ECF, or this isn't a record type that needs one, send
   // the message.
   if ((!_ccfs.empty()) ||
@@ -653,6 +658,11 @@ void RalfACR::send_message(pj_time_val timestamp)
 
 std::string RalfACR::get_message(pj_time_val timestamp)
 {
+  if (_cancelled)
+  {
+    return "Cancelled ACR";
+  }
+
   TRC_DEBUG("Building message");
 
   if (timestamp.sec == -1)

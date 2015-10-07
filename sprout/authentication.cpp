@@ -959,7 +959,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   }
 
   // Send the ACR.
-  acr->send_message();
+  acr->send();
   delete acr;
   delete av;
   return PJ_TRUE;

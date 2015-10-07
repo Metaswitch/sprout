@@ -147,12 +147,10 @@ public:
   /// @param   caps           Capabiliies as received from I-CSCF.
   virtual void server_capabilities(const ServerCapabilities& caps);
 
-  /// Called when the ACR message should be triggered.  In general this will
-  /// be when the relevant transaction or AS chain has ended.
-  /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
-  virtual void send_message(pj_time_val timestamp=unspec);
-
   /// Returns the JSON encoded message in string form.
+  ///
+  /// See comments for `_cancelled`.
+  ///
   /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
   virtual std::string get_message(pj_time_val timestamp=unspec);
 
@@ -164,6 +162,37 @@ public:
 
   /// Set the default CCF for this ACR.
   virtual void set_default_ccf(const std::string& default_ccf);
+
+  /// Called when the ACR message should be sent if it's not yet been
+  /// cancelled.  In general this will be when the relevant transaction or AS
+  /// chain has ended.
+  /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
+  inline void send(pj_time_val timestamp=unspec) {
+    if (!_cancelled)
+    {
+      send_message(timestamp);
+    }
+  }
+
+  /// Cancel this ACR, preventing it from being sent.  Used if a call leg
+  /// should no longer be considered for billing.
+  inline void cancel() { _cancelled = true; }
+
+protected:
+  /// Tracks if the ACR has been cancelled.
+  ///
+  /// `send_message()` will not be called if this is true.
+  /// `get_message()` should return an appropriate error string if this is true
+  bool _cancelled;
+
+private:
+  /// Called when the ACR message should be triggered.
+  ///
+  /// See comments for `_cancelled`.
+  ///
+  /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
+  virtual void send_message(pj_time_val timestamp=unspec);
+
 };
 
 
@@ -247,11 +276,6 @@ public:
   /// @param   caps           Capabiliies as received from I-CSCF.
   virtual void server_capabilities(const ServerCapabilities& caps);
 
-  /// Called when the Rf message should be triggered.  In general this will
-  /// be when the relevant transaction or AS chain has ended.
-  /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
-  virtual void send_message(pj_time_val timestamp=unspec);
-
   /// Returns the JSON encoded message in string form.
   /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
   virtual std::string get_message(pj_time_val timestamp=unspec);
@@ -260,6 +284,11 @@ public:
   virtual void set_default_ccf(const std::string& default_ccf);
 
 private:
+
+  /// Called when the Rf message should be triggered.  In general this will
+  /// be when the relevant transaction or AS chain has ended.
+  /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
+  virtual void send_message(pj_time_val timestamp=unspec);
 
   typedef enum { EVENT_RECORD=1,
                  START_RECORD=2,

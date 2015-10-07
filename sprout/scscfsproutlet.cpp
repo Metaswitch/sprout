@@ -347,7 +347,7 @@ SCSCFSproutletTsx::~SCSCFSproutletTsx()
     ACR* acr = get_acr();
     if (acr)
     {
-      acr->send_message();
+      acr->send();
     }
   }
 
@@ -648,7 +648,7 @@ void SCSCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
 
     // @TODO - timestamp from request.
     cancel_acr->rx_request(cancel_req);
-    cancel_acr->send_message();
+    cancel_acr->send();
 
     delete cancel_acr;
   }

@@ -1042,7 +1042,7 @@ void process_register_request(pjsip_rx_data* rdata)
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
 
   // Send the ACR and delete it.
-  acr->send_message();
+  acr->send();
   delete acr;
 
   // TODO in sto397: we should do third-party registration once per
