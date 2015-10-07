@@ -817,7 +817,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
           if (stack_data.record_route_on_diversion)
           {
             TRC_DEBUG("Add service to dialog - originating Cdiv");
-            add_record_route(req, NODE_ROLE_ORIGINATING);
+            add_record_route(req, false, NODE_ROLE_ORIGINATING);
           }
         }
         else
@@ -840,11 +840,11 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         TRC_DEBUG("Add service to dialog - AS hop");
         if (_session_case->is_terminating())
         {
-          add_record_route(req, NODE_ROLE_TERMINATING);
+          add_record_route(req, false, NODE_ROLE_TERMINATING);
         }
         else
         {
-          add_record_route(req, NODE_ROLE_ORIGINATING);
+          add_record_route(req, false, NODE_ROLE_ORIGINATING);
         }
       }
     }
@@ -889,7 +889,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         if (stack_data.record_route_on_initiation_of_terminating)
         {
           TRC_DEBUG("Single Record-Route - initiation of terminating handling");
-          add_record_route(req, NODE_ROLE_TERMINATING);
+          add_record_route(req, false, NODE_ROLE_TERMINATING);
         }
       }
       else if (_session_case->is_originating())
@@ -897,7 +897,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         if (stack_data.record_route_on_initiation_of_originating)
         {
           TRC_DEBUG("Single Record-Route - initiation of originating handling");
-          add_record_route(req, NODE_ROLE_ORIGINATING);
+          add_record_route(req, true, NODE_ROLE_ORIGINATING);
         }
       }
     }
@@ -1044,7 +1044,7 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
     if (stack_data.record_route_on_completion_of_originating)
     {
       TRC_DEBUG("Add service to dialog - end of originating handling");
-      add_record_route(req, NODE_ROLE_ORIGINATING);
+      add_record_route(req, false, NODE_ROLE_ORIGINATING);
     }
 
     // Attempt to translate the RequestURI using ENUM or an alternative
@@ -1115,7 +1115,7 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
     if (stack_data.record_route_on_completion_of_terminating)
     {
       TRC_DEBUG("Add service to dialog - end of terminating handling");
-      add_record_route(req, NODE_ROLE_TERMINATING);
+      add_record_route(req, true, NODE_ROLE_TERMINATING);
     }
 
     if (pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL) != NULL)
@@ -1539,25 +1539,14 @@ bool SCSCFSproutletTsx::lookup_ifcs(std::string public_id, Ifcs& ifcs)
 /// be attached to the Record-Route and can be used to recover the billing
 /// role that is in use on subsequent in-dialog messages.
 void SCSCFSproutletTsx::add_record_route(pjsip_msg* msg,
+                                         bool billing_rr,
                                          NodeRole billing_role)
 {
+  pj_pool_t* pool = get_pool(msg);
+
   if (!_record_routed)
   {
-    pj_pool_t* pool = get_pool(msg);
-
-    pjsip_param* param = PJ_POOL_ALLOC_T(pool, pjsip_param);
-    pj_strdup(pool, &param->name, &STR_BILLING_ROLE);
-    if (billing_role == NODE_ROLE_ORIGINATING)
-    {
-      pj_strdup(pool, &param->value, &STR_CHARGE_ORIG);
-    }
-    else
-    {
-      pj_strdup(pool, &param->value, &STR_CHARGE_TERM);
-    }
-
     pjsip_sip_uri* uri = get_reflexive_uri(pool);
-    pj_list_insert_before(&uri->other_param, param);
 
     pjsip_route_hdr* rr = pjsip_rr_hdr_create(pool);
     rr->name_addr.uri = (pjsip_uri*)uri;
@@ -1565,6 +1554,39 @@ void SCSCFSproutletTsx::add_record_route(pjsip_msg* msg,
     pjsip_msg_insert_first_hdr(msg, (pjsip_hdr*)rr);
 
     _record_routed = true;
+  }
+
+  // Ensure the billing scope flag is set on the RR header.
+  if (billing_rr)
+  {
+    pjsip_route_hdr* rr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg,
+                                                               PJSIP_H_RECORD_ROUTE,
+                                                               NULL);
+
+    // We've records routed before (either earlier in this function or in a
+    // previous call to this function within this transaction).  Therefore the
+    // Record-Route header we added then must be present (and must be the top
+    // such header).
+    assert(rr != NULL);
+
+    pjsip_sip_uri* uri = (pjsip_sip_uri*)rr->name_addr.uri;
+    pjsip_param* param = pjsip_param_find(&uri->other_param,
+                                          &STR_BILLING_ROLE);
+    if (!param)
+    {
+      param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+      pj_strdup(pool, &param->name, &STR_BILLING_ROLE);
+
+      if (billing_role == NODE_ROLE_ORIGINATING)
+      {
+        pj_strdup(pool, &param->value, &STR_CHARGE_ORIG);
+      }
+      else
+      {
+        pj_strdup(pool, &param->value, &STR_CHARGE_TERM);
+      }
+      pj_list_insert_before(&uri->other_param, param);
+    }
   }
 }
 
