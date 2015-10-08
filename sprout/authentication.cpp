@@ -831,7 +831,13 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       if (status == PJ_SUCCESS)
       {
         // Request authentication completed, so let the message through to
-        // other modules.
+        // other modules. Remove any authorization headers first.
+        while (pjsip_msg_find_remove_hdr(rdata->msg_info.msg,
+                                         PJSIP_H_AUTHORIZATION,
+                                         NULL) != NULL);
+        while (pjsip_msg_find_remove_hdr(rdata->msg_info.msg,
+                                         PJSIP_H_PROXY_AUTHORIZATION,
+                                         NULL) != NULL);
         delete av;
         return PJ_FALSE;
       }
