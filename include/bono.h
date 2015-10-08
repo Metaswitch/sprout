@@ -63,6 +63,7 @@ class UACTransaction;
 #include "scscfselector.h"
 #include "icscfrouter.h"
 #include "acr.h"
+#include "session_expires_helper.h"
 
 /// Short-lived data structure holding details of how we are to serve
 // this request.
@@ -281,6 +282,9 @@ private:
 
   /// Stores a BGCF ACR if BGCF processing was performed in this transaction.
   ACR*                 _bgcf_acr;
+
+  /// Object to handle session expires processing.
+  SessionExpiresHelper _se_helper;
 
 public:
   pj_timer_entry       _trying_timer;

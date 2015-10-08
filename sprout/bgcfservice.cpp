@@ -121,7 +121,8 @@ void BgcfService::update_routes()
            ((!(*routes_it).HasMember("domain"))  &&
             (((*routes_it).HasMember("number")) &&
              ((*routes_it)["number"].IsString())))) &&
-          ((*routes_it)["route"].IsArray())) 
+          ((*routes_it).HasMember("route") &&
+           (*routes_it)["route"].IsArray()))
       {
         std::vector<std::string> route_vec;
         const rapidjson::Value& route_arr = (*routes_it)["route"];

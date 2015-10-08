@@ -65,6 +65,7 @@ extern "C" {
 #include "acr.h"
 #include "sproutlet.h"
 #include "snmp_counter_table.h"
+#include "session_expires_helper.h"
 
 class SCSCFSproutletTsx;
 
@@ -229,7 +230,10 @@ private:
 
   /// Creates an AS chain for this service role and links this service hop to
   /// it.
-  AsChainLink create_as_chain(Ifcs ifcs, std::string served_user, ACR*& acr);
+  AsChainLink create_as_chain(Ifcs ifcs,
+                              std::string served_user,
+                              ACR*& acr,
+                              SAS::TrailId chain_trail);
 
   /// Apply originating services for this request.
   void apply_originating_services(pjsip_msg* req);
@@ -280,10 +284,15 @@ private:
   bool lookup_ifcs(std::string public_id,
                    Ifcs& ifcs);
 
-  /// Record-Route the S-CSCF sproutlet into a dialog.  The parameter passed
-  /// will be attached to the Record-Route and can be used to recover the
+  /// Record-Route the S-CSCF sproutlet into a dialog.  The third parameter
+  /// passed may be attached to the Record-Route and can be used to recover the
   /// billing role that is in use on subsequent in-dialog messages.
-  void add_record_route(pjsip_msg* msg, NodeRole);
+  ///
+  /// @param msg          - The message to modify
+  /// @param billing_rr   - Whether to add a `billing-role` parameter to the RR
+  /// @param billing_role - The contents of the `billing-role` (ignored if
+  ///                       `billing_rr` is false)
+  void add_record_route(pjsip_msg* msg, bool billing_rr, NodeRole billing_role);
 
   /// Retrieve the billing role for the incoming message.  This should have been
   /// set during session initiation.
@@ -375,6 +384,9 @@ private:
   ///   the way to the HSS (i.e. Homestead may not answer the response solely
   ///   from its cache).
   bool _auto_reg;
+
+  /// Class to handle session-expires processing.
+  SessionExpiresHelper _se_helper;
 };
 
 #endif

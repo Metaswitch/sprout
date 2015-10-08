@@ -92,7 +92,8 @@ TARGET_SOURCES := logger.cpp \
                   snmp_scalar.cpp \
                   snmp_row.cpp \
                   ralf_processor.cpp \
-                  sip_string_to_request_type.cpp
+                  sip_string_to_request_type.cpp \
+                  session_expires_helper.cpp
 
 TARGET_SOURCES_TEST := test_main.cpp \
                        fakecurl.cpp \
@@ -152,6 +153,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        common_sip_processing_test.cpp \
                        fakesnmp.cpp \
                        uriclassifier_test.cpp \
+                       session_expires_helper_test.cpp
 
 
 # Put the interposer in here, so it will be loaded before pjsip.

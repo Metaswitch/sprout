@@ -332,7 +332,8 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
   _req_type(req_type),
   _seen_1xx(false),
   _impi(),
-  _auto_reg(false)
+  _auto_reg(false),
+  _se_helper(stack_data.default_session_expires)
 {
   TRC_DEBUG("S-CSCF Transaction (%p) created", this);
 }
@@ -346,7 +347,7 @@ SCSCFSproutletTsx::~SCSCFSproutletTsx()
     ACR* acr = get_acr();
     if (acr)
     {
-      acr->send_message();
+      acr->send();
     }
   }
 
@@ -380,18 +381,7 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
   pjsip_status_code status_code = PJSIP_SC_OK;
 
-  // Try to add a Session-Expires header
-  if (!PJUtils::add_update_session_expires(req,
-                                           get_pool(req),
-                                           trail()))
-  {
-    // Session expires header is invalid, so reject the request
-    // This has been logged in PJUtils
-    pjsip_msg* rsp = create_response(req, PJSIP_SC_TEMPORARILY_UNAVAILABLE);
-    send_response(rsp);
-    free_msg(req);
-    return;
-  }
+  _se_helper.process_request(req, get_pool(req), trail());
 
   // Work out if we should be auto-registering the user based on this
   // request and if we are, also work out the IMPI to register them with.
@@ -481,18 +471,7 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
 {
   TRC_INFO("S-CSCF received in-dialog request");
 
-  // Try to add a Session-Expires header
-  if (!PJUtils::add_update_session_expires(req,
-                                           get_pool(req),
-                                           trail()))
-  {
-    // Session expires header is invalid, so reject the request
-    // This has been logged in PJUtils
-    pjsip_msg* rsp = create_response(req, PJSIP_SC_TEMPORARILY_UNAVAILABLE);
-    send_response(rsp);
-    free_msg(req);
-    return;
-  }
+  _se_helper.process_request(req, get_pool(req), trail());
 
   // Create an ACR for this request and pass the request to it.
   _in_dialog_acr = _scscf->get_acr(trail(),
@@ -521,6 +500,8 @@ void SCSCFSproutletTsx::on_tx_request(pjsip_msg* req)
 void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 {
   TRC_INFO("S-CSCF received response");
+
+  _se_helper.process_response(rsp, get_pool(rsp), trail());
 
   // Pass the received response to the ACR.
   // @TODO - timestamp from response???
@@ -667,7 +648,7 @@ void SCSCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
 
     // @TODO - timestamp from request.
     cancel_acr->rx_request(cancel_req);
-    cancel_acr->send_message();
+    cancel_acr->send();
 
     delete cancel_acr;
   }
@@ -817,22 +798,30 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
           pcv->term_ioi = pj_str("");
         }
 
-        // Create a new ACR for this request.
-        ACR* acr = _scscf->get_acr(trail(),
-                                   CALLING_PARTY,
-                                   NODE_ROLE_ORIGINATING);
+        // Abandon the `term` ACR we're building up as we're about to perform CDIV.
+        if (_as_chain_link.acr())
+        {
+          _as_chain_link.acr()->cancel();
+        }
 
         Ifcs ifcs;
         if (lookup_ifcs(served_user, ifcs))
         {
           TRC_DEBUG("Creating originating CDIV AS chain");
+
+          // Preserve the SAS trail ID of the AS chain, to allow us to correlate even when a B2BUA
+          // retargets the call
+          SAS::TrailId old_chain_trail = _as_chain_link.trail();
           _as_chain_link.release();
-          _as_chain_link = create_as_chain(ifcs, served_user, acr);
+
+          // Don't provide an ACR for the CDIV orig processing.
+          ACR* cdiv_acr = NULL;
+          _as_chain_link = create_as_chain(ifcs, served_user, cdiv_acr, old_chain_trail);
 
           if (stack_data.record_route_on_diversion)
           {
             TRC_DEBUG("Add service to dialog - originating Cdiv");
-            add_record_route(req, NODE_ROLE_ORIGINATING);
+            add_record_route(req, false, NODE_ROLE_ORIGINATING);
           }
         }
         else
@@ -841,9 +830,6 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
           status_code = PJSIP_SC_NOT_FOUND;
           SAS::Event no_ifcs(trail(), SASEvent::IFC_GET_FAILURE, 0);
           SAS::report_event(no_ifcs);
-
-          // No AsChain, store ACR locally.
-          _failed_ood_acr = acr;
         }
       }
     }
@@ -855,11 +841,11 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         TRC_DEBUG("Add service to dialog - AS hop");
         if (_session_case->is_terminating())
         {
-          add_record_route(req, NODE_ROLE_TERMINATING);
+          add_record_route(req, false, NODE_ROLE_TERMINATING);
         }
         else
         {
-          add_record_route(req, NODE_ROLE_ORIGINATING);
+          add_record_route(req, false, NODE_ROLE_ORIGINATING);
         }
       }
     }
@@ -886,7 +872,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       if (lookup_ifcs(served_user, ifcs))
       {
         TRC_DEBUG("Successfully looked up iFCs");
-        _as_chain_link = create_as_chain(ifcs, served_user, acr);
+        _as_chain_link = create_as_chain(ifcs, served_user, acr, trail());
       }
       else
       {
@@ -904,7 +890,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         if (stack_data.record_route_on_initiation_of_terminating)
         {
           TRC_DEBUG("Single Record-Route - initiation of terminating handling");
-          add_record_route(req, NODE_ROLE_TERMINATING);
+          add_record_route(req, false, NODE_ROLE_TERMINATING);
         }
       }
       else if (_session_case->is_originating())
@@ -912,7 +898,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         if (stack_data.record_route_on_initiation_of_originating)
         {
           TRC_DEBUG("Single Record-Route - initiation of originating handling");
-          add_record_route(req, NODE_ROLE_ORIGINATING);
+          add_record_route(req, true, NODE_ROLE_ORIGINATING);
         }
       }
     }
@@ -1003,7 +989,8 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
 /// Factory method: create AsChain by looking up iFCs.
 AsChainLink SCSCFSproutletTsx::create_as_chain(Ifcs ifcs,
                                                std::string served_user,
-                                               ACR*& acr)
+                                               ACR*& acr,
+                                               SAS::TrailId chain_trail)
 {
   if (served_user.empty())
   {
@@ -1015,7 +1002,7 @@ AsChainLink SCSCFSproutletTsx::create_as_chain(Ifcs ifcs,
                                                  *_session_case,
                                                  served_user,
                                                  is_registered,
-                                                 trail(),
+                                                 chain_trail,
                                                  ifcs,
                                                  acr);
   acr = NULL;
@@ -1058,7 +1045,7 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
     if (stack_data.record_route_on_completion_of_originating)
     {
       TRC_DEBUG("Add service to dialog - end of originating handling");
-      add_record_route(req, NODE_ROLE_ORIGINATING);
+      add_record_route(req, false, NODE_ROLE_ORIGINATING);
     }
 
     // Attempt to translate the RequestURI using ENUM or an alternative
@@ -1129,7 +1116,7 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
     if (stack_data.record_route_on_completion_of_terminating)
     {
       TRC_DEBUG("Add service to dialog - end of terminating handling");
-      add_record_route(req, NODE_ROLE_TERMINATING);
+      add_record_route(req, true, NODE_ROLE_TERMINATING);
     }
 
     if (pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL) != NULL)
@@ -1553,32 +1540,57 @@ bool SCSCFSproutletTsx::lookup_ifcs(std::string public_id, Ifcs& ifcs)
 /// be attached to the Record-Route and can be used to recover the billing
 /// role that is in use on subsequent in-dialog messages.
 void SCSCFSproutletTsx::add_record_route(pjsip_msg* msg,
+                                         bool billing_rr,
                                          NodeRole billing_role)
 {
+  pj_pool_t* pool = get_pool(msg);
+
+  pjsip_route_hdr* rr = NULL;
   if (!_record_routed)
   {
-    pj_pool_t* pool = get_pool(msg);
-
-    pjsip_param* param = PJ_POOL_ALLOC_T(pool, pjsip_param);
-    pj_strdup(pool, &param->name, &STR_BILLING_ROLE);
-    if (billing_role == NODE_ROLE_ORIGINATING)
-    {
-      pj_strdup(pool, &param->value, &STR_CHARGE_ORIG);
-    }
-    else
-    {
-      pj_strdup(pool, &param->value, &STR_CHARGE_TERM);
-    }
-
     pjsip_sip_uri* uri = get_reflexive_uri(pool);
-    pj_list_insert_before(&uri->other_param, param);
 
-    pjsip_route_hdr* rr = pjsip_rr_hdr_create(pool);
+    rr = pjsip_rr_hdr_create(pool);
     rr->name_addr.uri = (pjsip_uri*)uri;
 
     pjsip_msg_insert_first_hdr(msg, (pjsip_hdr*)rr);
 
     _record_routed = true;
+  }
+  else
+  {
+    rr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg,
+                                              PJSIP_H_RECORD_ROUTE,
+                                              NULL);
+  }
+
+  // Ensure the billing scope flag is set on the RR header.
+  if (billing_rr)
+  {
+    // We've records routed before (either earlier in this function or in a
+    // previous call to this function within this transaction).  Therefore the
+    // Record-Route header we added then must be present (and must be the top
+    // such header).
+    assert(rr != NULL);
+
+    pjsip_sip_uri* uri = (pjsip_sip_uri*)rr->name_addr.uri;
+    pjsip_param* param = pjsip_param_find(&uri->other_param,
+                                          &STR_BILLING_ROLE);
+    if (!param)
+    {
+      param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+      pj_strdup(pool, &param->name, &STR_BILLING_ROLE);
+
+      if (billing_role == NODE_ROLE_ORIGINATING)
+      {
+        pj_strdup(pool, &param->value, &STR_CHARGE_ORIG);
+      }
+      else
+      {
+        pj_strdup(pool, &param->value, &STR_CHARGE_TERM);
+      }
+      pj_list_insert_before(&uri->other_param, param);
+    }
   }
 }
 

@@ -399,10 +399,20 @@ bool SproutletProxy::schedule_timer(pj_timer_entry* tentry, int duration)
 }
 
 
-void SproutletProxy::cancel_timer(pj_timer_entry* tentry)
+bool SproutletProxy::cancel_timer(pj_timer_entry* tentry)
 {
-  pjsip_endpt_cancel_timer(_endpt, tentry);
-  TRC_DEBUG("Cancelled Sproutlet timer, id = %ld", (TimerID)tentry);
+  pj_timer_heap_t* timer_heap = pjsip_endpt_get_timer_heap(_endpt);
+  if (pj_timer_heap_cancel(timer_heap, tentry) > 0)
+  {
+    TRC_DEBUG("Cancelled Sproutlet timer, id = %ld", (TimerID)tentry);
+    return true;
+  }
+  else
+  {
+    TRC_DEBUG("Unable to cancel Sproutlet timer, id = %ld "
+              "(already popped or cancelled?)", (TimerID)tentry);
+    return false;
+  }
 }
 
 
@@ -420,7 +430,8 @@ SproutletProxy::UASTsx::UASTsx(SproutletProxy* proxy) :
   _umap(),
   _pending_req_q(),
   _sproutlet_proxy(proxy),
-  _timers()
+  _timers(),
+  _pending_timers()
 {
   TRC_VERBOSE("Sproutlet Proxy transaction (%p) created", this);
 }
@@ -800,13 +811,23 @@ bool SproutletProxy::UASTsx::schedule_timer(SproutletWrapper* tsx,
 
   id = (TimerID)tentry;
 
-  return _sproutlet_proxy->schedule_timer(tentry, duration);
+  bool scheduled = _sproutlet_proxy->schedule_timer(tentry, duration);
+  if (scheduled)
+  {
+    _pending_timers.insert(tentry);
+  }
+  return scheduled;
 }
 
-void SproutletProxy::UASTsx::cancel_timer(TimerID id)
+bool SproutletProxy::UASTsx::cancel_timer(TimerID id)
 {
   pj_timer_entry* tentry = (pj_timer_entry*)id;
-  _sproutlet_proxy->cancel_timer(tentry);
+  bool cancelled = _sproutlet_proxy->cancel_timer(tentry);
+  if (cancelled)
+  {
+    _pending_timers.erase(tentry);
+  }
+  return cancelled;
 }
 
 
@@ -829,8 +850,9 @@ void SproutletProxy::UASTsx::process_timer_pop(pj_timer_entry* tentry)
 {
   enter_context();
 
+  _pending_timers.erase(tentry);
   SproutletTimerCallbackData* tdata = (SproutletTimerCallbackData*)tentry->user_data;
-  tdata->sproutlet_wrapper->on_timer_pop(tdata->context);
+  tdata->sproutlet_wrapper->on_timer_pop((TimerID)tentry, tdata->context);
   schedule_requests();
 
   exit_context();
@@ -945,6 +967,7 @@ void SproutletProxy::UASTsx::check_destroy()
       (_dmap_sproutlet.empty()) &&
       (_umap.empty()) &&
       (_pending_req_q.empty()) &&
+      (_pending_timers.empty()) &&
       (_tsx == NULL))
   {
     // UAS transaction has been destroyed and all Sproutlets are complete.
@@ -981,6 +1004,7 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _complete(false),
   _process_actions_entered(0),
   _forks(),
+  _pending_timers(),
   _trail_id(trail_id)
 {
   _req_type = SNMP::string_to_request_type(_req->msg->line.req.method.name.ptr,
@@ -1004,7 +1028,7 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
     _sproutlet_tsx = new SproutletTsx(this);
   }
 
-  if ((_sproutlet != NULL) && 
+  if ((_sproutlet != NULL) &&
       (_sproutlet->_incoming_sip_transactions_tbl != NULL))
   {
     // Update SNMP SIP transactions statistics for the Sproutlet.
@@ -1014,7 +1038,7 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
       _sproutlet->_incoming_sip_transactions_tbl->increment_successes(_req_type);
     }
   }
-  
+
   // Construct a unique identifier for this Sproutlet.
   std::ostringstream id;
   id << _service_name << "-" << (const void*)_sproutlet_tsx;
@@ -1233,7 +1257,7 @@ int SproutletWrapper::send_request(pjsip_msg*& req)
     return -1;
   }
 
-  if ((_sproutlet != NULL) && 
+  if ((_sproutlet != NULL) &&
       (_sproutlet->_outgoing_sip_transactions_tbl != NULL))
   {
     // Update SNMP SIP transactions statistics for the Sproutlet.
@@ -1243,7 +1267,7 @@ int SproutletWrapper::send_request(pjsip_msg*& req)
       _sproutlet->_outgoing_sip_transactions_tbl->increment_successes(_req_type);
     }
   }
-  
+
   // We've found the tdata, move it to _send_requests under a new unique ID.
   int fork_id = _forks.size();
   _forks.resize(fork_id + 1);
@@ -1378,12 +1402,20 @@ pj_pool_t* SproutletWrapper::get_pool(const pjsip_msg* msg)
 
 bool SproutletWrapper::schedule_timer(void* context, TimerID& id, int duration)
 {
-  return _proxy_tsx->schedule_timer(this, context, id, duration);
+  bool scheduled = _proxy_tsx->schedule_timer(this, context, id, duration);
+  if (scheduled)
+  {
+    _pending_timers.insert(id);
+  }
+  return scheduled;
 }
 
 void SproutletWrapper::cancel_timer(TimerID id)
 {
-  _proxy_tsx->cancel_timer(id);
+  if (_proxy_tsx->cancel_timer(id))
+  {
+    _pending_timers.erase(id);
+  }
 }
 
 bool SproutletWrapper::timer_running(TimerID id)
@@ -1491,8 +1523,8 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
                 _id.c_str(), pjsip_tx_data_get_info(rsp),
                 fork_id, pjsip_tsx_state_str(_forks[fork_id].state.tsx_state));
     --_pending_responses;
-  
-    if ((_sproutlet != NULL) && 
+
+    if ((_sproutlet != NULL) &&
       (_sproutlet->_outgoing_sip_transactions_tbl != NULL))
     {
       // Update SNMP SIP transactions statistics for the Sproutlet.
@@ -1579,9 +1611,10 @@ void SproutletWrapper::rx_fork_error(pjsip_event_id_e event, int fork_id)
   }
 }
 
-void SproutletWrapper::on_timer_pop(void* context)
+void SproutletWrapper::on_timer_pop(TimerID id, void* context)
 {
   TRC_DEBUG("Timer has popped");
+  _pending_timers.erase(id);
   _sproutlet_tsx->on_timer_expiry(context);
   process_actions(false);
 }
@@ -1603,8 +1636,8 @@ void SproutletWrapper::deregister_tdata(pjsip_tx_data* tdata)
 /// Process actions required by a Sproutlet
 void SproutletWrapper::process_actions(bool complete_after_actions)
 {
-  TRC_DEBUG("Processing actions from sproutlet - %d responses, %d requests",
-            _send_responses.size(), _send_requests.size());
+  TRC_DEBUG("Processing actions from sproutlet - %d responses, %d requests, %d timers",
+            _send_responses.size(), _send_requests.size(), _pending_timers.size());
 
   // We've entered process_actions again.  We track this counter because
   // process_actions can be re-entered, and we must never delete the
@@ -1674,13 +1707,14 @@ void SproutletWrapper::process_actions(bool complete_after_actions)
   // We've now finished (almost) the process_actions method, so we're free to
   // delete this SproutletWrapper once more (if it's appropriate to do so).
   _process_actions_entered--;
-  
+
   if ((_complete) &&
       (_pending_responses == 0) &&
+      (_pending_timers.empty()) &&
       (_process_actions_entered == 0))
   {
-    // Sproutlet has sent a final response and has no downstream forks
-    // waiting a response, so should destroy itself.
+    // Sproutlet has sent a final response, has no downstream forks waiting
+    // a response, and has no pending timers, so should destroy itself.
     TRC_VERBOSE("%s suiciding", _id.c_str());
     delete this;
   }
@@ -1812,7 +1846,7 @@ void SproutletWrapper::tx_response(pjsip_tx_data* rsp)
         (_sproutlet->_incoming_sip_transactions_tbl != NULL))
     {
       // Update SNMP SIP transactions statistics for the Sproutlet.
-      if ((_best_rsp != NULL) && 
+      if ((_best_rsp != NULL) &&
                (_best_rsp->msg->line.status.code >= 200 && _best_rsp->msg->line.status.code < 300))
       {
         _sproutlet->_incoming_sip_transactions_tbl->increment_successes(_req_type);

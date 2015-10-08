@@ -536,12 +536,12 @@ void process_tsx_request(pjsip_rx_data* rdata)
     }
 
     // Send Rf messages and clean up the ACRs.
-    acr->send_message();
+    acr->send();
     delete acr; acr = NULL;
 
     if (downstream_acr)
     {
-      downstream_acr->send_message();
+      downstream_acr->send();
       delete downstream_acr; downstream_acr = NULL;
     }
 
@@ -638,7 +638,7 @@ void process_cancel_request(pjsip_rx_data* rdata)
                                        acr_node_role(rdata->msg_info.msg));
   acr->set_default_ccf(PJUtils::pj_str_to_string(&stack_data.cdf_domain));
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
-  acr->send_message();
+  acr->send();
   delete acr;
 
   // Unlock UAS tsx because it is locked in find_tsx()
@@ -752,7 +752,7 @@ static void reject_request(pjsip_rx_data* rdata, int status_code)
   }
 
   // Send the ACR and delete it.
-  acr->send_message();
+  acr->send();
   delete acr;
 }
 
@@ -1735,7 +1735,8 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
   _in_dialog(false),
   _icscf_router(NULL),
   _icscf_acr(NULL),
-  _bgcf_acr(NULL)
+  _bgcf_acr(NULL),
+  _se_helper(stack_data.default_session_expires)
 {
   TRC_DEBUG("UASTransaction constructor (%p)", this);
   TRC_DEBUG("ACR (%p)", acr);
@@ -1817,7 +1818,7 @@ UASTransaction::~UASTransaction()
     // I-CSCF ACR has been created for this transaction, so send the message
     // and delete the ACR.
     TRC_DEBUG("I-CSCF ACR = %p", _icscf_acr);
-    _icscf_acr->send_message();
+    _icscf_acr->send();
 
     if (_downstream_acr == _icscf_acr)
     {
@@ -1835,7 +1836,7 @@ UASTransaction::~UASTransaction()
     // BGCF ACR has been created for this transaction, so send the message
     // and delete the ACR.
     TRC_DEBUG("BGCF ACR = %p", _bgcf_acr);
-    _bgcf_acr->send_message();
+    _bgcf_acr->send();
 
     if (_downstream_acr == _bgcf_acr)
     {
@@ -1855,12 +1856,12 @@ UASTransaction::~UASTransaction()
   {
     // The downstream ACR is not the same as the upstream one, so send the
     // message and destroy the object.
-    _downstream_acr->send_message();
+    _downstream_acr->send();
     delete _downstream_acr;
   }
 
   // Send the ACR for the upstream side.
-  _upstream_acr->send_message();
+  _upstream_acr->send();
   delete _upstream_acr;
   _upstream_acr = NULL;
   _downstream_acr = NULL;
@@ -1974,16 +1975,7 @@ void UASTransaction::handle_outgoing_non_cancel(Target* target)
   // Already have a target, so use it.
   targets.push_back(*target);
 
-  // Try to add the session_expires header
-  if (!PJUtils::add_update_session_expires(_req->msg,
-                                           _req->pool,
-                                           trail()))
-  {
-    // Session expires header is invalid, so reject the request
-    // This has been logged in PJUtils
-    send_response(PJSIP_SC_TEMPORARILY_UNAVAILABLE);
-    return;
-  }
+  _se_helper.process_request(_req->msg, _req->pool, trail());
 
   // Now set up the data structures and transactions required to
   // process the request.
@@ -2030,6 +2022,8 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
       return;
     }
 
+    _se_helper.process_response(tdata->msg, tdata->pool, trail());
+
     // Strip any untrusted headers as required, so we don't pass them on.
     _trust->process_response(tdata);
 
@@ -2047,7 +2041,7 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
       {
         // This is a provisional response to a mid-dialog message, so we
         // should send an ACR now.
-        _downstream_acr->send_message();
+        _downstream_acr->send();
 
         // Don't delete the ACR as we will send another on any subsequent
         // provisional responses, and also when the transaction completes.
@@ -2071,7 +2065,7 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
         {
           // This is a provisional response to a mid-dialog message, so we
           // should send an ACR now.
-          _upstream_acr->send_message();
+          _upstream_acr->send();
 
           // Don't delete the ACR as we will send another on any subsequent
           // provisional responses, and also when the transaction completes.

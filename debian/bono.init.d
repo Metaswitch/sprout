@@ -137,34 +137,34 @@ get_daemon_args()
 
         if [ $IBCF_ENABLED = Y ]
         then
-          [ -z "$trusted_peers" ] || ibcf_arg="--ibcf $trusted_peers"
+          [ -z "$trusted_peers" ] || ibcf_arg="--ibcf=$trusted_peers"
         fi
 
-        [ -z "$ralf_hostname" ] || ralf_arg="--ralf $ralf_hostname"
+        [ -z "$ralf_hostname" ] || ralf_arg="--ralf=$ralf_hostname"
         # cdf_identity is the correct option for billing cdf.  For historical reasons, we also allow billing_cdf.
-        [ -z "$cdf_identity" ] || billing_cdf_arg="--billing-cdf $cdf_identity"
-        [ -z "$billing_cdf" ] || billing_cdf_arg="--billing-cdf $billing_cdf"
-        [ -z "$target_latency_us" ] || target_latency_us_arg="--target-latency-us $target_latency_us"
-        [ -z "$max_tokens" ] || max_tokens_arg="--max-tokens $max_tokens"
-        [ -z "$init_token_rate" ] || init_token_rate_arg="--init-token-rate $init_token_rate"
-        [ -z "$min_token_rate" ] || min_token_rate_arg="--min-token-rate $min_token_rate"
-        [ -z "$signaling_namespace" ] || namespace_prefix="ip netns exec $signaling_namespace"
-        [ -z "$exception_max_ttl" ] || exception_max_ttl_arg="--exception-max-ttl $exception_max_ttl"
+        [ -z "$cdf_identity" ] || billing_cdf_arg="--billing-cdf=$cdf_identity"
+        [ -z "$billing_cdf" ] || billing_cdf_arg="--billing-cdf=$billing_cdf"
+        [ -z "$target_latency_us" ] || target_latency_us_arg="--target-latency-us=$target_latency_us"
+        [ -z "$max_tokens" ] || max_tokens_arg="--max-tokens=$max_tokens"
+        [ -z "$init_token_rate" ] || init_token_rate_arg="--init-token-rate=$init_token_rate"
+        [ -z "$min_token_rate" ] || min_token_rate_arg="--min-token-rate=$min_token_rate"
+        [ -z "$signaling_namespace" ] || namespace_prefix="ip netns exec=$signaling_namespace"
+        [ -z "$exception_max_ttl" ] || exception_max_ttl_arg="--exception-max-ttl=$exception_max_ttl"
 
-        DAEMON_ARGS="--domain $home_domain
-                     --localhost $local_ip,$public_hostname
-                     --alias $public_ip
-                     --pcscf 5060,5058
-                     --webrtc-port 5062
-                     --routing-proxy $upstream_hostname,$upstream_port,$upstream_connections,$upstream_recycle_connections
+        DAEMON_ARGS="--domain=$home_domain
+                     --localhost=$local_ip,$public_hostname
+                     --alias=$public_ip
+                     --pcscf=5060,5058
+                     --webrtc-port=5062
+                     --routing-proxy=$upstream_hostname,$upstream_port,$upstream_connections,$upstream_recycle_connections
                      $ralf_arg
-                     --sas $sas_server,$NAME@$public_hostname
-                     --dns-server $signaling_dns_server
-                     --pjsip-threads $num_pjsip_threads
-                     --worker-threads $num_worker_threads
-                     -a $log_directory
-                     -F $log_directory
-                     -L $log_level
+                     --sas=$sas_server,$NAME@$public_hostname
+                     --dns-server=$signaling_dns_server
+                     --pjsip-threads=$num_pjsip_threads
+                     --worker-threads=$num_worker_threads
+                     -a=$log_directory
+                     -F=$log_directory
+                     -L=$log_level
                      $target_latency_us_arg
                      $max_tokens_arg
                      $init_token_rate_arg
@@ -174,7 +174,7 @@ get_daemon_args()
                      $exception_max_ttl_arg
                      --non-registering-pbxes=$pbxes"
 
-        [ "$additional_home_domains" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --additional-domains $additional_home_domains"
+        [ "$additional_home_domains" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --additional-domains=$additional_home_domains"
         [ "$sip_blacklist_duration" = "" ]  || DAEMON_ARGS="$DAEMON_ARGS --sip-blacklist-duration=$sip_blacklist_duration"
         [ "$http_blacklist_duration" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --http-blacklist-duration=$http_blacklist_duration"
         [ "$sip_tcp_connect_timeout" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --sip-tcp-connect-timeout=$sip_tcp_connect_timeout"
