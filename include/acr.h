@@ -51,7 +51,7 @@ extern "C" {
 #include <vector>
 
 #include "sas.h"
-#include "httpconnection.h"
+#include "ralf_processor.h"
 #include "servercaps.h"
 
 typedef enum { SCSCF=0, PCSCF=1, ICSCF=2, BGCF=5, AS=6, IBCF=7 } Node;
@@ -221,7 +221,7 @@ class RalfACR : public ACR
 {
 public:
   /// Constructor.
-  RalfACR(HttpConnection* ralf,
+  RalfACR(RalfProcessor* ralf,
           SAS::TrailId trail,
           Node node_functionality,
           Initiator initiator,
@@ -391,7 +391,7 @@ private:
 
   std::string hdr_contents(pjsip_hdr* hdr);
 
-  HttpConnection* _ralf;
+  RalfProcessor* _ralf;
   SAS::TrailId _trail;
 
   Initiator _initiator;
@@ -479,10 +479,10 @@ class RalfACRFactory : public ACRFactory
 {
 public:
   /// Constructor.
-  /// @param ralf                 HttpConnection class set up to connect to
+  /// @param ralf                 RalfProcessor pool set up to connect to
   ///                             Ralf cluster.
   /// @param node_functionality   Node-Functionality value to set in ACRs.
-  RalfACRFactory(HttpConnection* ralf,
+  RalfACRFactory(RalfProcessor* ralf,
                  Node node_functionality);
 
   /// Destructor.
@@ -497,7 +497,7 @@ public:
   virtual ACR* get_acr(SAS::TrailId trail, Initiator initiator, NodeRole role);
 
 private:
-  HttpConnection* _ralf;
+  RalfProcessor* _ralf;
   Node _node_functionality;
 };
 

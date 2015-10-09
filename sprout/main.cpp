@@ -106,6 +106,7 @@ extern "C" {
 #include "snmp_counter_table.h"
 #include "snmp_success_fail_count_table.h"
 #include "snmp_agent.h"
+#include "ralf_processor.h"
 #include "sprout_alarmdefinition.h"
 
 enum OptionTypes
@@ -135,6 +136,7 @@ enum OptionTypes
   OPT_SESSION_CONTINUED_TIMEOUT_MS,
   OPT_SESSION_TERMINATED_TIMEOUT_MS,
   OPT_STATELESS_PROXIES,
+  OPT_RALF_THREADS,
   OPT_NON_REGISTERING_PBXES,
   OPT_PBX_SERVICE_ROUTE,
   OPT_NON_REGISTER_AUTHENTICATION
@@ -208,6 +210,7 @@ const static struct pj_getopt_option long_opt[] =
   { "session-terminated-timeout",   required_argument, 0, OPT_SESSION_TERMINATED_TIMEOUT_MS},
   { "stateless-proxies",            required_argument, 0, OPT_STATELESS_PROXIES},
   { "non-registering-pbxes",        required_argument, 0, OPT_NON_REGISTERING_PBXES},
+  { "ralf-threads",                 required_argument, 0, OPT_RALF_THREADS},
   { "non-register-authentication",  required_argument, 0, OPT_NON_REGISTER_AUTHENTICATION},
   { "pbx-service-route",            required_argument, 0, OPT_PBX_SERVICE_ROUTE},
   { NULL,                           0,                 0, 0}
@@ -281,6 +284,7 @@ static void usage(void)
        "                            processing (i.e. when it receives or sends to an I-CSCF).\n"
        "                            If 'pcscf,icscf,as', it also Record-Routes between every AS.\n"
        " -G, --ralf <server>        Name/IP address of Ralf (Rf) billing server.\n"
+       "     --ralf-threads N       Number of Ralf threads (default: 25)\n"
        " -X, --xdms <server>        Name/IP address of XDM server\n"
        "     --dns-server <server>[,<server2>,<server3>]\n"
        "                            IP addresses of the DNS servers to use (defaults to 127.0.0.1)\n"
@@ -680,6 +684,12 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case 'G':
       options->ralf_server = std::string(pj_optarg);
       fprintf(stdout, "Ralf server set to %s\n", pj_optarg);
+      break;
+
+    case OPT_RALF_THREADS:
+      options->ralf_threads = atoi(pj_optarg);
+      TRC_INFO("Number of ralf threads set to %d",
+               options->ralf_threads);
       break;
 
     case 'E':
@@ -1240,7 +1250,7 @@ LoadMonitor* load_monitor = NULL;
 HSSConnection* hss_connection = NULL;
 RegStore* local_reg_store = NULL;
 RegStore* remote_reg_store = NULL;
-HttpConnection* ralf_connection = NULL;
+RalfProcessor* ralf_processor = NULL;
 HttpResolver* http_resolver = NULL;
 ACRFactory* scscf_acr_factory = NULL;
 EnumService* enum_service = NULL;
@@ -1262,6 +1272,7 @@ int main(int argc, char* argv[])
   Store* local_data_store = NULL;
   Store* remote_data_store = NULL;
   AvStore* av_store = NULL;
+  HttpConnection* ralf_connection = NULL;
   ChronosConnection* chronos_connection = NULL;
   ACRFactory* pcscf_acr_factory = NULL;
   pj_bool_t websockets_enabled = PJ_FALSE;
@@ -1336,6 +1347,7 @@ int main(int argc, char* argv[])
   opt.session_continued_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_CONTINUED_TIMEOUT;
   opt.session_terminated_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_TERMINATED_TIMEOUT;
   opt.stateless_proxies.clear();
+  opt.ralf_threads = 25;
   opt.non_register_auth_mode = NonRegisterAuthentication::NEVER;
 
   boost::filesystem::path p = argv[0];
@@ -1745,6 +1757,9 @@ int main(int argc, char* argv[])
                                          load_monitor,
                                          SASEvent::HttpLogLevel::PROTOCOL,
                                          ralf_comm_monitor);
+    ralf_processor = new RalfProcessor(ralf_connection,
+                                       exception_handler,
+                                       opt.ralf_threads);
   }
   else
   {
@@ -1813,8 +1828,8 @@ int main(int argc, char* argv[])
   if (opt.pcscf_enabled)
   {
     // Create an ACR factory for the P-CSCF.
-    pcscf_acr_factory = (ralf_connection != NULL) ?
-                (ACRFactory*)new RalfACRFactory(ralf_connection, PCSCF) :
+    pcscf_acr_factory = (ralf_processor != NULL) ?
+                (ACRFactory*)new RalfACRFactory(ralf_processor, PCSCF) :
                 new ACRFactory();
 
     // Launch stateful proxy as P-CSCF.
@@ -1865,8 +1880,8 @@ int main(int argc, char* argv[])
 
   if (opt.scscf_enabled)
   {
-    scscf_acr_factory = (ralf_connection != NULL) ?
-                      (ACRFactory*)new RalfACRFactory(ralf_connection, SCSCF) :
+    scscf_acr_factory = (ralf_processor != NULL) ?
+                      (ACRFactory*)new RalfACRFactory(ralf_processor, SCSCF) :
                       new ACRFactory();
 
     if (opt.store_servers != "")
@@ -2195,6 +2210,7 @@ int main(int argc, char* argv[])
   delete av_store;
   delete local_data_store;
   delete remote_data_store;
+  delete ralf_processor;
   delete ralf_connection;
   delete enum_service;
   delete scscf_acr_factory;

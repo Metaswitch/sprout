@@ -91,6 +91,7 @@ TARGET_SOURCES := logger.cpp \
                   uri_classifier.cpp \
                   snmp_scalar.cpp \
                   snmp_row.cpp \
+                  ralf_processor.cpp \
                   sip_string_to_request_type.cpp \
                   session_expires_helper.cpp
 
@@ -152,6 +153,8 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        common_sip_processing_test.cpp \
                        fakesnmp.cpp \
                        uriclassifier_test.cpp \
+                       ralf_processor_test.cpp \
+                       mockhttpconnection.cpp \
                        session_expires_helper_test.cpp
 
 
