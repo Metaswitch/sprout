@@ -38,11 +38,9 @@
 
 /// Constructor.
 RalfProcessor::RalfProcessor(HttpConnection* ralf_connection,
-                             LoadMonitor* load_monitor,
                              ExceptionHandler* exception_handler,
                              const int ralf_threads) :
   _thread_pool(new Pool(ralf_connection,
-                        load_monitor,
                         exception_handler,
                         &exception_callback,
                         ralf_threads))
@@ -70,27 +68,17 @@ void RalfProcessor::send_request_to_ralf(RalfRequest* rr)
 // Send the ACR to Ralf
 void RalfProcessor::Pool::process_work(RalfProcessor::RalfRequest*& rr)
 {
+  // Send the request using HTTPConnection, which adds penalties via
+  // the load monitor if the request fails
   std::map<std::string, std::string> headers;
-  long rc = _ralf_connection->send_post(rr->path,
-                                        headers,
-                                        rr->message,
-                                        rr->trail);
-  
-  if (rc != HTTP_OK)
-  {
-    TRC_INFO("Sending Ralf message failed with rc = %ld", rc);
-    if ((rc == HTTP_SERVER_UNAVAILABLE) ||
-        (rc == HTTP_GATEWAY_TIMEOUT))
-    {
-      _load_monitor->incr_penalties();
-    }
-  }
-
+  _ralf_connection->send_post(rr->path,
+                              headers,
+                              rr->message,
+                              rr->trail);
   delete rr; rr = NULL;
 }
 
 RalfProcessor::Pool::Pool(HttpConnection* ralf_connection,
-                          LoadMonitor* load_monitor,
                           ExceptionHandler* exception_handler, 
                           void (*callback)(RalfProcessor::RalfRequest*),
                           unsigned int num_threads) :
@@ -98,8 +86,7 @@ RalfProcessor::Pool::Pool(HttpConnection* ralf_connection,
                                           exception_handler, 
                                           callback, 
                                           100),
-  _ralf_connection(ralf_connection),
-  _load_monitor(load_monitor)
+  _ralf_connection(ralf_connection)
 {}
 
 RalfProcessor::Pool::~Pool()

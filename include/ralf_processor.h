@@ -47,7 +47,6 @@ class RalfProcessor
 public:
   /// Constructor
   RalfProcessor(HttpConnection* ralf_connection,
-                LoadMonitor* load_monitor,
                 ExceptionHandler* exception_handler,
                 const int ralf_threads);
 
@@ -81,11 +80,9 @@ private:
   public:
     /// Constructor.
     /// @param ralf_connection    A pointer to the underlying ralf connection.
-    /// @param load_monitor       Load monitor
     /// @param num_threads        Number of ralf threads to start
     /// @param exception_handler  Exception handler
     Pool(HttpConnection* ralf_connection,
-         LoadMonitor* load_monitor,
          ExceptionHandler* exception_handler,
          void (*callback)(RalfProcessor::RalfRequest*),
          unsigned int num_threads);
@@ -99,7 +96,6 @@ private:
 
     /// Underlying Ralf connection
     HttpConnection* _ralf_connection;
-    LoadMonitor* _load_monitor;
   };
 
   friend class Pool;
