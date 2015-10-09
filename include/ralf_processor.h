@@ -68,7 +68,7 @@ public:
 
   static void exception_callback(RalfProcessor::RalfRequest* work)
   {
-    // No recovery behaviour as this is asynchronos, so we can't sensibly
+    // No recovery behaviour as this is asynchronous, so we can't sensibly
     // respond
   }
 
