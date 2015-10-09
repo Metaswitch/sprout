@@ -1407,7 +1407,14 @@ TEST_F(AuthenticationPxyAuthHdrTest, ProxyAuthorizationSuccess)
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
   msg2._integ_prot = "ip-assoc-pending";
-  inject_msg(msg2.get());
+
+  // Inject the request into the auth module. Check that it passes the request
+  // through, and strips the Proxy-Authorization header.
+  pjsip_rx_data* rdata = build_rxdata(msg2.get());
+  parse_rxdata(rdata);
+  pj_bool_t ret = _module->on_rx_request(rdata);
+  ASSERT_EQ(ret, PJ_FALSE);
+  EXPECT_EQ(get_headers(rdata->msg_info.msg, "Proxy-Authorization"), "");
 
   // Expect no response, as the authentication module has let the request through.
   ASSERT_EQ(0, txdata_count());

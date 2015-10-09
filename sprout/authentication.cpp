@@ -830,8 +830,14 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
       if (status == PJ_SUCCESS)
       {
-        // Request authentication completed, so let the message through to
-        // other modules.
+        // Request authentication completed, so let the message through to other
+        // modules. Remove any Proxy-Authorization headers first so they are not
+        // passed to downstream devices. We can't do this for Authorization
+        // headers, as these may need to be included in 3rd party REGISTER
+        // messages.
+        while (pjsip_msg_find_remove_hdr(rdata->msg_info.msg,
+                                         PJSIP_H_PROXY_AUTHORIZATION,
+                                         NULL) != NULL);
         delete av;
         return PJ_FALSE;
       }
