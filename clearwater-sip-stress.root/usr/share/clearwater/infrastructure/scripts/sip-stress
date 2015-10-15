@@ -7,7 +7,7 @@
 # - sipp_count - number of sipp instances per node
 # - password - SIP password to use for all DNs (insecure but OK for stress)
 base=2010000000
-count=87500
+count=30000
 node_idx=1
 sipp_count=1
 password=7kkzTyGW
