@@ -150,7 +150,10 @@ public:
       /// The time (in seconds since the epoch) at which this subscription
       /// should expire.
       int _expires;
-    };
+
+      /// The timer ID provided by Chronos.
+      std::string _timer_id;
+   };
 
     /// Default Constructor.
     AoR(std::string sip_uri);
@@ -383,9 +386,16 @@ public:
                            std::string b_id,
                            SAS::TrailId trail);
 
+  // Send NOTIFY used for expiring subscription
+  virtual void send_notify(AoR::Subscription *s,
+                           int cseq,
+                           AoR::Bindings bindings,
+                           SAS::TrailId trail);
+
 private:
+  int expire_aor_members(AoR* aor_data, int now, SAS::TrailId trail);
   int expire_bindings(AoR* aor_data, int now, SAS::TrailId trail);
-  void expire_subscriptions(AoR* aor_data, int now);
+  void expire_subscriptions(AoR* aor_data, int now, SAS::TrailId trail);
 
   ChronosConnection* _chronos;
   Connector* _connector;
