@@ -485,7 +485,7 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
 }
 
 
-void SCSCFSproutletTsx::on_tx_request(pjsip_msg* req)
+void SCSCFSproutletTsx::on_tx_request(pjsip_msg* req, int fork_id)
 {
   ACR* acr = get_acr();
   if (acr)

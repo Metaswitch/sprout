@@ -289,7 +289,7 @@ void ICSCFSproutletRegTsx::on_rx_in_dialog_request(pjsip_msg* req)
 }
 
 
-void ICSCFSproutletRegTsx::on_tx_request(pjsip_msg* req)
+void ICSCFSproutletRegTsx::on_tx_request(pjsip_msg* req, int fork_id)
 {
   if (_acr != NULL)
   {
@@ -396,7 +396,7 @@ void ICSCFSproutletRegTsx::on_tx_response(pjsip_msg* rsp)
 }
 
 
-void ICSCFSproutletRegTsx::on_cancel(int status_code, pjsip_msg* cancel_req)
+void ICSCFSproutletRegTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
 {
   if ((status_code == PJSIP_SC_REQUEST_TERMINATED) &&
       (cancel_req != NULL))
@@ -679,7 +679,7 @@ void ICSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
 }
 
 
-void ICSCFSproutletTsx::on_tx_request(pjsip_msg* req)
+void ICSCFSproutletTsx::on_tx_request(pjsip_msg* req, int fork_id)
 {
   if (_acr != NULL)
   {
@@ -773,7 +773,7 @@ void ICSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
 }
 
 
-void ICSCFSproutletTsx::on_cancel(int status_code, pjsip_msg* cancel_req)
+void ICSCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
 {
   if ((status_code == PJSIP_SC_REQUEST_TERMINATED) &&
       (cancel_req != NULL))

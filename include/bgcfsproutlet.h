@@ -129,11 +129,11 @@ public:
                    BGCFSproutlet* bgcf);
   ~BGCFSproutletTsx();
 
-  virtual void on_rx_initial_request(pjsip_msg* req);
-  virtual void on_tx_request(pjsip_msg* req);
-  virtual void on_rx_response(pjsip_msg* rsp, int fork_id);
-  virtual void on_tx_response(pjsip_msg* rsp);
-  virtual void on_cancel(int status_code, pjsip_msg* req);
+  virtual void on_rx_initial_request(pjsip_msg* req) override;
+  virtual void on_tx_request(pjsip_msg* req, int fork_id) override;
+  virtual void on_rx_response(pjsip_msg* rsp, int fork_id) override;
+  virtual void on_tx_response(pjsip_msg* rsp) override;
+  virtual void on_rx_cancel(int status_code, pjsip_msg* req) override;
 
 private:
   BGCFSproutlet* _bgcf;

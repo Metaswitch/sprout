@@ -141,12 +141,12 @@ public:
   ICSCFSproutletTsx(SproutletTsxHelper* helper, ICSCFSproutlet* icscf);
   ~ICSCFSproutletTsx();
 
-  virtual void on_rx_initial_request(pjsip_msg* req);
-  virtual void on_rx_in_dialog_request(pjsip_msg* req);
-  virtual void on_tx_request(pjsip_msg* req);
-  virtual void on_rx_response(pjsip_msg* rsp, int fork_id);
-  virtual void on_tx_response(pjsip_msg* rsp);
-  virtual void on_cancel(int status_code, pjsip_msg* req);
+  virtual void on_rx_initial_request(pjsip_msg* req) override;
+  virtual void on_rx_in_dialog_request(pjsip_msg* req) override;
+  virtual void on_tx_request(pjsip_msg* req, int fork_id) override;
+  virtual void on_rx_response(pjsip_msg* rsp, int fork_id) override;
+  virtual void on_tx_response(pjsip_msg* rsp) override;
+  virtual void on_rx_cancel(int status_code, pjsip_msg* req) override;
 
 private:
   /// Determine whether a status code indicates that the S-CSCF wasn't
@@ -179,12 +179,12 @@ public:
   ICSCFSproutletRegTsx(SproutletTsxHelper* helper, ICSCFSproutlet* icscf);
   ~ICSCFSproutletRegTsx();
 
-  virtual void on_rx_initial_request(pjsip_msg* req);
-  virtual void on_rx_in_dialog_request(pjsip_msg* req);
-  virtual void on_tx_request(pjsip_msg* req);
-  virtual void on_rx_response(pjsip_msg* rsp, int fork_id);
-  virtual void on_tx_response(pjsip_msg* rsp);
-  virtual void on_cancel(int status_code, pjsip_msg* req);
+  virtual void on_rx_initial_request(pjsip_msg* req) override;
+  virtual void on_rx_in_dialog_request(pjsip_msg* req) override;
+  virtual void on_tx_request(pjsip_msg* req, int fork_id) override;
+  virtual void on_rx_response(pjsip_msg* rsp, int fork_id) override;
+  virtual void on_tx_response(pjsip_msg* rsp) override;
+  virtual void on_rx_cancel(int status_code, pjsip_msg* req) override;
 
 private:
   ICSCFSproutlet* _icscf;
