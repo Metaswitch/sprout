@@ -91,7 +91,7 @@ public:
   MOCK_METHOD2(on_tx_request, void(pjsip_msg*, int));
   MOCK_METHOD2(on_rx_response, void(pjsip_msg*, int));
   MOCK_METHOD1(on_tx_response, void(pjsip_msg*));
-  MOCK_METHOD1(on_rx_cancel, void(int));
+  MOCK_METHOD2(on_rx_cancel, void(int, pjsip_msg*));
   MOCK_METHOD1(on_timer_expiry, void(void*));
 };
 
