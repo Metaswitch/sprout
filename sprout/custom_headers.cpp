@@ -68,9 +68,9 @@ typedef int   (*print_fptr)(void *hdr, char *buf, pj_size_t len);
 /*****************************************************************************/
 pjsip_hdr_vptr session_expires_hdr_vptr =
 {
-  (clone_fptr) &pjsip_session_expires_hdr_clone,
-  (clone_fptr) &pjsip_session_expires_hdr_shallow_clone,
-  (print_fptr) &pjsip_session_expires_hdr_print_on,
+   &pjsip_session_expires_hdr_clone,
+   &pjsip_session_expires_hdr_shallow_clone,
+   &pjsip_session_expires_hdr_print_on,
 };
 
 pjsip_session_expires_hdr* pjsip_session_expires_hdr_create(pj_pool_t* pool)
@@ -228,9 +228,9 @@ int pjsip_session_expires_hdr_print_on(void* h, char* buf, pj_size_t len)
 
 pjsip_hdr_vptr identity_hdr_vptr =
 {
-  (clone_fptr) &identity_hdr_clone,
-  (clone_fptr) &identity_hdr_shallow_clone,
-  (print_fptr) &identity_hdr_print,
+   &identity_hdr_clone,
+   &identity_hdr_shallow_clone,
+   &identity_hdr_print,
 };
 
 
@@ -239,9 +239,9 @@ pjsip_hdr_vptr identity_hdr_vptr =
 /*****************************************************************************/
 pjsip_hdr_vptr min_se_hdr_vptr =
 {
-  (clone_fptr) &pjsip_min_se_hdr_clone,
-  (clone_fptr) &pjsip_min_se_hdr_shallow_clone,
-  (print_fptr) &pjsip_min_se_hdr_print_on,
+   &pjsip_min_se_hdr_clone,
+   &pjsip_min_se_hdr_shallow_clone,
+   &pjsip_min_se_hdr_print_on,
 };
 
 pjsip_min_se_hdr* pjsip_min_se_hdr_create(pj_pool_t* pool)
@@ -378,9 +378,9 @@ pjsip_routing_hdr* identity_hdr_init(pj_pool_t* pool, void* mem, const pj_str_t 
 }
 
 
-pjsip_routing_hdr* identity_hdr_clone(pj_pool_t* pool,
-                                      const pjsip_routing_hdr* rhs)
+void* identity_hdr_clone(pj_pool_t* pool, const void* o)
 {
+  const pjsip_routing_hdr* rhs = (pjsip_routing_hdr*)o;
   pjsip_routing_hdr *hdr = identity_hdr_create(pool, rhs->name);
   pjsip_name_addr_assign(pool, &hdr->name_addr, &rhs->name_addr);
   pjsip_param_clone(pool, &hdr->other_param, &rhs->other_param);
@@ -388,9 +388,9 @@ pjsip_routing_hdr* identity_hdr_clone(pj_pool_t* pool,
 }
 
 
-pjsip_routing_hdr* identity_hdr_shallow_clone(pj_pool_t* pool,
-                                              const pjsip_routing_hdr* rhs)
+void* identity_hdr_shallow_clone(pj_pool_t* pool, const void* o)
 {
+  const pjsip_routing_hdr* rhs = (pjsip_routing_hdr*)o;
   pjsip_routing_hdr *hdr = PJ_POOL_ALLOC_T(pool, pjsip_routing_hdr);
   pj_memcpy(hdr, rhs, sizeof(*hdr));
   pjsip_param_shallow_clone(pool, &hdr->other_param, &rhs->other_param);
@@ -398,7 +398,7 @@ pjsip_routing_hdr* identity_hdr_shallow_clone(pj_pool_t* pool,
 }
 
 
-int identity_hdr_print(pjsip_routing_hdr* hdr,
+int identity_hdr_print(void* h,
                        char* buf,
                        pj_size_t size)
 {
@@ -406,6 +406,7 @@ int identity_hdr_print(pjsip_routing_hdr* hdr,
   char *startbuf = buf;
   char *endbuf = buf + size;
   const pjsip_parser_const_t *pc = pjsip_parser_const();
+  pjsip_routing_hdr* hdr = (pjsip_routing_hdr*)h;
 
   /* Route and Record-Route don't compact forms */
   copy_advance(buf, hdr->name);
@@ -867,7 +868,9 @@ int pjsip_p_c_v_hdr_print_on(void* h, char* buf, pj_size_t len)
   pj_memcpy(p, "icid-value=", 11);
   p += 11;
   *p++ = '"';
-  pj_memcpy(p, hdr->icid.ptr, hdr->icid.slen);
+  if (hdr->icid.slen) {
+    pj_memcpy(p, hdr->icid.ptr, hdr->icid.slen);
+  }
   p += hdr->icid.slen;
   *p++ = '"';
   if (hdr->orig_ioi.slen) {

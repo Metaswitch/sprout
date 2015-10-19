@@ -137,9 +137,9 @@ pjsip_hdr* parse_hdr_p_asserted_identity(pjsip_parse_ctx* ctx);
 pjsip_hdr* parse_hdr_p_preferred_identity(pjsip_parse_ctx* ctx);
 pjsip_routing_hdr* identity_hdr_create(pj_pool_t* pool, const pj_str_t name);
 pjsip_routing_hdr* identity_hdr_init(pj_pool_t* pool, void* mem, const pj_str_t name);
-pjsip_routing_hdr* identity_hdr_clone(pj_pool_t* pool, const pjsip_routing_hdr* rhs);
-pjsip_routing_hdr* identity_hdr_shallow_clone(pj_pool_t* pool, const pjsip_routing_hdr* rhs);
-int identity_hdr_print(pjsip_routing_hdr* hdr, char* buf, pj_size_t size);
+void* identity_hdr_clone(pj_pool_t* pool, const void* rhs);
+void* identity_hdr_shallow_clone(pj_pool_t* pool, const void* rhs);
+int identity_hdr_print(void* hdr, char* buf, pj_size_t size);
 
 // Service-Route
 pjsip_hdr* parse_hdr_service_route(pjsip_parse_ctx* ctx);

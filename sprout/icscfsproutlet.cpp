@@ -289,7 +289,7 @@ void ICSCFSproutletRegTsx::on_rx_in_dialog_request(pjsip_msg* req)
 }
 
 
-void ICSCFSproutletRegTsx::on_tx_request(pjsip_msg* req, fork_id)
+void ICSCFSproutletRegTsx::on_tx_request(pjsip_msg* req, int fork_id)
 {
   if (_acr != NULL)
   {
