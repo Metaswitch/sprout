@@ -494,7 +494,7 @@ void create_challenge(pjsip_digest_credential* credentials,
       std::string timer_id;
       std::string chronos_body = "{\"impi\": \"" + impi + "\", \"impu\": \"" + impu +"\", \"nonce\": \"" + nonce +"\"}";
       TRC_DEBUG("Sending %s to Chronos to set AV timer", chronos_body.c_str());
-      chronos->send_post(timer_id, 30, "/authentication-timeout", chronos_body, 0);
+      chronos->send_post(timer_id, 30, "/authentication-timeout", chronos_body, get_trail(rdata));
     }
 
     delete av;
