@@ -208,13 +208,13 @@ public:
   SCSCFSproutletTsx(SproutletTsxHelper* helper, SCSCFSproutlet* scscf, pjsip_method_e req_type);
   ~SCSCFSproutletTsx();
 
-  virtual void on_rx_initial_request(pjsip_msg* req);
-  virtual void on_rx_in_dialog_request(pjsip_msg* req);
-  virtual void on_tx_request(pjsip_msg* req);
-  virtual void on_rx_response(pjsip_msg* rsp, int fork_id);
-  virtual void on_tx_response(pjsip_msg* rsp);
-  virtual void on_rx_cancel(int status_code, pjsip_msg* req);
-  virtual void on_timer_expiry(void* context);
+  virtual void on_rx_initial_request(pjsip_msg* req) override;
+  virtual void on_rx_in_dialog_request(pjsip_msg* req) override;
+  virtual void on_tx_request(pjsip_msg* req, int fork_id) override;
+  virtual void on_rx_response(pjsip_msg* rsp, int fork_id) override;
+  virtual void on_tx_response(pjsip_msg* rsp) override;
+  virtual void on_rx_cancel(int status_code, pjsip_msg* req) override;
+  virtual void on_timer_expiry(void* context) override;
 
 private:
   /// Examines the top route header to determine the relevant AS chain
