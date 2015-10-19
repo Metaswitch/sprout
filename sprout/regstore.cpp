@@ -342,7 +342,7 @@ void RegStore::expire_subscriptions(AoR* aor_data,
     if (s->_expires <= now)
     {
       // Send subscription termination notify
-      send_notify(s, aor_data->_notify_cseq, aor_data->_bindings, trail);
+      send_notify(s, aor_data->_notify_cseq, aor_data, trail);
 
       // Delete any associated chronos timer
       if (s->_timer_id != "")
@@ -638,17 +638,12 @@ void RegStore::send_notify(AoR::Subscription* s, int cseq,
 }
 
 void RegStore::send_notify(AoR::Subscription* s, int cseq,
-                           AoR::Bindings bindings,
+                           AoR* aor_data,
                            SAS::TrailId trail)
 {
   pjsip_tx_data* tdata_notify = NULL;
-  pj_status_t status = NotifyUtils::create_notify(&tdata_notify, s, "aor", cseq, bindings,
-                                  NotifyUtils::DocState::FULL,
-                                  NotifyUtils::RegistrationState::ACTIVE,
-                                  NotifyUtils::ContactState::ACTIVE,
-                                  NotifyUtils::ContactEvent::REGISTERED,
-                                  NotifyUtils::SubscriptionState::TERMINATED,
-                                  0);
+  pj_status_t status = NotifyUtils::create_subscription_notify(&tdata_notify, s, "aor",
+                                                                cseq, &aor_data, true, 0);
 
   if (status == PJ_SUCCESS)
   {

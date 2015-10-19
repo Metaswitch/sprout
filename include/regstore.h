@@ -389,7 +389,7 @@ public:
   // Send NOTIFY used for expiring subscription
   virtual void send_notify(AoR::Subscription *s,
                            int cseq,
-                           AoR::Bindings bindings,
+                           AoR* aor_data,
                            SAS::TrailId trail);
 
 private:

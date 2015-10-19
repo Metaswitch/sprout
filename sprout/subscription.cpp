@@ -283,41 +283,15 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
 
   if (subscription_copy != NULL)
   {
-    std::map<std::string, RegStore::AoR::Binding> bindings;
-
-    for (RegStore::AoR::Bindings::const_iterator i = (*aor_data)->bindings().begin();
-         i != (*aor_data)->bindings().end();
-         ++i)
-    {
-      std::string id = i->first;
-      RegStore::AoR::Binding bind = *(i->second);
-
-      if (!bind._emergency_registration)
-      {
-        bindings.insert(std::pair<std::string, RegStore::AoR::Binding>(id, bind));
-      }
-    }
-
     if (update_notify)
     {
-      NotifyUtils::SubscriptionState state = NotifyUtils::SubscriptionState::ACTIVE;
-
-      if (expiry == 0)
-      {
-        state = NotifyUtils::SubscriptionState::TERMINATED;
-      }
-
-      status = NotifyUtils::create_notify(tdata_notify,
-                                          subscription_copy,
-                                          aor,
-                                          (*aor_data)->_notify_cseq,
-                                          bindings,
-                                          NotifyUtils::DocState::FULL,
-                                          NotifyUtils::RegistrationState::ACTIVE,
-                                          NotifyUtils::ContactState::ACTIVE,
-                                          NotifyUtils::ContactEvent::REGISTERED,
-                                          state,
-                                          expiry);
+      status = NotifyUtils::create_subscription_notify(tdata_notify,
+                                                       subscription_copy,
+                                                       aor,
+                                                       (*aor_data)->_notify_cseq,
+                                                       aor_data,
+                                                       (expiry==0),
+                                                       expiry);
     }
 
     if (analytics != NULL)

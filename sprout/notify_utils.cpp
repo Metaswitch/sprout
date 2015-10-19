@@ -303,6 +303,53 @@ pj_status_t create_request_from_subscription(
   return status;
 }
 
+// Pass the correct subscription parameters in to creat_notify
+pj_status_t NotifyUtils::create_subscription_notify(
+                                    pjsip_tx_data** tdata_notify,
+                                    RegStore::AoR::Subscription* subscription,
+                                    std::string aor,
+                                    int cseq,
+                                    RegStore::AoR** aor_data,
+                                    bool subscription_expired,
+                                    int expiry)
+{
+  // Create a map of string to binding, and populate it from aor_data
+  std::map<std::string, RegStore::AoR::Binding> bindings;
+
+  for (RegStore::AoR::Bindings::const_iterator i = (*aor_data)->bindings().begin();
+         i != (*aor_data)->bindings().end();
+         ++i)
+  {
+    std::string id = i->first;
+    RegStore::AoR::Binding bind = *(i->second);
+
+    if (!bind._emergency_registration)
+    {
+      bindings.insert(std::pair<std::string, RegStore::AoR::Binding>(id, bind));
+    }
+  }
+
+  //set the correct subscription state header
+  NotifyUtils::SubscriptionState state = NotifyUtils::SubscriptionState::ACTIVE;
+
+  if (subscription_expired)
+  {
+    state = NotifyUtils::SubscriptionState::TERMINATED;
+  }
+
+  pj_status_t status = NotifyUtils::create_notify(tdata_notify,
+                                                  subscription,
+                                                  aor,
+                                                  cseq,
+                                                  bindings,
+                                                  NotifyUtils::DocState::FULL,
+                                                  NotifyUtils::RegistrationState::ACTIVE,
+                                                  NotifyUtils::ContactState::ACTIVE,
+                                                  NotifyUtils::ContactEvent::REGISTERED,
+                                                  state,
+                                                  expiry);
+  return status;
+}
 // Create the request with to and from headers and a null body string, then add the body.
 pj_status_t NotifyUtils::create_notify(
                                     pjsip_tx_data** tdata_notify,
