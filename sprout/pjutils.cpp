@@ -1618,9 +1618,10 @@ std::string PJUtils::get_header_value(pjsip_hdr* header)
 void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* cid_hdr, pjsip_msg* msg)
 {
     SAS::Marker::Scope scope;
-    if ((msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
-      ((pjsip_method_cmp(&msg->line.req.method, pjsip_get_subscribe_method())) == 0) ||
-      ((pjsip_method_cmp(&msg->line.req.method, pjsip_get_notify_method())) == 0))
+    if ((msg->type != PJSIP_REQUEST_MSG) ||
+        (msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
+        (pjsip_method_cmp(&msg->line.req.method, pjsip_get_subscribe_method()) == 0) ||
+        (pjsip_method_cmp(&msg->line.req.method, pjsip_get_notify_method()) == 0))
   {
     // Don't correlate flows based on Call-ID for REGISTER/SUBSCRIBE/NOTIFY - you get massive trace
     // files.
