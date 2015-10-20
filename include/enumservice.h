@@ -45,10 +45,12 @@
 #include <boost/regex.hpp>
 #include <netinet/in.h>
 #include <ares.h>
+#include <pthread.h>
 #include "sas.h"
 #include "baseresolver.h"
 #include "dnsresolver.h"
 #include "communicationmonitor.h"
+#include "updater.h"
 
 /// @class EnumService
 ///
@@ -88,9 +90,14 @@ public:
   JSONEnumService(std::string configuration = "./enum.json");
   ~JSONEnumService();
 
+  // Updates the enum configuration
+  void update_enum();
+
   std::string lookup_uri_from_user(const std::string& user, SAS::TrailId trail) const;
 
 private:
+  void destroy_prefixes();
+
   struct NumberPrefix
   {
     std::string prefix;
@@ -100,8 +107,10 @@ private:
 
   std::list<struct NumberPrefix*> _number_prefixes;
 
+  std::string _configuration;
   NumberPrefix* prefix_match(const std::string& number) const;
-
+  Updater<void, JSONEnumService>* _updater;
+  mutable pthread_mutex_t _number_prefixes_rw_lock;
 };
 
 /// @class DNSEnumService

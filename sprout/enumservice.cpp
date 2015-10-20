@@ -92,23 +92,34 @@ bool EnumService::parse_regex_replace(const std::string& regex_replace, boost::r
 }
 
 
-JSONEnumService::JSONEnumService(std::string configuration)
+JSONEnumService::JSONEnumService(std::string configuration):
+  _configuration(configuration),
+  _updater(NULL)
+{
+  pthread_mutex_init(&_number_prefixes_rw_lock, NULL);
+
+  // create and updater which, by default, runs the function when initialized
+  _updater = new Updater<void, JSONEnumService>(this,
+                                  std::mem_fun(&JSONEnumService::update_enum));
+}
+
+void JSONEnumService::update_enum()
 {
   // Check whether the file exists.
   struct stat s;
-  if ((stat(configuration.c_str(), &s) != 0) &&
+  if ((stat(_configuration.c_str(), &s) != 0) &&
       (errno == ENOENT))
   {
     TRC_STATUS("No ENUM configuration (file %s does not exist)",
-               configuration.c_str());
-    CL_SPROUT_ENUM_FILE_MISSING.log(configuration.c_str());
+               _configuration.c_str());
+    CL_SPROUT_ENUM_FILE_MISSING.log(_configuration.c_str());
     return;
   }
 
-  TRC_STATUS("Loading ENUM configuration from %s", configuration.c_str());
+  TRC_STATUS("Loading ENUM configuration from %s", _configuration.c_str());
 
   // Read from the file
-  std::ifstream fs(configuration.c_str());
+  std::ifstream fs(_configuration.c_str());
   std::string enum_str((std::istreambuf_iterator<char>(fs)),
                         std::istreambuf_iterator<char>());
 
@@ -116,8 +127,8 @@ JSONEnumService::JSONEnumService(std::string configuration)
   {
     // LCOV_EXCL_START
     TRC_ERROR("Failed to read ENUM configuration data from %s",
-              configuration.c_str());
-    CL_SPROUT_ENUM_FILE_EMPTY.log(configuration.c_str());
+              _configuration.c_str());
+    CL_SPROUT_ENUM_FILE_EMPTY.log(_configuration.c_str());
     return;
     // LCOV_EXCL_STOP
   }
@@ -131,12 +142,14 @@ JSONEnumService::JSONEnumService(std::string configuration)
     TRC_ERROR("Failed to read ENUM configuration data: %s\nError: %s",
               enum_str.c_str(),
               rapidjson::GetParseError_En(doc.GetParseError()));
-    CL_SPROUT_ENUM_FILE_INVALID.log(configuration.c_str());
+    CL_SPROUT_ENUM_FILE_INVALID.log(_configuration.c_str());
     return;
   }
 
   try
   {
+    std::list<struct NumberPrefix*> new_number_prefixes;
+
     JSON_ASSERT_CONTAINS(doc, "number_blocks");
     JSON_ASSERT_ARRAY(doc["number_blocks"]);
     const rapidjson::Value& nb_arr = doc["number_blocks"];
@@ -147,7 +160,7 @@ JSONEnumService::JSONEnumService(std::string configuration)
     {
       try
       {
-        std::string prefix; 
+        std::string prefix;
         JSON_GET_STRING_MEMBER(*nb_it, "prefix", prefix);
         std::string regex;
         JSON_GET_STRING_MEMBER(*nb_it, "regex", regex);
@@ -175,19 +188,24 @@ JSONEnumService::JSONEnumService(std::string configuration)
         // Badly formed number block.
         TRC_WARNING("Badly formed ENUM number block (hit error at %s:%d)",
                     err._file, err._line);
-        CL_SPROUT_ENUM_FILE_INVALID.log(configuration.c_str());
+        CL_SPROUT_ENUM_FILE_INVALID.log(_configuration.c_str());
       }
     }
+
+    // Delete the old prefixes and store the new ones under mutex protection.
+    pthread_mutex_lock(&_number_prefixes_rw_lock);
+    destroy_prefixes();
+    _number_prefixes = new_number_prefixes;
+    pthread_mutex_unlock(&_number_prefixes_rw_lock);
   }
   catch (JsonFormatError err)
   {
     TRC_ERROR("Badly formed ENUM configuration data - missing number_blocks object");
-    CL_SPROUT_ENUM_FILE_INVALID.log(configuration.c_str());
+    CL_SPROUT_ENUM_FILE_INVALID.log(_configuration.c_str());
   }
 }
 
-
-JSONEnumService::~JSONEnumService()
+void JSONEnumService::destroy_prefixes()
 {
   for (std::list<struct NumberPrefix*>::iterator it = _number_prefixes.begin();
        it != _number_prefixes.end();
@@ -195,6 +213,17 @@ JSONEnumService::~JSONEnumService()
   {
     delete *it;
   }
+}
+
+JSONEnumService::~JSONEnumService()
+{
+  // Destroy the updater
+  delete _updater;
+  _updater = NULL;
+
+  // Lock not required here as nothing should be using the object when it is
+  // destroyed.
+  destroy_prefixes();
 }
 
 
@@ -240,6 +269,10 @@ std::string JSONEnumService::lookup_uri_from_user(const std::string &user, SAS::
 
 JSONEnumService::NumberPrefix* JSONEnumService::prefix_match(const std::string& number) const
 {
+  pthread_mutex_lock(&_number_prefixes_rw_lock);
+
+  JSONEnumService::NumberPrefix* xoPrefix = NULL;
+
   // For simplicity this uses a linear scan since we don't expect too many
   // entries.  Should shift to a radix tree at some point.
   for (std::list<struct NumberPrefix*>::const_iterator it = _number_prefixes.begin();
@@ -257,11 +290,14 @@ JSONEnumService::NumberPrefix* JSONEnumService::prefix_match(const std::string& 
       // ordered with most specific matches first so we can stop as soon as we
       // have one match).
       TRC_DEBUG("Match found");
-      return *it;
+      xoPrefix = *it;
+      break;
     }
   }
 
-  return NULL;
+  pthread_mutex_unlock(&_number_prefixes_rw_lock);
+
+  return xoPrefix;
 }
 
 DNSEnumService::DNSEnumService(const std::vector<std::string>& dns_servers,
@@ -296,7 +332,7 @@ DNSEnumService::DNSEnumService(const std::vector<std::string>& dns_servers,
       dns_server_addr.af = res->ai_family;
       if (dns_server_addr.af == AF_INET)
       {
-        dns_server_addr.addr.ipv4 = ((struct sockaddr_in*)res->ai_addr)->sin_addr;   
+        dns_server_addr.addr.ipv4 = ((struct sockaddr_in*)res->ai_addr)->sin_addr;
       }
       else if (dns_server_addr.af == AF_INET6)
       {
@@ -450,7 +486,7 @@ std::string DNSEnumService::lookup_uri_from_user(const std::string& user, SAS::T
   }
 
   // Report state of last communication attempt (which may potentially set/clear
-  // an associated alarm). 
+  // an associated alarm).
   if (_comm_monitor)
   {
     if (server_failed)
@@ -509,7 +545,7 @@ void DNSEnumService::parse_naptr_reply(const struct ares_naptr_reply* naptr_repl
   {
     TRC_DEBUG("Got NAPTR record: %u %u \"%s\" \"%s\" \"%s\" %s", record->order, record->preference, record->service, record->flags, record->regexp, record->replacement);
     if ((strcasecmp((char*)record->service, "e2u+sip") == 0) ||
-        (strcasecmp((char*)record->service, "e2u+pstn:sip") == 0) || 
+        (strcasecmp((char*)record->service, "e2u+pstn:sip") == 0) ||
         (strcasecmp((char*)record->service, "e2u+pstn:tel") == 0))
     {
       boost::regex regex;
