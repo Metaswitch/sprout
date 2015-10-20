@@ -60,6 +60,10 @@ public:
                                  AoR::Binding* b,
                                  std::string b_id,
                                  SAS::TrailId trail));
+/*  MOCK_METHOD4(send_notify, void(AoR::Subscription* s,
+                                 int cseq,
+                                 AoR* aor_data,
+                                 SAS::TrailId trail));*/
 };
 
 #endif

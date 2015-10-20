@@ -60,11 +60,12 @@ static bool reg_store_access_common(RegStore::AoR** aor_data,
                                     RegStore* current_store,
                                     RegStore* remote_store,
                                     RegStore::AoR** previous_aor_data,
-                                    SAS::TrailId trail)
+                                    SAS::TrailId trail,
+                                    bool should_send_notify)
 {
   // Find the current bindings for the AoR.
   delete *aor_data;
-  *aor_data = current_store->get_aor_data(aor_id, trail);
+  *aor_data = current_store->get_aor_data(aor_id, trail, should_send_notify);
   TRC_DEBUG("Retrieved AoR data %p", *aor_data);
 
   if (*aor_data == NULL)
@@ -82,7 +83,7 @@ static bool reg_store_access_common(RegStore::AoR** aor_data,
         (remote_store != NULL) &&
         (remote_store->has_servers()))
     {
-      *previous_aor_data = remote_store->get_aor_data(aor_id, trail);
+      *previous_aor_data = remote_store->get_aor_data(aor_id, trail, false);
       previous_aor_data_alloced = true;
     }
 
@@ -300,19 +301,23 @@ RegStore::AoR* RegistrationTimeoutTask::set_aor_data(RegStore* current_store,
                                  current_store,
                                  remote_store,
                                  &previous_aor_data,
-                                 trail()))
+                                 trail(),
+                                 is_primary))
     {
       // LCOV_EXCL_START - local store (used in testing) never fails
       break;
       // LCOV_EXCL_STOP
     }
-
+    // Do not send NOTIFYs in regstore as the RegistrationTimoutTask is called
+    // with both the local and remote stores as current_store, and NOTIFYs should
+    // have already been sent correctly by the above call to reg_store_access_common.
     set_rc = current_store->set_aor_data(aor_id,
                                          aor_data,
                                          is_primary,
                                          trail(),
                                          all_bindings_expired,
-                                         RegStore::TAGS_REG);
+                                         RegStore::TAGS_REG,
+                                         false);
     if (set_rc != Store::OK)
     {
       delete aor_data; aor_data = NULL;
@@ -466,7 +471,8 @@ RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
                                  current_store,
                                  remote_store,
                                  &previous_aor_data,
-                                 trail()))
+                                 trail(),
+                                 is_primary))
     {
       break;
     }

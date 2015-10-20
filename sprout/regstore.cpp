@@ -105,14 +105,14 @@ RegStore::~RegStore()
 /// an empty record if no data exists for the AoR.
 ///
 /// @param aor_id       The SIP Address of Record for the registration
-RegStore::AoR* RegStore::get_aor_data(const std::string& aor_id, SAS::TrailId trail)
+RegStore::AoR* RegStore::get_aor_data(const std::string& aor_id, SAS::TrailId trail, bool should_send_notify)
 {
   AoR* aor_data = _connector->get_aor_data(aor_id, trail);
 
   if (aor_data != NULL)
   {
     int now = time(NULL);
-    expire_aor_members(aor_data, now, trail);
+    expire_aor_members(aor_data, now, trail, should_send_notify);
   }
 
   return aor_data;
@@ -178,10 +178,11 @@ Store::Status RegStore::set_aor_data(const std::string& aor_id,
                                      AoR* aor_data,
                                      bool set_chronos,
                                      SAS::TrailId trail,
-                                     std::vector<std::string> tags)
+                                     std::vector<std::string> tags,
+                                     bool should_send_notify)
 {
   bool unused;
-  return set_aor_data(aor_id, aor_data, set_chronos, trail, unused, tags);
+  return set_aor_data(aor_id, aor_data, set_chronos, trail, unused, tags, should_send_notify);
 }
 
 
@@ -205,7 +206,8 @@ Store::Status RegStore::set_aor_data(const std::string& aor_id,
                                      bool set_chronos,
                                      SAS::TrailId trail,
                                      bool& all_bindings_expired,
-                                     std::vector<std::string> tags)
+                                     std::vector<std::string> tags,
+                                     bool should_send_notify)
 {
   all_bindings_expired = false;
   // Expire old subscriptions and bindings before writing to the server. If
@@ -219,7 +221,7 @@ Store::Status RegStore::set_aor_data(const std::string& aor_id,
   // This prevents a window condition where Chronos can return a binding to
   // expire, but memcached has already deleted the aor data (meaning that
   // no NOTIFYs could be sent)
-  int orig_max_expires = expire_aor_members(aor_data, now, trail);
+  int orig_max_expires = expire_aor_members(aor_data, now, trail, should_send_notify);
   int max_expires = orig_max_expires + 10;
 
   // expire_aor_members returns "now" if there are no remaining bindings,
@@ -319,9 +321,10 @@ Store::Status RegStore::Connector::set_aor_data(const std::string& aor_id,
 
 int RegStore::expire_aor_members(AoR* aor_data,
                                  int now,
-                                 SAS::TrailId trail)
+                                 SAS::TrailId trail,
+                                 bool should_send_notify)
 {
-  expire_subscriptions(aor_data, now, trail);
+  expire_subscriptions(aor_data, now, trail, should_send_notify);
   int max_expires = expire_bindings(aor_data, now, trail);
   return max_expires;
 }
@@ -331,8 +334,9 @@ int RegStore::expire_aor_members(AoR* aor_data,
 /// @param aor_data      The registration data record.
 /// @param now           The current time in seconds since the epoch.
 void RegStore::expire_subscriptions(AoR* aor_data,
-                                   int now,
-                                   SAS::TrailId trail)
+                                    int now,
+                                    SAS::TrailId trail,
+                                    bool should_send_notify)
 {
   for (AoR::Subscriptions::iterator i = aor_data->_subscriptions.begin();
        i != aor_data->_subscriptions.end();
@@ -341,9 +345,11 @@ void RegStore::expire_subscriptions(AoR* aor_data,
     AoR::Subscription* s = i->second;
     if (s->_expires <= now)
     {
-      // Send subscription termination notify
-      send_notify(s, aor_data->_notify_cseq, aor_data, trail);
-
+      // Send subscription termination notify unless told not to
+      if (should_send_notify)
+      {
+        send_notify(s, aor_data->_notify_cseq, aor_data, trail);
+      }
       // Delete any associated chronos timer
       if (s->_timer_id != "")
       {

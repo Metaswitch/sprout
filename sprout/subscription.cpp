@@ -157,7 +157,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
     delete (*aor_data);
 
     // Find the current subscriptions for the AoR.
-    (*aor_data) = primary_store->get_aor_data(aor, trail);
+    (*aor_data) = primary_store->get_aor_data(aor, trail, false);
     TRC_DEBUG("Retrieved AoR data %p", (*aor_data));
 
     if ((*aor_data) == NULL)
@@ -177,7 +177,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
           (backup_store != NULL) &&
           (backup_store->has_servers()))
       {
-        backup_aor = backup_store->get_aor_data(aor, trail);
+        backup_aor = backup_store->get_aor_data(aor, trail, false);
         backup_aor_alloced = (backup_aor != NULL);
       }
 
@@ -271,7 +271,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
 
     // Try to write the AoR back to the store.
     set_rc = primary_store->set_aor_data(aor, (*aor_data), false, trail,
-                                         RegStore::TAGS_SUB);
+                                         RegStore::TAGS_SUB, false);
 
     if (set_rc != Store::OK)
     {
@@ -285,13 +285,19 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
   {
     if (update_notify)
     {
-      status = NotifyUtils::create_subscription_notify(tdata_notify,
-                                                       subscription_copy,
-                                                       aor,
-                                                       (*aor_data)->_notify_cseq,
-                                                       aor_data,
-                                                       (expiry==0),
-                                                       expiry);
+      // TODO check parity with regstore. if we are passing all gets and sets
+      // to regstore with should_send_notify = false, should we remove the 
+      // check on expiry != 0 below
+      //if (expiry != 0)
+//      {
+        status = NotifyUtils::create_subscription_notify(tdata_notify,
+                                                         subscription_copy,
+                                                         aor,
+                                                         (*aor_data)->_notify_cseq,
+                                                         aor_data,
+                                                         (expiry == 0), // Check expiry
+                                                         expiry);
+//      }
     }
 
     if (analytics != NULL)

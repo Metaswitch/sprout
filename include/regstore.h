@@ -361,7 +361,9 @@ public:
   /// in format "sip:2125551212@example.com"), creating creating it if
   /// necessary.  May return NULL in case of error.  Result is owned
   /// by caller and must be freed with delete.
-  virtual AoR* get_aor_data(const std::string& aor_id, SAS::TrailId trail);
+  virtual AoR* get_aor_data(const std::string& aor_id,
+                            SAS::TrailId trail,
+                            bool should_send_notify = true);
 
   /// Update the data for a particular address of record.  Writes the data
   /// atomically.  If the underlying data has changed since it was last
@@ -371,13 +373,15 @@ public:
                                      AoR* data,
                                      bool update_timers,
                                      SAS::TrailId trail,
-                                     const std::vector<std::string> tags = TAGS_NONE);
+                                     const std::vector<std::string> tags = TAGS_NONE,
+                                     bool should_send_notify = true);
   virtual Store::Status set_aor_data(const std::string& aor_id,
                                      AoR* data,
                                      bool update_timers,
                                      SAS::TrailId trail,
                                      bool& all_bindings_expired,
-                                     const std::vector<std::string> tags = TAGS_NONE);
+                                     const std::vector<std::string> tags = TAGS_NONE,
+                                     bool should_send_notify = true);
 
   // Send a SIP NOTIFY
   virtual void send_notify(AoR::Subscription* s,
@@ -393,9 +397,19 @@ public:
                            SAS::TrailId trail);
 
 private:
-  int expire_aor_members(AoR* aor_data, int now, SAS::TrailId trail);
-  int expire_bindings(AoR* aor_data, int now, SAS::TrailId trail);
-  void expire_subscriptions(AoR* aor_data, int now, SAS::TrailId trail);
+  int expire_aor_members(AoR* aor_data,
+                         int now,
+                         SAS::TrailId trail,
+                         bool should_send_notify);
+
+  int expire_bindings(AoR* aor_data,
+                      int now,
+                      SAS::TrailId trail);
+
+  void expire_subscriptions(AoR* aor_data,
+                            int now,
+                            SAS::TrailId trail,
+                            bool should_send_notify);
 
   ChronosConnection* _chronos;
   Connector* _connector;

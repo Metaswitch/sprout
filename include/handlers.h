@@ -91,7 +91,7 @@ protected:
                               std::string aor_id,
                               RegStore::AoR* previous_aor_data,
                               RegStore* remote_store,
-                              bool update_chronos,
+                              bool is_primary,  //do we update chronos and send NOTIFYs
                               bool& all_bindings_expired);
 
 protected:
