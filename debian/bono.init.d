@@ -162,9 +162,9 @@ get_daemon_args()
                      --dns-server=$signaling_dns_server
                      --pjsip-threads=$num_pjsip_threads
                      --worker-threads=$num_worker_threads
-                     -a=$log_directory
-                     -F=$log_directory
-                     -L=$log_level
+                     --analytics=$log_directory
+                     --log-file=$log_directory
+                     --log-level=$log_level
                      $target_latency_us_arg
                      $max_tokens_arg
                      $init_token_rate_arg
