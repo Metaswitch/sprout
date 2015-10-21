@@ -166,7 +166,7 @@ TEST_F(RegistrationTimeoutTasksTest, MissingBindingJSONTest)
   std::string body = "{\"aor_id\": \"aor_id\"}";
   int status = handler->parse_response(body);
 
-  ASSERT_EQ(status, 400);
+  ASSERT_EQ(status, 200);
 }
 
 

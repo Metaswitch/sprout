@@ -98,6 +98,7 @@ protected:
   const Config* _cfg;
   std::string _aor_id;
   std::string _binding_id;
+  std::string _subscription_id;
 };
 
 class DeregistrationTask : public HttpStackUtils::Task

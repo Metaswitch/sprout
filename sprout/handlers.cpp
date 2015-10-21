@@ -343,7 +343,7 @@ HTTPCode RegistrationTimeoutTask::parse_response(std::string body)
 
   if (doc.HasParseError())
   {
-    TRC_INFO("Failed to parse opaque data as JSON: %s\nError: %s",
+    TRC_DEBUG("Failed to parse opaque data as JSON: %s\nError: %s",
              json_str.c_str(),
              rapidjson::GetParseError_En(doc.GetParseError()));
     return HTTP_BAD_REQUEST;
@@ -352,12 +352,35 @@ HTTPCode RegistrationTimeoutTask::parse_response(std::string body)
   try
   {
     JSON_GET_STRING_MEMBER(doc, "aor_id", _aor_id);
-    JSON_GET_STRING_MEMBER(doc, "binding_id", _binding_id);
   }
   catch (JsonFormatError err)
   {
-    TRC_INFO("Badly formed opaque data (missing aor_id or binding_id)");
+    TRC_DEBUG("Badly formed opaque data (missing aor_id)");
     return HTTP_BAD_REQUEST;
+  }
+
+  _binding_id = (((doc.HasMember("binding_id")) && 
+                 ((doc["binding_id"]).IsString())) ? doc["binding_id"].GetString() : "");
+
+  _subscription_id = (((doc.HasMember("subscription_id")) &&
+                      ((doc["subscription_id"]).IsString())) ? doc["subscription_id"].GetString() : "");
+
+  if (_binding_id == "" && _subscription_id == "")
+  {
+    TRC_DEBUG("No binding id or subscription id found");
+  }
+  else if (_binding_id != "" && _subscription_id != "")
+  {
+    TRC_DEBUG("Found both binding id: %s and subscription id: %s", _binding_id.c_str(),
+                                                                   _subscription_id.c_str());
+  }
+  else if (_binding_id != "")
+  {
+    TRC_DEBUG("Found binding id: %s", _binding_id.c_str());
+  }
+  else if (_subscription_id != "")
+  {
+    TRC_DEBUG("Found subscription id: %s", _subscription_id.c_str());
   }
 
   return HTTP_OK;

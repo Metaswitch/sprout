@@ -245,38 +245,63 @@ Store::Status RegStore::set_aor_data(const std::string& aor_id,
          i != aor_data->_bindings.end();
          ++i)
     {
-      AoR::Binding* b = i->second;
-      std::string b_id = i->first;
+      std::string binding_id = i->first;
+      std::string* timer_id = &i->second->_timer_id;
+      int expiry = i->second->_expires;
+      std::string id_type = "\" \"binding_id\": \"";
 
-      HTTPCode status;
-      std::string timer_id = "";
-      std::string opaque = "{\"aor_id\": \"" + aor_id + "\", \"binding_id\": \"" + b_id +"\"}";
-      std::string callback_uri = "/timers";
+      set_timer(aor_id, binding_id, timer_id, expiry, id_type, trail, tags);
+    }
 
-      int now = time(NULL);
-      int expiry = b->_expires - now;
+    for (AoR::Subscriptions::iterator i = aor_data->_subscriptions.begin();
+         i != aor_data->_subscriptions.end();
+         ++i)
+    {
+      std::string subscription_id = i->first;
+      std::string* timer_id = &i->second->_timer_id;
+      int expiry = i->second->_expires;
+      std::string id_type = "\" \"subscription_id\": \"";
 
-      // If a timer has been previously set for this binding, send a PUT. Otherwise sent a POST.
-      if (b->_timer_id == "")
-      {
-        status = _chronos->send_post(timer_id, expiry, callback_uri, opaque, trail, tags);
-      }
-      else
-      {
-        timer_id = b->_timer_id;
-        status = _chronos->send_put(timer_id, expiry, callback_uri, opaque, trail, tags);
-      }
-
-      // Update the timer id. If the update to Chronos failed, that's OK, don't reject the register
-      // or update the stored timer id.
-      if (status == HTTP_OK)
-      {
-        b->_timer_id = timer_id;
-      }
+      set_timer(aor_id, subscription_id, timer_id, expiry, id_type, trail, tags);
     }
   }
-
   return _connector->set_aor_data(aor_id, aor_data, max_expires - now, trail);
+}
+
+void RegStore::set_timer(const std::string& aor_id,
+                         std::string object_id,
+                         std::string* timer_id,
+                         int expiry,
+                         std::string id_type,
+                         SAS::TrailId trail,
+                         std::vector<std::string> tags)
+{
+  std::string _timer_id = "";
+  HTTPCode status;
+  std::string opaque = "{\"aor_id\": \"" + aor_id + id_type + object_id +"\"}";
+  std::string callback_uri = "/timers";
+
+  // Set expiry to be relative to now, and ensure it is not negative.
+  int now = time(NULL);
+  (expiry>now) ? (expiry -= now):(expiry = 0);
+
+  // If a timer has been previously set for this binding, send a PUT. Otherwise sent a POST.
+  if (*timer_id == "")
+  {
+    status = _chronos->send_post(_timer_id, expiry, callback_uri, opaque, trail, tags);
+  }
+  else
+  {
+    _timer_id = *timer_id;
+    status = _chronos->send_put(_timer_id, expiry, callback_uri, opaque, trail, tags);
+  }
+  
+  // Update the timer id. If the update to Chronos failed, that's OK, don't reject
+  // the register or update the stored timer id.
+  if (status == HTTP_OK)
+  {
+    *timer_id = _timer_id;
+  }
 }
 
 Store::Status RegStore::Connector::set_aor_data(const std::string& aor_id,

@@ -397,6 +397,14 @@ public:
                            SAS::TrailId trail);
 
 private:
+  void set_timer(const std::string& aor_id,
+                 std::string object_id,
+                 std::string* timer_id,
+                 int expiry,
+                 std::string id_type,
+                 SAS::TrailId trail,
+                 std::vector<std::string> tags);
+
   int expire_aor_members(AoR* aor_data,
                          int now,
                          SAS::TrailId trail,
