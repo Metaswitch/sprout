@@ -866,6 +866,24 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       // SAS log the start of originating or terminating processing.
       sas_log_start_of_sesion_case(req, _session_case, served_user);
 
+      if (_session_case->is_terminating())
+      {
+        if (stack_data.record_route_on_initiation_of_terminating)
+        {
+          TRC_DEBUG("Single Record-Route - initiation of terminating handling");
+          add_record_route(req, false, NODE_ROLE_TERMINATING);
+        }
+      }
+      else if (_session_case->is_originating())
+      {
+        if (stack_data.record_route_on_initiation_of_originating)
+        {
+          TRC_DEBUG("Single Record-Route - initiation of originating handling");
+          add_record_route(req, true, NODE_ROLE_ORIGINATING);
+          acr->override_session_id(PJUtils::pj_str_to_string(&PJSIP_MSG_CID_HDR(req)->id));
+        }
+      }
+
       TRC_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
 
       Ifcs ifcs;
@@ -883,23 +901,6 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
 
         // No IFC, so no AsChain, store the ACR locally.
         _failed_ood_acr = acr;
-      }
-
-      if (_session_case->is_terminating())
-      {
-        if (stack_data.record_route_on_initiation_of_terminating)
-        {
-          TRC_DEBUG("Single Record-Route - initiation of terminating handling");
-          add_record_route(req, false, NODE_ROLE_TERMINATING);
-        }
-      }
-      else if (_session_case->is_originating())
-      {
-        if (stack_data.record_route_on_initiation_of_originating)
-        {
-          TRC_DEBUG("Single Record-Route - initiation of originating handling");
-          add_record_route(req, true, NODE_ROLE_ORIGINATING);
-        }
       }
     }
     else
@@ -1117,6 +1118,12 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
     {
       TRC_DEBUG("Add service to dialog - end of terminating handling");
       add_record_route(req, true, NODE_ROLE_TERMINATING);
+
+      ACR* acr = _as_chain_link.acr();
+      if (acr != NULL)
+      {
+        acr->override_session_id(PJUtils::pj_str_to_string(&PJSIP_MSG_CID_HDR(req)->id));
+      }
     }
 
     if (pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL) != NULL)
