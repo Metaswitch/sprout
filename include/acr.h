@@ -164,6 +164,16 @@ public:
   /// Set the default CCF for this ACR.
   virtual void set_default_ccf(const std::string& default_ccf);
 
+  /// Sets the session ID for this ACR.
+  ///
+  /// This allows the caller to override the default session ID (which is the
+  /// call ID of the first request passed to the ACR).  This is useful if there
+  /// are B2BUAs involved in the call and the caller needs more control about
+  /// what call ID is reported to Ralf.
+  ///
+  /// @param session_id       The session ID to use.
+  virtual void override_session_id(const std::string& session_id);
+
   /// Called when the ACR message should be sent if it's not yet been
   /// cancelled.  In general this will be when the relevant transaction or AS
   /// chain has ended.
@@ -285,6 +295,15 @@ public:
   /// Set the default CCF for this ACR.
   virtual void set_default_ccf(const std::string& default_ccf);
 
+  /// Sets the session ID for this ACR.
+  ///
+  /// This allows the caller to override the default session ID (which is the
+  /// call ID of the first request passed to the ACR).  This is useful if there
+  /// are B2BUAs involved in the call and the caller needs more control about
+  /// what call ID is reported to Ralf.
+  ///
+  /// @param session_id       The session ID to use.
+  virtual void override_session_id(const std::string& session_id);
 private:
 
   /// Called when the Rf message should be triggered.  In general this will

@@ -1,0 +1,102 @@
+{
+  "event": {
+    "Accounting-Record-Type": 2,
+    "Acct-Interim-Interval": 600,
+    "Event-Timestamp": 1,
+    "Service-Information": {
+      "IMS-Information": {
+        "Application-Server-Information": [
+          {
+            "Application-Provided-Called-Party-Address": [
+              "sip:6505559999@homedomain"
+            ],
+            "Application-Server": "sip:as1.homedomain:5060;transport=TCP"
+          }
+        ],
+        "Called-Asserted-Identity": [
+          "sip:6505550001@homedomain",
+          "tel:6505550001"
+        ],
+        "Called-Party-Address": "sip:6505550001@homedomain",
+        "Calling-Party-Address": [
+          "sip:6505550000@homedomain",
+          "tel:6505550000"
+        ],
+        "Event-Type": {
+          "SIP-Method": "INVITE"
+        },
+        "From-Address": "\"6505550000\" <sip:6505550000@homedomain>;tag=12345678",
+        "IMS-Charging-Identifier": "1234bc9876e",
+        "Inter-Operator-Identifier": [
+          {
+            "Originating-IOI": "homedomain",
+            "Terminating-IOI": "homedomain"
+          }
+        ],
+        "Node-Functionality": 0,
+        "Role-Of-Node": 1,
+        "Route-Header-Received": "<sip:sprout.homedomain:5054;transport=TCP;lr>",
+        "Route-Header-Transmitted": "<sip:abcdefgh@pcscf1.homedomain:5058;transport=TCP;lr>",
+        "SDP-Media-Component": [
+          {
+            "IP-Realm-Default-Indication": 1,
+            "Local-GW-Inserted-Indication": 0,
+            "Media-Initiator-Flag": 1,
+            "Media-Initiator-Party": "sip:6505550000@homedomain",
+            "SDP-Media-Description": [
+              "c=IN IP4 10.83.18.38"
+            ],
+            "SDP-Media-Name": "m=audio 1988 RTP\/SAVPF 0 8",
+            "SDP-Type": 0,
+            "Transcoder-Inserted-Indication": 0
+          },
+          {
+            "IP-Realm-Default-Indication": 1,
+            "Local-GW-Inserted-Indication": 0,
+            "Media-Initiator-Flag": 0,
+            "Media-Initiator-Party": "sip:6505550001@homedomain",
+            "SDP-Media-Description": [
+              "c=IN IP4 10.83.18.50"
+            ],
+            "SDP-Media-Name": "m=audio 1988 RTP/SAVPF 0 8",
+            "SDP-Type": 1,
+            "Transcoder-Inserted-Indication": 0
+          }
+        ],
+        "SDP-Session-Description": [
+          "v=0",
+          "o=- 2728502836004741600 2 IN IP4 127.0.0.1",
+          "s=Doubango Telecom - chrome",
+          "t=0 0"
+        ],
+        "Time-Stamps": {
+          "SIP-Request-Timestamp": 1,
+          "SIP-Request-Timestamp-Fraction": 0,
+          "SIP-Response-Timestamp": 1,
+          "SIP-Response-Timestamp-Fraction": 70
+        },
+        "User-Session-Id": "differentfromapreviouscallid@10.83.18.38"
+      },
+      "Subscription-Id": [
+        {
+          "Subscription-Id-Data": "sip:6505550001@homedomain",
+          "Subscription-Id-Type": 2
+        },
+        {
+          "Subscription-Id-Data": "6505550001",
+          "Subscription-Id-Type": 0
+        }
+      ]
+    }
+  },
+  "peers": {
+    "ccf": [
+      "192.1.1.1",
+      "192.1.1.2"
+    ],
+    "ecf": [
+      "192.1.1.3",
+      "192.1.1.4"
+    ]
+  }
+}
