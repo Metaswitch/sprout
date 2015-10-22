@@ -630,8 +630,9 @@ pj_status_t init_stack(const std::string& system_name,
     {
       stack_data.home_domains.insert(*ii);
 
-      pj_str_t* domain;
-      pj_strdup2(stack_data.pool, domain, ii->c_str());
+      // We can't allocate using PJSIP memory allocation here because it's not yet initialized.
+      pj_str_t* domain = (pj_str_t*)malloc(sizeof(pj_str_t));
+      *domain = pj_str(strdup(ii->c_str()));
       URIClassifier::home_domains.push_back(domain);
     }
   }
