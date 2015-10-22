@@ -66,6 +66,8 @@ public:
                                  int cseq,
                                  AoR* aor_data,
                                  SAS::TrailId trail));
+
+  MOCK_METHOD0(has_servers, bool());
 };
 
 #endif

@@ -122,18 +122,18 @@ class RegistrationTimeoutTasksTest : public SipTest
     for (uint32_t ii = 0; ii < aor_ids.size(); ++ii)
     {
       // Get the information from the local store
-      EXPECT_CALL(*store, get_aor_data(aor_ids[ii], _, _)).WillOnce(Return(aors[ii]));
+      EXPECT_CALL(*store, get_aor_data(aor_ids[ii], _, true)).WillOnce(Return(aors[ii]));
 
       if (aors[ii] != NULL)
       {
         // Write the information to the local store
-        EXPECT_CALL(*store, set_aor_data(aor_ids[ii], _, _, _, _, _, _)).WillOnce(Return(Store::OK));
+        EXPECT_CALL(*store, set_aor_data(aor_ids[ii], _, _, _, _, _, false)).WillOnce(Return(Store::OK));
 
         // Write the information to the remote store
-        EXPECT_CALL(*remote_store, get_aor_data(aor_ids[ii], _, _)).WillRepeatedly(Return(remote_aor));
+        EXPECT_CALL(*remote_store, get_aor_data(aor_ids[ii], _, false)).WillRepeatedly(Return(remote_aor));
         if (remote_aor != NULL)
         {
-          EXPECT_CALL(*remote_store, set_aor_data(aor_ids[ii], _, _, _, _, _, _)).WillOnce(Return(Store::OK));
+          EXPECT_CALL(*remote_store, set_aor_data(aor_ids[ii], _, _, _, _, _, false)).WillOnce(Return(Store::OK));
         }
       }
     }
@@ -154,6 +154,7 @@ class RegistrationTimeoutTasksTest : public SipTest
     b->_emergency_registration = false;
     b->_private_id = "6505550231";
   }
+
   void build_subscription(RegStore::AoR* aor, RegStore::AoR::Subscription* s, int now)
   {
     s = aor->get_subscription("1234");
@@ -259,6 +260,207 @@ TEST_F(RegistrationTimeoutTasksTest, MissingBindingJSONTest)
   handler->run();
 }
 
+TEST_F(RegistrationTimeoutTasksTest, SubscriptionIDTest)
+{
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"subscription_id\": \"subscription_id\"}";
+  build_timeout_request(body, htp_method_POST);
+
+  // Set up regstore expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  // Get an initial empty AoR record and add a standard binding and subscription
+  RegStore::AoR* aor = new RegStore::AoR(aor_id);
+  int now = time(NULL);
+  RegStore::AoR::Binding* b1 = NULL;
+  build_binding(aor, b1, now);
+  RegStore::AoR::Subscription* s1 = NULL;
+  build_subscription(aor, s1, now);
+
+// Set up the remote store to return NULL
+  RegStore::AoR* remote_aor = NULL;
+  std::vector<std::string> aor_ids = {aor_id};
+  std::vector<RegStore::AoR*> aors = {aor};
+
+  cwtest_advance_time_ms(6000);
+  expect_reg_store_updates(aor_ids, aors, remote_aor);
+  EXPECT_CALL(*stack, send_reply(_, 200, _));
+  handler->run();
+}
+
+TEST_F(RegistrationTimeoutTasksTest, BindAndSubIDTest)
+{
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"binding_id\", \"subscription_id\": \"subscription_id\"}";
+  build_timeout_request(body, htp_method_POST);
+
+  // Set up regstore expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  // Get an initial empty AoR record and add a standard binding and subscription
+  RegStore::AoR* aor = new RegStore::AoR(aor_id);
+  int now = time(NULL);
+  RegStore::AoR::Binding* b1 = NULL;
+  build_binding(aor, b1, now);
+  RegStore::AoR::Subscription* s1 = NULL;
+  build_subscription(aor, s1, now);
+
+// Set up the remote store to return NULL
+  RegStore::AoR* remote_aor = NULL;
+  std::vector<std::string> aor_ids = {aor_id};
+  std::vector<RegStore::AoR*> aors = {aor};
+
+  cwtest_advance_time_ms(6000);
+  expect_reg_store_updates(aor_ids, aors, remote_aor);
+  EXPECT_CALL(*stack, send_reply(_, 200, _));
+  handler->run();
+}
+
+TEST_F(RegistrationTimeoutTasksTest, RemoteAoRTest)
+{
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"binding_id\"}";
+  build_timeout_request(body, htp_method_POST);
+
+  // Set up regstore expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  // Get an initial empty AoR record and add a standard binding and subscription
+
+  RegStore::AoR* aor = new RegStore::AoR(aor_id);
+  int now = time(NULL);
+  RegStore::AoR::Binding* b1 = NULL;
+  build_binding(aor, b1, now);
+  RegStore::AoR::Subscription* s1 = NULL;
+  build_subscription(aor, s1, now);
+
+  RegStore::AoR* remote_aor = new RegStore::AoR(aor_id);
+  RegStore::AoR::Binding* b2 = NULL;
+  build_binding(remote_aor, b2, now);
+  RegStore::AoR::Subscription* s2 = NULL;
+  build_subscription(remote_aor, s2, now);
+
+  std::vector<std::string> aor_ids = {aor_id};
+  std::vector<RegStore::AoR*> aors = {aor};
+
+  cwtest_advance_time_ms(6000);
+
+  expect_reg_store_updates(aor_ids, aors, remote_aor);
+  EXPECT_CALL(*remote_store, has_servers()).WillOnce(Return(true));
+  EXPECT_CALL(*stack, send_reply(_, 200, _));
+  handler->run();
+}
+
+TEST_F(RegistrationTimeoutTasksTest, RemoteAoRNoBindingsTest)
+{
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"binding_id\"}";
+  build_timeout_request(body, htp_method_POST);
+
+  // Set up regstore expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  // Get an initial empty AoR record and add a standard binding and subscription
+
+  RegStore::AoR* aor = new RegStore::AoR(aor_id);
+  int now = time(NULL);
+  RegStore::AoR::Binding* b1 = NULL;
+  build_binding(aor, b1, now);
+  RegStore::AoR::Subscription* s1 = NULL;
+  build_subscription(aor, s1, now);
+
+  RegStore::AoR* remote_aor = new RegStore::AoR(aor_id);
+//  RegStore::AoR::Binding* b2 = NULL;
+//  build_binding(remote_aor, b2, now);
+//  RegStore::AoR::Subscription* s2 = NULL;
+//  build_subscription(remote_aor, s2, now);
+
+  std::vector<std::string> aor_ids = {aor_id};
+  std::vector<RegStore::AoR*> aors = {aor};
+
+  cwtest_advance_time_ms(6000);
+
+  expect_reg_store_updates(aor_ids, aors, remote_aor);
+  EXPECT_CALL(*remote_store, has_servers()).WillOnce(Return(true));
+  EXPECT_CALL(*stack, send_reply(_, 200, _));
+  handler->run();
+}
+
+TEST_F(RegistrationTimeoutTasksTest, LocalAoRNoBindingsTest)
+{
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"binding_id\"}";
+  build_timeout_request(body, htp_method_POST);
+
+  // Set up regstore expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  // Get an initial empty AoR record and add a standard binding and subscription
+
+  RegStore::AoR* aor = new RegStore::AoR(aor_id);
+  int now = time(NULL);
+//  RegStore::AoR::Binding* b1 = NULL;
+//  build_binding(aor, b1, now);
+//  RegStore::AoR::Subscription* s1 = NULL;
+//  build_subscription(aor, s1, now);
+
+  RegStore::AoR* remote_aor = new RegStore::AoR(aor_id);
+  RegStore::AoR::Binding* b2 = NULL;
+  build_binding(remote_aor, b2, now);
+  RegStore::AoR::Subscription* s2 = NULL;
+  build_subscription(remote_aor, s2, now);
+
+  RegStore::AoR* remote_aor_2 = new RegStore::AoR(*remote_aor);
+/*  RegStore::AoR* remote_aor_2 = new RegStore::AoR(aor_id);
+  RegStore::AoR::Binding* b3 = NULL;
+  build_binding(remote_aor_2, b3, now);
+  RegStore::AoR::Subscription* s3 = NULL;
+  build_subscription(remote_aor_2, s3, now);*/
+
+
+  std::vector<std::string> aor_ids = {aor_id};
+  std::vector<RegStore::AoR*> aors = {aor};
+
+  cwtest_advance_time_ms(6000);
+
+//  expect_reg_store_updates(aor_ids, aors, remote_aor);
+
+  for (uint32_t ii = 0; ii < aor_ids.size(); ++ii)
+  {
+    // Get the information from the local store
+    EXPECT_CALL(*store, get_aor_data(aor_ids[ii], _, true)).WillOnce(Return(aors[ii]));
+
+    EXPECT_CALL(*remote_store, get_aor_data(aor_ids[ii], _, false)).Times(2).WillOnce(Return(remote_aor)).WillOnce(Return(remote_aor_2));
+
+    if (aors[ii] != NULL)
+    {
+      // Write the information to the local store
+      EXPECT_CALL(*store, set_aor_data(aor_ids[ii], _, _, _, _, _, false)).WillOnce(Return(Store::OK));
+
+      // Write the information to the remote store
+      if (remote_aor != NULL)
+      {
+        EXPECT_CALL(*remote_store, set_aor_data(aor_ids[ii], _, _, _, _, _, false)).WillOnce(Return(Store::OK));
+      }
+    }
+  }
+
+  EXPECT_CALL(*remote_store, has_servers()).Times(2).WillRepeatedly(Return(true));
+  EXPECT_CALL(*stack, send_reply(_, 200, _));
+  handler->run();
+}
+
+TEST_F(RegistrationTimeoutTasksTest, NullAoRTest)
+{
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"binding_id\"}";
+  build_timeout_request(body, htp_method_POST);
+
+  // Set up regstore expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  // Get an initial empty AoR record and add a standard binding and subscription
+
+  RegStore::AoR* aor = NULL;
+  RegStore::AoR* remote_aor = new RegStore::AoR(aor_id);//NULL;
+  std::vector<std::string> aor_ids = {aor_id};
+  std::vector<RegStore::AoR*> aors = {aor};
+
+  cwtest_advance_time_ms(6000);
+
+  EXPECT_CALL(*stack, send_reply(_, 200, _));
+  expect_reg_store_updates(aor_ids, aors, remote_aor);
+  handler->run();
+
+}  
 
 class RegistrationTimeoutTasksMockStoreTest : public SipTest
 {

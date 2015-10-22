@@ -355,7 +355,7 @@ public:
   /// Destructor.
   virtual ~RegStore();
 
-  bool has_servers() { return _connector->underlying_store_has_servers(); }
+  virtual bool has_servers() { return _connector->underlying_store_has_servers(); }
 
   /// Get the data for a particular address of record (registered SIP URI,
   /// in format "sip:2125551212@example.com"), creating creating it if

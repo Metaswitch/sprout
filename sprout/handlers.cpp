@@ -65,17 +65,19 @@ static bool reg_store_access_common(RegStore::AoR** aor_data,
 {
   // Find the current bindings for the AoR.
   delete *aor_data;
+  printf("reg access common getting aor_data\n");
   *aor_data = current_store->get_aor_data(aor_id, trail, should_send_notify);
   TRC_DEBUG("Retrieved AoR data %p", *aor_data);
 
   if (*aor_data == NULL)
   {
+    printf("in reg access common aor_data got was null\n");
     // Failed to get data for the AoR because there is no connection
     // to the store.
     TRC_ERROR("Failed to get AoR binding for %s from store", aor_id.c_str());
     return false;
   }
-
+  printf("reg access common got aor_data\n");
   // If we don't have any bindings, try the backup AoR and/or store.
   if ((*aor_data)->bindings().empty())
   {
@@ -83,6 +85,7 @@ static bool reg_store_access_common(RegStore::AoR** aor_data,
         (remote_store != NULL) &&
         (remote_store->has_servers()))
     {
+      printf("aor_data bindings empty, no previous data, and remote store. getting remote aor_data\n");
       *previous_aor_data = remote_store->get_aor_data(aor_id, trail, false);
       previous_aor_data_alloced = true;
     }
@@ -90,6 +93,7 @@ static bool reg_store_access_common(RegStore::AoR** aor_data,
     if ((*previous_aor_data != NULL) &&
         (!(*previous_aor_data)->bindings().empty()))
     {
+      printf("aor_data bindings empty, but previous data has bindings\n");
       //LCOV_EXCL_START
       for (RegStore::AoR::Bindings::const_iterator i = (*previous_aor_data)->bindings().begin();
            i != (*previous_aor_data)->bindings().end();
@@ -248,6 +252,7 @@ void DeregistrationTask::run()
 
 void RegistrationTimeoutTask::handle_response()
 {
+  printf("entering handle_response\n");
   bool all_bindings_expired = false;
   RegStore::AoR* aor_data = set_aor_data(_cfg->_store, _aor_id, NULL, _cfg->_remote_store, true,
                                          all_bindings_expired);
@@ -256,12 +261,16 @@ void RegistrationTimeoutTask::handle_response()
   {
     // If we have a remote store, try to store this there too.  We don't worry
     // about failures in this case.
+    printf("have aor_data \n");
     if ((_cfg->_remote_store != NULL) && (_cfg->_remote_store->has_servers()))
     {
+      printf("remote store has servers, setting data to remote store\n");
       bool ignored;
       RegStore::AoR* remote_aor_data = set_aor_data(_cfg->_remote_store, _aor_id, aor_data, NULL,
                                                     false, ignored);
+      printf("deleting remote aor data\n");
       delete remote_aor_data;
+      printf("remote aor data deleted\n");
     }
 
     if (all_bindings_expired)
@@ -272,14 +281,17 @@ void RegistrationTimeoutTask::handle_response()
   }
   else
   {
+    printf("aor_data returned was null\n");
     // We couldn't update the RegStore but there is nothing else we can do to
     // recover from this.
     TRC_INFO("Could not update update RegStore on registration timeout for AoR: %s",
              _aor_id.c_str());
   }
-
+  printf("deleting aor_data");
   delete aor_data;
+  printf("aor data deleted\ncalling report_sip_all_register_marker\n");
   report_sip_all_register_marker(trail(), _aor_id);
+  printf("sip marker call ended");
 }
 
 RegStore::AoR* RegistrationTimeoutTask::set_aor_data(RegStore* current_store,
@@ -295,6 +307,7 @@ RegStore::AoR* RegistrationTimeoutTask::set_aor_data(RegStore* current_store,
 
   do
   {
+    printf("calling reg_access_common\n");
     if (!reg_store_access_common(&aor_data,
                                  previous_aor_data_alloced,
                                  aor_id,
@@ -304,6 +317,7 @@ RegStore::AoR* RegistrationTimeoutTask::set_aor_data(RegStore* current_store,
                                  trail(),
                                  is_primary))
     {
+      printf("reg_access_common returned false. breaking\n");
       // LCOV_EXCL_START - local store (used in testing) never fails
       break;
       // LCOV_EXCL_STOP
@@ -311,6 +325,7 @@ RegStore::AoR* RegistrationTimeoutTask::set_aor_data(RegStore* current_store,
     // Do not send NOTIFYs in regstore as the RegistrationTimoutTask is called
     // with both the local and remote stores as current_store, and NOTIFYs should
     // have already been sent correctly by the above call to reg_store_access_common.
+    printf("reg_access_common returned true. store setting aor data\n");
     set_rc = current_store->set_aor_data(aor_id,
                                          aor_data,
                                          is_primary,
@@ -320,17 +335,19 @@ RegStore::AoR* RegistrationTimeoutTask::set_aor_data(RegStore* current_store,
                                          false);
     if (set_rc != Store::OK)
     {
+      printf("store set_aor returned NOT ok, deleting aor_data\n");
       delete aor_data; aor_data = NULL;
     }
   }
   while (set_rc == Store::DATA_CONTENTION);
-
+  printf("finished do-while loop\n");
   // If we allocated the AoR, tidy up.
   if (previous_aor_data_alloced)
   {
+    printf("previously allocated data being deleted\n");
     delete previous_aor_data;
   }
-
+  printf("returning aor_data\n");
   return aor_data;
 }
 
