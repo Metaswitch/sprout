@@ -71,15 +71,12 @@ const std::string HSS_NOT_REG_STATE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?
 
 class RegistrationTimeoutTasksTest : public SipTest
 {
-  FakeChronosConnection* chronos_connection;
-  LocalStore* local_data_store;
-  RegStore* store;
+  MockRegStore* store;
+  MockRegStore* remote_store;
+  MockHttpStack* stack;
   FakeHSSConnection* fake_hss;
-
-  MockHttpStack stack;
   MockHttpStack::Request* req;
-  RegistrationTimeoutTask::Config* chronos_config;
-
+  RegistrationTimeoutTask::Config* config;
   RegistrationTimeoutTask* handler;
 
   static void SetUpTestCase()
@@ -89,84 +86,177 @@ class RegistrationTimeoutTasksTest : public SipTest
 
   void SetUp()
   {
-    chronos_connection = new FakeChronosConnection();
-    local_data_store = new LocalStore();
-    store = new RegStore(local_data_store, chronos_connection);
+    store = new MockRegStore();
+    remote_store = new MockRegStore();
     fake_hss = new FakeHSSConnection();
-    req = new MockHttpStack::Request(&stack, "/", "timers");
-    chronos_config = new RegistrationTimeoutTask::Config(store, store, fake_hss);
-    handler = new RegistrationTimeoutTask(*req, chronos_config, 0);
+    stack = new MockHttpStack();
+//    req = new MockHttpStack::Request(&stack, "/", "timers");
+//    config = new RegistrationTimeoutTask::Config(store, remote_store, fake_hss);
+//    handler = new RegistrationTimeoutTask(*req, config, 0);
   }
 
   void TearDown()
   {
-    delete handler;
-    delete chronos_config;
+    delete config;
     delete req;
+    delete stack;
     delete fake_hss;
+    delete remote_store; remote_store = NULL;
     delete store; store = NULL;
-    delete local_data_store; local_data_store = NULL;
-    delete chronos_connection; chronos_connection = NULL;
   }
 
+  void build_timeout_request(std::string body,
+                             htp_method method)
+  {
+    req = new MockHttpStack::Request(stack,
+                                     "/", "timers", "",
+                                     body, method);
+    config = new RegistrationTimeoutTask::Config(store, remote_store, fake_hss);
+    handler = new RegistrationTimeoutTask(*req, config, 0);
+  }
+
+  void expect_reg_store_updates(std::vector<std::string> aor_ids,
+                                std::vector<RegStore::AoR*> aors,
+                                RegStore::AoR* remote_aor)
+  {
+    for (uint32_t ii = 0; ii < aor_ids.size(); ++ii)
+    {
+      // Get the information from the local store
+      EXPECT_CALL(*store, get_aor_data(aor_ids[ii], _, _)).WillOnce(Return(aors[ii]));
+
+      if (aors[ii] != NULL)
+      {
+        // Write the information to the local store
+        EXPECT_CALL(*store, set_aor_data(aor_ids[ii], _, _, _, _, _, _)).WillOnce(Return(Store::OK));
+
+        // Write the information to the remote store
+        EXPECT_CALL(*remote_store, get_aor_data(aor_ids[ii], _, _)).WillRepeatedly(Return(remote_aor));
+        if (remote_aor != NULL)
+        {
+          EXPECT_CALL(*remote_store, set_aor_data(aor_ids[ii], _, _, _, _, _, _)).WillOnce(Return(Store::OK));
+        }
+      }
+    }
+  }
+
+  void build_binding(RegStore::AoR* aor, RegStore::AoR::Binding* b, int now)
+  {
+    b = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+    b->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
+    b->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+    b->_cseq = 17038;
+    b->_expires = now + 5;
+    b->_priority = 0;
+    b->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+    b->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+    b->_params["reg-id"] = "1";
+    b->_params["+sip.ice"] = "";
+    b->_emergency_registration = false;
+    b->_private_id = "6505550231";
+  }
+  void build_subscription(RegStore::AoR* aor, RegStore::AoR::Subscription* s, int now)
+  {
+    s = aor->get_subscription("1234");
+    s->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
+    s->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
+    s->_from_tag = std::string("4321");
+    s->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
+    s->_to_tag = std::string("1234");
+    s->_cid = std::string("xyzabc@192.91.191.29");
+    s->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+    s->_expires = now + 300;
+  }
 };
 
 TEST_F(RegistrationTimeoutTasksTest, MainlineTest)
 {
-  // Get an initial empty AoR record and add a standard binding.
-  int now = time(NULL);
-  RegStore::AoR* aor_data1 = store->get_aor_data(std::string("sip:6505550231@homedomain"), 0);
-  RegStore::AoR::Binding* b1 = aor_data1->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
-  b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
-  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
-  b1->_cseq = 17038;
-  b1->_expires = now + 5;
-  b1->_priority = 0;
-  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
-  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
-  b1->_params["reg-id"] = "1";
-  b1->_params["+sip.ice"] = "";
-  b1->_emergency_registration = false;
-  b1->_private_id = "6505550231";
+  // Build request
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1\"}";
+  build_timeout_request(body, htp_method_POST);
 
-  // Add the AoR record to the store.
-  store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1, true, 0);
-  delete aor_data1; aor_data1 = NULL;
+  // Set up regstore expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  // Get an initial empty AoR record and add a standard binding and subscription
+  RegStore::AoR* aor = new RegStore::AoR(aor_id);
+  int now = time(NULL);
+  RegStore::AoR::Binding* b1 = NULL;
+  build_binding(aor, b1, now);
+  RegStore::AoR::Subscription* s1 = NULL;
+  build_subscription(aor, s1, now);
+
+  // Set up the remote store to return NULL
+  RegStore::AoR* remote_aor = NULL;
+  std::vector<std::string> aor_ids = {aor_id};
+  std::vector<RegStore::AoR*> aors = {aor};
 
   // Advance time so the binding is due for expiry
   cwtest_advance_time_ms(6000);
 
-  // Parse and handle the request
-  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1\"}";
-  int status = handler->parse_response(body);
-
-  ASSERT_EQ(status, 200);
-
-  handler->handle_response();
+  expect_reg_store_updates(aor_ids, aors, remote_aor);
+  EXPECT_CALL(*stack, send_reply(_, 200, _));
+  handler->run();
 }
 
 TEST_F(RegistrationTimeoutTasksTest, InvalidJSONTest)
 {
   std::string body = "{\"aor_id\" \"aor_id\", \"binding_id\": \"binding_id\"}";
-  int status = handler->parse_response(body);
+  build_timeout_request(body, htp_method_POST);
 
-  ASSERT_EQ(status, 400);
+  EXPECT_CALL(*stack, send_reply(_, 400, _));
+  handler->run();
+}
+
+TEST_F(RegistrationTimeoutTasksTest, InvalidHTTPMethodPUTTest)
+{
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"binding_id\"}";
+  build_timeout_request(body, htp_method_PUT);
+
+  EXPECT_CALL(*stack, send_reply(_, 405, _));
+  handler->run();
+}
+
+TEST_F(RegistrationTimeoutTasksTest, InvalidHTTPMethodDELETETest)
+{
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"binding_id\"}";
+  build_timeout_request(body, htp_method_DELETE);
+
+  EXPECT_CALL(*stack, send_reply(_, 405, _));
+  handler->run();
 }
 
 TEST_F(RegistrationTimeoutTasksTest, MissingAorJSONTest)
 {
   std::string body = "{\"binding_id\": \"binding_id\"}";
-  int status = handler->parse_response(body);
+  build_timeout_request(body, htp_method_POST);
 
-  ASSERT_EQ(status, 400);
+  EXPECT_CALL(*stack, send_reply(_, 400, _));
+  handler->run();
 }
 
 TEST_F(RegistrationTimeoutTasksTest, MissingBindingJSONTest)
 {
-  std::string body = "{\"aor_id\": \"aor_id\"}";
-  int status = handler->parse_response(body);
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
+  build_timeout_request(body, htp_method_POST);
 
-  ASSERT_EQ(status, 200);
+  // Set up regstore expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  // Get an initial empty AoR record and add a standard binding and subscription
+  RegStore::AoR* aor = new RegStore::AoR(aor_id);
+  int now = time(NULL);
+  RegStore::AoR::Binding* b1 = NULL;
+  build_binding(aor, b1, now);
+  RegStore::AoR::Subscription* s1 = NULL;
+  build_subscription(aor, s1, now);
+  
+// Set up the remote store to return NULL
+  RegStore::AoR* remote_aor = NULL;
+  std::vector<std::string> aor_ids = {aor_id};
+  std::vector<RegStore::AoR*> aors = {aor};
+
+  cwtest_advance_time_ms(6000);
+  expect_reg_store_updates(aor_ids, aors, remote_aor);
+  EXPECT_CALL(*stack, send_reply(_, 200, _));
+  handler->run();
 }
 
 

@@ -375,6 +375,7 @@ void RegStore::expire_subscriptions(AoR* aor_data,
       {
         send_notify(s, aor_data->_notify_cseq, aor_data, trail);
       }
+
       // Delete any associated chronos timer
       if (s->_timer_id != "")
       {
