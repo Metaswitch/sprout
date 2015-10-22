@@ -116,7 +116,8 @@ ACR* BGCFSproutlet::get_acr(SAS::TrailId trail)
 BGCFSproutletTsx::BGCFSproutletTsx(SproutletTsxHelper* helper,
                                    BGCFSproutlet* bgcf) :
   SproutletTsx(helper),
-  _bgcf(bgcf)
+  _bgcf(bgcf),
+  _acr(NULL)
 {
 }
 
