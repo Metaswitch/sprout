@@ -2860,18 +2860,11 @@ void UACTransaction::cancel_pending_tsx(int st_code)
     TRC_DEBUG("Found transaction %s status=%d", name(), _tsx->status_code);
     if (_tsx->status_code < 200)
     {
-      pjsip_tx_data *cancel;
-      pjsip_endpt_create_cancel(stack_data.endpt, _tsx->last_tx, &cancel);
-      if (st_code != 0)
-      {
-        char reason_val_str[96];
-        const pj_str_t* st_text = pjsip_get_status_text(st_code);
-        sprintf(reason_val_str, "SIP ;cause=%d ;text=\"%.*s\"", st_code, (int)st_text->slen, st_text->ptr);
-        pj_str_t reason_name = pj_str("Reason");
-        pj_str_t reason_val = pj_str(reason_val_str);
-        pjsip_hdr* reason_hdr = (pjsip_hdr*)pjsip_generic_string_hdr_create(cancel->pool, &reason_name, &reason_val);
-        pjsip_msg_add_hdr(cancel->msg, reason_hdr);
-      }
+      // See issue 1232.
+      pjsip_tx_data* cancel = PJUtils::create_cancel(stack_data.endpt,
+                                                     _tsx->last_tx,
+                                                     _tsx->status_code)
+
       if (trail() == 0)
       {
         TRC_ERROR("Sending CANCEL request with no SAS trail");
