@@ -1815,9 +1815,6 @@ pjsip_history_info_hdr* PJUtils::create_history_info_hdr(pjsip_uri* target, pj_p
 void PJUtils::update_history_info_reason(pjsip_uri* history_info_uri, pj_pool_t* pool, int code)
 {
   static const pj_str_t STR_REASON = pj_str("Reason");
-  static const pj_str_t STR_SIP = pj_str("SIP");
-  static const pj_str_t STR_CAUSE = pj_str("cause");
-  static const pj_str_t STR_TEXT = pj_str("text");
 
   if (PJSIP_URI_SCHEME_IS_SIP(history_info_uri))
   {
@@ -1825,25 +1822,32 @@ void PJUtils::update_history_info_reason(pjsip_uri* history_info_uri, pj_pool_t*
     pjsip_sip_uri* history_info_sip_uri = (pjsip_sip_uri*)history_info_uri;
     if (pj_list_empty(&history_info_sip_uri->other_param))
     {
+      pj_str_t* null_terminated_text;
+      std::stringstream value_builder;
+      std::string reason_value_string;
+      pj_str_t* reason_value;
+
+      const pj_str_t* reason_text = pjsip_get_status_text(code);
+      pj_strdup2_with_null(pool, null_terminated_text, reason_text);
+
+      value_builder << "SIP;cause=" << code;
+      value_builder << ";text=\"" << null_terminated_text << "\"";
+      
+      // As per RFC 3261, the contents of a parameter must contain a limited
+      // set of characters.
+      reason_value_string = Utils::url_escape(value_builder.str())
+        
+      pj_strdup2(pool, 
+                 &reason_value, 
+                 reason_value_string.c_str());
+
+      // Create a parameter and copy in the details we've created.
       pjsip_param *param = PJ_POOL_ALLOC_T(pool, pjsip_param);
       param->name = STR_REASON;
-      param->value = STR_SIP;
+      param->value = reason_val;
 
-      pj_list_insert_after(&history_info_sip_uri->other_param, (pj_list_type*)param);
-
-      // Now add the cause parameter.
-      param = PJ_POOL_ALLOC_T(pool, pjsip_param);
-      param->name = STR_CAUSE;
-      char cause_text[4];
-      sprintf(cause_text, "%u", code);
-      pj_strdup2(pool, &param->value, cause_text);
-      pj_list_insert_after(&history_info_sip_uri->other_param, param);
-
-      // Finally add the text parameter.
-      param = PJ_POOL_ALLOC_T(pool, pjsip_param);
-      param->name = STR_TEXT;
-      param->value = *pjsip_get_status_text(code);
-      pj_list_insert_after(&history_info_sip_uri->other_param, param);
+      pj_list_insert_after(&history_info_sip_uri->other_param,
+                           (pj_list_type*)param);
     }
   }
 }
