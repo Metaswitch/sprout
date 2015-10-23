@@ -90,9 +90,6 @@ class RegistrationTimeoutTasksTest : public SipTest
     remote_store = new MockRegStore();
     fake_hss = new FakeHSSConnection();
     stack = new MockHttpStack();
-//    req = new MockHttpStack::Request(&stack, "/", "timers");
-//    config = new RegistrationTimeoutTask::Config(store, remote_store, fake_hss);
-//    handler = new RegistrationTimeoutTask(*req, config, 0);
   }
 
   void TearDown()
@@ -184,12 +181,11 @@ TEST_F(RegistrationTimeoutTasksTest, MainlineTest)
   build_binding(aor, b1, now);
   RegStore::AoR::Subscription* s1 = NULL;
   build_subscription(aor, s1, now);
-
   // Set up the remote store to return NULL
   RegStore::AoR* remote_aor = NULL;
+
   std::vector<std::string> aor_ids = {aor_id};
   std::vector<RegStore::AoR*> aors = {aor};
-
   // Advance time so the binding is due for expiry
   cwtest_advance_time_ms(6000);
 
@@ -248,13 +244,13 @@ TEST_F(RegistrationTimeoutTasksTest, MissingBindingJSONTest)
   build_binding(aor, b1, now);
   RegStore::AoR::Subscription* s1 = NULL;
   build_subscription(aor, s1, now);
-  
-// Set up the remote store to return NULL
+  // Set up the remote store to return NULL
   RegStore::AoR* remote_aor = NULL;
+
   std::vector<std::string> aor_ids = {aor_id};
   std::vector<RegStore::AoR*> aors = {aor};
-
   cwtest_advance_time_ms(6000);
+
   expect_reg_store_updates(aor_ids, aors, remote_aor);
   EXPECT_CALL(*stack, send_reply(_, 200, _));
   handler->run();
@@ -274,13 +270,13 @@ TEST_F(RegistrationTimeoutTasksTest, SubscriptionIDTest)
   build_binding(aor, b1, now);
   RegStore::AoR::Subscription* s1 = NULL;
   build_subscription(aor, s1, now);
-
-// Set up the remote store to return NULL
+  // Set up the remote store to return NULL
   RegStore::AoR* remote_aor = NULL;
+
   std::vector<std::string> aor_ids = {aor_id};
   std::vector<RegStore::AoR*> aors = {aor};
-
   cwtest_advance_time_ms(6000);
+
   expect_reg_store_updates(aor_ids, aors, remote_aor);
   EXPECT_CALL(*stack, send_reply(_, 200, _));
   handler->run();
@@ -360,16 +356,11 @@ TEST_F(RegistrationTimeoutTasksTest, RemoteAoRNoBindingsTest)
   build_binding(aor, b1, now);
   RegStore::AoR::Subscription* s1 = NULL;
   build_subscription(aor, s1, now);
-
+  // Set up an AoR with no bindings
   RegStore::AoR* remote_aor = new RegStore::AoR(aor_id);
-//  RegStore::AoR::Binding* b2 = NULL;
-//  build_binding(remote_aor, b2, now);
-//  RegStore::AoR::Subscription* s2 = NULL;
-//  build_subscription(remote_aor, s2, now);
 
   std::vector<std::string> aor_ids = {aor_id};
   std::vector<RegStore::AoR*> aors = {aor};
-
   cwtest_advance_time_ms(6000);
 
   expect_reg_store_updates(aor_ids, aors, remote_aor);
@@ -385,43 +376,32 @@ TEST_F(RegistrationTimeoutTasksTest, LocalAoRNoBindingsTest)
 
   // Set up regstore expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  // Get an initial empty AoR record and add a standard binding and subscription
-
+  // Set up local AoR with no bindings
   RegStore::AoR* aor = new RegStore::AoR(aor_id);
-  int now = time(NULL);
-//  RegStore::AoR::Binding* b1 = NULL;
-//  build_binding(aor, b1, now);
-//  RegStore::AoR::Subscription* s1 = NULL;
-//  build_subscription(aor, s1, now);
 
+  int now = time(NULL);
   RegStore::AoR* remote_aor = new RegStore::AoR(aor_id);
   RegStore::AoR::Binding* b2 = NULL;
   build_binding(remote_aor, b2, now);
   RegStore::AoR::Subscription* s2 = NULL;
   build_subscription(remote_aor, s2, now);
-
+  // Set up second remote aor, to avoid problem of test process deleting
+  // the data of the first one. This is only a problem in the tests, as real
+  // use would correctly set the data to the store before deleting the local copy
   RegStore::AoR* remote_aor_2 = new RegStore::AoR(*remote_aor);
-/*  RegStore::AoR* remote_aor_2 = new RegStore::AoR(aor_id);
-  RegStore::AoR::Binding* b3 = NULL;
-  build_binding(remote_aor_2, b3, now);
-  RegStore::AoR::Subscription* s3 = NULL;
-  build_subscription(remote_aor_2, s3, now);*/
-
 
   std::vector<std::string> aor_ids = {aor_id};
   std::vector<RegStore::AoR*> aors = {aor};
-
   cwtest_advance_time_ms(6000);
 
-//  expect_reg_store_updates(aor_ids, aors, remote_aor);
-
+// Modified version of expect_reg_store_updates to pass back the second remote aor
   for (uint32_t ii = 0; ii < aor_ids.size(); ++ii)
   {
     // Get the information from the local store
     EXPECT_CALL(*store, get_aor_data(aor_ids[ii], _, true)).WillOnce(Return(aors[ii]));
 
-    EXPECT_CALL(*remote_store, get_aor_data(aor_ids[ii], _, false)).Times(2).WillOnce(Return(remote_aor)).WillOnce(Return(remote_aor_2));
-
+    EXPECT_CALL(*remote_store, get_aor_data(aor_ids[ii], _, false)).Times(2).WillOnce(Return(remote_aor))
+                                                                            .WillOnce(Return(remote_aor_2));
     if (aors[ii] != NULL)
     {
       // Write the information to the local store
@@ -450,17 +430,15 @@ TEST_F(RegistrationTimeoutTasksTest, NullAoRTest)
   // Get an initial empty AoR record and add a standard binding and subscription
 
   RegStore::AoR* aor = NULL;
-  RegStore::AoR* remote_aor = new RegStore::AoR(aor_id);//NULL;
+  RegStore::AoR* remote_aor = NULL;
   std::vector<std::string> aor_ids = {aor_id};
   std::vector<RegStore::AoR*> aors = {aor};
-
   cwtest_advance_time_ms(6000);
 
   EXPECT_CALL(*stack, send_reply(_, 200, _));
   expect_reg_store_updates(aor_ids, aors, remote_aor);
   handler->run();
-
-}  
+}
 
 class RegistrationTimeoutTasksMockStoreTest : public SipTest
 {

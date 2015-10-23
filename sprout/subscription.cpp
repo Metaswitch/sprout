@@ -286,18 +286,15 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
     if (update_notify)
     {
       // TODO check parity with regstore. if we are passing all gets and sets
-      // to regstore with should_send_notify = false, should we remove the 
+      // to regstore with should_send_notify = false, should we remove the
       // check on expiry != 0 below
-      //if (expiry != 0)
-//      {
-        status = NotifyUtils::create_subscription_notify(tdata_notify,
-                                                         subscription_copy,
-                                                         aor,
-                                                         (*aor_data)->_notify_cseq,
-                                                         aor_data,
-                                                         (expiry == 0), // Check expiry
-                                                         expiry);
-//      }
+      status = NotifyUtils::create_subscription_notify(tdata_notify,
+                                                       subscription_copy,
+                                                       aor,
+                                                       (*aor_data)->_notify_cseq,
+                                                       aor_data,
+                                                       (expiry == 0), // Check expiry
+                                                       expiry);
     }
 
     if (analytics != NULL)

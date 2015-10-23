@@ -67,7 +67,6 @@ namespace NotifyUtils
                                          RegStore::AoR** aor_data,
                                          bool subscription_expired,
                                          int expiry);
-  
 
   pj_status_t create_notify(pjsip_tx_data** tdata_notify,
                             RegStore::AoR::Subscription* subscription,
@@ -81,5 +80,4 @@ namespace NotifyUtils
                             NotifyUtils::SubscriptionState subscription_state,
                             int expiry);
 };
-
 #endif
