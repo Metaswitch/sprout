@@ -138,7 +138,6 @@ TYPED_TEST(BasicRegStoreTest, BindingTests)
   RegStore::AoR::Binding* b1;
   bool rc;
   int now;
-  std::vector<std::string> no_tags = std::vector<std::string>();
 
   // Get an initial empty AoR record and add a binding.
   now = time(NULL);
@@ -160,7 +159,7 @@ TYPED_TEST(BasicRegStoreTest, BindingTests)
   b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0, no_tags);
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -187,7 +186,7 @@ TYPED_TEST(BasicRegStoreTest, BindingTests)
 
   // Update AoR record in the store and check it.
   b1->_cseq = 17039;
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0, no_tags);
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -204,7 +203,7 @@ TYPED_TEST(BasicRegStoreTest, BindingTests)
 
   // Update AoR record again in the store and check it, this time using get_binding.
   b1->_cseq = 17040;
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0, no_tags);
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -225,7 +224,7 @@ TYPED_TEST(BasicRegStoreTest, BindingTests)
   EXPECT_EQ(1u, aor_data1->bindings().size());
   aor_data1->remove_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   EXPECT_EQ(0u, aor_data1->bindings().size());
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0, no_tags);
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -244,7 +243,6 @@ TYPED_TEST(BasicRegStoreTest, SubscriptionTests)
   RegStore::AoR::Subscription* s1;
   bool rc;
   int now;
-  std::vector<std::string> no_tags = std::vector<std::string>();
 
   // Get an initial empty AoR record and add a binding.
   now = time(NULL);
@@ -266,7 +264,7 @@ TYPED_TEST(BasicRegStoreTest, SubscriptionTests)
   b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0, no_tags);
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -297,7 +295,7 @@ TYPED_TEST(BasicRegStoreTest, SubscriptionTests)
   aor_data1->_notify_cseq = 1;
 
   // Write the record back to the store.
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0, no_tags);
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -397,7 +395,6 @@ TYPED_TEST(BasicRegStoreTest, ExpiryTests)
   RegStore::AoR::Subscription* s2;
   bool rc;
   int now;
-  std::vector<std::string> no_tags = std::vector<std::string>();
 
   // Create an empty AoR record.
   now = time(NULL);
@@ -459,7 +456,7 @@ TYPED_TEST(BasicRegStoreTest, ExpiryTests)
   s2->_expires = now + 300;
 
   // Write the record to the store.
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0, no_tags);
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -557,7 +554,6 @@ TYPED_TEST(MultiFormatRegStoreTest, AllFormatsCanBeRead)
   RegStore::AoR::Binding* b1;
   bool rc;
   int now;
-  std::vector<std::string> no_tags = std::vector<std::string>();
 
   // Get an initial empty AoR record and add a binding.
   now = time(NULL);
@@ -578,7 +574,7 @@ TYPED_TEST(MultiFormatRegStoreTest, AllFormatsCanBeRead)
   b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
-  rc = this->_single_store->set_aor_data(std::string("2010000001@cw-ngv.com"), aor_data1, false, 0, no_tags);
+  rc = this->_single_store->set_aor_data(std::string("2010000001@cw-ngv.com"), aor_data1, false, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 

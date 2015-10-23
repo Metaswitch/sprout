@@ -446,8 +446,7 @@ static bool expire_bindings(RegStore *store, const std::string& aor, const std::
                                             // single binding (flow failed).
     }
 
-    set_rc = store->set_aor_data(aor, aor_data, false, trail, all_bindings_expired,
-                                 RegStore::TAGS_REG);
+    set_rc = store->set_aor_data(aor, aor_data, false, trail, true, all_bindings_expired);
     delete aor_data; aor_data = NULL;
 
     // We can only say for sure that the bindings were expired if we were able

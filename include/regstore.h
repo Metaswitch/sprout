@@ -369,19 +369,17 @@ public:
   /// atomically.  If the underlying data has changed since it was last
   /// read, the update is rejected and this returns false; if the update
   /// succeeds, this returns true.
+/*  virtual Store::Status set_aor_data(const std::string& aor_id,
+                                     AoR* data,
+                                     bool update_timers,
+                                     SAS::TrailId trail,
+                                     bool should_send_notify = true);*/
   virtual Store::Status set_aor_data(const std::string& aor_id,
                                      AoR* data,
                                      bool update_timers,
                                      SAS::TrailId trail,
-                                     const std::vector<std::string> tags = TAGS_NONE,
-                                     bool should_send_notify = true);
-  virtual Store::Status set_aor_data(const std::string& aor_id,
-                                     AoR* data,
-                                     bool update_timers,
-                                     SAS::TrailId trail,
-                                     bool& all_bindings_expired,
-                                     const std::vector<std::string> tags = TAGS_NONE,
-                                     bool should_send_notify = true);
+                                     bool should_send_notify = true,
+                                     bool& all_bindings_expired = unused_bool);
 
   // Send a SIP NOTIFY
   virtual void send_notify(AoR::Subscription* s,
@@ -419,6 +417,7 @@ private:
                             SAS::TrailId trail,
                             bool should_send_notify);
 
+  static bool unused_bool;
   ChronosConnection* _chronos;
   Connector* _connector;
 };

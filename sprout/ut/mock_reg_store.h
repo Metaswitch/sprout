@@ -50,13 +50,12 @@ public:
   MOCK_METHOD3(get_aor_data, AoR*(const std::string& aor_id,
                                   SAS::TrailId trail,
                                   bool should_send_notify));
-  MOCK_METHOD7(set_aor_data, Store::Status(const std::string& aor_id,
+  MOCK_METHOD6(set_aor_data, Store::Status(const std::string& aor_id,
                                            AoR* data,
                                            bool update_timers,
                                            SAS::TrailId trail,
-                                           bool& all_bindings_expired,
-                                           const std::vector<std::string> tags,
-                                           bool should_send_notify));
+                                           bool should_send_notify,
+                                           bool& all_bindings_expired));
   MOCK_METHOD5(send_notify, void(AoR::Subscription* s,
                                  int cseq,
                                  AoR::Binding* b,

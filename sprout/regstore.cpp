@@ -174,17 +174,15 @@ RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id, SAS:
   return aor_data;
 }
 
-Store::Status RegStore::set_aor_data(const std::string& aor_id,
+/*Store::Status RegStore::set_aor_data(const std::string& aor_id,
                                      AoR* aor_data,
                                      bool set_chronos,
                                      SAS::TrailId trail,
-                                     std::vector<std::string> tags,
                                      bool should_send_notify)
 {
   bool unused;
-  return set_aor_data(aor_id, aor_data, set_chronos, trail, unused, tags, should_send_notify);
-}
-
+  return set_aor_data(aor_id, aor_data, set_chronos, trail, unused, should_send_notify);
+}*/
 
 /// Update the data for a particular address of record.  Writes the data
 /// atomically.  Returns the code returned by the underlying store, one of:
@@ -200,14 +198,14 @@ Store::Status RegStore::set_aor_data(const std::string& aor_id,
 ///                      be sent to keep track of binding expiry time.
 /// @param all_bindings_expired   Set to true to flag to the caller that
 ///                               no bindings remain for this AoR.
+bool RegStore::unused_bool = false;
 
 Store::Status RegStore::set_aor_data(const std::string& aor_id,
                                      AoR* aor_data,
                                      bool set_chronos,
                                      SAS::TrailId trail,
-                                     bool& all_bindings_expired,
-                                     std::vector<std::string> tags,
-                                     bool should_send_notify)
+                                     bool should_send_notify,
+                                     bool& all_bindings_expired)
 {
   all_bindings_expired = false;
   // Expire old subscriptions and bindings before writing to the server. If
@@ -250,7 +248,7 @@ Store::Status RegStore::set_aor_data(const std::string& aor_id,
       int expiry = i->second->_expires;
       std::string id_type = "\" \"binding_id\": \"";
 
-      set_timer(aor_id, binding_id, timer_id, expiry, id_type, trail, tags);
+      set_timer(aor_id, binding_id, timer_id, expiry, id_type, trail, RegStore::TAGS_REG);
     }
 
     for (AoR::Subscriptions::iterator i = aor_data->_subscriptions.begin();
@@ -262,7 +260,7 @@ Store::Status RegStore::set_aor_data(const std::string& aor_id,
       int expiry = i->second->_expires;
       std::string id_type = "\" \"subscription_id\": \"";
 
-      set_timer(aor_id, subscription_id, timer_id, expiry, id_type, trail, tags);
+      set_timer(aor_id, subscription_id, timer_id, expiry, id_type, trail, RegStore::TAGS_SUB);
     }
   }
   return _connector->set_aor_data(aor_id, aor_data, max_expires - now, trail);
@@ -1117,7 +1115,8 @@ RegStore::AoR* RegStore::JsonSerializerDeserializer::
       }
 
       JSON_GET_INT_MEMBER(s_obj, JSON_EXPIRES, s->_expires);
-      JSON_GET_STRING_MEMBER(s_obj, JSON_TIMER_ID, s->_timer_id);
+      s->_timer_id = ((s_obj.HasMember(JSON_TIMER_ID)) &&
+                      ((s_obj[JSON_TIMER_ID]).IsString()) ? (s_obj[JSON_TIMER_ID].GetString()) : "");
     }
 
     JSON_GET_INT_MEMBER(doc, JSON_NOTIFY_CSEQ, aor->_notify_cseq);

@@ -442,8 +442,8 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
                                          aor_data,
                                          send_notify,
                                          trail,
-                                         all_bindings_expired,
-                                         RegStore::TAGS_REG);
+                                         true,
+                                         all_bindings_expired);
     if (set_rc != Store::OK)
     {
       delete aor_data; aor_data = NULL;

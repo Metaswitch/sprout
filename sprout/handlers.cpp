@@ -313,9 +313,8 @@ RegStore::AoR* RegistrationTimeoutTask::set_aor_data(RegStore* current_store,
                                          aor_data,
                                          is_primary,
                                          trail(),
-                                         all_bindings_expired,
-                                         RegStore::TAGS_REG,
-                                         false);
+                                         false,
+                                         all_bindings_expired);
     if (set_rc != Store::OK)
     {
       delete aor_data; aor_data = NULL;
@@ -538,8 +537,7 @@ RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
                                          aor_data,
                                          is_primary,
                                          trail(),
-                                         all_bindings_expired,
-                                         RegStore::TAGS_REG);
+                                         all_bindings_expired);
     if (set_rc != Store::OK)
     {
       delete aor_data; aor_data = NULL;

@@ -270,8 +270,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
     }
 
     // Try to write the AoR back to the store.
-    set_rc = primary_store->set_aor_data(aor, (*aor_data), false, trail,
-                                         RegStore::TAGS_SUB, false);
+    set_rc = primary_store->set_aor_data(aor, (*aor_data), false, trail, false);
 
     if (set_rc != Store::OK)
     {
