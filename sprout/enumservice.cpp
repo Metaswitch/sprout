@@ -217,13 +217,14 @@ void JSONEnumService::destroy_prefixes()
 
 JSONEnumService::~JSONEnumService()
 {
-  // Destroy the updater
   delete _updater;
   _updater = NULL;
 
   // Lock not required here as nothing should be using the object when it is
   // destroyed.
   destroy_prefixes();
+
+  pthread_mutex_destroy(&_number_prefixes_rw_lock);
 }
 
 
@@ -269,9 +270,9 @@ std::string JSONEnumService::lookup_uri_from_user(const std::string &user, SAS::
 
 JSONEnumService::NumberPrefix* JSONEnumService::prefix_match(const std::string& number) const
 {
-  pthread_mutex_lock(&_number_prefixes_rw_lock);
-
   JSONEnumService::NumberPrefix* xoPrefix = NULL;
+
+  pthread_mutex_lock(&_number_prefixes_rw_lock);
 
   // For simplicity this uses a linear scan since we don't expect too many
   // entries.  Should shift to a radix tree at some point.
