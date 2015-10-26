@@ -1826,19 +1826,19 @@ void PJUtils::update_history_info_reason(pjsip_uri* history_info_uri, pj_pool_t*
       // so that it can be manipulated using C++ utility functions.
       std::stringstream value_builder;
       std::string reason_value_string;
-      pj_str_t* reason_value;
+      pj_str_t reason_value;
 
       const pj_str_t* reason_text = pjsip_get_status_text(code);
 
       value_builder << "SIP;cause=";
       value_builder << code;
       value_builder << ";text=\"";
-      value_builder << pj_str_to_string(reason_text)
+      value_builder << pj_str_to_string(reason_text);
       value_builder << "\"";
 
       // As per RFC 3261, the contents of a parameter must contain a limited
       // set of characters.
-      reason_value_string = Utils::url_escape(value_builder.str())
+      reason_value_string = Utils::url_escape(value_builder.str());
 
       pj_strdup2(pool,
                  &reason_value,
@@ -1847,7 +1847,7 @@ void PJUtils::update_history_info_reason(pjsip_uri* history_info_uri, pj_pool_t*
       // Create a parameter and copy in the details we've created.
       pjsip_param *param = PJ_POOL_ALLOC_T(pool, pjsip_param);
       param->name = STR_REASON;
-      param->value = reason_val;
+      param->value = reason_value;
 
       pj_list_insert_after(&history_info_sip_uri->other_param,
                            (pj_list_type*)param);

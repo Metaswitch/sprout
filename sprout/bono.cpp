@@ -2863,7 +2863,7 @@ void UACTransaction::cancel_pending_tsx(int st_code)
       // See issue 1232.
       pjsip_tx_data* cancel = PJUtils::create_cancel(stack_data.endpt,
                                                      _tsx->last_tx,
-                                                     _tsx->status_code)
+                                                     _tsx->status_code);
 
       if (trail() == 0)
       {
