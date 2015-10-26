@@ -80,4 +80,5 @@ namespace NotifyUtils
                             NotifyUtils::SubscriptionState subscription_state,
                             int expiry);
 };
+
 #endif

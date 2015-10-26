@@ -369,11 +369,6 @@ public:
   /// atomically.  If the underlying data has changed since it was last
   /// read, the update is rejected and this returns false; if the update
   /// succeeds, this returns true.
-/*  virtual Store::Status set_aor_data(const std::string& aor_id,
-                                     AoR* data,
-                                     bool update_timers,
-                                     SAS::TrailId trail,
-                                     bool should_send_notify = true);*/
   virtual Store::Status set_aor_data(const std::string& aor_id,
                                      AoR* data,
                                      bool update_timers,
@@ -395,23 +390,30 @@ public:
                            SAS::TrailId trail);
 
 private:
+  // Send a timer to chronos, checking for previously set timers,
+  // and creating the correct timer body.
   void set_timer(const std::string& aor_id,
                  std::string object_id,
-                 std::string* timer_id,
+                 std::string& timer_id,
                  int expiry,
                  std::string id_type,
                  SAS::TrailId trail,
                  std::vector<std::string> tags);
 
+  // Call expire_subscriptions and expire_bindings, returning
+  // the max expires value created in expire_bindings. Chronos
+  // timers are deleted. NOTIFYs are sent depending on the bool value.
   int expire_aor_members(AoR* aor_data,
                          int now,
                          SAS::TrailId trail,
                          bool should_send_notify);
 
+  // expire any old bindings, and return max_expires.
   int expire_bindings(AoR* aor_data,
                       int now,
                       SAS::TrailId trail);
 
+  // expire any old subscriptions.
   void expire_subscriptions(AoR* aor_data,
                             int now,
                             SAS::TrailId trail,

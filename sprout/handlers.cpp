@@ -75,6 +75,7 @@ static bool reg_store_access_common(RegStore::AoR** aor_data,
     TRC_ERROR("Failed to get AoR binding for %s from store", aor_id.c_str());
     return false;
   }
+
   // If we don't have any bindings, try the backup AoR and/or store.
   if ((*aor_data)->bindings().empty())
   {
@@ -144,7 +145,7 @@ static void report_sip_all_register_marker(SAS::TrailId trail, std::string uri_s
 }
 
 //LCOV_EXCL_START - don't want to actually run the handlers in the UT
-void RegistrationTimeoutTask::run()
+void RegSubTimeoutTask::run()
 {
   if (_req.method() != htp_method_POST)
   {
@@ -245,7 +246,7 @@ void DeregistrationTask::run()
   delete this;
 }
 
-void RegistrationTimeoutTask::handle_response()
+void RegSubTimeoutTask::handle_response()
 {
   bool all_bindings_expired = false;
   RegStore::AoR* aor_data = set_aor_data(_cfg->_store, _aor_id, NULL, _cfg->_remote_store, true,
@@ -276,11 +277,12 @@ void RegistrationTimeoutTask::handle_response()
     TRC_INFO("Could not update update RegStore on registration timeout for AoR: %s",
              _aor_id.c_str());
   }
+
   delete aor_data;
   report_sip_all_register_marker(trail(), _aor_id);
 }
 
-RegStore::AoR* RegistrationTimeoutTask::set_aor_data(RegStore* current_store,
+RegStore::AoR* RegSubTimeoutTask::set_aor_data(RegStore* current_store,
                                                      std::string aor_id,
                                                      RegStore::AoR* previous_aor_data,
                                                      RegStore* remote_store,
@@ -306,6 +308,7 @@ RegStore::AoR* RegistrationTimeoutTask::set_aor_data(RegStore* current_store,
       break;
       // LCOV_EXCL_STOP
     }
+
     // Do not send NOTIFYs in regstore as the RegistrationTimoutTask is called
     // with both the local and remote stores as current_store, and NOTIFYs should
     // have already been sent correctly by the above call to reg_store_access_common.
@@ -321,16 +324,18 @@ RegStore::AoR* RegistrationTimeoutTask::set_aor_data(RegStore* current_store,
     }
   }
   while (set_rc == Store::DATA_CONTENTION);
+
   // If we allocated the AoR, tidy up.
   if (previous_aor_data_alloced)
   {
     delete previous_aor_data;
   }
+
   return aor_data;
 }
 
 // Retrieve the aor and binding ID from the opaque data
-HTTPCode RegistrationTimeoutTask::parse_response(std::string body)
+HTTPCode RegSubTimeoutTask::parse_response(std::string body)
 {
   rapidjson::Document doc;
   std::string json_str = body;
@@ -354,11 +359,13 @@ HTTPCode RegistrationTimeoutTask::parse_response(std::string body)
     return HTTP_BAD_REQUEST;
   }
 
-  _binding_id = (((doc.HasMember("binding_id")) && 
-                 ((doc["binding_id"]).IsString())) ? doc["binding_id"].GetString() : "");
+  std::string _binding_id = (((doc.HasMember("binding_id"))   &&
+                            ((doc["binding_id"]).IsString())) ?
+                            (doc["binding_id"].GetString()) : "");
 
-  _subscription_id = (((doc.HasMember("subscription_id")) &&
-                      ((doc["subscription_id"]).IsString())) ? doc["subscription_id"].GetString() : "");
+  std::string _subscription_id = (((doc.HasMember("subscription_id")) &&
+                                 ((doc["subscription_id"]).IsString())) ?
+                                 (doc["subscription_id"].GetString()) : "");
 
   if (_binding_id == "" && _subscription_id == "")
   {
@@ -440,7 +447,12 @@ HTTPCode DeregistrationTask::handle_request()
 {
   for (std::map<std::string, std::string>::iterator it=_bindings.begin(); it!=_bindings.end(); ++it)
   {
-    RegStore::AoR* aor_data = set_aor_data(_cfg->_store, it->first, it->second, NULL, _cfg->_remote_store, true);
+    RegStore::AoR* aor_data = set_aor_data(_cfg->_store,
+                                           it->first,
+                                           it->second,
+                                           NULL,
+                                           _cfg->_remote_store,
+                                           true);
 
     if (aor_data != NULL)
     {
@@ -448,7 +460,12 @@ HTTPCode DeregistrationTask::handle_request()
       // about failures in this case.
       if (_cfg->_remote_store != NULL)
       {
-        RegStore::AoR* remote_aor_data = set_aor_data(_cfg->_remote_store, it->first, it->second, aor_data, NULL, false);
+        RegStore::AoR* remote_aor_data = set_aor_data(_cfg->_remote_store,
+                                                      it->first,
+                                                      it->second,
+                                                      aor_data,
+                                                      NULL,
+                                                      false);
         delete remote_aor_data;
       }
     }
@@ -459,6 +476,7 @@ HTTPCode DeregistrationTask::handle_request()
       // Sprout will have changed some of the AoRs, but HSS will believe they all failed.
       // Sprout accepts changes to AoRs that don't exist though.
       TRC_WARNING("Unable to connect to memcached for AoR %s", it->first.c_str());
+
       delete aor_data;
       return HTTP_SERVER_ERROR;
     }

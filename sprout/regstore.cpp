@@ -174,16 +174,6 @@ RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id, SAS:
   return aor_data;
 }
 
-/*Store::Status RegStore::set_aor_data(const std::string& aor_id,
-                                     AoR* aor_data,
-                                     bool set_chronos,
-                                     SAS::TrailId trail,
-                                     bool should_send_notify)
-{
-  bool unused;
-  return set_aor_data(aor_id, aor_data, set_chronos, trail, unused, should_send_notify);
-}*/
-
 /// Update the data for a particular address of record.  Writes the data
 /// atomically.  Returns the code returned by the underlying store, one of:
 /// -  OK:              the AoR was writen successfully.
@@ -198,6 +188,7 @@ RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id, SAS:
 ///                      be sent to keep track of binding expiry time.
 /// @param all_bindings_expired   Set to true to flag to the caller that
 ///                               no bindings remain for this AoR.
+
 bool RegStore::unused_bool = false;
 
 Store::Status RegStore::set_aor_data(const std::string& aor_id,
@@ -229,9 +220,6 @@ Store::Status RegStore::set_aor_data(const std::string& aor_id,
     TRC_DEBUG("All bindings have expired, so this is a deregistration for AOR %s", aor_id.c_str());
     all_bindings_expired = true;
   }
-  // Subscriptions are not factored into the expiry time on the store record
-  //because, according to 5.4.2.1.2/TS 24.229, all subscriptions automatically
-  //expire when the last binding expires.
 
   TRC_DEBUG("Set AoR data for %s, CAS=%ld, expiry = %d",
             aor_id.c_str(), aor_data->_cas, max_expires);
@@ -243,40 +231,33 @@ Store::Status RegStore::set_aor_data(const std::string& aor_id,
          i != aor_data->_bindings.end();
          ++i)
     {
-      std::string binding_id = i->first;
-      std::string* timer_id = &i->second->_timer_id;
-      int expiry = i->second->_expires;
-      std::string id_type = "\" \"binding_id\": \"";
-
-      set_timer(aor_id, binding_id, timer_id, expiry, id_type, trail, RegStore::TAGS_REG);
+      set_timer(aor_id, i->first, i->second->_timer_id,
+                i->second->_expires, "binding_id", trail, RegStore::TAGS_REG);
     }
 
     for (AoR::Subscriptions::iterator i = aor_data->_subscriptions.begin();
          i != aor_data->_subscriptions.end();
          ++i)
     {
-      std::string subscription_id = i->first;
-      std::string* timer_id = &i->second->_timer_id;
-      int expiry = i->second->_expires;
-      std::string id_type = "\" \"subscription_id\": \"";
-
-      set_timer(aor_id, subscription_id, timer_id, expiry, id_type, trail, RegStore::TAGS_SUB);
+      set_timer(aor_id, i->first, i->second->_timer_id,
+                i->second->_expires, "subscription_id", trail, RegStore::TAGS_SUB);
     }
   }
+
   return _connector->set_aor_data(aor_id, aor_data, max_expires - now, trail);
 }
 
 void RegStore::set_timer(const std::string& aor_id,
                          std::string object_id,
-                         std::string* timer_id,
+                         std::string& timer_id,
                          int expiry,
                          std::string id_type,
                          SAS::TrailId trail,
                          std::vector<std::string> tags)
 {
-  std::string _timer_id = "";
+  std::string temp_timer_id = "";
   HTTPCode status;
-  std::string opaque = "{\"aor_id\": \"" + aor_id + id_type + object_id +"\"}";
+  std::string opaque = "{\"aor_id\": \"" + aor_id + "\", \"" + id_type + "\": \""+ object_id +"\"}";
   std::string callback_uri = "/timers";
 
   // Set expiry to be relative to now, and ensure it is not negative.
@@ -284,20 +265,20 @@ void RegStore::set_timer(const std::string& aor_id,
   (expiry>now) ? (expiry -= now):(expiry = 0);
 
   // If a timer has been previously set for this binding, send a PUT. Otherwise sent a POST.
-  if (*timer_id == "")
+  if (timer_id == "")
   {
-    status = _chronos->send_post(_timer_id, expiry, callback_uri, opaque, trail, tags);
+    status = _chronos->send_post(temp_timer_id, expiry, callback_uri, opaque, trail, tags);
   }
   else
   {
-    _timer_id = *timer_id;
-    status = _chronos->send_put(_timer_id, expiry, callback_uri, opaque, trail, tags);
+    temp_timer_id = timer_id;
+    status = _chronos->send_put(temp_timer_id, expiry, callback_uri, opaque, trail, tags);
   }
   // Update the timer id. If the update to Chronos failed, that's OK, don't reject
   // the register or update the stored timer id.
   if (status == HTTP_OK)
   {
-    *timer_id = _timer_id;
+    timer_id = temp_timer_id;
   }
 }
 
@@ -347,8 +328,11 @@ int RegStore::expire_aor_members(AoR* aor_data,
                                  bool should_send_notify)
 {
   expire_subscriptions(aor_data, now, trail, should_send_notify);
-  int max_expires = expire_bindings(aor_data, now, trail);
-  return max_expires;
+  return expire_bindings(aor_data, now, trail);
+
+  // N.B. Subscriptions are not factored into the returned expiry time on the
+  // store record because, according to 5.4.2.1.2/TS 24.229, all subscriptions
+  // automatically expire when the last binding expires.
 }
 
 /// Expire any old subscriptions.

@@ -63,7 +63,7 @@ public:
   }
 };
 
-class RegistrationTimeoutTask : public HttpStackUtils::Task
+class RegSubTimeoutTask : public HttpStackUtils::Task
 {
 public:
   struct Config
@@ -76,7 +76,7 @@ public:
     HSSConnection* _hss;
   };
 
-  RegistrationTimeoutTask(HttpStack::Request& req,
+  RegSubTimeoutTask(HttpStack::Request& req,
                           const Config* cfg,
                           SAS::TrailId trail) :
     HttpStackUtils::Task(req, trail), _cfg(cfg)
@@ -97,8 +97,6 @@ protected:
 protected:
   const Config* _cfg;
   std::string _aor_id;
-  std::string _binding_id;
-  std::string _subscription_id;
 };
 
 class DeregistrationTask : public HttpStackUtils::Task
