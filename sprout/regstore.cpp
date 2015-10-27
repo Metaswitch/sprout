@@ -105,7 +105,9 @@ RegStore::~RegStore()
 /// an empty record if no data exists for the AoR.
 ///
 /// @param aor_id       The SIP Address of Record for the registration
-RegStore::AoR* RegStore::get_aor_data(const std::string& aor_id, SAS::TrailId trail, bool should_send_notify)
+RegStore::AoR* RegStore::get_aor_data(const std::string& aor_id,
+                                      SAS::TrailId trail,
+                                      bool should_send_notify)
 {
   AoR* aor_data = _connector->get_aor_data(aor_id, trail);
 
@@ -118,7 +120,8 @@ RegStore::AoR* RegStore::get_aor_data(const std::string& aor_id, SAS::TrailId tr
   return aor_data;
 }
 
-RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id, SAS::TrailId trail)
+RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id,
+                                                 SAS::TrailId trail)
 {
   TRC_DEBUG("Get AoR data for %s", aor_id.c_str());
   AoR* aor_data = NULL;
