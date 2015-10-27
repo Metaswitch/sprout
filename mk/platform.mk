@@ -46,7 +46,7 @@
 MK_DIR ?= ${ROOT}/mk
 
 # All generated files go below here
-BUILD_DIR := ${ROOT}/build
+BUILD_DIR ?= ${ROOT}/build
 
 # Production and test binaries go into the same directory, below here
 BIN_DIR := ${BUILD_DIR}/bin

@@ -34,13 +34,13 @@ SUBMODULES := pjsip c-ares curl libevhtp libmemcached libre restund openssl webs
 include $(patsubst %, ${MK_DIR}/%.mk, ${SUBMODULES})
 include ${MK_DIR}/sprout.mk
 
-build: ${SUBMODULES} sprout scripts/sipp-stats/clearwater-sipp-stats-1.0.0.gem
+build: ${SUBMODULES} sprout scripts/sipp-stats/clearwater-sipp-stats-1.0.0.gem plugins-build
 
-test: ${SUBMODULES} sprout_test
+test: ${SUBMODULES} sprout_test plugins-test
 
 testall: $(patsubst %, %_test, ${SUBMODULES}) test
 
-clean: $(patsubst %, %_clean, ${SUBMODULES}) sprout_clean
+clean: $(patsubst %, %_clean, ${SUBMODULES}) sprout_clean plugins-clean
 	rm -rf ${ROOT}/usr
 	rm -rf ${ROOT}/build
 
@@ -48,10 +48,32 @@ distclean: $(patsubst %, %_distclean, ${SUBMODULES}) sprout_distclean
 	rm -rf ${ROOT}/usr
 	rm -rf ${ROOT}/build
 
+.PHONY: plugins-build
+plugins-build:
+	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} build \;
+
+.PHONY: plugins-test
+plugins-test:
+	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} test \;
+
+.PHONY: plugins-clean
+plugins-clean:
+	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} clean \;
+
+.PHONY: plugins-deb
+plugins-deb:
+	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} deb \;
+
+.PHONY: plugins-deb-only
+plugins-deb-only:
+	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} deb-only \;
+
 include build-infra/cw-deb.mk
 
+deb-only: plugins-deb-only
+
 .PHONY: deb
-deb: build deb-only
+deb: build deb-only plugins-deb
 
 .PHONY: all build test clean distclean
 
