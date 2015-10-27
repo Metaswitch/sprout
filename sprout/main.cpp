@@ -213,10 +213,11 @@ const static struct pj_getopt_option long_opt[] =
   { "ralf-threads",                 required_argument, 0, OPT_RALF_THREADS},
   { "non-register-authentication",  required_argument, 0, OPT_NON_REGISTER_AUTHENTICATION},
   { "pbx-service-route",            required_argument, 0, OPT_PBX_SERVICE_ROUTE},
+  { "plugin-option",                required_argument, 0, 'N'},
   { NULL,                           0,                 0, 0}
 };
 
-static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:u:g:r:P:w:a:F:L:K:G:B:dth";
+static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:u:g:r:P:w:a:F:L:K:G:B:N:dth";
 
 static sem_t term_sem;
 
@@ -384,6 +385,8 @@ static void usage(void)
        "                            - 'never' means that sprout never challenges non-REGISTER requests.\n"
        "                            - 'if_proxy_authorization_present' means sprout will only challenge\n"
        "                              requests that already have a Proxy-Authorization header.\n"
+       " -N, --plugin-option <plugin>,<name>,<value>\n"
+       "                            Provide an option value to a plugin.\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
@@ -1020,6 +1023,21 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
           TRC_ERROR("Invalid value for non-REGISTER authentication: %s", pj_optarg);
           return -1;
         }
+      }
+      break;
+
+    case 'N':
+      {
+        std::vector<std::string> fields;
+        Utils::split_string(std::string(pj_optarg), ',', fields, 3);
+        if (fields.size() < 3)
+        {
+          TRC_ERROR("Invalid value for plugin option: %s", pj_optarg);
+          return -1;
+        }
+        TRC_INFO("Plugin '%s' option '%s' set to '%s'",
+                 fields[0].c_str(), fields[1].c_str(), fields[2].c_str());
+        options->plugin_options[fields[0]].insert({fields[1], fields[2]});
       }
       break;
 

@@ -141,6 +141,8 @@ struct options
   std::string                          pbxes;
   std::string                          pbx_service_route;
   NonRegisterAuthentication            non_register_auth_mode;
+  std::map<std::string, std::multimap<std::string, std::string>>
+                                       plugin_options;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
