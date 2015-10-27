@@ -385,9 +385,9 @@ public:
 
   // Send NOTIFY used for expiring subscription
   virtual void send_notify(AoR::Subscription *s,
-                           int cseq,
                            AoR* aor_data,
-                           SAS::TrailId trail);
+                           SAS::TrailId trail,
+                           int now);
 
 private:
   // Send a timer to chronos, checking for previously set timers,

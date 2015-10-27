@@ -287,10 +287,8 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
       status = NotifyUtils::create_subscription_notify(tdata_notify,
                                                        subscription_copy,
                                                        aor,
-                                                       (*aor_data)->_notify_cseq,
                                                        aor_data,
-                                                       (expiry == 0),
-                                                       expiry);
+                                                       now);
     }
 
     if (analytics != NULL)

@@ -61,12 +61,10 @@ namespace NotifyUtils
   enum class ContactEvent { REGISTERED, CREATED, REFRESHED, EXPIRED, DEACTIVATED };
 
   pj_status_t create_subscription_notify(pjsip_tx_data** tdata_notify,
-                                         RegStore::AoR::Subscription* subscription,
+                                         RegStore::AoR::Subscription* s,
                                          std::string aor,
-                                         int cseq,
                                          RegStore::AoR** aor_data,
-                                         bool subscription_expired,
-                                         int expiry);
+                                         int now);
 
   pj_status_t create_notify(pjsip_tx_data** tdata_notify,
                             RegStore::AoR::Subscription* subscription,

@@ -378,11 +378,11 @@ HTTPCode RegSubTimeoutTask::parse_response(std::string body)
   }
   else if (_binding_id != "")
   {
-    TRC_DEBUG("Found binding id: %s", _binding_id.c_str());
+    TRC_DEBUG("Handling timer pop for binding id: %s", _binding_id.c_str());
   }
   else if (_subscription_id != "")
   {
-    TRC_DEBUG("Found subscription id: %s", _subscription_id.c_str());
+    TRC_DEBUG("Handling timer pop for subscription id: %s", _subscription_id.c_str());
   }
 
   return HTTP_OK;
