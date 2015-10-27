@@ -96,8 +96,6 @@ JSONEnumService::JSONEnumService(std::string configuration):
   _configuration(configuration),
   _updater(NULL)
 {
-  pthread_mutex_init(&_number_prefixes_rw_lock, NULL);
-
   // create and updater which, by default, runs the function when initialized
   _updater = new Updater<void, JSONEnumService>(this,
                                   std::mem_fun(&JSONEnumService::update_enum));
@@ -148,7 +146,7 @@ void JSONEnumService::update_enum()
 
   try
   {
-    std::list<struct NumberPrefix*> new_number_prefixes;
+    std::vector<NumberPrefix> new_number_prefixes;
 
     JSON_ASSERT_CONTAINS(doc, "number_blocks");
     JSON_ASSERT_ARRAY(doc["number_blocks"]);
@@ -167,20 +165,19 @@ void JSONEnumService::update_enum()
 
         // Entry is well-formed, so add it.
         TRC_DEBUG("Found valid number prefix block %s", prefix.c_str());
-        NumberPrefix *pfix = new NumberPrefix;
-        pfix->prefix = prefix;
+        NumberPrefix pfix;
+        pfix.prefix = prefix;
 
-        if (parse_regex_replace(regex, pfix->match, pfix->replace))
+        if (parse_regex_replace(regex, pfix.match, pfix.replace))
         {
-          _number_prefixes.push_back(pfix);
+          new_number_prefixes.push_back(pfix);
           TRC_STATUS("  Adding number prefix %s, regex=%s",
-                     pfix->prefix.c_str(), regex.c_str());
+                     pfix.prefix.c_str(), regex.c_str());
         }
         else
         {
           TRC_WARNING("Badly formed regular expression in ENUM number block %s",
                       regex.c_str());
-          delete pfix;
         }
       }
       catch (JsonFormatError err)
@@ -192,11 +189,9 @@ void JSONEnumService::update_enum()
       }
     }
 
-    // Delete the old prefixes and store the new ones under mutex protection.
-    pthread_mutex_lock(&_number_prefixes_rw_lock);
-    destroy_prefixes();
+    // Take a write lock on the mutex in RAII style
+    boost::lock_guard<boost::shared_mutex> write_lock(_number_prefixes_rw_lock);
     _number_prefixes = new_number_prefixes;
-    pthread_mutex_unlock(&_number_prefixes_rw_lock);
   }
   catch (JsonFormatError err)
   {
@@ -205,26 +200,11 @@ void JSONEnumService::update_enum()
   }
 }
 
-void JSONEnumService::destroy_prefixes()
-{
-  for (std::list<struct NumberPrefix*>::iterator it = _number_prefixes.begin();
-       it != _number_prefixes.end();
-       it++)
-  {
-    delete *it;
-  }
-}
 
 JSONEnumService::~JSONEnumService()
 {
   delete _updater;
   _updater = NULL;
-
-  // Lock not required here as nothing should be using the object when it is
-  // destroyed.
-  destroy_prefixes();
-
-  pthread_mutex_destroy(&_number_prefixes_rw_lock);
 }
 
 
@@ -241,7 +221,11 @@ std::string JSONEnumService::lookup_uri_from_user(const std::string &user, SAS::
   }
 
   std::string aus = user_to_aus(user);
-  struct NumberPrefix* pfix = prefix_match(aus);
+
+  // Take a read lock on the mutex in RAII style
+  boost::shared_lock<boost::shared_mutex> read_lock(_number_prefixes_rw_lock);
+
+  const struct NumberPrefix* pfix = prefix_match(aus);
 
   if (pfix == NULL)
   {
@@ -268,37 +252,30 @@ std::string JSONEnumService::lookup_uri_from_user(const std::string &user, SAS::
 }
 
 
-JSONEnumService::NumberPrefix* JSONEnumService::prefix_match(const std::string& number) const
+const JSONEnumService::NumberPrefix* JSONEnumService::prefix_match(const std::string& number) const
 {
-  JSONEnumService::NumberPrefix* xoPrefix = NULL;
-
-  pthread_mutex_lock(&_number_prefixes_rw_lock);
-
   // For simplicity this uses a linear scan since we don't expect too many
   // entries.  Should shift to a radix tree at some point.
-  for (std::list<struct NumberPrefix*>::const_iterator it = _number_prefixes.begin();
+  for (std::vector<NumberPrefix>::const_iterator it = _number_prefixes.begin();
        it != _number_prefixes.end();
        it++)
   {
-    int len = std::min(number.size(), (*it)->prefix.size());
+    int len = std::min(number.size(), it->prefix.size());
 
     TRC_DEBUG("Comparing first %d numbers of %s against prefix %s",
-              len, number.c_str(), (*it)->prefix.c_str());
+              len, number.c_str(), it->prefix.c_str());
 
-    if (number.compare(0, len, (*it)->prefix, 0, len) == 0)
+    if (number.compare(0, len, it->prefix, 0, len) == 0)
     {
       // Found a match, so return it (at the moment we assume the entries are
       // ordered with most specific matches first so we can stop as soon as we
       // have one match).
       TRC_DEBUG("Match found");
-      xoPrefix = *it;
-      break;
+      return &*it;
     }
   }
 
-  pthread_mutex_unlock(&_number_prefixes_rw_lock);
-
-  return xoPrefix;
+  return NULL;
 }
 
 DNSEnumService::DNSEnumService(const std::vector<std::string>& dns_servers,

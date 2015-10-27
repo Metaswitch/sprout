@@ -43,9 +43,9 @@
 #include <list>
 #include <string>
 #include <boost/regex.hpp>
+#include <boost/thread.hpp>
 #include <netinet/in.h>
 #include <ares.h>
-#include <pthread.h>
 #include "sas.h"
 #include "baseresolver.h"
 #include "dnsresolver.h"
@@ -96,8 +96,6 @@ public:
   std::string lookup_uri_from_user(const std::string& user, SAS::TrailId trail) const;
 
 private:
-  void destroy_prefixes();
-
   struct NumberPrefix
   {
     std::string prefix;
@@ -105,12 +103,15 @@ private:
     std::string replace;
   };
 
-  std::list<struct NumberPrefix*> _number_prefixes;
-
+  std::vector<NumberPrefix> _number_prefixes;
   std::string _configuration;
-  NumberPrefix* prefix_match(const std::string& number) const;
   Updater<void, JSONEnumService>* _updater;
-  mutable pthread_mutex_t _number_prefixes_rw_lock;
+
+  // Mark as mutable to flag that this can be modified without affecting the
+  // external behaviour of the class, allowing for locking in 'const' methods.
+  mutable boost::shared_mutex _number_prefixes_rw_lock;
+
+  const NumberPrefix* prefix_match(const std::string& number) const;
 };
 
 /// @class DNSEnumService
