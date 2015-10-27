@@ -51,7 +51,7 @@ extern "C" {
 #include <vector>
 
 #include "sas.h"
-#include "httpconnection.h"
+#include "ralf_processor.h"
 #include "servercaps.h"
 
 typedef enum { SCSCF=0, PCSCF=1, ICSCF=2, BGCF=5, AS=6, IBCF=7 } Node;
@@ -147,12 +147,11 @@ public:
   /// @param   caps           Capabiliies as received from I-CSCF.
   virtual void server_capabilities(const ServerCapabilities& caps);
 
-  /// Called when the ACR message should be triggered.  In general this will
-  /// be when the relevant transaction or AS chain has ended.
-  /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
-  virtual void send_message(pj_time_val timestamp=unspec);
-
   /// Returns the JSON encoded message in string form.
+  ///
+  /// If the ACR has been cancelled, this function's behaviour is unspecified
+  /// (though the UTs expect it to return "Cancelled ACR").
+  ///
   /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
   virtual std::string get_message(pj_time_val timestamp=unspec);
 
@@ -164,6 +163,48 @@ public:
 
   /// Set the default CCF for this ACR.
   virtual void set_default_ccf(const std::string& default_ccf);
+
+  /// Sets the session ID for this ACR.
+  ///
+  /// This allows the caller to override the default session ID (which is the
+  /// call ID of the first request passed to the ACR).  This is useful if there
+  /// are B2BUAs involved in the call and the caller needs more control about
+  /// what call ID is reported to Ralf.
+  ///
+  /// @param session_id       The session ID to use.
+  virtual void override_session_id(const std::string& session_id);
+
+  /// Called when the ACR message should be sent if it's not yet been
+  /// cancelled.  In general this will be when the relevant transaction or AS
+  /// chain has ended.
+  /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
+  inline void send(pj_time_val timestamp=unspec)
+  {
+    if (!_cancelled)
+    {
+      send_message(timestamp);
+    }
+  }
+
+  /// Cancel this ACR, preventing it from being sent.  Used if a call leg
+  /// should no longer be considered for billing.
+  inline void cancel() { _cancelled = true; }
+
+protected:
+  /// Tracks if the ACR has been cancelled.
+  ///
+  /// `send_message()` will not be called if this is true.
+  /// `get_message()` is undefined if this is true
+  bool _cancelled;
+
+private:
+  /// Called when the ACR message should be triggered.
+  ///
+  /// This will never be called on a cancelled ACR.
+  ///
+  /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
+  virtual void send_message(pj_time_val timestamp=unspec);
+
 };
 
 
@@ -190,7 +231,7 @@ class RalfACR : public ACR
 {
 public:
   /// Constructor.
-  RalfACR(HttpConnection* ralf,
+  RalfACR(RalfProcessor* ralf,
           SAS::TrailId trail,
           Node node_functionality,
           Initiator initiator,
@@ -247,11 +288,6 @@ public:
   /// @param   caps           Capabiliies as received from I-CSCF.
   virtual void server_capabilities(const ServerCapabilities& caps);
 
-  /// Called when the Rf message should be triggered.  In general this will
-  /// be when the relevant transaction or AS chain has ended.
-  /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
-  virtual void send_message(pj_time_val timestamp=unspec);
-
   /// Returns the JSON encoded message in string form.
   /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
   virtual std::string get_message(pj_time_val timestamp=unspec);
@@ -259,7 +295,21 @@ public:
   /// Set the default CCF for this ACR.
   virtual void set_default_ccf(const std::string& default_ccf);
 
+  /// Sets the session ID for this ACR.
+  ///
+  /// This allows the caller to override the default session ID (which is the
+  /// call ID of the first request passed to the ACR).  This is useful if there
+  /// are B2BUAs involved in the call and the caller needs more control about
+  /// what call ID is reported to Ralf.
+  ///
+  /// @param session_id       The session ID to use.
+  virtual void override_session_id(const std::string& session_id);
 private:
+
+  /// Called when the Rf message should be triggered.  In general this will
+  /// be when the relevant transaction or AS chain has ended.
+  /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
+  virtual void send_message(pj_time_val timestamp=unspec);
 
   typedef enum { EVENT_RECORD=1,
                  START_RECORD=2,
@@ -360,7 +410,7 @@ private:
 
   std::string hdr_contents(pjsip_hdr* hdr);
 
-  HttpConnection* _ralf;
+  RalfProcessor* _ralf;
   SAS::TrailId _trail;
 
   Initiator _initiator;
@@ -448,10 +498,10 @@ class RalfACRFactory : public ACRFactory
 {
 public:
   /// Constructor.
-  /// @param ralf                 HttpConnection class set up to connect to
+  /// @param ralf                 RalfProcessor pool set up to connect to
   ///                             Ralf cluster.
   /// @param node_functionality   Node-Functionality value to set in ACRs.
-  RalfACRFactory(HttpConnection* ralf,
+  RalfACRFactory(RalfProcessor* ralf,
                  Node node_functionality);
 
   /// Destructor.
@@ -466,7 +516,7 @@ public:
   virtual ACR* get_acr(SAS::TrailId trail, Initiator initiator, NodeRole role);
 
 private:
-  HttpConnection* _ralf;
+  RalfProcessor* _ralf;
   Node _node_functionality;
 };
 

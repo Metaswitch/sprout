@@ -494,7 +494,7 @@ void create_challenge(pjsip_digest_credential* credentials,
       std::string timer_id;
       std::string chronos_body = "{\"impi\": \"" + impi + "\", \"impu\": \"" + impu +"\", \"nonce\": \"" + nonce +"\"}";
       TRC_DEBUG("Sending %s to Chronos to set AV timer", chronos_body.c_str());
-      chronos->send_post(timer_id, 30, "/authentication-timeout", chronos_body, 0);
+      chronos->send_post(timer_id, 30, "/authentication-timeout", chronos_body, get_trail(rdata));
     }
 
     delete av;
@@ -830,8 +830,14 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
       if (status == PJ_SUCCESS)
       {
-        // Request authentication completed, so let the message through to
-        // other modules.
+        // Request authentication completed, so let the message through to other
+        // modules. Remove any Proxy-Authorization headers first so they are not
+        // passed to downstream devices. We can't do this for Authorization
+        // headers, as these may need to be included in 3rd party REGISTER
+        // messages.
+        while (pjsip_msg_find_remove_hdr(rdata->msg_info.msg,
+                                         PJSIP_H_PROXY_AUTHORIZATION,
+                                         NULL) != NULL);
         delete av;
         return PJ_FALSE;
       }
@@ -959,7 +965,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   }
 
   // Send the ACR.
-  acr->send_message();
+  acr->send();
   delete acr;
   delete av;
   return PJ_TRUE;

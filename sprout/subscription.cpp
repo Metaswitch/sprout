@@ -566,7 +566,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
 
   // Send the ACR and delete it.
-  acr->send_message();
+  acr->send();
   delete acr;
 
   // Send the Notify

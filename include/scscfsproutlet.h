@@ -208,13 +208,13 @@ public:
   SCSCFSproutletTsx(SproutletTsxHelper* helper, SCSCFSproutlet* scscf, pjsip_method_e req_type);
   ~SCSCFSproutletTsx();
 
-  virtual void on_rx_initial_request(pjsip_msg* req);
-  virtual void on_rx_in_dialog_request(pjsip_msg* req);
-  virtual void on_tx_request(pjsip_msg* req);
-  virtual void on_rx_response(pjsip_msg* rsp, int fork_id);
-  virtual void on_tx_response(pjsip_msg* rsp);
-  virtual void on_rx_cancel(int status_code, pjsip_msg* req);
-  virtual void on_timer_expiry(void* context);
+  virtual void on_rx_initial_request(pjsip_msg* req) override;
+  virtual void on_rx_in_dialog_request(pjsip_msg* req) override;
+  virtual void on_tx_request(pjsip_msg* req, int fork_id) override;
+  virtual void on_rx_response(pjsip_msg* rsp, int fork_id) override;
+  virtual void on_tx_response(pjsip_msg* rsp) override;
+  virtual void on_rx_cancel(int status_code, pjsip_msg* req) override;
+  virtual void on_timer_expiry(void* context) override;
 
 private:
   /// Examines the top route header to determine the relevant AS chain
@@ -284,10 +284,15 @@ private:
   bool lookup_ifcs(std::string public_id,
                    Ifcs& ifcs);
 
-  /// Record-Route the S-CSCF sproutlet into a dialog.  The parameter passed
-  /// will be attached to the Record-Route and can be used to recover the
+  /// Record-Route the S-CSCF sproutlet into a dialog.  The third parameter
+  /// passed may be attached to the Record-Route and can be used to recover the
   /// billing role that is in use on subsequent in-dialog messages.
-  void add_record_route(pjsip_msg* msg, NodeRole);
+  ///
+  /// @param msg          - The message to modify
+  /// @param billing_rr   - Whether to add a `billing-role` parameter to the RR
+  /// @param billing_role - The contents of the `billing-role` (ignored if
+  ///                       `billing_rr` is false)
+  void add_record_route(pjsip_msg* msg, bool billing_rr, NodeRole billing_role);
 
   /// Retrieve the billing role for the incoming message.  This should have been
   /// set during session initiation.

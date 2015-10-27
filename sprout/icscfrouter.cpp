@@ -100,7 +100,7 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool, pjsip_sip_uri*& scscf_sip_uri)
     // should be generated if the Cx Query fails - we are sending on both
     // success and failure, but that could be wrong.  Also, in the failure
     // case we will not include a Server-Capabilities AVP.)
-    _acr->send_message();
+    _acr->send();
   }
 
   if (status_code == PJSIP_SC_OK)

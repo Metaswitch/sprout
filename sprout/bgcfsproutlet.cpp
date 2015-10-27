@@ -116,7 +116,8 @@ ACR* BGCFSproutlet::get_acr(SAS::TrailId trail)
 BGCFSproutletTsx::BGCFSproutletTsx(SproutletTsxHelper* helper,
                                    BGCFSproutlet* bgcf) :
   SproutletTsx(helper),
-  _bgcf(bgcf)
+  _bgcf(bgcf),
+  _acr(NULL)
 {
 }
 
@@ -125,7 +126,7 @@ BGCFSproutletTsx::~BGCFSproutletTsx()
 {
   if (_acr != NULL)
   {
-    _acr->send_message();
+    _acr->send();
   }
 
   delete _acr;
@@ -216,7 +217,7 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 }
 
 
-void BGCFSproutletTsx::on_tx_request(pjsip_msg* req)
+void BGCFSproutletTsx::on_tx_request(pjsip_msg* req, int fork_id)
 {
   if (_acr != NULL)
   {
@@ -253,7 +254,7 @@ void BGCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
 }
 
 
-void BGCFSproutletTsx::on_cancel(int status_code, pjsip_msg* cancel_req)
+void BGCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
 {
   if ((status_code == PJSIP_SC_REQUEST_TERMINATED) &&
       (cancel_req != NULL))
@@ -263,7 +264,7 @@ void BGCFSproutletTsx::on_cancel(int status_code, pjsip_msg* cancel_req)
 
     // @TODO - timestamp from request.
     acr->rx_request(cancel_req);
-    acr->send_message();
+    acr->send();
 
     delete acr;
   }

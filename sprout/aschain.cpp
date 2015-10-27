@@ -95,7 +95,7 @@ AsChain::~AsChain()
 
     // Send the ACR for this chain and destroy the ACR.
     TRC_DEBUG("Sending ACR (%p) from AS chain", _acr);
-    _acr->send_message();
+    _acr->send();
     delete _acr;
   }
 

@@ -44,7 +44,7 @@
 
 const pj_time_val ACR::unspec = {-1,0};
 
-ACR::ACR()
+ACR::ACR() : _cancelled(false)
 {
   TRC_DEBUG("Created ACR (%p)", this);
 }
@@ -89,6 +89,10 @@ std::string ACR::get_message(pj_time_val timestamp)
 }
 
 void ACR::set_default_ccf(const std::string& default_ccf)
+{
+}
+
+void ACR::override_session_id(const std::string& session_id)
 {
 }
 
@@ -147,7 +151,7 @@ ACR* ACRFactory::get_acr(SAS::TrailId trail, Initiator initiator, NodeRole role)
   return new ACR();
 }
 
-RalfACR::RalfACR(HttpConnection* ralf,
+RalfACR::RalfACR(RalfProcessor* ralf,
                  SAS::TrailId trail,
                  Node node_functionality,
                  Initiator initiator,
@@ -282,12 +286,15 @@ void RalfACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
       _expires = -1;
     }
 
-    // Store the call ID.
-    pjsip_cid_hdr* cid_hdr = (pjsip_cid_hdr*)
-                                pjsip_msg_find_hdr(req, PJSIP_H_CALL_ID, NULL);
-    if (cid_hdr != NULL)
+    // Store the call ID but only if the session ID has not already been set.
+    if (_user_session_id.empty())
     {
-      _user_session_id = PJUtils::pj_str_to_string(&cid_hdr->id);
+      pjsip_cid_hdr* cid_hdr = (pjsip_cid_hdr*)
+                                  pjsip_msg_find_hdr(req, PJSIP_H_CALL_ID, NULL);
+      if (cid_hdr != NULL)
+      {
+        _user_session_id = PJUtils::pj_str_to_string(&cid_hdr->id);
+      }
     }
 
     // Store contents of From header.
@@ -617,6 +624,11 @@ void RalfACR::server_capabilities(const ServerCapabilities& caps)
 
 void RalfACR::send_message(pj_time_val timestamp)
 {
+  // Calls to this function are always made through calls to `ACR::send()` which
+  // ensures that the ACR has not been cancelled.  This means it is safe to
+  // call `get_message()` to produce our request body.
+  assert(!_cancelled);
+
   // If we have a CCF or ECF, or this isn't a record type that needs one, send
   // the message.
   if ((!_ccfs.empty()) ||
@@ -624,20 +636,18 @@ void RalfACR::send_message(pj_time_val timestamp)
       (_record_type == INTERIM_RECORD) ||
       (_record_type == STOP_RECORD))
   {
-    // Encode and send the request using the Ralf HTTP connection.
+    // Encode and add the request to the RalfProcessor pool
     TRC_VERBOSE("Sending %s Ralf ACR (%p)",
                 ACR::node_name(_node_functionality).c_str(), this);
     std::string path = "/call-id/" + Utils::url_escape(_user_session_id);
-    std::map<std::string, std::string> headers;
-    long rc = _ralf->send_post(path,
-                               headers,
-                               get_message(timestamp),
-                               _trail);
 
-    if (rc != HTTP_OK)
-    {
-      TRC_WARNING("Failed to send Ralf ACR message (%p), rc = %ld", this, rc);
-    }
+    // Create a Ralf request and populate it
+    RalfProcessor::RalfRequest* rr = new RalfProcessor::RalfRequest();
+    rr->path = path;
+    rr->message = get_message(timestamp);
+    rr->trail = _trail;
+
+    _ralf->send_request_to_ralf(rr);
   }
   else
   {
@@ -653,6 +663,11 @@ void RalfACR::send_message(pj_time_val timestamp)
 
 std::string RalfACR::get_message(pj_time_val timestamp)
 {
+  if (_cancelled)
+  {
+    return "Cancelled ACR";
+  }
+
   TRC_DEBUG("Building message");
 
   if (timestamp.sec == -1)
@@ -1259,6 +1274,11 @@ void RalfACR::set_default_ccf(const std::string& default_ccf)
   }
 }
 
+void RalfACR::override_session_id(const std::string& session_id)
+{
+  _user_session_id = session_id;
+}
+
 void RalfACR::encode_sdp_description(
                              rapidjson::Writer<rapidjson::StringBuffer>* writer,
                              const MediaDescription& media)
@@ -1719,7 +1739,7 @@ std::string RalfACR::hdr_contents(pjsip_hdr* hdr)
 }
 
 /// RalfACRFactory Constructor.
-RalfACRFactory::RalfACRFactory(HttpConnection* ralf,
+RalfACRFactory::RalfACRFactory(RalfProcessor* ralf,
                                Node node_functionality) :
   _ralf(ralf),
   _node_functionality(node_functionality)
