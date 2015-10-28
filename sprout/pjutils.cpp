@@ -1603,8 +1603,6 @@ std::string PJUtils::get_header_value(pjsip_hdr* header)
   char* buf2 = buf;
 
   int len = pjsip_hdr_print_on(header, buf2, MAX_HDR_SIZE);
-  // pjsip_hdr_print_on doesn't appear to null-terminate the string - do this by hand
-  buf2[len] = '\0';
 
   // Eat up to the first colon
   while (*buf2 != ':') { buf2++; len--; }
