@@ -118,7 +118,6 @@ enum OptionTypes
   OPT_MAX_CALL_LIST_LENGTH,
   OPT_MEMENTO_THREADS,
   OPT_CALL_LIST_TTL,
-  OPT_ALARMS_ENABLED,
   OPT_DNS_SERVER,
   OPT_TARGET_LATENCY_US,
   OPT_MEMCACHED_WRITE_FORMAT,
@@ -190,7 +189,6 @@ const static struct pj_getopt_option long_opt[] =
   { "max-call-list-length",         required_argument, 0, OPT_MAX_CALL_LIST_LENGTH},
   { "memento-threads",              required_argument, 0, OPT_MEMENTO_THREADS},
   { "call-list-ttl",                required_argument, 0, OPT_CALL_LIST_TTL},
-  { "alarms-enabled",               no_argument,       0, OPT_ALARMS_ENABLED},
   { "log-level",                    required_argument, 0, 'L'},
   { "daemon",                       no_argument,       0, 'd'},
   { "interactive",                  no_argument,       0, 't'},
@@ -914,11 +912,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
                options->call_list_ttl);
       break;
 
-    case OPT_ALARMS_ENABLED:
-      options->alarms_enabled = PJ_TRUE;
-      TRC_INFO("SNMP alarms are enabled");
-      break;
-
     case OPT_DNS_SERVER:
       options->dns_servers.clear();
       Utils::split_string(std::string(pj_optarg), ',', options->dns_servers, 0, false);
@@ -1327,7 +1320,6 @@ int main(int argc, char* argv[])
   opt.max_call_list_length = 0;
   opt.memento_threads = 25;
   opt.call_list_ttl = 604800;
-  opt.alarms_enabled = PJ_FALSE;
   opt.target_latency_us = 100000;
   opt.cass_target_latency_us = 1000000;
   opt.max_tokens = 20;
@@ -1631,7 +1623,7 @@ int main(int argc, char* argv[])
                                                       ".1.2.826.0.1.1578918.9.3.31");
   }
 
-  if ((opt.icscf_enabled || opt.scscf_enabled) && opt.alarms_enabled)
+  if (opt.icscf_enabled || opt.scscf_enabled)
   {
     // Create Sprout's alarm objects.
 
@@ -2233,7 +2225,7 @@ int main(int argc, char* argv[])
   delete analytics_logger;
   delete analytics_logger_logger;
 
-  if ((opt.icscf_enabled || opt.scscf_enabled) && opt.alarms_enabled)
+  if (opt.icscf_enabled || opt.scscf_enabled)
   {
     // Stop the alarm request agent
     AlarmReqAgent::get_instance().stop();
