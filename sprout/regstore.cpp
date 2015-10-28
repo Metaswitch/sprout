@@ -354,6 +354,9 @@ void RegStore::expire_subscriptions(AoR* aor_data,
     AoR::Subscription* s = i->second;
     if (s->_expires <= now)
     {
+      // Update the cseq
+      aor_data->_notify_cseq++;
+
       // Send subscription termination notify unless told not to
       if (should_send_notify)
       {
