@@ -1606,11 +1606,15 @@ std::string PJUtils::get_header_value(pjsip_hdr* header)
   // pjsip_hdr_print_on doesn't appear to null-terminate the string - do this by hand
   buf2[len] = '\0';
 
-  // Skip over all text up to the colon, then any whitespace following it
-  while ((*buf2 != ':') || (*buf2 == ' '))
-  {
-    buf2++;
-  }
+  // Eat up to the first colon
+  while (*buf2 != ':') { buf2++; len--; }
+
+  // Now eat the colon.
+  buf2++; len --;
+
+  // Eat any leading whitespace.
+  while (*buf2 == ' ') { buf2++; len--; }
+
   return std::string(buf2, len);
 }
 
