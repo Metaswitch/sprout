@@ -1270,10 +1270,11 @@ TEST_F(SproutletProxyTest, SimpleSproutletForker)
   std::vector<pjsip_tx_data*> req;
   for (int ii = 0; ii < NUM_FORKS; ++ii)
   {
+    int idx = NUM_FORKS - ii - 1;
     req.push_back(pop_txdata());
     expect_target("TCP", "10.10.20.1", 5060, req[ii]);
     ReqMatcher("INVITE").matches(req[ii]->msg);
-    EXPECT_EQ("sip:bob-" + std::to_string(ii) + "@proxy1.awaydomain:5060;transport=TCP",
+    EXPECT_EQ("sip:bob-" + std::to_string(idx) + "@proxy1.awaydomain:5060;transport=TCP",
               str_uri(req[ii]->msg->line.req.uri));
     EXPECT_EQ("", get_headers(req[ii]->msg, "Route"));
     EXPECT_EQ("", get_headers(req[ii]->msg, "Record-Route"));
@@ -1303,12 +1304,13 @@ TEST_F(SproutletProxyTest, SimpleSproutletForker)
   tp->expect_target(tdata);
   free_txdata();
 
-  for (int ii = NUM_FORKS - 1; ii >= 1; --ii)
+  for (int ii = 1; ii < NUM_FORKS; ++ii)
   {
+    int idx = NUM_FORKS - ii - 1;
     tdata = current_txdata();
     expect_target("TCP", "10.10.20.1", 5060, tdata);
     ReqMatcher("CANCEL").matches(tdata->msg);
-    EXPECT_EQ("sip:bob-" + std::to_string(ii) + "@proxy1.awaydomain:5060;transport=TCP",
+    EXPECT_EQ("sip:bob-" + std::to_string(idx) + "@proxy1.awaydomain:5060;transport=TCP",
               str_uri(tdata->msg->line.req.uri));
     EXPECT_EQ("", get_headers(tdata->msg, "Route"));
     EXPECT_EQ("", get_headers(tdata->msg, "Record-Route"));
@@ -1347,10 +1349,11 @@ TEST_F(SproutletProxyTest, SimpleSproutletForker)
   // be stripped and no Record-Route headers added.
   for (int ii = 0; ii < NUM_FORKS; ++ii)
   {
+    int idx = NUM_FORKS - ii - 1;
     req.push_back(pop_txdata());
     expect_target("TCP", "10.10.20.1", 5060, req[ii]);
     ReqMatcher("MESSAGE").matches(req[ii]->msg);
-    EXPECT_EQ("sip:bob-" + std::to_string(ii) + "@proxy1.awaydomain:5060;transport=TCP",
+    EXPECT_EQ("sip:bob-" + std::to_string(idx) + "@proxy1.awaydomain:5060;transport=TCP",
               str_uri(req[ii]->msg->line.req.uri));
     EXPECT_EQ("", get_headers(req[ii]->msg, "Route"));
     EXPECT_EQ("", get_headers(req[ii]->msg, "Record-Route"));
@@ -1431,10 +1434,11 @@ TEST_F(SproutletProxyTest, CancelForking)
   std::vector<pjsip_tx_data*> req;
   for (int ii = 0; ii < NUM_FORKS; ++ii)
   {
+    int idx = NUM_FORKS - ii - 1;
     req.push_back(pop_txdata());
     expect_target("TCP", "10.10.20.1", 5060, req[ii]);
     ReqMatcher("INVITE").matches(req[ii]->msg);
-    EXPECT_EQ("sip:bob-" + std::to_string(ii) + "@proxy1.awaydomain:5060;transport=TCP",
+    EXPECT_EQ("sip:bob-" + std::to_string(idx) + "@proxy1.awaydomain:5060;transport=TCP",
               str_uri(req[ii]->msg->line.req.uri));
     EXPECT_EQ("", get_headers(req[ii]->msg, "Route"));
     EXPECT_EQ("", get_headers(req[ii]->msg, "Record-Route"));
@@ -1472,12 +1476,13 @@ TEST_F(SproutletProxyTest, CancelForking)
   RespMatcher(200).matches(tdata->msg);
   free_txdata();
 
-  for (int ii = NUM_FORKS - 1; ii >= 1; --ii)
+  for (int ii = 1; ii < NUM_FORKS; ++ii)
   {
+    int idx = NUM_FORKS - ii - 1;
     tdata = current_txdata();
     expect_target("TCP", "10.10.20.1", 5060, tdata);
     ReqMatcher("CANCEL").matches(tdata->msg);
-    EXPECT_EQ("sip:bob-" + std::to_string(ii) + "@proxy1.awaydomain:5060;transport=TCP",
+    EXPECT_EQ("sip:bob-" + std::to_string(idx) + "@proxy1.awaydomain:5060;transport=TCP",
               str_uri(tdata->msg->line.req.uri));
     EXPECT_EQ("", get_headers(tdata->msg, "Route"));
     EXPECT_EQ("", get_headers(tdata->msg, "Record-Route"));
@@ -1849,10 +1854,11 @@ TEST_F(SproutletProxyTest, UASError)
   std::vector<pjsip_tx_data*> req;
   for (int ii = 0; ii < NUM_FORKS; ++ii)
   {
+    int idx = NUM_FORKS - ii - 1;
     req.push_back(pop_txdata());
     expect_target("TCP", "10.10.20.1", 5060, req[ii]);
     ReqMatcher("INVITE").matches(req[ii]->msg);
-    EXPECT_EQ("sip:bob-" + std::to_string(ii) + "@proxy1.awaydomain:5060;transport=TCP",
+    EXPECT_EQ("sip:bob-" + std::to_string(idx) + "@proxy1.awaydomain:5060;transport=TCP",
               str_uri(req[ii]->msg->line.req.uri));
     EXPECT_EQ("", get_headers(req[ii]->msg, "Route"));
     EXPECT_EQ("", get_headers(req[ii]->msg, "Record-Route"));
@@ -1950,10 +1956,11 @@ TEST_F(SproutletProxyTest, SproutletChain)
   std::vector<pjsip_tx_data*> req;
   for (int ii = 0; ii < NUM_FORKS; ++ii)
   {
+    int idx = NUM_FORKS - ii - 1;
     req.push_back(pop_txdata());
     expect_target("TCP", "10.10.20.1", 5060, req[ii]);
     ReqMatcher("INVITE").matches(req[ii]->msg);
-    EXPECT_EQ("sip:bob-" + std::to_string(ii) + "@proxy1.awaydomain:5060;transport=TCP",
+    EXPECT_EQ("sip:bob-" + std::to_string(idx) + "@proxy1.awaydomain:5060;transport=TCP",
               str_uri(req[ii]->msg->line.req.uri));
     EXPECT_EQ("", get_headers(req[ii]->msg, "Route"));
     EXPECT_EQ("", get_headers(req[ii]->msg, "Record-Route"));
@@ -1994,10 +2001,11 @@ TEST_F(SproutletProxyTest, SproutletChain)
 
   for (int ii = 2; ii < NUM_FORKS; ++ii)
   {
+    int idx = NUM_FORKS - ii - 1;
     tdata = current_txdata();
     expect_target("TCP", "10.10.20.1", 5060, tdata);
     ReqMatcher("CANCEL").matches(tdata->msg);
-    EXPECT_EQ("sip:bob-" + std::to_string(ii) + "@proxy1.awaydomain:5060;transport=TCP",
+    EXPECT_EQ("sip:bob-" + std::to_string(idx) + "@proxy1.awaydomain:5060;transport=TCP",
               str_uri(tdata->msg->line.req.uri));
     EXPECT_EQ("", get_headers(tdata->msg, "Route"));
     EXPECT_EQ("", get_headers(tdata->msg, "Record-Route"));

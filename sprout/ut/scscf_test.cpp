@@ -1942,17 +1942,17 @@ TEST_F(SCSCFTest, TestForkedFlow)
   // Receive and respond to CANCEL for target 0
   SCOPED_TRACE("");
   out = current_txdata()->msg;
-  ReqMatcher c2("CANCEL");
-  c2.matches(out);
-  EXPECT_THAT(c2.uri(), StrEq(_uris[2]));
+  ReqMatcher c0("CANCEL");
+  c0.matches(out);
+  EXPECT_THAT(c0.uri(), StrEq(_uris[0]));
   inject_msg(respond_to_current_txdata(200));
 
   // Receive and respond to CANCEL for target 2
   SCOPED_TRACE("");
   out = current_txdata()->msg;
-  ReqMatcher c0("CANCEL");
-  c0.matches(out);
-  EXPECT_THAT(c0.uri(), StrEq(_uris[0]));
+  ReqMatcher c2("CANCEL");
+  c2.matches(out);
+  EXPECT_THAT(c2.uri(), StrEq(_uris[2]));
   inject_msg(respond_to_current_txdata(200));
 
   // Send 487 response from target 0
