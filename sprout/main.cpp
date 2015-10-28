@@ -1833,25 +1833,6 @@ int main(int argc, char* argv[])
                 (ACRFactory*)new RalfACRFactory(ralf_processor, PCSCF) :
                 new ACRFactory();
 
-    // Start the HTTP stack early as plugins might need to register handlers
-    // with it.
-    try
-    {
-      http_stack->initialize();
-      http_stack->configure(opt.http_address,
-                            opt.http_port,
-                            opt.http_threads,
-                            exception_handler,
-                            access_logger);
-    }
-    catch (HttpStack::Exception& e)
-    {
-      CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
-      closelog();
-      TRC_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
-      return 1;
-    }
-
     // Launch stateful proxy as P-CSCF.
     status = init_stateful_proxy(NULL,
                                  NULL,
@@ -1978,6 +1959,25 @@ int main(int argc, char* argv[])
                                       serializer,
                                       deserializers,
                                       chronos_connection);
+    }
+
+    // Start the HTTP stack early as plugins might need to register handlers
+    // with it.
+    try
+    {
+      http_stack->initialize();
+      http_stack->configure(opt.http_address,
+                            opt.http_port,
+                            opt.http_threads,
+                            exception_handler,
+                            access_logger);
+    }
+    catch (HttpStack::Exception& e)
+    {
+      CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
+      closelog();
+      TRC_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      return 1;
     }
 
     if (opt.auth_enabled)
