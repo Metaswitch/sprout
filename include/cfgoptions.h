@@ -147,6 +147,7 @@ struct options
 // globally scoped.
 extern LoadMonitor* load_monitor;
 extern HSSConnection* hss_connection;
+extern Store* local_data_store;
 extern RegStore* local_reg_store;
 extern RegStore* remote_reg_store;
 extern RalfProcessor* ralf_processor;

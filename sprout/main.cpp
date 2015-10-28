@@ -1248,6 +1248,7 @@ void create_regstore_plugins(RegStore::SerializerDeserializer*& serializer,
 // globally scoped.
 LoadMonitor* load_monitor = NULL;
 HSSConnection* hss_connection = NULL;
+Store* local_data_store = NULL;
 RegStore* local_reg_store = NULL;
 RegStore* remote_reg_store = NULL;
 RalfProcessor* ralf_processor = NULL;
@@ -1269,7 +1270,6 @@ int main(int argc, char* argv[])
   pthread_t quiesce_unquiesce_thread;
   DnsCachedResolver* dns_resolver = NULL;
   SIPResolver* sip_resolver = NULL;
-  Store* local_data_store = NULL;
   Store* remote_data_store = NULL;
   AvStore* av_store = NULL;
   HttpConnection* ralf_connection = NULL;
