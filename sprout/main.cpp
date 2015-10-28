@@ -1825,12 +1825,32 @@ int main(int argc, char* argv[])
                                                chronos_comm_monitor);
   }
 
+  HttpStack* http_stack = HttpStack::get_instance();
   if (opt.pcscf_enabled)
   {
     // Create an ACR factory for the P-CSCF.
     pcscf_acr_factory = (ralf_processor != NULL) ?
                 (ACRFactory*)new RalfACRFactory(ralf_processor, PCSCF) :
                 new ACRFactory();
+
+    // Start the HTTP stack early as plugins might need to register handlers
+    // with it.
+    try
+    {
+      http_stack->initialize();
+      http_stack->configure(opt.http_address,
+                            opt.http_port,
+                            opt.http_threads,
+                            exception_handler,
+                            access_logger);
+    }
+    catch (HttpStack::Exception& e)
+    {
+      CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
+      closelog();
+      TRC_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      return 1;
+    }
 
     // Launch stateful proxy as P-CSCF.
     status = init_stateful_proxy(NULL,
@@ -2105,19 +2125,10 @@ int main(int argc, char* argv[])
   HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
   HttpStackUtils::PingHandler ping_handler;
 
-  HttpStack* http_stack = NULL;
   if (opt.scscf_enabled)
   {
-    http_stack = HttpStack::get_instance();
-
     try
     {
-      http_stack->initialize();
-      http_stack->configure(opt.http_address,
-                            opt.http_port,
-                            opt.http_threads,
-                            exception_handler,
-                            access_logger);
       http_stack->register_handler("^/ping$",
                                    &ping_handler);
       http_stack->register_handler("^/timers$",
