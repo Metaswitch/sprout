@@ -59,6 +59,11 @@ extern "C" {
 #include "enumservice.h"
 #include "uri_classifier.h"
 
+/// Definitions of static functions.
+namespace PJUtils {
+static std::string build_reason_value(int code);
+}
+
 static const int DEFAULT_RETRIES = 5;
 
 static void on_tsx_state(pjsip_transaction*, pjsip_event*);
@@ -1558,18 +1563,26 @@ void PJUtils::remove_top_via(pjsip_tx_data* tdata)
   }
 }
 
+static std::string PJUtils::build_reason_value(int code)
+{
+  std::stringstream value_builder;
+  std::string reason_text = pj_str_to_string(pjsip_get_status_text(code));
+
+  value_builder << "SIP;cause=" << code << ";text=\"" << reason_text << "\"";
+
+  return value_builder.str();
+}
+
 void PJUtils::add_reason(pjsip_tx_data* tdata, int reason_code)
 {
-  char reason_val_str[100];
-  const pj_str_t* reason_text = pjsip_get_status_text(reason_code);
-  snprintf(reason_val_str,
-           sizeof(reason_val_str),
-           "SIP ;cause=%d ;text=\"%.*s\"",
-           reason_code,
-           (int)reason_text->slen,
-           reason_text->ptr);
   pj_str_t reason_name = pj_str("Reason");
-  pj_str_t reason_val = pj_str(reason_val_str);
+  pj_str_t reason_val;
+
+  std::string reason_value_string = build_reason_value(reason_code);
+  pj_strdup2(tdata->pool,
+             &reason_val,
+             reason_value_string.c_str());
+
   pjsip_hdr* reason_hdr =
                       (pjsip_hdr*)pjsip_generic_string_hdr_create(tdata->pool,
                                                                   &reason_name,
@@ -1822,29 +1835,17 @@ void PJUtils::update_history_info_reason(pjsip_uri* history_info_uri, pj_pool_t*
     pjsip_sip_uri* history_info_sip_uri = (pjsip_sip_uri*)history_info_uri;
     if (pj_list_empty(&history_info_sip_uri->other_param))
     {
-      // Need to build up a std::string containing the parameter value
-      // so that it can be manipulated using C++ utility functions.
-      std::stringstream value_builder;
-      std::string reason_value_string;
       pj_str_t reason_value;
-
-      const pj_str_t* reason_text = pjsip_get_status_text(code);
-
-      value_builder << "SIP;cause=";
-      value_builder << code;
-      value_builder << ";text=\"";
-      value_builder << pj_str_to_string(reason_text);
-      value_builder << "\"";
 
       // As per RFC 3261, the contents of a parameter must contain a limited
       // set of characters.
-      reason_value_string = Utils::url_escape(value_builder.str());
+      std::string reason_value_string = Utils::url_escape(build_reason_value(code));
 
       pj_strdup2(pool,
                  &reason_value,
                  reason_value_string.c_str());
 
-      // Create a parameter and copy in the details we've created.
+      // Create a parameter and copy in the details.
       pjsip_param *param = PJ_POOL_ALLOC_T(pool, pjsip_param);
       param->name = STR_REASON;
       param->value = reason_value;
