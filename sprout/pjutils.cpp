@@ -59,10 +59,6 @@ extern "C" {
 #include "enumservice.h"
 #include "uri_classifier.h"
 
-/// Definitions of static functions.
-namespace PJUtils {
-static std::string build_reason_value(int code);
-}
 
 static const int DEFAULT_RETRIES = 5;
 
@@ -1563,10 +1559,10 @@ void PJUtils::remove_top_via(pjsip_tx_data* tdata)
   }
 }
 
-static std::string PJUtils::build_reason_value(int code)
+static std::string build_reason_value(int code)
 {
   std::stringstream value_builder;
-  std::string reason_text = pj_str_to_string(pjsip_get_status_text(code));
+  std::string reason_text = PJUtils::pj_str_to_string(pjsip_get_status_text(code));
 
   value_builder << "SIP;cause=" << code << ";text=\"" << reason_text << "\"";
 
