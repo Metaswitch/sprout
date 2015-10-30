@@ -1733,6 +1733,8 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
       if (_tdata->msg->line.req.method.id == PJSIP_INVITE_METHOD)
       {
         TRC_DEBUG("Sending CANCEL request");
+
+        // See issue 1232.
         pjsip_tx_data *cancel = PJUtils::create_cancel(stack_data.endpt,
                                                        _tsx->last_tx,
                                                        st_code);
