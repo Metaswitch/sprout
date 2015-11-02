@@ -69,7 +69,7 @@ public:
                  const std::string& root_uri,
                  const std::unordered_set<std::string>& host_aliases,
                  const std::list<Sproutlet*>& sproutlets,
-                 const std::set<std::string> stateless_proxies);
+                 const std::set<std::string>& stateless_proxies);
 
   /// Destructor.
   virtual ~SproutletProxy();
