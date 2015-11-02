@@ -309,7 +309,7 @@ RegStore::AoR* RegSubTimeoutTask::set_aor_data(RegStore* current_store,
       // LCOV_EXCL_STOP
     }
 
-    // Do not send NOTIFYs in regstore as the RegistrationTimoutTask is called
+    // Do not send NOTIFYs in regstore as the RegSubTimoutTask is called
     // with both the local and remote stores as current_store, and NOTIFYs should
     // have already been sent correctly by the above call to reg_store_access_common.
     set_rc = current_store->set_aor_data(aor_id,
@@ -344,8 +344,8 @@ HTTPCode RegSubTimeoutTask::parse_response(std::string body)
   if (doc.HasParseError())
   {
     TRC_DEBUG("Failed to parse opaque data as JSON: %s\nError: %s",
-             json_str.c_str(),
-             rapidjson::GetParseError_En(doc.GetParseError()));
+              json_str.c_str(),
+              rapidjson::GetParseError_En(doc.GetParseError()));
     return HTTP_BAD_REQUEST;
   }
 

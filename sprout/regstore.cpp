@@ -1106,8 +1106,10 @@ RegStore::AoR* RegStore::JsonSerializerDeserializer::
       }
 
       JSON_GET_INT_MEMBER(s_obj, JSON_EXPIRES, s->_expires);
-      s->_timer_id = ((s_obj.HasMember(JSON_TIMER_ID)) &&
-                      ((s_obj[JSON_TIMER_ID]).IsString()) ? (s_obj[JSON_TIMER_ID].GetString()) : "");
+      s->_timer_id =
+         ((s_obj.HasMember(JSON_TIMER_ID)) && ((s_obj[JSON_TIMER_ID]).IsString()) ?
+                                               (s_obj[JSON_TIMER_ID].GetString()) :
+                                                "");
     }
 
     JSON_GET_INT_MEMBER(doc, JSON_NOTIFY_CSEQ, aor->_notify_cseq);
