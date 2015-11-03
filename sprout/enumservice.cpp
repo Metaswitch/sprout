@@ -252,6 +252,10 @@ std::string JSONEnumService::lookup_uri_from_user(const std::string &user, SAS::
 }
 
 
+// This function returns a pointer to a struct that may be destroyed by the
+// updater. Callers must therefore ensure that they have the read lock before
+// calling this function and only release the lock once they no longer need
+// the object.
 const JSONEnumService::NumberPrefix* JSONEnumService::prefix_match(const std::string& number) const
 {
   // For simplicity this uses a linear scan since we don't expect too many
