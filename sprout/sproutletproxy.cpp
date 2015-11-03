@@ -65,7 +65,7 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
                                const std::string& root_uri,
                                const std::unordered_set<std::string>& host_aliases,
                                const std::list<Sproutlet*>& sproutlets,
-                               const std::set<std::string> stateless_proxies) :
+                               const std::set<std::string>& stateless_proxies) :
   BasicProxy(endpt,
              "mod-sproutlet-controller",
              priority,
@@ -1866,6 +1866,7 @@ void SproutletWrapper::tx_response(pjsip_tx_data* rsp)
 void SproutletWrapper::tx_cancel(int fork_id)
 {
   // Build a CANCEL request from the original request sent on this fork.
+  // See issue 1232.
   pjsip_tx_data* cancel = PJUtils::create_cancel(stack_data.endpt,
                                                  _forks[fork_id].req,
                                                  _forks[fork_id].cancel_reason);
