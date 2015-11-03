@@ -80,13 +80,13 @@ void BgcfService::update_routes()
   if (bgcf_str == "")
   {
     // LCOV_EXCL_START
-    TRC_ERROR("Failed to read BGCF configuration data from %s", 
+    TRC_ERROR("Failed to read BGCF configuration data from %s",
               _configuration.c_str());
     CL_SPROUT_BGCF_FILE_EMPTY.log();
     return;
     // LCOV_EXCL_STOP
   }
- 
+
   // Now parse the document
   rapidjson::Document doc;
   doc.Parse<0>(bgcf_str.c_str());
@@ -162,6 +162,8 @@ void BgcfService::update_routes()
       }
     }
 
+    // Take a write lock on the mutex in RAII style
+    boost::lock_guard<boost::shared_mutex> write_lock(_routes_rw_lock);
     _domain_routes = new_domain_routes;
     _number_routes = new_number_routes;
   }
@@ -185,8 +187,11 @@ std::vector<std::string> BgcfService::get_route_from_domain(
 {
   TRC_DEBUG("Getting route for URI domain %s via BGCF lookup", domain.c_str());
 
+  // Take a read lock on the mutex in RAII style
+  boost::shared_lock<boost::shared_mutex> read_lock(_routes_rw_lock);
+
   // First try the specified domain.
-  std::map<std::string, std::vector<std::string>>::const_iterator i = 
+  std::map<std::string, std::vector<std::string>>::const_iterator i =
                                                     _domain_routes.find(domain);
   if (i != _domain_routes.end())
   {
@@ -239,8 +244,11 @@ std::vector<std::string> BgcfService::get_route_from_number(
                                                 const std::string &number,
                                                 SAS::TrailId trail) const
 {
-  // The number routes map is ordered by length of key. Start from the end of 
-  // the map to get the longest prefixes first. 
+  // Take a read lock on the mutex in RAII style
+  boost::shared_lock<boost::shared_mutex> read_lock(_routes_rw_lock);
+
+  // The number routes map is ordered by length of key. Start from the end of
+  // the map to get the longest prefixes first.
   for (std::map<std::string, std::vector<std::string>>::const_reverse_iterator it =
         _number_routes.rbegin();
        it != _number_routes.rend();
@@ -262,8 +270,8 @@ std::vector<std::string> BgcfService::get_route_from_number(
       event.add_var_param(number);
       std::string route_string;
 
-      for (std::vector<std::string>::const_iterator ii = (*it).second.begin(); 
-                                                    ii != (*it).second.end(); 
+      for (std::vector<std::string>::const_iterator ii = (*it).second.begin();
+                                                    ii != (*it).second.end();
                                                     ++ii)
       {
         route_string = route_string + *ii + ";";

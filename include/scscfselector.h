@@ -41,6 +41,7 @@
 #include <vector>
 #include <map>
 #include <functional>
+#include <boost/thread.hpp>
 #include "updater.h"
 #include "sas.h"
 
@@ -70,6 +71,7 @@ private:
   std::string _configuration;
   std::vector<scscf> _scscfs;
   Updater<void, SCSCFSelector>* _updater;
+  boost::shared_mutex _scscfs_rw_lock;
 };
 
 #endif

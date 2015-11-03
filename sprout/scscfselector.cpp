@@ -111,18 +111,18 @@ void SCSCFSelector::update_scscf()
          scscfs_it != scscfs_arr.End();
          ++scscfs_it)
     {
-      try 
+      try
       {
         scscf_t new_scscf;
         JSON_GET_STRING_MEMBER(*scscfs_it, "server", new_scscf.server);
         JSON_GET_INT_MEMBER(*scscfs_it, "priority", new_scscf.priority);
         JSON_GET_INT_MEMBER(*scscfs_it, "weight", new_scscf.weight);
-        
+
         JSON_ASSERT_CONTAINS(*scscfs_it, "capabilities");
         JSON_ASSERT_ARRAY((*scscfs_it)["capabilities"]);
         const rapidjson::Value& cap_arr = (*scscfs_it)["capabilities"];
         std::vector<int> capabilities_vec;
- 
+
         for (rapidjson::Value::ConstValueIterator cap_it = cap_arr.Begin();
              cap_it != cap_arr.End();
              ++cap_it)
@@ -132,7 +132,7 @@ void SCSCFSelector::update_scscf()
 
         // Sort the capabilities and remove duplicates
         std::sort(capabilities_vec.begin(), capabilities_vec.end());
-        capabilities_vec.erase(unique(capabilities_vec.begin(),  
+        capabilities_vec.erase(unique(capabilities_vec.begin(),
                                       capabilities_vec.end()),
                                capabilities_vec.end() );
         new_scscf.capabilities = capabilities_vec;
@@ -148,6 +148,8 @@ void SCSCFSelector::update_scscf()
       }
     }
 
+    // Take a write lock on the mutex in RAII style
+    boost::lock_guard<boost::shared_mutex> write_lock(_scscfs_rw_lock);
     _scscfs = new_scscfs;
   }
   catch (JsonFormatError err)
@@ -169,6 +171,11 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
                                      const std::vector<std::string> &rejects,
                                      SAS::TrailId trail)
 {
+  // Take a read lock on the mutex in RAII style. See
+  // http://www.boost.org/doc/libs/1_41_0/doc/html/thread/synchronization.html
+  // for documentation.
+  boost::shared_lock<boost::shared_mutex> read_lock(_scscfs_rw_lock);
+
   // There are no configured S-CSCFs.
   if (_scscfs.empty())
   {
