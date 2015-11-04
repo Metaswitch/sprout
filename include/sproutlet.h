@@ -626,7 +626,7 @@ private:
   const std::string _service_host;
 
   /// The sproutletproxy that hosts this sproutlet.
-  SproutletProxy* _proxy;
+  SproutletProxy* _proxy = NULL;
 };
 
 #endif
