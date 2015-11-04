@@ -650,7 +650,7 @@ TEST_F(RegStoreCorruptDataTest, SemanticallyInvalidJson)
 
   EXPECT_CALL(*_datastore, get_data(_, _, _, _, _))
     .WillOnce(DoAll(SetArgReferee<2>(
-                     std::string("{\"bindings\": {}, \"subscriptions\" :{}, \"notify_cseq\": \"123\"}")),
+                    std::string("{\"bindings\": {}, \"subscriptions\" :{}, \"notify_cseq\": \"123\"}")),
                     SetArgReferee<3>(1), // CAS
                     Return(Store::OK)));
 
