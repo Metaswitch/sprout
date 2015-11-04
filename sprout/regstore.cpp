@@ -499,6 +499,7 @@ void RegStore::AoR::common_constructor(const AoR& other)
 
   _notify_cseq = other._notify_cseq;
   _cas = other._cas;
+  _uri = other._uri;
 }
 
 

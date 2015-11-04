@@ -375,6 +375,9 @@ TYPED_TEST(BasicRegStoreTest, CopyTests)
   RegStore::AoR* copy = new RegStore::AoR(*aor_data1);
   EXPECT_EQ(1u, copy->bindings().size());
   EXPECT_EQ(1u, copy->subscriptions().size());
+  EXPECT_EQ(1, copy->_notify_cseq);
+  EXPECT_EQ(0, copy->_cas);
+  EXPECT_EQ("5102175698@cw-ngv.com", copy->_uri);
   delete copy; copy = NULL;
 
   // Test AoR assignment.
@@ -382,6 +385,9 @@ TYPED_TEST(BasicRegStoreTest, CopyTests)
   *copy = *aor_data1;
   EXPECT_EQ(1u, copy->bindings().size());
   EXPECT_EQ(1u, copy->subscriptions().size());
+  EXPECT_EQ(1, copy->_notify_cseq);
+  EXPECT_EQ(0, copy->_cas);
+  EXPECT_EQ("5102175698@cw-ngv.com", copy->_uri);
   delete copy; copy = NULL;
   delete aor_data1; aor_data1 = NULL;
 }
