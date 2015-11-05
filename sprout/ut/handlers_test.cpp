@@ -320,7 +320,6 @@ TEST_F(RegSubTimeoutTasksTest, LocalAoRNoBindingsTest)
       EXPECT_CALL(*store, get_aor_data(aor_id, _, true)).WillOnce(Return(aor));
       EXPECT_CALL(*remote_store, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store, get_aor_data(aor_id, _, false)).WillOnce(Return(remote_aor));
-//again, entering loop at line 94, but no way to tell if we are
       EXPECT_CALL(*store, set_aor_data(aor_id, aor, true, _, false, _)).WillOnce(Return(Store::OK));
       EXPECT_CALL(*remote_store, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store, get_aor_data(aor_id, _, false)).WillOnce(Return(remote_aor_2));
