@@ -48,6 +48,7 @@
 #include "fakechronosconnection.hpp"
 #include "test_interposer.hpp"
 #include "mock_reg_store.h"
+#include "mock_hss_connection.h"
 
 using namespace std;
 using ::testing::_;
@@ -76,7 +77,7 @@ class RegSubTimeoutTasksTest : public SipTest
   MockRegStore* store;
   MockRegStore* remote_store;
   MockHttpStack* stack;
-  FakeHSSConnection* fake_hss;
+  MockHSSConnection* mock_hss;
   MockHttpStack::Request* req;
   RegSubTimeoutTask::Config* config;
   RegSubTimeoutTask* handler;
@@ -90,7 +91,7 @@ class RegSubTimeoutTasksTest : public SipTest
   {
     store = new MockRegStore();
     remote_store = new MockRegStore();
-    fake_hss = new FakeHSSConnection();
+    mock_hss = new MockHSSConnection();
     stack = new MockHttpStack();
   }
 
@@ -99,9 +100,9 @@ class RegSubTimeoutTasksTest : public SipTest
     delete config;
     delete req;
     delete stack;
-    delete fake_hss;
     delete remote_store; remote_store = NULL;
     delete store; store = NULL;
+    delete mock_hss;
   }
 
   void build_timeout_request(std::string body,
@@ -110,10 +111,11 @@ class RegSubTimeoutTasksTest : public SipTest
     req = new MockHttpStack::Request(stack,
                                      "/", "timers", "",
                                      body, method);
-    config = new RegSubTimeoutTask::Config(store, remote_store, fake_hss);
+    config = new RegSubTimeoutTask::Config(store, remote_store, mock_hss);
     handler = new RegSubTimeoutTask(*req, config, 0);
   }
 
+/*
   void expect_reg_store_updates(std::vector<std::string> aor_ids,
                                 std::vector<RegStore::AoR*> aors,
                                 RegStore::AoR* remote_aor)
@@ -137,7 +139,7 @@ class RegSubTimeoutTasksTest : public SipTest
       }
     }
   }
-
+*/
   RegStore::AoR* build_aor(std::string aor_id)
   {
     RegStore::AoR* aor = new RegStore::AoR(aor_id);
@@ -263,7 +265,7 @@ TEST_F(RegSubTimeoutTasksTest, RemoteAoRTest)
   }
   handler->run();
 }
-
+//NEED TO DIFFERENTIATE FROM ABOVE TEST AT POINT OF BINDINGS CHECK #94
 // Test with a remote AoR with no bindings
 TEST_F(RegSubTimeoutTasksTest, RemoteAoRNoBindingsTest)
 {
@@ -277,12 +279,16 @@ TEST_F(RegSubTimeoutTasksTest, RemoteAoRNoBindingsTest)
   // Set up an AoR with no bindings
   RegStore::AoR* remote_aor = new RegStore::AoR(aor_id);
 
-  std::vector<std::string> aor_ids = {aor_id};
-  std::vector<RegStore::AoR*> aors = {aor};
+  {
+    InSequence s;
+      EXPECT_CALL(*stack, send_reply(_, 200, _));
+      EXPECT_CALL(*store, get_aor_data(aor_id, _, true)).WillOnce(Return(aor));
+      EXPECT_CALL(*store, set_aor_data(aor_id, aor, true, _, false, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*remote_store, has_servers()).WillOnce(Return(true));
+      EXPECT_CALL(*remote_store, get_aor_data(aor_id, _, false)).WillOnce(Return(remote_aor));
+      EXPECT_CALL(*remote_store, set_aor_data(aor_id, remote_aor, false, _, false, _)).WillOnce(Return(Store::OK));
+  }
 
-  expect_reg_store_updates(aor_ids, aors, remote_aor);
-  EXPECT_CALL(*remote_store, has_servers()).WillOnce(Return(true));
-  EXPECT_CALL(*stack, send_reply(_, 200, _));
   handler->run();
 }
 
@@ -304,51 +310,87 @@ TEST_F(RegSubTimeoutTasksTest, LocalAoRNoBindingsTest)
   // use would correctly set the data to the store before deleting the local copy
   RegStore::AoR* remote_aor_2 = new RegStore::AoR(*remote_aor);
 
-  std::vector<std::string> aor_ids = {aor_id};
-  std::vector<RegStore::AoR*> aors = {aor};
-
-// Modified version of expect_reg_store_updates to pass back the second remote aor
-  for (uint32_t ii = 0; ii < aor_ids.size(); ++ii)
   {
-    // Get the information from the local store
-    EXPECT_CALL(*store, get_aor_data(aor_ids[ii], _, true)).WillOnce(Return(aors[ii]));
-
-    EXPECT_CALL(*remote_store, get_aor_data(aor_ids[ii], _, false)).Times(2).WillOnce(Return(remote_aor))
-                                                                            .WillOnce(Return(remote_aor_2));
-    if (aors[ii] != NULL)
-    {
-      // Write the information to the local store
-      EXPECT_CALL(*store, set_aor_data(aor_ids[ii], _, _, _, false, _)).WillOnce(Return(Store::OK));
-
-      // Write the information to the remote store
-      if (remote_aor != NULL)
-      {
-        EXPECT_CALL(*remote_store, set_aor_data(aor_ids[ii], _, _, _, false, _)).WillOnce(Return(Store::OK));
-      }
-    }
+    InSequence s;
+      EXPECT_CALL(*stack, send_reply(_, 200, _));
+      EXPECT_CALL(*store, get_aor_data(aor_id, _, true)).WillOnce(Return(aor));
+      EXPECT_CALL(*remote_store, has_servers()).WillOnce(Return(true));
+      EXPECT_CALL(*remote_store, get_aor_data(aor_id, _, false)).WillOnce(Return(remote_aor));
+//again, entering loop at line 94, but no way to tell if we are
+      EXPECT_CALL(*store, set_aor_data(aor_id, aor, true, _, false, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*remote_store, has_servers()).WillOnce(Return(true));
+      EXPECT_CALL(*remote_store, get_aor_data(aor_id, _, false)).WillOnce(Return(remote_aor_2));
+      EXPECT_CALL(*remote_store, set_aor_data(aor_id, remote_aor_2, false, _, false, _)).WillOnce(Return(Store::OK));
   }
 
-  EXPECT_CALL(*remote_store, has_servers()).Times(2).WillRepeatedly(Return(true));
-  EXPECT_CALL(*stack, send_reply(_, 200, _));
   handler->run();
 }
 
-// Test with NULL AoRs (local AoR)
+// Test with a remote store, and both AoRs with no bindings
+TEST_F(RegSubTimeoutTasksTest, NoBindingsTest)
+{
+  CapturingTestLogger log(5);
+
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
+
+  build_timeout_request(body, htp_method_POST);
+  // Set up regstore expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  // Set up AoRs with no bindings
+  RegStore::AoR* aor = new RegStore::AoR(aor_id);
+  RegStore::AoR* remote_aor = new RegStore::AoR(aor_id);
+
+  // Set up second remote aor, to avoid problem of test process deleting
+  // the data of the first one. This is only a problem in the tests, as real
+  // use would correctly set the data to the store before deleting the local copy
+  RegStore::AoR* remote_aor_2 = new RegStore::AoR(*remote_aor);
+
+  {
+    InSequence s;
+      EXPECT_CALL(*stack, send_reply(_, 200, _));
+      EXPECT_CALL(*store, get_aor_data(aor_id, _, true)).WillOnce(Return(aor));
+      EXPECT_CALL(*remote_store, has_servers()).WillOnce(Return(true));
+      EXPECT_CALL(*remote_store, get_aor_data(aor_id, _, false)).WillOnce(Return(remote_aor));
+      EXPECT_CALL(*store, set_aor_data(aor_id, aor, true, _, false, _))
+                  .WillOnce(DoAll(SetArgReferee<5>(true),
+                                  Return(Store::OK)));
+      EXPECT_CALL(*remote_store, has_servers()).WillOnce(Return(true));
+      EXPECT_CALL(*remote_store, get_aor_data(aor_id, _, false)).WillOnce(Return(remote_aor_2));
+      EXPECT_CALL(*remote_store, set_aor_data(aor_id, remote_aor_2, false, _, false, _))
+                  .WillOnce(DoAll(SetArgReferee<5>(true),
+                                  Return(Store::OK)));
+      EXPECT_CALL(*mock_hss, update_registration_state(aor_id, "", HSSConnection::DEREG_TIMEOUT, 0));
+  }
+
+  handler->run();
+
+  EXPECT_TRUE(log.contains("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS"));
+
+}
+
+// Test with NULL AoRs 
 TEST_F(RegSubTimeoutTasksTest, NullAoRTest)
 {
+  CapturingTestLogger log(5);
+
   std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"binding_id\"}";
   build_timeout_request(body, htp_method_POST);
 
   // Set up regstore expectations
   std::string aor_id = "sip:6505550231@homedomain";
   RegStore::AoR* aor = NULL;
-  RegStore::AoR* remote_aor = NULL;
-  std::vector<std::string> aor_ids = {aor_id};
-  std::vector<RegStore::AoR*> aors = {aor};
 
-  EXPECT_CALL(*stack, send_reply(_, 200, _));
-  expect_reg_store_updates(aor_ids, aors, remote_aor);
+  {
+    InSequence s;
+      EXPECT_CALL(*stack, send_reply(_, 200, _));
+      EXPECT_CALL(*store, get_aor_data(aor_id, _, true)).WillOnce(Return(aor));
+  }
+
   handler->run();
+
+  EXPECT_TRUE(log.contains("Failed to get AoR binding for sip:6505550231@homedomain from store"));
+  EXPECT_TRUE(log.contains("Could not update update RegStore on registration timeout for AoR: sip:6505550231@homedomain"));
+
 }
 
 class RegSubTimeoutTasksMockStoreTest : public SipTest

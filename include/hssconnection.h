@@ -115,7 +115,7 @@ public:
                                      std::map<std::string, Ifcs >& service_profiles,
                                      std::vector<std::string>& associated_uris,
                                      SAS::TrailId trail);
-  HTTPCode update_registration_state(const std::string& public_user_identity,
+  virtual  HTTPCode update_registration_state(const std::string& public_user_identity,
                                      const std::string& private_user_identity,
                                      const std::string& type,
                                      SAS::TrailId trail);
