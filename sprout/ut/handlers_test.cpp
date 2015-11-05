@@ -54,7 +54,10 @@ using namespace std;
 using ::testing::_;
 using ::testing::Return;
 using ::testing::SetArgReferee;
+using ::testing::SaveArg;
+using ::testing::SaveArgPointee;
 using ::testing::InSequence;
+using ::testing::ByRef;
 
 const std::string HSS_REG_STATE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
                                   "<ClearwaterRegData>"
@@ -243,7 +246,7 @@ TEST_F(RegSubTimeoutTasksTest, MissingAorJSONTest)
 }
 
 // Test with a valid remote store and AoR
-TEST_F(RegSubTimeoutTasksTest, RemoteAoRTest)
+/*TEST_F(RegSubTimeoutTasksTest, RemoteAoRTest)
 {
   std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"subscription_id\": \"subscription_id\"}";
   build_timeout_request(body, htp_method_POST);
@@ -264,8 +267,8 @@ TEST_F(RegSubTimeoutTasksTest, RemoteAoRTest)
       EXPECT_CALL(*remote_store, set_aor_data(aor_id, remote_aor, false, _, false, _)).WillOnce(Return(Store::OK));
   }
   handler->run();
-}
-//NEED TO DIFFERENTIATE FROM ABOVE TEST AT POINT OF BINDINGS CHECK #94
+}*/
+
 // Test with a remote AoR with no bindings
 TEST_F(RegSubTimeoutTasksTest, RemoteAoRNoBindingsTest)
 {
@@ -286,7 +289,8 @@ TEST_F(RegSubTimeoutTasksTest, RemoteAoRNoBindingsTest)
       EXPECT_CALL(*store, set_aor_data(aor_id, aor, true, _, false, _)).WillOnce(Return(Store::OK));
       EXPECT_CALL(*remote_store, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store, get_aor_data(aor_id, _, false)).WillOnce(Return(remote_aor));
-      EXPECT_CALL(*remote_store, set_aor_data(aor_id, remote_aor, false, _, false, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*remote_store, set_aor_data(aor_id, remote_aor, false, _, false, _))
+                   .WillOnce(Return(Store::OK));
   }
 
   handler->run();
@@ -295,7 +299,7 @@ TEST_F(RegSubTimeoutTasksTest, RemoteAoRNoBindingsTest)
 // Test with a remote store, and a local AoR with no bindings
 TEST_F(RegSubTimeoutTasksTest, LocalAoRNoBindingsTest)
 {
-  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"subscription_id\": \"subscription_id\"}";
   build_timeout_request(body, htp_method_POST);
 
   // Set up regstore expectations
@@ -352,13 +356,11 @@ TEST_F(RegSubTimeoutTasksTest, NoBindingsTest)
       EXPECT_CALL(*remote_store, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store, get_aor_data(aor_id, _, false)).WillOnce(Return(remote_aor));
       EXPECT_CALL(*store, set_aor_data(aor_id, aor, true, _, false, _))
-                  .WillOnce(DoAll(SetArgReferee<5>(true),
-                                  Return(Store::OK)));
+                  .WillOnce(DoAll(SetArgReferee<5>(true), Return(Store::OK)));
       EXPECT_CALL(*remote_store, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store, get_aor_data(aor_id, _, false)).WillOnce(Return(remote_aor_2));
       EXPECT_CALL(*remote_store, set_aor_data(aor_id, remote_aor_2, false, _, false, _))
-                  .WillOnce(DoAll(SetArgReferee<5>(true),
-                                  Return(Store::OK)));
+                  .WillOnce(DoAll(SetArgReferee<5>(true), Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(aor_id, "", HSSConnection::DEREG_TIMEOUT, 0));
   }
 
