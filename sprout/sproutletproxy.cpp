@@ -449,6 +449,21 @@ SproutletProxy::UASTsx::~UASTsx()
   }
   _timers.clear();
 
+  if (_trail != 0)
+  {
+    // Flush the trail so it appears promptly in SAS. Note that we also log an
+    // end marker when the transaction moves into completed state, which also
+    // flushes the trail (see on_tsx_complete). We need to log a flush marker
+    // here as well, because ACKs to successful responses are handled
+    // statelessly without a PJSIP transaction, which means that on_tsx_complete
+    // is never called.
+    //
+    // For non-ACK transactions, there isn't any harm in logging an extra flush
+    // marker after the end marker.
+    SAS::Marker flush(_trail, MARKED_ID_FLUSH);
+    SAS::report_marker(flush);
+  }
+
   TRC_VERBOSE("Sproutlet Proxy transaction (%p) destroyed", this);
 }
 
