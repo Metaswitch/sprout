@@ -2114,13 +2114,13 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  RegistrationTimeoutTask::Config reg_timeout_config(local_reg_store, remote_reg_store, hss_connection);
+  RegSubTimeoutTask::Config reg_sub_timeout_config(local_reg_store, remote_reg_store, hss_connection);
   AuthTimeoutTask::Config auth_timeout_config(av_store, hss_connection);
   DeregistrationTask::Config deregistration_config(local_reg_store, remote_reg_store, hss_connection, sip_resolver);
 
-  // The RegistrationTimeoutTask and AuthTimeoutTask both handle
+  // The RegSubTimeoutTask and AuthTimeoutTask both handle
   // chronos requests, so use the ChronosHandler.
-  ChronosHandler<RegistrationTimeoutTask, RegistrationTimeoutTask::Config> reg_timeout_handler(&reg_timeout_config);
+  ChronosHandler<RegSubTimeoutTask, RegSubTimeoutTask::Config> reg_timeout_handler(&reg_sub_timeout_config);
   ChronosHandler<AuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
   HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
   HttpStackUtils::PingHandler ping_handler;

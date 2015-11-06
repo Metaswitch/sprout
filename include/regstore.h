@@ -150,7 +150,10 @@ public:
       /// The time (in seconds since the epoch) at which this subscription
       /// should expire.
       int _expires;
-    };
+
+      /// The timer ID provided by Chronos.
+      std::string _timer_id;
+   };
 
     /// Default Constructor.
     AoR(std::string sip_uri);
@@ -352,13 +355,15 @@ public:
   /// Destructor.
   virtual ~RegStore();
 
-  bool has_servers() { return _connector->underlying_store_has_servers(); }
+  virtual bool has_servers() { return _connector->underlying_store_has_servers(); }
 
   /// Get the data for a particular address of record (registered SIP URI,
   /// in format "sip:2125551212@example.com"), creating creating it if
   /// necessary.  May return NULL in case of error.  Result is owned
   /// by caller and must be freed with delete.
-  virtual AoR* get_aor_data(const std::string& aor_id, SAS::TrailId trail);
+  virtual AoR* get_aor_data(const std::string& aor_id,
+                            SAS::TrailId trail,
+                            bool should_send_notify = true);
 
   /// Update the data for a particular address of record.  Writes the data
   /// atomically.  If the underlying data has changed since it was last
@@ -368,13 +373,8 @@ public:
                                      AoR* data,
                                      bool update_timers,
                                      SAS::TrailId trail,
-                                     const std::vector<std::string> tags = TAGS_NONE);
-  virtual Store::Status set_aor_data(const std::string& aor_id,
-                                     AoR* data,
-                                     bool update_timers,
-                                     SAS::TrailId trail,
-                                     bool& all_bindings_expired,
-                                     const std::vector<std::string> tags = TAGS_NONE);
+                                     bool should_send_notify = true,
+                                     bool& all_bindings_expired = unused_bool);
 
   // Send a SIP NOTIFY
   virtual void send_notify(AoR::Subscription* s,
@@ -383,10 +383,43 @@ public:
                            std::string b_id,
                            SAS::TrailId trail);
 
-private:
-  int expire_bindings(AoR* aor_data, int now, SAS::TrailId trail);
-  void expire_subscriptions(AoR* aor_data, int now);
+  // Send NOTIFY used for expiring subscription
+  virtual void send_notify(AoR::Subscription *s,
+                           AoR* aor_data,
+                           SAS::TrailId trail,
+                           int now);
 
+private:
+  // Send a timer to chronos, checking for previously set timers,
+  // and creating the correct timer body.
+  void set_timer(const std::string& aor_id,
+                 std::string object_id,
+                 std::string& timer_id,
+                 int expiry,
+                 std::string id_type,
+                 SAS::TrailId trail,
+                 std::vector<std::string> tags);
+
+  // Call expire_subscriptions and expire_bindings, returning
+  // the max expires value created in expire_bindings. Chronos
+  // timers are deleted. NOTIFYs are sent depending on the bool value.
+  int expire_aor_members(AoR* aor_data,
+                         int now,
+                         SAS::TrailId trail,
+                         bool should_send_notify);
+
+  // expire any old bindings, and return max_expires.
+  int expire_bindings(AoR* aor_data,
+                      int now,
+                      SAS::TrailId trail);
+
+  // expire any old subscriptions.
+  void expire_subscriptions(AoR* aor_data,
+                            int now,
+                            SAS::TrailId trail,
+                            bool should_send_notify);
+
+  static bool unused_bool;
   ChronosConnection* _chronos;
   Connector* _connector;
 };

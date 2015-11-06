@@ -157,7 +157,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
     delete (*aor_data);
 
     // Find the current subscriptions for the AoR.
-    (*aor_data) = primary_store->get_aor_data(aor, trail);
+    (*aor_data) = primary_store->get_aor_data(aor, trail, false);
     TRC_DEBUG("Retrieved AoR data %p", (*aor_data));
 
     if ((*aor_data) == NULL)
@@ -177,7 +177,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
           (backup_store != NULL) &&
           (backup_store->has_servers()))
       {
-        backup_aor = backup_store->get_aor_data(aor, trail);
+        backup_aor = backup_store->get_aor_data(aor, trail, false);
         backup_aor_alloced = (backup_aor != NULL);
       }
 
@@ -270,8 +270,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
     }
 
     // Try to write the AoR back to the store.
-    set_rc = primary_store->set_aor_data(aor, (*aor_data), false, trail,
-                                         RegStore::TAGS_SUB);
+    set_rc = primary_store->set_aor_data(aor, (*aor_data), true, trail, false);
 
     if (set_rc != Store::OK)
     {
@@ -283,41 +282,13 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
 
   if (subscription_copy != NULL)
   {
-    std::map<std::string, RegStore::AoR::Binding> bindings;
-
-    for (RegStore::AoR::Bindings::const_iterator i = (*aor_data)->bindings().begin();
-         i != (*aor_data)->bindings().end();
-         ++i)
-    {
-      std::string id = i->first;
-      RegStore::AoR::Binding bind = *(i->second);
-
-      if (!bind._emergency_registration)
-      {
-        bindings.insert(std::pair<std::string, RegStore::AoR::Binding>(id, bind));
-      }
-    }
-
     if (update_notify)
     {
-      NotifyUtils::SubscriptionState state = NotifyUtils::SubscriptionState::ACTIVE;
-
-      if (expiry == 0)
-      {
-        state = NotifyUtils::SubscriptionState::TERMINATED;
-      }
-
-      status = NotifyUtils::create_notify(tdata_notify,
-                                          subscription_copy,
-                                          aor,
-                                          (*aor_data)->_notify_cseq,
-                                          bindings,
-                                          NotifyUtils::DocState::FULL,
-                                          NotifyUtils::RegistrationState::ACTIVE,
-                                          NotifyUtils::ContactState::ACTIVE,
-                                          NotifyUtils::ContactEvent::REGISTERED,
-                                          state,
-                                          expiry);
+      status = NotifyUtils::create_subscription_notify(tdata_notify,
+                                                       subscription_copy,
+                                                       aor,
+                                                       aor_data,
+                                                       now);
     }
 
     if (analytics != NULL)

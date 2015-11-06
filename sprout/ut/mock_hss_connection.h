@@ -1,8 +1,8 @@
 /**
- * @file notify_utils.h
+ * @file mock_hss_connection.h Mock HSS connection class
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Project Clearwater - IMS in the cloud.
+ * Copyright (C) 2015  Metaswitch Networks Ltd
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -34,49 +34,35 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#ifndef NOTIFY_UTILS_H__
-#define NOTIFY_UTILS_H__
+#ifndef MOCK_HSS_CONNECTION_H_
+#define MOCK_HSS_CONNECTION_H_
 
-extern "C" {
-#include <pjsip.h>
-#include <pjlib-util.h>
-#include <pjlib.h>
-#include <stdint.h>
-#include <pjsip/sip_msg.h>
-}
+#include "gmock/gmock.h"
 
-#include <string>
-#include "regstore.h"
-#include "ifchandler.h"
 #include "hssconnection.h"
-#include "pjsip-simple/evsub.h"
+#include "fakesnmp.hpp"
 
-namespace NotifyUtils
+class MockHSSConnection : public HSSConnection
 {
-  // See RFC 3265 
-  enum class DocState { FULL, PARTIAL };
-  enum class RegistrationState { ACTIVE, TERMINATED };
-  enum class ContactState { ACTIVE, TERMINATED };
-  enum class SubscriptionState { ACTIVE, TERMINATED };
-  enum class ContactEvent { REGISTERED, CREATED, REFRESHED, EXPIRED, DEACTIVATED };
+public:
+  MockHSSConnection() : HSSConnection("localhost",
+                                      NULL,
+                                      NULL,
+                                      &SNMP::FAKE_IP_COUNT_TABLE,
+                                      &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+                                      &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+                                      &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+                                      &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+                                      &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+                                      NULL) {};
+  virtual ~MockHSSConnection() {};
 
-  pj_status_t create_subscription_notify(pjsip_tx_data** tdata_notify,
-                                         RegStore::AoR::Subscription* s,
-                                         std::string aor,
-                                         RegStore::AoR** aor_data,
-                                         int now);
-
-  pj_status_t create_notify(pjsip_tx_data** tdata_notify,
-                            RegStore::AoR::Subscription* subscription,
-                            std::string aor, 
-                            int cseq,
-                            std::map<std::string, RegStore::AoR::Binding> bindings,
-                            NotifyUtils::DocState doc_state,
-                            NotifyUtils::RegistrationState reg_state,
-                            NotifyUtils::ContactState contact_state,
-                            NotifyUtils::ContactEvent contact_event,
-                            NotifyUtils::SubscriptionState subscription_state,
-                            int expiry);
+  MOCK_METHOD4(update_registration_state, HTTPCode(
+                                  const std::string& public_user_identity,
+                                  const std::string& private_user_identity,
+                                  const std::string& type,
+                                  SAS::TrailId trail));
 };
 
 #endif
+
