@@ -1,5 +1,5 @@
 /**
- * @file mock_hss_connection.h Mock regstore class
+ * @file mock_hss_connection.h Mock HSS connection class 
  *
  * Project Clearwater - IMS in the cloud.
  * Copyright (C) 2015  Metaswitch Networks Ltd

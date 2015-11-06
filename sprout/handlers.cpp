@@ -274,7 +274,7 @@ void RegSubTimeoutTask::handle_response()
   {
     // We couldn't update the RegStore but there is nothing else we can do to
     // recover from this.
-    TRC_INFO("Could not update update RegStore on registration timeout for AoR: %s",
+    TRC_INFO("Could not update RegStore on registration timeout for AoR: %s",
              _aor_id.c_str());
   }
 

@@ -284,8 +284,6 @@ TEST_F(RegSubTimeoutTasksTest, LocalAoRNoBindingsTest)
 // Test with a remote store, and both AoRs with no bindings
 TEST_F(RegSubTimeoutTasksTest, NoBindingsTest)
 {
-  CapturingTestLogger log(5);
-
   std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
 
   build_timeout_request(body, htp_method_POST);
@@ -316,8 +314,6 @@ TEST_F(RegSubTimeoutTasksTest, NoBindingsTest)
   }
 
   handler->run();
-
-  EXPECT_TRUE(log.contains("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS"));
 }
 
 // Test with NULL AoRs 
@@ -336,12 +332,12 @@ TEST_F(RegSubTimeoutTasksTest, NullAoRTest)
     InSequence s;
       EXPECT_CALL(*stack, send_reply(_, 200, _));
       EXPECT_CALL(*store, get_aor_data(aor_id, _, true)).WillOnce(Return(aor));
+      EXPECT_CALL(*store, set_aor_data(aor_id, aor, true, _, false, _)).Times(0);
   }
 
   handler->run();
 
-  EXPECT_TRUE(log.contains("Failed to get AoR binding for sip:6505550231@homedomain from store"));
-  EXPECT_TRUE(log.contains("Could not update update RegStore on registration timeout for AoR: sip:6505550231@homedomain"));
+  EXPECT_TRUE(log.contains("Failed to get AoR binding for"));
 }
 
 class RegSubTimeoutTasksMockStoreTest : public SipTest
