@@ -245,6 +245,31 @@ static pj_status_t add_path(pjsip_tx_data* tdata,
 static NodeRole acr_node_role(pjsip_msg *req);
 
 
+// Utility class that automatically flushes a trail ID when it goes out of
+// scope (unless the user decides it isn't required). This is useful when a
+// function has multiple exit points that should all cause the trail to be
+// flushed.
+class TrailFlusher
+{
+public:
+  TrailFlusher(SAS::TrailId trail) : _trail(trail), _flush_required(true) {}
+
+  void set_flush_required(bool required) { _flush_required = required; }
+
+  ~TrailFlusher()
+  {
+    if (_flush_required)
+    {
+      SAS::Marker flush_marker(_trail, MARKED_ID_FLUSH);
+      SAS::report_marker(flush_marker);
+    }
+  }
+
+private:
+  SAS::TrailId _trail;
+  bool _flush_required;
+};
+
 ///@{
 // MAIN ENTRY POINTS
 
@@ -393,6 +418,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
   Target *target = NULL;
   ACR* acr = NULL;
   ACR* downstream_acr = NULL;
+  TrailFlusher trail_flusher(get_trail(rdata));
 
   // Verify incoming request.
   int status_code = proxy_verify_request(rdata);
@@ -553,6 +579,10 @@ void process_tsx_request(pjsip_rx_data* rdata)
   // safe to operate on it (and have to exit its context below).
   status = UASTransaction::create(rdata, tdata, trust, acr, &uas_data);
 
+  // The UAS transaction is responsible for flushing the trail when it is
+  // terminated.
+  trail_flusher.set_flush_required(false);
+
   if (status != PJ_SUCCESS)
   {
     TRC_ERROR("Failed to create UAS transaction, %s",
@@ -586,6 +616,7 @@ void process_cancel_request(pjsip_rx_data* rdata)
 {
   pjsip_transaction *invite_uas;
   pj_str_t key;
+  TrailFlusher trail_flusher(get_trail(rdata));
 
   // Find the UAS INVITE transaction
   pjsip_tsx_create_key(rdata->tp_info.pool, &key, PJSIP_UAS_ROLE,
