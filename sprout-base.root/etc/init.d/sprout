@@ -166,12 +166,6 @@ get_daemon_args()
         [ "$enforce_global_only_lookups" != "Y" ] || global_only_lookups_arg="--enforce-global-only-lookups"
         [ "$override_npdi" != "Y" ] || override_npdi_arg="--override-npdi"
 
-        # Enable SNMP alarms if informsink(s) are configured
-        if [ ! -z "$snmp_ip" ]
-        then
-          alarms_enabled_arg="--alarms-enabled"
-        fi
-
         [ -z "$target_latency_us" ] || target_latency_us_arg="--target-latency-us=$target_latency_us"
         [ -z "$cass_target_latency_us" ] || cass_target_latency_us_arg="--cass-target-latency-us=$cass_target_latency_us"
         [ -z "$max_tokens" ] || max_tokens_arg="--max-tokens=$max_tokens"
@@ -210,7 +204,6 @@ get_daemon_args()
                      $user_phone_arg
                      $global_only_lookups_arg
                      $override_npdi_arg
-                     $alarms_enabled_arg
                      $exception_max_ttl_arg
                      --http-address=$local_ip
                      --http-port=9888
