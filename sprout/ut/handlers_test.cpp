@@ -316,7 +316,7 @@ TEST_F(RegSubTimeoutTasksTest, NoBindingsTest)
   handler->run();
 }
 
-// Test with NULL AoRs 
+// Test with NULL AoRs
 TEST_F(RegSubTimeoutTasksTest, NullAoRTest)
 {
   CapturingTestLogger log(5);
