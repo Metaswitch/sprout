@@ -60,6 +60,10 @@ extern "C" {
 
 static SNMP::RegistrationStatsTables* third_party_reg_stats_tables;
 
+// Should we always send the access-side REGISTER and 200 OK in the body of third-party REGISTER
+// messages to application servers, even if the iFCs don't tell us to?
+static bool force_third_party_register_body;
+
 /// Temporary data structure maintained while transmitting a third-party
 /// REGISTER to an application server.
 struct ThirdPartyRegData
@@ -79,10 +83,16 @@ void send_register_to_as(pjsip_rx_data* received_register,
                          const std::string&,
                          SAS::TrailId);
 
+void RegistrationUtils::init(SNMP::RegistrationStatsTables* third_party_reg_stats_tables_arg,
+                             bool force_third_party_register_body_arg)
+{
+  third_party_reg_stats_tables = third_party_reg_stats_tables_arg;
+  force_third_party_register_body = force_third_party_register_body_arg;
+}
+
 void RegistrationUtils::deregister_with_application_servers(Ifcs& ifcs,
                                                             RegStore* store,
                                                             const std::string& served_user,
-                                                            SNMP::RegistrationStatsTables* third_party_reg_stats_tables,
                                                             SAS::TrailId trail)
 {
   RegistrationUtils::register_with_application_servers(ifcs,
@@ -92,7 +102,6 @@ void RegistrationUtils::deregister_with_application_servers(Ifcs& ifcs,
                                                        0,
                                                        false,
                                                        served_user,
-                                                       third_party_reg_stats_tables,
                                                        trail);
 }
 
@@ -103,7 +112,6 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
                                                           int expires,
                                                           bool is_initial_registration,
                                                           const std::string& served_user,
-                                                          SNMP::RegistrationStatsTables* third_party_reg_stats_tbls,
                                                           SAS::TrailId trail)
 {
   // Function preconditions
@@ -116,11 +124,6 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
   {
     // We should have both messages or neither
     assert(ok_response != NULL);
-  }
-
-  if (third_party_reg_stats_tbls != NULL)
-  {
-    third_party_reg_stats_tables = third_party_reg_stats_tbls;
   }
 
   std::vector<AsInvocation> as_list;
@@ -189,7 +192,7 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
        as_iter != as_list.end();
        as_iter++)
   {
-    if (third_party_reg_stats_tbls != NULL)
+    if (third_party_reg_stats_tables != NULL)
     {
       if (expires == 0)
       {
@@ -350,7 +353,7 @@ void send_register_to_as(pjsip_rx_data *received_register,
                                xml_part);
     }
 
-    if (as.include_register_request)
+    if (as.include_register_request || force_third_party_register_body)
     {
       pjsip_multipart_part *request_part = pjsip_multipart_create_part(tdata->pool);
       pjsip_msg_print(received_register->msg_info.msg, buf, sizeof(buf));
@@ -363,7 +366,7 @@ void send_register_to_as(pjsip_rx_data *received_register,
                                request_part);
     }
 
-    if (as.include_register_response)
+    if (as.include_register_response || force_third_party_register_body)
     {
       pjsip_multipart_part *response_part = pjsip_multipart_create_part(tdata->pool);
       pjsip_msg_print(ok_response->msg, buf, sizeof(buf));
@@ -486,7 +489,7 @@ void RegistrationUtils::remove_bindings(RegStore* store,
     {
       // Note that 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 doesn't specify that any binding information
       // should be passed on the REGISTER message, so we don't need the binding ID.
-      deregister_with_application_servers(ifc_map[aor], store, aor, third_party_reg_stats_tables, trail);
+      deregister_with_application_servers(ifc_map[aor], store, aor, trail);
       notify_application_servers();
     }
   }

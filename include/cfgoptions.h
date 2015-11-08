@@ -140,6 +140,7 @@ struct options
   std::string                          pbxes;
   std::string                          pbx_service_route;
   NonRegisterAuthentication            non_register_auth_mode;
+  bool                                 force_third_party_register_body;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
