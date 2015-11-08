@@ -745,6 +745,43 @@ void SCSCFSproutletTsx::retrieve_odi_and_sesscase(pjsip_msg* req)
 
 }
 
+bool SCSCFSproutletTsx::is_retarget(std::string new_served_user)
+{
+  std::string old_served_user = _as_chain_link.served_user();
+
+  // TS 24.229 section 5.4.3.3 says that changing the Request-URI to an alias of the original URI
+  // doesn't count as a retarget, so get the aliases ready to check
+  std::vector<std::string> aliases;
+  get_aliases(old_served_user, aliases);
+
+  if (new_served_user == old_served_user)
+  {
+    // URIs match exactly - this is not a retarget
+    return false;
+  }
+  else if (std::find(aliases.begin(), aliases.end(), new_served_user) != aliases.end())
+  {
+    TRC_DEBUG("Application server has changed URI %s to the aliased URI %s - "
+              "not treating as a retarget, not invoking originating-cdiv processing",
+              old_served_user.c_str(),
+              new_served_user.c_str());
+    SAS::Event event(trail(), SASEvent::AS_RETARGETED_TO_ALIAS, 1);
+    event.add_var_param(old_served_user);
+    event.add_var_param(new_served_user);
+    SAS::report_event(event);
+    return false;
+  }
+  else
+  {
+    // The new URI is not identical to the old one and is not an aliased URI - the request has been retargeted
+    SAS::Event event(trail(), SASEvent::AS_RETARGETED_CDIV, 1);
+    event.add_var_param(old_served_user);
+    event.add_var_param(new_served_user);
+    SAS::report_event(event);
+    return true;
+  }
+}
+
 pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
 {
   pjsip_status_code status_code = PJSIP_SC_OK;
@@ -757,7 +794,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
     std::string served_user = served_user_from_msg(req);
 
     if ((_session_case->is_terminating()) &&
-        (served_user != _as_chain_link.served_user()))
+        is_retarget(served_user))
     {
       if (pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL) != NULL)
       {
@@ -1515,7 +1552,7 @@ bool SCSCFSproutletTsx::is_user_registered(std::string public_id)
 /// Look up the associated URIs for the given public ID, using the cache if
 /// possible (and caching them and the iFC otherwise).
 /// The uris parameter is only filled in correctly if this function
-/// returns true,
+/// returns true.
 bool SCSCFSproutletTsx::get_associated_uris(std::string public_id,
                                             std::vector<std::string>& uris)
 {
@@ -1526,6 +1563,22 @@ bool SCSCFSproutletTsx::get_associated_uris(std::string public_id,
   }
   return success;
 }
+
+/// Look up the aliases for the given public ID, using the cache if
+/// possible (and caching them and the iFC otherwise).
+/// The aliases parameter is only filled in correctly if this function
+/// returns true.
+bool SCSCFSproutletTsx::get_aliases(std::string public_id,
+                                    std::vector<std::string>& aliases)
+{
+  bool success = get_data_from_hss(public_id);
+  if (success)
+  {
+    aliases = _aliases;
+  }
+  return success;
+}
+
 
 
 /// Look up the Ifcs for the given public ID, using the cache if possible

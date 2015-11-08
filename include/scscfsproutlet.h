@@ -235,6 +235,9 @@ private:
                               ACR*& acr,
                               SAS::TrailId chain_trail);
 
+  /// Check whether the request has been retargeted, given the updated URI.
+  bool is_retarget(std::string new_served_user);
+
   /// Apply originating services for this request.
   void apply_originating_services(pjsip_msg* req);
 
@@ -278,6 +281,11 @@ private:
   /// is only filled in correctly if this function returns true.
   bool get_associated_uris(std::string public_id,
                            std::vector<std::string>& uris);
+
+  /// Look up the aliases for the given public ID.  The uris parameter
+  /// is only filled in correctly if this function returns true.
+  bool get_aliases(std::string public_id,
+                   std::vector<std::string>& aliases);
 
   /// Look up the Ifcs for the given public ID.  The ifcs parameter is only
   /// filled in correctly if this function returns true.
