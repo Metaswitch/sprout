@@ -93,6 +93,7 @@ TARGET_SOURCES := logger.cpp \
                   snmp_row.cpp \
                   ralf_processor.cpp \
                   sip_string_to_request_type.cpp \
+                  namespace_hop.cpp \
                   session_expires_helper.cpp
 
 TARGET_SOURCES_TEST := test_main.cpp \
