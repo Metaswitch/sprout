@@ -90,6 +90,7 @@ TARGET_SOURCES := logger.cpp \
                   snmp_scalar.cpp \
                   ralf_processor.cpp \
                   uri_classifier.cpp \
+                  namespace_hop.cpp \
                   session_expires_helper.cpp
 
 TARGET_SOURCES_BUILD := main.cpp

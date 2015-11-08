@@ -1682,18 +1682,14 @@ int main(int argc, char* argv[])
                                  token_rate_scalar);      // Statistics scalar for current token rate.
 
   // Start the health checker
-  HealthChecker* health_checker = new HealthChecker();
-  pthread_t health_check_thread;
-  pthread_create(&health_check_thread,
-                 NULL,
-                 &HealthChecker::static_main_thread_function,
-                 (void*)health_checker);
+  HealthChecker* hc = new HealthChecker();
+  hc->start_thread();
 
   // Create an exception handler. The exception handler should attempt to
   // quiesce the process before killing it.
   exception_handler = new ExceptionHandler(opt.exception_max_ttl,
                                            true,
-                                           health_checker);
+                                           hc);
 
   // Create a DNS resolver and a SIP specific resolver.
   dns_resolver = new DnsCachedResolver(opt.dns_servers);
@@ -2094,7 +2090,7 @@ int main(int argc, char* argv[])
   init_common_sip_processing(load_monitor,
                              requests_counter,
                              overload_counter,
-                             health_checker);
+                             hc);
 
   init_thread_dispatcher(opt.worker_threads,
                          latency_table,
@@ -2289,9 +2285,8 @@ int main(int argc, char* argv[])
     delete auth_stats_tbls.ims_aka_auth_tbl;
     delete auth_stats_tbls.non_register_auth_tbl;
   }
-  health_checker->terminate();
-  pthread_join(health_check_thread, NULL);
-  delete health_checker;
+  hc->stop_thread();
+  delete hc;
 
   // Unregister the handlers that use semaphores (so we can safely destroy
   // them).
