@@ -52,8 +52,8 @@ extern "C" {
 
 namespace RegistrationUtils {
 
-void init(SNMP::RegistrationStatsTables* _third_party_reg_stats_tables,
-          bool _force_third_party_register_body);
+void init(SNMP::RegistrationStatsTables* third_party_reg_stats_tables_arg,
+          bool force_third_party_register_body_arg);
 
 void remove_bindings(RegStore* store,
                      HSSConnection* hss,

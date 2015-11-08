@@ -83,11 +83,11 @@ void send_register_to_as(pjsip_rx_data* received_register,
                          const std::string&,
                          SAS::TrailId);
 
-void RegistrationUtils::init(SNMP::RegistrationStatsTables* _third_party_reg_stats_tables,
-                             bool _force_third_party_register_body)
+void RegistrationUtils::init(SNMP::RegistrationStatsTables* third_party_reg_stats_tables_arg,
+                             bool force_third_party_register_body_arg)
 {
-  third_party_reg_stats_tables = _third_party_reg_stats_tables;
-  force_third_party_register_body = _force_third_party_register_body;
+  third_party_reg_stats_tables = third_party_reg_stats_tables_arg;
+  force_third_party_register_body = force_third_party_register_body_arg;
 }
 
 void RegistrationUtils::deregister_with_application_servers(Ifcs& ifcs,
