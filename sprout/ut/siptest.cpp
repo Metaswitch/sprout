@@ -361,9 +361,10 @@ void SipTest::add_host_mapping(const string& hostname, const string& addresses)
 void SipTest::inject_msg(const string& msg, TransportFlow* tp)
 {
   pj_pool_t *rdata_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
-							PJSIP_POOL_RDATA_LEN,
-							PJSIP_POOL_RDATA_INC);
+                                                  PJSIP_POOL_RDATA_LEN,
+                                                  PJSIP_POOL_RDATA_INC);
   pjsip_rx_data* rdata = build_rxdata(msg, tp, rdata_pool);
+  set_trail(rdata, SAS::new_trail());
   char buf[100];
   snprintf(buf, sizeof(buf), "inject_msg on %p (transport %p)", tp, tp->_transport);
   log_pjsip_buf(buf, rdata->pkt_info.packet, rdata->pkt_info.len);
