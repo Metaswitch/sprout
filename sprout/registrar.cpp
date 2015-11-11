@@ -266,7 +266,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
           (backup_store != NULL) &&
           (backup_store->has_servers()))
       {
-        backup_aor = backup_store->get_aor_data(aor, trail);
+        backup_aor = backup_store->get_aor_data(aor, trail, false);
         backup_aor_alloced = (backup_aor != NULL);
       }
 
@@ -442,8 +442,8 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
                                          aor_data,
                                          send_notify,
                                          trail,
-                                         all_bindings_expired,
-                                         RegStore::TAGS_REG);
+                                         true,
+                                         all_bindings_expired);
     if (set_rc != Store::OK)
     {
       delete aor_data; aor_data = NULL;
@@ -1061,7 +1061,6 @@ void process_register_request(pjsip_rx_data* rdata)
                                                          expiry,
                                                          is_initial_registration,
                                                          public_id,
-                                                         third_party_reg_stats_tables,
                                                          trail);
   }
 
@@ -1115,6 +1114,7 @@ pj_status_t init_registrar(RegStore* registrar_store,
                            AnalyticsLogger* analytics_logger,
                            ACRFactory* rfacr_factory,
                            int cfg_max_expires,
+                           bool force_original_register_inclusion, 
                            SNMP::RegistrationStatsTables* reg_stats_tbls,
                            SNMP::RegistrationStatsTables* third_party_reg_stats_tbls)
 {
@@ -1128,6 +1128,8 @@ pj_status_t init_registrar(RegStore* registrar_store,
   acr_factory = rfacr_factory;
   reg_stats_tables = reg_stats_tbls;
   third_party_reg_stats_tables = third_party_reg_stats_tbls;
+
+  RegistrationUtils::init(third_party_reg_stats_tbls, force_original_register_inclusion);
 
   // Construct a Service-Route header pointing at the S-CSCF ready to be added
   // to REGISTER 200 OK response.

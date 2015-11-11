@@ -48,10 +48,16 @@
 #include "fakechronosconnection.hpp"
 #include "test_interposer.hpp"
 #include "mock_reg_store.h"
+#include "mock_hss_connection.h"
 
 using namespace std;
 using ::testing::_;
 using ::testing::Return;
+using ::testing::SetArgReferee;
+using ::testing::SaveArg;
+using ::testing::SaveArgPointee;
+using ::testing::InSequence;
+using ::testing::ByRef;
 
 const std::string HSS_REG_STATE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
                                   "<ClearwaterRegData>"
@@ -69,18 +75,15 @@ const std::string HSS_NOT_REG_STATE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?
                                         "<RegistrationState>NOT_REGISTERED</RegistrationState>"
                                       "</ClearwaterRegData>";
 
-class RegistrationTimeoutTasksTest : public SipTest
+class RegSubTimeoutTasksTest : public SipTest
 {
-  FakeChronosConnection* chronos_connection;
-  LocalStore* local_data_store;
-  RegStore* store;
-  FakeHSSConnection* fake_hss;
-
-  MockHttpStack stack;
+  MockRegStore* store;
+  MockRegStore* remote_store;
+  MockHttpStack* stack;
+  MockHSSConnection* mock_hss;
   MockHttpStack::Request* req;
-  RegistrationTimeoutTask::Config* chronos_config;
-
-  RegistrationTimeoutTask* handler;
+  RegSubTimeoutTask::Config* config;
+  RegSubTimeoutTask* handler;
 
   static void SetUpTestCase()
   {
@@ -89,88 +92,255 @@ class RegistrationTimeoutTasksTest : public SipTest
 
   void SetUp()
   {
-    chronos_connection = new FakeChronosConnection();
-    local_data_store = new LocalStore();
-    store = new RegStore(local_data_store, chronos_connection);
-    fake_hss = new FakeHSSConnection();
-    req = new MockHttpStack::Request(&stack, "/", "timers");
-    chronos_config = new RegistrationTimeoutTask::Config(store, store, fake_hss);
-    handler = new RegistrationTimeoutTask(*req, chronos_config, 0);
+    store = new MockRegStore();
+    remote_store = new MockRegStore();
+    mock_hss = new MockHSSConnection();
+    stack = new MockHttpStack();
   }
 
   void TearDown()
   {
-    delete handler;
-    delete chronos_config;
+    delete config;
     delete req;
-    delete fake_hss;
+    delete stack;
+    delete remote_store; remote_store = NULL;
     delete store; store = NULL;
-    delete local_data_store; local_data_store = NULL;
-    delete chronos_connection; chronos_connection = NULL;
+    delete mock_hss;
   }
 
+  void build_timeout_request(std::string body, htp_method method)
+  {
+    req = new MockHttpStack::Request(stack, "/", "timers", "", body, method);
+    config = new RegSubTimeoutTask::Config(store, remote_store, mock_hss);
+    handler = new RegSubTimeoutTask(*req, config, 0);
+  }
+
+  RegStore::AoR* build_aor(std::string aor_id)
+  {
+    RegStore::AoR* aor = new RegStore::AoR(aor_id);
+    int now = time(NULL);
+    RegStore::AoR::Binding* b = NULL;
+    build_binding(aor, b, now);
+    RegStore::AoR::Subscription* s = NULL;
+    build_subscription(aor, s, now);
+    return aor;
+  }
+
+  RegStore::AoR::Binding* build_binding(RegStore::AoR* aor, RegStore::AoR::Binding* b, int now)
+  {
+    b = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+    b->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
+    b->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+    b->_cseq = 17038;
+    b->_expires = now + 5;
+    b->_priority = 0;
+    b->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+    b->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+    b->_params["reg-id"] = "1";
+    b->_params["+sip.ice"] = "";
+    b->_emergency_registration = false;
+    b->_private_id = "6505550231";
+    return b;
+  }
+
+  RegStore::AoR::Subscription* build_subscription(RegStore::AoR* aor, RegStore::AoR::Subscription* s, int now)
+  {
+    s = aor->get_subscription("1234");
+    s->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
+    s->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
+    s->_from_tag = std::string("4321");
+    s->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
+    s->_to_tag = std::string("1234");
+    s->_cid = std::string("xyzabc@192.91.191.29");
+    s->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+    s->_expires = now + 300;
+    return s;
+  }
 };
 
-TEST_F(RegistrationTimeoutTasksTest, MainlineTest)
+// Test main flow, without a remote store.
+TEST_F(RegSubTimeoutTasksTest, MainlineTest)
 {
-  // Get an initial empty AoR record and add a standard binding.
-  int now = time(NULL);
-  RegStore::AoR* aor_data1 = store->get_aor_data(std::string("sip:6505550231@homedomain"), 0);
-  RegStore::AoR::Binding* b1 = aor_data1->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
-  b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
-  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
-  b1->_cseq = 17038;
-  b1->_expires = now + 5;
-  b1->_priority = 0;
-  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
-  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
-  b1->_params["reg-id"] = "1";
-  b1->_params["+sip.ice"] = "";
-  b1->_emergency_registration = false;
-  b1->_private_id = "6505550231";
-
-  // Add the AoR record to the store.
-  store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1, true, 0);
-  delete aor_data1; aor_data1 = NULL;
-
-  // Advance time so the binding is due for expiry
-  cwtest_advance_time_ms(6000);
-
-  // Parse and handle the request
+  // Build request
   std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1\"}";
-  int status = handler->parse_response(body);
+  build_timeout_request(body, htp_method_POST);
 
-  ASSERT_EQ(status, 200);
+  // Set up regstore expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  RegStore::AoR* aor = build_aor(aor_id);
 
-  handler->handle_response();
+  {
+    InSequence s;
+      EXPECT_CALL(*stack, send_reply(_, 200, _));
+      EXPECT_CALL(*store, get_aor_data(aor_id, _, true)).WillOnce(Return(aor));
+      EXPECT_CALL(*store, set_aor_data(aor_id, aor, true, _, false, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*remote_store, has_servers()).WillOnce(Return(false));
+  }
+
+  handler->run();
 }
 
-TEST_F(RegistrationTimeoutTasksTest, InvalidJSONTest)
+// Test that an invalid HTTP method fails with HTTP_BADMETHOD
+TEST_F(RegSubTimeoutTasksTest, InvalidHTTPMethodTest)
 {
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"binding_id\"}";
+  build_timeout_request(body, htp_method_PUT);
+
+  EXPECT_CALL(*stack, send_reply(_, 405, _));
+
+  handler->run();
+}
+
+// Test that an invalid JSON body fails in parsing
+TEST_F(RegSubTimeoutTasksTest, InvalidJSONTest)
+{
+  CapturingTestLogger log(5);
+
   std::string body = "{\"aor_id\" \"aor_id\", \"binding_id\": \"binding_id\"}";
-  int status = handler->parse_response(body);
+  build_timeout_request(body, htp_method_POST);
 
-  ASSERT_EQ(status, 400);
+  EXPECT_CALL(*stack, send_reply(_, 400, _));
+
+  handler->run();
+
+  EXPECT_TRUE(log.contains("Failed to parse opaque data as JSON:"));
 }
 
-TEST_F(RegistrationTimeoutTasksTest, MissingAorJSONTest)
+// Test that a body without an AoR ID fails, logging "Badly formed opaque data"
+TEST_F(RegSubTimeoutTasksTest, MissingAorJSONTest)
 {
+  CapturingTestLogger log(5);
+
   std::string body = "{\"binding_id\": \"binding_id\"}";
-  int status = handler->parse_response(body);
+  build_timeout_request(body, htp_method_POST);
 
-  ASSERT_EQ(status, 400);
+  EXPECT_CALL(*stack, send_reply(_, 400, _));
+
+  handler->run();
+
+  EXPECT_TRUE(log.contains("Badly formed opaque data (missing aor_id)"));
 }
 
-TEST_F(RegistrationTimeoutTasksTest, MissingBindingJSONTest)
+// Test with a remote AoR with no bindings
+TEST_F(RegSubTimeoutTasksTest, RemoteAoRNoBindingsTest)
 {
-  std::string body = "{\"aor_id\": \"aor_id\"}";
-  int status = handler->parse_response(body);
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"subscription_id\": \"subscription_id\", \"binding_id\": \"binding_id\"}";
+  build_timeout_request(body, htp_method_POST);
 
-  ASSERT_EQ(status, 400);
+  // Set up regstore expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  RegStore::AoR* aor = build_aor(aor_id);
+
+  // Set up an AoR with no bindings
+  RegStore::AoR* remote_aor = new RegStore::AoR(aor_id);
+
+  {
+    InSequence s;
+      EXPECT_CALL(*stack, send_reply(_, 200, _));
+      EXPECT_CALL(*store, get_aor_data(aor_id, _, true)).WillOnce(Return(aor));
+      EXPECT_CALL(*store, set_aor_data(aor_id, aor, true, _, false, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*remote_store, has_servers()).WillOnce(Return(true));
+      EXPECT_CALL(*remote_store, get_aor_data(aor_id, _, false)).WillOnce(Return(remote_aor));
+      EXPECT_CALL(*remote_store, set_aor_data(aor_id, remote_aor, false, _, false, _))
+                   .WillOnce(Return(Store::OK));
+  }
+
+  handler->run();
 }
 
+// Test with a remote store, and a local AoR with no bindings
+TEST_F(RegSubTimeoutTasksTest, LocalAoRNoBindingsTest)
+{
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"subscription_id\": \"subscription_id\"}";
+  build_timeout_request(body, htp_method_POST);
 
-class RegistrationTimeoutTasksMockStoreTest : public SipTest
+  // Set up regstore expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  // Set up local AoR with no bindings
+  RegStore::AoR* aor = new RegStore::AoR(aor_id);
+
+  RegStore::AoR* remote_aor = build_aor(aor_id);
+
+  // Set up second remote aor, to avoid problem of test process deleting
+  // the data of the first one. This is only a problem in the tests, as real
+  // use would correctly set the data to the store before deleting the local copy
+  RegStore::AoR* remote_aor_2 = new RegStore::AoR(*remote_aor);
+
+  {
+    InSequence s;
+      EXPECT_CALL(*stack, send_reply(_, 200, _));
+      EXPECT_CALL(*store, get_aor_data(aor_id, _, true)).WillOnce(Return(aor));
+      EXPECT_CALL(*remote_store, has_servers()).WillOnce(Return(true));
+      EXPECT_CALL(*remote_store, get_aor_data(aor_id, _, false)).WillOnce(Return(remote_aor));
+      EXPECT_CALL(*store, set_aor_data(aor_id, aor, true, _, false, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*remote_store, has_servers()).WillOnce(Return(true));
+      EXPECT_CALL(*remote_store, get_aor_data(aor_id, _, false)).WillOnce(Return(remote_aor_2));
+      EXPECT_CALL(*remote_store, set_aor_data(aor_id, remote_aor_2, false, _, false, _)).WillOnce(Return(Store::OK));
+  }
+
+  handler->run();
+}
+
+// Test with a remote store, and both AoRs with no bindings
+TEST_F(RegSubTimeoutTasksTest, NoBindingsTest)
+{
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
+
+  build_timeout_request(body, htp_method_POST);
+  // Set up regstore expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  // Set up AoRs with no bindings
+  RegStore::AoR* aor = new RegStore::AoR(aor_id);
+  RegStore::AoR* remote_aor = new RegStore::AoR(aor_id);
+
+  // Set up second remote aor, to avoid problem of test process deleting
+  // the data of the first one. This is only a problem in the tests, as real
+  // use would correctly set the data to the store before deleting the local copy
+  RegStore::AoR* remote_aor_2 = new RegStore::AoR(*remote_aor);
+
+  {
+    InSequence s;
+      EXPECT_CALL(*stack, send_reply(_, 200, _));
+      EXPECT_CALL(*store, get_aor_data(aor_id, _, true)).WillOnce(Return(aor));
+      EXPECT_CALL(*remote_store, has_servers()).WillOnce(Return(true));
+      EXPECT_CALL(*remote_store, get_aor_data(aor_id, _, false)).WillOnce(Return(remote_aor));
+      EXPECT_CALL(*store, set_aor_data(aor_id, aor, true, _, false, _))
+                  .WillOnce(DoAll(SetArgReferee<5>(true), Return(Store::OK)));
+      EXPECT_CALL(*remote_store, has_servers()).WillOnce(Return(true));
+      EXPECT_CALL(*remote_store, get_aor_data(aor_id, _, false)).WillOnce(Return(remote_aor_2));
+      EXPECT_CALL(*remote_store, set_aor_data(aor_id, remote_aor_2, false, _, false, _))
+                  .WillOnce(DoAll(SetArgReferee<5>(true), Return(Store::OK)));
+      EXPECT_CALL(*mock_hss, update_registration_state(aor_id, "", HSSConnection::DEREG_TIMEOUT, 0));
+  }
+
+  handler->run();
+}
+
+// Test with NULL AoRs
+TEST_F(RegSubTimeoutTasksTest, NullAoRTest)
+{
+  CapturingTestLogger log(5);
+
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"binding_id\"}";
+  build_timeout_request(body, htp_method_POST);
+
+  // Set up regstore expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  RegStore::AoR* aor = NULL;
+
+  {
+    InSequence s;
+      EXPECT_CALL(*stack, send_reply(_, 200, _));
+      EXPECT_CALL(*store, get_aor_data(aor_id, _, true)).WillOnce(Return(aor));
+      EXPECT_CALL(*store, set_aor_data(aor_id, aor, true, _, false, _)).Times(0);
+  }
+
+  handler->run();
+
+  EXPECT_TRUE(log.contains("Failed to get AoR binding for"));
+}
+
+class RegSubTimeoutTasksMockStoreTest : public SipTest
 {
   FakeChronosConnection* chronos_connection;
   MockRegStore* store;
@@ -178,9 +348,9 @@ class RegistrationTimeoutTasksMockStoreTest : public SipTest
 
   MockHttpStack stack;
   MockHttpStack::Request* req;
-  RegistrationTimeoutTask::Config* chronos_config;
+  RegSubTimeoutTask::Config* chronos_config;
 
-  RegistrationTimeoutTask* handler;
+  RegSubTimeoutTask* handler;
 
   static void SetUpTestCase()
   {
@@ -193,8 +363,8 @@ class RegistrationTimeoutTasksMockStoreTest : public SipTest
     store = new MockRegStore();
     fake_hss = new FakeHSSConnection();
     req = new MockHttpStack::Request(&stack, "/", "timers");
-    chronos_config = new RegistrationTimeoutTask::Config(store, NULL, fake_hss);
-    handler = new RegistrationTimeoutTask(*req, chronos_config, 0);
+    chronos_config = new RegSubTimeoutTask::Config(store, NULL, fake_hss);
+    handler = new RegSubTimeoutTask(*req, chronos_config, 0);
   }
 
   void TearDown()
@@ -209,12 +379,12 @@ class RegistrationTimeoutTasksMockStoreTest : public SipTest
 
 };
 
-TEST_F(RegistrationTimeoutTasksMockStoreTest, RegStoreWritesFail)
+TEST_F(RegSubTimeoutTasksMockStoreTest, RegStoreWritesFail)
 {
   // Set up the RegStore to fail all sets and respond to all gets with not
   // found.
   RegStore::AoR* aor = new RegStore::AoR("sip:6505550231@homedomain");
-  EXPECT_CALL(*store, get_aor_data(_, _)).WillOnce(Return(aor));
+  EXPECT_CALL(*store, get_aor_data(_, _, _)).WillOnce(Return(aor));
   EXPECT_CALL(*store, set_aor_data(_, _, _, _, _, _)).WillOnce(Return(Store::ERROR));
 
   // Parse and handle the request
@@ -283,7 +453,7 @@ class DeregistrationTaskTest : public SipTest
     for (uint32_t ii = 0; ii < aor_ids.size(); ++ii)
     {
       // Get the information from the local store
-      EXPECT_CALL(*_regstore, get_aor_data(aor_ids[ii], _)).WillOnce(Return(aors[ii]));
+      EXPECT_CALL(*_regstore, get_aor_data(aor_ids[ii], _, _)).WillOnce(Return(aors[ii]));
 
       if (aors[ii] != NULL)
       {
@@ -291,7 +461,7 @@ class DeregistrationTaskTest : public SipTest
         EXPECT_CALL(*_regstore, set_aor_data(aor_ids[ii], _, _, _, _, _)).WillOnce(Return(Store::OK));
 
         // Write the information to the remote store
-        EXPECT_CALL(*_remotestore, get_aor_data(aor_ids[ii], _)).WillRepeatedly(Return(remote_aor));
+        EXPECT_CALL(*_remotestore, get_aor_data(aor_ids[ii], _, _)).WillRepeatedly(Return(remote_aor));
         if (remote_aor != NULL)
         {
           EXPECT_CALL(*_remotestore, set_aor_data(aor_ids[ii], _, _, _, _, _)).WillOnce(Return(Store::OK));
@@ -369,6 +539,7 @@ TEST_F(DeregistrationTaskTest, AoRPrivateIdPairsTest)
 
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
+  EXPECT_CALL(*_remotestore, has_servers()).WillRepeatedly(Return(false));
   _task->run();
 }
 
@@ -412,6 +583,7 @@ TEST_F(DeregistrationTaskTest, InvalidIMPUTest)
   expect_reg_store_updates(aor_ids, aors, remote_aor);
 
   // Run the task
+  EXPECT_CALL(*_remotestore, has_servers()).WillOnce(Return(false));
   EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
   _task->run();
 
@@ -475,7 +647,7 @@ TEST_F(DeregistrationTaskTest, RegStoreWritesFail)
   build_dereg_request(body);
 
   RegStore::AoR* aor = new RegStore::AoR("sip:6505550231@homedomain");
-  EXPECT_CALL(*_regstore, get_aor_data(_, _)).WillOnce(Return(aor));
+  EXPECT_CALL(*_regstore, get_aor_data(_, _, _)).WillOnce(Return(aor));
   EXPECT_CALL(*_regstore, set_aor_data(_, _, _, _, _, _)).WillOnce(Return(Store::ERROR));
 
   // Run the task

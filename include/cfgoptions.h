@@ -117,7 +117,6 @@ struct options
   int                                  call_list_ttl;
   bool                                 memento_enabled;
   bool                                 gemini_enabled;
-  bool                                 alarms_enabled;
   int                                  worker_threads;
   bool                                 log_to_file;
   std::string                          log_directory;
@@ -141,6 +140,7 @@ struct options
   std::string                          pbxes;
   std::string                          pbx_service_route;
   NonRegisterAuthentication            non_register_auth_mode;
+  bool                                 force_third_party_register_body;
   std::map<std::string, std::multimap<std::string, std::string>>
                                        plugin_options;
 };
@@ -149,6 +149,7 @@ struct options
 // globally scoped.
 extern LoadMonitor* load_monitor;
 extern HSSConnection* hss_connection;
+extern Store* local_data_store;
 extern RegStore* local_reg_store;
 extern RegStore* remote_reg_store;
 extern RalfProcessor* ralf_processor;

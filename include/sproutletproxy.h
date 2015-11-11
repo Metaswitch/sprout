@@ -69,7 +69,7 @@ public:
                  const std::string& root_uri,
                  const std::unordered_set<std::string>& host_aliases,
                  const std::list<Sproutlet*>& sproutlets,
-                 const std::set<std::string> stateless_proxies);
+                 const std::set<std::string>& stateless_proxies);
 
   /// Destructor.
   virtual ~SproutletProxy();
@@ -322,7 +322,7 @@ private:
   typedef std::unordered_map<const pjsip_msg*, pjsip_tx_data*> Packets;
   Packets _packets;
 
-  typedef std::unordered_map<int, pjsip_tx_data*> Requests;
+  typedef std::map<int, pjsip_tx_data*> Requests;
   Requests _send_requests;
 
   typedef std::list<pjsip_tx_data*> Responses;

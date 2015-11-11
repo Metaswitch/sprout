@@ -1942,17 +1942,17 @@ TEST_F(SCSCFTest, TestForkedFlow)
   // Receive and respond to CANCEL for target 0
   SCOPED_TRACE("");
   out = current_txdata()->msg;
-  ReqMatcher c2("CANCEL");
-  c2.matches(out);
-  EXPECT_THAT(c2.uri(), StrEq(_uris[2]));
+  ReqMatcher c0("CANCEL");
+  c0.matches(out);
+  EXPECT_THAT(c0.uri(), StrEq(_uris[0]));
   inject_msg(respond_to_current_txdata(200));
 
   // Receive and respond to CANCEL for target 2
   SCOPED_TRACE("");
   out = current_txdata()->msg;
-  ReqMatcher c0("CANCEL");
-  c0.matches(out);
-  EXPECT_THAT(c0.uri(), StrEq(_uris[0]));
+  ReqMatcher c2("CANCEL");
+  c2.matches(out);
+  EXPECT_THAT(c2.uri(), StrEq(_uris[2]));
   inject_msg(respond_to_current_txdata(200));
 
   // Send 487 response from target 0
@@ -2340,6 +2340,122 @@ TEST_F(SCSCFTest, SimpleISCMainline)
 
   free_txdata();
 }
+
+// Test that, if we change a SIP URI to an aliased TEL URI, it doesn't count as a retarget for
+// originating-cdiv purposes.
+TEST_F(SCSCFTest, ISCRetargetWithoutCdiv)
+{
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", "REGISTERED",
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
+                                "<PublicIdentity><Identity>tel:6505551234</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+  _hss_connection->set_impu_result("tel:6505551234", "call", "REGISTERED",
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
+                                "<PublicIdentity><Identity>tel:6505551234</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+
+
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain>";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS1
+  SCOPED_TRACE("INVITE (S)");
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  tpAS1.expect_target(current_txdata(), false);
+
+  // ---------- AS1 turns it around (acting as proxy)
+  const pj_str_t STR_ROUTE = pj_str("Route");
+  const pj_str_t STR_NUMBER = pj_str("6505551234");
+  pjsip_tel_uri* new_requri = pjsip_tel_uri_create(current_txdata()->pool);
+  new_requri->number = STR_NUMBER;
+  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  out->line.req.uri = (pjsip_uri*)new_requri;
+  inject_msg(out, &tpAS1);
+  free_txdata();
+
+  // 100 Trying goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to final destination
+  SCOPED_TRACE("INVITE (2)");
+  out = current_txdata()->msg;
+  ReqMatcher r2("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r2.matches(out));
+
+  tpBono.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
+  EXPECT_EQ("", get_headers(out, "Route"));
+
+  free_txdata();
+}
+
 
 TEST_F(SCSCFTest, URINotIncludedInUserData)
 {
@@ -4779,7 +4895,7 @@ TEST_F(SCSCFTest, MmtelCdiv)
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=orig-cdiv"));
   EXPECT_THAT(get_headers(out, "History-Info"),
-              testing::MatchesRegex("History-Info: <sip:6505551234@homedomain;text=Temporarily%20Unavailable;cause=480;Reason=SIP>;index=1\r\nHistory-Info: <sip:6505555678@homedomain>;index=1.1"));
+              testing::MatchesRegex("History-Info: <sip:6505551234@homedomain;Reason=SIP%3[bB]cause%3[dD]480%3[bB]text%3[dD]%22Temporarily%20Unavailable%22>;index=1\r\nHistory-Info: <sip:6505555678@homedomain>;index=1.1"));
 
   // ---------- AS2 turns it around (acting as proxy)
   hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
@@ -4806,7 +4922,7 @@ TEST_F(SCSCFTest, MmtelCdiv)
   EXPECT_EQ("sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob", r1.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
   EXPECT_THAT(get_headers(out, "History-Info"),
-              testing::MatchesRegex("History-Info: <sip:6505551234@homedomain;text=Temporarily%20Unavailable;cause=480;Reason=SIP>;index=1\r\nHistory-Info: <sip:6505555678@homedomain>;index=1.1"));
+              testing::MatchesRegex("History-Info: <sip:6505551234@homedomain;Reason=SIP%3[bB]cause%3[dD]480%3[bB]text%3[dD]%22Temporarily%20Unavailable%22>;index=1\r\nHistory-Info: <sip:6505555678@homedomain>;index=1.1"));
 
   free_txdata();
 }
@@ -4987,7 +5103,7 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:6505555678@homedomain>;sescase=orig-cdiv"));
   EXPECT_THAT(get_headers(out, "History-Info"),
-              testing::MatchesRegex("History-Info: <sip:6505551234@homedomain;text=Temporarily%20Unavailable;cause=480;Reason=SIP>;index=1\r\nHistory-Info: <sip:6505555678@homedomain;text=Temporarily%20Unavailable;cause=480;Reason=SIP>;index=1.1\r\nHistory-Info: <sip:6505559012@homedomain>;index=1.1.1"));
+              testing::MatchesRegex("History-Info: <sip:6505551234@homedomain;Reason=SIP%3[bB]cause%3[dD]480%3[bB]text%3[dD]%22Temporarily%20Unavailable%22>;index=1\r\nHistory-Info: <sip:6505555678@homedomain;Reason=SIP%3[bB]cause%3[dD]480%3[bB]text%3[dD]%22Temporarily%20Unavailable%22>;index=1.1\r\nHistory-Info: <sip:6505559012@homedomain>;index=1.1.1"));
 
   // ---------- AS2 turns it around (acting as proxy)
   hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);

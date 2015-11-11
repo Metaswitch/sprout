@@ -118,7 +118,6 @@ enum OptionTypes
   OPT_MAX_CALL_LIST_LENGTH,
   OPT_MEMENTO_THREADS,
   OPT_CALL_LIST_TTL,
-  OPT_ALARMS_ENABLED,
   OPT_DNS_SERVER,
   OPT_TARGET_LATENCY_US,
   OPT_MEMCACHED_WRITE_FORMAT,
@@ -139,7 +138,8 @@ enum OptionTypes
   OPT_RALF_THREADS,
   OPT_NON_REGISTERING_PBXES,
   OPT_PBX_SERVICE_ROUTE,
-  OPT_NON_REGISTER_AUTHENTICATION
+  OPT_NON_REGISTER_AUTHENTICATION,
+  OPT_FORCE_THIRD_PARTY_REGISTER_BODY,
 };
 
 
@@ -190,7 +190,6 @@ const static struct pj_getopt_option long_opt[] =
   { "max-call-list-length",         required_argument, 0, OPT_MAX_CALL_LIST_LENGTH},
   { "memento-threads",              required_argument, 0, OPT_MEMENTO_THREADS},
   { "call-list-ttl",                required_argument, 0, OPT_CALL_LIST_TTL},
-  { "alarms-enabled",               no_argument,       0, OPT_ALARMS_ENABLED},
   { "log-level",                    required_argument, 0, 'L'},
   { "daemon",                       no_argument,       0, 'd'},
   { "interactive",                  no_argument,       0, 't'},
@@ -213,6 +212,7 @@ const static struct pj_getopt_option long_opt[] =
   { "ralf-threads",                 required_argument, 0, OPT_RALF_THREADS},
   { "non-register-authentication",  required_argument, 0, OPT_NON_REGISTER_AUTHENTICATION},
   { "pbx-service-route",            required_argument, 0, OPT_PBX_SERVICE_ROUTE},
+  { "force-3pr-body",               no_argument,       0, OPT_FORCE_THIRD_PARTY_REGISTER_BODY},
   { "plugin-option",                required_argument, 0, 'N'},
   { NULL,                           0,                 0, 0}
 };
@@ -385,6 +385,9 @@ static void usage(void)
        "                            - 'never' means that sprout never challenges non-REGISTER requests.\n"
        "                            - 'if_proxy_authorization_present' means sprout will only challenge\n"
        "                              requests that already have a Proxy-Authorization header.\n"
+       "     --force-3pr-body       Always include the original REGISTER and 200 OK in the body of\n"
+       "                            third-party REGISTER messages to application servers, even if the\n"
+       "                            User-Data doesn't specify it\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
        " -F, --log-file <directory>\n"
@@ -917,11 +920,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
                options->call_list_ttl);
       break;
 
-    case OPT_ALARMS_ENABLED:
-      options->alarms_enabled = PJ_TRUE;
-      TRC_INFO("SNMP alarms are enabled");
-      break;
-
     case OPT_DNS_SERVER:
       options->dns_servers.clear();
       Utils::split_string(std::string(pj_optarg), ',', options->dns_servers, 0, false);
@@ -1023,6 +1021,13 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
           TRC_ERROR("Invalid value for non-REGISTER authentication: %s", pj_optarg);
           return -1;
         }
+      }
+      break;
+
+    case OPT_FORCE_THIRD_PARTY_REGISTER_BODY:
+      {
+        TRC_INFO("Forcing inclusion of original REGISTER requests/responses on third-party REGISTERs");
+        options->force_third_party_register_body = true;
       }
       break;
 
@@ -1266,6 +1271,7 @@ void create_regstore_plugins(RegStore::SerializerDeserializer*& serializer,
 // globally scoped.
 LoadMonitor* load_monitor = NULL;
 HSSConnection* hss_connection = NULL;
+Store* local_data_store = NULL;
 RegStore* local_reg_store = NULL;
 RegStore* remote_reg_store = NULL;
 RalfProcessor* ralf_processor = NULL;
@@ -1287,7 +1293,6 @@ int main(int argc, char* argv[])
   pthread_t quiesce_unquiesce_thread;
   DnsCachedResolver* dns_resolver = NULL;
   SIPResolver* sip_resolver = NULL;
-  Store* local_data_store = NULL;
   Store* remote_data_store = NULL;
   AvStore* av_store = NULL;
   HttpConnection* ralf_connection = NULL;
@@ -1345,7 +1350,6 @@ int main(int argc, char* argv[])
   opt.max_call_list_length = 0;
   opt.memento_threads = 25;
   opt.call_list_ttl = 604800;
-  opt.alarms_enabled = PJ_FALSE;
   opt.target_latency_us = 100000;
   opt.cass_target_latency_us = 1000000;
   opt.max_tokens = 20;
@@ -1367,6 +1371,7 @@ int main(int argc, char* argv[])
   opt.stateless_proxies.clear();
   opt.ralf_threads = 25;
   opt.non_register_auth_mode = NonRegisterAuthentication::NEVER;
+  opt.force_third_party_register_body = false;
 
   boost::filesystem::path p = argv[0];
   // Copy the filename to a string so that we can be sure of its lifespan -
@@ -1649,7 +1654,7 @@ int main(int argc, char* argv[])
                                                       ".1.2.826.0.1.1578918.9.3.31");
   }
 
-  if ((opt.icscf_enabled || opt.scscf_enabled) && opt.alarms_enabled)
+  if (opt.icscf_enabled || opt.scscf_enabled)
   {
     // Create Sprout's alarm objects.
 
@@ -1694,18 +1699,14 @@ int main(int argc, char* argv[])
                                  token_rate_scalar);      // Statistics scalar for current token rate.
 
   // Start the health checker
-  HealthChecker* health_checker = new HealthChecker();
-  pthread_t health_check_thread;
-  pthread_create(&health_check_thread,
-                 NULL,
-                 &HealthChecker::static_main_thread_function,
-                 (void*)health_checker);
+  HealthChecker* hc = new HealthChecker();
+  hc->start_thread();
 
   // Create an exception handler. The exception handler should attempt to
   // quiesce the process before killing it.
   exception_handler = new ExceptionHandler(opt.exception_max_ttl,
                                            true,
-                                           health_checker);
+                                           hc);
 
   // Create a DNS resolver and a SIP specific resolver.
   dns_resolver = new DnsCachedResolver(opt.dns_servers);
@@ -1843,6 +1844,7 @@ int main(int argc, char* argv[])
                                                chronos_comm_monitor);
   }
 
+  HttpStack* http_stack = HttpStack::get_instance();
   if (opt.pcscf_enabled)
   {
     // Create an ACR factory for the P-CSCF.
@@ -1978,6 +1980,25 @@ int main(int argc, char* argv[])
                                       chronos_connection);
     }
 
+    // Start the HTTP stack early as plugins might need to register handlers
+    // with it.
+    try
+    {
+      http_stack->initialize();
+      http_stack->configure(opt.http_address,
+                            opt.http_port,
+                            opt.http_threads,
+                            exception_handler,
+                            access_logger);
+    }
+    catch (HttpStack::Exception& e)
+    {
+      CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
+      closelog();
+      TRC_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      return 1;
+    }
+
     if (opt.auth_enabled)
     {
       // Create an AV store using the local store and initialise the authentication
@@ -2003,6 +2024,7 @@ int main(int argc, char* argv[])
                             analytics_logger,
                             scscf_acr_factory,
                             opt.reg_max_expires,
+                            opt.force_third_party_register_body,
                             &reg_stats_tbls,
                             &third_party_reg_stats_tbls);
 
@@ -2085,7 +2107,7 @@ int main(int argc, char* argv[])
   init_common_sip_processing(load_monitor,
                              requests_counter,
                              overload_counter,
-                             health_checker);
+                             hc);
 
   init_thread_dispatcher(opt.worker_threads,
                          latency_table,
@@ -2112,30 +2134,21 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  RegistrationTimeoutTask::Config reg_timeout_config(local_reg_store, remote_reg_store, hss_connection);
+  RegSubTimeoutTask::Config reg_sub_timeout_config(local_reg_store, remote_reg_store, hss_connection);
   AuthTimeoutTask::Config auth_timeout_config(av_store, hss_connection);
   DeregistrationTask::Config deregistration_config(local_reg_store, remote_reg_store, hss_connection, sip_resolver);
 
-  // The RegistrationTimeoutTask and AuthTimeoutTask both handle
+  // The RegSubTimeoutTask and AuthTimeoutTask both handle
   // chronos requests, so use the ChronosHandler.
-  ChronosHandler<RegistrationTimeoutTask, RegistrationTimeoutTask::Config> reg_timeout_handler(&reg_timeout_config);
+  ChronosHandler<RegSubTimeoutTask, RegSubTimeoutTask::Config> reg_timeout_handler(&reg_sub_timeout_config);
   ChronosHandler<AuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
   HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
   HttpStackUtils::PingHandler ping_handler;
 
-  HttpStack* http_stack = NULL;
   if (opt.scscf_enabled)
   {
-    http_stack = HttpStack::get_instance();
-
     try
     {
-      http_stack->initialize();
-      http_stack->configure(opt.http_address,
-                            opt.http_port,
-                            opt.http_threads,
-                            exception_handler,
-                            access_logger);
       http_stack->register_handler("^/ping$",
                                    &ping_handler);
       http_stack->register_handler("^/timers$",
@@ -2240,7 +2253,7 @@ int main(int argc, char* argv[])
   delete analytics_logger;
   delete analytics_logger_logger;
 
-  if ((opt.icscf_enabled || opt.scscf_enabled) && opt.alarms_enabled)
+  if (opt.icscf_enabled || opt.scscf_enabled)
   {
     // Stop the alarm request agent
     AlarmReqAgent::get_instance().stop();
@@ -2289,9 +2302,8 @@ int main(int argc, char* argv[])
     delete auth_stats_tbls.ims_aka_auth_tbl;
     delete auth_stats_tbls.non_register_auth_tbl;
   }
-  health_checker->terminate();
-  pthread_join(health_check_thread, NULL);
-  delete health_checker;
+  hc->stop_thread();
+  delete hc;
 
   // Unregister the handlers that use semaphores (so we can safely destroy
   // them).

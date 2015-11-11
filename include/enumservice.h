@@ -43,12 +43,14 @@
 #include <list>
 #include <string>
 #include <boost/regex.hpp>
+#include <boost/thread.hpp>
 #include <netinet/in.h>
 #include <ares.h>
 #include "sas.h"
 #include "baseresolver.h"
 #include "dnsresolver.h"
 #include "communicationmonitor.h"
+#include "updater.h"
 
 /// @class EnumService
 ///
@@ -88,6 +90,9 @@ public:
   JSONEnumService(std::string configuration = "./enum.json");
   ~JSONEnumService();
 
+  // Updates the enum configuration
+  void update_enum();
+
   std::string lookup_uri_from_user(const std::string& user, SAS::TrailId trail) const;
 
 private:
@@ -98,10 +103,15 @@ private:
     std::string replace;
   };
 
-  std::list<struct NumberPrefix*> _number_prefixes;
+  std::vector<NumberPrefix> _number_prefixes;
+  std::string _configuration;
+  Updater<void, JSONEnumService>* _updater;
 
-  NumberPrefix* prefix_match(const std::string& number) const;
+  // Mark as mutable to flag that this can be modified without affecting the
+  // external behaviour of the class, allowing for locking in 'const' methods.
+  mutable boost::shared_mutex _number_prefixes_rw_lock;
 
+  const NumberPrefix* prefix_match(const std::string& number) const;
 };
 
 /// @class DNSEnumService

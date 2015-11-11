@@ -1,8 +1,8 @@
 /**
- * @file registrar.h Initialization/termination functions for Sprout's Registrar module
+ * @file mock_hss_connection.h Mock HSS connection class
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Project Clearwater - IMS in the cloud.
+ * Copyright (C) 2015  Metaswitch Networks Ltd
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -34,37 +34,35 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+#ifndef MOCK_HSS_CONNECTION_H_
+#define MOCK_HSS_CONNECTION_H_
 
-#ifndef REGISTRAR_H__
-#define REGISTRAR_H__
+#include "gmock/gmock.h"
 
-extern "C" {
-#include <pjsip.h>
-}
-
-#include "regstore.h"
 #include "hssconnection.h"
-#include "chronosconnection.h"
-#include "analyticslogger.h"
-#include "acr.h"
-#include "snmp_success_fail_count_table.h"
+#include "fakesnmp.hpp"
 
-extern pjsip_module mod_registrar;
+class MockHSSConnection : public HSSConnection
+{
+public:
+  MockHSSConnection() : HSSConnection("localhost",
+                                      NULL,
+                                      NULL,
+                                      &SNMP::FAKE_IP_COUNT_TABLE,
+                                      &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+                                      &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+                                      &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+                                      &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+                                      &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+                                      NULL) {};
+  virtual ~MockHSSConnection() {};
 
-void third_party_register_failed(const std::string& public_id,
-                                 SAS::TrailId trail);
-
-extern pj_status_t init_registrar(RegStore* registrar_store,
-                                  RegStore* remote_reg_store,
-                                  HSSConnection* hss_connection,
-                                  AnalyticsLogger* analytics_logger,
-                                  ACRFactory* rfacr_factory,
-                                  int cfg_max_expires,
-                                  bool force_third_party_register_body,
-                                  SNMP::RegistrationStatsTables* reg_stats_tbls,
-                                  SNMP::RegistrationStatsTables* third_party_reg_stats_tbls);
-
-
-extern void destroy_registrar();
+  MOCK_METHOD4(update_registration_state, HTTPCode(
+                                  const std::string& public_user_identity,
+                                  const std::string& private_user_identity,
+                                  const std::string& type,
+                                  SAS::TrailId trail));
+};
 
 #endif
+

@@ -245,6 +245,31 @@ static pj_status_t add_path(pjsip_tx_data* tdata,
 static NodeRole acr_node_role(pjsip_msg *req);
 
 
+// Utility class that automatically flushes a trail ID when it goes out of
+// scope (unless the user decides it isn't required). This is useful when a
+// function has multiple exit points that should all cause the trail to be
+// flushed.
+class TrailFlusher
+{
+public:
+  TrailFlusher(SAS::TrailId trail) : _trail(trail), _flush_required(true) {}
+
+  void set_flush_required(bool required) { _flush_required = required; }
+
+  ~TrailFlusher()
+  {
+    if (_flush_required)
+    {
+      SAS::Marker flush_marker(_trail, MARKED_ID_FLUSH);
+      SAS::report_marker(flush_marker);
+    }
+  }
+
+private:
+  SAS::TrailId _trail;
+  bool _flush_required;
+};
+
 ///@{
 // MAIN ENTRY POINTS
 
@@ -393,6 +418,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
   Target *target = NULL;
   ACR* acr = NULL;
   ACR* downstream_acr = NULL;
+  TrailFlusher trail_flusher(get_trail(rdata));
 
   // Verify incoming request.
   int status_code = proxy_verify_request(rdata);
@@ -553,6 +579,10 @@ void process_tsx_request(pjsip_rx_data* rdata)
   // safe to operate on it (and have to exit its context below).
   status = UASTransaction::create(rdata, tdata, trust, acr, &uas_data);
 
+  // The UAS transaction is responsible for flushing the trail when it is
+  // terminated.
+  trail_flusher.set_flush_required(false);
+
   if (status != PJ_SUCCESS)
   {
     TRC_ERROR("Failed to create UAS transaction, %s",
@@ -586,6 +616,7 @@ void process_cancel_request(pjsip_rx_data* rdata)
 {
   pjsip_transaction *invite_uas;
   pj_str_t key;
+  TrailFlusher trail_flusher(get_trail(rdata));
 
   // Find the UAS INVITE transaction
   pjsip_tsx_create_key(rdata->tp_info.pool, &key, PJSIP_UAS_ROLE,
@@ -2860,18 +2891,11 @@ void UACTransaction::cancel_pending_tsx(int st_code)
     TRC_DEBUG("Found transaction %s status=%d", name(), _tsx->status_code);
     if (_tsx->status_code < 200)
     {
-      pjsip_tx_data *cancel;
-      pjsip_endpt_create_cancel(stack_data.endpt, _tsx->last_tx, &cancel);
-      if (st_code != 0)
-      {
-        char reason_val_str[96];
-        const pj_str_t* st_text = pjsip_get_status_text(st_code);
-        sprintf(reason_val_str, "SIP ;cause=%d ;text=\"%.*s\"", st_code, (int)st_text->slen, st_text->ptr);
-        pj_str_t reason_name = pj_str("Reason");
-        pj_str_t reason_val = pj_str(reason_val_str);
-        pjsip_hdr* reason_hdr = (pjsip_hdr*)pjsip_generic_string_hdr_create(cancel->pool, &reason_name, &reason_val);
-        pjsip_msg_add_hdr(cancel->msg, reason_hdr);
-      }
+      // See issue 1232.
+      pjsip_tx_data* cancel = PJUtils::create_cancel(stack_data.endpt,
+                                                     _tsx->last_tx,
+                                                     _tsx->status_code);
+
       if (trail() == 0)
       {
         TRC_ERROR("Sending CANCEL request with no SAS trail");
