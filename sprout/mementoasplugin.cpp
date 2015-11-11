@@ -117,7 +117,9 @@ bool MementoPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                     opt.max_tokens,
                                     opt.init_token_rate,
                                     opt.min_token_rate,
-                                    exception_handler);
+                                    exception_handler,
+                                    http_resolver,
+                                    opt.memento_notify_url);
 
     _memento_sproutlet = new SproutletAppServerShim(_memento, incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl);
     sproutlets.push_back(_memento_sproutlet);
