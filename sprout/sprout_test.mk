@@ -37,7 +37,7 @@ TARGET_SOURCES := logger.cpp \
                   memcachedstoreview.cpp \
                   memcached_config.cpp \
                   avstore.cpp \
-                  regstore.cpp \
+                  subscriber_data_manager.cpp \
                   xdmconnection.cpp \
                   simservs.cpp \
                   enumservice.cpp \
@@ -116,7 +116,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        hssconnection_test.cpp \
                        xdmconnection_test.cpp \
                        enumservice_test.cpp \
-                       regstore_test.cpp \
+                       subscriber_data_manager_test.cpp \
                        avstore_test.cpp \
                        registrar_test.cpp \
                        bono_test.cpp \

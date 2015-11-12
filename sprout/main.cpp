@@ -65,7 +65,7 @@ extern "C" {
 #include "cfgoptions.h"
 #include "sasevent.h"
 #include "analyticslogger.h"
-#include "regstore.h"
+#include "subscriber_data_manager.h"
 #include "stack.h"
 #include "bono.h"
 #include "hssconnection.h"
@@ -1231,21 +1231,21 @@ void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
 }
 
 
-void create_regstore_plugins(RegStore::SerializerDeserializer*& serializer,
-                             std::vector<RegStore::SerializerDeserializer*>& deserializers,
-                             MemcachedWriteFormat write_format)
+void create_sdm_plugins(SubscriberDataManager::SerializerDeserializer*& serializer,
+                        std::vector<SubscriberDataManager::SerializerDeserializer*>& deserializers,
+                        MemcachedWriteFormat write_format)
 {
   deserializers.clear();
-  deserializers.push_back(new RegStore::JsonSerializerDeserializer());
-  deserializers.push_back(new RegStore::BinarySerializerDeserializer());
+  deserializers.push_back(new SubscriberDataManager::JsonSerializerDeserializer());
+  deserializers.push_back(new SubscriberDataManager::BinarySerializerDeserializer());
 
   if (write_format == MemcachedWriteFormat::JSON)
   {
-    serializer = new RegStore::JsonSerializerDeserializer();
+    serializer = new SubscriberDataManager::JsonSerializerDeserializer();
   }
   else
   {
-    serializer = new RegStore::BinarySerializerDeserializer();
+    serializer = new SubscriberDataManager::BinarySerializerDeserializer();
   }
 }
 
@@ -1255,8 +1255,8 @@ void create_regstore_plugins(RegStore::SerializerDeserializer*& serializer,
 LoadMonitor* load_monitor = NULL;
 HSSConnection* hss_connection = NULL;
 Store* local_data_store = NULL;
-RegStore* local_reg_store = NULL;
-RegStore* remote_reg_store = NULL;
+SubscriberDataManager* local_sdm = NULL;
+SubscriberDataManager* remote_sdm = NULL;
 RalfProcessor* ralf_processor = NULL;
 HttpResolver* http_resolver = NULL;
 ACRFactory* scscf_acr_factory = NULL;
@@ -1941,26 +1941,28 @@ int main(int argc, char* argv[])
     // It is fine to reuse these variables for creating both stores, as
     // ownership of the objects they point to is transferred to the store when
     // it is constructed.
-    RegStore::SerializerDeserializer* serializer;
-    std::vector<RegStore::SerializerDeserializer*> deserializers;
+    SubscriberDataManager::SerializerDeserializer* serializer;
+    std::vector<SubscriberDataManager::SerializerDeserializer*> deserializers;
 
-    create_regstore_plugins(serializer,
-                            deserializers,
-                            opt.memcached_write_format);
-    local_reg_store = new RegStore(local_data_store,
-                                   serializer,
-                                   deserializers,
-                                   chronos_connection);
+    create_sdm_plugins(serializer,
+                       deserializers,
+                       opt.memcached_write_format);
+    local_sdm = new SubscriberDataManager(local_data_store,
+                                          serializer,
+                                          deserializers,
+                                          chronos_connection,
+                                          true);
 
     if (remote_data_store != NULL)
     {
-      create_regstore_plugins(serializer,
-                              deserializers,
-                              opt.memcached_write_format);
-      remote_reg_store = new RegStore(remote_data_store,
-                                      serializer,
-                                      deserializers,
-                                      chronos_connection);
+      create_sdm_plugins(serializer,
+                         deserializers,
+                         opt.memcached_write_format);
+      remote_sdm = new SubscriberDataManager(remote_data_store,
+                                             serializer,
+                                             deserializers,
+                                             chronos_connection,
+                                             false);
     }
 
     // Start the HTTP stack early as plugins might need to register handlers
@@ -2001,8 +2003,8 @@ int main(int argc, char* argv[])
     }
 
     // Launch the registrar.
-    status = init_registrar(local_reg_store,
-                            remote_reg_store,
+    status = init_registrar(local_sdm,
+                            remote_sdm,
                             hss_connection,
                             analytics_logger,
                             scscf_acr_factory,
@@ -2020,8 +2022,8 @@ int main(int argc, char* argv[])
     }
 
     // Launch the subscription module.
-    status = init_subscription(local_reg_store,
-                               remote_reg_store,
+    status = init_subscription(local_sdm,
+                               remote_sdm,
                                hss_connection,
                                scscf_acr_factory,
                                analytics_logger,
@@ -2117,9 +2119,9 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  RegSubTimeoutTask::Config reg_sub_timeout_config(local_reg_store, remote_reg_store, hss_connection);
+  RegSubTimeoutTask::Config reg_sub_timeout_config(local_sdm, remote_sdm, hss_connection);
   AuthTimeoutTask::Config auth_timeout_config(av_store, hss_connection);
-  DeregistrationTask::Config deregistration_config(local_reg_store, remote_reg_store, hss_connection, sip_resolver);
+  DeregistrationTask::Config deregistration_config(local_sdm, remote_sdm, hss_connection, sip_resolver);
 
   // The RegSubTimeoutTask and AuthTimeoutTask both handle
   // chronos requests, so use the ChronosHandler.
@@ -2219,8 +2221,8 @@ int main(int argc, char* argv[])
   delete quiescing_mgr;
   delete exception_handler;
   delete load_monitor;
-  delete local_reg_store;
-  delete remote_reg_store;
+  delete local_sdm;
+  delete remote_sdm;
   delete av_store;
   delete local_data_store;
   delete remote_data_store;

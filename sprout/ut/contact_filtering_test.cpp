@@ -609,7 +609,7 @@ TEST_F(ContactFilteringImplicitFiltersTest, AddImplicitFilterWithEvent)
 class ContactFilteringCreateBindingFixture : public ContactFilteringTest
 {
 public:
-  void create_binding(RegStore::AoR::Binding& binding)
+  void create_binding(SubscriberDataManager::AoR::Binding& binding)
   {
     binding._uri = "sip:2125551212@192.168.0.1:55491;transport=TCP;rinstance=fad34fbcdea6a931";
     binding._cid = "gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq";
@@ -632,7 +632,7 @@ class ContactFilteringBindingToTargetTest : public ContactFilteringCreateBinding
 TEST_F(ContactFilteringBindingToTargetTest, SimpleConversion)
 {
   std::string aor = "sip:user@domain.com";
-  RegStore::AoR::Binding binding(&aor);
+  SubscriberDataManager::AoR::Binding binding(&aor);
   create_binding(binding);
   std::string binding_id = "<sip:user@10.1.2.3>";
   Target target;
@@ -656,7 +656,7 @@ TEST_F(ContactFilteringBindingToTargetTest, SimpleConversion)
 TEST_F(ContactFilteringBindingToTargetTest, InvalidURI)
 {
   std::string aor = "sip:user@domain.com";
-  RegStore::AoR::Binding binding(&aor);
+  SubscriberDataManager::AoR::Binding binding(&aor);
   create_binding(binding);
   std::string binding_id = "<sip:user@10.1.2.3>";
   binding._uri = "banana";
@@ -671,7 +671,7 @@ TEST_F(ContactFilteringBindingToTargetTest, InvalidURI)
 TEST_F(ContactFilteringBindingToTargetTest, InvalidPath)
 {
   std::string aor = "sip:user@domain.com";
-  RegStore::AoR::Binding binding(&aor);
+  SubscriberDataManager::AoR::Binding binding(&aor);
   create_binding(binding);
   std::string binding_id = "<sip:user@10.1.2.3>";
   binding._path_headers.push_back("banana");
@@ -689,8 +689,8 @@ class ContactFilteringFullStackTest :
 
 TEST_F(ContactFilteringFullStackTest, NoFiltering)
 {
-  RegStore::AoR* aor_data = new RegStore::AoR(aor);
-  RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  SubscriberDataManager::AoR* aor_data = new SubscriberDataManager::AoR(aor);
+  SubscriberDataManager::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -712,8 +712,8 @@ TEST_F(ContactFilteringFullStackTest, NoFiltering)
 }
 TEST_F(ContactFilteringFullStackTest, ImplicitFiltering)
 {
-  RegStore::AoR* aor_data = new RegStore::AoR(aor);
-  RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  SubscriberDataManager::AoR* aor_data = new SubscriberDataManager::AoR(aor);
+  SubscriberDataManager::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
   // Pick a method the contact doesn't support
@@ -738,8 +738,8 @@ TEST_F(ContactFilteringFullStackTest, ImplicitFiltering)
 }
 TEST_F(ContactFilteringFullStackTest, ImplicitFilteringDeprioritize)
 {
-  RegStore::AoR* aor_data = new RegStore::AoR(aor);
-  RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  SubscriberDataManager::AoR* aor_data = new SubscriberDataManager::AoR(aor);
+  SubscriberDataManager::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
   binding->_params.erase("methods");
 
@@ -766,8 +766,8 @@ TEST_F(ContactFilteringFullStackTest, ImplicitFilteringDeprioritize)
 }
 TEST_F(ContactFilteringFullStackTest, ExplicitFilteringYesMatch)
 {
-  RegStore::AoR* aor_data = new RegStore::AoR(aor);
-  RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  SubscriberDataManager::AoR* aor_data = new SubscriberDataManager::AoR(aor);
+  SubscriberDataManager::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -804,8 +804,8 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringYesMatch)
 
 TEST_F(ContactFilteringFullStackTest, ExplicitFilteringUnknownMatch)
 {
-  RegStore::AoR* aor_data = new RegStore::AoR(aor);
-  RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  SubscriberDataManager::AoR* aor_data = new SubscriberDataManager::AoR(aor);
+  SubscriberDataManager::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -841,8 +841,8 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringUnknownMatch)
 }
 TEST_F(ContactFilteringFullStackTest, ExplicitFilteringNoMatch)
 {
-  RegStore::AoR* aor_data = new RegStore::AoR(aor);
-  RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  SubscriberDataManager::AoR* aor_data = new SubscriberDataManager::AoR(aor);
+  SubscriberDataManager::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -877,8 +877,8 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringNoMatch)
 }
 TEST_F(ContactFilteringFullStackTest, RejectFilteringMatch)
 {
-  RegStore::AoR* aor_data = new RegStore::AoR(aor);
-  RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  SubscriberDataManager::AoR* aor_data = new SubscriberDataManager::AoR(aor);
+  SubscriberDataManager::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -915,8 +915,8 @@ TEST_F(ContactFilteringFullStackTest, RejectFilteringMatch)
 }
 TEST_F(ContactFilteringFullStackTest, RejectFilteringNoMatch)
 {
-  RegStore::AoR* aor_data = new RegStore::AoR(aor);
-  RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  SubscriberDataManager::AoR* aor_data = new SubscriberDataManager::AoR(aor);
+  SubscriberDataManager::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
@@ -952,14 +952,14 @@ TEST_F(ContactFilteringFullStackTest, RejectFilteringNoMatch)
 
 TEST_F(ContactFilteringFullStackTest, LotsOfBindings)
 {
-  RegStore::AoR* aor_data = new RegStore::AoR(aor);
+  SubscriberDataManager::AoR* aor_data = new SubscriberDataManager::AoR(aor);
 
   for (int ii = 0;
        ii < 20;
        ii++)
   {
     std::string binding_id = "sip:user" + std::to_string(ii) + "@domain.com";
-    RegStore::AoR::Binding* binding = aor_data->get_binding(binding_id);
+    SubscriberDataManager::AoR::Binding* binding = aor_data->get_binding(binding_id);
     create_binding(*binding);
 
     // Change the features on some of the bindings.
@@ -1015,14 +1015,14 @@ TEST_F(ContactFilteringFullStackTest, LotsOfBindings)
 
 TEST_F(ContactFilteringFullStackTest, GRUUNoMatch)
 {
-  RegStore::AoR* aor_data = new RegStore::AoR(aor);
+  SubscriberDataManager::AoR* aor_data = new SubscriberDataManager::AoR(aor);
 
   for (int ii = 0;
        ii < 20;
        ii++)
   {
     std::string binding_id = "sip:user" + std::to_string(ii) + "@domain.com";
-    RegStore::AoR::Binding* binding = aor_data->get_binding(binding_id);
+    SubscriberDataManager::AoR::Binding* binding = aor_data->get_binding(binding_id);
     create_binding(*binding);
 
     binding->_expires = ii * 100;
@@ -1048,14 +1048,14 @@ TEST_F(ContactFilteringFullStackTest, GRUUNoMatch)
 
 TEST_F(ContactFilteringFullStackTest, GRUUMatch)
 {
-  RegStore::AoR* aor_data = new RegStore::AoR(aor);
+  SubscriberDataManager::AoR* aor_data = new SubscriberDataManager::AoR(aor);
 
   for (int ii = 0;
        ii < 20;
        ii++)
   {
     std::string binding_id = "sip:user" + std::to_string(ii) + "@domain.com";
-    RegStore::AoR::Binding* binding = aor_data->get_binding(binding_id);
+    SubscriberDataManager::AoR::Binding* binding = aor_data->get_binding(binding_id);
     create_binding(*binding);
 
     // Change the features on some of the bindings.

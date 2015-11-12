@@ -46,7 +46,7 @@
 #include <set>
 
 #include "hssconnection.h"
-#include "regstore.h"
+#include "subscriber_data_manager.h"
 #include "httpconnection.h"
 #include "httpresolver.h"
 #include "acr.h"
@@ -148,8 +148,8 @@ struct options
 extern LoadMonitor* load_monitor;
 extern HSSConnection* hss_connection;
 extern Store* local_data_store;
-extern RegStore* local_reg_store;
-extern RegStore* remote_reg_store;
+extern SubscriberDataManager* local_sdm;
+extern SubscriberDataManager* remote_sdm;
 extern RalfProcessor* ralf_processor;
 extern HttpResolver* http_resolver;
 extern ACRFactory* scscf_acr_factory;
