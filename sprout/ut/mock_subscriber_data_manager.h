@@ -1,8 +1,8 @@
 /**
- * @file registrar.h Initialization/termination functions for Sprout's Registrar module
+ * @file mock_subscriber_data_manager.h
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Project Clearwater - IMS in the cloud.
+ * Copyright (C) 2015  Metaswitch Networks Ltd
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -34,37 +34,27 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+#ifndef MOCK_SUBSCRIBER_DATA_MANAGER_H_
+#define MOCK_SUBSCRIBER_DATA_MANAGER_H_
 
-#ifndef REGISTRAR_H__
-#define REGISTRAR_H__
-
-extern "C" {
-#include <pjsip.h>
-}
-
+#include "gmock/gmock.h"
 #include "subscriber_data_manager.h"
-#include "hssconnection.h"
-#include "chronosconnection.h"
-#include "analyticslogger.h"
-#include "acr.h"
-#include "snmp_success_fail_count_table.h"
 
-extern pjsip_module mod_registrar;
+class MockSubscriberDataManager : public SubscriberDataManager
+{
+public:
+  MockSubscriberDataManager();
+  virtual ~MockSubscriberDataManager();
 
-void third_party_register_failed(const std::string& public_id,
-                                 SAS::TrailId trail);
-
-extern pj_status_t init_registrar(SubscriberDataManager* sdm,
-                                  SubscriberDataManager* remote_sdm,
-                                  HSSConnection* hss_connection,
-                                  AnalyticsLogger* analytics_logger,
-                                  ACRFactory* rfacr_factory,
-                                  int cfg_max_expires,
-                                  bool force_third_party_register_body,
-                                  SNMP::RegistrationStatsTables* reg_stats_tbls,
-                                  SNMP::RegistrationStatsTables* third_party_reg_stats_tbls);
-
-
-extern void destroy_registrar();
+  MOCK_METHOD2(get_aor_data, AoRPair*(const std::string& aor_id,
+                                      SAS::TrailId trail));
+  MOCK_METHOD5(set_aor_data, Store::Status(const std::string& aor_id,
+                                           AoRPair* data,
+                                           SAS::TrailId trail,
+                                           bool& all_bindings_expired,
+                                           pjsip_tx_data* extra_messages));
+  MOCK_METHOD0(has_servers, bool());
+};
 
 #endif
+

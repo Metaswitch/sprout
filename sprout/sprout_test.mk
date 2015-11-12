@@ -156,7 +156,8 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        uriclassifier_test.cpp \
                        ralf_processor_test.cpp \
                        mockhttpconnection.cpp \
-                       session_expires_helper_test.cpp
+                       session_expires_helper_test.cpp \
+                       mock_subscriber_data_manager.cpp
 
 
 # Put the interposer in here, so it will be loaded before pjsip.

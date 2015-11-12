@@ -44,7 +44,6 @@ extern "C" {
 
 #include <string>
 #include <cassert>
-#include "regstore.h"
 #include "constants.h"
 #include "ifchandler.h"
 #include "pjutils.h"
@@ -91,12 +90,12 @@ void RegistrationUtils::init(SNMP::RegistrationStatsTables* third_party_reg_stat
 }
 
 void RegistrationUtils::deregister_with_application_servers(Ifcs& ifcs,
-                                                            RegStore* store,
+                                                            SubscriberDataManager* sdm,
                                                             const std::string& served_user,
                                                             SAS::TrailId trail)
 {
   RegistrationUtils::register_with_application_servers(ifcs,
-                                                       store,
+                                                       sdm,
                                                        NULL,
                                                        NULL,
                                                        0,
@@ -106,7 +105,7 @@ void RegistrationUtils::deregister_with_application_servers(Ifcs& ifcs,
 }
 
 void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
-                                                          RegStore* store,
+                                                          SubscriberDataManager* sdm,
                                                           pjsip_rx_data *received_register,
                                                           pjsip_tx_data *ok_response, // Can only be NULL if received_register is
                                                           int expires,
@@ -421,7 +420,10 @@ void notify_application_servers()
   // TODO: implement as part of reg events package
 }
 
-static bool expire_bindings(RegStore *store, const std::string& aor, const std::string& binding_id, SAS::TrailId trail)
+static bool expire_bindings(SubscriberDataManager *sdm,
+                            const std::string& aor,
+                            const std::string& binding_id,
+                            SAS::TrailId trail)
 {
   // We need the retry loop to handle the store's compare-and-swap.
   bool all_bindings_expired = false;
@@ -429,8 +431,9 @@ static bool expire_bindings(RegStore *store, const std::string& aor, const std::
 
   do
   {
-    RegStore::AoR* aor_data = store->get_aor_data(aor, trail);
-    if (aor_data == NULL)
+    SubscriberDataManager::AoRPair* aor_pair = sdm->get_aor_data(aor, trail);
+
+    if (aor_pair == NULL)
     {
       break;  // LCOV_EXCL_LINE No UT for lookup failure.
     }
@@ -440,17 +443,17 @@ static bool expire_bindings(RegStore *store, const std::string& aor, const std::
       // We only use this when doing some network-initiated deregistrations;
       // when the user deregisters all bindings another code path clears them
       TRC_INFO("Clearing all bindings!");
-      aor_data->clear(false);
+      aor_pair->get_current()->clear(false);
     }
     else
     {
-      aor_data->remove_binding(binding_id); // LCOV_EXCL_LINE No UT for network
-                                            // initiated deregistration of a
-                                            // single binding (flow failed).
+      aor_pair->get_current()->remove_binding(binding_id); // LCOV_EXCL_LINE No UT for network
+                                                           // initiated deregistration of a
+                                                           // single binding (flow failed).
     }
 
-    set_rc = store->set_aor_data(aor, aor_data, false, trail, true, all_bindings_expired);
-    delete aor_data; aor_data = NULL;
+    set_rc = sdm->set_aor_data(aor, aor_pair, trail, all_bindings_expired);
+    delete aor_pair; aor_pair = NULL;
 
     // We can only say for sure that the bindings were expired if we were able
     // to update the store.
@@ -462,7 +465,7 @@ static bool expire_bindings(RegStore *store, const std::string& aor, const std::
   return all_bindings_expired;
 }
 
-void RegistrationUtils::remove_bindings(RegStore* store,
+void RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
                                         HSSConnection* hss,
                                         const std::string& aor,
                                         const std::string& binding_id,
@@ -471,7 +474,7 @@ void RegistrationUtils::remove_bindings(RegStore* store,
 {
   TRC_INFO("Remove binding(s) %s from IMPU %s", binding_id.c_str(), aor.c_str());
 
-  if (expire_bindings(store, aor, binding_id, trail))
+  if (expire_bindings(sdm, aor, binding_id, trail))
   {
     // All bindings have been expired, so do deregistration processing for the
     // IMPU.
@@ -489,7 +492,7 @@ void RegistrationUtils::remove_bindings(RegStore* store,
     {
       // Note that 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 doesn't specify that any binding information
       // should be passed on the REGISTER message, so we don't need the binding ID.
-      deregister_with_application_servers(ifc_map[aor], store, aor, trail);
+      deregister_with_application_servers(ifc_map[aor], sdm, aor, trail);
       notify_application_servers();
     }
   }

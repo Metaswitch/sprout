@@ -46,7 +46,7 @@ extern "C" {
 
 #include "handlers.h"
 #include "log.h"
-#include "regstore.h"
+#include "subscriber_data_manager.h"
 #include "ifchandler.h"
 #include "registration_utils.h"
 #include "stack.h"
@@ -54,21 +54,21 @@ extern "C" {
 #include "sproutsasevent.h"
 #include "uri_classifier.h"
 
-static bool reg_store_access_common(RegStore::AoR** aor_data,
-                                    bool& previous_aor_data_alloced,
-                                    std::string aor_id,
-                                    RegStore* current_store,
-                                    RegStore* remote_store,
-                                    RegStore::AoR** previous_aor_data,
-                                    SAS::TrailId trail,
-                                    bool should_send_notify)
+static bool sdm_access_common(SubscriberDataManager::AoRPair** aor_pair,
+                              bool& previous_aor_pair_alloced,
+                              std::string aor_id,
+                              SubscriberDataManager* current_sdm,
+                              SubscriberDataManager* remote_sdm,
+                              SubscriberDataManager::AoRPair** previous_aor_pair,
+                              SAS::TrailId trail)
 {
   // Find the current bindings for the AoR.
-  delete *aor_data;
-  *aor_data = current_store->get_aor_data(aor_id, trail, should_send_notify);
-  TRC_DEBUG("Retrieved AoR data %p", *aor_data);
+  delete *aor_pair;
+  *aor_pair = current_sdm->get_aor_data(aor_id, trail);
+  TRC_DEBUG("Retrieved AoR data %p", *aor_pair);
 
-  if (*aor_data == NULL)
+  if ((*aor_pair == NULL) ||
+      ((*aor_pair)->get_current() == NULL))
   {
     // Failed to get data for the AoR because there is no connection
     // to the store.
@@ -77,35 +77,39 @@ static bool reg_store_access_common(RegStore::AoR** aor_data,
   }
 
   // If we don't have any bindings, try the backup AoR and/or store.
-  if ((*aor_data)->bindings().empty())
+  if ((*aor_pair)->get_current()->bindings().empty())
   {
-    if ((*previous_aor_data == NULL) &&
-        (remote_store != NULL) &&
-        (remote_store->has_servers()))
+    if ((*previous_aor_pair == NULL) &&
+        (remote_sdm != NULL) &&
+        (remote_sdm->has_servers()))
     {
-      *previous_aor_data = remote_store->get_aor_data(aor_id, trail, false);
-      previous_aor_data_alloced = true;
+      *previous_aor_pair = remote_sdm->get_aor_data(aor_id, trail);
+      previous_aor_pair_alloced = true;
     }
 
-    if ((*previous_aor_data != NULL) &&
-        (!(*previous_aor_data)->bindings().empty()))
+    if ((*previous_aor_pair != NULL) &&
+        (!(*previous_aor_pair)->get_current()->bindings().empty()))
     {
       //LCOV_EXCL_START
-      for (RegStore::AoR::Bindings::const_iterator i = (*previous_aor_data)->bindings().begin();
-           i != (*previous_aor_data)->bindings().end();
+      for (SubscriberDataManager::AoR::Bindings::const_iterator i =
+             (*previous_aor_pair)->get_current()->bindings().begin();
+           i != (*previous_aor_pair)->get_current()->bindings().end();
            ++i)
       {
-        RegStore::AoR::Binding* src = i->second;
-        RegStore::AoR::Binding* dst = (*aor_data)->get_binding(i->first);
+        SubscriberDataManager::AoR::Binding* src = i->second;
+        SubscriberDataManager::AoR::Binding* dst =
+           (*aor_pair)->get_current()->get_binding(i->first);
         *dst = *src;
       }
 
-      for (RegStore::AoR::Subscriptions::const_iterator i = (*previous_aor_data)->subscriptions().begin();
-           i != (*previous_aor_data)->subscriptions().end();
+      for (SubscriberDataManager::AoR::Subscriptions::const_iterator i =
+             (*previous_aor_pair)->get_current()->subscriptions().begin();
+           i != (*previous_aor_pair)->get_current()->subscriptions().end();
            ++i)
       {
-        RegStore::AoR::Subscription* src = i->second;
-        RegStore::AoR::Subscription* dst = (*aor_data)->get_subscription(i->first);
+        SubscriberDataManager::AoR::Subscription* src = i->second;
+        SubscriberDataManager::AoR::Subscription* dst =
+           (*aor_pair)->get_current()->get_subscription(i->first);
         *dst = *src;
       }
       //LCOV_EXCL_STOP
@@ -249,21 +253,29 @@ void DeregistrationTask::run()
 void RegSubTimeoutTask::handle_response()
 {
   bool all_bindings_expired = false;
-  RegStore::AoR* aor_data = set_aor_data(_cfg->_store, _aor_id, NULL, _cfg->_remote_store, true,
-                                         all_bindings_expired);
+  SubscriberDataManager::AoRPair* aor_pair = set_aor_data(_cfg->_sdm,
+                                                          _aor_id,
+                                                          NULL,
+                                                          _cfg->_remote_sdm,
+                                                          all_bindings_expired);
 
-  if (aor_data != NULL)
+  if (aor_pair != NULL)
   {
     // If we have a remote store, try to store this there too.  We don't worry
     // about failures in this case.
-    if ((_cfg->_remote_store != NULL) && (_cfg->_remote_store->has_servers()))
+    if ((_cfg->_remote_sdm != NULL) && (_cfg->_remote_sdm->has_servers()))
     {
       bool ignored;
-      RegStore::AoR* remote_aor_data = set_aor_data(_cfg->_remote_store, _aor_id, aor_data, NULL,
-                                                    false, ignored);
-      delete remote_aor_data;
+      SubscriberDataManager::AoRPair* remote_aor_pair =
+                                         set_aor_data(_cfg->_remote_sdm,
+                                                      _aor_id,
+                                                      aor_pair,
+                                                      NULL,
+                                                      ignored);
+      delete remote_aor_pair;
     }
 
+    // TODO - Move this into the set_aor_data call
     if (all_bindings_expired)
     {
       TRC_DEBUG("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS");
@@ -272,66 +284,60 @@ void RegSubTimeoutTask::handle_response()
   }
   else
   {
-    // We couldn't update the RegStore but there is nothing else we can do to
+    // We couldn't update the SubscriberDataManager but there is nothing else we can do to
     // recover from this.
-    TRC_INFO("Could not update RegStore on registration timeout for AoR: %s",
+    TRC_INFO("Could not update SubscriberDataManager on registration timeout for AoR: %s",
              _aor_id.c_str());
   }
 
-  delete aor_data;
+  delete aor_pair;
   report_sip_all_register_marker(trail(), _aor_id);
 }
 
-RegStore::AoR* RegSubTimeoutTask::set_aor_data(RegStore* current_store,
-                                                     std::string aor_id,
-                                                     RegStore::AoR* previous_aor_data,
-                                                     RegStore* remote_store,
-                                                     bool is_primary,
-                                                     bool& all_bindings_expired)
+SubscriberDataManager::AoRPair* RegSubTimeoutTask::set_aor_data(
+                          SubscriberDataManager* current_sdm,
+                          std::string aor_id,
+                          SubscriberDataManager::AoRPair* previous_aor_pair,
+                          SubscriberDataManager* remote_sdm,
+                          bool& all_bindings_expired)
 {
-  RegStore::AoR* aor_data = NULL;
-  bool previous_aor_data_alloced = false;
+  SubscriberDataManager::AoRPair* aor_pair = NULL;
+  bool previous_aor_pair_alloced = false;
   Store::Status set_rc;
 
   do
   {
-    if (!reg_store_access_common(&aor_data,
-                                 previous_aor_data_alloced,
-                                 aor_id,
-                                 current_store,
-                                 remote_store,
-                                 &previous_aor_data,
-                                 trail(),
-                                 is_primary))
+    if (!sdm_access_common(&aor_pair,
+                           previous_aor_pair_alloced,
+                           aor_id,
+                           current_sdm,
+                           remote_sdm,
+                           &previous_aor_pair,
+                           trail()))
     {
       // LCOV_EXCL_START - local store (used in testing) never fails
       break;
       // LCOV_EXCL_STOP
     }
 
-    // Do not send NOTIFYs in regstore as the RegSubTimoutTask is called
-    // with both the local and remote stores as current_store, and NOTIFYs should
-    // have already been sent correctly by the above call to reg_store_access_common.
-    set_rc = current_store->set_aor_data(aor_id,
-                                         aor_data,
-                                         is_primary,
-                                         trail(),
-                                         false,
-                                         all_bindings_expired);
+    set_rc = current_sdm->set_aor_data(aor_id,
+                                       aor_pair,
+                                       trail(),
+                                       all_bindings_expired);
     if (set_rc != Store::OK)
     {
-      delete aor_data; aor_data = NULL;
+      delete aor_pair; aor_pair = NULL;
     }
   }
   while (set_rc == Store::DATA_CONTENTION);
 
   // If we allocated the AoR, tidy up.
-  if (previous_aor_data_alloced)
+  if (previous_aor_pair_alloced)
   {
-    delete previous_aor_data;
+    delete previous_aor_pair;
   }
 
-  return aor_data;
+  return aor_pair;
 }
 
 // Retrieve the aor and binding ID from the opaque data
@@ -445,28 +451,29 @@ HTTPCode DeregistrationTask::parse_request(std::string body)
 
 HTTPCode DeregistrationTask::handle_request()
 {
-  for (std::map<std::string, std::string>::iterator it=_bindings.begin(); it!=_bindings.end(); ++it)
+  for (std::map<std::string, std::string>::iterator it=_bindings.begin(); 
+       it!=_bindings.end();
+       ++it)
   {
-    RegStore::AoR* aor_data = set_aor_data(_cfg->_store,
-                                           it->first,
-                                           it->second,
-                                           NULL,
-                                           _cfg->_remote_store,
-                                           true);
+    SubscriberDataManager::AoRPair* aor_pair = set_aor_data(_cfg->_sdm,
+                                                            it->first,
+                                                            it->second,
+                                                            NULL,
+                                                            _cfg->_remote_sdm);
 
-    if (aor_data != NULL)
+    if (aor_pair != NULL)
     {
       // If we have a remote store, try to store this there too.  We don't worry
       // about failures in this case.
-      if (_cfg->_remote_store != NULL)
+      if (_cfg->_remote_sdm != NULL)
       {
-        RegStore::AoR* remote_aor_data = set_aor_data(_cfg->_remote_store,
-                                                      it->first,
-                                                      it->second,
-                                                      aor_data,
-                                                      NULL,
-                                                      false);
-        delete remote_aor_data;
+        SubscriberDataManager::AoRPair* remote_aor_pair =
+                                             set_aor_data(_cfg->_remote_sdm,
+                                                          it->first,
+                                                          it->second,
+                                                          aor_pair,
+                                                          NULL);
+        delete remote_aor_pair;
       }
     }
     else
@@ -477,46 +484,46 @@ HTTPCode DeregistrationTask::handle_request()
       // Sprout accepts changes to AoRs that don't exist though.
       TRC_WARNING("Unable to connect to memcached for AoR %s", it->first.c_str());
 
-      delete aor_data;
+      delete aor_pair;
       return HTTP_SERVER_ERROR;
     }
 
-    delete aor_data;
+    delete aor_pair;
   }
 
   return HTTP_OK;
 }
 
-RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
-                                                std::string aor_id,
-                                                std::string private_id,
-                                                RegStore::AoR* previous_aor_data,
-                                                RegStore* remote_store,
-                                                bool is_primary)
+SubscriberDataManager::AoRPair* DeregistrationTask::set_aor_data(
+                                        SubscriberDataManager* current_sdm,
+                                        std::string aor_id,
+                                        std::string private_id,
+                                        SubscriberDataManager::AoRPair* previous_aor_pair,
+                                        SubscriberDataManager* remote_sdm)
 {
-  RegStore::AoR* aor_data = NULL;
-  bool previous_aor_data_alloced = false;
+  SubscriberDataManager::AoRPair* aor_pair = NULL;
+  bool previous_aor_pair_alloced = false;
   bool all_bindings_expired = false;
   Store::Status set_rc;
 
   do
   {
-    if (!reg_store_access_common(&aor_data,
-                                 previous_aor_data_alloced,
-                                 aor_id,
-                                 current_store,
-                                 remote_store,
-                                 &previous_aor_data,
-                                 trail(),
-                                 is_primary))
+    if (!sdm_access_common(&aor_pair,
+                           previous_aor_pair_alloced,
+                           aor_id,
+                           current_sdm,
+                           remote_sdm,
+                           &previous_aor_pair,
+                           trail()))
     {
       break;
     }
 
     std::vector<std::string> binding_ids;
 
-    for (RegStore::AoR::Bindings::const_iterator i = aor_data->bindings().begin();
-         i != aor_data->bindings().end();
+    for (SubscriberDataManager::AoR::Bindings::const_iterator i =
+           aor_pair->get_current()->bindings().begin();
+         i != aor_pair->get_current()->bindings().end();
          ++i)
     {
       // Get a list of the bindings to iterate over
@@ -528,37 +535,22 @@ RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
          ++i)
     {
       std::string b_id = *i;
-      RegStore::AoR::Binding* b = aor_data->get_binding(b_id);
+      SubscriberDataManager::AoR::Binding* b =
+                                  aor_pair->get_current()->get_binding(b_id);
 
       if (private_id == "" || private_id == b->_private_id)
       {
-        // Update the cseq
-        aor_data->_notify_cseq++;
-
-        // The binding matches the private id, or no private id was supplied.
-        // Send a SIP NOTIFY for this binding if there are any subscriptions
-        if (_notify == "true" && is_primary)
-        {
-          for (RegStore::AoR::Subscriptions::const_iterator j = aor_data->subscriptions().begin();
-              j != aor_data->subscriptions().end();
-               ++j)
-          {
-            current_store->send_notify(j->second, aor_data->_notify_cseq, b, b_id, trail());
-          }
-        }
-
-        aor_data->remove_binding(b_id);
+        aor_pair->get_current()->remove_binding(b_id);
       }
     }
 
-    set_rc = current_store->set_aor_data(aor_id,
-                                         aor_data,
-                                         is_primary,
-                                         trail(),
-                                         all_bindings_expired);
+    set_rc = current_sdm->set_aor_data(aor_id,
+                                       aor_pair,
+                                       trail(),
+                                       all_bindings_expired);
     if (set_rc != Store::OK)
     {
-      delete aor_data; aor_data = NULL;
+      delete aor_pair; aor_pair = NULL;
     }
   }
   while (set_rc == Store::DATA_CONTENTION);
@@ -574,19 +566,19 @@ RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
     if (_cfg->_hss->get_registration_data(aor_id, state, ifc_map, uris, trail()) == HTTP_OK)
     {
       RegistrationUtils::deregister_with_application_servers(ifc_map[aor_id],
-                                                             current_store,
+                                                             current_sdm,
                                                              aor_id,
                                                              trail());
     }
   }
 
   // If we allocated the AoR, tidy up.
-  if (previous_aor_data_alloced)
+  if (previous_aor_pair_alloced)
   {
-    delete previous_aor_data; //LCOV_EXCL_LINE
+    delete previous_aor_pair; //LCOV_EXCL_LINE
   }
 
-  return aor_data;
+  return aor_pair;
 }
 
 HTTPCode AuthTimeoutTask::handle_response(std::string body)

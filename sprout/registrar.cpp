@@ -65,8 +65,8 @@ extern "C" {
 #include "snmp_success_fail_count_table.h"
 #include "uri_classifier.h"
 
-static RegStore* store;
-static RegStore* remote_store;
+static SubscriberDataManager* sdm;
+static SubscriberDataManager* remote_sdm;
 
 // Connection to the HSS service for retrieving associated public URIs.
 static HSSConnection* hss;
@@ -110,14 +110,16 @@ pjsip_module mod_registrar =
 };
 
 
-void log_bindings(const std::string& aor_name, RegStore::AoR* aor_data)
+void log_bindings(const std::string& aor_name,
+                  SubscriberDataManager::AoR* aor_data)
 {
   TRC_DEBUG("Bindings for %s", aor_name.c_str());
-  for (RegStore::AoR::Bindings::const_iterator i = aor_data->bindings().begin();
+  for (SubscriberDataManager::AoR::Bindings::const_iterator i =
+         aor_data->bindings().begin();
        i != aor_data->bindings().end();
        ++i)
   {
-    RegStore::AoR::Binding* binding = i->second;
+    SubscriberDataManager::AoR::Binding* binding = i->second;
     TRC_DEBUG("  %s URI=%s expires=%d q=%d from=%s cseq=%d timer=%s private_id=%s emergency_registration=%s",
               i->first.c_str(),
               binding->_uri.c_str(),
@@ -208,23 +210,21 @@ bool get_private_id(pjsip_rx_data* rdata, std::string& id)
 }
 
 /// Write to the registration store.
-RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write to
-                              std::string aor,               ///<address of record to write to
-                              pjsip_rx_data* rdata,          ///<received message to read headers from
-                              int now,                       ///<time now
-                              int& expiry,                   ///<[out] longest expiry time
-                              bool& out_is_initial_registration,
-                              RegStore::AoR* backup_aor,     ///<backup data if no entry in store
-                              RegStore* backup_store,        ///<backup store to read from if no entry in store and no backup data
-                              bool send_notify,              ///<whether to send notifies (only send when writing to the local store)
-                              std::string private_id,        ///<private id that the binding was registered with
-                              SAS::TrailId trail)
+SubscriberDataManager::AoRPair* write_to_store(
+                   SubscriberDataManager* primary_sdm,         ///<store to write to
+                   std::string aor,                            ///<address of record to write to
+                   pjsip_rx_data* rdata,                       ///<received message to read headers from
+                   int now,                                    ///<time now
+                   int& expiry,                                ///<[out] longest expiry time
+                   bool& out_is_initial_registration,
+                   SubscriberDataManager::AoRPair* backup_aor, ///<backup data if no entry in store
+                   SubscriberDataManager* backup_sdm,          ///<backup store to read from if no entry in store and no backup data
+                   std::string private_id,                     ///<private id that the binding was registered with
+                   SAS::TrailId trail)
 {
   // Get the call identifier and the cseq number from the respective headers.
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);
   int cseq = rdata->msg_info.cseq->cseq;
-
-  NotifyUtils::ContactEvent contact_event = NotifyUtils::ContactEvent::CREATED;
 
   // Find the expire headers in the message.
   pjsip_msg *msg = rdata->msg_info.msg;
@@ -233,23 +233,23 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   // The registration service uses optimistic locking to avoid concurrent
   // updates to the same AoR conflicting.  This means we have to loop
   // reading, updating and writing the AoR until the write is successful.
-  RegStore::AoR* aor_data = NULL;
+  SubscriberDataManager::AoRPair* aor_pair = NULL;
   bool backup_aor_alloced = false;
   bool is_initial_registration = true;
-  std::map<std::string, RegStore::AoR::Binding> bindings_for_notify;
   bool all_bindings_expired = false;
   Store::Status set_rc;
 
   do
   {
     // delete NULL is safe, so we can do this on every iteration.
-    delete aor_data;
+    delete aor_pair;
 
     // Find the current bindings for the AoR.
-    aor_data = primary_store->get_aor_data(aor, trail);
-    TRC_DEBUG("Retrieved AoR data %p", aor_data);
+    aor_pair = primary_sdm->get_aor_data(aor, trail);
+    TRC_DEBUG("Retrieved AoR data %p", aor_pair);
 
-    if (aor_data == NULL)
+    if ((aor_pair == NULL) ||
+        (aor_pair->get_current() == NULL))
     {
       // Failed to get data for the AoR because there is no connection
       // to the store.
@@ -260,40 +260,41 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
     }
 
     // If we don't have any bindings, try the backup AoR and/or store.
-    if (aor_data->bindings().empty())
+    if (aor_pair->get_current()->bindings().empty())
     {
       if ((backup_aor == NULL)   &&
-          (backup_store != NULL) &&
-          (backup_store->has_servers()))
+          (backup_sdm != NULL) &&
+          (backup_sdm->has_servers()))
       {
-        backup_aor = backup_store->get_aor_data(aor, trail, false);
+        backup_aor = backup_sdm->get_aor_data(aor, trail);
         backup_aor_alloced = (backup_aor != NULL);
       }
 
       if ((backup_aor != NULL) &&
-          (!backup_aor->bindings().empty()))
+          (backup_aor->get_current() != NULL) &&
+          (!backup_aor->get_current()->bindings().empty()))
       {
-        for (RegStore::AoR::Bindings::const_iterator i = backup_aor->bindings().begin();
-             i != backup_aor->bindings().end();
+        for (SubscriberDataManager::AoR::Bindings::const_iterator i = backup_aor->get_current()->bindings().begin();
+             i != backup_aor->get_current()->bindings().end();
              ++i)
         {
-          RegStore::AoR::Binding* src = i->second;
-          RegStore::AoR::Binding* dst = aor_data->get_binding(i->first);
+          SubscriberDataManager::AoR::Binding* src = i->second;
+          SubscriberDataManager::AoR::Binding* dst = aor_pair->get_current()->get_binding(i->first);
           *dst = *src;
         }
 
-        for (RegStore::AoR::Subscriptions::const_iterator i = backup_aor->subscriptions().begin();
-             i != backup_aor->subscriptions().end();
+        for (SubscriberDataManager::AoR::Subscriptions::const_iterator i = backup_aor->get_current()->subscriptions().begin();
+             i != backup_aor->get_current()->subscriptions().end();
              ++i)
         {
-          RegStore::AoR::Subscription* src = i->second;
-          RegStore::AoR::Subscription* dst = aor_data->get_subscription(i->first);
+          SubscriberDataManager::AoR::Subscription* src = i->second;
+          SubscriberDataManager::AoR::Subscription* dst = aor_pair->get_current()->get_subscription(i->first);
           *dst = *src;
         }
       }
     }
 
-    is_initial_registration = is_initial_registration && aor_data->bindings().empty();
+    is_initial_registration = is_initial_registration && aor_pair->get_current()->bindings().empty();
 
     // Now loop through all the contacts.  If there are multiple contacts in
     // the contact header in the SIP message, pjsip parses them to separate
@@ -317,7 +318,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
         // Wildcard contact, which can only be used to clear all bindings for
         // the AoR (and only if the expiry is 0). It won't clear any emergency
         // bindings
-        aor_data->clear(false);
+        aor_pair->get_current()->clear(false);
         break;
       }
 
@@ -338,10 +339,10 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
           binding_id = contact_uri;
         }
 
-        TRC_DEBUG(". Binding identifier for contact = %s", binding_id.c_str());
+        TRC_DEBUG("Binding identifier for contact = %s", binding_id.c_str());
 
         // Find the appropriate binding in the bindings list for this AoR.
-        RegStore::AoR::Binding* binding = aor_data->get_binding(binding_id);
+        SubscriberDataManager::AoR::Binding* binding = aor_pair->get_current()->get_binding(binding_id);
 
         if ((cid != binding->_cid) ||
             (cseq > binding->_cseq))
@@ -349,17 +350,6 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
           // Either this is a new binding, has come from a restarted device, or
           // is an update to an existing binding.
           binding->_uri = contact_uri;
-
-          if (cid != binding->_cid)
-          {
-            // New binding, set contact event to created
-            contact_event = NotifyUtils::ContactEvent::CREATED;
-          }
-          else
-          {
-            // Updated binding, set contact event to refreshed
-            contact_event = NotifyUtils::ContactEvent::REFRESHED;
-          }
 
           // TODO Examine Via header to see if we're the first hop
           // TODO Only if we're not the first hop, check that the top path header has "ob" parameter
@@ -418,13 +408,6 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
             binding->_expires = now + expiry;
           }
 
-          // If this is a de-registration, don't send NOTIFYs, as this is covered in
-          // expire_bindings which is called when the aor_data is saved.
-          if ((expiry != 0) && (!binding->_emergency_registration))
-          {
-            bindings_for_notify.insert(std::pair<std::string, RegStore::AoR::Binding>(binding_id, *binding));
-          }
-
           if (analytics != NULL)
           {
             // Generate an analytics log for this binding update.
@@ -436,17 +419,15 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
     }
 
     // Finally, update the cseq
-    aor_data->_notify_cseq++;
+    aor_pair->get_current()->_notify_cseq++;
 
-    set_rc = primary_store->set_aor_data(aor,
-                                         aor_data,
-                                         send_notify,
-                                         trail,
-                                         true,
-                                         all_bindings_expired);
+    set_rc = primary_sdm->set_aor_data(aor,
+                                       aor_pair,
+                                       trail,
+                                       all_bindings_expired);
     if (set_rc != Store::OK)
     {
-      delete aor_data; aor_data = NULL;
+      delete aor_pair; aor_pair = NULL;
     }
   }
   while (set_rc == Store::DATA_CONTENTION);
@@ -457,35 +438,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
     delete backup_aor;
   }
 
-  // Finally, send out SIP NOTIFYs for any subscriptions
-  if ((send_notify) &&
-      (aor_data != NULL))
-  {
-    for (RegStore::AoR::Subscriptions::const_iterator i = aor_data->subscriptions().begin();
-         i != aor_data->subscriptions().end();
-         ++i)
-    {
-      RegStore::AoR::Subscription* subscription = i->second;
-      if (subscription->_expires > now)
-      {
-        pjsip_tx_data* tdata_notify;
-
-        pj_status_t status = NotifyUtils::create_notify(&tdata_notify, subscription, aor,
-                                                        aor_data->_notify_cseq, bindings_for_notify,
-                                                        NotifyUtils::DocState::PARTIAL,
-                                                        NotifyUtils::RegistrationState::ACTIVE,
-                                                        NotifyUtils::ContactState::ACTIVE, contact_event,
-                                                        NotifyUtils::SubscriptionState::ACTIVE,
-                                                        (subscription->_expires - now));
-        if (status == PJ_SUCCESS)
-        {
-          set_trail(tdata_notify, trail);
-          status = PJUtils::send_request(tdata_notify, 0, NULL, NULL, true);
-        }
-      }
-    }
-  }
-
+  // TODO remove this
   if (all_bindings_expired)
   {
     TRC_DEBUG("All bindings have expired - triggering deregistration at the HSS");
@@ -494,7 +447,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
 
   out_is_initial_registration = is_initial_registration;
 
-  return aor_data;
+  return aor_pair;
 }
 
 void process_register_request(pjsip_rx_data* rdata)
@@ -744,25 +697,41 @@ void process_register_request(pjsip_rx_data* rdata)
   }
 
   // Write to the local store, checking the remote store if there is no entry locally.
-  RegStore::AoR* aor_data = write_to_store(store, aor, rdata, now, expiry,
-                                           is_initial_registration, NULL, remote_store,
-                                           true, private_id_for_binding, trail);
-  if (aor_data != NULL)
+  SubscriberDataManager::AoRPair* aor_pair =
+                                  write_to_store(sdm,
+                                                aor,
+                                                rdata,
+                                                now,
+                                                expiry,
+                                                is_initial_registration,
+                                                NULL,
+                                                remote_sdm,
+                                                private_id_for_binding,
+                                                trail);
+
+  if (aor_pair != NULL)
   {
     // Log the bindings.
-    log_bindings(aor, aor_data);
+    log_bindings(aor, aor_pair->get_current());
 
     // If we have a remote store, try to store this there too.  We don't worry
     // about failures in this case.
-    if ((remote_store != NULL) && remote_store->has_servers())
+    if ((remote_sdm != NULL) && remote_sdm->has_servers())
     {
       int tmp_expiry = 0;
       bool ignored;
-      RegStore::AoR* remote_aor_data = write_to_store(remote_store, aor, rdata, now,
-                                                      tmp_expiry, ignored, aor_data,
-                                                      NULL, false, private_id_for_binding,
-                                                      trail);
-      delete remote_aor_data;
+      SubscriberDataManager::AoRPair* remote_aor_pair =
+                                      write_to_store(remote_sdm,
+                                                     aor,
+                                                     rdata,
+                                                     now,
+                                                     tmp_expiry,
+                                                     ignored,
+                                                     aor_pair,
+                                                     NULL,
+                                                     private_id_for_binding,
+                                                     trail);
+      delete remote_aor_pair;
     }
   }
   else
@@ -815,7 +784,7 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL,
                                NULL);
     delete acr;
-    delete aor_data;
+    delete aor_pair;
 
     if (is_initial_registration)
     {
@@ -847,7 +816,7 @@ void process_register_request(pjsip_rx_data* rdata)
     SAS::report_event(event);
 
     delete acr;
-    delete aor_data;
+    delete aor_pair;
 
     if (is_initial_registration)
     {
@@ -884,7 +853,7 @@ void process_register_request(pjsip_rx_data* rdata)
     pjsip_tx_data_invalidate_msg(tdata);
     status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
     delete acr;
-    delete aor_data;
+    delete aor_pair;
 
     if (is_initial_registration)
     {
@@ -905,11 +874,12 @@ void process_register_request(pjsip_rx_data* rdata)
   pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)gen_hdr);
 
   // Add contact headers for all active bindings.
-  for (RegStore::AoR::Bindings::const_iterator i = aor_data->bindings().begin();
-       i != aor_data->bindings().end();
+  for (SubscriberDataManager::AoR::Bindings::const_iterator i =
+          aor_pair->get_current()->bindings().begin();
+       i != aor_pair->get_current()->bindings().end();
        ++i)
   {
-    RegStore::AoR::Binding* binding = i->second;
+    SubscriberDataManager::AoR::Binding* binding = i->second;
     if (binding->_expires > now)
     {
       // The binding hasn't expired.  Parse the Contact URI from the store,
@@ -991,7 +961,7 @@ void process_register_request(pjsip_rx_data* rdata)
   pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
                               pjsip_msg_find_hdr_by_name(msg, &STR_PATH, NULL);
   if ((path_hdr != NULL) &&
-      (!aor_data->bindings().empty()))
+      (!aor_pair->get_current()->bindings().empty()))
   {
     // We have bindings with path headers so we must require outbound.
     pjsip_require_hdr* require_hdr = pjsip_require_hdr_create(tdata->pool);
@@ -1055,7 +1025,7 @@ void process_register_request(pjsip_rx_data* rdata)
   if (!any_emergency_registrations)
   {
     RegistrationUtils::register_with_application_servers(ifc_map[public_id],
-                                                         store,
+                                                         sdm,
                                                          rdata,
                                                          tdata,
                                                          expiry,
@@ -1070,7 +1040,7 @@ void process_register_request(pjsip_rx_data* rdata)
   TRC_DEBUG("Report SAS end marker - trail (%llx)", trail);
   SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
-  delete aor_data;
+  delete aor_pair;
 }
 
 
@@ -1082,7 +1052,7 @@ void third_party_register_failed(const std::string& public_id,
   // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure
   // where SESSION_TERMINATED is set means that we should deregister "the
   // currently registered public user identity" - i.e. all bindings
-  RegistrationUtils::remove_bindings(store,
+  RegistrationUtils::remove_bindings(sdm,
                                      hss,
                                      public_id,
                                      "*",
@@ -1108,8 +1078,8 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
   return PJ_FALSE;
 }
 
-pj_status_t init_registrar(RegStore* registrar_store,
-                           RegStore* remote_reg_store,
+pj_status_t init_registrar(SubscriberDataManager* reg_sdm,
+                           SubscriberDataManager* reg_remote_sdm,
                            HSSConnection* hss_connection,
                            AnalyticsLogger* analytics_logger,
                            ACRFactory* rfacr_factory,
@@ -1120,8 +1090,8 @@ pj_status_t init_registrar(RegStore* registrar_store,
 {
   pj_status_t status;
 
-  store = registrar_store;
-  remote_store = remote_reg_store;
+  sdm = reg_sdm;
+  remote_sdm = reg_remote_sdm;
   hss = hss_connection;
   analytics = analytics_logger;
   max_expires = cfg_max_expires;
