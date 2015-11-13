@@ -38,10 +38,7 @@
 
 MockSubscriberDataManager::MockSubscriberDataManager() : 
   SubscriberDataManager(NULL, NULL, true) 
-{};
+{}
 
 MockSubscriberDataManager::~MockSubscriberDataManager()
-{};
-
-#endif
-
+{}
