@@ -338,8 +338,6 @@ public:
     SipTest::SetUpTestCase(false);
 
     _chronos_connection = new FakeChronosConnection();
-    _local_data_store = new LocalStore();
-    _store = new RegStore((Store*)_local_data_store, _chronos_connection);
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _hss_connection = new FakeHSSConnection();
     if (ifcs)
@@ -360,9 +358,7 @@ public:
     _scscf = scscf_enabled;
     _emerg_reg = emerg_reg_enabled;
     _acr_factory = new ACRFactory();
-    pj_status_t ret = init_stateful_proxy(_store,
-                                          NULL,
-                                          _ifc_handler,
+    pj_status_t ret = init_stateful_proxy(_ifc_handler,
                                           !_edge_upstream_proxy.empty(),
                                           _edge_upstream_proxy.c_str(),
                                           stack_data.pcscf_trusted_port,
@@ -398,9 +394,7 @@ public:
     pjsip_tsx_layer_destroy();
     destroy_stateful_proxy();
     delete _acr_factory; _acr_factory = NULL;
-    delete _store; _store = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
-    delete _local_data_store; _local_data_store = NULL;
     delete _analytics; _analytics = NULL;
     delete _ifc_handler; _ifc_handler = NULL;
     delete _hss_connection; _hss_connection = NULL;
@@ -414,7 +408,6 @@ public:
   StatefulProxyTestBase()
   {
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
-    _local_data_store->flush_all();  // start from a clean slate on each test
     if (_hss_connection)
     {
       _hss_connection->flush_all();
@@ -461,9 +454,7 @@ public:
   }
 
 protected:
-  static LocalStore* _local_data_store;
   static FakeChronosConnection* _chronos_connection;
-  static RegStore* _store;
   static AnalyticsLogger* _analytics;
   static FakeHSSConnection* _hss_connection;
   static FakeXDMConnection* _xdm_connection;
@@ -492,9 +483,7 @@ protected:
                      bool pcpi);
 };
 
-LocalStore* StatefulProxyTestBase::_local_data_store;
 FakeChronosConnection* StatefulProxyTestBase::_chronos_connection;
-RegStore* StatefulProxyTestBase::_store;
 AnalyticsLogger* StatefulProxyTestBase::_analytics;
 FakeHSSConnection* StatefulProxyTestBase::_hss_connection;
 FakeXDMConnection* StatefulProxyTestBase::_xdm_connection;

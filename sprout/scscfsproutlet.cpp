@@ -60,7 +60,6 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
                                const std::string& bgcf_uri,
                                int port,
                                RegStore* store,
-                               RegStore* remote_store,
                                HSSConnection* hss,
                                EnumService* enum_service,
                                ACRFactory* acr_factory,
@@ -73,7 +72,6 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
   _icscf_uri(NULL),
   _bgcf_uri(NULL),
   _store(store),
-  _remote_store(remote_store),
   _hss(hss),
   _enum_service(enum_service),
   _acr_factory(acr_factory),
@@ -210,8 +208,8 @@ AsChainTable* SCSCFSproutlet::as_chain_table() const
 }
 
 
-/// Gets all bindings for the specified Address of Record from the local or
-/// remote registration stores.
+/// Gets all bindings for the specified Address of Record from the registration
+/// store.
 void SCSCFSproutlet::get_bindings(const std::string& aor,
                                   RegStore::AoR** aor_data,
                                   SAS::TrailId trail)
@@ -220,23 +218,12 @@ void SCSCFSproutlet::get_bindings(const std::string& aor,
   TRC_INFO("Look up targets in registration store: %s", aor.c_str());
   *aor_data = _store->get_aor_data(aor, trail);
 
-  // If we didn't get bindings from the local store and we have a remote
-  // store, try the remote.
-  if ((_remote_store != NULL) &&
-      (_remote_store->has_servers()) &&
-      ((*aor_data == NULL) ||
-       ((*aor_data)->bindings().empty())))
-  {
-    delete *aor_data;
-    *aor_data = _remote_store->get_aor_data(aor, trail);
-  }
-
   // TODO - Log bindings to SAS
 }
 
 
 /// Removes the specified binding for the specified Address of Record from
-/// the local or remote registration stores.
+/// the registration store.
 void SCSCFSproutlet::remove_binding(const std::string& aor,
                                     const std::string& binding_id,
                                     SAS::TrailId trail)

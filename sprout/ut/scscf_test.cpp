@@ -355,7 +355,6 @@ public:
                                           "sip:bgcf@homedomain:5058",
                                           5058,
                                           _store,
-                                          NULL,
                                           _hss_connection,
                                           _enum_service,
                                           _acr_factory,

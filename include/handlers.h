@@ -68,11 +68,10 @@ class RegSubTimeoutTask : public HttpStackUtils::Task
 public:
   struct Config
   {
-    Config(RegStore* store, RegStore* remote_store, HSSConnection* hss) :
-      _store(store), _remote_store(remote_store), _hss(hss)
+    Config(RegStore* store, HSSConnection* hss) :
+      _store(store), _hss(hss)
       {}
     RegStore* _store;
-    RegStore* _remote_store;
     HSSConnection* _hss;
   };
 
@@ -89,8 +88,6 @@ protected:
   HTTPCode parse_response(std::string body);
   RegStore::AoR* set_aor_data(RegStore* current_store,
                               std::string aor_id,
-                              RegStore::AoR* previous_aor_data,
-                              RegStore* remote_store,
                               bool is_primary,  //do we update chronos and send NOTIFYs
                               bool& all_bindings_expired);
 
@@ -104,11 +101,10 @@ class DeregistrationTask : public HttpStackUtils::Task
 public:
   struct Config
   {
-    Config(RegStore* store, RegStore* remote_store, HSSConnection* hss, SIPResolver* sipresolver) :
-      _store(store), _remote_store(remote_store), _hss(hss), _sipresolver(sipresolver)
+    Config(RegStore* store, HSSConnection* hss, SIPResolver* sipresolver) :
+      _store(store), _hss(hss), _sipresolver(sipresolver)
       {}
     RegStore* _store;
-    RegStore* _remote_store;
     HSSConnection* _hss;
     SIPResolver* _sipresolver;
   };
@@ -126,8 +122,6 @@ public:
   RegStore::AoR* set_aor_data(RegStore* current_store,
                               std::string aor_id,
                               std::string private_id,
-                              RegStore::AoR* previous_aor_data,
-                              RegStore* remote_store,
                               bool is_primary);
 
 protected:

@@ -59,7 +59,6 @@ extern "C" {
 #include "uri_classifier.h"
 
 static RegStore* store;
-static RegStore* remote_store;
 
 // Connection to the HSS service for retrieving associated public URIs.
 static HSSConnection* hss;
@@ -126,8 +125,6 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
                                          std::string aor,              ///<address of record to write to
                                          pjsip_rx_data* rdata,         ///<received message to read headers from
                                          int now,                      ///<time now
-                                         RegStore::AoR* backup_aor,    ///<backup data if no entry in store
-                                         RegStore* backup_store,       ///<backup store to read from if no entry in store and no backup data
                                          pjsip_tx_data** tdata_notify, ///<tdata to construct a SIP NOTIFY from
                                          RegStore::AoR** aor_data,     ///<aor_data to write to
                                          bool update_notify,           ///<whether to generate a SIP NOTIFY
@@ -141,10 +138,6 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
   pjsip_fromto_hdr* from = (pjsip_fromto_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_FROM, NULL);
   pjsip_fromto_hdr* to = (pjsip_fromto_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_TO, NULL);
 
-  // The registration store uses optimistic locking to avoid concurrent
-  // updates to the same AoR conflicting.  This means we have to loop
-  // reading, updating and writing the AoR until the write is successful.
-  bool backup_aor_alloced = false;
   int expiry = 0;
   pj_status_t status = PJ_FALSE;
   Store::Status set_rc;
@@ -168,31 +161,6 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
       TRC_ERROR("Failed to get AoR subscriptions for %s from store", aor.c_str());
       break;
       // LCOV_EXCL_STOP
-    }
-
-    // If we don't have any subscriptions, try the backup AoR and/or store.
-    if ((*aor_data)->subscriptions().empty())
-    {
-      if ((backup_aor == NULL)   &&
-          (backup_store != NULL) &&
-          (backup_store->has_servers()))
-      {
-        backup_aor = backup_store->get_aor_data(aor, trail, false);
-        backup_aor_alloced = (backup_aor != NULL);
-      }
-
-      if ((backup_aor != NULL) &&
-          (!backup_aor->subscriptions().empty()))
-      {
-        for (RegStore::AoR::Subscriptions::const_iterator i = backup_aor->subscriptions().begin();
-             i != backup_aor->subscriptions().end();
-             ++i)
-        {
-          RegStore::AoR::Subscription* src = i->second;
-          RegStore::AoR::Subscription* dst = (*aor_data)->get_subscription(i->first);
-          *dst = *src;
-        }
-      }
     }
 
     pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
@@ -299,12 +267,6 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
                               subscription_copy->_req_uri,
                               expiry);
     }
-  }
-
-  // If we allocated the backup AoR, tidy up.
-  if (backup_aor_alloced)
-  {
-    delete backup_aor; backup_aor = NULL;
   }
 
   delete subscription_copy; subscription_copy = NULL;
@@ -476,7 +438,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
   RegStore::AoR* aor_data = NULL;
   std::string subscription_id;
   pj_status_t notify_status = write_subscriptions_to_store(store, aor, rdata,
-                                                           now, NULL, remote_store,
+                                                           now, 
                                                            &tdata_notify, &aor_data,
                                                            true, subscription_id,
                                                            trail);
@@ -485,18 +447,6 @@ void process_subscription_request(pjsip_rx_data* rdata)
   {
     // Log the subscriptions.
     log_subscriptions(aor, aor_data);
-
-    // If we have a remote store, try to store this there too.  We don't worry
-    // about failures in this case.
-    if ((remote_store != NULL) && remote_store->has_servers())
-    {
-      RegStore::AoR* remote_aor_data = NULL;
-      std::string ignore;
-      write_subscriptions_to_store(remote_store, aor, rdata, now, aor_data, NULL,
-                                   &tdata_notify, &remote_aor_data, false, ignore,
-                                   trail);
-      delete remote_aor_data;
-    }
   }
   else
   {
@@ -690,7 +640,6 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
 }
 
 pj_status_t init_subscription(RegStore* registrar_store,
-                              RegStore* remote_reg_store,
                               HSSConnection* hss_connection,
                               ACRFactory* rfacr_factory,
                               AnalyticsLogger* analytics_logger,
@@ -699,7 +648,6 @@ pj_status_t init_subscription(RegStore* registrar_store,
   pj_status_t status;
 
   store = registrar_store;
-  remote_store = remote_reg_store;
   hss = hss_connection;
   acr_factory = rfacr_factory;
   analytics = analytics_logger;

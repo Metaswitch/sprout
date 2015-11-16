@@ -355,9 +355,7 @@ private:
   static const int LIVENESS_TIMER = 1;
 };
 
-pj_status_t init_stateful_proxy(RegStore* registrar_store,
-                                RegStore* remote_reg_store,
-                                IfcHandler* ifc_handler,
+pj_status_t init_stateful_proxy(IfcHandler* ifc_handler,
                                 pj_bool_t enable_access_proxy,
                                 const std::string& upstream_proxy,
                                 int upstream_proxy_port,

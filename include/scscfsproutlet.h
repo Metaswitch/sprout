@@ -81,7 +81,6 @@ public:
                  const std::string& bgcf_uri,
                  int port,
                  RegStore* store,
-                 RegStore* remote_store,
                  HSSConnection* hss,
                  EnumService* enum_service,
                  ACRFactory* acr_factory,
@@ -123,14 +122,14 @@ private:
   /// Returns the configured BGCF URI for this system.
   const pjsip_uri* bgcf_uri() const;
 
-  /// Gets all bindings for the specified Address of Record from the local or
-  /// remote registration stores.
+  /// Gets all bindings for the specified Address of Record from the 
+  /// registration store.
   void get_bindings(const std::string& aor,
                     RegStore::AoR** aor_data,
                     SAS::TrailId trail);
 
   /// Removes the specified binding for the specified Address of Record from
-  /// the local or remote registration stores.
+  /// the registration store.
   void remove_binding(const std::string& aor,
                       const std::string& binding_id,
                       SAS::TrailId trail);
@@ -174,7 +173,6 @@ private:
   pjsip_uri* _bgcf_uri;
 
   RegStore* _store;
-  RegStore* _remote_store;
 
   HSSConnection* _hss;
 

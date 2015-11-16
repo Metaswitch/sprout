@@ -133,9 +133,6 @@ extern "C" {
 #include "contact_filtering.h"
 #include "uri_classifier.h"
 
-static RegStore* store;
-static RegStore* remote_store;
-
 static IfcHandler* ifc_handler;
 
 static AnalyticsLogger* analytics_logger;
@@ -3209,9 +3206,7 @@ void UACTransaction::exit_context()
 ///@{
 // MODULE LIFECYCLE
 
-pj_status_t init_stateful_proxy(RegStore* registrar_store,
-                                RegStore* remote_reg_store,
-                                IfcHandler* ifc_handler_in,
+pj_status_t init_stateful_proxy(IfcHandler* ifc_handler_in,
                                 pj_bool_t enable_edge_proxy,
                                 const std::string& upstream_proxy_arg,
                                 int upstream_proxy_port,
@@ -3238,8 +3233,6 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
   pj_status_t status;
 
   analytics_logger = analytics;
-  store = registrar_store;
-  remote_store = remote_reg_store;
 
   ifc_handler = ifc_handler_in;
 

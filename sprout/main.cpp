@@ -640,16 +640,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       TRC_INFO("Authentication realm %s", pj_optarg);
       break;
 
-    case 'M':
-      options->store_servers = std::string(pj_optarg);
-      TRC_INFO("Using memcached store with configuration file %s", pj_optarg);
-      break;
-
-    case 'm':
-      options->remote_store_servers = std::string(pj_optarg);
-      TRC_INFO("Using remote memcached store with configuration file %s", pj_optarg);
-      break;
-
     case 'S':
       {
         std::vector<std::string> sas_options;
@@ -1256,7 +1246,6 @@ LoadMonitor* load_monitor = NULL;
 HSSConnection* hss_connection = NULL;
 Store* local_data_store = NULL;
 RegStore* local_reg_store = NULL;
-RegStore* remote_reg_store = NULL;
 RalfProcessor* ralf_processor = NULL;
 HttpResolver* http_resolver = NULL;
 ACRFactory* scscf_acr_factory = NULL;
@@ -1276,7 +1265,6 @@ int main(int argc, char* argv[])
   pthread_t quiesce_unquiesce_thread;
   DnsCachedResolver* dns_resolver = NULL;
   SIPResolver* sip_resolver = NULL;
-  Store* remote_data_store = NULL;
   AvStore* av_store = NULL;
   HttpConnection* ralf_connection = NULL;
   ChronosConnection* chronos_connection = NULL;
@@ -1289,10 +1277,7 @@ int main(int argc, char* argv[])
   CommunicationMonitor* enum_comm_monitor = NULL;
   CommunicationMonitor* hss_comm_monitor = NULL;
   CommunicationMonitor* memcached_comm_monitor = NULL;
-  CommunicationMonitor* memcached_remote_comm_monitor = NULL;
   CommunicationMonitor* ralf_comm_monitor = NULL;
-  Alarm* vbucket_alarm = NULL;
-  Alarm* remote_vbucket_alarm = NULL;
 
   // Set up our exception signal handler for asserts and segfaults.
   signal(SIGABRT, signal_handler);
@@ -1511,8 +1496,7 @@ int main(int argc, char* argv[])
     TRC_WARNING("XDM server configured on P-CSCF, ignoring");
   }
 
-  if ((opt.store_servers != "") &&
-      (opt.auth_enabled) &&
+  if ((opt.auth_enabled) &&
       (opt.worker_threads == 1))
   {
     TRC_WARNING("Use multiple threads for good performance when using memstore and/or authentication");
@@ -1653,17 +1637,8 @@ int main(int argc, char* argv[])
     memcached_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_MEMCACHED_COMM_ERROR,
                                                                           AlarmDef::CRITICAL));
 
-    memcached_remote_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_REMOTE_MEMCACHED_COMM_ERROR,
-                                                                                 AlarmDef::CRITICAL));
-
     ralf_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_RALF_COMM_ERROR,
                                                                      AlarmDef::MAJOR));
-
-    vbucket_alarm = new Alarm("sprout", AlarmDef::SPROUT_VBUCKET_ERROR,
-                                        AlarmDef::MAJOR);
-
-    remote_vbucket_alarm = new Alarm("sprout", AlarmDef::SPROUT_REMOTE_VBUCKET_ERROR,
-                                               AlarmDef::MAJOR);
 
     // Start the alarm request agent
     AlarmReqAgent::get_instance().start();
@@ -1837,8 +1812,6 @@ int main(int argc, char* argv[])
 
     // Launch stateful proxy as P-CSCF.
     status = init_stateful_proxy(NULL,
-                                 NULL,
-                                 NULL,
                                  true,
                                  opt.upstream_proxy,
                                  opt.upstream_proxy_port,
@@ -1887,46 +1860,10 @@ int main(int argc, char* argv[])
                       (ACRFactory*)new RalfACRFactory(ralf_processor, SCSCF) :
                       new ACRFactory();
 
-    if (opt.store_servers != "")
-    {
-      // Use memcached store.
-      TRC_STATUS("Using memcached compatible store with ASCII protocol");
+    // Use memcached store.
+    TRC_STATUS("Using memcached compatible store");
 
-      local_data_store = (Store*)new MemcachedStore(true,
-                                                    opt.store_servers,
-                                                    memcached_comm_monitor,
-                                                    vbucket_alarm);
-
-      if (!(((MemcachedStore*)local_data_store)->has_servers()))
-      {
-        TRC_ERROR("Cluster settings file '%s' does not contain a valid set of servers",
-                  opt.store_servers.c_str());
-        return 1;
-      };
-
-      if (opt.remote_store_servers != "")
-      {
-        // Use remote memcached store too.
-        TRC_STATUS("Using remote memcached compatible store with ASCII protocol");
-
-        remote_data_store = (Store*)new MemcachedStore(true,
-                                                       opt.remote_store_servers,
-                                                       memcached_remote_comm_monitor,
-                                                       remote_vbucket_alarm);
-
-        if (!(((MemcachedStore*)remote_data_store)->has_servers()))
-        {
-          TRC_WARNING("Remote cluster settings file '%s' does not contain a valid set of servers",
-                      opt.remote_store_servers.c_str());
-        };
-      }
-    }
-    else
-    {
-      // Use local store.
-      TRC_STATUS("Using local store");
-      local_data_store = (Store*)new LocalStore();
-    }
+    local_data_store = (Store*)new MemcachedStore(memcached_comm_monitor);
 
     if (local_data_store == NULL)
     {
@@ -1951,17 +1888,6 @@ int main(int argc, char* argv[])
                                    serializer,
                                    deserializers,
                                    chronos_connection);
-
-    if (remote_data_store != NULL)
-    {
-      create_regstore_plugins(serializer,
-                              deserializers,
-                              opt.memcached_write_format);
-      remote_reg_store = new RegStore(remote_data_store,
-                                      serializer,
-                                      deserializers,
-                                      chronos_connection);
-    }
 
     // Start the HTTP stack early as plugins might need to register handlers
     // with it.
@@ -2002,7 +1928,6 @@ int main(int argc, char* argv[])
 
     // Launch the registrar.
     status = init_registrar(local_reg_store,
-                            remote_reg_store,
                             hss_connection,
                             analytics_logger,
                             scscf_acr_factory,
@@ -2021,7 +1946,6 @@ int main(int argc, char* argv[])
 
     // Launch the subscription module.
     status = init_subscription(local_reg_store,
-                               remote_reg_store,
                                hss_connection,
                                scscf_acr_factory,
                                analytics_logger,
@@ -2117,9 +2041,9 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  RegSubTimeoutTask::Config reg_sub_timeout_config(local_reg_store, remote_reg_store, hss_connection);
+  RegSubTimeoutTask::Config reg_sub_timeout_config(local_reg_store, hss_connection);
   AuthTimeoutTask::Config auth_timeout_config(av_store, hss_connection);
-  DeregistrationTask::Config deregistration_config(local_reg_store, remote_reg_store, hss_connection, sip_resolver);
+  DeregistrationTask::Config deregistration_config(local_reg_store, hss_connection, sip_resolver);
 
   // The RegSubTimeoutTask and AuthTimeoutTask both handle
   // chronos requests, so use the ChronosHandler.
@@ -2220,10 +2144,8 @@ int main(int argc, char* argv[])
   delete exception_handler;
   delete load_monitor;
   delete local_reg_store;
-  delete remote_reg_store;
   delete av_store;
   delete local_data_store;
-  delete remote_data_store;
   delete ralf_processor;
   delete ralf_connection;
   delete enum_service;
@@ -2246,10 +2168,7 @@ int main(int argc, char* argv[])
     delete enum_comm_monitor;
     delete hss_comm_monitor;
     delete memcached_comm_monitor;
-    delete memcached_remote_comm_monitor;
     delete ralf_comm_monitor;
-    delete vbucket_alarm;
-    delete remote_vbucket_alarm;
   }
 
   delete latency_table;

@@ -65,13 +65,11 @@ public:
 
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
-    _remote_data_store = new LocalStore();
     _store = new RegStore((Store*)_local_data_store, _chronos_connection);
-    _remote_store = new RegStore((Store*)_remote_data_store, _chronos_connection);
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
-    pj_status_t ret = init_subscription(_store, _remote_store, _hss_connection, _acr_factory, _analytics, 300);
+    pj_status_t ret = init_subscription(_store, _hss_connection, _acr_factory, _analytics, 300);
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.scscf_uri = pj_str("sip:all.the.sprout.nodes:5058;transport=TCP");
 
@@ -85,9 +83,7 @@ public:
     delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _analytics; _analytics = NULL;
-    delete _remote_store; _remote_store = NULL;
     delete _store; _store = NULL;
-    delete _remote_data_store; _remote_data_store = NULL;
     delete _local_data_store; _local_data_store = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
     SipTest::TearDownTestCase();
@@ -96,7 +92,6 @@ public:
   SubscriptionTest() : SipTest(&mod_subscription)
   {
     _local_data_store->flush_all();  // start from a clean slate on each test
-    _remote_data_store->flush_all();
 
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
   }
@@ -107,9 +102,7 @@ public:
 
 protected:
   static LocalStore* _local_data_store;
-  static LocalStore* _remote_data_store;
   static RegStore* _store;
-  static RegStore* _remote_store;
   static AnalyticsLogger* _analytics;
   static ACRFactory* _acr_factory;
   static FakeHSSConnection* _hss_connection;
@@ -120,9 +113,7 @@ protected:
 };
 
 LocalStore* SubscriptionTest::_local_data_store;
-LocalStore* SubscriptionTest::_remote_data_store;
 RegStore* SubscriptionTest::_store;
-RegStore* SubscriptionTest::_remote_store;
 AnalyticsLogger* SubscriptionTest::_analytics;
 ACRFactory* SubscriptionTest::_acr_factory;
 FakeHSSConnection* SubscriptionTest::_hss_connection;
@@ -645,7 +636,7 @@ public:
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
-    pj_status_t ret = init_subscription(_store, NULL, _hss_connection, _acr_factory, _analytics, 300);
+    pj_status_t ret = init_subscription(_store, _hss_connection, _acr_factory, _analytics, 300);
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.scscf_uri = pj_str("sip:all.the.sprout.nodes:5058;transport=TCP");
 

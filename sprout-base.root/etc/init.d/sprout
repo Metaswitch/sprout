@@ -104,23 +104,6 @@ get_settings()
         chronos_hostname=127.0.0.1:7253
         . /etc/clearwater/config
 
-        # Set up a default cluster_settings file if it does not exist.  The local
-        # IP address needs to be surrounded by square brackets if it is IPv6.
-        if [ ! -f /etc/clearwater/cluster_settings ]
-        then
-          cluster_ip=$(python /usr/share/clearwater/bin/bracket_ipv6_address.py $local_ip)
-          echo "servers=$cluster_ip:11211" > /etc/clearwater/cluster_settings
-        fi
-
-        remote_memstore_arg="--remote-memstore=/etc/clearwater/remote_cluster_settings"
-
-        # Create /etc/clearwater/remote_cluster_settings if it doesn't exist
-        # This means 'service sprout reload' will pick up changes
-        if [ ! -f /etc/clearwater/remote_cluster_settings ]
-        then
-          echo "servers=" > /etc/clearwater/remote_cluster_settings
-        fi
-
         # Set up defaults for user settings then pull in any overrides.
         # Sprout uses blocking look-up services, so must run multi-threaded.
         num_pjsip_threads=1
@@ -179,8 +162,6 @@ get_daemon_args()
                      --domain=$home_domain
                      --localhost=$local_ip
                      --realm=$home_domain
-                     --memstore=/etc/clearwater/cluster_settings
-                     $remote_memstore_arg
                      --hss=$hs_hostname
                      --chronos=$chronos_hostname
                      $xdms_hostname_arg

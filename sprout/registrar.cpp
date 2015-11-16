@@ -66,7 +66,6 @@ extern "C" {
 #include "uri_classifier.h"
 
 static RegStore* store;
-static RegStore* remote_store;
 
 // Connection to the HSS service for retrieving associated public URIs.
 static HSSConnection* hss;
@@ -214,8 +213,6 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
                               int now,                       ///<time now
                               int& expiry,                   ///<[out] longest expiry time
                               bool& out_is_initial_registration,
-                              RegStore::AoR* backup_aor,     ///<backup data if no entry in store
-                              RegStore* backup_store,        ///<backup store to read from if no entry in store and no backup data
                               bool send_notify,              ///<whether to send notifies (only send when writing to the local store)
                               std::string private_id,        ///<private id that the binding was registered with
                               SAS::TrailId trail)
@@ -234,7 +231,6 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   // updates to the same AoR conflicting.  This means we have to loop
   // reading, updating and writing the AoR until the write is successful.
   RegStore::AoR* aor_data = NULL;
-  bool backup_aor_alloced = false;
   bool is_initial_registration = true;
   std::map<std::string, RegStore::AoR::Binding> bindings_for_notify;
   bool all_bindings_expired = false;
@@ -257,40 +253,6 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
       TRC_ERROR("Failed to get AoR binding for %s from store", aor.c_str());
       break;
       // LCOV_EXCL_STOP
-    }
-
-    // If we don't have any bindings, try the backup AoR and/or store.
-    if (aor_data->bindings().empty())
-    {
-      if ((backup_aor == NULL)   &&
-          (backup_store != NULL) &&
-          (backup_store->has_servers()))
-      {
-        backup_aor = backup_store->get_aor_data(aor, trail, false);
-        backup_aor_alloced = (backup_aor != NULL);
-      }
-
-      if ((backup_aor != NULL) &&
-          (!backup_aor->bindings().empty()))
-      {
-        for (RegStore::AoR::Bindings::const_iterator i = backup_aor->bindings().begin();
-             i != backup_aor->bindings().end();
-             ++i)
-        {
-          RegStore::AoR::Binding* src = i->second;
-          RegStore::AoR::Binding* dst = aor_data->get_binding(i->first);
-          *dst = *src;
-        }
-
-        for (RegStore::AoR::Subscriptions::const_iterator i = backup_aor->subscriptions().begin();
-             i != backup_aor->subscriptions().end();
-             ++i)
-        {
-          RegStore::AoR::Subscription* src = i->second;
-          RegStore::AoR::Subscription* dst = aor_data->get_subscription(i->first);
-          *dst = *src;
-        }
-      }
     }
 
     is_initial_registration = is_initial_registration && aor_data->bindings().empty();
@@ -450,12 +412,6 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
     }
   }
   while (set_rc == Store::DATA_CONTENTION);
-
-  // If we allocated the backup AoR, tidy up.
-  if (backup_aor_alloced)
-  {
-    delete backup_aor;
-  }
 
   // Finally, send out SIP NOTIFYs for any subscriptions
   if ((send_notify) &&
@@ -745,25 +701,12 @@ void process_register_request(pjsip_rx_data* rdata)
 
   // Write to the local store, checking the remote store if there is no entry locally.
   RegStore::AoR* aor_data = write_to_store(store, aor, rdata, now, expiry,
-                                           is_initial_registration, NULL, remote_store,
+                                           is_initial_registration, 
                                            true, private_id_for_binding, trail);
   if (aor_data != NULL)
   {
     // Log the bindings.
     log_bindings(aor, aor_data);
-
-    // If we have a remote store, try to store this there too.  We don't worry
-    // about failures in this case.
-    if ((remote_store != NULL) && remote_store->has_servers())
-    {
-      int tmp_expiry = 0;
-      bool ignored;
-      RegStore::AoR* remote_aor_data = write_to_store(remote_store, aor, rdata, now,
-                                                      tmp_expiry, ignored, aor_data,
-                                                      NULL, false, private_id_for_binding,
-                                                      trail);
-      delete remote_aor_data;
-    }
   }
   else
   {
@@ -1109,7 +1052,6 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 }
 
 pj_status_t init_registrar(RegStore* registrar_store,
-                           RegStore* remote_reg_store,
                            HSSConnection* hss_connection,
                            AnalyticsLogger* analytics_logger,
                            ACRFactory* rfacr_factory,
@@ -1121,7 +1063,6 @@ pj_status_t init_registrar(RegStore* registrar_store,
   pj_status_t status;
 
   store = registrar_store;
-  remote_store = remote_reg_store;
   hss = hss_connection;
   analytics = analytics_logger;
   max_expires = cfg_max_expires;

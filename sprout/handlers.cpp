@@ -55,11 +55,8 @@ extern "C" {
 #include "uri_classifier.h"
 
 static bool reg_store_access_common(RegStore::AoR** aor_data,
-                                    bool& previous_aor_data_alloced,
                                     std::string aor_id,
                                     RegStore* current_store,
-                                    RegStore* remote_store,
-                                    RegStore::AoR** previous_aor_data,
                                     SAS::TrailId trail,
                                     bool should_send_notify)
 {
@@ -74,42 +71,6 @@ static bool reg_store_access_common(RegStore::AoR** aor_data,
     // to the store.
     TRC_ERROR("Failed to get AoR binding for %s from store", aor_id.c_str());
     return false;
-  }
-
-  // If we don't have any bindings, try the backup AoR and/or store.
-  if ((*aor_data)->bindings().empty())
-  {
-    if ((*previous_aor_data == NULL) &&
-        (remote_store != NULL) &&
-        (remote_store->has_servers()))
-    {
-      *previous_aor_data = remote_store->get_aor_data(aor_id, trail, false);
-      previous_aor_data_alloced = true;
-    }
-
-    if ((*previous_aor_data != NULL) &&
-        (!(*previous_aor_data)->bindings().empty()))
-    {
-      //LCOV_EXCL_START
-      for (RegStore::AoR::Bindings::const_iterator i = (*previous_aor_data)->bindings().begin();
-           i != (*previous_aor_data)->bindings().end();
-           ++i)
-      {
-        RegStore::AoR::Binding* src = i->second;
-        RegStore::AoR::Binding* dst = (*aor_data)->get_binding(i->first);
-        *dst = *src;
-      }
-
-      for (RegStore::AoR::Subscriptions::const_iterator i = (*previous_aor_data)->subscriptions().begin();
-           i != (*previous_aor_data)->subscriptions().end();
-           ++i)
-      {
-        RegStore::AoR::Subscription* src = i->second;
-        RegStore::AoR::Subscription* dst = (*aor_data)->get_subscription(i->first);
-        *dst = *src;
-      }
-      //LCOV_EXCL_STOP
-    }
   }
 
   return true;
@@ -249,21 +210,11 @@ void DeregistrationTask::run()
 void RegSubTimeoutTask::handle_response()
 {
   bool all_bindings_expired = false;
-  RegStore::AoR* aor_data = set_aor_data(_cfg->_store, _aor_id, NULL, _cfg->_remote_store, true,
+  RegStore::AoR* aor_data = set_aor_data(_cfg->_store, _aor_id, true,
                                          all_bindings_expired);
 
   if (aor_data != NULL)
   {
-    // If we have a remote store, try to store this there too.  We don't worry
-    // about failures in this case.
-    if ((_cfg->_remote_store != NULL) && (_cfg->_remote_store->has_servers()))
-    {
-      bool ignored;
-      RegStore::AoR* remote_aor_data = set_aor_data(_cfg->_remote_store, _aor_id, aor_data, NULL,
-                                                    false, ignored);
-      delete remote_aor_data;
-    }
-
     if (all_bindings_expired)
     {
       TRC_DEBUG("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS");
@@ -284,23 +235,17 @@ void RegSubTimeoutTask::handle_response()
 
 RegStore::AoR* RegSubTimeoutTask::set_aor_data(RegStore* current_store,
                                                      std::string aor_id,
-                                                     RegStore::AoR* previous_aor_data,
-                                                     RegStore* remote_store,
                                                      bool is_primary,
                                                      bool& all_bindings_expired)
 {
   RegStore::AoR* aor_data = NULL;
-  bool previous_aor_data_alloced = false;
   Store::Status set_rc;
 
   do
   {
     if (!reg_store_access_common(&aor_data,
-                                 previous_aor_data_alloced,
                                  aor_id,
                                  current_store,
-                                 remote_store,
-                                 &previous_aor_data,
                                  trail(),
                                  is_primary))
     {
@@ -324,12 +269,6 @@ RegStore::AoR* RegSubTimeoutTask::set_aor_data(RegStore* current_store,
     }
   }
   while (set_rc == Store::DATA_CONTENTION);
-
-  // If we allocated the AoR, tidy up.
-  if (previous_aor_data_alloced)
-  {
-    delete previous_aor_data;
-  }
 
   return aor_data;
 }
@@ -450,26 +389,9 @@ HTTPCode DeregistrationTask::handle_request()
     RegStore::AoR* aor_data = set_aor_data(_cfg->_store,
                                            it->first,
                                            it->second,
-                                           NULL,
-                                           _cfg->_remote_store,
                                            true);
 
-    if (aor_data != NULL)
-    {
-      // If we have a remote store, try to store this there too.  We don't worry
-      // about failures in this case.
-      if (_cfg->_remote_store != NULL)
-      {
-        RegStore::AoR* remote_aor_data = set_aor_data(_cfg->_remote_store,
-                                                      it->first,
-                                                      it->second,
-                                                      aor_data,
-                                                      NULL,
-                                                      false);
-        delete remote_aor_data;
-      }
-    }
-    else
+    if (aor_data == NULL)
     {
       // Can't connect to memcached, return 500. If this isn't the first AoR being edited
       // then this will lead to an inconsistency between the HSS and Sprout, as
@@ -490,23 +412,17 @@ HTTPCode DeregistrationTask::handle_request()
 RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
                                                 std::string aor_id,
                                                 std::string private_id,
-                                                RegStore::AoR* previous_aor_data,
-                                                RegStore* remote_store,
                                                 bool is_primary)
 {
   RegStore::AoR* aor_data = NULL;
-  bool previous_aor_data_alloced = false;
   bool all_bindings_expired = false;
   Store::Status set_rc;
 
   do
   {
     if (!reg_store_access_common(&aor_data,
-                                 previous_aor_data_alloced,
                                  aor_id,
                                  current_store,
-                                 remote_store,
-                                 &previous_aor_data,
                                  trail(),
                                  is_primary))
     {
@@ -578,12 +494,6 @@ RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
                                                              aor_id,
                                                              trail());
     }
-  }
-
-  // If we allocated the AoR, tidy up.
-  if (previous_aor_data_alloced)
-  {
-    delete previous_aor_data; //LCOV_EXCL_LINE
   }
 
   return aor_data;

@@ -67,14 +67,11 @@ public:
 
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
-    _remote_data_store = new LocalStore();
     _store = new RegStore((Store*)_local_data_store, _chronos_connection);
-    _remote_store = new RegStore((Store*)_remote_data_store, _chronos_connection);
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_registrar(_store,
-                                     _remote_store,
                                      _hss_connection,
                                      _analytics,
                                      _acr_factory,
@@ -97,9 +94,7 @@ public:
     delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _analytics;
-    delete _remote_store; _remote_store = NULL;
     delete _store; _store = NULL;
-    delete _remote_data_store; _remote_data_store = NULL;
     delete _local_data_store; _local_data_store = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
     SipTest::TearDownTestCase();
@@ -108,7 +103,6 @@ public:
   RegistrarTest() : SipTest(&mod_registrar)
   {
     _local_data_store->flush_all();  // start from a clean slate on each test
-    _remote_data_store->flush_all();
   }
 
   ~RegistrarTest()
@@ -135,9 +129,7 @@ public:
 
 protected:
   static LocalStore* _local_data_store;
-  static LocalStore* _remote_data_store;
   static RegStore* _store;
-  static RegStore* _remote_store;
   static AnalyticsLogger* _analytics;
   static IfcHandler* _ifc_handler;
   static ACRFactory* _acr_factory;
@@ -146,9 +138,7 @@ protected:
 };
 
 LocalStore* RegistrarTest::_local_data_store;
-LocalStore* RegistrarTest::_remote_data_store;
 RegStore* RegistrarTest::_store;
-RegStore* RegistrarTest::_remote_store;
 AnalyticsLogger* RegistrarTest::_analytics;
 IfcHandler* RegistrarTest::_ifc_handler;
 ACRFactory* RegistrarTest::_acr_factory;
@@ -2243,7 +2233,6 @@ public:
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_registrar(_store,
-                                     NULL,
                                      _hss_connection,
                                      _analytics,
                                      _acr_factory,
