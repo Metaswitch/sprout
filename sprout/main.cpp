@@ -141,6 +141,7 @@ enum OptionTypes
   OPT_NON_REGISTER_AUTHENTICATION,
   OPT_FORCE_THIRD_PARTY_REGISTER_BODY,
   OPT_MEMENTO_NOTIFY_URL,
+  OPT_PIDFILE,
 };
 
 
@@ -215,6 +216,7 @@ const static struct pj_getopt_option long_opt[] =
   { "non-register-authentication",  required_argument, 0, OPT_NON_REGISTER_AUTHENTICATION},
   { "pbx-service-route",            required_argument, 0, OPT_PBX_SERVICE_ROUTE},
   { "force-3pr-body",               no_argument,       0, OPT_FORCE_THIRD_PARTY_REGISTER_BODY},
+  { "pidfile",                      no_argument,       0, OPT_PIDFILE},
   { NULL,                           0,                 0, 0}
 };
 
@@ -391,6 +393,7 @@ static void usage(void)
        "     --force-3pr-body       Always include the original REGISTER and 200 OK in the body of\n"
        "                            third-party REGISTER messages to application servers, even if the\n"
        "                            User-Data doesn't specify it\n"
+       "     --pidfile=<filename>   Write pidfile\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
@@ -1040,6 +1043,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
+    case OPT_PIDFILE:
+      options->pidfile = std::string(pj_optarg);
+      break;
+
+ 
     case 'h':
       usage();
       return -1;
@@ -1435,6 +1443,17 @@ int main(int argc, char* argv[])
   {
     closelog();
     return 1;
+  }
+  
+  if (opt.pidfile != "")
+  {
+    int rc = Utils::lock_and_write_pidfile(opt.pidfile);
+    if (rc == -1)
+    {
+      // Failure to acquire pidfile lock
+      TRC_ERROR("Could not write pidfile - exiting");
+      return 2;
+    }
   }
 
   if (opt.analytics_enabled)
