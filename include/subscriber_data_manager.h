@@ -359,10 +359,11 @@ public:
 
     virtual void send_timers(const std::string& aor_id,
                              AoRPair* aor_pair,
+                             int now,
                              SAS::TrailId trail)
     {
-      send_binding_timers(aor_id, aor_pair, trail);
-      send_subscription_timers(aor_id, aor_pair, trail);
+      send_binding_timers(aor_id, aor_pair, now, trail);
+      send_subscription_timers(aor_id, aor_pair, now, trail);
     }
 
     /// SubscriberDataManager is the only class that can use Connector
@@ -381,10 +382,12 @@ public:
 
     virtual void send_binding_timers(const std::string& aor_id,
                                      AoRPair* aor_pair,
+                                     int now,
                                      SAS::TrailId trail);
 
     virtual void send_subscription_timers(const std::string& aor_id,
                                           AoRPair* aor_pair,
+                                          int now,
                                           SAS::TrailId trail);
   };
 
@@ -397,12 +400,22 @@ public:
 
     void send_notifys(const std::string& aor_id,
                       AoRPair* aor_pair,
+                      int now,
                       SAS::TrailId trail);
 
     /// SubscriberDataManager is the only class that can use Connector
     friend class SubscriberDataManager;
 
   private:
+    void send_notifys_for_orig_aor(const std::string& aor_id,
+                                   SubscriberDataManager::AoRPair* aor_pair,
+                                   int now,
+                                   SAS::TrailId trail);
+
+    void send_notifys_for_current_aor(const std::string& aor_id,
+                                      SubscriberDataManager::AoRPair* aor_pair,
+                                      int now,
+                                      SAS::TrailId trail);
   };
 
   /// Tags to use when setting timers for nothing, for registration and for subscription.
@@ -467,19 +480,17 @@ private:
   // Call expire_subscriptions and expire_bindings, returning
   // the max expires value created in expire_bindings. Chronos
   // timers are deleted. NOTIFYs are sent depending on the bool value.
-  int expire_aor_members(AoR* aor_data,
-                         int now,
-                         SAS::TrailId trail);
+  int expire_aor_members(AoRPair* aor_pair,
+                         int now);
 
   // expire any old bindings, and return max_expires.
   int expire_bindings(AoR* aor_data,
-                      int now,
-                      SAS::TrailId trail);
+                      int now);
 
   // expire any old subscriptions.
-  void expire_subscriptions(AoR* aor_data,
+  void expire_subscriptions(AoRPair* aor_pair,
                             int now,
-                            SAS::TrailId trail);
+                            bool force_expire);
 
   static bool unused_bool;
   Connector* _connector;

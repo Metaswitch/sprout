@@ -1,5 +1,5 @@
 /**
- * @file regstore_test.cpp UT for Sprout registration store.
+ * @file subscriber_data_manager_test.cpp
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -45,10 +45,11 @@
 #include "pjutils.h"
 #include "sas.h"
 #include "localstore.h"
-#include "regstore.h"
+#include "subscriber_data_manager.h"
 #include "test_utils.hpp"
 #include "test_interposer.hpp"
 #include "fakechronosconnection.hpp"
+#include "mock_chronos_connection.h"
 #include "mock_store.h"
 
 using ::testing::_;
@@ -62,17 +63,17 @@ using ::testing::SetArgReferee;
 
 /// The types of (de)serializer that we want to test.
 typedef ::testing::Types<
-  RegStore::BinarySerializerDeserializer,
-  RegStore::JsonSerializerDeserializer
+  SubscriberDataManager::BinarySerializerDeserializer,
+  SubscriberDataManager::JsonSerializerDeserializer
 > SerializerDeserializerTypes;
 
-/// Fixture for BasicRegStoreTest.  This uses a single RegStore, configured to
+/// Fixture for BasicSubscriberDataManagerTest.  This uses a single SubscriberDataManager, configured to
 /// use exactly one (de)serializer.
 ///
 /// The fixture is a template, parameterized over the different types of
 /// (de)serializer.
 template<class T>
-class BasicRegStoreTest : public SipTest
+class BasicSubscriberDataManagerTest : public SipTest
 {
   static void SetUpTestCase()
   {
@@ -84,23 +85,24 @@ class BasicRegStoreTest : public SipTest
     SipTest::TearDownTestCase();
   }
 
-  BasicRegStoreTest()
+  BasicSubscriberDataManagerTest()
   {
     _chronos_connection = new FakeChronosConnection();
     _datastore = new LocalStore();
 
-    RegStore::SerializerDeserializer* serializer = new T();
-    std::vector<RegStore::SerializerDeserializer*> deserializers = {
+    SubscriberDataManager::SerializerDeserializer* serializer = new T();
+    std::vector<SubscriberDataManager::SerializerDeserializer*> deserializers = {
       new T()
     };
 
-    _store = new RegStore(_datastore,
-                          serializer,
-                          deserializers,
-                          _chronos_connection);
+    _store = new SubscriberDataManager(_datastore,
+                                       serializer,
+                                       deserializers,
+                                       _chronos_connection,
+                                       true);
   }
 
-  virtual ~BasicRegStoreTest()
+  virtual ~BasicSubscriberDataManagerTest()
   {
     // PJSIP transactions aren't actually destroyed until a zero ms
     // timer fires (presumably to ensure destruction doesn't hold up
@@ -123,19 +125,19 @@ class BasicRegStoreTest : public SipTest
   // Fixture variables.  Note that as the fixture is a C++ template, these must
   // be accessed in the individual tests using the this pointer (e.g. use
   // `this->store` rather than `_store`).
-  ChronosConnection* _chronos_connection;
+  FakeChronosConnection* _chronos_connection;
   LocalStore* _datastore;
-  RegStore* _store;
+  SubscriberDataManager* _store;
 };
 
-// BasicRegStoreTest is parameterized over these types.
-TYPED_TEST_CASE(BasicRegStoreTest, SerializerDeserializerTypes);
+// BasicSubscriberDataManagerTest is parameterized over these types.
+TYPED_TEST_CASE(BasicSubscriberDataManagerTest, SerializerDeserializerTypes);
 
 
-TYPED_TEST(BasicRegStoreTest, BindingTests)
+TYPED_TEST(BasicSubscriberDataManagerTest, BindingTests)
 {
-  RegStore::AoR* aor_data1;
-  RegStore::AoR::Binding* b1;
+  SubscriberDataManager::AoRPair* aor_data1;
+  SubscriberDataManager::AoR::Binding* b1;
   bool rc;
   int now;
 
@@ -143,8 +145,8 @@ TYPED_TEST(BasicRegStoreTest, BindingTests)
   now = time(NULL);
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
-  EXPECT_EQ(0u, aor_data1->bindings().size());
-  b1 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
+  b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -159,16 +161,16 @@ TYPED_TEST(BasicRegStoreTest, BindingTests)
   b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0);
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
   // Get the AoR record from the store.
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
-  EXPECT_EQ(1u, aor_data1->bindings().size());
-  EXPECT_EQ(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"), aor_data1->bindings().begin()->first);
-  b1 = aor_data1->bindings().begin()->second;
+  EXPECT_EQ(1u, aor_data1->get_current()->bindings().size());
+  EXPECT_EQ(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"), aor_data1->get_current()->bindings().begin()->first);
+  b1 = aor_data1->get_current()->bindings().begin()->second;
   EXPECT_EQ(std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>"), b1->_uri);
   EXPECT_EQ(std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq"), b1->_cid);
   EXPECT_EQ(17038, b1->_cseq);
@@ -186,15 +188,15 @@ TYPED_TEST(BasicRegStoreTest, BindingTests)
 
   // Update AoR record in the store and check it.
   b1->_cseq = 17039;
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0);
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
-  EXPECT_EQ(1u, aor_data1->bindings().size());
-  EXPECT_EQ(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"), aor_data1->bindings().begin()->first);
-  b1 = aor_data1->bindings().begin()->second;
+  EXPECT_EQ(1u, aor_data1->get_current()->bindings().size());
+  EXPECT_EQ(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"), aor_data1->get_current()->bindings().begin()->first);
+  b1 = aor_data1->get_current()->bindings().begin()->second;
   EXPECT_EQ(std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>"), b1->_uri);
   EXPECT_EQ(std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq"), b1->_cid);
   EXPECT_EQ(17039, b1->_cseq);
@@ -203,14 +205,14 @@ TYPED_TEST(BasicRegStoreTest, BindingTests)
 
   // Update AoR record again in the store and check it, this time using get_binding.
   b1->_cseq = 17040;
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0);
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
-  EXPECT_EQ(1u, aor_data1->bindings().size());
-  b1 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  EXPECT_EQ(1u, aor_data1->get_current()->bindings().size());
+  b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   EXPECT_EQ(std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>"), b1->_uri);
   EXPECT_EQ(std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq"), b1->_cid);
   EXPECT_EQ(17040, b1->_cseq);
@@ -221,26 +223,26 @@ TYPED_TEST(BasicRegStoreTest, BindingTests)
   // Remove a binding.
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
-  EXPECT_EQ(1u, aor_data1->bindings().size());
-  aor_data1->remove_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
-  EXPECT_EQ(0u, aor_data1->bindings().size());
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0);
+  EXPECT_EQ(1u, aor_data1->get_current()->bindings().size());
+  aor_data1->get_current()->remove_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
-  EXPECT_EQ(0u, aor_data1->bindings().size());
+  EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
 
   delete aor_data1; aor_data1 = NULL;
 }
 
 
-TYPED_TEST(BasicRegStoreTest, SubscriptionTests)
+TYPED_TEST(BasicSubscriberDataManagerTest, SubscriptionTests)
 {
-  RegStore::AoR* aor_data1;
-  RegStore::AoR::Binding* b1;
-  RegStore::AoR::Subscription* s1;
+  SubscriberDataManager::AoRPair* aor_data1;
+  SubscriberDataManager::AoR::Binding* b1;
+  SubscriberDataManager::AoR::Subscription* s1;
   bool rc;
   int now;
 
@@ -248,8 +250,8 @@ TYPED_TEST(BasicRegStoreTest, SubscriptionTests)
   now = time(NULL);
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
-  EXPECT_EQ(0u, aor_data1->bindings().size());
-  b1 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
+  b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -264,16 +266,16 @@ TYPED_TEST(BasicRegStoreTest, SubscriptionTests)
   b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0);
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
   // Get the AoR record from the store.
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
-  EXPECT_EQ(1u, aor_data1->bindings().size());
-  EXPECT_EQ(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"), aor_data1->bindings().begin()->first);
-  b1 = aor_data1->bindings().begin()->second;
+  EXPECT_EQ(1u, aor_data1->get_current()->bindings().size());
+  EXPECT_EQ(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"), aor_data1->get_current()->bindings().begin()->first);
+  b1 = aor_data1->get_current()->bindings().begin()->second;
   EXPECT_EQ(std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>"), b1->_uri);
   EXPECT_EQ(std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq"), b1->_cid);
   EXPECT_EQ(17038, b1->_cseq);
@@ -281,7 +283,7 @@ TYPED_TEST(BasicRegStoreTest, SubscriptionTests)
   EXPECT_EQ(0, b1->_priority);
 
   // Add a subscription to the record.
-  s1 = aor_data1->get_subscription("1234");
+  s1 = aor_data1->get_current()->get_subscription("1234");
   s1->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
   s1->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
   s1->_from_tag = std::string("4321");
@@ -290,21 +292,19 @@ TYPED_TEST(BasicRegStoreTest, SubscriptionTests)
   s1->_cid = std::string("xyzabc@192.91.191.29");
   s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
   s1->_expires = now + 300;
-
-  // Set the NOTIFY CSeq value to 1.
-  aor_data1->_notify_cseq = 1;
+  s1->_timer_id = "11111111111";
 
   // Write the record back to the store.
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0);
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
   // Read the record back in and check the subscription is still in place.
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
-  EXPECT_EQ(1u, aor_data1->subscriptions().size());
-  EXPECT_EQ(std::string("1234"), aor_data1->subscriptions().begin()->first);
-  s1 = aor_data1->get_subscription(std::string("1234"));
+  EXPECT_EQ(1u, aor_data1->get_current()->subscriptions().size());
+  EXPECT_EQ(std::string("1234"), aor_data1->get_current()->subscriptions().begin()->first);
+  s1 = aor_data1->get_current()->get_subscription(std::string("1234"));
   EXPECT_EQ(std::string("sip:5102175698@192.91.191.29:59934;transport=tcp"), s1->_req_uri);
   EXPECT_EQ(std::string("<sip:5102175698@cw-ngv.com>"), s1->_from_uri);
   EXPECT_EQ(std::string("4321"), s1->_from_tag);
@@ -314,33 +314,32 @@ TYPED_TEST(BasicRegStoreTest, SubscriptionTests)
   EXPECT_EQ(1u, s1->_route_uris.size());
   EXPECT_EQ(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"), s1->_route_uris.front());
   EXPECT_EQ(now + 300, s1->_expires);
-  EXPECT_EQ(1, aor_data1->_notify_cseq);
+  EXPECT_EQ(3, aor_data1->get_current()->_notify_cseq);
 
   // Remove the subscription.
-  aor_data1->remove_subscription(std::string("1234"));
-  EXPECT_EQ(0u, aor_data1->subscriptions().size());
+  aor_data1->get_current()->remove_subscription(std::string("1234"));
+  EXPECT_EQ(0u, aor_data1->get_current()->subscriptions().size());
 
   delete aor_data1; aor_data1 = NULL;
 }
 
-
-TYPED_TEST(BasicRegStoreTest, CopyTests)
+TYPED_TEST(BasicSubscriberDataManagerTest, CopyTests)
 {
-  RegStore::AoR* aor_data1;
-  RegStore::AoR::Binding* b1;
-  RegStore::AoR::Subscription* s1;
+  SubscriberDataManager::AoRPair* aor_data1;
+  SubscriberDataManager::AoR::Binding* b1;
+  SubscriberDataManager::AoR::Subscription* s1;
   int now;
 
   // Get an initial empty AoR record.
   now = time(NULL);
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
-  EXPECT_EQ(0u, aor_data1->bindings().size());
-  EXPECT_EQ(0u, aor_data1->subscriptions().size());
+  EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
+  EXPECT_EQ(0u, aor_data1->get_current()->subscriptions().size());
 
   // Add a binding to the record.
-  b1 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
-  EXPECT_EQ(1u, aor_data1->bindings().size());
+  b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  EXPECT_EQ(1u, aor_data1->get_current()->bindings().size());
   b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -355,8 +354,8 @@ TYPED_TEST(BasicRegStoreTest, CopyTests)
   b1->_emergency_registration = false;
 
   // Add a subscription to the record.
-  s1 = aor_data1->get_subscription("1234");
-  EXPECT_EQ(1u, aor_data1->subscriptions().size());
+  s1 = aor_data1->get_current()->get_subscription("1234");
+  EXPECT_EQ(1u, aor_data1->get_current()->subscriptions().size());
   s1->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
   s1->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
   s1->_from_tag = std::string("4321");
@@ -367,10 +366,10 @@ TYPED_TEST(BasicRegStoreTest, CopyTests)
   s1->_expires = now + 300;
 
   // Set the NOTIFY CSeq value to 1.
-  aor_data1->_notify_cseq = 1;
+  aor_data1->get_current()->_notify_cseq = 1;
 
   // Test AoR copy constructor.
-  RegStore::AoR* copy = new RegStore::AoR(*aor_data1);
+  SubscriberDataManager::AoR* copy = new SubscriberDataManager::AoR(*aor_data1->get_current());
   EXPECT_EQ(1u, copy->bindings().size());
   EXPECT_EQ(1u, copy->subscriptions().size());
   EXPECT_EQ(1, copy->_notify_cseq);
@@ -379,8 +378,8 @@ TYPED_TEST(BasicRegStoreTest, CopyTests)
   delete copy; copy = NULL;
 
   // Test AoR assignment.
-  copy = new RegStore::AoR("sip:name@example.com");
-  *copy = *aor_data1;
+  copy = new SubscriberDataManager::AoR("sip:name@example.com");
+  *copy = *aor_data1->get_current();
   EXPECT_EQ(1u, copy->bindings().size());
   EXPECT_EQ(1u, copy->subscriptions().size());
   EXPECT_EQ(1, copy->_notify_cseq);
@@ -391,14 +390,14 @@ TYPED_TEST(BasicRegStoreTest, CopyTests)
 }
 
 
-TYPED_TEST(BasicRegStoreTest, ExpiryTests)
+TYPED_TEST(BasicSubscriberDataManagerTest, ExpiryTests)
 {
   // The expiry tests require pjsip, so initialise for this test
-  RegStore::AoR* aor_data1;
-  RegStore::AoR::Binding* b1;
-  RegStore::AoR::Binding* b2;
-  RegStore::AoR::Subscription* s1;
-  RegStore::AoR::Subscription* s2;
+  SubscriberDataManager::AoRPair* aor_data1;
+  SubscriberDataManager::AoR::Binding* b1;
+  SubscriberDataManager::AoR::Binding* b2;
+  SubscriberDataManager::AoR::Subscription* s1;
+  SubscriberDataManager::AoR::Subscription* s2;
   bool rc;
   int now;
 
@@ -406,13 +405,13 @@ TYPED_TEST(BasicRegStoreTest, ExpiryTests)
   now = time(NULL);
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
-  EXPECT_EQ(0u, aor_data1->bindings().size());
-  EXPECT_EQ(0u, aor_data1->subscriptions().size());
+  EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
+  EXPECT_EQ(0u, aor_data1->get_current()->subscriptions().size());
 
   // Add a couple of bindings, one with expiry in 100 seconds, the next with
   // expiry in 200 seconds.
-  b1 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
-  EXPECT_EQ(1u, aor_data1->bindings().size());
+  b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  EXPECT_EQ(1u, aor_data1->get_current()->bindings().size());
   b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -424,8 +423,8 @@ TYPED_TEST(BasicRegStoreTest, ExpiryTests)
   b1->_params["+sip.ice"] = "";
   b1->_private_id = "5102175698@cw-ngv.com";
   b1->_emergency_registration = false;
-  b2 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:2"));
-  EXPECT_EQ(2u, aor_data1->bindings().size());
+  b2 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:2"));
+  EXPECT_EQ(2u, aor_data1->get_current()->bindings().size());
   b2->_uri = std::string("<sip:5102175698@192.91.191.42:59934;transport=tcp;ob>");
   b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b2->_cseq = 17038;
@@ -440,8 +439,8 @@ TYPED_TEST(BasicRegStoreTest, ExpiryTests)
 
   // Add a couple of subscriptions, one with expiry in 150 seconds, the next
   // with expiry in 300 seconds.
-  s1 = aor_data1->get_subscription("1234");
-  EXPECT_EQ(1u, aor_data1->subscriptions().size());
+  s1 = aor_data1->get_current()->get_subscription("1234");
+  EXPECT_EQ(1u, aor_data1->get_current()->subscriptions().size());
   s1->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
   s1->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
   s1->_from_tag = std::string("4321");
@@ -451,8 +450,8 @@ TYPED_TEST(BasicRegStoreTest, ExpiryTests)
   s1->_route_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
   s1->_expires = now + 150;
   s1->_timer_id = "00000000000";
-  s2 = aor_data1->get_subscription("5678");
-  EXPECT_EQ(2u, aor_data1->subscriptions().size());
+  s2 = aor_data1->get_current()->get_subscription("5678");
+  EXPECT_EQ(2u, aor_data1->get_current()->subscriptions().size());
   s2->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
   s2->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
   s2->_from_tag = std::string("8765");
@@ -464,7 +463,7 @@ TYPED_TEST(BasicRegStoreTest, ExpiryTests)
   s2->_timer_id = "00000000000";
 
   // Write the record to the store.
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0);
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -473,8 +472,8 @@ TYPED_TEST(BasicRegStoreTest, ExpiryTests)
   cwtest_advance_time_ms(101000);
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
-  EXPECT_EQ(1u, aor_data1->bindings().size());
-  EXPECT_EQ(2u, aor_data1->subscriptions().size());
+  EXPECT_EQ(1u, aor_data1->get_current()->bindings().size());
+  EXPECT_EQ(2u, aor_data1->get_current()->subscriptions().size());
   delete aor_data1; aor_data1 = NULL;
 
   // Advance the time by another 50 seconds and read the record back from the
@@ -482,8 +481,8 @@ TYPED_TEST(BasicRegStoreTest, ExpiryTests)
   cwtest_advance_time_ms(50000);
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
-  EXPECT_EQ(1u, aor_data1->bindings().size());
-  EXPECT_EQ(1u, aor_data1->subscriptions().size());
+  EXPECT_EQ(1u, aor_data1->get_current()->bindings().size());
+  EXPECT_EQ(1u, aor_data1->get_current()->subscriptions().size());
   delete aor_data1; aor_data1 = NULL;
 
   // Advance the time by another 100 seconds and read the record back.
@@ -493,20 +492,20 @@ TYPED_TEST(BasicRegStoreTest, ExpiryTests)
   cwtest_advance_time_ms(100000);
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
-  EXPECT_EQ(0u, aor_data1->bindings().size());
-  EXPECT_EQ(0u, aor_data1->subscriptions().size());
+  EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
+  EXPECT_EQ(0u, aor_data1->get_current()->subscriptions().size());
   delete aor_data1; aor_data1 = NULL;
 }
 
 /// Fixture for testing converting between data formats. Thsi creates two
-/// RegStores:
+/// SubscriberDataManagers:
 /// 1).  One that only uses one (de)serializer.
 /// 2).  One that loads all (de)serializers.
 ///
 /// The fixture is a template, parameterized over the different types of
 /// (de)serializer that store 1). uses.
 template<class T>
-class MultiFormatRegStoreTest : public ::testing::Test
+class MultiFormatSubscriberDataManagerTest : public ::testing::Test
 {
   void SetUp()
   {
@@ -514,28 +513,30 @@ class MultiFormatRegStoreTest : public ::testing::Test
     _datastore = new LocalStore();
 
     {
-      RegStore::SerializerDeserializer* serializer = new T();
-      std::vector<RegStore::SerializerDeserializer*> deserializers = {
+      SubscriberDataManager::SerializerDeserializer* serializer = new T();
+      std::vector<SubscriberDataManager::SerializerDeserializer*> deserializers = {
         new T()
       };
 
-      _single_store = new RegStore(_datastore,
-                                   serializer,
-                                   deserializers,
-                                   _chronos_connection);
+      _single_store = new SubscriberDataManager(_datastore,
+                                                serializer,
+                                                deserializers,
+                                                _chronos_connection,
+                                                true);
     }
     {
-      RegStore::SerializerDeserializer* serializer =
-        new RegStore::JsonSerializerDeserializer();
-      std::vector<RegStore::SerializerDeserializer*> deserializers = {
-        new RegStore::JsonSerializerDeserializer(),
-        new RegStore::BinarySerializerDeserializer(),
+      SubscriberDataManager::SerializerDeserializer* serializer =
+        new SubscriberDataManager::JsonSerializerDeserializer();
+      std::vector<SubscriberDataManager::SerializerDeserializer*> deserializers = {
+        new SubscriberDataManager::JsonSerializerDeserializer(),
+        new SubscriberDataManager::BinarySerializerDeserializer(),
       };
 
-      _multi_store = new RegStore(_datastore,
-                                  serializer,
-                                  deserializers,
-                                  _chronos_connection);
+      _multi_store = new SubscriberDataManager(_datastore,
+                                               serializer,
+                                               deserializers,
+                                               _chronos_connection,
+                                               true);
     }
   }
 
@@ -547,19 +548,19 @@ class MultiFormatRegStoreTest : public ::testing::Test
     delete _chronos_connection; _chronos_connection = NULL;
   }
 
-  ChronosConnection* _chronos_connection;
+  FakeChronosConnection* _chronos_connection;
   LocalStore* _datastore;
-  RegStore* _multi_store;
-  RegStore* _single_store;
+  SubscriberDataManager* _multi_store;
+  SubscriberDataManager* _single_store;
 };
 
-// MultiFormatRegStoreTest is parameterized over these types.
-TYPED_TEST_CASE(MultiFormatRegStoreTest, SerializerDeserializerTypes);
+// MultiFormatSubscriberDataManagerTest is parameterized over these types.
+TYPED_TEST_CASE(MultiFormatSubscriberDataManagerTest, SerializerDeserializerTypes);
 
-TYPED_TEST(MultiFormatRegStoreTest, AllFormatsCanBeRead)
+TYPED_TEST(MultiFormatSubscriberDataManagerTest, AllFormatsCanBeRead)
 {
-  RegStore::AoR* aor_data1;
-  RegStore::AoR::Binding* b1;
+  SubscriberDataManager::AoRPair* aor_data1;
+  SubscriberDataManager::AoR::Binding* b1;
   bool rc;
   int now;
 
@@ -567,7 +568,7 @@ TYPED_TEST(MultiFormatRegStoreTest, AllFormatsCanBeRead)
   now = time(NULL);
   aor_data1 = this->_single_store->get_aor_data(std::string("2010000001@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
-  b1 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817621:1"));
+  b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817621:1"));
   b1->_uri = std::string("<sip:2010000001@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("cid1");
   b1->_cseq = 1000;
@@ -582,14 +583,14 @@ TYPED_TEST(MultiFormatRegStoreTest, AllFormatsCanBeRead)
   b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
-  rc = this->_single_store->set_aor_data(std::string("2010000001@cw-ngv.com"), aor_data1, false, 0);
+  rc = this->_single_store->set_aor_data(std::string("2010000001@cw-ngv.com"), aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
   aor_data1 = this->_multi_store->get_aor_data(std::string("2010000001@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
-  EXPECT_EQ(1u, aor_data1->bindings().size());
-  b1 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817621:1"));
+  EXPECT_EQ(1u, aor_data1->get_current()->bindings().size());
+  b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817621:1"));
   EXPECT_EQ(std::string("cid1"), b1->_cid);
 
   EXPECT_EQ(1u, b1->_path_headers.size());
@@ -600,10 +601,9 @@ TYPED_TEST(MultiFormatRegStoreTest, AllFormatsCanBeRead)
   delete aor_data1; aor_data1 = NULL;
 }
 
-
 /// Fixtures for tests that bad JSON documents are handled correctly, even when
 /// mutliple deserializers are loaded.
-class RegStoreCorruptDataTest : public ::testing::Test
+class SubscriberDataManagerCorruptDataTest : public ::testing::Test
 {
   void SetUp()
   {
@@ -611,17 +611,18 @@ class RegStoreCorruptDataTest : public ::testing::Test
     _datastore = new MockStore();
 
     {
-      RegStore::SerializerDeserializer* serializer =
-        new RegStore::JsonSerializerDeserializer();
-      std::vector<RegStore::SerializerDeserializer*> deserializers = {
-        new RegStore::JsonSerializerDeserializer(),
-        new RegStore::BinarySerializerDeserializer(),
+      SubscriberDataManager::SerializerDeserializer* serializer =
+        new SubscriberDataManager::JsonSerializerDeserializer();
+      std::vector<SubscriberDataManager::SerializerDeserializer*> deserializers = {
+        new SubscriberDataManager::JsonSerializerDeserializer(),
+        new SubscriberDataManager::BinarySerializerDeserializer(),
       };
 
-      _store = new RegStore(_datastore,
-                            serializer,
-                            deserializers,
-                            _chronos_connection);
+      _store = new SubscriberDataManager(_datastore,
+                                         serializer,
+                                         deserializers,
+                                         _chronos_connection,
+                                         true);
     }
   }
 
@@ -632,15 +633,15 @@ class RegStoreCorruptDataTest : public ::testing::Test
     delete _chronos_connection; _chronos_connection = NULL;
   }
 
-  ChronosConnection* _chronos_connection;
+  FakeChronosConnection* _chronos_connection;
   MockStore* _datastore;
-  RegStore* _store;
+  SubscriberDataManager* _store;
 };
 
 
-TEST_F(RegStoreCorruptDataTest, BadlyFormedJson)
+TEST_F(SubscriberDataManagerCorruptDataTest, BadlyFormedJson)
 {
-  RegStore::AoR* aor_data1;
+  SubscriberDataManager::AoRPair* aor_data1;
 
   EXPECT_CALL(*_datastore, get_data(_, _, _, _, _))
     .WillOnce(DoAll(SetArgReferee<2>(std::string("{\"bindings\": {}")),
@@ -649,12 +650,13 @@ TEST_F(RegStoreCorruptDataTest, BadlyFormedJson)
 
   aor_data1 = this->_store->get_aor_data(std::string("2010000001@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 == NULL);
+  delete aor_data1;
 }
 
 
-TEST_F(RegStoreCorruptDataTest, SemanticallyInvalidJson)
+TEST_F(SubscriberDataManagerCorruptDataTest, SemanticallyInvalidJson)
 {
-  RegStore::AoR* aor_data1;
+  SubscriberDataManager::AoRPair* aor_data1;
 
   EXPECT_CALL(*_datastore, get_data(_, _, _, _, _))
     .WillOnce(DoAll(SetArgReferee<2>(
@@ -664,12 +666,13 @@ TEST_F(RegStoreCorruptDataTest, SemanticallyInvalidJson)
 
   aor_data1 = this->_store->get_aor_data(std::string("2010000001@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 == NULL);
+  delete aor_data1;
 }
 
 
-TEST_F(RegStoreCorruptDataTest, EmptyJsonObject)
+TEST_F(SubscriberDataManagerCorruptDataTest, EmptyJsonObject)
 {
-  RegStore::AoR* aor_data1;
+  SubscriberDataManager::AoRPair* aor_data1;
 
   EXPECT_CALL(*_datastore, get_data(_, _, _, _, _))
     .WillOnce(DoAll(SetArgReferee<2>(std::string("{}")),
@@ -678,4 +681,216 @@ TEST_F(RegStoreCorruptDataTest, EmptyJsonObject)
 
   aor_data1 = this->_store->get_aor_data(std::string("2010000001@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 == NULL);
+  delete aor_data1;
+}
+
+/// Test using a Mock Chronos connection that doesn't just swallow requests
+class SubscriberDataManagerChronosRequestsTest : public SipTest
+{
+  static void SetUpTestCase()
+  {
+    SipTest::SetUpTestCase();
+  }
+
+  static void TearDownTestCase()
+  {
+    SipTest::TearDownTestCase();
+  }
+
+  SubscriberDataManagerChronosRequestsTest()
+  {
+    _chronos_connection = new MockChronosConnection();
+    _datastore = new LocalStore();
+
+    SubscriberDataManager::SerializerDeserializer* serializer =
+      new SubscriberDataManager::JsonSerializerDeserializer();
+    std::vector<SubscriberDataManager::SerializerDeserializer*> deserializers = {
+      new SubscriberDataManager::JsonSerializerDeserializer(),
+    };
+
+    _store = new SubscriberDataManager(_datastore,
+                                       serializer,
+                                       deserializers,
+                                       _chronos_connection,
+                                       true);
+  //  delete _store->_notify_sender;
+//    _store->_notify_sender = new MockNotifySender();
+  }
+
+  ~SubscriberDataManagerChronosRequestsTest()
+  {
+    delete _store; _store = NULL;
+    delete _datastore; _datastore = NULL;
+    delete _chronos_connection; _chronos_connection = NULL;
+  }
+
+  MockChronosConnection* _chronos_connection;
+  LocalStore* _datastore;
+  SubscriberDataManager* _store;
+};
+
+TEST_F(SubscriberDataManagerChronosRequestsTest, SubscriptionTestsDeleteWithoutChronosTimer)
+{
+  SubscriberDataManager::AoRPair* aor_data1;
+  SubscriberDataManager::AoR::Binding* b1;
+  SubscriberDataManager::AoR::Subscription* s1;
+  bool rc;
+  int now;
+
+  // Get an initial empty AoR record and add a binding.
+  now = time(NULL);
+  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+  EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
+  b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_timer_id = "00000000000";
+  b1->_priority = 0;
+  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
+  b1->_private_id = "5102175698@cw-ngv.com";
+  b1->_emergency_registration = false;
+
+  // Add a subscription to the record.
+  s1 = aor_data1->get_current()->get_subscription("1234");
+  s1->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
+  s1->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s1->_from_tag = std::string("4321");
+  s1->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s1->_to_tag = std::string("1234");
+  s1->_cid = std::string("xyzabc@192.91.191.29");
+  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s1->_expires = now + 300;
+
+  // Write the record back to the store. Have the Chronos request fail
+  EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _));
+  EXPECT_CALL(*(this->_chronos_connection), send_post(s1->_timer_id, _, _, _, _, _)).
+                   WillOnce(Return(503));
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
+
+  // Read the record back in and check the timer ID.
+  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+  EXPECT_EQ(1u, aor_data1->get_current()->subscriptions().size());
+  EXPECT_EQ(std::string("1234"), aor_data1->get_current()->subscriptions().begin()->first);
+  s1 = aor_data1->get_current()->get_subscription(std::string("1234"));
+  EXPECT_EQ("", s1->_timer_id);
+
+  // Remove the subscription.
+  aor_data1->get_current()->remove_subscription(std::string("1234"));
+  EXPECT_EQ(0u, aor_data1->get_current()->subscriptions().size());
+
+  // Write the record back to the store. Check no delete is sent
+  EXPECT_CALL(*(this->_chronos_connection), send_delete(_, _)).Times(0);
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
+}
+
+TEST_F(SubscriberDataManagerChronosRequestsTest, SubscriptionTestsChronosRequests)
+{
+  SubscriberDataManager::AoRPair* aor_data1;
+  SubscriberDataManager::AoR::Binding* b1;
+  SubscriberDataManager::AoR::Subscription* s1;
+  bool rc;
+  int now;
+
+  // Get an initial empty AoR record and add a binding.
+  now = time(NULL);
+  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+  EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
+  b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_timer_id = "00000000000";
+  b1->_priority = 0;
+  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
+  b1->_private_id = "5102175698@cw-ngv.com";
+  b1->_emergency_registration = false;
+
+  // Add a subscription to the record.
+  s1 = aor_data1->get_current()->get_subscription("1234");
+  s1->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
+  s1->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s1->_from_tag = std::string("4321");
+  s1->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s1->_to_tag = std::string("1234");
+  s1->_cid = std::string("xyzabc@192.91.191.29");
+  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s1->_expires = now + 300;
+
+  // Write the record back to the store. Have the Chronos request fail
+  EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _));
+  EXPECT_CALL(*(this->_chronos_connection), send_post(s1->_timer_id, _, _, _, _, _)).
+                   WillOnce(Return(503));
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
+
+  // Read the record back in and check the timer ID.
+  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+  EXPECT_EQ(1u, aor_data1->get_current()->subscriptions().size());
+  EXPECT_EQ(std::string("1234"), aor_data1->get_current()->subscriptions().begin()->first);
+  s1 = aor_data1->get_current()->get_subscription(std::string("1234"));
+  EXPECT_EQ("", s1->_timer_id);
+
+  // Write the record back. This time let the Chronos request succeed
+  EXPECT_CALL(*(this->_chronos_connection), send_post(s1->_timer_id, _, _, _, _, _)).
+       WillOnce(DoAll(SetArgReferee<0>("TIMER_ID"), Return(HTTP_OK)));
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
+
+  // Read the record back in and check the timer ID.
+  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+  s1 = aor_data1->get_current()->get_subscription(std::string("1234"));
+  EXPECT_EQ("TIMER_ID", s1->_timer_id);
+
+  // Change the expiry time and check that we still get a Chronos request
+  s1->_expires++;
+  EXPECT_CALL(*(this->_chronos_connection), send_put(s1->_timer_id, _, _, _, _, _)).
+       WillOnce(Return(HTTP_OK));
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
+
+  // Read the record back in and check the timer ID.
+  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+  s1 = aor_data1->get_current()->get_subscription(std::string("1234"));
+  EXPECT_EQ("TIMER_ID", s1->_timer_id);
+
+  // Don't change the expiry time, and check there's no Chronos request
+  EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _)).Times(0);
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
+
+  // Remove the subscription.
+  // Read the record back in and check the timer ID.
+  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+  aor_data1->get_current()->remove_subscription(std::string("1234"));
+  EXPECT_EQ(0u, aor_data1->get_current()->subscriptions().size());
+
+  // Write the record back to the store. Check a delete is sent
+  EXPECT_CALL(*(this->_chronos_connection), send_delete(_, _));
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
 }

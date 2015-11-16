@@ -135,7 +135,8 @@ protected:
   static FakeChronosConnection* _chronos_connection;
 
   void check_subscriptions(std::string aor, uint32_t expected);
-  void check_OK_and_NOTIFY(bool terminated = false);
+  std::string check_OK_and_NOTIFY(bool terminated = false,
+                                  std::string reason = "");
 };
 
 LocalStore* SubscriptionTest::_local_data_store;
@@ -163,6 +164,7 @@ public:
   string _auth;
   string _record_route;
   string _scheme;
+  string _to_tag;
 
   SubscribeMessage() :
     _method("SUBSCRIBE"),
@@ -175,7 +177,8 @@ public:
     _route("homedomain"),
     _auth(""),
     _record_route("Record-Route: <sip:sprout.example.com;transport=tcp;lr>"),
-    _scheme("sip")
+    _scheme("sip"),
+    _to_tag("")
   {
   }
 
@@ -191,7 +194,7 @@ string SubscribeMessage::get()
                    "Via: SIP/2.0/TCP 10.83.18.38:36530;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY5e9kSPI\r\n"
                    "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n"
                    "From: <%2$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
-                   "To: <%2$s>\r\n"
+                   "To: <%2$s>%14$s\r\n"
                    "Max-Forwards: 68\r\n"
                    "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqsUOO4ohntC@10.114.61.213\r\n"
                    "CSeq: 16567 %1$s\r\n"
@@ -225,7 +228,8 @@ string SubscribeMessage::get()
                    /* 10 */ _auth.empty() ? "" : string(_auth).append("\r\n").c_str(),
                    /* 11 */ _event.empty() ? "" : string(_event).append("\r\n").c_str(),
                    /* 12 */ _accepts.empty() ? "" : string(_accepts).append("\r\n").c_str(),
-                   /* 13 */ _record_route.empty() ? "" : string(_record_route).append("\r\n").c_str()
+                   /* 13 */ _record_route.empty() ? "" : string(_record_route).append("\r\n").c_str(),
+                   /* 14 */ _to_tag.empty() ? "": string(";tag=").append(_to_tag).c_str()
     );
 
   EXPECT_LT(n, (int)sizeof(buf));
@@ -298,14 +302,17 @@ TEST_F(SubscriptionTest, SimpleMainline)
   // a NOTIFY
   SubscribeMessage msg;
   inject_msg(msg.get());
-  check_OK_and_NOTIFY();
+  std::string to_tag = check_OK_and_NOTIFY();
   check_subscriptions("sip:6505550231@homedomain", 1u);
 
   // Actively expire the subscription - this generates a 200 OK and a
   // final NOTIFY
+  msg._to_tag = to_tag;
   msg._expires = "0";
   inject_msg(msg.get());
-  check_OK_and_NOTIFY(true);
+  check_OK_and_NOTIFY(true, "timeout");
+
+  check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
 /// Simple correct example with Tel URIs
@@ -335,14 +342,46 @@ TEST_F(SubscriptionTest, SimpleMainlineWithTelURI)
   SubscribeMessage msg;
   msg._scheme = "tel";
   inject_msg(msg.get());
-  check_OK_and_NOTIFY();
+  std::string to_tag = check_OK_and_NOTIFY();
   check_subscriptions("tel:6505550231", 1u);
 
   // Actively expire the subscription - this generates a 200 OK and a
   // final NOTIFY
+  msg._to_tag = to_tag;
   msg._expires = "0";
   inject_msg(msg.get());
-  check_OK_and_NOTIFY(true);
+  check_OK_and_NOTIFY(true, "timeout");
+}
+
+/// Check that a subscription with immediate expiry is treated correctly
+TEST_F(SubscriptionTest, OneShotSubscription)
+{
+  check_subscriptions("sip:6505550231@homedomain", 0u);
+
+  // Set up a single subscription - this should generate a 200 OK then
+  // a NOTIFY
+  SubscribeMessage msg;
+  msg._expires = "0";
+  inject_msg(msg.get());
+  check_OK_and_NOTIFY(true, "timeout");
+  check_subscriptions("sip:6505550231@homedomain", 0u);
+}
+
+/// Check that a subscription where there are no bindings is treated
+/// correctly (note, this isn't a particularly realistic scenario)
+TEST_F(SubscriptionTest, SubscriptionWithNoBindings)
+{
+  _local_data_store->flush_all();
+  _remote_data_store->flush_all();
+
+  check_subscriptions("sip:6505550231@homedomain", 0u);
+
+  // Set up a single subscription - this should generate a 200 OK then
+  // a NOTIFY
+  SubscribeMessage msg;
+  inject_msg(msg.get());
+  check_OK_and_NOTIFY(true, "deactivated");
+  check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
 // Test the Event Header
@@ -560,26 +599,6 @@ void SubscriptionTest::check_subscriptions(std::string aor, uint32_t expected)
 /// Check that subsequent NOTIFYs have updated CSeqs
 TEST_F(SubscriptionTest, CheckNotifyCseqs)
 {
-  // Get an initial empty AoR record and add a binding.
-  int now = time(NULL);
-
-  SubscriberDataManager::AoRPair* aor_data1 = _sdm->get_aor_data(std::string("sip:6505550231@homedomain"), 0);
-  SubscriberDataManager::AoR::Binding* b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
-  b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
-  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
-  b1->_cseq = 17038;
-  b1->_expires = now + 300;
-  b1->_priority = 0;
-  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
-  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
-  b1->_params["reg-id"] = "1";
-  b1->_params["+sip.ice"] = "";
-  b1->_emergency_registration = false;
-
-  // Add the AoR record to the store.
-  _sdm->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1, 0);
-  delete aor_data1; aor_data1 = NULL;
-
   SubscribeMessage msg;
   inject_msg(msg.get());
 
@@ -587,14 +606,26 @@ TEST_F(SubscriptionTest, CheckNotifyCseqs)
   ASSERT_EQ(2, txdata_count());
   pjsip_msg* out = pop_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
+  std::vector<std::string> to_params;
+  Utils::split_string(get_headers(out, "To"), ';', to_params, 0, true);
+  std::string to_tag = "No to tag in 200 OK";
+  for (unsigned ii = 0; ii < to_params.size(); ii++)
+  {
+    if (to_params[ii].find("tag=") != string::npos)
+    {
+      to_tag = to_params[ii].substr(4);
+    }
+  }
 
   out = current_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
+
   // Store off CSeq for later checking.
   std::string first_cseq = get_headers(out, "CSeq");
   inject_msg(respond_to_current_txdata(200));
 
   msg._expires = "0";
+  msg._to_tag = to_tag;
   inject_msg(msg.get());
 
   // Receive another SUBSCRIBE 200 OK and NOTIFY, then send NOTIFY 200 OK.
@@ -612,9 +643,10 @@ TEST_F(SubscriptionTest, CheckNotifyCseqs)
   EXPECT_GT(second_cseq_val, first_cseq_val);
 }
 
-void SubscriptionTest::check_OK_and_NOTIFY(bool terminated)
+std::string SubscriptionTest::check_OK_and_NOTIFY(bool terminated,
+                                                  std::string reason)
 {
-  ASSERT_EQ(2, txdata_count());
+  EXPECT_EQ(2, txdata_count());
   pjsip_msg* out = pop_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
@@ -629,7 +661,7 @@ void SubscriptionTest::check_OK_and_NOTIFY(bool terminated)
   {
     if (to_params[ii].find("tag=") != string::npos)
     {
-      to_tag = string(".*").append(to_params[ii]);
+      to_tag = to_params[ii].substr(4);
     }
   }
 
@@ -641,17 +673,23 @@ void SubscriptionTest::check_OK_and_NOTIFY(bool terminated)
 
   if (terminated)
   {
-    // TODO EXPECT_EQ("Subscription-State: terminated;reason=timeout", get_headers(out, "Subscription-State"));
+    EXPECT_EQ(std::string("Subscription-State: terminated;reason=").append(reason), get_headers(out, "Subscription-State"));
   }
   else
   {
-    // TODO EXPECT_EQ("Subscription-State: active;expires=300", get_headers(out, "Subscription-State"));
+    EXPECT_EQ("Subscription-State: active;expires=300", get_headers(out, "Subscription-State"));
   }
 
+  // TODO check the body of the NOTFIY
+  char buf[16384];
+  int n = out->body->print_body(out->body, buf, sizeof(buf));
+  string body(buf, n);
+  printf(body.c_str());
   EXPECT_THAT(get_headers(out, "To"), testing::MatchesRegex("To: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));
-  // TODO EXPECT_THAT(get_headers(out, "From"), testing::MatchesRegex(to_tag));
+  EXPECT_THAT(get_headers(out, "From"), testing::MatchesRegex(string(".*tag=").append(to_tag)));
 
   inject_msg(respond_to_current_txdata(200));
+  return to_tag;
 }
 
 

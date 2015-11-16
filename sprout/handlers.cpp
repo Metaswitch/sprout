@@ -277,7 +277,6 @@ void RegSubTimeoutTask::handle_response()
     }
     // LCOV_EXCL_STOP
 
-    // TODO - Move this into the set_aor_data call
     if (all_bindings_expired)
     {
       TRC_DEBUG("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS");

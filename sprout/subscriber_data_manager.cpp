@@ -1,5 +1,5 @@
 /**
- * @file regstore.cpp Registration data store.
+ * @file subscriber_data_manager.cpp
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -57,7 +57,7 @@ extern "C" {
 
 #include "log.h"
 #include "utils.h"
-#include "regstore.h"
+#include "subscriber_data_manager.h"
 #include "notify_utils.h"
 #include "stack.h"
 #include "pjutils.h"
@@ -67,25 +67,29 @@ extern "C" {
 #include "json_parse_utils.h"
 #include "rapidjson/error/en.h"
 
-const std::vector<std::string> RegStore::TAGS_NONE = {};
-const std::vector<std::string> RegStore::TAGS_REG = {"REG"};
-const std::vector<std::string> RegStore::TAGS_SUB = {"SUB"};
+const std::vector<std::string> SubscriberDataManager::TAGS_NONE = {};
+const std::vector<std::string> SubscriberDataManager::TAGS_REG = {"REG"};
+const std::vector<std::string> SubscriberDataManager::TAGS_SUB = {"SUB"};
 
-RegStore::RegStore(Store* data_store,
-                   SerializerDeserializer*& serializer,
-                   std::vector<SerializerDeserializer*>& deserializers,
-                   ChronosConnection* chronos_connection) :
-  _chronos(chronos_connection),
-  _connector(NULL)
+/// SubscriberDataManager Methods
+
+SubscriberDataManager::SubscriberDataManager(Store* data_store,
+                                             SerializerDeserializer*& serializer,
+                                             std::vector<SerializerDeserializer*>& deserializers,
+                                             ChronosConnection* chronos_connection,
+                                             bool is_primary) :
+  _primary_sdm(is_primary)
 {
   _connector = new Connector(data_store, serializer, deserializers);
+  _chronos_timer_request = new ChronosTimerRequest(chronos_connection);
+  _notify_sender = new NotifySender();
 }
 
 
-RegStore::RegStore(Store* data_store,
-                   ChronosConnection* chronos_connection) :
-  _chronos(chronos_connection),
-  _connector(NULL)
+SubscriberDataManager::SubscriberDataManager(Store* data_store,
+                                             ChronosConnection* chronos_connection,
+                                             bool is_primary) :
+  _primary_sdm(is_primary)
 {
   SerializerDeserializer* serializer = new JsonSerializerDeserializer();
   std::vector<SerializerDeserializer*> deserializers = {
@@ -93,34 +97,284 @@ RegStore::RegStore(Store* data_store,
   };
 
   _connector = new Connector(data_store, serializer, deserializers);
+  _chronos_timer_request = new ChronosTimerRequest(chronos_connection);
+  _notify_sender = new NotifySender();
 }
 
 
-RegStore::~RegStore()
+SubscriberDataManager::~SubscriberDataManager()
 {
+  delete _notify_sender;
+  delete _chronos_timer_request;
   delete _connector;
+}
+
+/// Retrieve the registration data for a given SIP Address of Record.
+///
+/// @param aor_id       The SIP Address of Record for the registration
+SubscriberDataManager::AoRPair* SubscriberDataManager::get_aor_data(
+                                          const std::string& aor_id,
+                                          SAS::TrailId trail)
+{
+  AoR* aor_data = _connector->get_aor_data(aor_id, trail);
+
+  if (aor_data != NULL)
+  {
+    // We got some data from the store. Copy the AoR, expire the copy,
+    // and return both AoRs as an AoR pair.
+    AoR* aor_copy = new AoR(*aor_data);
+    int now = time(NULL);
+    AoRPair* aor_pair = new AoRPair(aor_data, aor_copy);
+    expire_aor_members(aor_pair, now);
+    return aor_pair;
+  }
+  else
+  {
+    // We hit some kind of error in the store. Return NULL
+    return NULL;
+  }
+}
+
+/// Update the data for a particular address of record.  Writes the data
+/// atomically.  Returns the code returned by the underlying store, one of:
+/// -  OK:              the AoR was writen successfully.
+/// -  DATA_CONTENTION: the AoR was not written to the store because the CAS is
+///                     out of date. The caller can refetch the AoR and try again.
+/// -  ERROR:           the AoR was not written successfully and the caller
+///                     should not retry.
+///
+/// @param aor_id     The SIP Address of Record for the registration
+/// @param aor_pair   The registration data record.
+/// @param trail      The SAS trail
+bool SubscriberDataManager::unused_bool = false;
+
+Store::Status SubscriberDataManager::set_aor_data(
+                                     const std::string& aor_id,
+                                     AoRPair* aor_pair,
+                                     SAS::TrailId trail,
+                                     bool& all_bindings_expired,
+                                     pjsip_rx_data* extra_message_rdata,
+                                     pjsip_tx_data* extra_message_tdata)
+{
+  all_bindings_expired = false;
+
+  // Expire old subscriptions and bindings before writing to the server. If
+  // there were no bindings left we could delete the entry, but this may
+  // cause concurrency problems because memcached does not support
+  // cas on delete operations.  In this case we do a memcached_cas with
+  // an effectively immediate expiry time.
+  int now = time(NULL);
+
+  // Set the max expires to be greater than the longest binding expiry time.
+  // This prevents a window condition where Chronos can return a binding to
+  // expire, but memcached has already deleted the aor data (meaning that
+  // no NOTIFYs could be sent)
+  int orig_max_expires = expire_aor_members(aor_pair, now);
+  int max_expires = orig_max_expires + 10;
+
+  // expire_aor_members returns "now" if there are no remaining bindings,
+  // so test for that.
+  if (orig_max_expires == now)
+  {
+    TRC_DEBUG("All bindings have expired, so this is a deregistration for AOR %s",
+              aor_id.c_str());
+    all_bindings_expired = true;
+  }
+
+  TRC_DEBUG("Set AoR data for %s, CAS=%ld, expiry = %d",
+            aor_id.c_str(), aor_pair->get_current()->_cas, max_expires);
+
+  // Set the chronos timers
+  if (_primary_sdm)
+  {
+    _chronos_timer_request->send_timers(aor_id, aor_pair, now, trail);
+  }
+
+  // Update the Notify CSeq, and write to store. We always update the cseq
+  // as it's safe to increment it unnecessarily, and if we wait to find out
+  // how many NOTIFYs we're going to send then we'll have to write back to
+  // memcached again
+  aor_pair->get_current()->_notify_cseq++;
+  Store::Status rc = _connector->set_aor_data(aor_id,
+                                              aor_pair->get_current(),
+                                              max_expires - now,
+                                              trail);
+
+  if (rc != Store::Status::OK)
+  {
+    // We were unable to write to the store - return to the caller and
+    // send no further messages
+    return rc;
+  }
+
+  if (_primary_sdm)
+  {
+    // We may have been given some messages to send by the caller.
+    if ((extra_message_rdata != NULL) &&
+        (extra_message_tdata != NULL))
+    {
+      pjsip_endpt_send_response2(stack_data.endpt,
+                                 extra_message_rdata,
+                                 extra_message_tdata,
+                                 NULL,
+                                 NULL);
+    }
+
+    // Send any NOTIFYs needed
+    _notify_sender->send_notifys(aor_id, aor_pair, now, trail);
+
+    // Consider if necessary - TODO
+    if (all_bindings_expired)
+    {
+      // Finally, notify the HSS if all the bindings have been removed
+    }
+  }
+
+  return Store::Status::OK;
+}
+
+int SubscriberDataManager::expire_aor_members(AoRPair* aor_pair,
+                                              int now)
+{
+  int max_expires = expire_bindings(aor_pair->get_current(), now);
+
+  // N.B. Subscriptions are not factored into the returned expiry time on the
+  // store record because, according to 5.4.2.1.2/TS 24.229, all subscriptions
+  // automatically expire when the last binding expires.
+  expire_subscriptions(aor_pair, now, (max_expires == now));
+
+  return max_expires;
+}
+
+/// Expire any old subscriptions. Expire all subscriptions if requested
+/// (e.g. when all the bindings have expired)
+///
+/// @param aor_data      The registration data record.
+/// @param now           The current time in seconds since the epoch.
+/// @param force_expire  Whether we should always remove the subscriptions
+void SubscriberDataManager::expire_subscriptions(AoRPair* aor_pair,
+                                                 int now,
+                                                 bool force_expire)
+{
+  if (force_expire)
+  { TRC_DEBUG("FORCE");}
+  for (AoR::Subscriptions::iterator i =
+         aor_pair->get_current()->_subscriptions.begin();
+       i != aor_pair->get_current()->_subscriptions.end();
+      )
+  {
+    AoR::Subscription* s = i->second;
+    if ((force_expire) || (s->_expires <= now))
+    {
+      // The subscription has expired, so remove it. This could be
+      // a single one shot subscription though - if so pretend it was
+      // part of the original AoR
+      SubscriberDataManager::AoR::Subscriptions::const_iterator aor_orig_s =
+        aor_pair->get_orig()->subscriptions().find(i->first);
+
+      if (aor_orig_s == aor_pair->get_orig()->subscriptions().end())
+      {
+        SubscriberDataManager::AoR::Subscription* s_copy =
+          aor_pair->get_orig()->get_subscription(i->first);
+        *s_copy = *i->second;
+      }
+
+      delete i->second;
+      aor_pair->get_current()->_subscriptions.erase(i++);
+    }
+    else
+    {
+      ++i;
+    }
+  }
+
+  for (AoR::Subscriptions::iterator i =
+         aor_pair->get_orig()->_subscriptions.begin();
+       i != aor_pair->get_orig()->_subscriptions.end();
+       ++i
+      )
+  {
+    TRC_DEBUG("sub5 %s", i->second->_to_uri.c_str());
+  }
+
+  for (AoR::Subscriptions::iterator i =
+         aor_pair->get_current()->_subscriptions.begin();
+       i != aor_pair->get_current()->_subscriptions.end();
+       ++i
+      )
+  {
+    TRC_DEBUG("sub6 %s", i->second->_to_uri.c_str());
+  }
+}
+
+/// Expire any old bindings, and calculates the latest outstanding expiry time,
+/// or now if none.
+///
+/// @returns             The latest expiry time from all unexpired bindings.
+/// @param aor_data      The registration data record.
+/// @param now           The current time in seconds since the epoch.
+int SubscriberDataManager::expire_bindings(AoR* aor_data,
+                                           int now)
+{
+  int max_expires = now;
+  for (AoR::Bindings::iterator i = aor_data->_bindings.begin();
+       i != aor_data->_bindings.end();
+      )
+  {
+    AoR::Binding* b = i->second;
+    std::string b_id = i->first;
+
+    if (b->_expires <= now)
+    {
+      delete i->second;
+      aor_data->_bindings.erase(i++);
+    }
+    else
+    {
+      if (b->_expires > max_expires)
+      {
+        max_expires = b->_expires;
+      }
+
+      ++i;
+    }
+  }
+
+  return max_expires;
+}
+
+/// SubscriberDataManager::Connector Methods
+
+SubscriberDataManager::Connector::Connector(Store* data_store,
+                               SerializerDeserializer*& serializer,
+                               std::vector<SerializerDeserializer*>& deserializers) :
+  _data_store(data_store),
+  _serializer(serializer),
+  _deserializers(deserializers)
+{
+  // We have taken ownership of the serializer and deserializers.
+  serializer = NULL;
+  deserializers.clear();
+}
+
+SubscriberDataManager::Connector::~Connector()
+{
+  delete _serializer; _serializer = NULL;
+
+  for(std::vector<SerializerDeserializer*>::iterator it = _deserializers.begin();
+      it != _deserializers.end();
+      ++it)
+  {
+    delete *it; *it = NULL;
+  }
 }
 
 /// Retrieve the registration data for a given SIP Address of Record, creating
 /// an empty record if no data exists for the AoR.
 ///
 /// @param aor_id       The SIP Address of Record for the registration
-RegStore::AoR* RegStore::get_aor_data(const std::string& aor_id,
-                                      SAS::TrailId trail,
-                                      bool should_send_notify)
-{
-  AoR* aor_data = _connector->get_aor_data(aor_id, trail);
-
-  if (aor_data != NULL)
-  {
-    int now = time(NULL);
-    expire_aor_members(aor_data, now, trail, should_send_notify);
-  }
-
-  return aor_data;
-}
-
-RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id,
+SubscriberDataManager::AoR* SubscriberDataManager::Connector::get_aor_data(
+                                                 const std::string& aor_id,
                                                  SAS::TrailId trail)
 {
   TRC_DEBUG("Get AoR data for %s", aor_id.c_str());
@@ -163,129 +417,21 @@ RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id,
     event.add_var_param(aor_id);
     SAS::report_event(event);
 
-    TRC_DEBUG("Data store returned not found, so create new record, CAS = %ld", aor_data->_cas);
+    TRC_DEBUG("Data store returned not found, so create new record, CAS = %ld",
+              aor_data->_cas);
   }
   else
   {
-    // LCOV_EXCL_START
     SAS::Event event(trail, SASEvent::REGSTORE_GET_FAILURE, 0);
     event.add_var_param(aor_id);
     SAS::report_event(event);
-    // LCOV_EXCL_STOP
   }
 
   return aor_data;
 }
 
-/// Update the data for a particular address of record.  Writes the data
-/// atomically.  Returns the code returned by the underlying store, one of:
-/// -  OK:              the AoR was writen successfully.
-/// -  DATA_CONTENTION: the AoR was not written to the store because the CAS is
-///                     out of date. The caller can refetch the AoR and try again.
-/// -  ERROR:           the AoR was not written successfully and the caller
-///                     should not retry.
-///
-/// @param aor_id     The SIP Address of Record for the registration
-/// @param aor_data   The registration data record.
-/// @param set_chronos   Determines whether a Chronos request should
-///                      be sent to keep track of binding expiry time.
-/// @param all_bindings_expired   Set to true to flag to the caller that
-///                               no bindings remain for this AoR.
-
-bool RegStore::unused_bool = false;
-
-Store::Status RegStore::set_aor_data(const std::string& aor_id,
-                                     AoR* aor_data,
-                                     bool set_chronos,
-                                     SAS::TrailId trail,
-                                     bool should_send_notify,
-                                     bool& all_bindings_expired)
-{
-  all_bindings_expired = false;
-  // Expire old subscriptions and bindings before writing to the server. If
-  // there were no bindings left we could delete the entry, but this may
-  // cause concurrency problems because memcached does not support
-  // cas on delete operations.  In this case we do a memcached_cas with
-  // an effectively immediate expiry time.
-  int now = time(NULL);
-
-  // Set the max expires to be greater than the longest binding expiry time.
-  // This prevents a window condition where Chronos can return a binding to
-  // expire, but memcached has already deleted the aor data (meaning that
-  // no NOTIFYs could be sent)
-  int orig_max_expires = expire_aor_members(aor_data, now, trail, should_send_notify);
-  int max_expires = orig_max_expires + 10;
-
-  // expire_aor_members returns "now" if there are no remaining bindings,
-  // so test for that.
-  if (orig_max_expires == now)
-  {
-    TRC_DEBUG("All bindings have expired, so this is a deregistration for AOR %s", aor_id.c_str());
-    all_bindings_expired = true;
-  }
-
-  TRC_DEBUG("Set AoR data for %s, CAS=%ld, expiry = %d",
-            aor_id.c_str(), aor_data->_cas, max_expires);
-
-  // Set the chronos timers
-  if (set_chronos)
-  {
-    for (AoR::Bindings::iterator i = aor_data->_bindings.begin();
-         i != aor_data->_bindings.end();
-         ++i)
-    {
-      set_timer(aor_id, i->first, i->second->_timer_id,
-                i->second->_expires, "binding_id", trail, RegStore::TAGS_REG);
-    }
-
-    for (AoR::Subscriptions::iterator i = aor_data->_subscriptions.begin();
-         i != aor_data->_subscriptions.end();
-         ++i)
-    {
-      set_timer(aor_id, i->first, i->second->_timer_id,
-                i->second->_expires, "subscription_id", trail, RegStore::TAGS_SUB);
-    }
-  }
-
-  return _connector->set_aor_data(aor_id, aor_data, max_expires - now, trail);
-}
-
-void RegStore::set_timer(const std::string& aor_id,
-                         std::string object_id,
-                         std::string& timer_id,
-                         int expiry,
-                         std::string id_type,
-                         SAS::TrailId trail,
-                         std::vector<std::string> tags)
-{
-  std::string temp_timer_id = "";
-  HTTPCode status;
-  std::string opaque = "{\"aor_id\": \"" + aor_id + "\", \"" + id_type + "\": \""+ object_id +"\"}";
-  std::string callback_uri = "/timers";
-
-  // Set expiry to be relative to now, and ensure it is not negative.
-  int now = time(NULL);
-  (expiry>now) ? (expiry -= now):(expiry = 0);
-
-  // If a timer has been previously set for this binding, send a PUT. Otherwise sent a POST.
-  if (timer_id == "")
-  {
-    status = _chronos->send_post(temp_timer_id, expiry, callback_uri, opaque, trail, tags);
-  }
-  else
-  {
-    temp_timer_id = timer_id;
-    status = _chronos->send_put(temp_timer_id, expiry, callback_uri, opaque, trail, tags);
-  }
-  // Update the timer id. If the update to Chronos failed, that's OK, don't reject
-  // the register or update the stored timer id.
-  if (status == HTTP_OK)
-  {
-    timer_id = temp_timer_id;
-  }
-}
-
-Store::Status RegStore::Connector::set_aor_data(const std::string& aor_id,
+Store::Status SubscriberDataManager::Connector::set_aor_data(
+                                                const std::string& aor_id,
                                                 AoR* aor_data,
                                                 int expiry,
                                                 SAS::TrailId trail)
@@ -313,139 +459,24 @@ Store::Status RegStore::Connector::set_aor_data(const std::string& aor_id,
   }
   else
   {
-    // LCOV_EXCL_START
     SAS::Event event2(trail, SASEvent::REGSTORE_SET_FAILURE, 0);
     event2.add_var_param(aor_id);
     SAS::report_event(event2);
-    // LCOV_EXCL_STOP
   }
-
 
   return status;
 }
 
-
-int RegStore::expire_aor_members(AoR* aor_data,
-                                 int now,
-                                 SAS::TrailId trail,
-                                 bool should_send_notify)
-{
-  expire_subscriptions(aor_data, now, trail, should_send_notify);
-  return expire_bindings(aor_data, now, trail);
-
-  // N.B. Subscriptions are not factored into the returned expiry time on the
-  // store record because, according to 5.4.2.1.2/TS 24.229, all subscriptions
-  // automatically expire when the last binding expires.
-}
-
-/// Expire any old subscriptions.
-///
-/// @param aor_data      The registration data record.
-/// @param now           The current time in seconds since the epoch.
-void RegStore::expire_subscriptions(AoR* aor_data,
-                                    int now,
-                                    SAS::TrailId trail,
-                                    bool should_send_notify)
-{
-  for (AoR::Subscriptions::iterator i = aor_data->_subscriptions.begin();
-       i != aor_data->_subscriptions.end();
-      )
-  {
-    AoR::Subscription* s = i->second;
-    if (s->_expires <= now)
-    {
-      // Update the cseq
-      aor_data->_notify_cseq++;
-
-      // Send subscription termination notify unless told not to
-      if (should_send_notify)
-      {
-        send_notify(s, aor_data, trail, now);
-      }
-
-      // Delete any associated chronos timer
-      if (s->_timer_id != "")
-      {
-        _chronos->send_delete(s->_timer_id, trail);
-      }
-
-      // The subscription has expired, so remove it.
-      delete i->second;
-      aor_data->_subscriptions.erase(i++);
-    }
-    else
-    {
-      ++i;
-    }
-  }
-}
-
-/// Expire any old bindings, and calculates the latest outstanding expiry time,
-/// or now if none.
-///
-/// @returns             The latest expiry time from all unexpired bindings.
-/// @param aor_data      The registration data record.
-/// @param now           The current time in seconds since the epoch.
-int RegStore::expire_bindings(AoR* aor_data,
-                              int now,
-                              SAS::TrailId trail)
-{
-  int max_expires = now;
-  for (AoR::Bindings::iterator i = aor_data->_bindings.begin();
-       i != aor_data->_bindings.end();
-      )
-  {
-    AoR::Binding* b = i->second;
-    std::string b_id = i->first;
-    if (b->_expires <= now)
-    {
-      // Update the cseq
-      aor_data->_notify_cseq++;
-
-      // The binding has expired, so remove it. Send a SIP NOTIFY for this binding
-      // if there are any subscriptions
-      for (AoR::Subscriptions::iterator j = aor_data->_subscriptions.begin();
-           j != aor_data->_subscriptions.end();
-          ++j)
-      {
-        // Don't send a notification when an emergency registration expires
-        if (!b->_emergency_registration)
-        {
-          send_notify(j->second, aor_data->_notify_cseq, b, b_id, trail);
-        }
-      }
-
-      // If a timer id is present, then delete it. If the timer id is empty (because a
-      // previous post/put failed) then don't.
-      if (b->_timer_id != "")
-      {
-        _chronos->send_delete(b->_timer_id, trail);
-      }
-
-      delete i->second;
-      aor_data->_bindings.erase(i++);
-    }
-    else
-    {
-      if (b->_expires > max_expires)
-      {
-        max_expires = b->_expires;
-      }
-      ++i;
-    }
-  }
-  return max_expires;
-}
-
 /// Serialize the contents of an AoR.
-std::string RegStore::Connector::serialize_aor(AoR* aor_data)
+std::string SubscriberDataManager::Connector::serialize_aor(AoR* aor_data)
 {
   return _serializer->serialize_aor(aor_data);
 }
 
-
 /// Deserialize the contents of an AoR
-RegStore::AoR* RegStore::Connector::deserialize_aor(const std::string& aor_id, const std::string& s)
+SubscriberDataManager::AoR* SubscriberDataManager::Connector::deserialize_aor(
+                                                   const std::string& aor_id,
+                                                   const std::string& s)
 {
   AoR* aor = NULL;
 
@@ -475,8 +506,10 @@ RegStore::AoR* RegStore::Connector::deserialize_aor(const std::string& aor_id, c
 }
 
 
+/// AoR Methods
+
 /// Default constructor.
-RegStore::AoR::AoR(std::string sip_uri) :
+SubscriberDataManager::AoR::AoR(std::string sip_uri) :
   _notify_cseq(1),
   _bindings(),
   _subscriptions(),
@@ -487,20 +520,20 @@ RegStore::AoR::AoR(std::string sip_uri) :
 
 
 /// Destructor.
-RegStore::AoR::~AoR()
+SubscriberDataManager::AoR::~AoR()
 {
   clear(true);
 }
 
 
 /// Copy constructor.
-RegStore::AoR::AoR(const AoR& other)
+SubscriberDataManager::AoR::AoR(const AoR& other)
 {
   common_constructor(other);
 }
 
 // Make sure assignment is deep!
-RegStore::AoR& RegStore::AoR::operator= (AoR const& other)
+SubscriberDataManager::AoR& SubscriberDataManager::AoR::operator= (AoR const& other)
 {
   if (this != &other)
   {
@@ -511,7 +544,7 @@ RegStore::AoR& RegStore::AoR::operator= (AoR const& other)
   return *this;
 }
 
-void RegStore::AoR::common_constructor(const AoR& other)
+void SubscriberDataManager::AoR::common_constructor(const AoR& other)
 {
   for (Bindings::const_iterator i = other._bindings.begin();
        i != other._bindings.end();
@@ -536,7 +569,7 @@ void RegStore::AoR::common_constructor(const AoR& other)
 
 
 /// Clear all the bindings and subscriptions from this object.
-void RegStore::AoR::clear(bool clear_emergency_bindings)
+void SubscriberDataManager::AoR::clear(bool clear_emergency_bindings)
 {
   for (Bindings::iterator i = _bindings.begin();
        i != _bindings.end();
@@ -572,7 +605,8 @@ void RegStore::AoR::clear(bool clear_emergency_bindings)
 /// Retrieve a binding by binding identifier, creating an empty one if
 /// necessary.  The created binding is completely empty, even the Contact URI
 /// field.
-RegStore::AoR::Binding* RegStore::AoR::get_binding(const std::string& binding_id)
+SubscriberDataManager::AoR::Binding*
+         SubscriberDataManager::AoR::get_binding(const std::string& binding_id)
 {
   AoR::Binding* b;
   AoR::Bindings::const_iterator i = _bindings.find(binding_id);
@@ -593,7 +627,7 @@ RegStore::AoR::Binding* RegStore::AoR::get_binding(const std::string& binding_id
 
 /// Removes any binding that had the given ID.  If there is no such binding,
 /// does nothing.
-void RegStore::AoR::remove_binding(const std::string& binding_id)
+void SubscriberDataManager::AoR::remove_binding(const std::string& binding_id)
 {
   AoR::Bindings::iterator i = _bindings.find(binding_id);
   if (i != _bindings.end())
@@ -605,7 +639,8 @@ void RegStore::AoR::remove_binding(const std::string& binding_id)
 
 /// Retrieve a subscription by To tag, creating an empty subscription if
 /// necessary.
-RegStore::AoR::Subscription* RegStore::AoR::get_subscription(const std::string& to_tag)
+SubscriberDataManager::AoR::Subscription*
+       SubscriberDataManager::AoR::get_subscription(const std::string& to_tag)
 {
   AoR::Subscription* s;
   AoR::Subscriptions::const_iterator i = _subscriptions.find(to_tag);
@@ -625,7 +660,7 @@ RegStore::AoR::Subscription* RegStore::AoR::get_subscription(const std::string& 
 
 /// Removes the subscription with the specified tag.  If there is no such
 /// subscription, does nothing.
-void RegStore::AoR::remove_subscription(const std::string& to_tag)
+void SubscriberDataManager::AoR::remove_subscription(const std::string& to_tag)
 {
   AoR::Subscriptions::iterator i = _subscriptions.find(to_tag);
   if (i != _subscriptions.end())
@@ -635,71 +670,9 @@ void RegStore::AoR::remove_subscription(const std::string& to_tag)
   }
 }
 
-void RegStore::send_notify(AoR::Subscription* s, int cseq,
-                           AoR::Binding* b, std::string b_id,
-                           SAS::TrailId trail)
-{
-  pjsip_tx_data* tdata_notify = NULL;
-  std::map<std::string, AoR::Binding> bindings;
-  bindings.insert(std::pair<std::string, RegStore::AoR::Binding>(b_id, *b));
-  pj_status_t status = NotifyUtils::create_notify(&tdata_notify, s, "aor", cseq, bindings,
-                                  NotifyUtils::DocState::PARTIAL,
-                                  NotifyUtils::RegistrationState::ACTIVE,
-                                  NotifyUtils::ContactState::TERMINATED,
-                                  NotifyUtils::ContactEvent::EXPIRED,
-                                  NotifyUtils::SubscriptionState::ACTIVE,
-                                  (s->_expires - time(NULL)));
-
-  if (status == PJ_SUCCESS)
-  {
-    set_trail(tdata_notify, trail);
-    status = PJUtils::send_request(tdata_notify, 0, NULL, NULL, true);
-  }
-}
-
-void RegStore::send_notify(AoR::Subscription* s,
-                           AoR* aor_data,
-                           SAS::TrailId trail,
-                           int now)
-{
-  pjsip_tx_data* tdata_notify = NULL;
-  pj_status_t status = NotifyUtils::create_subscription_notify(&tdata_notify, s, "aor",
-                                                               &aor_data, now);
-
-  if (status == PJ_SUCCESS)
-  {
-    set_trail(tdata_notify, trail);
-    status = PJUtils::send_request(tdata_notify, 0, NULL, NULL, true);
-  }
-}
-
-RegStore::Connector::Connector(Store* data_store,
-                               SerializerDeserializer*& serializer,
-                               std::vector<SerializerDeserializer*>& deserializers) :
-  _data_store(data_store),
-  _serializer(serializer),
-  _deserializers(deserializers)
-{
-  // We have taken ownership of the serializer and deserializers.
-  serializer = NULL;
-  deserializers.clear();
-}
-
-RegStore::Connector::~Connector()
-{
-  delete _serializer; _serializer = NULL;
-
-  for(std::vector<SerializerDeserializer*>::iterator it = _deserializers.begin();
-      it != _deserializers.end();
-      ++it)
-  {
-    delete *it; *it = NULL;
-  }
-}
-
 // Generates the public GRUU for this binding from the address of record and
 // instance-id. Returns NULL if this binding has no valid GRUU.
-pjsip_sip_uri* RegStore::AoR::Binding::pub_gruu(pj_pool_t* pool) const
+pjsip_sip_uri* SubscriberDataManager::AoR::Binding::pub_gruu(pj_pool_t* pool) const
 {
   pjsip_sip_uri* uri = (pjsip_sip_uri*)PJUtils::uri_from_string(*_address_of_record, pool);
 
@@ -745,7 +718,7 @@ pjsip_sip_uri* RegStore::AoR::Binding::pub_gruu(pj_pool_t* pool) const
 
 // Utility method to return the public GRUU as a string.
 // Returns "" if this binding has no GRUU.
-std::string RegStore::AoR::Binding::pub_gruu_str(pj_pool_t* pool) const
+std::string SubscriberDataManager::AoR::Binding::pub_gruu_str(pj_pool_t* pool) const
 {
   pjsip_sip_uri* pub_gruu_uri = pub_gruu(pool);
 
@@ -759,7 +732,7 @@ std::string RegStore::AoR::Binding::pub_gruu_str(pj_pool_t* pool) const
 
 // Utility method to return the public GRUU surrounded by quotes.
 // Returns "" if this binding has no GRUU.
-std::string RegStore::AoR::Binding::pub_gruu_quoted_string(pj_pool_t* pool) const
+std::string SubscriberDataManager::AoR::Binding::pub_gruu_quoted_string(pj_pool_t* pool) const
 {
   std::string unquoted_pub_gruu = pub_gruu_str(pool);
 
@@ -774,10 +747,10 @@ std::string RegStore::AoR::Binding::pub_gruu_quoted_string(pj_pool_t* pool) cons
 
 
 //
-// (De)serializer for the binary RegStore format.
+// (De)serializer for the binary SubscriberDataManager format.
 //
 
-RegStore::AoR* RegStore::BinarySerializerDeserializer::
+SubscriberDataManager::AoR* SubscriberDataManager::BinarySerializerDeserializer::
   deserialize_aor(const std::string& aor_id, const std::string& s)
 {
   std::istringstream iss(s, std::istringstream::in|std::istringstream::binary);
@@ -895,7 +868,7 @@ RegStore::AoR* RegStore::BinarySerializerDeserializer::
 }
 
 
-std::string RegStore::BinarySerializerDeserializer::serialize_aor(AoR* aor_data)
+std::string SubscriberDataManager::BinarySerializerDeserializer::serialize_aor(AoR* aor_data)
 {
   std::ostringstream oss(std::ostringstream::out|std::ostringstream::binary);
 
@@ -973,14 +946,14 @@ std::string RegStore::BinarySerializerDeserializer::serialize_aor(AoR* aor_data)
   return oss.str();
 }
 
-std::string RegStore::BinarySerializerDeserializer::name()
+std::string SubscriberDataManager::BinarySerializerDeserializer::name()
 {
   return "binary";
 }
 
 
 //
-// (De)serializer for the JSON RegStore format.
+// (De)serializer for the JSON SubscriberDataManager format.
 //
 
 static const char* const JSON_BINDINGS = "bindings";
@@ -1004,7 +977,7 @@ static const char* const JSON_ROUTES = "routes";
 static const char* const JSON_NOTIFY_CSEQ = "notify_cseq";
 
 
-RegStore::AoR* RegStore::JsonSerializerDeserializer::
+SubscriberDataManager::AoR* SubscriberDataManager::JsonSerializerDeserializer::
   deserialize_aor(const std::string& aor_id, const std::string& s)
 {
   TRC_DEBUG("Deserialize JSON document: %s", s.c_str());
@@ -1126,7 +1099,7 @@ RegStore::AoR* RegStore::JsonSerializerDeserializer::
 }
 
 
-std::string RegStore::JsonSerializerDeserializer::serialize_aor(AoR* aor_data)
+std::string SubscriberDataManager::JsonSerializerDeserializer::serialize_aor(AoR* aor_data)
 {
   rapidjson::StringBuffer sb;
   rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
@@ -1237,7 +1210,429 @@ std::string RegStore::JsonSerializerDeserializer::serialize_aor(AoR* aor_data)
   return sb.GetString();
 }
 
-std::string RegStore::JsonSerializerDeserializer::name()
+std::string SubscriberDataManager::JsonSerializerDeserializer::name()
 {
   return "JSON";
+}
+
+/// ChronosTimerRequest Methods
+
+SubscriberDataManager::ChronosTimerRequest::ChronosTimerRequest(ChronosConnection* chronos_conn) :
+  _chronos_conn(chronos_conn)
+{
+}
+
+SubscriberDataManager::ChronosTimerRequest::~ChronosTimerRequest()
+{
+}
+
+void SubscriberDataManager::ChronosTimerRequest::set_timer(
+                                    const std::string& aor_id,
+                                    std::string object_id,
+                                    std::string& timer_id,
+                                    int expiry,
+                                    std::string id_type,
+                                    std::vector<std::string> tags,
+                                    SAS::TrailId trail)
+{
+  std::string temp_timer_id = "";
+  HTTPCode status;
+  std::string opaque = "{\"aor_id\": \"" + aor_id + "\", \"" +
+                              id_type + "\": \""+ object_id +"\"}";
+  std::string callback_uri = "/timers";
+
+  // If a timer has been previously set for this binding, send a PUT.
+  // Otherwise sent a POST.
+  if (timer_id == "")
+  {
+    status = _chronos_conn->send_post(temp_timer_id,
+                                      expiry,
+                                      callback_uri,
+                                      opaque,
+                                      trail,
+                                      tags);
+  }
+  else
+  {
+    temp_timer_id = timer_id;
+    status = _chronos_conn->send_put(temp_timer_id,
+                                     expiry,
+                                     callback_uri,
+                                     opaque,
+                                     trail,
+                                     tags);
+  }
+
+  // Update the timer id. If the update to Chronos failed, that's OK,
+  // don't reject the request or update the stored timer id.
+  if (status == HTTP_OK)
+  {
+    timer_id = temp_timer_id;
+  }
+}
+
+void SubscriberDataManager::ChronosTimerRequest::send_binding_timers(
+                                const std::string& aor_id,
+                                SubscriberDataManager::AoRPair* aor_pair,
+                                int now,
+                                SAS::TrailId trail)
+{
+  // Iterate over the bindings in the original AoR, and process any
+  // that aren't in the current AoR
+  for (SubscriberDataManager::AoR::Bindings::const_iterator aor_orig =
+         aor_pair->get_orig()->bindings().begin();
+       aor_orig != aor_pair->get_orig()->bindings().end();
+       ++aor_orig)
+  {
+    SubscriberDataManager::AoR::Binding* b = aor_orig->second;
+    std::string b_id = aor_orig->first;
+
+    // Is this binding present in the new AoR?
+    SubscriberDataManager::AoR::Bindings::const_iterator aor_current =
+      aor_pair->get_current()->bindings().find(b_id);
+
+    if (aor_current == aor_pair->get_current()->bindings().end())
+    {
+      // The binding has been deleted. If a timer id is present,
+      // then delete it (it can be empty because a previous post/put failed).
+      if (b->_timer_id != "")
+      {
+        _chronos_conn->send_delete(b->_timer_id, trail);
+      }
+    }
+  }
+
+  for (SubscriberDataManager::AoR::Bindings::const_iterator aor_current =
+         aor_pair->get_current()->bindings().begin();
+       aor_current != aor_pair->get_current()->bindings().end();
+       ++aor_current)
+  {
+    SubscriberDataManager::AoR::Binding* b = aor_current->second;
+    std::string b_id = aor_current->first;
+
+    // Was the binding present in the original AoR?
+    SubscriberDataManager::AoR::Bindings::const_iterator aor_orig =
+      aor_pair->get_orig()->bindings().find(b_id);
+
+    // Set a timer if the binding is new, if a previous attempt to
+    // set a timer failed, or if the expiry time has changed
+    if ((aor_orig == aor_pair->get_orig()->bindings().end()) ||
+        (b->_timer_id == "") ||
+        (b->_expires != aor_orig->second->_expires))
+    {
+      // It must be a new binding - set a timer
+      set_timer(aor_id,
+                b_id,
+                b->_timer_id,
+                b->_expires - now,
+                "binding_id",
+                SubscriberDataManager::TAGS_REG,
+                trail);
+    }
+  }
+}
+
+void SubscriberDataManager::ChronosTimerRequest::send_subscription_timers(
+                               const std::string& aor_id,
+                               SubscriberDataManager::AoRPair* aor_pair,
+                               int now,
+                               SAS::TrailId trail)
+{
+  // Iterate over the subscription in the original AoR, and process any
+  // that aren't in the current AoR
+  for (SubscriberDataManager::AoR::Subscriptions::const_iterator aor_orig =
+         aor_pair->get_orig()->subscriptions().begin();
+       aor_orig != aor_pair->get_orig()->subscriptions().end();
+       ++aor_orig)
+  {
+    SubscriberDataManager::AoR::Subscription* s = aor_orig->second;
+    std::string s_id = aor_orig->first;
+
+    // Is this binding present in the new AoR?
+    SubscriberDataManager::AoR::Subscriptions::const_iterator aor_current =
+      aor_pair->get_current()->subscriptions().find(s_id);
+
+    if (aor_current == aor_pair->get_current()->subscriptions().end())
+    {
+      // The subscription has been deleted. If a timer id is present,
+      // then delete it (it can be empty because a previous post/put failed).
+      if (s->_timer_id != "")
+      {
+        _chronos_conn->send_delete(s->_timer_id, trail);
+      }
+    }
+  }
+
+  for (SubscriberDataManager::AoR::Subscriptions::const_iterator aor_current =
+         aor_pair->get_current()->subscriptions().begin();
+       aor_current != aor_pair->get_current()->subscriptions().end();
+       ++aor_current)
+  {
+    SubscriberDataManager::AoR::Subscription* s = aor_current->second;
+    std::string s_id = aor_current->first;
+
+    // Was the subscription present in the original AoR?
+    SubscriberDataManager::AoR::Subscriptions::const_iterator aor_orig =
+      aor_pair->get_orig()->subscriptions().find(s_id);
+
+    // Set a timer if the subscription is new, if a previous attempt to
+    // set a timer failed, or if the expiry time has changed
+    if ((aor_orig == aor_pair->get_orig()->subscriptions().end()) ||
+        (s->_timer_id == "") ||
+        (s->_expires != aor_orig->second->_expires))
+    {
+      // It must be a new subscription - set a timer
+      set_timer(aor_id,
+                s_id,
+                s->_timer_id,
+                s->_expires - now,
+                "subscription_id",
+                SubscriberDataManager::TAGS_SUB,
+                trail);
+    }
+  }
+}
+
+/// NotifySender Methods
+
+SubscriberDataManager::NotifySender::NotifySender()
+{
+}
+
+SubscriberDataManager::NotifySender::~NotifySender()
+{
+}
+
+void SubscriberDataManager::NotifySender::send_notifys(
+                               const std::string& aor_id,
+                               SubscriberDataManager::AoRPair* aor_pair,
+                               int now,
+                               SAS::TrailId trail)
+{
+  // Iterate over the subscriptions in the original AoR, and send NOTIFYs for
+  // any subscriptions that aren't in the current AoR
+  send_notifys_for_orig_aor(aor_id, aor_pair, now, trail);
+
+  // Iterate over the subscriptions in the current AoR and send NOTIFYs
+  send_notifys_for_current_aor(aor_id, aor_pair, now, trail);
+}
+
+void SubscriberDataManager::NotifySender::send_notifys_for_orig_aor(
+                               const std::string& aor_id,
+                               SubscriberDataManager::AoRPair* aor_pair,
+                               int now,
+                               SAS::TrailId trail)
+{
+  // Iterate over the subscriptions in the original AoR, and send NOTIFYs for
+  // any subscriptions that aren't in the current AoR
+  for (SubscriberDataManager::AoR::Subscriptions::const_iterator aor_orig_s =
+         aor_pair->get_orig()->subscriptions().begin();
+       aor_orig_s != aor_pair->get_orig()->subscriptions().end();
+       ++aor_orig_s)
+  {
+    SubscriberDataManager::AoR::Subscription* s = aor_orig_s->second;
+    TRC_DEBUG("sub %s", s->_to_uri.c_str());
+    std::string s_id = aor_orig_s->first;
+
+    // Is this subscription present in the new AoR?
+    SubscriberDataManager::AoR::Subscriptions::const_iterator aor_current =
+      aor_pair->get_current()->subscriptions().find(s_id);
+
+    // The subscription has been deleted. We should send a final NOTIFY
+    // about the state of the bindings in the original AoR
+    if (aor_current == aor_pair->get_current()->subscriptions().end())
+    {
+      TRC_DEBUG("The subscription has been terminated");
+
+      NotifyUtils::ContactEvent contact_event;
+      NotifyUtils::RegistrationState reg_state;
+
+      // There are no non-emergency bindings left; the subscription has been
+      // terminated.
+      bool bindings_remaining = false;
+      for (SubscriberDataManager::AoR::Bindings::const_iterator aor_current_b =
+             aor_pair->get_current()->bindings().begin();
+           aor_current_b != aor_pair->get_current()->bindings().end();
+           ++aor_current_b)
+      {
+        if (!aor_current_b->second->_emergency_registration)
+        {
+          bindings_remaining = true;
+          break;
+        }
+      }
+
+      if (bindings_remaining)
+      {
+        contact_event = NotifyUtils::ContactEvent::REGISTERED;
+        reg_state = NotifyUtils::RegistrationState::ACTIVE;;
+      }
+      else
+      {
+        contact_event = NotifyUtils::ContactEvent::EXPIRED;
+        reg_state = NotifyUtils::RegistrationState::TERMINATED;
+      }
+
+      std::vector<NotifyUtils::BindingNotifyObject*> binding_notify_objects;
+
+      for (SubscriberDataManager::AoR::Bindings::const_iterator aor_orig_b =
+             aor_pair->get_orig()->bindings().begin();
+           aor_orig_b != aor_pair->get_orig()->bindings().end();
+           ++aor_orig_b)
+      {
+        // Don't include emergency registrations
+        if (!aor_orig_b->second->_emergency_registration)
+        {
+          NotifyUtils::BindingNotifyObject* bno =
+               new NotifyUtils::BindingNotifyObject(aor_orig_b->first,
+                                                    aor_orig_b->second,
+                                                    contact_event);
+          binding_notify_objects.push_back(bno);
+        }
+      }
+
+      pjsip_tx_data* tdata_notify = NULL;
+
+      // This is a terminated subscription - set the expiry time to now
+      s->_expires = now;
+      pj_status_t status = NotifyUtils::create_subscription_notify(
+                                          &tdata_notify,
+                                          s,
+                                          "aor",
+                                          aor_pair->get_orig(),
+                                          binding_notify_objects,
+                                          reg_state,
+                                          now);
+
+      if (status == PJ_SUCCESS)
+      {
+        set_trail(tdata_notify, trail);
+        status = PJUtils::send_request(tdata_notify, 0, NULL, NULL, true);
+      }
+
+      for (std::vector<NotifyUtils::BindingNotifyObject*>::iterator it =
+             binding_notify_objects.begin();
+           it != binding_notify_objects.end();
+           ++it)
+      {
+        delete *it;
+      }
+    }
+  }
+}
+
+void SubscriberDataManager::NotifySender::send_notifys_for_current_aor(
+                               const std::string& aor_id,
+                               SubscriberDataManager::AoRPair* aor_pair,
+                               int now,
+                               SAS::TrailId trail)
+{
+  // Iterate over the subscriptions in the current AoR.
+  for (SubscriberDataManager::AoR::Subscriptions::const_iterator aor_current =
+         aor_pair->get_current()->subscriptions().begin();
+       aor_current != aor_pair->get_current()->subscriptions().end();
+       ++aor_current)
+  {
+    std::vector<NotifyUtils::BindingNotifyObject*> binding_notify_objects;
+
+    // Iterate over the bindings in the original AoR. If they're not present
+    // the current AoR, mark them as expired
+    for (SubscriberDataManager::AoR::Bindings::const_iterator aor_orig_b =
+           aor_pair->get_orig()->bindings().begin();
+         aor_orig_b != aor_pair->get_orig()->bindings().end();
+         ++aor_orig_b)
+    {
+      if (!aor_orig_b->second->_emergency_registration)
+      {
+        SubscriberDataManager::AoR::Bindings::const_iterator aor_current =
+          aor_pair->get_current()->bindings().find(aor_orig_b->first);
+
+        if (aor_current == aor_pair->get_current()->bindings().end())
+        {
+          TRC_DEBUG("Binding %s has been removed", aor_orig_b->first.c_str());
+          NotifyUtils::BindingNotifyObject* bno =
+             new NotifyUtils::BindingNotifyObject(aor_orig_b->first,
+                                                  aor_orig_b->second,
+                                                  NotifyUtils::ContactEvent::EXPIRED);
+          binding_notify_objects.push_back(bno);
+        }
+      }
+    }
+
+    // Iterate over the bindings in the current AoR.
+    for (SubscriberDataManager::AoR::Bindings::const_iterator aor_current_b =
+           aor_pair->get_current()->bindings().begin();
+         aor_current_b != aor_pair->get_current()->bindings().end();
+         ++aor_current_b)
+    {
+      if (!aor_current_b->second->_emergency_registration)
+      {
+        // If the binding is only in the current AoR, mark it as created
+        SubscriberDataManager::AoR::Bindings::const_iterator aor_orig_b =
+          aor_pair->get_orig()->bindings().find(aor_current_b->first);
+
+        if (aor_orig_b == aor_pair->get_orig()->bindings().end())
+        {
+          TRC_DEBUG("Binding %s has been created", aor_current_b->first.c_str());
+          NotifyUtils::BindingNotifyObject* bno =
+              new NotifyUtils::BindingNotifyObject(aor_current_b->first,
+                                                   aor_current_b->second,
+                                                   NotifyUtils::ContactEvent::CREATED);
+          binding_notify_objects.push_back(bno);
+        }
+        else
+        {
+          // The binding is in both AoRs. Check if the expiry time has changed at all
+          NotifyUtils::ContactEvent event;
+
+          if (aor_orig_b->second->_expires < aor_current_b->second->_expires)
+          {
+            TRC_DEBUG("Binding %s has been refreshed", aor_current_b->first.c_str());
+            event = NotifyUtils::ContactEvent::REFRESHED;
+          }
+          else if (aor_orig_b->second->_expires > aor_current_b->second->_expires)
+          {
+            TRC_DEBUG("Binding %s has been shortened", aor_current_b->first.c_str());
+            event = NotifyUtils::ContactEvent::SHORTENED;
+          }
+          else
+          {
+            TRC_DEBUG("Binding %s is unchanged", aor_current_b->first.c_str());
+            event = NotifyUtils::ContactEvent::REGISTERED;
+          }
+
+
+          NotifyUtils::BindingNotifyObject* bno =
+             new NotifyUtils::BindingNotifyObject(aor_current_b->first,
+                                                  aor_current_b->second,
+                                                  event);
+          binding_notify_objects.push_back(bno);
+        }
+      }
+    }
+
+    pjsip_tx_data* tdata_notify = NULL;
+    pj_status_t status = NotifyUtils::create_subscription_notify(
+                                          &tdata_notify,
+                                          aor_current->second,
+                                          "aor",
+                                          aor_pair->get_orig(),
+                                          binding_notify_objects,
+                                          NotifyUtils::RegistrationState::ACTIVE,
+                                          now);
+
+    if (status == PJ_SUCCESS)
+    {
+      set_trail(tdata_notify, trail);
+      status = PJUtils::send_request(tdata_notify, 0, NULL, NULL, true);
+    }
+
+    for (std::vector<NotifyUtils::BindingNotifyObject*>::iterator it =
+           binding_notify_objects.begin();
+         it != binding_notify_objects.end();
+         ++it)
+    {
+      delete *it;
+    }
+  }
 }

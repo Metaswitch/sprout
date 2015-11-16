@@ -326,7 +326,6 @@ SubscriberDataManager::AoRPair* write_subscriptions_to_store(
     }
 
     // Try to write the AoR back to the store.
-    bool todo; // TODO all_bindings_expired - to remove
     set_rc = primary_sdm->set_aor_data(aor, aor_pair, trail, todo, rdata, tdata);
 
     if (set_rc != Store::OK)
@@ -502,7 +501,6 @@ void process_subscription_request(pjsip_rx_data* rdata)
     return;
   }
 
-  // TODO must only subscribe if there are non emergency bindings present
   // Determine the AOR from the first entry in the uris array.
   std::string aor = uris.front();
 
@@ -613,7 +611,6 @@ void process_subscription_request(pjsip_rx_data* rdata)
   acr->send();
   delete acr;
 
-  // TODO pcfa headers and SAS events on the NOTIFY??
   TRC_DEBUG("Report SAS end marker - trail (%llx)", trail);
   SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);

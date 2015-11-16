@@ -435,7 +435,6 @@ SubscriberDataManager::AoRPair* write_to_store(
     delete backup_aor;
   }
 
-  // TODO remove this
   if (all_bindings_expired)
   {
     TRC_DEBUG("All bindings have expired - triggering deregistration at the HSS");
