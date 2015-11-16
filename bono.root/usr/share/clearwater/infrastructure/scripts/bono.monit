@@ -39,7 +39,7 @@ cat > /etc/monit/conf.d/bono.monit <<EOF
 # Check the Bono process.
 
 # Monitor the service's PID file and memory use.
-check process bono_process with pidfile /var/run/bono.pid
+check process bono_process with pidfile /var/run/bono/bono.pid
   group bono
 
   start program = "/etc/init.d/bono start"

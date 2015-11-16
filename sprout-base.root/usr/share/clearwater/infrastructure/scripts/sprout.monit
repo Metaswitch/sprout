@@ -39,7 +39,7 @@ cat > /etc/monit/conf.d/sprout.monit <<EOF
 # Check the Sprout process.
 
 # Monitor the service's PID file and memory use.
-check process sprout_process with pidfile /var/run/sprout.pid
+check process sprout_process with pidfile /var/run/sprout/sprout.pid
   group sprout
 
   # The start, stop and restart commands are linked to alarms
