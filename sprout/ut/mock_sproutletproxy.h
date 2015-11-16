@@ -46,16 +46,6 @@ class MockSproutletProxy : public SproutletProxy
 public:
   MockSproutletProxy(pjsip_endpoint* endpt) :
     SproutletProxy(endpt, 0, "", {}, {}, {}) {}
-
-  MOCK_METHOD6(
-      create_uas_tsx,
-      void(
-        pjsip_tx_data*,
-        Sproutlet*,
-        const std::string&,
-        SAS::TrailId,
-        SproutletProxy::uas_tsx_terminated_callback,
-        void*));
 };
 
 #endif
