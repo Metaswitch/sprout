@@ -157,8 +157,8 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        ralf_processor_test.cpp \
                        mockhttpconnection.cpp \
                        session_expires_helper_test.cpp \
-                       mock_subscriber_data_manager.cpp
-
+                       mock_subscriber_data_manager.cpp \
+                       mock_chronos_connection.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \

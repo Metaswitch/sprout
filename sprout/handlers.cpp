@@ -77,6 +77,7 @@ static bool sdm_access_common(SubscriberDataManager::AoRPair** aor_pair,
   }
 
   // If we don't have any bindings, try the backup AoR and/or store.
+  //LCOV_EXCL_START
   if ((*aor_pair)->get_current()->bindings().empty())
   {
     if ((*previous_aor_pair == NULL) &&
@@ -90,7 +91,6 @@ static bool sdm_access_common(SubscriberDataManager::AoRPair** aor_pair,
     if ((*previous_aor_pair != NULL) &&
         (!(*previous_aor_pair)->get_current()->bindings().empty()))
     {
-      //LCOV_EXCL_START
       for (SubscriberDataManager::AoR::Bindings::const_iterator i =
              (*previous_aor_pair)->get_current()->bindings().begin();
            i != (*previous_aor_pair)->get_current()->bindings().end();
@@ -112,9 +112,9 @@ static bool sdm_access_common(SubscriberDataManager::AoRPair** aor_pair,
            (*aor_pair)->get_current()->get_subscription(i->first);
         *dst = *src;
       }
-      //LCOV_EXCL_STOP
     }
   }
+  //LCOV_EXCL_STOP
 
   return true;
 }
@@ -263,6 +263,7 @@ void RegSubTimeoutTask::handle_response()
   {
     // If we have a remote store, try to store this there too.  We don't worry
     // about failures in this case.
+    // LCOV_EXCL_START
     if ((_cfg->_remote_sdm != NULL) && (_cfg->_remote_sdm->has_servers()))
     {
       bool ignored;
@@ -274,6 +275,7 @@ void RegSubTimeoutTask::handle_response()
                                                       ignored);
       delete remote_aor_pair;
     }
+    // LCOV_EXCL_STOP
 
     // TODO - Move this into the set_aor_data call
     if (all_bindings_expired)
@@ -315,9 +317,7 @@ SubscriberDataManager::AoRPair* RegSubTimeoutTask::set_aor_data(
                            &previous_aor_pair,
                            trail()))
     {
-      // LCOV_EXCL_START - local store (used in testing) never fails
       break;
-      // LCOV_EXCL_STOP
     }
 
     set_rc = current_sdm->set_aor_data(aor_id,
@@ -332,10 +332,12 @@ SubscriberDataManager::AoRPair* RegSubTimeoutTask::set_aor_data(
   while (set_rc == Store::DATA_CONTENTION);
 
   // If we allocated the AoR, tidy up.
+  // LCOV_EXCL_START
   if (previous_aor_pair_alloced)
   {
     delete previous_aor_pair;
   }
+  // LCOV_EXCL_STOP
 
   return aor_pair;
 }
@@ -461,7 +463,9 @@ HTTPCode DeregistrationTask::handle_request()
                                                             NULL,
                                                             _cfg->_remote_sdm);
 
-    if (aor_pair != NULL)
+    // LCOV_EXCL_START
+    if ((aor_pair != NULL) &&
+        (aor_pair->get_current() != NULL))
     {
       // If we have a remote store, try to store this there too.  We don't worry
       // about failures in this case.
@@ -476,6 +480,7 @@ HTTPCode DeregistrationTask::handle_request()
         delete remote_aor_pair;
       }
     }
+    // LCOV_EXCL_STOP
     else
     {
       // Can't connect to memcached, return 500. If this isn't the first AoR being edited

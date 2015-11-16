@@ -253,13 +253,12 @@ SubscriberDataManager::AoRPair* write_to_store(
     {
       // Failed to get data for the AoR because there is no connection
       // to the store.
-      // LCOV_EXCL_START - local store (used in testing) never fails
       TRC_ERROR("Failed to get AoR binding for %s from store", aor.c_str());
       break;
-      // LCOV_EXCL_STOP
     }
 
     // If we don't have any bindings, try the backup AoR and/or store.
+    // LCOV_EXCL_START - remote store tests temp excluded
     if (aor_pair->get_current()->bindings().empty())
     {
       if ((backup_aor == NULL)   &&
@@ -293,6 +292,7 @@ SubscriberDataManager::AoRPair* write_to_store(
         }
       }
     }
+    // LCOV_EXCL_STOP
 
     is_initial_registration = is_initial_registration && aor_pair->get_current()->bindings().empty();
 
@@ -417,9 +417,6 @@ SubscriberDataManager::AoRPair* write_to_store(
       }
       contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, contact->next);
     }
-
-    // Finally, update the cseq
-    aor_pair->get_current()->_notify_cseq++;
 
     set_rc = primary_sdm->set_aor_data(aor,
                                        aor_pair,

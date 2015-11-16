@@ -561,10 +561,49 @@ void process_subscription_request(pjsip_rx_data* rdata)
   {
     // Failed to connect to the local store.  Reject the subscribe with a 500
     // response.
-
-    // LCOV_EXCL_START - the can't fail to connect to the store we use for UT
     st_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
-    // LCOV_EXCL_STOP
+
+    // Build and send the reply.
+    pjsip_tx_data* tdata;
+    pj_status_t status = PJUtils::create_response(stack_data.endpt,
+                                                  rdata,
+                                                  st_code,
+                                                  NULL,
+                                                  &tdata);
+
+    if (status != PJ_SUCCESS)
+    {
+      // LCOV_EXCL_START - don't know how to get PJSIP to fail to create a response
+      TRC_ERROR("Error building SUBSCRIBE %d response %s", st_code,
+                PJUtils::pj_status_to_string(status).c_str());
+      SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED, 0);
+      event.add_var_param(public_id);
+      std::string error_msg = "Error building SUBSCRIBE (" + std::to_string(st_code) + ") " + PJUtils::pj_status_to_string(status);
+      event.add_var_param(error_msg);
+      SAS::report_event(event);
+
+      PJUtils::respond_stateless(stack_data.endpt,
+                                 rdata,
+                                 PJSIP_SC_INTERNAL_SERVER_ERROR,
+                                 NULL,
+                                 NULL,
+                                 NULL);
+      delete acr;
+      return;
+      // LCOV_EXCL_STOP
+    }
+
+    // Add the to tag to the response
+    pjsip_to_hdr *to = (pjsip_to_hdr*) pjsip_msg_find_hdr(tdata->msg,
+                                                          PJSIP_H_TO,
+                                                          NULL);
+    pj_strdup2(tdata->pool, &to->tag, subscription_id.c_str());
+
+    // Pass the response to the ACR.
+    acr->tx_response(tdata->msg);
+
+    // Send the response.
+    status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
   }
 
   SAS::Event sub_accepted(trail, SASEvent::SUBSCRIBE_ACCEPTED, 0);
