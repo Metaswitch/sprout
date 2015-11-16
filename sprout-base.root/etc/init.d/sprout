@@ -283,8 +283,11 @@ get_daemon_args()
 
         for script in /usr/share/clearwater/sprout/plugin_conf.d/*.plugin_conf
         do
-          # Include plugin configuration scripts
-          DAEMON_ARGS="$DAEMON_ARGS $($script)"
+          if [ -x "$script" ]
+          then
+            # Include plugin configuration scripts
+            DAEMON_ARGS="$DAEMON_ARGS $("$script")"
+          fi
         done
 }
 
