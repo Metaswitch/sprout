@@ -140,6 +140,7 @@ enum OptionTypes
   OPT_PBX_SERVICE_ROUTE,
   OPT_NON_REGISTER_AUTHENTICATION,
   OPT_FORCE_THIRD_PARTY_REGISTER_BODY,
+  OPT_MEMENTO_NOTIFY_URL,
 };
 
 
@@ -190,6 +191,7 @@ const static struct pj_getopt_option long_opt[] =
   { "max-call-list-length",         required_argument, 0, OPT_MAX_CALL_LIST_LENGTH},
   { "memento-threads",              required_argument, 0, OPT_MEMENTO_THREADS},
   { "call-list-ttl",                required_argument, 0, OPT_CALL_LIST_TTL},
+  { "memento-notify-url",           required_argument, 0, OPT_MEMENTO_NOTIFY_URL},
   { "log-level",                    required_argument, 0, 'L'},
   { "daemon",                       no_argument,       0, 'd'},
   { "interactive",                  no_argument,       0, 't'},
@@ -340,6 +342,8 @@ static void usage(void)
        "                            then there is no limit (default: 0)\n"
        "     --memento-threads N    Number of Memento threads (default: 25)\n"
        "     --call-list-ttl N      Time to store call lists entries (default: 604800)\n"
+       "     --memento-notify-url <url>\n"
+       "                            URL Memento should notify when call lists change.\n"
        "     --alarms-enabled       Whether SNMP alarms are enabled (default: false)\n"
        "     --memcached-write-format\n"
        "                            The data format to use when writing registration and subscription data\n"
@@ -1028,6 +1032,14 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       {
         TRC_INFO("Forcing inclusion of original REGISTER requests/responses on third-party REGISTERs");
         options->force_third_party_register_body = true;
+      }
+      break;
+
+    case OPT_MEMENTO_NOTIFY_URL:
+      {
+        options->memento_notify_url = std::string(pj_optarg);
+        TRC_INFO("Memento notify URL set to: '%s'",
+                 options->memento_notify_url.c_str());
       }
       break;
 

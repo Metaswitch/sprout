@@ -14,6 +14,7 @@ TARGET_SOURCES := sproutletappserver.cpp \
                   call_list_store.cpp \
                   mementosaslogger.cpp \
                   call_list_store_processor.cpp \
+                  httpnotifier.cpp \
                   mementoappserver.cpp
 
 CPPFLAGS += -Wno-write-strings \
