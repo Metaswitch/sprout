@@ -222,12 +222,6 @@ Store::Status SubscriberDataManager::set_aor_data(
 
     // Send any NOTIFYs needed
     _notify_sender->send_notifys(aor_id, aor_pair, now, trail);
-
-    // Consider if necessary - TODO
-    if (all_bindings_expired)
-    {
-      // Finally, notify the HSS if all the bindings have been removed
-    }
   }
 
   return Store::Status::OK;
@@ -1508,6 +1502,16 @@ void SubscriberDataManager::NotifySender::send_notifys_for_orig_aor(
       {
         set_trail(tdata_notify, trail);
         status = PJUtils::send_request(tdata_notify, 0, NULL, NULL, true);
+
+        if (status != PJ_SUCCESS)
+        {
+          // LCOV_EXCL_START
+          SAS::Event event(trail, SASEvent::NOTIFICATION_FAILED, 0);
+          std::string error_msg = "Failed to send NOTIFY - error: " + std::to_string(status);
+          event.add_var_param(error_msg);
+          SAS::report_event(event);
+         // LCOV_EXCL_STOP
+        }
       }
 
       for (std::vector<NotifyUtils::BindingNotifyObject*>::iterator it =
@@ -1625,6 +1629,16 @@ void SubscriberDataManager::NotifySender::send_notifys_for_current_aor(
     {
       set_trail(tdata_notify, trail);
       status = PJUtils::send_request(tdata_notify, 0, NULL, NULL, true);
+
+      if (status != PJ_SUCCESS)
+      {
+        // LCOV_EXCL_START
+        SAS::Event event(trail, SASEvent::NOTIFICATION_FAILED, 0);
+        std::string error_msg = "Failed to send NOTIFY - error: " + std::to_string(status);
+        event.add_var_param(error_msg);
+        SAS::report_event(event);
+       // LCOV_EXCL_STOP
+      }
     }
 
     for (std::vector<NotifyUtils::BindingNotifyObject*>::iterator it =

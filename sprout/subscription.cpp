@@ -131,13 +131,12 @@ SubscriberDataManager::AoRPair* write_subscriptions_to_store(
                    int now,                                   ///<time now
                    SubscriberDataManager::AoRPair* backup_aor,///<backup data if no entry in store
                    SubscriberDataManager* backup_sdm,         ///<backup store to read from if no entry in store and no backup data
-                   std::string& subscription_id,
-                   SAS::TrailId trail,
-                   std::string public_id,
-                   bool send_ok,
-                   ACR* acr,
-                   std::deque<std::string> ccfs,
-                   std::deque<std::string> ecfs)
+                   SAS::TrailId trail,                        ///<SAS trail
+                   std::string public_id,                     ///
+                   bool send_ok,                              ///<Should we create an OK
+                   ACR* acr,                                  ///
+                   std::deque<std::string> ccfs,              ///
+                   std::deque<std::string> ecfs)              ///
 {
   // Parse the headers
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);;
@@ -155,6 +154,7 @@ SubscriberDataManager::AoRPair* write_subscriptions_to_store(
   Store::Status set_rc;
   SubscriberDataManager::AoRPair* aor_pair = NULL;
   std::string subscription_contact;
+  std::string subscription_id;
 
   do
   {
@@ -326,7 +326,8 @@ SubscriberDataManager::AoRPair* write_subscriptions_to_store(
     }
 
     // Try to write the AoR back to the store.
-    set_rc = primary_sdm->set_aor_data(aor, aor_pair, trail, todo, rdata, tdata);
+    bool unused;
+    set_rc = primary_sdm->set_aor_data(aor, aor_pair, trail, unused, rdata, tdata);
 
     if (set_rc != Store::OK)
     {
@@ -512,7 +513,6 @@ void process_subscription_request(pjsip_rx_data* rdata)
 
   // Write to the local store, checking the remote store if there is no entry locally.
   // If the write to the local store succeeds, then write to the remote store.
-  std::string subscription_id;
   SubscriberDataManager::AoRPair* aor_pair =
                               write_subscriptions_to_store(sdm,
                                                            aor,
@@ -520,7 +520,6 @@ void process_subscription_request(pjsip_rx_data* rdata)
                                                            now,
                                                            NULL,
                                                            remote_sdm,
-                                                           subscription_id,
                                                            trail,
                                                            public_id,
                                                            true,
@@ -537,7 +536,6 @@ void process_subscription_request(pjsip_rx_data* rdata)
     // about failures in this case.
     if ((remote_sdm != NULL) && remote_sdm->has_servers())
     {
-      std::string ignore;
       SubscriberDataManager::AoRPair* remote_aor_pair =
          write_subscriptions_to_store(remote_sdm,
                                       aor,
@@ -545,7 +543,6 @@ void process_subscription_request(pjsip_rx_data* rdata)
                                       now,
                                       aor_pair,
                                       NULL,
-                                      ignore,
                                       trail,
                                       public_id,
                                       false,
@@ -595,6 +592,17 @@ void process_subscription_request(pjsip_rx_data* rdata)
     pjsip_to_hdr *to = (pjsip_to_hdr*) pjsip_msg_find_hdr(tdata->msg,
                                                           PJSIP_H_TO,
                                                           NULL);
+    std::string subscription_id = PJUtils::pj_str_to_string(&to->tag);
+
+    if (subscription_id == "")
+    {
+      // If there's no to tag, generate an unique one
+      // LCOV_EXCL_START
+      subscription_id = std::to_string(Utils::generate_unique_integer(id_deployment,
+                                                                      id_instance));
+      // LCOV_EXCL_STOP
+    }
+
     pj_strdup2(tdata->pool, &to->tag, subscription_id.c_str());
 
     // Pass the response to the ACR.
