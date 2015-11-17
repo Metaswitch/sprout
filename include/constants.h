@@ -41,6 +41,7 @@ extern "C" {
 #include <pjsip.h>
 }
 
+const pj_str_t STR_HISTORY_INFO = pj_str((char*)"History-Info");
 const pj_str_t STR_DIVERSION = pj_str((char *)"Diversion");
 const pj_str_t STR_SUPPORTED = pj_str((char *)"Supported");
 const pj_str_t STR_REQUIRE = pj_str((char *)"Require");
@@ -82,7 +83,10 @@ const pj_str_t STR_CK = pj_str((char*)"ck");
 const pj_str_t STR_IK = pj_str((char*)"ik");
 const pj_str_t STR_P_PROFILE_KEY = pj_str((char*)"P-Profile-Key");
 const pj_str_t STR_APPLICATION = pj_str((char*)"application");
+const pj_str_t STR_JSON = pj_str((char*)"json");
 const pj_str_t STR_SDP = pj_str((char*)"sdp");
+const pj_str_t STR_TEXT = pj_str((char*)"text");
+const pj_str_t STR_XML = pj_str((char*)"xml");
 const pj_str_t STR_EVENT = pj_str((char*)"Event");
 const pj_str_t STR_EVENT_LOWER = pj_str((char*)"event");
 const pj_str_t STR_EVENTS = pj_str((char*)"events");
@@ -122,6 +126,11 @@ const pj_str_t STR_NPDI = pj_str((char*)"npdi");
 const pj_str_t STR_RN = pj_str((char*)"rn");
 const pj_str_t STR_AUTO_REG = pj_str((char*)"auto-reg");
 const pj_str_t STR_TIMER = pj_str((char*)"timer");
+const pj_str_t STR_TO = pj_str((char*)"To");
+const pj_str_t STR_FROM = pj_str((char*)"From");
+const pj_str_t STR_ROUTE = pj_str((char*)"Route");
+const pj_str_t STR_CONTENT_TYPE = pj_str((char*)"Content-Type");
+const pj_str_t STR_CONTENT_LENGTH = pj_str((char*)"Content-Length");
 
 /// Prefix of ODI tokens we generate.
 const pj_str_t STR_ODI_PREFIX = pj_str((char*)"odi_");
@@ -183,5 +192,6 @@ const pj_str_t STR_XSI_SLOC_VAL = pj_str((char*)"http://www.w3.org/2001/03/xml.x
 
 // SIP methods not defined in PJSIP core.
 const static pjsip_method METHOD_UPDATE = { PJSIP_OTHER_METHOD, pj_str((char*)"UPDATE") };
+const static pjsip_method METHOD_INFO = { PJSIP_OTHER_METHOD, pj_str((char*)"INFO") };
 
 #endif /* CONSTANTS_H_ */
