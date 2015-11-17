@@ -229,6 +229,9 @@ do_stop()
 #
 do_run()
 {
+        # Allow us to write to the pidfile directory
+        [ -d /var/run/$NAME ] || install -m 755 -o $NAME -g root -d /var/run/$NAME
+
         setup_environment
         get_daemon_args
         $namespace_prefix start-stop-daemon --start --quiet --exec $DAEMON --chuid $NAME --chdir $HOME -- $DAEMON_ARGS \
