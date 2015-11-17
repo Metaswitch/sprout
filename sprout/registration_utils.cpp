@@ -433,7 +433,7 @@ static bool expire_bindings(SubscriberDataManager *sdm,
   {
     SubscriberDataManager::AoRPair* aor_pair = sdm->get_aor_data(aor, trail);
 
-    if (aor_pair == NULL)
+    if ((aor_pair == NULL) || (aor_pair->get_current() == NULL))
     {
       break;  // LCOV_EXCL_LINE No UT for lookup failure.
     }

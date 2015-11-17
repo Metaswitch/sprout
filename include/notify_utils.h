@@ -60,10 +60,12 @@ namespace NotifyUtils
   enum class SubscriptionState { ACTIVE, TERMINATED };
   enum class ContactEvent { REGISTERED, CREATED, REFRESHED, EXPIRED, SHORTENED };
 
-  struct BindingNotifyObject {
-    BindingNotifyObject(std::string id,
-                        SubscriberDataManager::AoR::Binding* b,
-                        NotifyUtils::ContactEvent event) :
+  // Wrapper for the bindings in a NOTIFY. The information needed is
+  // the binding itself, a unique ID for it and the contact event
+  struct BindingNotifyInformation {
+    BindingNotifyInformation(std::string id,
+                             SubscriberDataManager::AoR::Binding* b,
+                             NotifyUtils::ContactEvent event) :
       _id(id),
       _b(b),
       _contact_event(event)
@@ -78,7 +80,7 @@ namespace NotifyUtils
                                          SubscriberDataManager::AoR::Subscription* s,
                                          std::string aor,
                                          SubscriberDataManager::AoR* aor_data,
-                                         std::vector<BindingNotifyObject*> bnos,
+                                         std::vector<BindingNotifyInformation*> bnis,
                                          NotifyUtils::RegistrationState reg_state,
                                          int now);
 
@@ -86,7 +88,7 @@ namespace NotifyUtils
                             SubscriberDataManager::AoR::Subscription* subscription,
                             std::string aor, 
                             int cseq,
-                            std::vector<BindingNotifyObject*> bnos,
+                            std::vector<BindingNotifyInformation*> bnis,
                             NotifyUtils::RegistrationState reg_state,
                             NotifyUtils::SubscriptionState subscription_state,
                             int expiry);

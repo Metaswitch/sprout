@@ -229,7 +229,11 @@ public:
     friend class SubscriberDataManager;
   };
 
-  /// Class to hold a pair of AoRs.
+  /// @class SubscriberDataManager::AoRPair
+  ///
+  /// Class to hold a pair of AoRs. The original AoR holds the AoR retrieved
+  /// from the store, the current AoR holds any changes made to the AoR before
+  /// it's put back in the store
   class AoRPair
   {
   public:
@@ -244,17 +248,15 @@ public:
       delete _current_aor; _current_aor = NULL;
     }
 
-    /// Get and set the current AoR
+    /// Get the current AoR
     AoR* get_current() { return _current_aor; }
-    void set_current(AoR* current) { _current_aor = current; }
 
   private:
     AoR* _orig_aor;
     AoR* _current_aor;
 
-    /// Get and set the original AoR
+    /// Get the original AoR
     AoR* get_orig() { return _orig_aor; }
-    void set_orig(AoR* orig) { _orig_aor = orig; }
 
     /// The subscriber data manager is allowed to access the original AoR
     friend class SubscriberDataManager;
@@ -350,28 +352,46 @@ public:
     std::vector<SerializerDeserializer*> _deserializers;
   };
 
-  class ChronosTimerRequest
+  /// @class SubscriberDataManager::ChronosTimerRequestSender
+  ///
+  /// Class responsible for sending any requests to Chronos about
+  /// registration/subscription expiry
+  ///
+  /// @param chronos_conn    The underlying chronos connection
+  class ChronosTimerRequestSender
   {
   public:
-    ChronosTimerRequest(ChronosConnection* chronos_conn);
+    ChronosTimerRequestSender(ChronosConnection* chronos_conn);
 
-    virtual ~ChronosTimerRequest();
+    virtual ~ChronosTimerRequestSender();
 
+    /// Create and send any appropriate Chronos requests
+    ///
+    /// @param aor_id       The AoR ID
+    /// @param aor_pair     The AoR pair to send Chronos requests for
+    /// @param now          The current time
+    /// @param trail        SAS trail
     virtual void send_timers(const std::string& aor_id,
                              AoRPair* aor_pair,
                              int now,
-                             SAS::TrailId trail)
-    {
-      send_binding_timers(aor_id, aor_pair, now, trail);
-      send_subscription_timers(aor_id, aor_pair, now, trail);
-    }
+                             SAS::TrailId trail);
 
-    /// SubscriberDataManager is the only class that can use Connector
+    /// SubscriberDataManager is the only class that can use
+    /// ChronosTimerRequestSender
     friend class SubscriberDataManager;
 
   private:
     ChronosConnection* _chronos_conn;
 
+    /// Create the Chronos Timer request
+    ///
+    /// @param aor_id       The AoR ID
+    /// @param object_id    What the JSON ID should be
+    /// @param timer_id     The Timer ID
+    /// @param expiry       Timer length
+    /// @param id_type      Binding/subscription ID
+    /// @param tags         Any tags to add to the Chronos timer
+    /// @param trail        SAS trail
     virtual void set_timer(const std::string& aor_id,
                            std::string object_id,
                            std::string& timer_id,
@@ -380,17 +400,33 @@ public:
                            std::vector<std::string> tags,
                            SAS::TrailId trail);
 
+    /// Create and send any Chronos requests for bindings
+    ///
+    /// @param aor_id       The AoR ID
+    /// @param aor_pair     The AoR pair to send requests for
+    /// @param now          The current time
+    /// @param trail        SAS trail
     virtual void send_binding_timers(const std::string& aor_id,
                                      AoRPair* aor_pair,
                                      int now,
                                      SAS::TrailId trail);
 
+    /// Create and send any Chronos requests for subscriptions
+    ///
+    /// @param aor_id       The AoR ID
+    /// @param aor_pair     The AoR pair to send requests for
+    /// @param now          The current time
+    /// @param trail        SAS trail
     virtual void send_subscription_timers(const std::string& aor_id,
                                           AoRPair* aor_pair,
                                           int now,
                                           SAS::TrailId trail);
   };
 
+  /// @class SubscriberDataManager::NotifySender
+  ///
+  /// Class responsible for sending any NOTIFYs about registration state
+  /// change
   class NotifySender
   {
   public:
@@ -398,21 +434,41 @@ public:
 
     virtual ~NotifySender();
 
+    /// Create and send any appropriate NOTIFYs
+    ///
+    /// @param aor_id       The AoR ID
+    /// @param aor_pair     The AoR pair to send NOTIFYs for
+    /// @param now          The current time
+    /// @param trail        SAS trail
     void send_notifys(const std::string& aor_id,
                       AoRPair* aor_pair,
                       int now,
                       SAS::TrailId trail);
 
-    /// SubscriberDataManager is the only class that can use Connector
+    /// SubscriberDataManager is the only class that can use NotifySender
     friend class SubscriberDataManager;
 
   private:
-    void send_notifys_for_orig_aor(const std::string& aor_id,
+    // Create and send any appropriate NOTIFYs for any expired subscriptions
+    //
+    // @param aor_id       The AoR ID
+    // @param aor_pair     The AoR pair to send NOTIFYs for
+    // @param now          The current time
+    // @param trail        SAS trail
+    void send_notifys_for_expired_subscriptions(
+                                   const std::string& aor_id,
                                    SubscriberDataManager::AoRPair* aor_pair,
                                    int now,
                                    SAS::TrailId trail);
 
-    void send_notifys_for_current_aor(const std::string& aor_id,
+    // Create and send any appropriate NOTIFYs for any current subscriptions
+    //
+    // @param aor_id       The AoR ID
+    // @param aor_pair     The AoR pair to send NOTIFYs for
+    // @param now          The current time
+    // @param trail        SAS trail
+    void send_notifys_for_current_subscriptions(
+                                      const std::string& aor_id,
                                       SubscriberDataManager::AoRPair* aor_pair,
                                       int now,
                                       SAS::TrailId trail);
@@ -437,6 +493,8 @@ public:
   ///                             the entries in the vector.
   /// @param chronos_connection - Chronos connection used to set timers for
   ///                             expiring registrations and subscriptions.
+  /// @param is_primary         - Whether the underlying data store is the local
+  ///                             store or remote
   SubscriberDataManager(Store* data_store,
                         SerializerDeserializer*& serializer,
                         std::vector<SerializerDeserializer*>& deserializers,
@@ -449,6 +507,8 @@ public:
   /// @param data_store         - Pointer to the underlying data store.
   /// @param chronos_connection - Chronos connection used to set timers for
   ///                             expiring registrations and subscriptions.
+  /// @param is_primary         - Whether the underlying data store is the local
+  ///                             store or remote
   SubscriberDataManager(Store* data_store,
                         ChronosConnection* chronos_connection,
                         bool is_primary);
@@ -462,39 +522,59 @@ public:
   /// in format "sip:2125551212@example.com"), creating creating it if
   /// necessary.  May return NULL in case of error.  Result is owned
   /// by caller and must be freed with delete.
+  ///
+  /// @param aor_id    The AoR to retrieve
+  /// @param trail     SAS trail
   virtual AoRPair* get_aor_data(const std::string& aor_id,
                                 SAS::TrailId trail);
 
   /// Update the data for a particular address of record.  Writes the data
-  /// atomically.  If the underlying data has changed since it was last
+  /// atomically. If the underlying data has changed since it was last
   /// read, the update is rejected and this returns false; if the update
   /// succeeds, this returns true.
+  ///
+  /// @param aor_id               The AoR to retrieve
+  /// @param aor_pair             The AoR pair to set
+  /// @param trail                SAS trail
+  /// @param all_bindings_expired Whether all bindings have expired
+  ///                             as a result of the set
+  /// @param extra_message_rdata  Message to respond to
+  /// @param extra_message_tdata  Message to respond with
   virtual Store::Status set_aor_data(const std::string& aor_id,
-                                     AoRPair* data,
+                                     AoRPair* aor_pair,
                                      SAS::TrailId trail,
                                      bool& all_bindings_expired = unused_bool,
                                      pjsip_rx_data* extra_message_rdata = NULL,
                                      pjsip_tx_data* extra_message_tdata = NULL);
 
 private:
-  // Call expire_subscriptions and expire_bindings, returning
-  // the max expires value created in expire_bindings. Chronos
-  // timers are deleted. NOTIFYs are sent depending on the bool value.
+  // Expire any out of date bindings in the current AoR
+  //
+  // @param aor_pair  The AoRPair to expir
+  // @param now       The current time
   int expire_aor_members(AoRPair* aor_pair,
                          int now);
 
-  // expire any old bindings, and return max_expires.
+  // Expire any old bindings, and return the maximum expiry
+  //
+  // @param aor_pair  The AoRPair to expir
+  // @param now       The current time
   int expire_bindings(AoR* aor_data,
                       int now);
 
-  // expire any old subscriptions.
+  // Expire any old subscriptions.
+  //
+  // @param aor_pair      The AoRPair to expir
+  // @param now           The current time
+  // @param force_expires Whether all subscriptions should be expired
+  //                      no matter the current time
   void expire_subscriptions(AoRPair* aor_pair,
                             int now,
                             bool force_expire);
 
   static bool unused_bool;
   Connector* _connector;
-  ChronosTimerRequest* _chronos_timer_request;
+  ChronosTimerRequestSender* _chronos_timer_request_sender;
   NotifySender* _notify_sender;
   bool _primary_sdm;
 };

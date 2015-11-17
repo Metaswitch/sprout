@@ -188,6 +188,7 @@ SubscriberDataManager::AoRPair* write_subscriptions_to_store(
       }
 
       if ((backup_aor != NULL) &&
+          (backup_aor->get_current() != NULL) &&
           (!backup_aor->get_current()->subscriptions().empty()))
       {
         for (SubscriberDataManager::AoR::Subscriptions::const_iterator i =

@@ -699,7 +699,7 @@ class SubscriberDataManagerChronosRequestsTest : public SipTest
 
   SubscriberDataManagerChronosRequestsTest()
   {
-    _chronos_connection = new MockChronosConnection();
+    _chronos_connection = new MockChronosConnection("chronos");
     _datastore = new LocalStore();
 
     SubscriberDataManager::SerializerDeserializer* serializer =
@@ -713,8 +713,6 @@ class SubscriberDataManagerChronosRequestsTest : public SipTest
                                        deserializers,
                                        _chronos_connection,
                                        true);
-  //  delete _store->_notify_sender;
-//    _store->_notify_sender = new MockNotifySender();
   }
 
   ~SubscriberDataManagerChronosRequestsTest()
@@ -729,6 +727,8 @@ class SubscriberDataManagerChronosRequestsTest : public SipTest
   SubscriberDataManager* _store;
 };
 
+// Test that deleting a subscription when it doesn't have a timer set doesn't generate a
+// Chronos request
 TEST_F(SubscriberDataManagerChronosRequestsTest, SubscriptionTestsDeleteWithoutChronosTimer)
 {
   SubscriberDataManager::AoRPair* aor_data1;
@@ -794,6 +794,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, SubscriptionTestsDeleteWithoutC
   delete aor_data1; aor_data1 = NULL;
 }
 
+// Test that adding a subscription generates Chronos Timer requests
 TEST_F(SubscriberDataManagerChronosRequestsTest, SubscriptionTestsChronosRequests)
 {
   SubscriberDataManager::AoRPair* aor_data1;
@@ -881,8 +882,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, SubscriptionTestsChronosRequest
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
-  // Remove the subscription.
-  // Read the record back in and check the timer ID.
+  // Remove the subscription. Read the record back in and check the timer ID.
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
   aor_data1->get_current()->remove_subscription(std::string("1234"));

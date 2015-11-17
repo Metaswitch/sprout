@@ -81,7 +81,7 @@ SubscriberDataManager::SubscriberDataManager(Store* data_store,
   _primary_sdm(is_primary)
 {
   _connector = new Connector(data_store, serializer, deserializers);
-  _chronos_timer_request = new ChronosTimerRequest(chronos_connection);
+  _chronos_timer_request_sender = new ChronosTimerRequestSender(chronos_connection);
   _notify_sender = new NotifySender();
 }
 
@@ -97,7 +97,7 @@ SubscriberDataManager::SubscriberDataManager(Store* data_store,
   };
 
   _connector = new Connector(data_store, serializer, deserializers);
-  _chronos_timer_request = new ChronosTimerRequest(chronos_connection);
+  _chronos_timer_request_sender = new ChronosTimerRequestSender(chronos_connection);
   _notify_sender = new NotifySender();
 }
 
@@ -105,7 +105,7 @@ SubscriberDataManager::SubscriberDataManager(Store* data_store,
 SubscriberDataManager::~SubscriberDataManager()
 {
   delete _notify_sender;
-  delete _chronos_timer_request;
+  delete _chronos_timer_request_sender;
   delete _connector;
 }
 
@@ -130,7 +130,7 @@ SubscriberDataManager::AoRPair* SubscriberDataManager::get_aor_data(
   }
   else
   {
-    // We hit some kind of error in the store. Return NULL
+    // We hit some kind of error in the store.
     return NULL;
   }
 }
@@ -156,6 +156,17 @@ Store::Status SubscriberDataManager::set_aor_data(
                                      pjsip_rx_data* extra_message_rdata,
                                      pjsip_tx_data* extra_message_tdata)
 {
+  // The ordering of this function is quite important.
+  //
+  // 1. Expire any old bindings/subscriptions.
+  // 2. Send any Chronos timer requests
+  // 3. Write the data to memcached. If this fails, bail out here
+  // 4. Send any messages we were asked to by the caller
+  // 5. Send any NOTIFYs
+  //
+  // This ordering is important to ensure that we don't send
+  // duplicate NOTIFYs (so we send these after writing to memcached) and
+  // so that only one piece of code has responsibility for this
   all_bindings_expired = false;
 
   // Expire old subscriptions and bindings before writing to the server. If
@@ -187,7 +198,7 @@ Store::Status SubscriberDataManager::set_aor_data(
   // Set the chronos timers
   if (_primary_sdm)
   {
-    _chronos_timer_request->send_timers(aor_id, aor_pair, now, trail);
+    _chronos_timer_request_sender->send_timers(aor_id, aor_pair, now, trail);
   }
 
   // Update the Notify CSeq, and write to store. We always update the cseq
@@ -250,14 +261,13 @@ void SubscriberDataManager::expire_subscriptions(AoRPair* aor_pair,
                                                  int now,
                                                  bool force_expire)
 {
-  if (force_expire)
-  { TRC_DEBUG("FORCE");}
   for (AoR::Subscriptions::iterator i =
          aor_pair->get_current()->_subscriptions.begin();
        i != aor_pair->get_current()->_subscriptions.end();
       )
   {
     AoR::Subscription* s = i->second;
+
     if ((force_expire) || (s->_expires <= now))
     {
       // The subscription has expired, so remove it. This could be
@@ -280,24 +290,6 @@ void SubscriberDataManager::expire_subscriptions(AoRPair* aor_pair,
     {
       ++i;
     }
-  }
-
-  for (AoR::Subscriptions::iterator i =
-         aor_pair->get_orig()->_subscriptions.begin();
-       i != aor_pair->get_orig()->_subscriptions.end();
-       ++i
-      )
-  {
-    TRC_DEBUG("sub5 %s", i->second->_to_uri.c_str());
-  }
-
-  for (AoR::Subscriptions::iterator i =
-         aor_pair->get_current()->_subscriptions.begin();
-       i != aor_pair->get_current()->_subscriptions.end();
-       ++i
-      )
-  {
-    TRC_DEBUG("sub6 %s", i->second->_to_uri.c_str());
   }
 }
 
@@ -1209,18 +1201,29 @@ std::string SubscriberDataManager::JsonSerializerDeserializer::name()
   return "JSON";
 }
 
-/// ChronosTimerRequest Methods
+/// ChronosTimerRequestSender Methods
 
-SubscriberDataManager::ChronosTimerRequest::ChronosTimerRequest(ChronosConnection* chronos_conn) :
+SubscriberDataManager::ChronosTimerRequestSender::
+     ChronosTimerRequestSender(ChronosConnection* chronos_conn) :
   _chronos_conn(chronos_conn)
 {
 }
 
-SubscriberDataManager::ChronosTimerRequest::~ChronosTimerRequest()
+SubscriberDataManager::ChronosTimerRequestSender::~ChronosTimerRequestSender()
 {
 }
 
-void SubscriberDataManager::ChronosTimerRequest::set_timer(
+void SubscriberDataManager::ChronosTimerRequestSender::send_timers(
+                             const std::string& aor_id,
+                             AoRPair* aor_pair,
+                             int now,
+                             SAS::TrailId trail)
+{
+  send_binding_timers(aor_id, aor_pair, now, trail);
+  send_subscription_timers(aor_id, aor_pair, now, trail);
+}
+
+void SubscriberDataManager::ChronosTimerRequestSender::set_timer(
                                     const std::string& aor_id,
                                     std::string object_id,
                                     std::string& timer_id,
@@ -1265,7 +1268,7 @@ void SubscriberDataManager::ChronosTimerRequest::set_timer(
   }
 }
 
-void SubscriberDataManager::ChronosTimerRequest::send_binding_timers(
+void SubscriberDataManager::ChronosTimerRequestSender::send_binding_timers(
                                 const std::string& aor_id,
                                 SubscriberDataManager::AoRPair* aor_pair,
                                 int now,
@@ -1326,7 +1329,7 @@ void SubscriberDataManager::ChronosTimerRequest::send_binding_timers(
   }
 }
 
-void SubscriberDataManager::ChronosTimerRequest::send_subscription_timers(
+void SubscriberDataManager::ChronosTimerRequestSender::send_subscription_timers(
                                const std::string& aor_id,
                                SubscriberDataManager::AoRPair* aor_pair,
                                int now,
@@ -1342,7 +1345,7 @@ void SubscriberDataManager::ChronosTimerRequest::send_subscription_timers(
     SubscriberDataManager::AoR::Subscription* s = aor_orig->second;
     std::string s_id = aor_orig->first;
 
-    // Is this binding present in the new AoR?
+    // Is this subscription present in the new AoR?
     SubscriberDataManager::AoR::Subscriptions::const_iterator aor_current =
       aor_pair->get_current()->subscriptions().find(s_id);
 
@@ -1405,13 +1408,13 @@ void SubscriberDataManager::NotifySender::send_notifys(
 {
   // Iterate over the subscriptions in the original AoR, and send NOTIFYs for
   // any subscriptions that aren't in the current AoR
-  send_notifys_for_orig_aor(aor_id, aor_pair, now, trail);
+  send_notifys_for_expired_subscriptions(aor_id, aor_pair, now, trail);
 
   // Iterate over the subscriptions in the current AoR and send NOTIFYs
-  send_notifys_for_current_aor(aor_id, aor_pair, now, trail);
+  send_notifys_for_current_subscriptions(aor_id, aor_pair, now, trail);
 }
 
-void SubscriberDataManager::NotifySender::send_notifys_for_orig_aor(
+void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions(
                                const std::string& aor_id,
                                SubscriberDataManager::AoRPair* aor_pair,
                                int now,
@@ -1425,7 +1428,6 @@ void SubscriberDataManager::NotifySender::send_notifys_for_orig_aor(
        ++aor_orig_s)
   {
     SubscriberDataManager::AoR::Subscription* s = aor_orig_s->second;
-    TRC_DEBUG("sub %s", s->_to_uri.c_str());
     std::string s_id = aor_orig_s->first;
 
     // Is this subscription present in the new AoR?
@@ -1436,7 +1438,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_orig_aor(
     // about the state of the bindings in the original AoR
     if (aor_current == aor_pair->get_current()->subscriptions().end())
     {
-      TRC_DEBUG("The subscription has been terminated");
+      TRC_DEBUG("The subscription (%s) has been terminated", s_id.c_str());
 
       NotifyUtils::ContactEvent contact_event;
       NotifyUtils::RegistrationState reg_state;
@@ -1459,7 +1461,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_orig_aor(
       if (bindings_remaining)
       {
         contact_event = NotifyUtils::ContactEvent::REGISTERED;
-        reg_state = NotifyUtils::RegistrationState::ACTIVE;;
+        reg_state = NotifyUtils::RegistrationState::ACTIVE;
       }
       else
       {
@@ -1467,7 +1469,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_orig_aor(
         reg_state = NotifyUtils::RegistrationState::TERMINATED;
       }
 
-      std::vector<NotifyUtils::BindingNotifyObject*> binding_notify_objects;
+      std::vector<NotifyUtils::BindingNotifyInformation*> binding_notify;
 
       for (SubscriberDataManager::AoR::Bindings::const_iterator aor_orig_b =
              aor_pair->get_orig()->bindings().begin();
@@ -1477,11 +1479,11 @@ void SubscriberDataManager::NotifySender::send_notifys_for_orig_aor(
         // Don't include emergency registrations
         if (!aor_orig_b->second->_emergency_registration)
         {
-          NotifyUtils::BindingNotifyObject* bno =
-               new NotifyUtils::BindingNotifyObject(aor_orig_b->first,
-                                                    aor_orig_b->second,
-                                                    contact_event);
-          binding_notify_objects.push_back(bno);
+          NotifyUtils::BindingNotifyInformation* bni =
+               new NotifyUtils::BindingNotifyInformation(aor_orig_b->first,
+                                                         aor_orig_b->second,
+                                                         contact_event);
+          binding_notify.push_back(bni);
         }
       }
 
@@ -1494,7 +1496,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_orig_aor(
                                           s,
                                           "aor",
                                           aor_pair->get_orig(),
-                                          binding_notify_objects,
+                                          binding_notify,
                                           reg_state,
                                           now);
 
@@ -1507,16 +1509,17 @@ void SubscriberDataManager::NotifySender::send_notifys_for_orig_aor(
         {
           // LCOV_EXCL_START
           SAS::Event event(trail, SASEvent::NOTIFICATION_FAILED, 0);
-          std::string error_msg = "Failed to send NOTIFY - error: " + std::to_string(status);
+          std::string error_msg = "Failed to send NOTIFY - error: " +
+                                       PJUtils::pj_status_to_string(status);
           event.add_var_param(error_msg);
           SAS::report_event(event);
          // LCOV_EXCL_STOP
         }
       }
 
-      for (std::vector<NotifyUtils::BindingNotifyObject*>::iterator it =
-             binding_notify_objects.begin();
-           it != binding_notify_objects.end();
+      for (std::vector<NotifyUtils::BindingNotifyInformation*>::iterator it =
+             binding_notify.begin();
+           it != binding_notify.end();
            ++it)
       {
         delete *it;
@@ -1525,7 +1528,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_orig_aor(
   }
 }
 
-void SubscriberDataManager::NotifySender::send_notifys_for_current_aor(
+void SubscriberDataManager::NotifySender::send_notifys_for_current_subscriptions(
                                const std::string& aor_id,
                                SubscriberDataManager::AoRPair* aor_pair,
                                int now,
@@ -1537,7 +1540,8 @@ void SubscriberDataManager::NotifySender::send_notifys_for_current_aor(
        aor_current != aor_pair->get_current()->subscriptions().end();
        ++aor_current)
   {
-    std::vector<NotifyUtils::BindingNotifyObject*> binding_notify_objects;
+    TRC_DEBUG("The subscription (%s) is still active", aor_current->first.c_str());
+    std::vector<NotifyUtils::BindingNotifyInformation*> binding_notify;
 
     // Iterate over the bindings in the original AoR. If they're not present
     // the current AoR, mark them as expired
@@ -1554,11 +1558,12 @@ void SubscriberDataManager::NotifySender::send_notifys_for_current_aor(
         if (aor_current == aor_pair->get_current()->bindings().end())
         {
           TRC_DEBUG("Binding %s has been removed", aor_orig_b->first.c_str());
-          NotifyUtils::BindingNotifyObject* bno =
-             new NotifyUtils::BindingNotifyObject(aor_orig_b->first,
-                                                  aor_orig_b->second,
-                                                  NotifyUtils::ContactEvent::EXPIRED);
-          binding_notify_objects.push_back(bno);
+          NotifyUtils::BindingNotifyInformation* bni =
+             new NotifyUtils::BindingNotifyInformation(
+                                              aor_orig_b->first,
+                                              aor_orig_b->second,
+                                              NotifyUtils::ContactEvent::EXPIRED);
+          binding_notify.push_back(bni);
         }
       }
     }
@@ -1578,11 +1583,11 @@ void SubscriberDataManager::NotifySender::send_notifys_for_current_aor(
         if (aor_orig_b == aor_pair->get_orig()->bindings().end())
         {
           TRC_DEBUG("Binding %s has been created", aor_current_b->first.c_str());
-          NotifyUtils::BindingNotifyObject* bno =
-              new NotifyUtils::BindingNotifyObject(aor_current_b->first,
+          NotifyUtils::BindingNotifyInformation* bni =
+              new NotifyUtils::BindingNotifyInformation(aor_current_b->first,
                                                    aor_current_b->second,
                                                    NotifyUtils::ContactEvent::CREATED);
-          binding_notify_objects.push_back(bno);
+          binding_notify.push_back(bni);
         }
         else
         {
@@ -1606,11 +1611,11 @@ void SubscriberDataManager::NotifySender::send_notifys_for_current_aor(
           }
 
 
-          NotifyUtils::BindingNotifyObject* bno =
-             new NotifyUtils::BindingNotifyObject(aor_current_b->first,
-                                                  aor_current_b->second,
-                                                  event);
-          binding_notify_objects.push_back(bno);
+          NotifyUtils::BindingNotifyInformation* bni =
+             new NotifyUtils::BindingNotifyInformation(aor_current_b->first,
+                                                       aor_current_b->second,
+                                                       event);
+          binding_notify.push_back(bni);
         }
       }
     }
@@ -1621,7 +1626,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_current_aor(
                                           aor_current->second,
                                           "aor",
                                           aor_pair->get_orig(),
-                                          binding_notify_objects,
+                                          binding_notify,
                                           NotifyUtils::RegistrationState::ACTIVE,
                                           now);
 
@@ -1634,16 +1639,17 @@ void SubscriberDataManager::NotifySender::send_notifys_for_current_aor(
       {
         // LCOV_EXCL_START
         SAS::Event event(trail, SASEvent::NOTIFICATION_FAILED, 0);
-        std::string error_msg = "Failed to send NOTIFY - error: " + std::to_string(status);
+        std::string error_msg = "Failed to send NOTIFY - error: " +
+                                       PJUtils::pj_status_to_string(status);
         event.add_var_param(error_msg);
         SAS::report_event(event);
        // LCOV_EXCL_STOP
       }
     }
 
-    for (std::vector<NotifyUtils::BindingNotifyObject*>::iterator it =
-           binding_notify_objects.begin();
-         it != binding_notify_objects.end();
+    for (std::vector<NotifyUtils::BindingNotifyInformation*>::iterator it =
+           binding_notify.begin();
+         it != binding_notify.end();
          ++it)
     {
       delete *it;

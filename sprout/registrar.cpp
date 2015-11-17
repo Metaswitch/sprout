@@ -705,7 +705,7 @@ void process_register_request(pjsip_rx_data* rdata)
                                                 private_id_for_binding,
                                                 trail);
 
-  if (aor_pair != NULL)
+  if ((aor_pair != NULL) && (aor_pair->get_current() != NULL))
   {
     // Log the bindings.
     log_bindings(aor, aor_pair->get_current());

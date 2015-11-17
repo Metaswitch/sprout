@@ -89,6 +89,7 @@ static bool sdm_access_common(SubscriberDataManager::AoRPair** aor_pair,
     }
 
     if ((*previous_aor_pair != NULL) &&
+        ((*previous_aor_pair)->get_current() != NULL) &&
         (!(*previous_aor_pair)->get_current()->bindings().empty()))
     {
       for (SubscriberDataManager::AoR::Bindings::const_iterator i =
