@@ -142,6 +142,7 @@ struct options
   NonRegisterAuthentication            non_register_auth_mode;
   bool                                 force_third_party_register_body;
   std::string                          memento_notify_url;
+  std::string                          pidfile;
   std::map<std::string, std::multimap<std::string, std::string>>
                                        plugin_options;
 };
