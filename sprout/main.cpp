@@ -140,6 +140,8 @@ enum OptionTypes
   OPT_PBX_SERVICE_ROUTE,
   OPT_NON_REGISTER_AUTHENTICATION,
   OPT_FORCE_THIRD_PARTY_REGISTER_BODY,
+  OPT_MEMENTO_NOTIFY_URL,
+  OPT_PIDFILE,
 };
 
 
@@ -190,6 +192,7 @@ const static struct pj_getopt_option long_opt[] =
   { "max-call-list-length",         required_argument, 0, OPT_MAX_CALL_LIST_LENGTH},
   { "memento-threads",              required_argument, 0, OPT_MEMENTO_THREADS},
   { "call-list-ttl",                required_argument, 0, OPT_CALL_LIST_TTL},
+  { "memento-notify-url",           required_argument, 0, OPT_MEMENTO_NOTIFY_URL},
   { "log-level",                    required_argument, 0, 'L'},
   { "daemon",                       no_argument,       0, 'd'},
   { "interactive",                  no_argument,       0, 't'},
@@ -213,10 +216,12 @@ const static struct pj_getopt_option long_opt[] =
   { "non-register-authentication",  required_argument, 0, OPT_NON_REGISTER_AUTHENTICATION},
   { "pbx-service-route",            required_argument, 0, OPT_PBX_SERVICE_ROUTE},
   { "force-3pr-body",               no_argument,       0, OPT_FORCE_THIRD_PARTY_REGISTER_BODY},
+  { "pidfile",                      required_argument, 0, OPT_PIDFILE},
+  { "plugin-option",                required_argument, 0, 'N'},
   { NULL,                           0,                 0, 0}
 };
 
-static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:u:g:r:P:w:a:F:L:K:G:B:dth";
+static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:u:g:r:P:w:a:F:L:K:G:B:N:dth";
 
 static sem_t term_sem;
 
@@ -339,6 +344,8 @@ static void usage(void)
        "                            then there is no limit (default: 0)\n"
        "     --memento-threads N    Number of Memento threads (default: 25)\n"
        "     --call-list-ttl N      Time to store call lists entries (default: 604800)\n"
+       "     --memento-notify-url <url>\n"
+       "                            URL Memento should notify when call lists change.\n"
        "     --alarms-enabled       Whether SNMP alarms are enabled (default: false)\n"
        "     --memcached-write-format\n"
        "                            The data format to use when writing registration and subscription data\n"
@@ -387,6 +394,9 @@ static void usage(void)
        "     --force-3pr-body       Always include the original REGISTER and 200 OK in the body of\n"
        "                            third-party REGISTER messages to application servers, even if the\n"
        "                            User-Data doesn't specify it\n"
+       "     --pidfile=<filename>   Write pidfile\n"
+       " -N, --plugin-option <plugin>,<name>,<value>\n"
+       "                            Provide an option value to a plugin.\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
@@ -1028,7 +1038,34 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
+    case OPT_MEMENTO_NOTIFY_URL:
+      {
+        options->memento_notify_url = std::string(pj_optarg);
+        TRC_INFO("Memento notify URL set to: '%s'",
+                 options->memento_notify_url.c_str());
+      }
+      break;
 
+    case OPT_PIDFILE:
+      options->pidfile = std::string(pj_optarg);
+      break;
+
+    case 'N':
+      {
+        std::vector<std::string> fields;
+        Utils::split_string(std::string(pj_optarg), ',', fields, 3);
+        if (fields.size() < 3)
+        {
+          TRC_ERROR("Invalid value for plugin option: %s", pj_optarg);
+          return -1;
+        }
+        TRC_INFO("Plugin '%s' option '%s' set to '%s'",
+                 fields[0].c_str(), fields[1].c_str(), fields[2].c_str());
+        options->plugin_options[fields[0]].insert({fields[1], fields[2]});
+      }
+      break;
+
+ 
     case 'h':
       usage();
       return -1;
@@ -1424,6 +1461,17 @@ int main(int argc, char* argv[])
   {
     closelog();
     return 1;
+  }
+  
+  if (opt.pidfile != "")
+  {
+    int rc = Utils::lock_and_write_pidfile(opt.pidfile);
+    if (rc == -1)
+    {
+      // Failure to acquire pidfile lock
+      TRC_ERROR("Could not write pidfile - exiting");
+      return 2;
+    }
   }
 
   if (opt.analytics_enabled)
