@@ -216,7 +216,7 @@ const static struct pj_getopt_option long_opt[] =
   { "non-register-authentication",  required_argument, 0, OPT_NON_REGISTER_AUTHENTICATION},
   { "pbx-service-route",            required_argument, 0, OPT_PBX_SERVICE_ROUTE},
   { "force-3pr-body",               no_argument,       0, OPT_FORCE_THIRD_PARTY_REGISTER_BODY},
-  { "pidfile",                      no_argument,       0, OPT_PIDFILE},
+  { "pidfile",                      required_argument, 0, OPT_PIDFILE},
   { NULL,                           0,                 0, 0}
 };
 
