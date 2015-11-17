@@ -217,10 +217,11 @@ const static struct pj_getopt_option long_opt[] =
   { "pbx-service-route",            required_argument, 0, OPT_PBX_SERVICE_ROUTE},
   { "force-3pr-body",               no_argument,       0, OPT_FORCE_THIRD_PARTY_REGISTER_BODY},
   { "pidfile",                      required_argument, 0, OPT_PIDFILE},
+  { "plugin-option",                required_argument, 0, 'N'},
   { NULL,                           0,                 0, 0}
 };
 
-static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:u:g:r:P:w:a:F:L:K:G:B:dth";
+static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:u:g:r:P:w:a:F:L:K:G:B:N:dth";
 
 static sem_t term_sem;
 
@@ -394,6 +395,8 @@ static void usage(void)
        "                            third-party REGISTER messages to application servers, even if the\n"
        "                            User-Data doesn't specify it\n"
        "     --pidfile=<filename>   Write pidfile\n"
+       " -N, --plugin-option <plugin>,<name>,<value>\n"
+       "                            Provide an option value to a plugin.\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
@@ -1045,6 +1048,21 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case OPT_PIDFILE:
       options->pidfile = std::string(pj_optarg);
+      break;
+
+    case 'N':
+      {
+        std::vector<std::string> fields;
+        Utils::split_string(std::string(pj_optarg), ',', fields, 3);
+        if (fields.size() < 3)
+        {
+          TRC_ERROR("Invalid value for plugin option: %s", pj_optarg);
+          return -1;
+        }
+        TRC_INFO("Plugin '%s' option '%s' set to '%s'",
+                 fields[0].c_str(), fields[1].c_str(), fields[2].c_str());
+        options->plugin_options[fields[0]].insert({fields[1], fields[2]});
+      }
       break;
 
  

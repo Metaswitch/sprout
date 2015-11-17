@@ -143,6 +143,8 @@ struct options
   bool                                 force_third_party_register_body;
   std::string                          memento_notify_url;
   std::string                          pidfile;
+  std::map<std::string, std::multimap<std::string, std::string>>
+                                       plugin_options;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
