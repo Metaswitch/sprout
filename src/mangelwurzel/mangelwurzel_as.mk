@@ -21,7 +21,7 @@ CPPFLAGS += -I${ROOT}/include \
             -I${ROOT}/modules/rapidjson/include
 CPPFLAGS += $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --cflags libpjproject)
 
-VPATH += ${ROOT}/sprout/mangelwurzel
+VPATH += ${ROOT}/src/mangelwurzel
 
 # Production build:
 #

@@ -8,7 +8,7 @@ ifndef LIBMEM_DIR
   include ${MK_DIR}/libmemcached.mk
 endif
 
-SPROUT_DIR := ${ROOT}/sprout
+SPROUT_DIR := ${ROOT}/src
 SPROUT_TEST_DIR := ${ROOT}/tests
 
 sprout: pjsip libmemcached
