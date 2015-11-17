@@ -71,7 +71,6 @@ public:
   MOCK_METHOD3(get_tsx, SproutletTsx*(SproutletTsxHelper*, const std::string&, pjsip_msg*));
 };
 
-
 /// Mock class for SproutletTsx.
 class MockSproutletTsx : public SproutletTsx
 {
@@ -79,11 +78,6 @@ public:
   MockSproutletTsx() :
     SproutletTsx(NULL)
   {
-  }
-
-  void set_helper(SproutletTsxHelper* helper)
-  {
-    _helper = helper;
   }
 
   MOCK_METHOD1(on_rx_initial_request, void(pjsip_msg*));
@@ -471,6 +465,7 @@ private:
 template <int T>
 class FakeSproutletTsxDelayAfterRsp : public SproutletTsx
 {
+public:
   FakeSproutletTsxDelayAfterRsp(SproutletTsxHelper* helper) :
     SproutletTsx(helper),
     _tsx_from_tag(),
@@ -609,8 +604,86 @@ class FakeSproutletTsxDelayAfterFwd : public SproutletTsx
   }
 
   TimerID _tid;
-  bool _response;
+  int _response;
   pjsip_msg* _second_request;
+};
+
+template <bool FAIL>
+class FakeSproutletOutDialer : public SproutletTsx
+{
+public:
+  FakeSproutletOutDialer(SproutletTsxHelper* helper) :
+    SproutletTsx(helper)
+  {
+  }
+
+  // This must be the INFO that asks us to send an INVITE.  We have two
+  // possible behaviours: give up at once, or send the INVITE.
+  void on_rx_initial_request(pjsip_msg* req)
+  {
+    if (FAIL)
+    {
+      pjsip_msg* rsp = create_response(req, PJSIP_SC_FORBIDDEN);
+      send_response(rsp);
+      free_msg(req);
+      return;
+    }
+
+    // Real code would include details in the INFO, indicating what headers
+    // the INVITE should contain.  We just hardcode enough values to get us
+    // through the testcase.
+    //
+    // The only interesting thing that we do is route via one of the other
+    // sproutlets - to prove that it works.
+    pjsip_msg *invite = create_request();
+    pj_pool_t* pool = get_pool(invite);
+    pjsip_method_copy(pool, &invite->line.req.method, pjsip_get_invite_method());
+
+    invite->line.req.uri = PJUtils::uri_from_string(
+        "sip:5205551234@1.2.3.4;transport=tcp",
+        pool);
+
+    pjsip_cid_hdr* cid_hdr = pjsip_cid_hdr_create(pool);
+    pj_create_unique_string(pool, &cid_hdr->id);
+    pjsip_msg_add_hdr(invite, (pjsip_hdr*)cid_hdr);
+
+    pjsip_name_addr* contact_uri = pjsip_name_addr_create(pool);
+    contact_uri->uri = (pjsip_uri*)get_reflexive_uri(pool);
+    pjsip_contact_hdr* contact_hdr = pjsip_contact_hdr_create(pool);
+    contact_hdr->uri = (pjsip_uri*)contact_uri;
+    pjsip_msg_add_hdr(invite, (pjsip_hdr*)contact_hdr);
+
+    pjsip_cseq_hdr* cseq_hdr = pjsip_cseq_hdr_create(pool);
+    cseq_hdr->cseq = 1;
+    pjsip_method_copy(pool, &cseq_hdr->method, pjsip_get_invite_method());
+    pjsip_msg_add_hdr(invite, (pjsip_hdr*)cseq_hdr);
+
+    pjsip_from_hdr* from_hdr = pjsip_from_hdr_create(pool);
+    from_hdr->uri = PJUtils::uri_from_string(
+        "sip:alice@homedomain",
+        pool,
+        true);
+    pj_create_unique_string(pool, &from_hdr->tag);
+    pjsip_msg_add_hdr(invite, (pjsip_hdr*)from_hdr);
+
+    pjsip_to_hdr* to_hdr = pjsip_to_hdr_create(pool);
+    to_hdr->uri = PJUtils::uri_from_string(
+        "sip:bob@awaydomain",
+        pool,
+        true);
+    pjsip_msg_add_hdr(invite, (pjsip_hdr*)to_hdr);
+
+    pjsip_route_hdr* route_hdr = pjsip_route_hdr_create(pool);
+    route_hdr->name_addr.uri = PJUtils::uri_from_string(
+        "sip:fwd.proxy1.homedomain",
+        pool);
+    pjsip_msg_add_hdr(invite, (pjsip_hdr*)route_hdr);
+
+    send_request(invite);
+
+    // We no longer need the INFO.
+    free_msg(req);
+  }
 };
 
 class SproutletProxyTest : public SipTest
@@ -644,6 +717,13 @@ public:
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxB2BUA >("b2bua", 0, ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDelayAfterRsp<1> >("delayafterrsp", 0, ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDelayAfterFwd<1> >("delayafterfwd", 0, ""));
+
+    _outdialer = new FakeSproutlet<FakeSproutletOutDialer<false> >("outdialer", 0, "");
+    _sproutlets.push_back(_outdialer);
+
+    _failing_outdialer = new FakeSproutlet<FakeSproutletOutDialer<true> >("outdialer", 0, "");
+    _sproutlets.push_back(_failing_outdialer);
+
 
     // Create a host alias.
     std::unordered_set<std::string> host_aliases;
@@ -869,10 +949,14 @@ protected:
 
   static SproutletProxy* _proxy;
   static std::list<Sproutlet*> _sproutlets;
+  static Sproutlet* _outdialer;
+  static Sproutlet* _failing_outdialer;
 };
 
 SproutletProxy* SproutletProxyTest::_proxy;
 std::list<Sproutlet*> SproutletProxyTest::_sproutlets;
+Sproutlet* SproutletProxyTest::_outdialer;
+Sproutlet* SproutletProxyTest::_failing_outdialer;
 
 TEST_F(SproutletProxyTest, NullSproutlet)
 {
@@ -2235,4 +2319,114 @@ TEST_F(SproutletProxyTest, DelayAfterForward)
   ASSERT_EQ(0, txdata_count());
 
   delete tp;
+}
+
+// Tests a sproutlet that handles a transaction created 'out of thin air' eg a
+// click-to-dial application.
+SproutletProxy::uas_tsx_terminated_callback tsx_terminated;
+void tsx_terminated(void* user_data)
+{
+  int* terminations = static_cast<int*>(user_data);
+  (*terminations)++;
+}
+
+TEST_F(SproutletProxyTest, SimpleSproutletOutdial)
+{
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Here we're pretending to be, say, an HttpStack::HandlerInterface that has
+  // just been clicked with a request to make a call.  We create a transaction
+  // and use it to send an INFO to the sproutlet.
+  //
+  // When the sproutlet receives the INFO, it'll send an INVITE and that call
+  // proceeds as normal.
+  //
+  // Start by building the INFO.
+  const pjsip_method METHOD_INFO = { PJSIP_OTHER_METHOD, { "INFO", 4 } };
+  pjsip_tx_data* req;
+  pj_str_t uri = pj_str((char*)"sip:outdialer-app");
+  pj_status_t status = pjsip_endpt_create_request(
+      stack_data.endpt,
+      &METHOD_INFO,
+      &uri,
+      &uri,
+      &uri,
+      &uri,
+      NULL,
+      1,
+      NULL,
+      &req);
+  EXPECT_EQ(status, PJ_SUCCESS);
+  PJUtils::remove_top_via(req);
+
+  // Create a transaction and pump the INFO into it.
+  int terminations = 0;
+  _proxy->create_uas_tsx(
+      req,
+      _outdialer,
+      "outdialer",
+      0,
+      &tsx_terminated,
+      &terminations);
+  EXPECT_EQ(terminations, 0);
+
+  // The INFO is received at the outdialer sproutlet, which causes it to send
+  // an INVITE.
+  ASSERT_EQ(1, txdata_count());
+  pjsip_tx_data* tdata = current_txdata();
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+  free_txdata();
+
+  // All done.
+  ASSERT_EQ(0, txdata_count());
+  ASSERT_EQ(terminations, 1);
+
+  delete tp;
+}
+
+// Tests a sproutlet that handles a transaction created 'out of thin air' eg a
+// click-to-dial application.
+//
+// This time we use the failing outdialer, and so the transaction is deleted
+// immediately.
+TEST_F(SproutletProxyTest, SimpleSproutletOutdialFails)
+{
+  // Start by building the INFO.
+  const pjsip_method METHOD_INFO = { PJSIP_OTHER_METHOD, { "INFO", 4 } };
+  pjsip_tx_data* req;
+  pj_str_t uri = pj_str((char*)"sip:outdialer-app");
+  pj_status_t status = pjsip_endpt_create_request(
+      stack_data.endpt,
+      &METHOD_INFO,
+      &uri,
+      &uri,
+      &uri,
+      &uri,
+      NULL,
+      1,
+      NULL,
+      &req);
+  EXPECT_EQ(status, PJ_SUCCESS);
+  PJUtils::remove_top_via(req);
+
+  // Create a transaction and pump the INFO into it.
+  int terminations = 0;
+  _proxy->create_uas_tsx(
+      req,
+      _failing_outdialer,
+      "failing_outdialer",
+      0,
+      &tsx_terminated,
+      &terminations);
+
+  // The failing outdialer fails immediately.
+  ASSERT_EQ(0, txdata_count());
+  EXPECT_EQ(terminations, 1);
 }

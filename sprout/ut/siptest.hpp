@@ -328,6 +328,7 @@ private:
 
 class RespMatcher : public MsgMatcher
 {
+public:
   RespMatcher(int status, string body="", string reason="") :
     MsgMatcher(body),
     _status(status),

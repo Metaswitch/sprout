@@ -77,6 +77,17 @@ public:
   /// Static callback for timers
   static void on_timer_pop(pj_timer_heap_t* th, pj_timer_entry* tentry);
 
+  /// Create a Sproutlet UAS transaction object, with optional notification of
+  /// termination.
+  typedef void (uas_tsx_terminated_callback)(void* user_data);
+  virtual void create_uas_tsx(
+      pjsip_tx_data *rdata,
+      Sproutlet* sproutlet,
+      const std::string& alias,
+      SAS::TrailId trail,
+      uas_tsx_terminated_callback* terminated_callback = NULL,
+      void* user_data = NULL);
+
 protected:
   /// Pre-declaration
   class UASTsx;
@@ -126,9 +137,6 @@ protected:
     /// Destructor.
     virtual ~UASTsx();
 
-    /// Initializes the UAS transaction.
-    virtual pj_status_t init(pjsip_rx_data* rdata);
-
     /// Handle the incoming half of a transaction request.
     virtual void process_tsx_request(pjsip_rx_data* rdata);
 
@@ -147,10 +155,6 @@ protected:
     virtual void on_client_not_responding(UACTsx* uac_tsx,
                                           pjsip_event_id_e event);
 
-    virtual void on_tsx_state(pjsip_event* event);
-
-
-  private:
     void tx_request(SproutletWrapper* sproutlet,
                     int fork_id,
                     pjsip_tx_data* req);
@@ -162,8 +166,11 @@ protected:
     bool cancel_timer(TimerID id);
     bool timer_running(TimerID id);
 
-    void tx_response(SproutletWrapper* sproutlet,
-                     pjsip_tx_data* rsp);
+    virtual void tx_response(SproutletWrapper* sproutlet,
+                             pjsip_tx_data* rsp) = 0;
+
+    void forward_tx_response(SproutletWrapper* downstream,
+                             pjsip_tx_data* rsp);
 
     void tx_cancel(SproutletWrapper* sproutlet,
                    int fork_id,
@@ -174,7 +181,7 @@ protected:
     Sproutlet* target_sproutlet(pjsip_msg* msg, int port, std::string& alias);
 
     /// Checks to see if it is safe to destroy the UASTsx.
-    void check_destroy();
+    virtual void check_destroy() = 0;
 
     /// The root Sproutlet for this transaction.
     SproutletWrapper* _root;
@@ -221,6 +228,63 @@ protected:
     /// children of this UASTsx that have not popped or been cancelled yet.
     /// The UASTsx will persist while there are pending timers.
     std::set<pj_timer_entry*> _pending_timers;
+
+    friend class SproutletWrapper;
+  };
+
+  class ExtUASTsx : public UASTsx
+  {
+  public:
+    /// Constructor.
+    ExtUASTsx(SproutletProxy* proxy);
+
+    /// Destructor.
+    virtual ~ExtUASTsx();
+
+    /// Initializes the UAS transaction.
+    virtual pj_status_t init(pjsip_rx_data* rdata);
+
+  protected:
+    virtual void on_tsx_state(pjsip_event* event);
+
+  private:
+    virtual void tx_response(SproutletWrapper* downstream,
+                             pjsip_tx_data* rsp);
+
+    /// Checks to see if it is safe to destroy the ExtUASTsx.
+    virtual void check_destroy();
+
+    friend class SproutletWrapper;
+  };
+
+  class IntUASTsx : public UASTsx
+  {
+  public:
+    /// Constructor.
+    IntUASTsx(SproutletProxy* proxy,
+              uas_tsx_terminated_callback* terminated_callback,
+              void* user_data);
+
+    /// Destructor.
+    virtual ~IntUASTsx();
+
+    /// Initializes the UAS transaction.
+    virtual pj_status_t init(pjsip_rx_data* rdata);
+    void init(pjsip_tx_data* rdata,
+              Sproutlet* sproutlet,
+              const std::string& alias,
+              SAS::TrailId trail);
+
+  private:
+    virtual void tx_response(SproutletWrapper* downstream,
+                             pjsip_tx_data* rsp);
+
+    /// Checks to see if it is safe to destroy the ExtUASTsx.
+    virtual void check_destroy();
+
+    bool _terminated;
+    uas_tsx_terminated_callback* _terminated_callback;
+    void* _user_data;
 
     friend class SproutletWrapper;
   };
@@ -362,6 +426,8 @@ private:
   SAS::TrailId _trail_id;
 
   friend class SproutletProxy::UASTsx;
+  friend class SproutletProxy::ExtUASTsx;
+  friend class SproutletProxy::IntUASTsx;
 };
 
 #endif

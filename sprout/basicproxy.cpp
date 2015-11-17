@@ -434,6 +434,10 @@ BasicProxy::UASTsx::UASTsx(BasicProxy* proxy) :
   _pending_destroy(false),
   _context_count(0)
 {
+  // initialise deferred trying timer
+  pj_timer_entry_init(&_trying_timer, 0, (void*)this, &trying_timer_callback);
+  _trying_timer.id = 0;
+
   // Don't do any set-up that could fail in here - do that in the init method.
 }
 
@@ -508,13 +512,8 @@ pj_status_t BasicProxy::UASTsx::init(pjsip_rx_data* rdata)
 {
   _trail = get_trail(rdata);
 
-  // initialise deferred trying timer
-  pthread_mutex_init(&_trying_timer_lock, NULL);
-  pj_timer_entry_init(&_trying_timer, 0, (void*)this, &trying_timer_callback);
-  _trying_timer.id = 0;
-
   // Do any start of transaction logging operations.
-  on_tsx_start(rdata);
+  on_tsx_start();
 
   _req = PJUtils::clone_msg(stack_data.endpt, rdata);
   if (_req == NULL)
@@ -1241,7 +1240,7 @@ void BasicProxy::UASTsx::on_tx_client_request(pjsip_tx_data* tdata, UACTsx* uac_
 
 
 /// Perform actions on a new transaction starting.
-void BasicProxy::UASTsx::on_tsx_start(const pjsip_rx_data* rdata)
+void BasicProxy::UASTsx::on_tsx_start()
 {
   // Report SAS markers for the transaction.
   TRC_DEBUG("Report SAS start marker - trail (%llx)", trail());

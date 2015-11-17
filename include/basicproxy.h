@@ -199,7 +199,7 @@ protected:
                                const pj_str_t* st_text=NULL);
 
     /// Called when a new transaction is starting.
-    virtual void on_tsx_start(const pjsip_rx_data* rdata);
+    virtual void on_tsx_start();
 
     /// Called when a transaction completes.
     virtual void on_tsx_complete();
@@ -256,7 +256,7 @@ protected:
 
     pj_timer_entry       _trying_timer;
     static const int     TRYING_TIMER = 1;
-    pthread_mutex_t      _trying_timer_lock;
+    pthread_mutex_t      _trying_timer_lock = PTHREAD_MUTEX_INITIALIZER;
 
     friend class UACTsx;
   };
