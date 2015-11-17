@@ -49,6 +49,7 @@
 #include "test_interposer.hpp"
 #include "mock_store.h"
 #include "fakesnmp.hpp"
+#include "rapidxml/rapidxml.hpp"
 
 using ::testing::MatchesRegex;
 using ::testing::_;
@@ -131,6 +132,42 @@ public:
     // Stop and restart the layer just in case
     //pjsip_tsx_layer_instance()->stop();
     //pjsip_tsx_layer_instance()->start();
+  }
+
+  void check_notify(pjsip_msg* out,
+                    std::string reg_state,
+                    std::pair<std::string, std::string> contact_values)
+  {
+    char buf[16384];
+    int n = out->body->print_body(out->body, buf, sizeof(buf));
+    string body(buf, n);
+
+    // Parse the XML document, saving off the passed in string first (as parsing
+    // is destructive)
+    rapidxml::xml_document<> doc;
+    char* xml_str = doc.allocate_string(body.c_str());
+
+    try
+    {
+      doc.parse<rapidxml::parse_strip_xml_namespaces>(xml_str);
+    }
+    catch (rapidxml::parse_error err)
+    {
+      printf("Parse error in NOTIFY: %s\n\n%s", err.what(), body.c_str());
+      doc.clear();
+    }
+
+    rapidxml::xml_node<> *reg_info = doc.first_node("reginfo");
+    ASSERT_TRUE(reg_info);
+    rapidxml::xml_node<> *registration = reg_info->first_node("registration");
+    ASSERT_TRUE(registration);
+    rapidxml::xml_node<> *contact = registration->first_node("contact");
+    ASSERT_TRUE(contact);
+
+    ASSERT_EQ("full", std::string(reg_info->first_attribute("state")->value()));
+    ASSERT_EQ(reg_state, std::string(registration->first_attribute("state")->value()));
+    ASSERT_EQ(contact_values.first, std::string(contact->first_attribute("state")->value()));
+    ASSERT_EQ(contact_values.second, std::string(contact->first_attribute("event")->value()));
   }
 
 protected:
@@ -2082,7 +2119,8 @@ TEST_F(RegistrarTest, RinstanceParameter)
   free_txdata();
 }
 
-// TODO - Check the NOTIFYs have the correct form, and send 200 OKs to them
+// Make registers with a subscription and check the correct NOTIFYs
+// are sent
 TEST_F(RegistrarTest, RegistrationWithSubscription)
 {
   // We have a private ID in this test, so set up the expect response
@@ -2121,10 +2159,9 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-  char buf[16384];
-  int n = out->body->print_body(out->body, buf, sizeof(buf));
-  string body(buf, n);
-  printf(body.c_str());
+
+  check_notify(out, "active", std::make_pair("active", "registered"));
+  inject_msg(respond_to_current_txdata(200));
   free_txdata();
 
   // Extend the registration
@@ -2134,15 +2171,8 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   ASSERT_EQ(2, txdata_count());
   out = pop_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-  buf[16384];
-  n = out->body->print_body(out->body, buf, sizeof(buf));
-  string body2(buf, n);
-  printf(body2.c_str());
+  check_notify(out, "active", std::make_pair("active", "refreshed"));
   inject_msg(respond_to_current_txdata(200));
-
-  //out = current_txdata()->msg;
-  //EXPECT_EQ(200, out->line.status.code);
-  //EXPECT_EQ("OK", str_pj(out->line.status.reason));
   free_txdata();
 
   // Shorten the registration
@@ -2152,14 +2182,8 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   ASSERT_EQ(2, txdata_count());
   out = pop_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-  buf[16384];
-  n = out->body->print_body(out->body, buf, sizeof(buf));
-  string body3(buf, n);
-  printf(body3.c_str());
-  //inject_msg(respond_to_current_txdata(200));
-  out = pop_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  check_notify(out, "active", std::make_pair("active", "shortened"));
+  inject_msg(respond_to_current_txdata(200));
   free_txdata();
 
   // Delete the registration
@@ -2169,13 +2193,8 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   ASSERT_EQ(2, txdata_count());
   out = pop_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-  buf[16384];
-  n = out->body->print_body(out->body, buf, sizeof(buf));
-  string body4(buf, n);
-  printf(body4.c_str());
-  out = pop_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  check_notify(out, "terminated", std::make_pair("terminated", "expired"));
+  inject_msg(respond_to_current_txdata(200));
   free_txdata();
 }
 
@@ -2214,10 +2233,8 @@ TEST_F(RegistrarTest, MultipleRegistrationsWithSubscription)
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-  char buf[16384];
-  int n = out->body->print_body(out->body, buf, sizeof(buf));
-  string body(buf, n);
-  printf(body.c_str());
+  check_notify(out, "active", std::make_pair("active", "registered"));
+  inject_msg(respond_to_current_txdata(200));
   free_txdata();
 
   // Register a second binding.
@@ -2228,13 +2245,9 @@ TEST_F(RegistrarTest, MultipleRegistrationsWithSubscription)
   ASSERT_EQ(2, txdata_count());
   out = pop_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-  buf[16384];
-  n = out->body->print_body(out->body, buf, sizeof(buf));
-  string body2(buf, n);
-  printf(body2.c_str());
-  out = pop_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  check_notify(out, "active", std::make_pair("active", "created"));
+  inject_msg(respond_to_current_txdata(200));
+  free_txdata();
 
   // Expire the second binding
   msg._contact_params = ";expires=0;+sip.ice;reg-id=1";
@@ -2243,13 +2256,9 @@ TEST_F(RegistrarTest, MultipleRegistrationsWithSubscription)
   ASSERT_EQ(2, txdata_count());
   out = pop_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-  buf[16384];
-  n = out->body->print_body(out->body, buf, sizeof(buf));
-  string body3(buf, n);
-  printf(body3.c_str());
-  out = pop_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  check_notify(out, "active", std::make_pair("terminated", "expired"));
+  inject_msg(respond_to_current_txdata(200));
+  free_txdata();
 }
 
 

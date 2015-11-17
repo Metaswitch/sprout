@@ -47,6 +47,7 @@
 #include "test_interposer.hpp"
 #include "fakechronosconnection.hpp"
 #include "mock_store.h"
+#include "rapidxml/rapidxml.hpp"
 
 using ::testing::MatchesRegex;
 using ::testing::HasSubstr;
@@ -135,7 +136,9 @@ protected:
   static FakeChronosConnection* _chronos_connection;
 
   void check_subscriptions(std::string aor, uint32_t expected);
-  std::string check_OK_and_NOTIFY(bool terminated = false,
+  std::string check_OK_and_NOTIFY(std::string reg_state,
+                                  std::pair<std::string, std::string> contact_values,
+                                  bool terminated = false,
                                   std::string reason = "");
 };
 
@@ -302,7 +305,7 @@ TEST_F(SubscriptionTest, SimpleMainline)
   // a NOTIFY
   SubscribeMessage msg;
   inject_msg(msg.get());
-  std::string to_tag = check_OK_and_NOTIFY();
+  std::string to_tag = check_OK_and_NOTIFY("active", std::make_pair("active", "registered"));
   check_subscriptions("sip:6505550231@homedomain", 1u);
 
   // Actively expire the subscription - this generates a 200 OK and a
@@ -310,7 +313,7 @@ TEST_F(SubscriptionTest, SimpleMainline)
   msg._to_tag = to_tag;
   msg._expires = "0";
   inject_msg(msg.get());
-  check_OK_and_NOTIFY(true, "timeout");
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), true, "timeout");
 
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
@@ -342,7 +345,7 @@ TEST_F(SubscriptionTest, SimpleMainlineWithTelURI)
   SubscribeMessage msg;
   msg._scheme = "tel";
   inject_msg(msg.get());
-  std::string to_tag = check_OK_and_NOTIFY();
+  std::string to_tag = check_OK_and_NOTIFY("active", std::make_pair("active", "registered"));
   check_subscriptions("tel:6505550231", 1u);
 
   // Actively expire the subscription - this generates a 200 OK and a
@@ -350,7 +353,7 @@ TEST_F(SubscriptionTest, SimpleMainlineWithTelURI)
   msg._to_tag = to_tag;
   msg._expires = "0";
   inject_msg(msg.get());
-  check_OK_and_NOTIFY(true, "timeout");
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), true, "timeout");
 }
 
 /// Check that a subscription with immediate expiry is treated correctly
@@ -363,7 +366,9 @@ TEST_F(SubscriptionTest, OneShotSubscription)
   SubscribeMessage msg;
   msg._expires = "0";
   inject_msg(msg.get());
-  check_OK_and_NOTIFY(true, "timeout");
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), true, "timeout");
+
+  // Check there's no subscriptions stored
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
@@ -380,8 +385,64 @@ TEST_F(SubscriptionTest, SubscriptionWithNoBindings)
   // a NOTIFY
   SubscribeMessage msg;
   inject_msg(msg.get());
-  check_OK_and_NOTIFY(true, "deactivated");
+
+  // Get OK
+  EXPECT_EQ(2, txdata_count());
+  pjsip_msg* out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+
+  // Check the NOTIFY
+  out = current_txdata()->msg;
+  EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
+  EXPECT_EQ("Subscription-State: terminated;reason=deactivated", get_headers(out, "Subscription-State"));
+  char buf[16384];
+  int n = out->body->print_body(out->body, buf, sizeof(buf));
+  string body(buf, n);
+
+  // Parse the XML document, saving off the passed in string first (as parsing
+  // is destructive)
+  rapidxml::xml_document<> doc;
+  char* xml_str = doc.allocate_string(body.c_str());
+
+  try
+  {
+    doc.parse<rapidxml::parse_strip_xml_namespaces>(xml_str);
+  }
+  catch (rapidxml::parse_error err)
+  {
+    printf("Parse error in NOTIFY: %s\n\n%s", err.what(), body.c_str());
+    doc.clear();
+  }
+
+  rapidxml::xml_node<> *reg_info = doc.first_node("reginfo");
+  EXPECT_TRUE(reg_info);
+  rapidxml::xml_node<> *registration = reg_info->first_node("registration");
+  EXPECT_TRUE(registration);
+  rapidxml::xml_node<> *contact = registration->first_node("contact");
+  EXPECT_FALSE(contact);
+
+  EXPECT_EQ("full", std::string(reg_info->first_attribute("state")->value()));
+  EXPECT_EQ("terminated", std::string(registration->first_attribute("state")->value()));
+
+  // Check there's no subscriptions stored
   check_subscriptions("sip:6505550231@homedomain", 0u);
+}
+
+/// Check that a subscription where there is data contention doesn't
+/// generate any duplicate NOTIFYs
+TEST_F(SubscriptionTest, SubscriptionWithDataContention)
+{
+  _local_data_store->force_contention();
+
+  // Set up a single subscription - this should generate a 200 OK then
+  // a NOTIFY
+  SubscribeMessage msg;
+  inject_msg(msg.get());
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"));
+
+  // Check there's one subscription stored
+  check_subscriptions("sip:6505550231@homedomain", 1u);
 }
 
 // Test the Event Header
@@ -424,7 +485,7 @@ TEST_F(SubscriptionTest, EmptyAcceptsHeader)
   SubscribeMessage msg;
   msg._accepts = "";
   inject_msg(msg.get());
-  check_OK_and_NOTIFY();
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"));
 
   check_subscriptions("sip:6505550231@homedomain", 1u);
 }
@@ -453,7 +514,7 @@ TEST_F(SubscriptionTest, CorrectAcceptsHeader)
   SubscribeMessage msg;
   msg._accepts = "Accept: otherstuff,application/reginfo+xml";
   inject_msg(msg.get());
-  check_OK_and_NOTIFY();
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"));
 
   check_subscriptions("sip:6505550231@homedomain", 1u);
 }
@@ -525,7 +586,7 @@ TEST_F(SubscriptionTest, NonPrimaryAssociatedUri)
                                    "</ServiceProfile></IMSSubscription>");
 
   inject_msg(msg.get());
-  check_OK_and_NOTIFY();
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"));
   check_subscriptions("sip:6505550233@homedomain", 1u);
 }
 
@@ -643,7 +704,9 @@ TEST_F(SubscriptionTest, CheckNotifyCseqs)
   EXPECT_GT(second_cseq_val, first_cseq_val);
 }
 
-std::string SubscriptionTest::check_OK_and_NOTIFY(bool terminated,
+std::string SubscriptionTest::check_OK_and_NOTIFY(std::string reg_state,
+                                                  std::pair<std::string, std::string> contact_values,
+                                                  bool terminated,
                                                   std::string reason)
 {
   EXPECT_EQ(2, txdata_count());
@@ -680,11 +743,37 @@ std::string SubscriptionTest::check_OK_and_NOTIFY(bool terminated,
     EXPECT_EQ("Subscription-State: active;expires=300", get_headers(out, "Subscription-State"));
   }
 
-  // TODO check the body of the NOTFIY
   char buf[16384];
   int n = out->body->print_body(out->body, buf, sizeof(buf));
   string body(buf, n);
-  printf(body.c_str());
+
+  // Parse the XML document, saving off the passed in string first (as parsing
+  // is destructive)
+  rapidxml::xml_document<> doc;
+  char* xml_str = doc.allocate_string(body.c_str());
+
+  try
+  {
+    doc.parse<rapidxml::parse_strip_xml_namespaces>(xml_str);
+  }
+  catch (rapidxml::parse_error err)
+  {
+    printf("Parse error in NOTIFY: %s\n\n%s", err.what(), body.c_str());
+    doc.clear();
+  }
+
+  rapidxml::xml_node<> *reg_info = doc.first_node("reginfo");
+  EXPECT_TRUE(reg_info);
+  rapidxml::xml_node<> *registration = reg_info->first_node("registration");
+  EXPECT_TRUE(registration);
+  rapidxml::xml_node<> *contact = registration->first_node("contact");
+  EXPECT_TRUE(contact);
+
+  EXPECT_EQ("full", std::string(reg_info->first_attribute("state")->value()));
+  EXPECT_EQ(reg_state, std::string(registration->first_attribute("state")->value()));
+  EXPECT_EQ(contact_values.first, std::string(contact->first_attribute("state")->value()));
+  EXPECT_EQ(contact_values.second, std::string(contact->first_attribute("event")->value()));
+
   EXPECT_THAT(get_headers(out, "To"), testing::MatchesRegex("To: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));
   EXPECT_THAT(get_headers(out, "From"), testing::MatchesRegex(string(".*tag=").append(to_tag)));
 
