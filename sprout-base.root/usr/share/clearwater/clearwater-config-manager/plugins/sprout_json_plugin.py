@@ -31,7 +31,7 @@
 # as those licenses appear in the file LICENSE-OPENSSL.
 
 from metaswitch.clearwater.config_manager.plugin_base import ConfigPluginBase, FileStatus
-from metaswitch.clearwater.etcd_shared.plugin_utils import run_command
+from metaswitch.clearwater.etcd_shared.plugin_utils import run_command, safely_write
 import logging
 
 _log = logging.getLogger("sprout_json_plugin")
@@ -61,8 +61,7 @@ class SproutJsonPlugin(ConfigPluginBase):
     def on_config_changed(self, value, alarm):
         _log.info("Updating {}".format(self._file))
 
-        with open(self._file, "w") as ofile:
-            ofile.write(value);
+        safely_write(self._file, value)
 
         run_command("service sprout reload")
 
