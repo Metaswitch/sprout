@@ -193,7 +193,7 @@ CPPFLAGS += -I${ROOT}/include \
             -I${ROOT}/modules/app-servers/include \
             -I${ROOT}/modules/app-servers/test \
             -I${ROOT}/modules/gemini/include \
-            -I${ROOT}/sprout/ut \
+            -I${ROOT}/src/ut \
             -I${ROOT}/modules/gemini/src/ut \
             -I${ROOT}/usr/include \
             -I${ROOT}/modules/rapidjson/include
@@ -201,7 +201,7 @@ CPPFLAGS += -I${ROOT}/include \
 CPPFLAGS += $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --cflags libpjproject)
 
 # Add cpp-common/src as VPATH so build will find modules there.
-VPATH = ${ROOT}/modules/cpp-common/src:${ROOT}/modules/cpp-common/test_utils:${ROOT}/modules/app-servers/test:${ROOT}/modules/gemini/src:${ROOT}/sprout/mangelwurzel
+VPATH = ${ROOT}/modules/cpp-common/src:${ROOT}/modules/cpp-common/test_utils:${ROOT}/modules/app-servers/test:${ROOT}/modules/gemini/src:${ROOT}/src/mangelwurzel
 
 # Production build:
 #
@@ -262,7 +262,7 @@ GMOCK_SRCS_ := $(GMOCK_DIR)/src/*.cc $(GMOCK_HEADERS)
 # End of boilerplate
 
 COVERAGEFLAGS = $(OBJ_DIR_TEST) --object-directory=$(shell pwd) --root=${ROOT} \
-                --exclude='(^include/|^modules/gmock/|^modules/rapidjson/|^modules/cpp-common/include/|^modules/cpp-common/test_utils/|^ut/|^usr/|^modules/gemini/src/ut/|^modules/gemini/include/|^sprout/ut/|^sprout/mangelwurzel/ut/)' \
+                --exclude='(^include/|^modules/gmock/|^modules/rapidjson/|^modules/cpp-common/include/|^modules/cpp-common/test_utils/|^ut/|^usr/|^modules/gemini/src/ut/|^modules/gemini/include/|^src/ut/|^src/mangelwurzel/ut/)' \
                 --sort-percentage
 
 VGFLAGS = --suppressions=$(VG_SUPPRESS) \

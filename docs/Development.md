@@ -54,7 +54,7 @@ On completion,
 
 Subsequent builds should be quicker, but still check all of the
 dependencies.  For fast builds when you've only changed sprout code, change to
-the `sprout` subdirectory below the top-level `sprout` directory and then run
+the `src` subdirectory below the top-level `sprout` directory and then run
 `make all`.
 
 ## Building Debian Packages
@@ -76,7 +76,7 @@ environment variable to the user and server name.
 
 ## Running Unit Tests
 
-To run the sprout unit test suite, change to the `sprout` subdirectory below
+To run the sprout unit test suite, change to the `src` subdirectory below
 the top-level `sprout` directory and issue `make test`.
 
 Sprout unit tests use the [Google Test](https://code.google.com/p/googletest/)
