@@ -424,6 +424,7 @@ TEST_F(SubscriptionTest, SubscriptionWithNoBindings)
 
   EXPECT_EQ("full", std::string(reg_info->first_attribute("state")->value()));
   EXPECT_EQ("terminated", std::string(registration->first_attribute("state")->value()));
+  inject_msg(respond_to_current_txdata(200));
 
   // Check there's no subscriptions stored
   check_subscriptions("sip:6505550231@homedomain", 0u);
