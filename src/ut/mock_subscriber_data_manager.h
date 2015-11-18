@@ -1,5 +1,5 @@
 /**
- * @file mock_reg_store.h Mock regstore class
+ * @file mock_subscriber_data_manager.h
  *
  * Project Clearwater - IMS in the cloud.
  * Copyright (C) 2015  Metaswitch Networks Ltd
@@ -34,38 +34,26 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#ifndef MOCK_REG_STORE_H_
-#define MOCK_REG_STORE_H_
+#ifndef MOCK_SUBSCRIBER_DATA_MANAGER_H_
+#define MOCK_SUBSCRIBER_DATA_MANAGER_H_
 
 #include "gmock/gmock.h"
+#include "subscriber_data_manager.h"
 
-#include "regstore.h"
-
-class MockRegStore : public RegStore
+class MockSubscriberDataManager : public SubscriberDataManager
 {
 public:
-  MockRegStore() : RegStore(NULL, NULL) {};
-  virtual ~MockRegStore() {};
+  MockSubscriberDataManager();
+  virtual ~MockSubscriberDataManager();
 
-  MOCK_METHOD3(get_aor_data, AoR*(const std::string& aor_id,
-                                  SAS::TrailId trail,
-                                  bool should_send_notify));
+  MOCK_METHOD2(get_aor_data, AoRPair*(const std::string& aor_id,
+                                      SAS::TrailId trail));
   MOCK_METHOD6(set_aor_data, Store::Status(const std::string& aor_id,
-                                           AoR* data,
-                                           bool update_timers,
+                                           AoRPair* data,
                                            SAS::TrailId trail,
-                                           bool should_send_notify,
-                                           bool& all_bindings_expired));
-  MOCK_METHOD5(send_notify, void(AoR::Subscription* s,
-                                 int cseq,
-                                 AoR::Binding* b,
-                                 std::string b_id,
-                                 SAS::TrailId trail));
-  MOCK_METHOD4(send_notify, void(AoR::Subscription* s,
-                                 AoR* aor_data,
-                                 SAS::TrailId trail,
-                                 int now));
-
+                                           bool& all_bindings_expired,
+                                           pjsip_rx_data* extra_message_rdata,
+                                           pjsip_tx_data* extra_message_tdata));
   MOCK_METHOD0(has_servers, bool());
 };
 

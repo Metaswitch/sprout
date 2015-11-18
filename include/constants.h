@@ -172,6 +172,7 @@ const pj_str_t STR_CREATED = pj_str((char*)"created");
 const pj_str_t STR_REFRESHED = pj_str((char*)"refreshed");
 const pj_str_t STR_EXPIRED = pj_str((char*)"expired");
 const pj_str_t STR_DEACTIVATED = pj_str((char*)"deactivated");
+const pj_str_t STR_SHORTENED = pj_str((char*)"shortened");
 const pj_str_t STR_UNREGISTERED = pj_str((char*)"unregistered");
 const pj_str_t STR_TIMEOUT = pj_str((char*)"timeout");
 

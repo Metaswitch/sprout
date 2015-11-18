@@ -339,7 +339,7 @@ public:
 
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
-    _store = new RegStore((Store*)_local_data_store, _chronos_connection);
+    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _hss_connection = new FakeHSSConnection();
     if (ifcs)
@@ -360,7 +360,7 @@ public:
     _scscf = scscf_enabled;
     _emerg_reg = emerg_reg_enabled;
     _acr_factory = new ACRFactory();
-    pj_status_t ret = init_stateful_proxy(_store,
+    pj_status_t ret = init_stateful_proxy(_sdm,
                                           NULL,
                                           _ifc_handler,
                                           !_edge_upstream_proxy.empty(),
@@ -398,7 +398,7 @@ public:
     pjsip_tsx_layer_destroy();
     destroy_stateful_proxy();
     delete _acr_factory; _acr_factory = NULL;
-    delete _store; _store = NULL;
+    delete _sdm; _sdm = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
     delete _local_data_store; _local_data_store = NULL;
     delete _analytics; _analytics = NULL;
@@ -463,7 +463,7 @@ public:
 protected:
   static LocalStore* _local_data_store;
   static FakeChronosConnection* _chronos_connection;
-  static RegStore* _store;
+  static SubscriberDataManager* _sdm;
   static AnalyticsLogger* _analytics;
   static FakeHSSConnection* _hss_connection;
   static FakeXDMConnection* _xdm_connection;
@@ -494,7 +494,7 @@ protected:
 
 LocalStore* StatefulProxyTestBase::_local_data_store;
 FakeChronosConnection* StatefulProxyTestBase::_chronos_connection;
-RegStore* StatefulProxyTestBase::_store;
+SubscriberDataManager* StatefulProxyTestBase::_sdm;
 AnalyticsLogger* StatefulProxyTestBase::_analytics;
 FakeHSSConnection* StatefulProxyTestBase::_hss_connection;
 FakeXDMConnection* StatefulProxyTestBase::_xdm_connection;

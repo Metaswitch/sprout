@@ -56,7 +56,7 @@ public:
   static FakeChronosConnection* _chronos_connection;
   static FakeHSSConnection* _hss_connection;
   static LocalStore* _local_data_store;
-  static RegStore* _store;
+  static SubscriberDataManager* _sdm;
   static IfcHandler* _ifc_handler;
   pjsip_msg* TEST_MSG;
 
@@ -67,13 +67,13 @@ public:
     _chronos_connection = new FakeChronosConnection();
     _hss_connection = new FakeHSSConnection();
     _local_data_store = new LocalStore();
-    _store = new RegStore((Store*)_local_data_store, _chronos_connection);
+    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
     _ifc_handler = new IfcHandler();
   }
 
   static void TearDownTestCase()
   {
-    delete _store;
+    delete _sdm;
     delete _local_data_store;
     delete _ifc_handler;
     _ifc_handler = NULL;
@@ -155,7 +155,7 @@ public:
 FakeChronosConnection* IfcHandlerTest::_chronos_connection;
 FakeHSSConnection* IfcHandlerTest::_hss_connection;
 LocalStore* IfcHandlerTest::_local_data_store;
-RegStore* IfcHandlerTest::_store;
+SubscriberDataManager* IfcHandlerTest::_sdm;
 IfcHandler* IfcHandlerTest::_ifc_handler;
 
 TEST_F(IfcHandlerTest, ServedUser)

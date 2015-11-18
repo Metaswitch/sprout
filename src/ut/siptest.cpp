@@ -554,7 +554,7 @@ void SipTest::log_pjsip_msg(const char* description, pjsip_msg* msg)
   }
 }
 
-void SipTest::register_uri(RegStore* store,
+void SipTest::register_uri(SubscriberDataManager* sdm,
                            FakeHSSConnection* hss,
                            const std::string& user,
                            const std::string& domain,
@@ -568,8 +568,8 @@ void SipTest::register_uri(RegStore* store,
   {
     hss->set_impu_result(uri, "call", HSSConnection::STATE_REGISTERED, "");
   }
-  RegStore::AoR* aor = store->get_aor_data(uri, 0);
-  RegStore::AoR::Binding* binding = aor->get_binding(contact);
+  SubscriberDataManager::AoRPair* aor = sdm->get_aor_data(uri, 0);
+  SubscriberDataManager::AoR::Binding* binding = aor->get_current()->get_binding(contact);
   binding->_uri = contact;
   binding->_cid = "1";
   binding->_cseq = 1;
@@ -580,7 +580,7 @@ void SipTest::register_uri(RegStore* store,
   {
     binding->_params["+sip.instance"] = instance_id;
   }
-  bool ret = store->set_aor_data(uri, aor, false, 0);
+  bool ret = sdm->set_aor_data(uri, aor, 0);
   delete aor;
   EXPECT_TRUE(ret);
 };

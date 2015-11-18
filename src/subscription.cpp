@@ -58,8 +58,8 @@ extern "C" {
 #include "sproutsasevent.h"
 #include "uri_classifier.h"
 
-static RegStore* store;
-static RegStore* remote_store;
+static SubscriberDataManager* sdm;
+static SubscriberDataManager* remote_sdm;
 
 // Connection to the HSS service for retrieving associated public URIs.
 static HSSConnection* hss;
@@ -100,14 +100,16 @@ pjsip_module mod_subscription =
   NULL,                                // on_tsx_state()
 };
 
-void log_subscriptions(const std::string& aor_name, RegStore::AoR* aor_data)
+void log_subscriptions(const std::string& aor_name,
+                       SubscriberDataManager::AoR* aor_data)
 {
   TRC_DEBUG("Subscriptions for %s", aor_name.c_str());
-  for (RegStore::AoR::Subscriptions::const_iterator i = aor_data->subscriptions().begin();
+  for (SubscriberDataManager::AoR::Subscriptions::const_iterator i =
+         aor_data->subscriptions().begin();
        i != aor_data->subscriptions().end();
        ++i)
   {
-    RegStore::AoR::Subscription* subscription = i->second;
+    SubscriberDataManager::AoR::Subscription* subscription = i->second;
 
     TRC_DEBUG("%s URI=%s expires=%d from_uri=%s from_tag=%s to_uri=%s to_tag=%s call_id=%s",
               i->first.c_str(),
@@ -122,17 +124,19 @@ void log_subscriptions(const std::string& aor_name, RegStore::AoR* aor_data)
 }
 
 /// Write to the registration store.
-pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store to write to
-                                         std::string aor,              ///<address of record to write to
-                                         pjsip_rx_data* rdata,         ///<received message to read headers from
-                                         int now,                      ///<time now
-                                         RegStore::AoR* backup_aor,    ///<backup data if no entry in store
-                                         RegStore* backup_store,       ///<backup store to read from if no entry in store and no backup data
-                                         pjsip_tx_data** tdata_notify, ///<tdata to construct a SIP NOTIFY from
-                                         RegStore::AoR** aor_data,     ///<aor_data to write to
-                                         bool update_notify,           ///<whether to generate a SIP NOTIFY
-                                         std::string& subscription_id,
-                                         SAS::TrailId trail)
+SubscriberDataManager::AoRPair* write_subscriptions_to_store(
+                   SubscriberDataManager* primary_sdm,        ///<store to write to
+                   std::string aor,                           ///<address of record to write to
+                   pjsip_rx_data* rdata,                      ///<received message to read headers from
+                   int now,                                   ///<time now
+                   SubscriberDataManager::AoRPair* backup_aor,///<backup data if no entry in store
+                   SubscriberDataManager* backup_sdm,         ///<backup store to read from if no entry in store and no backup data
+                   SAS::TrailId trail,                        ///<SAS trail
+                   std::string public_id,                     ///
+                   bool send_ok,                              ///<Should we create an OK
+                   ACR* acr,                                  ///
+                   std::deque<std::string> ccfs,              ///
+                   std::deque<std::string> ecfs)              ///
 {
   // Parse the headers
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);;
@@ -148,19 +152,21 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
   int expiry = 0;
   pj_status_t status = PJ_FALSE;
   Store::Status set_rc;
-  (*aor_data) = NULL;
-  RegStore::AoR::Subscription* subscription_copy = NULL;
+  SubscriberDataManager::AoRPair* aor_pair = NULL;
+  std::string subscription_contact;
+  std::string subscription_id;
 
   do
   {
     // delete NULL is safe, so we can do this on every iteration.
-    delete (*aor_data);
+    delete aor_pair;
 
     // Find the current subscriptions for the AoR.
-    (*aor_data) = primary_store->get_aor_data(aor, trail, false);
-    TRC_DEBUG("Retrieved AoR data %p", (*aor_data));
+    aor_pair = primary_sdm->get_aor_data(aor, trail);
+    TRC_DEBUG("Retrieved AoR data %p", aor_pair);
 
-    if ((*aor_data) == NULL)
+    if ((aor_pair == NULL) ||
+        (aor_pair->get_current() == NULL))
     {
       // Failed to get data for the AoR because there is no connection
       // to the store.
@@ -171,31 +177,34 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
     }
 
     // If we don't have any subscriptions, try the backup AoR and/or store.
-    if ((*aor_data)->subscriptions().empty())
+    if (aor_pair->get_current()->subscriptions().empty())
     {
       if ((backup_aor == NULL)   &&
-          (backup_store != NULL) &&
-          (backup_store->has_servers()))
+          (backup_sdm != NULL) &&
+          (backup_sdm->has_servers()))
       {
-        backup_aor = backup_store->get_aor_data(aor, trail, false);
+        backup_aor = backup_sdm->get_aor_data(aor, trail);
         backup_aor_alloced = (backup_aor != NULL);
       }
 
       if ((backup_aor != NULL) &&
-          (!backup_aor->subscriptions().empty()))
+          (backup_aor->get_current() != NULL) &&
+          (!backup_aor->get_current()->subscriptions().empty()))
       {
-        for (RegStore::AoR::Subscriptions::const_iterator i = backup_aor->subscriptions().begin();
-             i != backup_aor->subscriptions().end();
+        for (SubscriberDataManager::AoR::Subscriptions::const_iterator i =
+               backup_aor->get_current()->subscriptions().begin();
+             i != backup_aor->get_current()->subscriptions().end();
              ++i)
         {
-          RegStore::AoR::Subscription* src = i->second;
-          RegStore::AoR::Subscription* dst = (*aor_data)->get_subscription(i->first);
+          SubscriberDataManager::AoR::Subscription* src = i->second;
+          SubscriberDataManager::AoR::Subscription* dst = aor_pair->get_current()->get_subscription(i->first);
           *dst = *src;
         }
       }
     }
 
     pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
+
     if (contact != NULL)
     {
       std::string contact_uri;
@@ -214,29 +223,36 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
       if (subscription_id == "")
       {
         // If there's no to tag, generate an unique one
-        subscription_id = std::to_string(Utils::generate_unique_integer(id_deployment, id_instance));
+        subscription_id = std::to_string(Utils::generate_unique_integer(id_deployment,
+                                                                        id_instance));
       }
 
       TRC_DEBUG("Subscription identifier = %s", subscription_id.c_str());
 
       // Find the appropriate subscription in the subscription list for this AoR. If it can't
       // be found a new empty subscription is created.
-      RegStore::AoR::Subscription* subscription = (*aor_data)->get_subscription(subscription_id);
+      SubscriberDataManager::AoR::Subscription* subscription =
+                    aor_pair->get_current()->get_subscription(subscription_id);
 
       // Update/create the subscription.
       subscription->_req_uri = contact_uri;
 
       subscription->_route_uris.clear();
-      pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_RECORD_ROUTE, NULL);
+      pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg,
+                                                                        PJSIP_H_RECORD_ROUTE,
+                                                                        NULL);
 
       while (route_hdr)
       {
-        std::string route = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, route_hdr->name_addr.uri);
+        std::string route = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                                   route_hdr->name_addr.uri);
         TRC_DEBUG("Route header %s", route.c_str());
         // Add the route.
         subscription->_route_uris.push_back(route);
         // Look for the next header.
-        route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_RECORD_ROUTE, route_hdr->next);
+        route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg,
+                                                         PJSIP_H_RECORD_ROUTE,
+                                                         route_hdr->next);
       }
 
       subscription->_cid = cid;
@@ -255,50 +271,79 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
       }
 
       subscription->_expires = now + expiry;
+      subscription_contact = subscription->_req_uri;
+    }
 
-      // We need the subscription object to build a corresponding NOTIFY below.
-      // However calling `set_aor_data` may invalidate the pointer we already
-      // have, so make a copy of the subscription for later use.
-      subscription_copy = new RegStore::AoR::Subscription(*subscription);
+    // Build and send the reply.
+    pjsip_tx_data* tdata = NULL;
 
-      if (update_notify)
+    if (send_ok)
+    {
+      status = PJUtils::create_response(stack_data.endpt, rdata, PJSIP_SC_OK, NULL, &tdata);
+      if (status != PJ_SUCCESS)
       {
-        // We need to generate a notify so increment the cseq before writing
-        // the AoR back to the store.
-        (*aor_data)->_notify_cseq++;
+        // LCOV_EXCL_START - don't know how to get PJSIP to fail to create a response
+        TRC_ERROR("Error building SUBSCRIBE %d response %s", PJSIP_SC_OK,
+                  PJUtils::pj_status_to_string(status).c_str());
+
+        SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED, 0);
+        event.add_var_param(public_id);
+        std::string error_msg = "Error building SUBSCRIBE (" + std::to_string(PJSIP_SC_OK) + ") " + PJUtils::pj_status_to_string(status);
+        event.add_var_param(error_msg);
+        SAS::report_event(event);
+
+        PJUtils::respond_stateless(stack_data.endpt,
+                                   rdata,
+                                   PJSIP_SC_INTERNAL_SERVER_ERROR,
+                                   NULL,
+                                   NULL,
+                                   NULL);
+        delete acr;
+        delete aor_pair;
+        return PJ_FALSE;
+        // LCOV_EXCL_STOP
       }
+
+      // Add expires headers
+      pjsip_expires_hdr* expires_hdr = pjsip_expires_hdr_create(tdata->pool, expiry);
+      pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)expires_hdr);
+
+      // Add the to tag to the response
+      pjsip_to_hdr *to = (pjsip_to_hdr*) pjsip_msg_find_hdr(tdata->msg,
+                                                            PJSIP_H_TO,
+                                                            NULL);
+      pj_strdup2(tdata->pool, &to->tag, subscription_id.c_str());
+
+      // Add a P-Charging-Function-Addresses header to the successful SUBSCRIBE
+      // response containing the charging addresses returned by the HSS.
+      PJUtils::add_pcfa_header(tdata->msg,
+                               tdata->pool,
+                               ccfs,
+                               ecfs,
+                               false);
+
+      // Pass the response to the ACR.
+      acr->tx_response(tdata->msg);
     }
 
     // Try to write the AoR back to the store.
-    set_rc = primary_store->set_aor_data(aor, (*aor_data), true, trail, false);
+    bool unused;
+    set_rc = primary_sdm->set_aor_data(aor, aor_pair, trail, unused, rdata, tdata);
 
     if (set_rc != Store::OK)
     {
-      delete *aor_data; *aor_data = NULL;
-      delete subscription_copy; subscription_copy = NULL;
+      delete aor_pair; aor_pair = NULL;
     }
   }
   while (set_rc == Store::DATA_CONTENTION);
 
-  if (subscription_copy != NULL)
+  if (analytics != NULL)
   {
-    if (update_notify)
-    {
-      status = NotifyUtils::create_subscription_notify(tdata_notify,
-                                                       subscription_copy,
-                                                       aor,
-                                                       aor_data,
-                                                       now);
-    }
-
-    if (analytics != NULL)
-    {
-      // Generate an analytics log for this subscription update.
-      analytics->subscription(aor,
-                              subscription_id,
-                              subscription_copy->_req_uri,
-                              expiry);
-    }
+    // Generate an analytics log for this subscription update.
+    analytics->subscription(aor,
+                            subscription_id,
+                            subscription_contact,
+                            expiry);
   }
 
   // If we allocated the backup AoR, tidy up.
@@ -307,14 +352,11 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
     delete backup_aor; backup_aor = NULL;
   }
 
-  delete subscription_copy; subscription_copy = NULL;
-
-  return status;
+  return aor_pair;
 }
 
 void process_subscription_request(pjsip_rx_data* rdata)
 {
-  pj_status_t status;
   int st_code = PJSIP_SC_OK;
 
   SAS::TrailId trail = get_trail(rdata);
@@ -472,132 +514,117 @@ void process_subscription_request(pjsip_rx_data* rdata)
 
   // Write to the local store, checking the remote store if there is no entry locally.
   // If the write to the local store succeeds, then write to the remote store.
-  pjsip_tx_data* tdata_notify = NULL;
-  RegStore::AoR* aor_data = NULL;
-  std::string subscription_id;
-  pj_status_t notify_status = write_subscriptions_to_store(store, aor, rdata,
-                                                           now, NULL, remote_store,
-                                                           &tdata_notify, &aor_data,
-                                                           true, subscription_id,
-                                                           trail);
+  SubscriberDataManager::AoRPair* aor_pair =
+                              write_subscriptions_to_store(sdm,
+                                                           aor,
+                                                           rdata,
+                                                           now,
+                                                           NULL,
+                                                           remote_sdm,
+                                                           trail,
+                                                           public_id,
+                                                           true,
+                                                           acr,
+                                                           ccfs,
+                                                           ecfs);
 
-  if (aor_data != NULL)
+  if (aor_pair != NULL)
   {
     // Log the subscriptions.
-    log_subscriptions(aor, aor_data);
+    log_subscriptions(aor, aor_pair->get_current());
 
     // If we have a remote store, try to store this there too.  We don't worry
     // about failures in this case.
-    if ((remote_store != NULL) && remote_store->has_servers())
+    if ((remote_sdm != NULL) && remote_sdm->has_servers())
     {
-      RegStore::AoR* remote_aor_data = NULL;
-      std::string ignore;
-      write_subscriptions_to_store(remote_store, aor, rdata, now, aor_data, NULL,
-                                   &tdata_notify, &remote_aor_data, false, ignore,
-                                   trail);
-      delete remote_aor_data;
+      SubscriberDataManager::AoRPair* remote_aor_pair =
+         write_subscriptions_to_store(remote_sdm,
+                                      aor,
+                                      rdata,
+                                      now,
+                                      aor_pair,
+                                      NULL,
+                                      trail,
+                                      public_id,
+                                      false,
+                                      acr,
+                                      ccfs,
+                                      ecfs);
+      delete remote_aor_pair;
     }
   }
   else
   {
     // Failed to connect to the local store.  Reject the subscribe with a 500
     // response.
-
-    // LCOV_EXCL_START - the can't fail to connect to the store we use for UT
     st_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
-    // LCOV_EXCL_STOP
+
+    // Build and send the reply.
+    pjsip_tx_data* tdata;
+    pj_status_t status = PJUtils::create_response(stack_data.endpt,
+                                                  rdata,
+                                                  st_code,
+                                                  NULL,
+                                                  &tdata);
+
+    if (status != PJ_SUCCESS)
+    {
+      // LCOV_EXCL_START - don't know how to get PJSIP to fail to create a response
+      TRC_ERROR("Error building SUBSCRIBE %d response %s", st_code,
+                PJUtils::pj_status_to_string(status).c_str());
+      SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED, 0);
+      event.add_var_param(public_id);
+      std::string error_msg = "Error building SUBSCRIBE (" + std::to_string(st_code) + ") " + PJUtils::pj_status_to_string(status);
+      event.add_var_param(error_msg);
+      SAS::report_event(event);
+
+      PJUtils::respond_stateless(stack_data.endpt,
+                                 rdata,
+                                 PJSIP_SC_INTERNAL_SERVER_ERROR,
+                                 NULL,
+                                 NULL,
+                                 NULL);
+      delete acr;
+      return;
+      // LCOV_EXCL_STOP
+    }
+
+    // Add the to tag to the response
+    pjsip_to_hdr *to = (pjsip_to_hdr*) pjsip_msg_find_hdr(tdata->msg,
+                                                          PJSIP_H_TO,
+                                                          NULL);
+    std::string subscription_id = PJUtils::pj_str_to_string(&to->tag);
+
+    if (subscription_id == "")
+    {
+      // If there's no to tag, generate an unique one
+      // LCOV_EXCL_START
+      subscription_id = std::to_string(Utils::generate_unique_integer(id_deployment,
+                                                                      id_instance));
+      // LCOV_EXCL_STOP
+    }
+
+    pj_strdup2(tdata->pool, &to->tag, subscription_id.c_str());
+
+    // Pass the response to the ACR.
+    acr->tx_response(tdata->msg);
+
+    // Send the response.
+    status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
   }
 
   SAS::Event sub_accepted(trail, SASEvent::SUBSCRIBE_ACCEPTED, 0);
   SAS::report_event(sub_accepted);
 
-  // Build and send the reply.
-  pjsip_tx_data* tdata;
-  status = PJUtils::create_response(stack_data.endpt, rdata, st_code, NULL, &tdata);
-  if (status != PJ_SUCCESS)
-  {
-    // LCOV_EXCL_START - don't know how to get PJSIP to fail to create a response
-    TRC_ERROR("Error building SUBSCRIBE %d response %s", st_code,
-              PJUtils::pj_status_to_string(status).c_str());
-
-    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED, 0);
-    event.add_var_param(public_id);
-    std::string error_msg = "Error building SUBSCRIBE (" + std::to_string(st_code) + ") " + PJUtils::pj_status_to_string(status);
-    event.add_var_param(error_msg);
-    SAS::report_event(event);
-
-    PJUtils::respond_stateless(stack_data.endpt,
-                               rdata,
-                               PJSIP_SC_INTERNAL_SERVER_ERROR,
-                               NULL,
-                               NULL,
-                               NULL);
-    delete acr;
-    delete aor_data;
-    return;
-    // LCOV_EXCL_STOP
-  }
-
-  // Add expires headers
-  pjsip_expires_hdr* expires_hdr = pjsip_expires_hdr_create(tdata->pool, expiry);
-  pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)expires_hdr);
-
-  // Add the to tag to the response
-  pjsip_to_hdr *to = (pjsip_to_hdr*) pjsip_msg_find_hdr(tdata->msg,
-                                                        PJSIP_H_TO,
-                                                        NULL);
-  pj_strdup2(tdata->pool, &to->tag, subscription_id.c_str());
-
-  // Add a P-Charging-Function-Addresses header to the successful SUBSCRIBE
-  // response containing the charging addresses returned by the HSS.
-  if (st_code == PJSIP_SC_OK)
-  {
-    PJUtils::add_pcfa_header(tdata->msg,
-                             tdata->pool,
-                             ccfs,
-                             ecfs,
-                             false);
-  }
-
-  // Pass the response to the ACR.
-  acr->tx_response(tdata->msg);
-
-  // Send the response.
-  status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
-
   // Send the ACR and delete it.
   acr->send();
   delete acr;
-
-  // Send the Notify
-  if (tdata_notify != NULL && notify_status == PJ_SUCCESS)
-  {
-    // Add a P-Charging-Function-Addresses header to the NOTIFY containing the
-    // charging addresses returned by the HSS.
-    PJUtils::add_pcfa_header(tdata_notify->msg,
-                             tdata_notify->pool,
-                             ccfs,
-                             ecfs,
-                             false);
-    set_trail(tdata_notify, trail);
-    status = PJUtils::send_request(tdata_notify, 0, NULL, NULL, true);
-
-    if (status != PJ_SUCCESS)
-    {
-      // LCOV_EXCL_START
-      SAS::Event event(trail, SASEvent::NOTIFICATION_FAILED, 0);
-      std::string error_msg = "Failed to send NOTIFY - error: " + std::to_string(status);
-      event.add_var_param(error_msg);
-      SAS::report_event(event);
-      // LCOV_EXCL_STOP
-    }
-  }
 
   TRC_DEBUG("Report SAS end marker - trail (%llx)", trail);
   SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
 
-  delete aor_data;
+  delete aor_pair;
 }
 
 // Reject request unless it's a SUBSCRIBE targeted at the home domain / this node.
@@ -689,8 +716,8 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
   return PJ_TRUE;
 }
 
-pj_status_t init_subscription(RegStore* registrar_store,
-                              RegStore* remote_reg_store,
+pj_status_t init_subscription(SubscriberDataManager* reg_sdm,
+                              SubscriberDataManager* reg_remote_sdm,
                               HSSConnection* hss_connection,
                               ACRFactory* rfacr_factory,
                               AnalyticsLogger* analytics_logger,
@@ -698,8 +725,8 @@ pj_status_t init_subscription(RegStore* registrar_store,
 {
   pj_status_t status;
 
-  store = registrar_store;
-  remote_store = remote_reg_store;
+  sdm = reg_sdm;
+  remote_sdm = reg_remote_sdm;
   hss = hss_connection;
   acr_factory = rfacr_factory;
   analytics = analytics_logger;

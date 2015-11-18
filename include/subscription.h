@@ -42,15 +42,15 @@ extern "C" {
 #include <pjsip.h>
 }
 
-#include "regstore.h"
+#include "subscriber_data_manager.h"
 #include "hssconnection.h"
 #include "analyticslogger.h"
 #include "acr.h"
 
 extern pjsip_module mod_subscription;
 
-extern pj_status_t init_subscription(RegStore* registrar_store,
-                                     RegStore* remote_reg_store,
+extern pj_status_t init_subscription(SubscriberDataManager* sdm,
+                                     SubscriberDataManager* remote_sdm,
                                      HSSConnection* hss_connection,
                                      ACRFactory* rfacr_factory,
                                      AnalyticsLogger* analytics_logger,

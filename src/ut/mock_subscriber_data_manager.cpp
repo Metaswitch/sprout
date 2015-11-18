@@ -1,8 +1,8 @@
 /**
- * @file registrar.h Initialization/termination functions for Sprout's Registrar module
+ * @file mock_subscriber_data_manager.cpp
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Project Clearwater - IMS in the cloud.
+ * Copyright (C) 2015  Metaswitch Networks Ltd
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -34,37 +34,11 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+#include "mock_subscriber_data_manager.h"
 
-#ifndef REGISTRAR_H__
-#define REGISTRAR_H__
+MockSubscriberDataManager::MockSubscriberDataManager() : 
+  SubscriberDataManager(NULL, NULL, true) 
+{}
 
-extern "C" {
-#include <pjsip.h>
-}
-
-#include "subscriber_data_manager.h"
-#include "hssconnection.h"
-#include "chronosconnection.h"
-#include "analyticslogger.h"
-#include "acr.h"
-#include "snmp_success_fail_count_table.h"
-
-extern pjsip_module mod_registrar;
-
-void third_party_register_failed(const std::string& public_id,
-                                 SAS::TrailId trail);
-
-extern pj_status_t init_registrar(SubscriberDataManager* sdm,
-                                  SubscriberDataManager* remote_sdm,
-                                  HSSConnection* hss_connection,
-                                  AnalyticsLogger* analytics_logger,
-                                  ACRFactory* rfacr_factory,
-                                  int cfg_max_expires,
-                                  bool force_third_party_register_body,
-                                  SNMP::RegistrationStatsTables* reg_stats_tbls,
-                                  SNMP::RegistrationStatsTables* third_party_reg_stats_tbls);
-
-
-extern void destroy_registrar();
-
-#endif
+MockSubscriberDataManager::~MockSubscriberDataManager()
+{}

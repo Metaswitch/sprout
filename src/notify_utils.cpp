@@ -101,12 +101,9 @@ pj_xml_node* create_contact_node(pj_pool_t *pool,
 pj_xml_node* notify_create_reg_state_xml(
                          pj_pool_t *pool,
                          std::string& aor,
-                         RegStore::AoR::Subscription* subscription,
-                         std::map<std::string, RegStore::AoR::Binding> bindings,
-                         NotifyUtils::DocState doc_state,
-                         NotifyUtils::RegistrationState reg_state,
-                         NotifyUtils::ContactState contact_state,
-                         NotifyUtils::ContactEvent contact_event)
+                         SubscriberDataManager::AoR::Subscription* subscription,
+                         std::vector<NotifyUtils::BindingNotifyInformation*> bnis,
+                         NotifyUtils::RegistrationState reg_state)
 {
   TRC_DEBUG("Create the XML body for a SIP NOTIFY");
 
@@ -127,8 +124,7 @@ pj_xml_node* notify_create_reg_state_xml(
   pj_xml_add_attr(doc, attr);
 
   // Add the state - this will be partial except on an initial subscription
-  const pj_str_t* state_str = (doc_state == NotifyUtils::DocState::FULL) ?
-                                                       &STR_FULL : &STR_PARTIAL;
+  const pj_str_t* state_str = &STR_FULL;
   attr = pj_xml_attr_new(pool, &STR_STATE, state_str);
   pj_xml_add_attr(doc, attr);
 
@@ -147,38 +143,40 @@ pj_xml_node* notify_create_reg_state_xml(
 
   // Create the contact nodes
   // For each binding, add a contact node to the registration node
-  for (std::map<std::string, RegStore::AoR::Binding>::const_iterator binding = bindings.begin();
-       binding != bindings.end();
-       ++binding)
+  for (std::vector<NotifyUtils::BindingNotifyInformation*>::const_iterator bni =
+         bnis.begin();
+       bni != bnis.end();
+       ++bni)
   {
     // for each attribute, correctly populate
     pj_str_t c_id;
     pj_str_t c_state;
     pj_str_t c_event;
 
-    std::string unescaped_c_id = binding->first;
+    std::string unescaped_c_id = (*bni)->_id;
     pj_strdup2(pool, &c_id, Utils::xml_escape(unescaped_c_id).c_str());
-    c_state = (contact_state == NotifyUtils::ContactState::ACTIVE)
-                                                  ? STR_ACTIVE : STR_TERMINATED;
 
-    switch (contact_event)
+    switch ((*bni)->_contact_event)
     {
       case NotifyUtils::ContactEvent::REGISTERED:
         c_event = STR_REGISTERED;
+        c_state = STR_ACTIVE;
         break;
       case NotifyUtils::ContactEvent::CREATED:
         c_event = STR_CREATED;
+        c_state = STR_ACTIVE;
         break;
-      // LCOV_EXCL_START
-      case NotifyUtils::ContactEvent::DEACTIVATED:
-        c_event = STR_DEACTIVATED;
-        break;
-      // LCOV_EXCL_STOP
       case NotifyUtils::ContactEvent::REFRESHED:
         c_event = STR_REFRESHED;
+        c_state = STR_ACTIVE;
+        break;
+      case NotifyUtils::ContactEvent::SHORTENED:
+        c_event = STR_SHORTENED;
+        c_state = STR_ACTIVE;
         break;
       case NotifyUtils::ContactEvent::EXPIRED:
         c_event = STR_EXPIRED;
+        c_state = STR_TERMINATED;
         break;
     }
 
@@ -190,9 +188,9 @@ pj_xml_node* notify_create_reg_state_xml(
     // Create and add URI element
     pj_str_t c_uri;
 
-    if (binding->second._uri.size() > 0)
+    if ((*bni)->_b->_uri.size() > 0)
     {
-      std::string unescaped_c_uri = binding->second._uri;
+      std::string unescaped_c_uri = (*bni)->_b->_uri;
       pj_strdup2(pool, &c_uri, Utils::xml_escape(unescaped_c_uri).c_str());
     }
 
@@ -200,9 +198,10 @@ pj_xml_node* notify_create_reg_state_xml(
     pj_strdup(pool, &uri_node->content, &c_uri);
     pj_xml_add_node(contact_node, uri_node);
 
-    std::string unescaped_gruu = binding->second.pub_gruu_str(pool);
     pj_str_t gruu;
-    pj_strdup2(pool, &gruu, Utils::xml_escape(unescaped_gruu).c_str());
+    pj_strdup2(pool,
+               &gruu,
+               Utils::xml_escape((*bni)->_b->pub_gruu_str(pool)).c_str());
 
     if (gruu.slen != 0)
     {
@@ -235,12 +234,9 @@ static int xml_print_body( struct pjsip_msg_body *msg_body,
 pj_status_t notify_create_body(pjsip_msg_body* body,
                                pj_pool_t *pool,
                                std::string& aor,
-                               RegStore::AoR::Subscription* subscription,
-                               std::map<std::string, RegStore::AoR::Binding> bindings,
-                               NotifyUtils::DocState doc_state,
-                               NotifyUtils::RegistrationState reg_state,
-                               NotifyUtils::ContactState contact_state,
-                               NotifyUtils::ContactEvent contact_event)
+                               SubscriberDataManager::AoR::Subscription* subscription,
+                               std::vector<NotifyUtils::BindingNotifyInformation*> bnis,
+                               NotifyUtils::RegistrationState reg_state)
 {
   TRC_DEBUG("Create body of a SIP NOTIFY");
 
@@ -248,11 +244,8 @@ pj_status_t notify_create_body(pjsip_msg_body* body,
   doc = notify_create_reg_state_xml(pool,
                                     aor,
                                     subscription,
-                                    bindings,
-                                    doc_state,
-                                    reg_state,
-                                    contact_state,
-                                    contact_event);
+                                    bnis,
+                                    reg_state);
 
   if (doc == NULL)
   {
@@ -275,7 +268,7 @@ pj_status_t notify_create_body(pjsip_msg_body* body,
 
 pj_status_t create_request_from_subscription(
                                      pjsip_tx_data** p_tdata,
-                                     RegStore::AoR::Subscription* subscription,
+                                     SubscriberDataManager::AoR::Subscription* subscription,
                                      int cseq,
                                      pj_str_t* body)
 {
@@ -306,31 +299,17 @@ pj_status_t create_request_from_subscription(
 // Pass the correct subscription parameters in to create_notify
 pj_status_t NotifyUtils::create_subscription_notify(
                                     pjsip_tx_data** tdata_notify,
-                                    RegStore::AoR::Subscription* s,
+                                    SubscriberDataManager::AoR::Subscription* s,
                                     std::string aor,
-                                    RegStore::AoR** aor_data,
+                                    SubscriberDataManager::AoR* aor_data,
+                                    std::vector<NotifyUtils::BindingNotifyInformation*> bnis,
+                                    NotifyUtils::RegistrationState reg_state,
                                     int now)
 {
-  // Create a map of string to binding, and populate it from aor_data
-  std::map<std::string, RegStore::AoR::Binding> bindings;
-
-  for (RegStore::AoR::Bindings::const_iterator i = (*aor_data)->bindings().begin();
-         i != (*aor_data)->bindings().end();
-         ++i)
-  {
-    std::string id = i->first;
-    RegStore::AoR::Binding bind = *(i->second);
-
-    if (!bind._emergency_registration)
-    {
-      bindings.insert(std::pair<std::string, RegStore::AoR::Binding>(id, bind));
-    }
-  }
-
-  //set the correct subscription state header
+  // Set the correct subscription state header
   NotifyUtils::SubscriptionState state = NotifyUtils::SubscriptionState::ACTIVE;
 
-  int expiry = ((s->_expires - now) > 0) ? (s->_expires - now) : 0;
+  int expiry = (s->_expires > now) ? (s->_expires - now) : 0;
 
   if (expiry == 0)
   {
@@ -340,12 +319,9 @@ pj_status_t NotifyUtils::create_subscription_notify(
   pj_status_t status = NotifyUtils::create_notify(tdata_notify,
                                                   s,
                                                   aor,
-                                                  (*aor_data)->_notify_cseq,
-                                                  bindings,
-                                                  NotifyUtils::DocState::FULL,
-                                                  NotifyUtils::RegistrationState::ACTIVE,
-                                                  NotifyUtils::ContactState::ACTIVE,
-                                                  NotifyUtils::ContactEvent::REGISTERED,
+                                                  aor_data->_notify_cseq,
+                                                  bnis,
+                                                  reg_state,
                                                   state,
                                                   expiry);
   return status;
@@ -353,14 +329,11 @@ pj_status_t NotifyUtils::create_subscription_notify(
 // Create the request with to and from headers and a null body string, then add the body.
 pj_status_t NotifyUtils::create_notify(
                                     pjsip_tx_data** tdata_notify,
-                                    RegStore::AoR::Subscription* subscription,
+                                    SubscriberDataManager::AoR::Subscription* subscription,
                                     std::string aor,
                                     int cseq,
-                                    std::map<std::string, RegStore::AoR::Binding> bindings,
-                                    NotifyUtils::DocState doc_state,
+                                    std::vector<NotifyUtils::BindingNotifyInformation*> bnis,
                                     NotifyUtils::RegistrationState reg_state,
-                                    NotifyUtils::ContactState contact_state,
-                                    NotifyUtils::ContactEvent contact_event,
                                     NotifyUtils::SubscriptionState subscription_state,
                                     int expiry)
 {
@@ -411,13 +384,22 @@ pj_status_t NotifyUtils::create_notify(
 
     if (subscription_state == NotifyUtils::SubscriptionState::TERMINATED)
     {
-      // The only reason we support is timeout (this also covers
-      // actively unsubscribing)
+      // If there are any bindings remaining (e.g. the registration state isn't
+      // terminated) set the reason to timeout. Otherwise set it to deactivated
       sub_state_hdr->sub_state = STR_TERMINATED;
-      sub_state_hdr->reason_param = STR_TIMEOUT;
+
+      if (reg_state == NotifyUtils::RegistrationState::TERMINATED)
+      {
+        sub_state_hdr->reason_param = STR_DEACTIVATED;
+      }
+      else
+      {
+        sub_state_hdr->reason_param = STR_TIMEOUT;
+      }
     }
     else
     {
+      // If the subscription is active add the expiry parameter
       sub_state_hdr->sub_state = STR_ACTIVE;
       sub_state_hdr->expires_param = expiry;
     }
@@ -431,11 +413,8 @@ pj_status_t NotifyUtils::create_notify(
                                (*tdata_notify)->pool,
                                 aor,
                                 subscription,
-                                bindings,
-                                doc_state,
-                                reg_state,
-                                contact_state,
-                                contact_event);
+                                bnis,
+                                reg_state);
     (*tdata_notify)->msg->body = body2;
   }
   else
