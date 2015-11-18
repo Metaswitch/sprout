@@ -46,7 +46,7 @@ extern "C" {
 }
 
 #include <string>
-#include "regstore.h"
+#include "subscriber_data_manager.h"
 #include "ifchandler.h"
 #include "hssconnection.h"
 #include "pjsip-simple/evsub.h"
@@ -58,23 +58,38 @@ namespace NotifyUtils
   enum class RegistrationState { ACTIVE, TERMINATED };
   enum class ContactState { ACTIVE, TERMINATED };
   enum class SubscriptionState { ACTIVE, TERMINATED };
-  enum class ContactEvent { REGISTERED, CREATED, REFRESHED, EXPIRED, DEACTIVATED };
+  enum class ContactEvent { REGISTERED, CREATED, REFRESHED, EXPIRED, SHORTENED };
+
+  // Wrapper for the bindings in a NOTIFY. The information needed is
+  // the binding itself, a unique ID for it and the contact event
+  struct BindingNotifyInformation {
+    BindingNotifyInformation(std::string id,
+                             SubscriberDataManager::AoR::Binding* b,
+                             NotifyUtils::ContactEvent event) :
+      _id(id),
+      _b(b),
+      _contact_event(event)
+    {}
+
+    std::string _id;
+    SubscriberDataManager::AoR::Binding* _b;
+    NotifyUtils::ContactEvent _contact_event;
+  };
 
   pj_status_t create_subscription_notify(pjsip_tx_data** tdata_notify,
-                                         RegStore::AoR::Subscription* s,
+                                         SubscriberDataManager::AoR::Subscription* s,
                                          std::string aor,
-                                         RegStore::AoR** aor_data,
+                                         SubscriberDataManager::AoR* aor_data,
+                                         std::vector<BindingNotifyInformation*> bnis,
+                                         NotifyUtils::RegistrationState reg_state,
                                          int now);
 
   pj_status_t create_notify(pjsip_tx_data** tdata_notify,
-                            RegStore::AoR::Subscription* subscription,
+                            SubscriberDataManager::AoR::Subscription* subscription,
                             std::string aor, 
                             int cseq,
-                            std::map<std::string, RegStore::AoR::Binding> bindings,
-                            NotifyUtils::DocState doc_state,
+                            std::vector<BindingNotifyInformation*> bnis,
                             NotifyUtils::RegistrationState reg_state,
-                            NotifyUtils::ContactState contact_state,
-                            NotifyUtils::ContactEvent contact_event,
                             NotifyUtils::SubscriptionState subscription_state,
                             int expiry);
 };

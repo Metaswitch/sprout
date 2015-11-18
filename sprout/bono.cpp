@@ -113,7 +113,6 @@ extern "C" {
 #include "stack.h"
 #include "sproutsasevent.h"
 #include "analyticslogger.h"
-#include "regstore.h"
 #include "bono.h"
 #include "constants.h"
 #include "enumservice.h"
@@ -133,8 +132,8 @@ extern "C" {
 #include "contact_filtering.h"
 #include "uri_classifier.h"
 
-static RegStore* store;
-static RegStore* remote_store;
+static SubscriberDataManager* sdm;
+static SubscriberDataManager* remote_sdm;
 
 static IfcHandler* ifc_handler;
 
@@ -3209,8 +3208,8 @@ void UACTransaction::exit_context()
 ///@{
 // MODULE LIFECYCLE
 
-pj_status_t init_stateful_proxy(RegStore* registrar_store,
-                                RegStore* remote_reg_store,
+pj_status_t init_stateful_proxy(SubscriberDataManager* reg_sdm,
+                                SubscriberDataManager* reg_remote_sdm,
                                 IfcHandler* ifc_handler_in,
                                 pj_bool_t enable_edge_proxy,
                                 const std::string& upstream_proxy_arg,
@@ -3238,8 +3237,8 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
   pj_status_t status;
 
   analytics_logger = analytics;
-  store = registrar_store;
-  remote_store = remote_reg_store;
+  reg_sdm = sdm;
+  reg_remote_sdm = remote_sdm;
 
   ifc_handler = ifc_handler_in;
 

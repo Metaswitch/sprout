@@ -37,7 +37,7 @@
 #ifndef CONTACT_FILTERING_H__
 #define CONTACT_FILTERING_H__
 
-#include "regstore.h"
+#include "subscriber_data_manager.h"
 #include "aschain.h"
 #include "custom_headers.h"
 
@@ -50,7 +50,7 @@ class FeatureParseError {};
 // Entry point for contact filtering.  Convert the set of bindings to a set of
 // Targets, applying filtering where required.
 void filter_bindings_to_targets(const std::string& aor,
-                                const RegStore::AoR* bindings,
+                                const SubscriberDataManager::AoR* bindings,
                                 pjsip_msg* msg,
                                 pj_pool_t* pool,
                                 int max_targets,
@@ -58,7 +58,7 @@ void filter_bindings_to_targets(const std::string& aor,
                                 SAS::TrailId trail);
 bool binding_to_target(const std::string& aor,
                        const std::string& binding_id,
-                       const RegStore::AoR::Binding& binding,
+                       const SubscriberDataManager::AoR::Binding& binding,
                        bool deprioritized,
                        pj_pool_t* pool,
                        Target& target);

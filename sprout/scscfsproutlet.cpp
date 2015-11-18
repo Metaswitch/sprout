@@ -59,8 +59,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
                                const std::string& icscf_uri,
                                const std::string& bgcf_uri,
                                int port,
-                               RegStore* store,
-                               RegStore* remote_store,
+                               SubscriberDataManager* sdm,
+                               SubscriberDataManager* remote_sdm,
                                HSSConnection* hss,
                                EnumService* enum_service,
                                ACRFactory* acr_factory,
@@ -72,8 +72,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
   _scscf_node_uri(NULL),
   _icscf_uri(NULL),
   _bgcf_uri(NULL),
-  _store(store),
-  _remote_store(remote_store),
+  _sdm(sdm),
+  _remote_sdm(remote_sdm),
   _hss(hss),
   _enum_service(enum_service),
   _acr_factory(acr_factory),
@@ -213,22 +213,23 @@ AsChainTable* SCSCFSproutlet::as_chain_table() const
 /// Gets all bindings for the specified Address of Record from the local or
 /// remote registration stores.
 void SCSCFSproutlet::get_bindings(const std::string& aor,
-                                  RegStore::AoR** aor_data,
+                                  SubscriberDataManager::AoRPair** aor_pair,
                                   SAS::TrailId trail)
 {
   // Look up the target in the registration data store.
   TRC_INFO("Look up targets in registration store: %s", aor.c_str());
-  *aor_data = _store->get_aor_data(aor, trail);
+  *aor_pair = _sdm->get_aor_data(aor, trail);
 
   // If we didn't get bindings from the local store and we have a remote
   // store, try the remote.
-  if ((_remote_store != NULL) &&
-      (_remote_store->has_servers()) &&
-      ((*aor_data == NULL) ||
-       ((*aor_data)->bindings().empty())))
+  if ((_remote_sdm != NULL) &&
+      (_remote_sdm->has_servers()) &&
+      ((*aor_pair == NULL) ||
+       ((*aor_pair)->get_current() == NULL) ||
+       ((*aor_pair)->get_current()->bindings().empty())))
   {
-    delete *aor_data;
-    *aor_data = _remote_store->get_aor_data(aor, trail);
+    delete *aor_pair;
+    *aor_pair = _remote_sdm->get_aor_data(aor, trail);
   }
 
   // TODO - Log bindings to SAS
@@ -241,7 +242,7 @@ void SCSCFSproutlet::remove_binding(const std::string& aor,
                                     const std::string& binding_id,
                                     SAS::TrailId trail)
 {
-  RegistrationUtils::remove_bindings(_store,
+  RegistrationUtils::remove_bindings(_sdm,
                                      _hss,
                                      aor,
                                      binding_id,
@@ -1418,21 +1419,23 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
     }
 
     // Get the bindings from the store and filter/sort them for the request.
-    RegStore::AoR* aor_data = NULL;
-    _scscf->get_bindings(aor, &aor_data, trail());
+    SubscriberDataManager::AoRPair* aor_pair = NULL;
+    _scscf->get_bindings(aor, &aor_pair, trail());
 
-    if ((aor_data != NULL) && (!(aor_data)->bindings().empty()))
+    if ((aor_pair != NULL) &&
+        (aor_pair->get_current() != NULL) &&
+        (!aor_pair->get_current()->bindings().empty()))
     {
       // Retrieved bindings from the store so filter them to an ordered list
       // of targets.
       filter_bindings_to_targets(aor,
-                                 aor_data,
+                                 aor_pair->get_current(),
                                  req,
                                  pool,
                                  MAX_FORKING,
                                  targets,
                                  trail());
-      delete aor_data; aor_data = NULL;
+      delete aor_pair; aor_pair = NULL;
     }
     else
     {

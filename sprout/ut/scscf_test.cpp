@@ -334,7 +334,7 @@ public:
 
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
-    _store = new RegStore((Store*)_local_data_store, _chronos_connection);
+    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _hss_connection = new FakeHSSConnection();
     _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_stateful_proxy_scscf.json"));
@@ -354,7 +354,7 @@ public:
                                           "",
                                           "sip:bgcf@homedomain:5058",
                                           5058,
-                                          _store,
+                                          _sdm,
                                           NULL,
                                           _hss_connection,
                                           _enum_service,
@@ -409,7 +409,7 @@ public:
     delete _scscf_sproutlet; _scscf_sproutlet = NULL;
     delete _scscf_selector; _scscf_selector = NULL;
     delete _acr_factory; _acr_factory = NULL;
-    delete _store; _store = NULL;
+    delete _sdm; _sdm = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
     delete _local_data_store; _local_data_store = NULL;
     delete _analytics; _analytics = NULL;
@@ -469,7 +469,7 @@ public:
 protected:
   static LocalStore* _local_data_store;
   static FakeChronosConnection* _chronos_connection;
-  static RegStore* _store;
+  static SubscriberDataManager* _sdm;
   static AnalyticsLogger* _analytics;
   static FakeHSSConnection* _hss_connection;
   static FakeXDMConnection* _xdm_connection;
@@ -510,7 +510,7 @@ protected:
 
 LocalStore* SCSCFTest::_local_data_store;
 FakeChronosConnection* SCSCFTest::_chronos_connection;
-RegStore* SCSCFTest::_store;
+SubscriberDataManager* SCSCFTest::_sdm;
 AnalyticsLogger* SCSCFTest::_analytics;
 FakeHSSConnection* SCSCFTest::_hss_connection;
 FakeXDMConnection* SCSCFTest::_xdm_connection;
@@ -528,7 +528,7 @@ using SP::Message;
 
 void SCSCFTest::doFourAppServerFlow(std::string record_route_regex, bool app_servers_record_route)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 R"(<IMSSubscription><ServiceProfile>
                                 <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
@@ -1249,7 +1249,7 @@ void SCSCFTest::doSlowFailureFlow(Message& msg,
 TEST_F(SCSCFTest, TestSimpleMainline)
 {
   SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
@@ -1261,7 +1261,7 @@ TEST_F(SCSCFTest, TestSimpleMainline)
 TEST_F(SCSCFTest, ReqURIMatchesSproutletPort)
 {
   SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
   msg._requri = "sip:254.253.252.251:5058";
   msg._route = "Route: <sip:homedomain;transport=tcp;lr;service=scscf;billing-role=charge-term>";
@@ -1273,7 +1273,7 @@ TEST_F(SCSCFTest, ReqURIMatchesSproutletPort)
 TEST_F(SCSCFTest, TestMainlineHeadersSprout)
 {
   SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
   // INVITE from anywhere to anywhere.
   // We're within the trust boundary, so no stripping should occur.
@@ -1292,7 +1292,7 @@ TEST_F(SCSCFTest, TestNotRegisteredTo)
 TEST_F(SCSCFTest, TestBadScheme)
 {
   SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
   msg._toscheme = "sips";
   doFastFailureFlow(msg, 416);  // bad scheme
@@ -1302,7 +1302,7 @@ TEST_F(SCSCFTest, TestSimpleTelURI)
 {
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
   Message msg;
   msg._toscheme = "tel";
@@ -1316,8 +1316,8 @@ TEST_F(SCSCFTest, TestSimpleTelURI)
 
 TEST_F(SCSCFTest, TestTerminatingTelURI)
 {
-  //register_uri(_store, _hss_connection, "6505551000", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  //register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("tel:6505551235", "call", "REGISTERED",
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
@@ -1360,7 +1360,7 @@ TEST_F(SCSCFTest, TestTerminatingTelURI)
 TEST_F(SCSCFTest, TestNoMoreForwards)
 {
   SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
   msg._forwards = 1;
   doFastFailureFlow(msg, 483); // too many hops
@@ -1369,7 +1369,7 @@ TEST_F(SCSCFTest, TestNoMoreForwards)
 TEST_F(SCSCFTest, TestNoMoreForwards2)
 {
   SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
   msg._forwards = 0;
   doFastFailureFlow(msg, 483); // too many hops
@@ -1448,7 +1448,7 @@ TEST_F(SCSCFTest, TestNonLocal)
 TEST_F(SCSCFTest, TestTerminatingPCV)
 {
   SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
   // Test that a segfault previously seen when not doing originating
   // handling on a call with a P-Charging-Vector does not reoccur.
@@ -1522,7 +1522,7 @@ TEST_F(SCSCFTest, TestNoEnumWhenGRUU)
 {
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  register_uri(_store, _hss_connection, "+15108580271", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", 30, "abcd");
+  register_uri(_sdm, _hss_connection, "+15108580271", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", 30, "abcd");
 
   Message msg;
   msg._to = "+15108580271";
@@ -1548,7 +1548,7 @@ TEST_F(SCSCFTest, TestGRUUFailure)
   // a 480 error.
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  register_uri(_store, _hss_connection, "+15108580271", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", 30, "abcde");
+  register_uri(_sdm, _hss_connection, "+15108580271", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", 30, "abcde");
 
   Message msg;
   msg._to = "+15108580271";
@@ -1878,9 +1878,9 @@ TEST_F(SCSCFTest, TestInvalidBGCFRouteNameAddrMix)
 void SCSCFTest::setupForkedFlow(SP::Message& msg)
 {
   SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:awwnawmaw@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:awwnawmaw@10.114.61.213:5061;transport=tcp;ob");
   pjsip_msg* out;
 
   // Send INVITE
@@ -2163,7 +2163,7 @@ TEST_F(SCSCFTest, TestForkedFlow4)
 TEST_F(SCSCFTest, TestSIPMessageSupport)
 {
   SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
   Message msg;
   msg._via = "10.99.88.11:12345";
@@ -2201,7 +2201,7 @@ TEST_F(SCSCFTest, TestSIPMessageSupport)
 TEST_F(SCSCFTest, TestSimpleMultipart)
 {
   SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
   msg._content_type = "multipart/mixed;boundary=\"boundary1\"";
   msg._body = "\r\n--boundary1\r\nContent-Type: application/sdp\r\nContent-Length: 343\r\n\r\nv=0\r\no=- 3600506724 3600506724 IN IP4 888.888.888.888\r\n" \
@@ -2220,8 +2220,8 @@ TEST_F(SCSCFTest, TestSimpleMultipart)
 TEST_F(SCSCFTest, TestReceiveCallToEmergencyBinding)
 {
   SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;sos;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;sos;ob");
   Message msg;
 
   pjsip_msg* out;
@@ -2252,7 +2252,7 @@ TEST_F(SCSCFTest, TestReceiveCallToEmergencyBinding)
 // Test basic ISC (AS) flow.
 TEST_F(SCSCFTest, SimpleISCMainline)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
@@ -2345,7 +2345,7 @@ TEST_F(SCSCFTest, SimpleISCMainline)
 // originating-cdiv purposes.
 TEST_F(SCSCFTest, ISCRetargetWithoutCdiv)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", "REGISTERED",
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
@@ -2459,7 +2459,7 @@ TEST_F(SCSCFTest, ISCRetargetWithoutCdiv)
 
 TEST_F(SCSCFTest, URINotIncludedInUserData)
 {
-  register_uri(_store, _hss_connection, "6505551000", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("tel:8886505551234", "call", "UNREGISTERED",
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
@@ -2511,7 +2511,7 @@ TEST_F(SCSCFTest, URINotIncludedInUserData)
 // Test basic ISC (AS) flow.
 TEST_F(SCSCFTest, SimpleISCTwoRouteHeaders)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
@@ -2574,7 +2574,7 @@ TEST_F(SCSCFTest, SimpleISCTwoRouteHeaders)
 // Test handling of IFC with a malformed AS URI.
 TEST_F(SCSCFTest, ISCASURIMalformed)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
@@ -2628,7 +2628,7 @@ TEST_F(SCSCFTest, ISCASURIMalformed)
 // Test handling of IFC with a AS Tel URI.
 TEST_F(SCSCFTest, ISCASURITel)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
@@ -2682,7 +2682,7 @@ TEST_F(SCSCFTest, ISCASURITel)
 // Test basic ISC (AS) flow with a single "Next" on the originating side.
 TEST_F(SCSCFTest, SimpleNextOrigFlow)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
@@ -2789,7 +2789,7 @@ TEST_F(SCSCFTest, SimpleNextOrigFlow)
 // Test basic ISC (AS) rejection flow.
 TEST_F(SCSCFTest, SimpleReject)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
@@ -2877,7 +2877,7 @@ TEST_F(SCSCFTest, SimpleReject)
 // Test basic ISC (AS) terminating-only flow: call comes from non-local user.
 TEST_F(SCSCFTest, SimpleNonLocalReject)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
@@ -2964,7 +2964,7 @@ TEST_F(SCSCFTest, SimpleNonLocalReject)
 // Test basic ISC (AS) final acceptance flow (AS sinks request).
 TEST_F(SCSCFTest, SimpleAccept)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
@@ -3052,7 +3052,7 @@ TEST_F(SCSCFTest, SimpleAccept)
 // Test basic ISC (AS) redirection flow.
 TEST_F(SCSCFTest, SimpleRedirect)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
@@ -3141,7 +3141,7 @@ TEST_F(SCSCFTest, SimpleRedirect)
 // Test DefaultHandling=TERMINATE for non-responsive AS.
 TEST_F(SCSCFTest, DefaultHandlingTerminate)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
@@ -3230,7 +3230,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate)
 TEST_F(SCSCFTest, DISABLED_DefaultHandlingTerminateTimeout)
 {
   // Register an endpoint to act as the callee.
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
   // Set up an application server for the caller. It's default handling is set
   // to session continue.
@@ -3312,7 +3312,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateDisabled)
   _scscf_sproutlet->set_session_terminated_timeout(0);
 
   // Register an endpoint to act as the callee.
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
   // Set up an application server for the caller. It's default handling is set
   // to session continue.
@@ -3392,8 +3392,8 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateDisabled)
 // Test DefaultHandling=CONTINUE for non-existent AS (where name does not resolve).
 TEST_F(SCSCFTest, DefaultHandlingContinueRecordRouting)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  register_uri(_store, _hss_connection, "6505551000", "homedomain", "sip:who@example.net");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:who@example.net");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
@@ -3477,8 +3477,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueRecordRouting)
 // Test DefaultHandling=CONTINUE for non-existent AS (where name does not resolve).
 TEST_F(SCSCFTest, DefaultHandlingContinueNonExistent)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  register_uri(_store, _hss_connection, "6505551000", "homedomain", "sip:who@example.net");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:who@example.net");
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
@@ -3541,8 +3541,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistent)
 // Test DefaultHandling=CONTINUE for non-responsive AS.
 TEST_F(SCSCFTest, DefaultHandlingContinueNonResponsive)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  register_uri(_store, _hss_connection, "6505551000", "homedomain", "sip:who@example.net");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:who@example.net");
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
@@ -3627,7 +3627,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonResponsive)
 // Test DefaultHandling=CONTINUE for a responsive AS that returns an error.
 TEST_F(SCSCFTest, DefaultHandlingContinueResponsiveError)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
     _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
@@ -3721,7 +3721,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueResponsiveError)
 TEST_F(SCSCFTest, DefaultHandlingContinueTimeout)
 {
   // Register an endpoint to act as the callee.
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
   // Set up an application server for the caller. It's default handling is set
   // to session continue.
@@ -3807,7 +3807,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueDisabled)
   _scscf_sproutlet->set_session_continued_timeout(0);
 
   // Register an endpoint to act as the callee.
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
   // Set up an application server for the caller. It's default handling is set
   // to session continue.
@@ -3895,8 +3895,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueDisabled)
 // Test DefaultHandling attribute missing.
 TEST_F(SCSCFTest, DefaultHandlingMissing)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  register_uri(_store, _hss_connection, "6505551000", "homedomain", "sip:who@example.net");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:who@example.net");
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
@@ -3958,8 +3958,8 @@ TEST_F(SCSCFTest, DefaultHandlingMissing)
 // Test DefaultHandling attribute malformed.
 TEST_F(SCSCFTest, DefaultHandlingMalformed)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  register_uri(_store, _hss_connection, "6505551000", "homedomain", "sip:who@example.net");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:who@example.net");
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
@@ -4149,7 +4149,7 @@ void SCSCFTest::doAsOriginated(Message& msg, bool expect_orig)
 
 void SCSCFTest::doAsOriginated(const std::string& msg, bool expect_orig)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 "<IMSSubscription><ServiceProfile>"
                                 "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
@@ -4318,9 +4318,9 @@ TEST_F(SCSCFTest, AsOriginatedTerm)
 // Test call-diversion AS flow.
 TEST_F(SCSCFTest, Cdiv)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  register_uri(_store, _hss_connection, "6505551000", "homedomain", "sip:wuntootree@10.14.61.213:5061;transport=tcp;ob");
-  register_uri(_store, _hss_connection, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:wuntootree@10.14.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 R"(<IMSSubscription><ServiceProfile>
                                 <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
@@ -4470,9 +4470,9 @@ TEST_F(SCSCFTest, Cdiv)
 // Test call-diversion AS flow where the AS diverts to a different domain.
 TEST_F(SCSCFTest, CdivToDifferentDomain)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  register_uri(_store, _hss_connection, "6505551000", "homedomain", "sip:wuntootree@10.14.61.213:5061;transport=tcp;ob");
-  register_uri(_store, _hss_connection, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:wuntootree@10.14.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 R"(<IMSSubscription><ServiceProfile>
                                 <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
@@ -4618,7 +4618,7 @@ TEST_F(SCSCFTest, CdivToDifferentDomain)
 // Test that ENUM lookups and appropriate URI translation is done before any terminating services are applied.
 TEST_F(SCSCFTest, BothEndsWithEnumRewrite)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
     _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                R"(<IMSSubscription><ServiceProfile>
                                   <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
@@ -4699,7 +4699,7 @@ TEST_F(SCSCFTest, BothEndsWithEnumRewrite)
 // terminating processing.
 TEST_F(SCSCFTest, TerminatingWithNoEnumRewrite)
 {
-  register_uri(_store, _hss_connection, "1115551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "1115551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
     _hss_connection->set_impu_result("sip:1115551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 R"(<IMSSubscription><ServiceProfile>
                                   <PublicIdentity><Identity>sip:1115551234@homedomain</Identity></PublicIdentity>
@@ -4776,8 +4776,8 @@ TEST_F(SCSCFTest, TerminatingWithNoEnumRewrite)
 // Test call-diversion AS flow, where MMTEL does the diversion.
 TEST_F(SCSCFTest, MmtelCdiv)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  register_uri(_store, _hss_connection, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 R"(<IMSSubscription><ServiceProfile>
                                 <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
@@ -4931,7 +4931,7 @@ TEST_F(SCSCFTest, MmtelCdiv)
 // Test call-diversion AS flow, where MMTEL does the diversion - twice.
 TEST_F(SCSCFTest, MmtelDoubleCdiv)
 {
-  register_uri(_store, _hss_connection, "6505559012", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505559012", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", "UNREGISTERED",
                                 R"(<IMSSubscription><ServiceProfile>
                                 <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
@@ -5137,7 +5137,7 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
 // Test attempted AS chain link after chain has expired.
 TEST_F(SCSCFTest, ExpiredChain)
 {
-  register_uri(_store, _hss_connection, "6505551000", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 "<IMSSubscription><ServiceProfile>"
                                 "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
@@ -5241,7 +5241,7 @@ TEST_F(SCSCFTest, ExpiredChain)
 // Test a simple MMTEL flow.
 TEST_F(SCSCFTest, MmtelFlow)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 R"(<IMSSubscription><ServiceProfile>
                                 <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
@@ -5379,7 +5379,7 @@ TEST_F(SCSCFTest, MmtelFlow)
 //
 TEST_F(SCSCFTest, MmtelThenExternal)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
                                 R"(<IMSSubscription><ServiceProfile>
                                 <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
@@ -5600,7 +5600,7 @@ TEST_F(SCSCFTest, MmtelThenExternal)
 //
 TEST_F(SCSCFTest, DISABLED_MultipleMmtelFlow)  // @@@KSW not working: https://github.com/Metaswitch/sprout/issues/44
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 R"(<IMSSubscription><ServiceProfile>
                                 <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
@@ -5786,7 +5786,7 @@ TEST_F(SCSCFTest, DISABLED_MultipleMmtelFlow)  // @@@KSW not working: https://gi
 // Test basic ISC (AS) OPTIONS final acceptance flow (AS sinks request).
 TEST_F(SCSCFTest, SimpleOptionsAccept)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
@@ -5857,7 +5857,7 @@ TEST_F(SCSCFTest, SimpleOptionsAccept)
 // Repros https://github.com/Metaswitch/sprout/issues/519.
 TEST_F(SCSCFTest, TerminatingDiversionExternal)
 {
-  register_uri(_store, _hss_connection, "6505501234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505501234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505501234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 R"(<IMSSubscription><ServiceProfile>
                                 <PublicIdentity><Identity>sip:6505501234@homedomain</Identity></PublicIdentity>
@@ -5997,7 +5997,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
 // Test originating AS handling for request to external URI.
 TEST_F(SCSCFTest, OriginatingExternal)
 {
-  register_uri(_store, _hss_connection, "6505501234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505501234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 R"(<IMSSubscription><ServiceProfile>
                                 <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
@@ -6136,7 +6136,7 @@ TEST_F(SCSCFTest, OriginatingExternal)
 // Test local call with both originating and terminating ASs.
 TEST_F(SCSCFTest, OriginatingTerminatingAS)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 R"(<IMSSubscription><ServiceProfile>
                                 <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
@@ -6345,7 +6345,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingASTimeout)
   TransportFlow tpBono(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 R"(<IMSSubscription><ServiceProfile>
                                 <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
@@ -6631,7 +6631,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingMessageASTimeout)
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
 
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 R"(<IMSSubscription><ServiceProfile>
                                 <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
@@ -6848,7 +6848,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
   TransportFlow tpExternal(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.9.8.7", 5060);
 
-  register_uri(_store, _hss_connection, "6505501234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505501234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505501234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 R"(<IMSSubscription><ServiceProfile>
                                 <PublicIdentity><Identity>sip:6505501234@homedomain</Identity></PublicIdentity>
@@ -7036,7 +7036,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
 TEST_F(SCSCFTest, TestAddSecondTelPAIHdr)
 {
   SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                    "<IMSSubscription><ServiceProfile>\n"
                                    "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
@@ -7055,7 +7055,7 @@ TEST_F(SCSCFTest, TestAddSecondTelPAIHdr)
 TEST_F(SCSCFTest, TestAddSecondSIPPAIHdr)
 {
   SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("tel:6505551000", "call", HSSConnection::STATE_REGISTERED,
                                    "<IMSSubscription><ServiceProfile>\n"
                                    "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
@@ -7074,7 +7074,7 @@ TEST_F(SCSCFTest, TestAddSecondSIPPAIHdr)
 TEST_F(SCSCFTest, TestTwoPAIHdrsAlready)
 {
   SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                    "<IMSSubscription><ServiceProfile>\n"
                                    "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
@@ -7093,7 +7093,7 @@ TEST_F(SCSCFTest, TestTwoPAIHdrsAlready)
 TEST_F(SCSCFTest, TestNoPAIHdrs)
 {
   SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                    "<IMSSubscription><ServiceProfile>\n"
                                    "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
@@ -7111,7 +7111,7 @@ TEST_F(SCSCFTest, TestNoPAIHdrs)
 TEST_F(SCSCFTest, TestPAIHdrODIToken)
 {
   SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                    "<IMSSubscription><ServiceProfile>\n"
                                    "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
@@ -7130,7 +7130,7 @@ TEST_F(SCSCFTest, TestPAIHdrODIToken)
 TEST_F(SCSCFTest, TestNoSecondPAIHdrTerm)
 {
   SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                    "<IMSSubscription><ServiceProfile>\n"
                                    "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
@@ -7153,7 +7153,7 @@ TEST_F(SCSCFTest, FlowFailedResponse)
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   std::string user = "sip:6505550231@homedomain";
-  register_uri(_store, _hss_connection, "6505550231", "homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213", 30);
+  register_uri(_sdm, _hss_connection, "6505550231", "homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213", 30);
 
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
   _hss_connection->set_impu_result("sip:6505550231@homedomain", "dereg-timeout", HSSConnection::STATE_REGISTERED,
@@ -7213,9 +7213,9 @@ TEST_F(SCSCFTest, FlowFailedResponse)
   free_txdata();
 
   // Sprout deletes the binding.
-  RegStore::AoR* aor_data = _store->get_aor_data(user, 0);
+  SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data(user, 0);
   ASSERT_TRUE(aor_data != NULL);
-  EXPECT_EQ(0u, aor_data->_bindings.size());
+  EXPECT_EQ(0u, aor_data->get_current()->_bindings.size());
   delete aor_data; aor_data = NULL;
 
   // Because there are no remaining bindings, Sprout sends a deregister to the
@@ -7249,7 +7249,7 @@ TEST_F(SCSCFTest, FlowFailedResponse)
 // request URI.
 TEST_F(SCSCFTest, PreloadedRouteChangedReqUri)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 R"(<IMSSubscription><ServiceProfile>
                                 <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
@@ -7364,7 +7364,7 @@ TEST_F(SCSCFTest, PreloadedRouteChangedReqUri)
 // request URI.
 TEST_F(SCSCFTest, PreloadedRoutePreserveReqUri)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 R"(<IMSSubscription><ServiceProfile>
                                 <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
@@ -7476,7 +7476,7 @@ TEST_F(SCSCFTest, PreloadedRoutePreserveReqUri)
 // the chain.
 TEST_F(SCSCFTest, PreloadedRouteNotLastAs)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 R"(<IMSSubscription><ServiceProfile>
                                 <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
@@ -7654,7 +7654,7 @@ TEST_F(SCSCFTest, AutomaticRegistrationDerivedIMPI)
 TEST_F(SCSCFTest, TestSessionExpires)
 {
   SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
   // Send an INVITE where the client supports session timers. This means that

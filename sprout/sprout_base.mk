@@ -33,7 +33,7 @@ TARGET_SOURCES := logger.cpp \
                   memcachedstoreview.cpp \
                   memcached_config.cpp \
                   avstore.cpp \
-                  regstore.cpp \
+                  subscriber_data_manager.cpp \
                   xdmconnection.cpp \
                   simservs.cpp \
                   enumservice.cpp \

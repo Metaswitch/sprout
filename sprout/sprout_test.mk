@@ -37,7 +37,7 @@ TARGET_SOURCES := logger.cpp \
                   memcachedstoreview.cpp \
                   memcached_config.cpp \
                   avstore.cpp \
-                  regstore.cpp \
+                  subscriber_data_manager.cpp \
                   xdmconnection.cpp \
                   simservs.cpp \
                   enumservice.cpp \
@@ -116,7 +116,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        hssconnection_test.cpp \
                        xdmconnection_test.cpp \
                        enumservice_test.cpp \
-                       regstore_test.cpp \
+                       subscriber_data_manager_test.cpp \
                        avstore_test.cpp \
                        registrar_test.cpp \
                        bono_test.cpp \
@@ -156,8 +156,9 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        uriclassifier_test.cpp \
                        ralf_processor_test.cpp \
                        mockhttpconnection.cpp \
-                       session_expires_helper_test.cpp
-
+                       session_expires_helper_test.cpp \
+                       mock_subscriber_data_manager.cpp \
+                       mock_chronos_connection.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \

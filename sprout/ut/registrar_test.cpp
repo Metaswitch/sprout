@@ -49,6 +49,7 @@
 #include "test_interposer.hpp"
 #include "mock_store.h"
 #include "fakesnmp.hpp"
+#include "rapidxml/rapidxml.hpp"
 
 using ::testing::MatchesRegex;
 using ::testing::_;
@@ -68,13 +69,13 @@ public:
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
     _remote_data_store = new LocalStore();
-    _store = new RegStore((Store*)_local_data_store, _chronos_connection);
-    _remote_store = new RegStore((Store*)_remote_data_store, _chronos_connection);
+    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
+    _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, false);
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
-    pj_status_t ret = init_registrar(_store,
-                                     _remote_store,
+    pj_status_t ret = init_registrar(_sdm,
+                                     _remote_sdm,
                                      _hss_connection,
                                      _analytics,
                                      _acr_factory,
@@ -97,8 +98,8 @@ public:
     delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _analytics;
-    delete _remote_store; _remote_store = NULL;
-    delete _store; _store = NULL;
+    delete _remote_sdm; _remote_sdm = NULL;
+    delete _sdm; _sdm = NULL;
     delete _remote_data_store; _remote_data_store = NULL;
     delete _local_data_store; _local_data_store = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
@@ -133,11 +134,47 @@ public:
     //pjsip_tsx_layer_instance()->start();
   }
 
+  void check_notify(pjsip_msg* out,
+                    std::string reg_state,
+                    std::pair<std::string, std::string> contact_values)
+  {
+    char buf[16384];
+    int n = out->body->print_body(out->body, buf, sizeof(buf));
+    string body(buf, n);
+
+    // Parse the XML document, saving off the passed in string first (as parsing
+    // is destructive)
+    rapidxml::xml_document<> doc;
+    char* xml_str = doc.allocate_string(body.c_str());
+
+    try
+    {
+      doc.parse<rapidxml::parse_strip_xml_namespaces>(xml_str);
+    }
+    catch (rapidxml::parse_error err)
+    {
+      printf("Parse error in NOTIFY: %s\n\n%s", err.what(), body.c_str());
+      doc.clear();
+    }
+
+    rapidxml::xml_node<> *reg_info = doc.first_node("reginfo");
+    ASSERT_TRUE(reg_info);
+    rapidxml::xml_node<> *registration = reg_info->first_node("registration");
+    ASSERT_TRUE(registration);
+    rapidxml::xml_node<> *contact = registration->first_node("contact");
+    ASSERT_TRUE(contact);
+
+    ASSERT_EQ("full", std::string(reg_info->first_attribute("state")->value()));
+    ASSERT_EQ(reg_state, std::string(registration->first_attribute("state")->value()));
+    ASSERT_EQ(contact_values.first, std::string(contact->first_attribute("state")->value()));
+    ASSERT_EQ(contact_values.second, std::string(contact->first_attribute("event")->value()));
+  }
+
 protected:
   static LocalStore* _local_data_store;
   static LocalStore* _remote_data_store;
-  static RegStore* _store;
-  static RegStore* _remote_store;
+  static SubscriberDataManager* _sdm;
+  static SubscriberDataManager* _remote_sdm;
   static AnalyticsLogger* _analytics;
   static IfcHandler* _ifc_handler;
   static ACRFactory* _acr_factory;
@@ -147,8 +184,8 @@ protected:
 
 LocalStore* RegistrarTest::_local_data_store;
 LocalStore* RegistrarTest::_remote_data_store;
-RegStore* RegistrarTest::_store;
-RegStore* RegistrarTest::_remote_store;
+SubscriberDataManager* RegistrarTest::_sdm;
+SubscriberDataManager* RegistrarTest::_remote_sdm;
 AnalyticsLogger* RegistrarTest::_analytics;
 IfcHandler* RegistrarTest::_ifc_handler;
 ACRFactory* RegistrarTest::_acr_factory;
@@ -1012,7 +1049,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   std::string user = "sip:6505550231@homedomain";
-  register_uri(_store, _hss_connection, "6505550231", "homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213", 30);
+  register_uri(_sdm, _hss_connection, "6505550231", "homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213", 30);
 
   _hss_connection->set_impu_result("sip:6505550231@homedomain", "dereg-admin", HSSConnection::STATE_REGISTERED,
                               "<IMSSubscription><ServiceProfile>\n"
@@ -1035,13 +1072,13 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
                               "  </InitialFilterCriteria>\n"
                               "</ServiceProfile></IMSSubscription>");
 
-  RegStore::AoR* aor_data;
-  aor_data = _store->get_aor_data(user, 0);
+  SubscriberDataManager::AoRPair* aor_data;
+  aor_data = _sdm->get_aor_data(user, 0);
   ASSERT_TRUE(aor_data != NULL);
-  EXPECT_EQ(1u, aor_data->_bindings.size());
+  EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
   delete aor_data; aor_data = NULL;
 
-  RegistrationUtils::remove_bindings(_store,
+  RegistrationUtils::remove_bindings(_sdm,
                                      _hss_connection,
                                      user,
                                      "*",
@@ -1064,9 +1101,9 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
   
   free_txdata();
   // Check that we deleted the binding
-  aor_data = _store->get_aor_data(user, 0);
+  aor_data = _sdm->get_aor_data(user, 0);
   ASSERT_TRUE(aor_data != NULL);
-  EXPECT_EQ(0u, aor_data->_bindings.size());
+  EXPECT_EQ(0u, aor_data->get_current()->_bindings.size());
   delete aor_data; aor_data = NULL;
 }
 
@@ -1194,10 +1231,10 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes); 
   free_txdata();
 
-  RegStore::AoR* aor_data;
-  aor_data = _store->get_aor_data(user, 0);
+  SubscriberDataManager::AoRPair* aor_data;
+  aor_data = _sdm->get_aor_data(user, 0);
   ASSERT_TRUE(aor_data != NULL);
-  EXPECT_EQ(1u, aor_data->_bindings.size());
+  EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
   delete aor_data; aor_data = NULL;
 
   SCOPED_TRACE("REGISTER (forwarded)");
@@ -1221,9 +1258,9 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_failures); 
   
   // Check that we deleted the binding
-  aor_data = _store->get_aor_data(user, 0);
+  aor_data = _sdm->get_aor_data(user, 0);
   ASSERT_TRUE(aor_data != NULL);
-  ASSERT_EQ(0u, aor_data->_bindings.size());
+  ASSERT_EQ(0u, aor_data->get_current()->_bindings.size());
   delete aor_data; aor_data = NULL;
 
   SCOPED_TRACE("deREGISTER");
@@ -1290,10 +1327,10 @@ TEST_F(RegistrarTest, AppServersDeRegistrationFailure)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_successes); 
   free_txdata();
 
-  RegStore::AoR* aor_data;
-  aor_data = _store->get_aor_data(user, 0);
+  SubscriberDataManager::AoRPair* aor_data;
+  aor_data = _sdm->get_aor_data(user, 0);
   ASSERT_TRUE(aor_data != NULL);
-  EXPECT_EQ(0u, aor_data->_bindings.size());
+  EXPECT_EQ(0u, aor_data->get_current()->_bindings.size());
   delete aor_data; aor_data = NULL;
 
   SCOPED_TRACE("REGISTER (forwarded)");
@@ -1317,9 +1354,9 @@ TEST_F(RegistrarTest, AppServersDeRegistrationFailure)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.de_reg_tbl)->_failures); 
 
   // Check that we deleted the binding
-  aor_data = _store->get_aor_data(user, 0);
+  aor_data = _sdm->get_aor_data(user, 0);
   ASSERT_TRUE(aor_data != NULL);
-  ASSERT_EQ(0u, aor_data->_bindings.size());
+  ASSERT_EQ(0u, aor_data->get_current()->_bindings.size());
   delete aor_data; aor_data = NULL;
 
   free_txdata();
@@ -1616,13 +1653,13 @@ TEST_F(RegistrarTest, NonPrimaryAssociatedUri)
   free_txdata();
 
   // Check that we registered the correct URI (0233, not 0234).
-  RegStore::AoR* aor_data = _store->get_aor_data("sip:6505550233@homedomain", 0);
+  SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data("sip:6505550233@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
-  EXPECT_EQ(1u, aor_data->_bindings.size());
+  EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
   delete aor_data; aor_data = NULL;
-  aor_data = _store->get_aor_data("sip:6505550234@homedomain", 0);
+  aor_data = _sdm->get_aor_data("sip:6505550234@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
-  EXPECT_EQ(0u, aor_data->_bindings.size());
+  EXPECT_EQ(0u, aor_data->get_current()->_bindings.size());
   delete aor_data; aor_data = NULL;
 }
 
@@ -1735,146 +1772,6 @@ TEST_F(RegistrarTest, AppServersWithSDPIFCs)
   free_txdata();
 }
 
-/// Simple correct example with a subscription
-TEST_F(RegistrarTest, RegistrationWithSubscription)
-{
-  // We have a private ID in this test, so set up the expect response to the query.
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
-
-  RegStore::AoR::Subscription* s1;
-  int now = time(NULL);
-  RegStore::AoR* aor_data1 = _store->get_aor_data(std::string("sip:6505550231@homedomain"), 0);
-
-  // Add a subscription
-  s1 = aor_data1->get_subscription("1234");
-  s1->_req_uri = std::string("sip:6505550231@192.91.191.29:59934;transport=tcp");
-  s1->_from_uri = std::string("<sip:6505550231@cw-ngv.com>");
-  s1->_from_tag = std::string("4321");
-  s1->_to_uri = std::string("<sip:6505550231@cw-ngv.com>");
-  s1->_to_tag = std::string("1234");
-  s1->_cid = std::string("xyzabc@192.91.191.29");
-  s1->_route_uris.push_back(std::string("sip:abcdefgh@bono1.homedomain;lr"));
-  s1->_expires = now + 300;
-
-  // Set the NOTIFY CSeq value to 1.
-  aor_data1->_notify_cseq = 1;
-
-  // Write the record back to the store.
-  pj_status_t rc = _store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1, false, 0);
-  EXPECT_TRUE(rc);
-  delete aor_data1; aor_data1 = NULL;
-
-  Message msg;
-  msg._expires = "Expires: 300";
-  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
-  msg._contact_params = ";+sip.ice;reg-id=1";
-  inject_msg(msg.get());
-  ASSERT_EQ(2, txdata_count());
-  pjsip_msg* out = pop_txdata()->msg;
-  out = pop_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
-            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts); 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes); 
-  free_txdata();
-
-  // Register again with an updated cseq
-  msg._cseq = "16568";
-  inject_msg(msg.get());
-  ASSERT_EQ(2, txdata_count());
-  out = pop_txdata()->msg;
-  out = pop_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
-            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts); 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes); 
-  free_txdata();
-}
-
-/// Simple correct example with a subscription and Tel URIs
-TEST_F(RegistrarTest, RegistrationWithSubscriptionWithTelURI)
-{
-  // We have a private ID in this test, so set up the expect response to the query.
-  _hss_connection->set_impu_result("tel:6505550231", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
-
-  RegStore::AoR::Subscription* s1;
-  int now = time(NULL);
-  RegStore::AoR* aor_data1 = _store->get_aor_data(std::string("tel:6505550231"), 0);
-
-  // Add a subscription
-  s1 = aor_data1->get_subscription("1234");
-  s1->_req_uri = std::string("sip:6505550231@192.91.191.29:59934;transport=tcp");
-  s1->_from_uri = std::string("<sip:6505550231@cw-ngv.com>");
-  s1->_from_tag = std::string("4321");
-  s1->_to_uri = std::string("<sip:6505550231@cw-ngv.com>");
-  s1->_to_tag = std::string("1234");
-  s1->_cid = std::string("xyzabc@192.91.191.29");
-  s1->_route_uris.push_back(std::string("sip:abcdefgh@bono1.homedomain;lr"));
-  s1->_expires = now + 300;
-
-  // Set the NOTIFY CSeq value to 1.
-  aor_data1->_notify_cseq = 1;
-
-  // Write the record back to the store.
-  pj_status_t rc = _store->set_aor_data(std::string("tel:6505550231"), aor_data1, false, 0);
-  EXPECT_TRUE(rc);
-  delete aor_data1; aor_data1 = NULL;
-  Message msg;
-  msg._expires = "Expires: 300";
-  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
-  msg._contact_params = ";+sip.ice;reg-id=1";
-  msg._scheme = "tel";
-  inject_msg(msg.get());
-  ASSERT_EQ(2, txdata_count());
-  pjsip_msg* out = pop_txdata()->msg;
-  out = pop_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1",
-            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <tel:6505550231>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts); 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes); 
-  free_txdata();
-
-  // Register again with an updated cseq
-  msg._cseq = "16568";
-  inject_msg(msg.get());
-  ASSERT_EQ(2, txdata_count());
-  out = pop_txdata()->msg;
-  out = pop_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1",
-            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <tel:6505550231>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts); 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes); 
-  free_txdata();
-}
-
 // Test that an emergency registration is successful, and creates an emergency binding
 TEST_F(RegistrarTest, MainlineEmergencyRegistration)
 {
@@ -1905,10 +1802,10 @@ TEST_F(RegistrarTest, MainlineEmergencyRegistration)
   free_txdata();
 
   // There should be one binding, and it is an emergency registration. The emergency binding should have 'sos' prepended to its key.
-  RegStore::AoR* aor_data = _store->get_aor_data("sip:6505550231@homedomain", 0);
+  SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
-  EXPECT_EQ(1u, aor_data->_bindings.size());
-  EXPECT_TRUE(aor_data->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
+  EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
+  EXPECT_TRUE(aor_data->get_current()->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
   delete aor_data; aor_data = NULL;
 }
 
@@ -1943,10 +1840,10 @@ TEST_F(RegistrarTest, MainlineEmergencyRegistrationWithTelURI)
   free_txdata();
 
   // There should be one binding, and it is an emergency registration. The emergency binding should have 'sos' prepended to its key.
-  RegStore::AoR* aor_data = _store->get_aor_data("tel:6505550231", 0);
+  SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data("tel:6505550231", 0);
   ASSERT_TRUE(aor_data != NULL);
-  EXPECT_EQ(1u, aor_data->_bindings.size());
-  EXPECT_TRUE(aor_data->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
+  EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
+  EXPECT_TRUE(aor_data->get_current()->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
   delete aor_data; aor_data = NULL;
 }
 
@@ -1982,10 +1879,10 @@ TEST_F(RegistrarTest, MainlineEmergencyRegistrationNoSipInstance)
   free_txdata();
 
   // There should be one binding, and it is an emergency registration
-  RegStore::AoR* aor_data = _store->get_aor_data("sip:6505550231@homedomain", 0);
+  SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
-  EXPECT_EQ(1u, aor_data->_bindings.size());
-  EXPECT_TRUE(aor_data->get_binding(std::string("sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob"))->_emergency_registration);
+  EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
+  EXPECT_TRUE(aor_data->get_current()->get_binding(std::string("sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob"))->_emergency_registration);
   delete aor_data; aor_data = NULL;
 }
 
@@ -2020,10 +1917,10 @@ TEST_F(RegistrarTest, EmergencyDeregistration)
   free_txdata();
 
   // There should be one binding, and it is an emergency registration. The emergency binding should have 'sos' prepended to its key.
-  RegStore::AoR* aor_data = _store->get_aor_data("sip:6505550231@homedomain", 0);
+  SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
-  EXPECT_EQ(1u, aor_data->_bindings.size());
-  EXPECT_TRUE(aor_data->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
+  EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
+  EXPECT_TRUE(aor_data->get_current()->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
   delete aor_data; aor_data = NULL;
 
   // Attempt to deregister a single emergency binding
@@ -2095,10 +1992,10 @@ TEST_F(RegistrarTest, MultipleEmergencyRegistrations)
   free_txdata();
 
   // There should be one binding, and it isn't an emergency registration
-  RegStore::AoR* aor_data = _store->get_aor_data("sip:6505550231@homedomain", 0);
+  SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
-  EXPECT_EQ(1u, aor_data->_bindings.size());
-  EXPECT_FALSE(aor_data->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
+  EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
+  EXPECT_FALSE(aor_data->get_current()->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
   delete aor_data; aor_data = NULL;
 
   // Make an emergency registration
@@ -2122,10 +2019,10 @@ TEST_F(RegistrarTest, MultipleEmergencyRegistrations)
   free_txdata();
 
   // There should be two bindings. The emergency binding should have 'sos' prepended to its key.
-  aor_data = _store->get_aor_data("sip:6505550231@homedomain", 0);
+  aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
-  EXPECT_EQ(2u, aor_data->_bindings.size());
-  EXPECT_TRUE(aor_data->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
+  EXPECT_EQ(2u, aor_data->get_current()->_bindings.size());
+  EXPECT_TRUE(aor_data->get_current()->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
   delete aor_data; aor_data = NULL;
 
   // Make an emergency registration
@@ -2151,10 +2048,10 @@ TEST_F(RegistrarTest, MultipleEmergencyRegistrations)
   free_txdata();
 
   // There should be three bindings.
-  aor_data = _store->get_aor_data("sip:6505550231@homedomain", 0);
+  aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
-  EXPECT_EQ(3u, aor_data->_bindings.size());
-  EXPECT_TRUE(aor_data->get_binding(std::string("sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob"))->_emergency_registration);
+  EXPECT_EQ(3u, aor_data->get_current()->_bindings.size());
+  EXPECT_TRUE(aor_data->get_current()->get_binding(std::string("sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob"))->_emergency_registration);
   delete aor_data; aor_data = NULL;
 
   // Attempt to deregister all bindings
@@ -2182,18 +2079,18 @@ TEST_F(RegistrarTest, MultipleEmergencyRegistrations)
   free_txdata();
 
   // There should be two emergency bindings
-  aor_data = _store->get_aor_data("sip:6505550231@homedomain", 0);
+  aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
-  EXPECT_EQ(2u, aor_data->_bindings.size());
-  EXPECT_TRUE(aor_data->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
-  EXPECT_TRUE(aor_data->get_binding(std::string("sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob"))->_emergency_registration);
+  EXPECT_EQ(2u, aor_data->get_current()->_bindings.size());
+  EXPECT_TRUE(aor_data->get_current()->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
+  EXPECT_TRUE(aor_data->get_current()->get_binding(std::string("sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob"))->_emergency_registration);
   delete aor_data; aor_data = NULL;
 
   // Wait 5 mins and the emergency bindings should have expired
   cwtest_advance_time_ms(300100);
-  aor_data = _store->get_aor_data("sip:6505550231@homedomain", 0);
+  aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
-  EXPECT_EQ(0u, aor_data->_bindings.size());
+  EXPECT_EQ(0u, aor_data->get_current()->_bindings.size());
   delete aor_data; aor_data = NULL;
 }
 
@@ -2222,6 +2119,148 @@ TEST_F(RegistrarTest, RinstanceParameter)
   free_txdata();
 }
 
+// Make registers with a subscription and check the correct NOTIFYs
+// are sent
+TEST_F(RegistrarTest, RegistrationWithSubscription)
+{
+  // We have a private ID in this test, so set up the expect response
+  // to the query.
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
+
+  // Register a binding
+  Message msg;
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  msg._expires = "Expires: 200";
+  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  free_txdata();
+
+  // Now add a subscription to the store
+  SubscriberDataManager::AoRPair* aor_pair = _sdm->get_aor_data(std::string("sip:6505550231@homedomain"), 0);
+  SubscriberDataManager::AoR::Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
+  s1->_req_uri = std::string("sip:6505550231@192.91.191.29:59934;transport=tcp");
+  s1->_from_uri = std::string("<sip:6505550231@cw-ngv.com>");
+  s1->_from_tag = std::string("4321");
+  s1->_to_uri = std::string("<sip:6505550231@cw-ngv.com>");
+  s1->_to_tag = std::string("1234");
+  s1->_cid = std::string("xyzabc@192.91.191.29");
+  s1->_route_uris.push_back(std::string("sip:abcdefgh@bono1.homedomain;lr"));
+  int now = time(NULL);
+  s1->_expires = now + 300;
+
+  pj_status_t rc = _sdm->set_aor_data(std::string("sip:6505550231@homedomain"), aor_pair, 0);
+  EXPECT_TRUE(rc);
+  delete aor_pair; aor_pair = NULL;
+
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
+
+  check_notify(out, "active", std::make_pair("active", "registered"));
+  inject_msg(respond_to_current_txdata(200));
+  free_txdata();
+
+  // Extend the registration
+  msg._expires = "Expires: 300";
+  msg._cseq = "16568";
+  inject_msg(msg.get());
+  ASSERT_EQ(2, txdata_count());
+  out = pop_txdata()->msg;
+  EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
+  check_notify(out, "active", std::make_pair("active", "refreshed"));
+  inject_msg(respond_to_current_txdata(200));
+  free_txdata();
+
+  // Shorten the registration
+  msg._expires = "Expires: 200";
+  msg._cseq = "16569";
+  inject_msg(msg.get());
+  ASSERT_EQ(2, txdata_count());
+  out = pop_txdata()->msg;
+  EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
+  check_notify(out, "active", std::make_pair("active", "shortened"));
+  inject_msg(respond_to_current_txdata(200));
+  free_txdata();
+
+  // Delete the registration
+  msg._expires = "Expires: 0";
+  msg._cseq = "16570";
+  inject_msg(msg.get());
+  ASSERT_EQ(2, txdata_count());
+  out = pop_txdata()->msg;
+  EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
+  check_notify(out, "terminated", std::make_pair("terminated", "expired"));
+  inject_msg(respond_to_current_txdata(200));
+  free_txdata();
+}
+
+TEST_F(RegistrarTest, MultipleRegistrationsWithSubscription)
+{
+  // We have a private ID in this test, so set up the expect response
+  // to the query.
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
+
+  // Register a binding
+  Message msg;
+  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  free_txdata();
+
+  // Now add a subscription to the store
+  SubscriberDataManager::AoRPair* aor_pair = _sdm->get_aor_data(std::string("sip:6505550231@homedomain"), 0);
+  SubscriberDataManager::AoR::Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
+  s1->_req_uri = std::string("sip:6505550231@192.91.191.29:59934;transport=tcp");
+  s1->_from_uri = std::string("<sip:6505550231@cw-ngv.com>");
+  s1->_from_tag = std::string("4321");
+  s1->_to_uri = std::string("<sip:6505550231@cw-ngv.com>");
+  s1->_to_tag = std::string("1234");
+  s1->_cid = std::string("xyzabc@192.91.191.29");
+  s1->_route_uris.push_back(std::string("sip:abcdefgh@bono1.homedomain;lr"));
+  int now = time(NULL);
+  s1->_expires = now + 300;
+
+  pj_status_t rc = _sdm->set_aor_data(std::string("sip:6505550231@homedomain"), aor_pair, 0);
+  EXPECT_TRUE(rc);
+  delete aor_pair; aor_pair = NULL;
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
+  check_notify(out, "active", std::make_pair("active", "registered"));
+  inject_msg(respond_to_current_txdata(200));
+  free_txdata();
+
+  // Register a second binding.
+  msg._contact = "sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob";
+  msg._contact_instance = ";+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"";
+  msg._path = "Path: <sip:XxxxxxxXXXXXXAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-119.compute-1.amazonaws.com:5060;lr;ob>";
+  inject_msg(msg.get());
+  ASSERT_EQ(2, txdata_count());
+  out = pop_txdata()->msg;
+  EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
+  check_notify(out, "active", std::make_pair("active", "created"));
+  inject_msg(respond_to_current_txdata(200));
+  free_txdata();
+
+  // Expire the second binding
+  msg._contact_params = ";expires=0;+sip.ice;reg-id=1";
+  msg._cseq = "16570";
+  inject_msg(msg.get());
+  ASSERT_EQ(2, txdata_count());
+  out = pop_txdata()->msg;
+  EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
+  check_notify(out, "active", std::make_pair("terminated", "expired"));
+  inject_msg(respond_to_current_txdata(200));
+  free_txdata();
+}
+
 
 /// Fixture for RegistrarTest.
 class RegistrarTestMockStore : public SipTest
@@ -2238,11 +2277,11 @@ public:
   {
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new MockStore();
-    _store = new RegStore((Store*)_local_data_store, _chronos_connection);
+    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
-    pj_status_t ret = init_registrar(_store,
+    pj_status_t ret = init_registrar(_sdm,
                                      NULL,
                                      _hss_connection,
                                      _analytics,
@@ -2280,7 +2319,7 @@ public:
     delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _analytics;
-    delete _store; _store = NULL;
+    delete _sdm; _sdm = NULL;
     delete _local_data_store; _local_data_store = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
   }
@@ -2292,7 +2331,7 @@ public:
 
 protected:
   MockStore* _local_data_store;
-  RegStore* _store;
+  SubscriberDataManager* _sdm;
   AnalyticsLogger* _analytics;
   IfcHandler* _ifc_handler;
   ACRFactory* _acr_factory;
@@ -2307,12 +2346,32 @@ protected:
 // -  Returns ERROR to all sets.
 //
 // This is a repro for https://github.com/Metaswitch/sprout/issues/977
-TEST_F(RegistrarTestMockStore, RegStoreWritesFail)
+TEST_F(RegistrarTestMockStore, SubscriberDataManagerWritesFail)
 {
   EXPECT_CALL(*_local_data_store, get_data(_, _, _, _, _))
     .WillOnce(Return(Store::NOT_FOUND));
 
   EXPECT_CALL(*_local_data_store, set_data(_, _, _, _, _, _))
+    .WillOnce(Return(Store::ERROR));
+
+  // We have a private ID in this test, so set up the expect response
+  // to the query.
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
+
+  Message msg;
+  msg._expires = "Expires: 300";
+  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(500, out->line.status.code);
+  free_txdata();
+}
+
+TEST_F(RegistrarTestMockStore, SubscriberDataManagerGetsFail)
+{
+  EXPECT_CALL(*_local_data_store, get_data(_, _, _, _, _))
     .WillOnce(Return(Store::ERROR));
 
   // We have a private ID in this test, so set up the expect response

@@ -56,7 +56,7 @@ extern "C" {
 #include "pjutils.h"
 #include "enumservice.h"
 #include "analyticslogger.h"
-#include "regstore.h"
+#include "subscriber_data_manager.h"
 #include "stack.h"
 #include "sessioncase.h"
 #include "ifchandler.h"
@@ -80,8 +80,8 @@ public:
                  const std::string& icscf_uri,
                  const std::string& bgcf_uri,
                  int port,
-                 RegStore* store,
-                 RegStore* remote_store,
+                 SubscriberDataManager* sdm,
+                 SubscriberDataManager* remote_sdm,
                  HSSConnection* hss,
                  EnumService* enum_service,
                  ACRFactory* acr_factory,
@@ -126,7 +126,7 @@ private:
   /// Gets all bindings for the specified Address of Record from the local or
   /// remote registration stores.
   void get_bindings(const std::string& aor,
-                    RegStore::AoR** aor_data,
+                    SubscriberDataManager::AoRPair** aor_pair,
                     SAS::TrailId trail);
 
   /// Removes the specified binding for the specified Address of Record from
@@ -173,8 +173,8 @@ private:
   /// A URI which routes to the BGCF.
   pjsip_uri* _bgcf_uri;
 
-  RegStore* _store;
-  RegStore* _remote_store;
+  SubscriberDataManager* _sdm;
+  SubscriberDataManager* _remote_sdm;
 
   HSSConnection* _hss;
 

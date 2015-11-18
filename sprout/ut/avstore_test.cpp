@@ -48,7 +48,7 @@
 
 using namespace std;
 
-/// Fixture for RegStoreTest.
+/// Fixture for AvStoreTest.
 class AvStoreTest : public ::testing::Test
 {
   AvStoreTest()

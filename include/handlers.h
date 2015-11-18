@@ -41,7 +41,7 @@
 #include "httpstack_utils.h"
 #include "chronosconnection.h"
 #include "hssconnection.h"
-#include "regstore.h"
+#include "subscriber_data_manager.h"
 #include "sipresolver.h"
 #include "avstore.h"
 
@@ -68,11 +68,15 @@ class RegSubTimeoutTask : public HttpStackUtils::Task
 public:
   struct Config
   {
-    Config(RegStore* store, RegStore* remote_store, HSSConnection* hss) :
-      _store(store), _remote_store(remote_store), _hss(hss)
-      {}
-    RegStore* _store;
-    RegStore* _remote_store;
+    Config(SubscriberDataManager* sdm,
+           SubscriberDataManager* remote_sdm,
+           HSSConnection* hss) :
+      _sdm(sdm),
+      _remote_sdm(remote_sdm),
+      _hss(hss)
+    {}
+    SubscriberDataManager* _sdm;
+    SubscriberDataManager* _remote_sdm;
     HSSConnection* _hss;
   };
 
@@ -87,12 +91,12 @@ public:
 protected:
   void handle_response();
   HTTPCode parse_response(std::string body);
-  RegStore::AoR* set_aor_data(RegStore* current_store,
-                              std::string aor_id,
-                              RegStore::AoR* previous_aor_data,
-                              RegStore* remote_store,
-                              bool is_primary,  //do we update chronos and send NOTIFYs
-                              bool& all_bindings_expired);
+  SubscriberDataManager::AoRPair* set_aor_data(
+                        SubscriberDataManager* current_sdm,
+                        std::string aor_id,
+                        SubscriberDataManager::AoRPair* previous_aor_data,
+                        SubscriberDataManager* remote_sdm,
+                        bool& all_bindings_expired);
 
 protected:
   const Config* _cfg;
@@ -104,11 +108,17 @@ class DeregistrationTask : public HttpStackUtils::Task
 public:
   struct Config
   {
-    Config(RegStore* store, RegStore* remote_store, HSSConnection* hss, SIPResolver* sipresolver) :
-      _store(store), _remote_store(remote_store), _hss(hss), _sipresolver(sipresolver)
-      {}
-    RegStore* _store;
-    RegStore* _remote_store;
+    Config(SubscriberDataManager* sdm,
+           SubscriberDataManager* remote_sdm,
+           HSSConnection* hss,
+           SIPResolver* sipresolver) :
+      _sdm(sdm),
+      _remote_sdm(remote_sdm),
+      _hss(hss),
+      _sipresolver(sipresolver)
+    {}
+    SubscriberDataManager* _sdm;
+    SubscriberDataManager* _remote_sdm;
     HSSConnection* _hss;
     SIPResolver* _sipresolver;
   };
@@ -123,12 +133,12 @@ public:
   void run();
   HTTPCode handle_request();
   HTTPCode parse_request(std::string body);
-  RegStore::AoR* set_aor_data(RegStore* current_store,
-                              std::string aor_id,
-                              std::string private_id,
-                              RegStore::AoR* previous_aor_data,
-                              RegStore* remote_store,
-                              bool is_primary);
+  SubscriberDataManager::AoRPair* set_aor_data(
+                    SubscriberDataManager* current_sdm,
+                    std::string aor_id,
+                    std::string private_id,
+                    SubscriberDataManager::AoRPair* previous_aor_data,
+                    SubscriberDataManager* remote_sdm);
 
 protected:
   const Config* _cfg;

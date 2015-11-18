@@ -52,7 +52,7 @@ class UACTransaction;
 #include "enumservice.h"
 #include "bgcfservice.h"
 #include "analyticslogger.h"
-#include "regstore.h"
+#include "subscriber_data_manager.h"
 #include "stack.h"
 #include "trustboundary.h"
 #include "sessioncase.h"
@@ -219,17 +219,17 @@ private:
                                int max_targets,
                                SAS::TrailId trail);
   void get_targets_from_store(const std::string& aor,
-                              RegStore*& store,
-                              RegStore*& remote_store,
+                              SubscriberDataManager*& sdm,
+                              SubscriberDataManager*& remote_sdm,
                               pjsip_msg*& msg,
                               pj_pool_t* pool,
                               int max_targets,
                               TargetList& targets,
                               SAS::TrailId trail);
   void get_all_bindings(const std::string& aor,
-                        RegStore*& store,
-                        RegStore*& remote_store,
-                        RegStore::AoR** aor_data,
+                        SubscriberDataManager*& sdm,
+                        SubscriberDataManager*& remote_sdm,
+                        SubscriberDataManager::AoR** aor_data,
                         SAS::TrailId trail);
 
   void cancel_trying_timer();
@@ -355,8 +355,8 @@ private:
   static const int LIVENESS_TIMER = 1;
 };
 
-pj_status_t init_stateful_proxy(RegStore* registrar_store,
-                                RegStore* remote_reg_store,
+pj_status_t init_stateful_proxy(SubscriberDataManager* sdm,
+                                SubscriberDataManager* remote_sdm,
                                 IfcHandler* ifc_handler,
                                 pj_bool_t enable_access_proxy,
                                 const std::string& upstream_proxy,
