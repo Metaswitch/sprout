@@ -102,7 +102,6 @@ get_settings()
         default_session_expires=600
         signaling_dns_server=127.0.0.1
         chronos_hostname=127.0.0.1:7253
-        . /etc/clearwater/config
 
         # Set up a default cluster_settings file if it does not exist.  The local
         # IP address needs to be surrounded by square brackets if it is IPv6.
@@ -126,9 +125,14 @@ get_settings()
         num_pjsip_threads=1
         num_worker_threads=$(($(grep processor /proc/cpuinfo | wc -l) * 50))
         num_http_threads=$(($(grep processor /proc/cpuinfo | wc -l) * 50))
+
+        # Testing has shown that we can handle at least 250 requests per second per core - this is
+        # probably an underestimate, but is a reasonable start.
+        init_token_rate=$(($(grep processor /proc/cpuinfo | wc -l) * 250))
+        
         log_level=2
         authentication=Y
-        [ -r /etc/clearwater/user_settings ] && . /etc/clearwater/user_settings
+        . /etc/clearwater/config
 
         # Work out which features are enabled.
         MMTEL_SERVICES_ENABLED=Y
