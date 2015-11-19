@@ -102,7 +102,6 @@ get_settings()
         default_session_expires=600
         signaling_dns_server=127.0.0.1
         chronos_hostname=127.0.0.1:7253
-        . /etc/clearwater/config
 
         # Set up a default cluster_settings file if it does not exist.  The local
         # IP address needs to be surrounded by square brackets if it is IPv6.
@@ -133,7 +132,7 @@ get_settings()
         
         log_level=2
         authentication=Y
-        [ -r /etc/clearwater/user_settings ] && . /etc/clearwater/user_settings
+        . /etc/clearwater/config
 
         # Work out which features are enabled.
         MMTEL_SERVICES_ENABLED=Y
