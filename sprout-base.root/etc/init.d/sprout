@@ -239,7 +239,7 @@ get_daemon_args()
 
         if [ -n "$memento_notify_url" ]
         then
-          DAEMON_ARGS="$DAEMON_ARGS --memento-notify-url=$memento_notify_ur"
+          DAEMON_ARGS="$DAEMON_ARGS --memento-notify-url=$memento_notify_url"
         fi
 
         if [ -n "$call_list_ttl" ]
