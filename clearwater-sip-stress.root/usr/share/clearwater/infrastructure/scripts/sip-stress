@@ -11,6 +11,7 @@ count=30000
 node_idx=1
 sipp_count=1
 password=7kkzTyGW
+stress_uri="sip:example@localhost"
 . /etc/clearwater/config
 
 # Clear out old configuration files.
@@ -36,4 +37,11 @@ for index in $(seq $(((node_idx - 1) * sipp_count + 1)) $((node_idx * sipp_count
       echo "$dn;[authentication username=$dn@$home_domain password=$password];$((dn + 1));[authentication username=$((dn + 1))@$home_domain password=$password]"
     done
   } > /usr/share/clearwater/sip-stress/users.csv.$index
+
+  { echo USER
+    for dn in $(eval echo {$((base + (count * (index - 1))))..$((base + (count * index)- 1))})
+    do
+      echo "$dn;[authentication username=$dn@$home_domain password=$password];$stress_uri"
+    done
+  } > /usr/share/clearwater/sip-stress/single_uri_users.csv.$index
 done

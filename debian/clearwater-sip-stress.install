@@ -1,3 +1,4 @@
 clearwater-sip-stress.root/* /
 modules/sipp/sipp usr/share/clearwater/sip-stress/
 tests/load/call_load2.xml usr/share/clearwater/sip-stress/
+tests/load/single_uri_load.xml usr/share/clearwater/sip-stress/

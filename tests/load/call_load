@@ -1,1 +1,0 @@
-./sipp -sf call_load.xml $1:5060 -t tn -s $1 -p 5060 -inf ./dn_list.csv -users $2

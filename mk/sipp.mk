@@ -3,7 +3,7 @@
 SIPP_DIR := ${MODULE_DIR}/sipp
 
 sipp:
-	${MAKE} -C ${SIPP_DIR} debug_ossl
+	cd ${SIPP_DIR} && autoreconf -vifs && ./configure --with-rtpstream && make
 
 sipp_test:
 	true
