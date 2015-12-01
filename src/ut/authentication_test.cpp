@@ -661,6 +661,45 @@ TEST_F(AuthenticationTest, NoAlgorithmDigestAuthSuccess)
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
 
+// Test the case where:
+//  - we have no algorithm parameter in a REGISTER
+//  - we have an invalid nonce, so can't look up the AV
+//
+// This tests behaviour when we can't work out whether to track this in the digest auth or AKA auth
+// statistics - we should use digest as a default.
+TEST_F(AuthenticationTest, NoAlgorithmBadNonceDigestAuthFailure)
+{
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Send a new REGISTER request with an authentication header including the
+  // response.
+  AuthenticationMessage msg2("REGISTER");
+  msg2._algorithm = "";
+  msg2._key = "12345678123456781234567812345678";
+  msg2._nonce = "abab";
+  msg2._opaque = "bcbc";
+  msg2._nc = "00000001";
+  msg2._cnonce = "8765432187654321";
+  msg2._qop = "auth";
+  inject_msg(msg2.get());
+
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+  free_txdata();
+
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_failures);
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+}
+
+
 TEST_F(AuthenticationTest, DigestAuthFailBadResponse)
 {
   // Test a failed SIP Digest authentication flow where the response is wrong.
