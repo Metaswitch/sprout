@@ -710,20 +710,22 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       {
         auth_stats_table = auth_stats_tables->ims_aka_auth_tbl;
       }
-    }
-    if (auth_stats_table == NULL)
-    {
-      // Authorization header did not specify an algorithm, so check the av for
-      // this information instead.
-      if (av->HasMember("digest"))
+      else
       {
-        auth_stats_table = auth_stats_tables->sip_digest_auth_tbl;
-      }
-      else if (av->HasMember("aka"))
-      {
-        auth_stats_table = auth_stats_tables->ims_aka_auth_tbl;
+        // Authorization header did not specify an algorithm, so check the av for
+        // this information instead.
+        if ((av != NULL) && (av->HasMember("aka")))
+        {
+          auth_stats_table = auth_stats_tables->ims_aka_auth_tbl;
+        }
+        else
+        {
+          // Use the digest table if the AV specified digest, or as a fallback if there was no AV
+          auth_stats_table = auth_stats_tables->sip_digest_auth_tbl;
+        }
       }
     }
+
     if (auth_stats_table != NULL)
     {
       auth_stats_table->increment_attempts();
