@@ -1494,7 +1494,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
       pj_status_t status = NotifyUtils::create_subscription_notify(
                                           &tdata_notify,
                                           s,
-                                          "aor",
+                                          aor_id,
                                           aor_pair->get_orig(),
                                           binding_notify,
                                           reg_state,
@@ -1624,7 +1624,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_current_subscriptions
     pj_status_t status = NotifyUtils::create_subscription_notify(
                                           &tdata_notify,
                                           aor_current->second,
-                                          "aor",
+                                          aor_id,
                                           aor_pair->get_orig(),
                                           binding_notify,
                                           NotifyUtils::RegistrationState::ACTIVE,
