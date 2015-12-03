@@ -103,7 +103,7 @@ static bool is_local_name(pj_str_t host)
 // - prefer_sip - for ambiguous URIs like sip:+1234@example.com (which could be a global phone
 // number or just a SIP URI), prefer to interpret it as SIP
 //
-URIClass URIClassifier::classify_uri(pjsip_uri* uri, bool prefer_sip)
+URIClass URIClassifier::classify_uri(const pjsip_uri* uri, bool prefer_sip)
 {
   URIClass ret = URIClass::UNKNOWN;
 

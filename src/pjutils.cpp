@@ -1854,7 +1854,7 @@ void PJUtils::update_history_info_reason(pjsip_uri* history_info_uri, pj_pool_t*
   }
 }
 
-pj_str_t PJUtils::user_from_uri(pjsip_uri* uri)
+pj_str_t PJUtils::user_from_uri(const pjsip_uri* uri)
 {
   if (PJSIP_URI_SCHEME_IS_SIP(uri) ||
       PJSIP_URI_SCHEME_IS_SIPS(uri))
