@@ -228,10 +228,10 @@ TEST_F(LoadMonitorTest, CorrectStatistics)
   // Initialisation should count as an update though
   // Observe these values are the values that the load monitor has been
   // initialised with
-  EXPECT_EQ(target_latency.value, 100000);
-  EXPECT_EQ(smoothed_latency.value, 100000);
-  EXPECT_EQ(penalties.value, 0);
-  EXPECT_EQ(token_rate.value, 10);
+  EXPECT_EQ(target_latency.value, (uint32_t)100000);
+  EXPECT_EQ(smoothed_latency.value, (uint32_t)100000);
+  EXPECT_EQ(penalties.value, (uint32_t)0);
+  EXPECT_EQ(token_rate.value, (uint32_t)10);
 
   // Give low latency value and force rate update through penalty
   _load_monitor->incr_penalties();
@@ -241,6 +241,6 @@ TEST_F(LoadMonitorTest, CorrectStatistics)
 
   // Scalar value should be reported as less than current value
   // as the current smoothed latency will have increased
-  EXPECT_GT(_load_monitor->smoothed_latency, smoothed_latency.value);
+  EXPECT_GT((uint32_t)_load_monitor->smoothed_latency, smoothed_latency.value);
 }
 

@@ -373,7 +373,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, CopyTests)
   EXPECT_EQ(1u, copy->bindings().size());
   EXPECT_EQ(1u, copy->subscriptions().size());
   EXPECT_EQ(1, copy->_notify_cseq);
-  EXPECT_EQ(0, copy->_cas);
+  EXPECT_EQ((uint64_t)0, copy->_cas);
   EXPECT_EQ("5102175698@cw-ngv.com", copy->_uri);
   delete copy; copy = NULL;
 
@@ -383,7 +383,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, CopyTests)
   EXPECT_EQ(1u, copy->bindings().size());
   EXPECT_EQ(1u, copy->subscriptions().size());
   EXPECT_EQ(1, copy->_notify_cseq);
-  EXPECT_EQ(0, copy->_cas);
+  EXPECT_EQ((uint64_t)0, copy->_cas);
   EXPECT_EQ("5102175698@cw-ngv.com", copy->_uri);
   delete copy; copy = NULL;
   delete aor_data1; aor_data1 = NULL;
