@@ -263,3 +263,14 @@ $(sprout_test_OBJECT_DIR)/md5.o : $(SIPP_DIR)/md5.c
 # Build rule for our interposer.
 ${sprout_test_OBJECT_DIR}/test_interposer.so : ../modules/cpp-common/test_utils/test_interposer.cpp ../modules/cpp-common/test_utils/test_interposer.hpp
 	g++ $(sprout_test_CPPFLAGS) -shared -fPIC -ldl $< -o $@
+
+# Alarm definition generation rules
+ROOT := $(abspath $(shell pwd)/../)
+MODULE_DIR := ${ROOT}/modules
+include ../modules/cpp-common/makefiles/alarm-utils.mk
+
+../usr/include/sprout_alarmdefinition.h : ../build/bin/alarm_header ../sprout-base.root/usr/share/clearwater/infrastructure/alarms/sprout_alarms.json
+	$< -j "../sprout-base.root/usr/share/clearwater/infrastructure/alarms/sprout_alarms.json" -n "sprout"
+	mv sprout_alarmdefinition.h $@
+
+${sprout_OBJECT_DIR}/main.o : ../usr/include/sprout_alarmdefinition.h
