@@ -833,7 +833,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         if (pcv)
         {
           TRC_DEBUG("Blanking out term_ioi parameter due to redirect");
-          pcv->term_ioi = pj_str("");
+          pcv->term_ioi = pj_str(const_cast<char*>(""));
         }
 
         // Abandon the `term` ACR we're building up as we're about to perform CDIV.
