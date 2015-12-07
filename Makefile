@@ -38,7 +38,9 @@ build: ${SUBMODULES} sprout scripts/sipp-stats/clearwater-sipp-stats-1.0.0.gem p
 
 test: ${SUBMODULES} sprout_test plugins-test
 
-testall: $(patsubst %, %_test, ${SUBMODULES}) test
+full_test: ${SUBMODULES} sprout_full_test plugins-test
+
+testall: $(patsubst %, %_test, ${SUBMODULES}) full_test
 
 clean: $(patsubst %, %_clean, ${SUBMODULES}) sprout_clean plugins-clean
 	rm -rf ${ROOT}/usr
