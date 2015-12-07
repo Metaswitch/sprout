@@ -272,5 +272,9 @@ include ../modules/cpp-common/makefiles/alarm-utils.mk
 ../usr/include/sprout_alarmdefinition.h : ../build/bin/alarm_header ../sprout-base.root/usr/share/clearwater/infrastructure/alarms/sprout_alarms.json
 	$< -j "../sprout-base.root/usr/share/clearwater/infrastructure/alarms/sprout_alarms.json" -n "sprout"
 	mv sprout_alarmdefinition.h $@
-
 ${sprout_OBJECT_DIR}/main.o : ../usr/include/sprout_alarmdefinition.h
+
+../usr/include/memento_as_alarmdefinition.h : ../build/bin/alarm_header ../memento-as.root/usr/share/clearwater/infrastructure/alarms/memento_as_alarms.json
+	$< -j "../memento-as.root/usr/share/clearwater/infrastructure/alarms/memento_as_alarms.json" -n "memento_as"
+	mv memento_as_alarmdefinition.h $@
+${memento_as.so_OBJECT_DIR}/mementoasplugin.o : ../usr/include/memento_as_alarmdefinition.h
