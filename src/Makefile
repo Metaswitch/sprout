@@ -1,4 +1,4 @@
-TARGETS := sprout cdiv_as.so gemini_as.so memento_as.so sprout_bgcf.so sprout_icscf.so sprout_mmtel_as.so sprout_scscf.so
+TARGETS := sprout call-diversion-as.so gemini-as.so memento-as.so sprout_bgcf.so sprout_icscf.so sprout_mmtel_as.so sprout_scscf.so mangelwurzel-as.so
 
 TEST_TARGETS := sprout_test
 
@@ -219,17 +219,17 @@ PLUGIN_COMMON_CPPFLAGS := -fPIC \
                           `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --cflags libpjproject`
 PLUGIN_COMMON_LDFLAGS := -shared -L../usr/lib
 
-gemini_as.so_SOURCES := mobiletwinned.cpp sproutletappserver.cpp geminiasplugin.cpp
-gemini_as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -I../modules/gemini/include
-gemini_as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
+gemini-as.so_SOURCES := mobiletwinned.cpp sproutletappserver.cpp geminiasplugin.cpp
+gemini-as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -I../modules/gemini/include
+gemini-as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
-memento_as.so_SOURCES := sproutletappserver.cpp mementoasplugin.cpp cassandra_store.cpp call_list_store.cpp mementosaslogger.cpp call_list_store_processor.cpp httpnotifier.cpp mementoappserver.cpp
-memento_as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -I../modules/memento/include
-memento_as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS} -lthrift -lcassandra
+memento-as.so_SOURCES := sproutletappserver.cpp mementoasplugin.cpp cassandra_store.cpp call_list_store.cpp mementosaslogger.cpp call_list_store_processor.cpp httpnotifier.cpp mementoappserver.cpp
+memento-as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -I../modules/memento/include
+memento-as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS} -lthrift -lcassandra
 
-cdiv_as.so_SOURCES := mmtel.cpp sproutletappserver.cpp cdivasplugin.cpp
-cdiv_as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -Wno-write-strings
-cdiv_as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
+call-diversion-as.so_SOURCES := mmtel.cpp sproutletappserver.cpp cdivasplugin.cpp
+call-diversion-as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -Wno-write-strings
+call-diversion-as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
 sprout_bgcf.so_SOURCES := bgcfsproutlet.cpp bgcfservice.cpp bgcfplugin.cpp
 sprout_bgcf.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS}
@@ -247,6 +247,10 @@ sprout_scscf.so_SOURCES := scscfsproutlet.cpp scscfplugin.cpp
 sprout_scscf.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS}
 sprout_scscf.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
+mangelwurzel-as.so_SOURCES := mangelwurzel.cpp mangelwurzelplugin.cpp
+mangelwurzel-as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -I../include/mangelwurzel
+mangelwurzel-as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
+
 VPATH = ../modules/cpp-common/src ../modules/cpp-common/test_utils ../modules/app-servers/test ../modules/gemini/src ../modules/gemini/src/ut ../modules/memento/src mangelwurzel mangelwurzel/ut ut
 
 include ../build-infra/cpp.mk
@@ -261,7 +265,7 @@ $(sprout_test_OBJECT_DIR)/md5.o : $(SIPP_DIR)/md5.c
 	g++ $(sprout_test_CPPFLAGS) -I$(SIPP_DIR) -c $(SIPP_DIR)/md5.c -o $@
 
 # Build rule for our interposer.
-${sprout_test_OBJECT_DIR}/test_interposer.so : ../modules/cpp-common/test_utils/test_interposer.cpp ../modules/cpp-common/test_utils/test_interposer.hpp
+${sprout_test_OBJECT_DIR}/testinterposer.so : ../modules/cpp-common/test_utils/test_interposer.cpp ../modules/cpp-common/test_utils/test_interposer.hpp
 	g++ $(sprout_test_CPPFLAGS) -shared -fPIC -ldl $< -o $@
 
 # Alarm definition generation rules
@@ -274,7 +278,7 @@ include ../modules/cpp-common/makefiles/alarm-utils.mk
 	mv sprout_alarmdefinition.h $@
 ${sprout_OBJECT_DIR}/main.o : ../usr/include/sprout_alarmdefinition.h
 
-../usr/include/memento_as_alarmdefinition.h : ../build/bin/alarm_header ../memento-as.root/usr/share/clearwater/infrastructure/alarms/memento_as_alarms.json
-	$< -j "../memento-as.root/usr/share/clearwater/infrastructure/alarms/memento_as_alarms.json" -n "memento_as"
-	mv memento_as_alarmdefinition.h $@
-${memento_as.so_OBJECT_DIR}/mementoasplugin.o : ../usr/include/memento_as_alarmdefinition.h
+../usr/include/memento-as_alarmdefinition.h : ../build/bin/alarm_header ../memento-as.root/usr/share/clearwater/infrastructure/alarms/memento_as_alarms.json
+	$< -j "../memento-as.root/usr/share/clearwater/infrastructure/alarms/memento_as_alarms.json" -n "memento-as"
+	mv memento-as_alarmdefinition.h $@
+${memento-as.so_OBJECT_DIR}/mementoasplugin.o : ../usr/include/memento-as_alarmdefinition.h
