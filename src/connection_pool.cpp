@@ -423,10 +423,7 @@ void ConnectionPool::recycle_connections()
 
   while (!_terminated)
   {
-#ifdef UNIT_TEST
-    // A smaller pause here is much faster
-    sleep(0.1);
-#else
+#ifndef UNIT_TEST
     sleep(1);
 #endif
 
