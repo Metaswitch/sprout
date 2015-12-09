@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# @file clearwater-sip-stress.postinst
+# @file clearwater-sipp.postinst
 #
 # Project Clearwater - IMS in the Cloud
 # Copyright (C) 2013  Metaswitch Networks Ltd
@@ -51,12 +51,34 @@ set -e
 # for details, see http://www.debian.org/doc/debian-policy/ or
 # the debian-policy package
 
-NAME=clearwater-sip-stress
+NAME=clearwater-sipp
+log_directory=/var/log/$NAME
+
+#
+# Function to ensure logging directory is in place and has the right permissions
+#
+setup_logging() {
+    if [ ! -d "$log_directory" ]; then
+        mkdir -p $log_directory
+    fi
+}
+
+add_section() {
+  file=$1
+  tag=$2
+  delta=$3
+  { echo "#+$tag"
+    cat $delta
+    echo "#-$tag" ; } >> $file
+}
 
 case "$1" in
     configure)
-        /usr/share/clearwater/infrastructure/scripts/sip-stress
-        service clearwater-sip-stress start
+        setup_logging
+        /usr/share/clearwater/infrastructure/scripts/sipp
+
+        add_section /etc/sysctl.conf clearwater-sipp /etc/sysctl.conf.clearwater-sipp
+        sysctl -p /etc/sysctl.conf >/dev/null
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)

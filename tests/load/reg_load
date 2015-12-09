@@ -1,1 +1,0 @@
-./sipp -sf reg_load.xml $1:5060 -t t1 -s $1 -p 5060 -inf dn_list.csv

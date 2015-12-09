@@ -46,4 +46,4 @@ override_dh_strip:
 	dh_strip -pcall-diversion-as --dbg-package=call-diversion-as-dbg
 	dh_strip -pmangelwurzel-as --dbg-package=mangelwurzel-as-dbg
 	dh_strip -pbono --dbg-package=bono-dbg
-	dh_strip -pclearwater-sip-stress --dbg-package=clearwater-sip-stress-dbg
+	dh_strip -pclearwater-sipp --dbg-package=clearwater-sipp-dbg

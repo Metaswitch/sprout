@@ -175,22 +175,35 @@ Depends: clearwater-infrastructure, sprout-libs
 Suggests: clearwater-logging, clearwater-snmpd
 Description: restund, the STUN/TURN server
 
-Package: clearwater-sip-stress
+Package: clearwater-sipp
 Architecture: any
-Depends: clearwater-infrastructure, clearwater-tcp-scalability
-Conflicts: sprout, bono, restund
-Suggests: clearwater-sip-stress-dbg, clearwater-sip-stress-stats, clearwater-logging, clearwater-snmpd
-Description: Runs SIP stress against Clearwater
+Suggests: clearwater-sipp-dbg
+Description: Clearwater build of SIPp, used for running SIP stress and performance tests
 
-Package: clearwater-sip-stress-dbg
+Package: clearwater-sipp-dbg
 Architecture: any
 Section: debug
 Priority: extra
-Depends: clearwater-sip-stress (= ${binary:Version})
+Depends: clearwater-sipp (= ${binary:Version})
 Recommends: gdb
-Description: Debugging symbols for sipp, used for running SIP stress against Clearwater
+Description: Debugging symbols for the Clearwater build of SIPp, used for running SIP stress and performance tests
+
+Package: clearwater-sip-stress
+Architecture: any
+Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-sipp
+Conflicts: sprout, bono, restund
+Suggests: clearwater-logging, clearwater-snmpd, clearwater-sip-stress-stats
+Description: Runs SIP stress against Clearwater
 
 Package: clearwater-sip-stress-stats
 Architecture: any
 Depends: clearwater-sip-stress, libzmq3-dev, ruby1.9.3, build-essential
-Description: Exposes SIPp stress statistics over the clearwater statistics interface.
+Description: Exposes SIP stress statistics over the clearwater statistics interface.
+
+Package: clearwater-sip-perf
+Architecture: any
+Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-sipp
+Conflicts: sprout, bono, restund
+Suggests: clearwater-logging, clearwater-snmpd
+Description: Runs SIP performance tests against Clearwater
+

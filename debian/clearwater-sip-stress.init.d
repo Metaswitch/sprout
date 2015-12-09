@@ -115,6 +115,29 @@ do_stop()
         return $RC
 }
 
+#
+# Function that runs the daemon/service
+#
+do_run()
+{
+        # Return
+        #   0 if daemons have been started
+        #   1 if some daemons were already running (and any others have been started)
+        #   2 if some daemons could not be started (some may have been started)
+        RC=0
+
+        # Restart clearwater-infrastructure to pick up any config changes first.
+        service clearwater-infrastructure restart
+
+        for index in $(ls -1 /usr/share/clearwater/sip-stress/users.csv.* | sed -e 's/^.*\.//g') ; do
+                $DAEMON
+                TEMP_RC=$?
+                [ "$TEMP_RC" = 2 ] && RC=2
+        done
+
+        return $RC
+}
+
 case "$1" in
   start)
         [ "$VERBOSE" != no ] && log_daemon_msg "Starting $DESC" "$NAME"
@@ -127,6 +150,14 @@ case "$1" in
   stop)
         [ "$VERBOSE" != no ] && log_daemon_msg "Stopping $DESC" "$NAME"
         do_stop
+        case "$?" in
+                0|1) [ "$VERBOSE" != no ] && log_end_msg 0 ;;
+                2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
+        esac
+        ;;
+  run)
+        [ "$VERBOSE" != no ] && log_daemon_msg "Running $DESC" "$NAME"
+        do_run
         case "$?" in
                 0|1) [ "$VERBOSE" != no ] && log_end_msg 0 ;;
                 2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
