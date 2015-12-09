@@ -262,12 +262,12 @@ ${BUILD_DIR}/bin/sprout_test : ${sprout_test_OBJECT_DIR}/md5.o \
 # Build rules for SIPp cryptographic modules
 SIPP_DIR := ../modules/sipp
 $(sprout_test_OBJECT_DIR)/md5.o : $(SIPP_DIR)/md5.c
-	g++ $(sprout_test_CPPFLAGS) -I$(SIPP_DIR) -c $(SIPP_DIR)/md5.c -o $@
+	$(CC) $(CPPFLAGS) $(sprout_test_CPPFLAGS) -I$(SIPP_DIR) -c $(SIPP_DIR)/md5.c -o $@
 CLEANS += ${sprout_test_OBJECT_DIR}/md5.o
 
 # Build rule for our interposer.
 ${sprout_test_OBJECT_DIR}/test_interposer.so : ../modules/cpp-common/test_utils/test_interposer.cpp ../modules/cpp-common/test_utils/test_interposer.hpp
-	g++ $(sprout_test_CPPFLAGS) -shared -fPIC -ldl $< -o $@
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(sprout_test_CPPFLAGS) -shared -fPIC -ldl $< -o $@
 CLEANS += ${sprout_test_OBJECT_DIR}/test_interposer.so
 
 # Alarm definition generation rules

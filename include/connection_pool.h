@@ -96,9 +96,6 @@ private:
   pjsip_endpoint* _endpt;
   pjsip_tpfactory* _tpfactory;
 
-  /// The address family to request from the resolver.
-  int _addr_family;
-
   pj_thread_t* _recycler;
   volatile bool _terminated;
 
