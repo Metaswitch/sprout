@@ -9,7 +9,6 @@ ifndef LIBMEM_DIR
 endif
 
 SPROUT_DIR := ${ROOT}/src
-SPROUT_TEST_DIR := ${ROOT}/tests
 
 sprout: pjsip libmemcached
 	${MAKE} -C ${SPROUT_DIR}
@@ -22,7 +21,6 @@ sprout_full_test:
 
 sprout_clean:
 	${MAKE} -C ${SPROUT_DIR} clean
-	-${MAKE} -C ${SPROUT_TEST_DIR} clean
 
 sprout_distclean: sprout_clean
 
