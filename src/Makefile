@@ -263,10 +263,12 @@ ${BUILD_DIR}/bin/sprout_test : ${sprout_test_OBJECT_DIR}/md5.o \
 SIPP_DIR := ../modules/sipp
 $(sprout_test_OBJECT_DIR)/md5.o : $(SIPP_DIR)/md5.c
 	g++ $(sprout_test_CPPFLAGS) -I$(SIPP_DIR) -c $(SIPP_DIR)/md5.c -o $@
+CLEANS += ${sprout_test_OBJECT_DIR}/md5.o
 
 # Build rule for our interposer.
-${sprout_test_OBJECT_DIR}/testinterposer.so : ../modules/cpp-common/test_utils/test_interposer.cpp ../modules/cpp-common/test_utils/test_interposer.hpp
+${sprout_test_OBJECT_DIR}/test_interposer.so : ../modules/cpp-common/test_utils/test_interposer.cpp ../modules/cpp-common/test_utils/test_interposer.hpp
 	g++ $(sprout_test_CPPFLAGS) -shared -fPIC -ldl $< -o $@
+CLEANS += ${sprout_test_OBJECT_DIR}/test_interposer.so
 
 # Alarm definition generation rules
 ROOT := $(abspath $(shell pwd)/../)
@@ -277,8 +279,10 @@ include ../modules/cpp-common/makefiles/alarm-utils.mk
 	$< -j "../sprout-base.root/usr/share/clearwater/infrastructure/alarms/sprout_alarms.json" -n "sprout"
 	mv sprout_alarmdefinition.h $@
 ${sprout_OBJECT_DIR}/main.o : ../usr/include/sprout_alarmdefinition.h
+CLEANS += ../usr/include/sprout_alarmdefinition.h
 
 ../usr/include/memento_as_alarmdefinition.h : ../build/bin/alarm_header ../memento-as.root/usr/share/clearwater/infrastructure/alarms/memento_as_alarms.json
 	$< -j "../memento-as.root/usr/share/clearwater/infrastructure/alarms/memento_as_alarms.json" -n "memento_as"
 	mv memento_as_alarmdefinition.h $@
 ${memento-as.so_OBJECT_DIR}/mementoasplugin.o : ../usr/include/memento_as_alarmdefinition.h
+CLEANS += ../usr/include/memento_as_alarmdefinition.h
