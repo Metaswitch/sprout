@@ -81,19 +81,15 @@ do_start()
         #   0 if daemons have been started
         #   1 if some daemons were already running (and any others have been started)
         #   2 if some daemons could not be started (some may have been started)
-        RC=0
 
         # Restart clearwater-infrastructure to pick up any config changes first.
         service clearwater-infrastructure restart
 
-        for index in $(ls -1 /usr/share/clearwater/sip-perf/users.csv.* | sed -e 's/^.*\.//g') ; do
-                start-stop-daemon --start --quiet --pidfile $PIDFILE.$index --exec $DAEMON --test > /dev/null &&
-                start-stop-daemon --start --quiet --background --make-pidfile --pidfile $PIDFILE.$index --exec $DAEMON -- $index
-                TEMP_RC=$?
-                [ "$TEMP_RC" = 2 ] && RC=2
-        done
+        start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON --test > /dev/null \
+                || return 1
 
-        return $RC
+        start-stop-daemon --start --quiet --background --make-pidfile --pidfile $PIDFILE --exec $DAEMON \
+                || return 2
 }
 
 #
@@ -101,18 +97,14 @@ do_start()
 #
 do_stop()
 {
-        RC=0
-        for index in $(ls -1 /usr/share/clearwater/sip-perf/users.csv.* | sed -e 's/^.*\.//g') ; do
-                start-stop-daemon --stop --quiet --retry=TERM/30/KILL/5 --pidfile $PIDFILE.$index --name $NAME
-                TEMP_RC=$?
-                [ "$TEMP_RC" = 2 ] && RC=2
-        done
+        start-stop-daemon --stop --quiet --retry=TERM/30/KILL/5 --pidfile $PIDFILE.$index --name $NAME
+        RETVAL="$?"
 
         # Kill any remaining clearwater-sip-perf or sipp instances
         pkill clearwater-sip-perf >/dev/null 2>&1
         pkill sipp >/dev/null 2>&1
 
-        return $RC
+        return "$RETVAL"
 }
 
 #
@@ -124,18 +116,13 @@ do_run()
         #   0 if daemons have been started
         #   1 if some daemons were already running (and any others have been started)
         #   2 if some daemons could not be started (some may have been started)
-        RC=0
 
         # Restart clearwater-infrastructure to pick up any config changes first.
         service clearwater-infrastructure restart
 
-        for index in $(ls -1 /usr/share/clearwater/sip-stress/users.csv.* | sed -e 's/^.*\.//g') ; do
-                $DAEMON
-                TEMP_RC=$?
-                [ "$TEMP_RC" = 2 ] && RC=2
-        done
-
-        return $RC
+        $DAEMON
+        RETVAL="$?"
+        return "$RETVAL"
 }
 
 case "$1" in

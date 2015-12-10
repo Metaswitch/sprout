@@ -75,7 +75,6 @@ add_section() {
 case "$1" in
     configure)
         setup_logging
-        /usr/share/clearwater/infrastructure/scripts/sipp
 
         add_section /etc/sysctl.conf clearwater-sipp /etc/sysctl.conf.clearwater-sipp
         sysctl -p /etc/sysctl.conf >/dev/null
