@@ -5,7 +5,7 @@
 # - count - number of directory numbers per instance (must be even)
 # - password - SIP password to use for all DNs (insecure but OK for stress)
 base=2010000000
-count=1000
+count=5000
 password=7kkzTyGW
 . /etc/clearwater/config
 
