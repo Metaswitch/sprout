@@ -11,7 +11,7 @@ password=7kkzTyGW
 
 # Create configuration file.
 { echo USER
-  for dn in $(eval echo {$((base))..$((base + count))..2})
+  for dn in $(eval echo {$((base))..$((base + count - 2))..2})
   do
     echo "$dn;[authentication username=$dn@$home_domain password=$password];$((dn + 1));[authentication username=$((dn + 1))@$home_domain password=$password]"
   done
