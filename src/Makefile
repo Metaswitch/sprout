@@ -163,6 +163,8 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        mock_subscriber_data_manager.cpp \
                        mock_chronos_connection.cpp \
 
+sprout_test_COVERAGE_EXCLUSIONS := ^mangelwurzel/ut
+
 SPROUT_COMMON_CPPFLAGS := -Wno-write-strings \
                           -I../include \
                           -I../modules/cpp-common/include \
