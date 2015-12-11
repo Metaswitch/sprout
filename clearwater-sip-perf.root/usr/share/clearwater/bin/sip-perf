@@ -1,0 +1,25 @@
+#!/bin/bash
+# sip-perf
+# Runs SIP performance tests against a bono node.
+
+# Increase our connection limit.
+ulimit -Hn 100000
+ulimit -Sn 100000
+
+# Read in config.
+. /etc/clearwater/config
+
+# Calculate the number of users.
+num_users=$(($(wc -l < /usr/share/clearwater/sip-perf/users.csv) - 1))
+
+# Copy the script file, then move it - moves within a partition are atomic.
+cp /usr/share/clearwater/sip-perf/sip-perf.xml /var/log/clearwater-sipp/sip-perf.xml.1
+mv /var/log/clearwater-sipp/sip-perf.xml.1 /var/log/clearwater-sipp/sip-perf.xml
+
+# sipp wants a terminal.  Give it a dumb one (we're going to send it to file anyway).
+export TERM=dumb
+
+# Actually run sipp.
+logger -p daemon.error -t sip-perf Starting SIP performance test
+nice -n-20 /usr/share/clearwater/bin/sipp -i $local_ip -sf /var/log/clearwater-sipp/sip-perf.xml $home_domain:5060 -t tn -s $home_domain -inf /usr/share/clearwater/sip-perf/users.csv -users $num_users -m $num_users -default_behaviors all,-bye -max_socket 65000 -trace_stat -trace_rtt -trace_counts -trace_err -max_reconnect -1 -reconnect_sleep 0 -reconnect_close 0 -send_timeout 4000 -recv_timeout 12000 -nostdin >> /var/log/clearwater-sipp/sip-perf.out 2>&1
+logger -p daemon.error -t sip-perf Completed SIP performance test

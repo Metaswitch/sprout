@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# Set up defaults, then dot in base configuration.
+# - base - base directory number
+# - count - number of directory numbers per instance (must be even)
+# - password - SIP password to use for all DNs (insecure but OK for stress)
+base=2010000000
+count=5000
+password=7kkzTyGW
+. /etc/clearwater/config
+
+# Create configuration file.
+{ echo USER
+  for dn in $(eval echo {$((base))..$((base + count - 2))..2})
+  do
+    echo "$dn;[authentication username=$dn@$home_domain password=$password];$((dn + 1));[authentication username=$((dn + 1))@$home_domain password=$password]"
+  done
+} > /usr/share/clearwater/sip-perf/users.csv

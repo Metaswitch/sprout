@@ -60,7 +60,7 @@ old_stats = initial_old_stats
 loop do
   begin
     # Reload the CSV file in case SIPp has crashed
-    stats_file = Dir.glob("/var/log/clearwater-sip-stress/call_load2_*_counts.csv").sort_by { |f| File.mtime(f) }.reverse.first
+    stats_file = Dir.glob("/var/log/clearwater-sipp/sip-stress_*_counts.csv").sort_by { |f| File.mtime(f) }.reverse.first
     f = File.open(stats_file)
     f.seek(0, IO::SEEK_END)
   rescue Exception => e

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# @file clearwater-sip-stress.postinst
+# @file clearwater-sip-perf.postinst
 #
 # Project Clearwater - IMS in the Cloud
 # Copyright (C) 2013  Metaswitch Networks Ltd
@@ -51,12 +51,12 @@ set -e
 # for details, see http://www.debian.org/doc/debian-policy/ or
 # the debian-policy package
 
-NAME=clearwater-sip-stress
+NAME=clearwater-sip-perf
 
 case "$1" in
     configure)
-        /usr/share/clearwater/infrastructure/scripts/sip-stress
-        service clearwater-sip-stress start
+        /usr/share/clearwater/infrastructure/scripts/sip-perf
+        # Don't start the service - we do this on demand
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)

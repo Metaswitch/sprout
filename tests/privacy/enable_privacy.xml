@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" >
-  <originating-identity-presentation active="true"/>
-  <originating-identity-presentation-restriction active="true">
-    <default-behaviour>presentation-restricted</default-behaviour>
-  </originating-identity-presentation-restriction>
-</simservs>

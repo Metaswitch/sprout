@@ -37,20 +37,23 @@ then
   stress_target=$(echo $stress_targets | sed -e 's/,/\n/g' | tail -n +$stress_target_idx | head -1)
 fi
 
+# Calculate the number of users.
+num_users=$(($(wc -l < /usr/share/clearwater/sip-stress/users.csv.$index) - 1))
+
 # Keep running sipp until we're killed.
 while true
 do
   logger -p daemon.error -t sip-stress Restarting sipp instance $index - targeting $stress_target...
 
   # Copy the script file, then move it - moves within a partition are atomic.
-  cp /usr/share/clearwater/sip-stress/call_load2.xml /var/log/clearwater-sip-stress/call_load2.xml.$index
-  mv /var/log/clearwater-sip-stress/call_load2.xml.$index /var/log/clearwater-sip-stress/call_load2.xml
+  cp /usr/share/clearwater/sip-stress/sip-stress.xml /var/log/clearwater-sipp/sip-stress.xml.$index
+  mv /var/log/clearwater-sipp/sip-stress.xml.$index /var/log/clearwater-sipp/sip-stress.xml
 
   # sipp wants a terminal.  Give it a dumb one (we're going to send it to file anyway).
   export TERM=dumb
 
   # Actually run sipp.
-  nice -n-20 /usr/share/clearwater/sip-stress/sipp -i $local_ip -sf /var/log/clearwater-sip-stress/call_load2.xml $stress_target:5060 -t tn -s $home_domain -inf /usr/share/clearwater/sip-stress/users.csv.$index -users $(($(wc -l < /usr/share/clearwater/sip-stress/users.csv.$index) - 1)) -default_behaviors all,-bye -max_socket 65000 -trace_stat -trace_rtt -trace_counts -trace_err -max_reconnect -1 -reconnect_sleep 0 -reconnect_close 0 -send_timeout 4000 -recv_timeout 12000 -nostdin >> /var/log/clearwater-sip-stress/sipp.$index.out 2>&1
+  nice -n-20 /usr/share/clearwater/bin/sipp -i $local_ip -sf /var/log/clearwater-sipp/sip-stress.xml $stress_target:5060 -t tn -s $home_domain -inf /usr/share/clearwater/sip-stress/users.csv.$index -users $num_users -m $num_users -default_behaviors all,-bye -max_socket 65000 -trace_stat -trace_rtt -trace_counts -trace_err -max_reconnect -1 -reconnect_sleep 0 -reconnect_close 0 -send_timeout 4000 -recv_timeout 12000 -nostdin >> /var/log/clearwater-sipp/sip-stress.$index.out 2>&1
 
   logger -p daemon.error -t sip-stress sipp instance $index terminated - waiting
 

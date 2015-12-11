@@ -2,7 +2,7 @@
 
 This component runs as a service on a SIPp stress node and is responsible for parsing SIPp's statistics files and presenting a selected subset of the values over the 0mq stats interface.
 
-Currently the service assumes that SIPp is running the `call_load2.xml` script and that SIPp is configured to write its logs out to `/var/log/clearwater-sip-stress/`.  This is true for the `clearwater-sip-stress` Debian package.  If the name of the script is changed, or the order of the SIP messages is changed, this service will need to be changed too.
+Currently the service assumes that SIPp is running the `sip-stress.xml` script and that SIPp is configured to write its logs out to `/var/log/clearwater-sipp/`.  This is true for the `clearwater-sip-stress-stats` Debian package.  If the name of the script is changed, or the order of the SIP messages is changed, this service will need to be changed too.
 
 # Installing
 
