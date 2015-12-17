@@ -123,7 +123,9 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
   }
   else
   {
-    if (PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri))
+    // TODO: Again, needs to change once the subscription manager is a sproutlet.
+    if ((pjsip_method_cmp(&req->line.req.method, pjsip_get_subscribe_method()) != 0) &&
+        PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri))
     {
       uri = (pjsip_sip_uri*)route->name_addr.uri;
     }
