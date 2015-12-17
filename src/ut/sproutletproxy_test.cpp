@@ -573,7 +573,7 @@ class FakeSproutletTsxDelayAfterFwd : public SproutletTsx
   }
 
   TimerID _tid;
-  bool _response;
+  int _response;
   pjsip_msg* _second_request;
 };
 
