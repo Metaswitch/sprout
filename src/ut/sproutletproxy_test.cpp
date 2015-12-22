@@ -577,6 +577,49 @@ class FakeSproutletTsxDelayAfterFwd : public SproutletTsx
   pjsip_msg* _second_request;
 };
 
+template <int T>
+class FakeSproutletTsxAsyncProcess : public SproutletTsx
+{
+  FakeSproutletTsxAsyncProcess(SproutletTsxHelper* helper) :
+    SproutletTsx(helper)
+  {
+  }
+
+  void on_rx_initial_request(pjsip_msg* req)
+  {
+    TRC_DEBUG("Initial request for %d.  Delay.", T);
+    _req = req;
+
+    schedule_timer(NULL, _tid, 100);
+  }
+
+  void on_timer_expiry(void* context)
+  {
+    TRC_DEBUG("Timer expired for %d.  Respond and forward on request.", T);
+    pjsip_msg* rsp = create_response(_req, PJSIP_SC_OK);
+    send_response(rsp);
+
+    send_request(_req);
+  }
+
+  void on_rx_response(pjsip_msg* rsp, int fork_id)
+  {
+    TRC_DEBUG("Response for %d.", T);
+
+    // Swallow this response
+    free_msg(rsp);
+
+    // Perform post-response processing
+    processed = true;
+  }
+
+  static bool processed;
+  TimerID _tid;
+  pjsip_msg* _req;
+};
+
+template <int T> bool FakeSproutletTsxAsyncProcess<T>::processed;
+
 class SproutletProxyTest : public SipTest
 {
 public:
@@ -608,6 +651,8 @@ public:
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxB2BUA >("b2bua", 0, ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDelayAfterRsp<1> >("delayafterrsp", 0, ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDelayAfterFwd<1> >("delayafterfwd", 0, ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxAsyncProcess<1> >("async1", 0, ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxAsyncProcess<2> >("async2", 0, ""));
 
     // Create a host alias.
     std::unordered_set<std::string> host_aliases;
@@ -2197,6 +2242,69 @@ TEST_F(SproutletProxyTest, DelayAfterForward)
 
   // All done!
   ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+TEST_F(SproutletProxyTest, ChainedAsyncProcess)
+{
+  // Tests correct destruction of chained asynchronous sproutlets
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with two Route headers for a chain of
+  // asynchronous processors.
+  Message msg1;
+  msg1._method = "BYE";
+  msg1._requri = "sip:bob@awaydomain";
+  msg1._from = "sip:alice@homedomain";
+  msg1._to = "sip:bob@awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:async1.proxy1.homedomain;transport=TCP;lr>\r\n"
+                "Route: <sip:async2.proxy1.homedomain;transport=TCP;lr>\r\n"
+                "Route: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Advance time to allow the first async processor to perform its task.
+  cwtest_advance_time_ms(110L);
+  poll();
+
+  // Expecting 200 OK.
+  ASSERT_EQ(1, txdata_count());
+
+  // Check the 200 OK.
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
+  // Advance time to allow the second async processor to perform its task.
+  cwtest_advance_time_ms(110L);
+  poll();
+
+  // Request is forwarded to the node in the third Route header.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  ReqMatcher("BYE").matches(tdata->msg);
+
+  // The first processor has processed; the second is waiting for our response.
+  ASSERT_TRUE(FakeSproutletTsxAsyncProcess<1>::processed);
+  ASSERT_FALSE(FakeSproutletTsxAsyncProcess<2>::processed);
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // No outstanding messages.
+  ASSERT_EQ(0, txdata_count());
+
+  // Async processing occurred for both processors.
+  ASSERT_TRUE(FakeSproutletTsxAsyncProcess<2>::processed);
 
   delete tp;
 }
