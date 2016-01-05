@@ -1420,6 +1420,28 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
                                int now,
                                SAS::TrailId trail)
 {
+  // Work out which bindings have expired - we no longer have a valid connection to these endpoints,
+  // so shouldn't send a NOTIFY to them (even to say that their subscription is terminated).
+  //
+  // Note that we can't just check whether a binding exists before sending a NOTIFY - a SUBSCRIBE
+  // may have come from a P-CSCF or AS, which wouldn't match a binding.
+  std::vector<std::string> expired_bindings;
+
+  for (SubscriberDataManager::AoR::Bindings::const_iterator aor_orig =
+         aor_pair->get_orig()->bindings().begin();
+       aor_orig != aor_pair->get_orig()->bindings().end();
+       ++aor_orig)
+  {
+    SubscriberDataManager::AoR::Binding* b = aor_orig->second;
+    std::string b_id = aor_orig->first;
+
+    // Compare the original and current lists to see whether this binding has expired.
+    if (aor_pair->get_current()->bindings().find(b_id) == aor_pair->get_current()->bindings().end())
+    {
+      expired_bindings.push_back(b->_uri);
+    }
+  }
+
   // Iterate over the subscriptions in the original AoR, and send NOTIFYs for
   // any subscriptions that aren't in the current AoR
   for (SubscriberDataManager::AoR::Subscriptions::const_iterator aor_orig_s =
@@ -1429,6 +1451,12 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
   {
     SubscriberDataManager::AoR::Subscription* s = aor_orig_s->second;
     std::string s_id = aor_orig_s->first;
+
+    if (std::find(expired_bindings.begin(), expired_bindings.end(), s->_req_uri) != expired_bindings.end())
+    {
+      // This NOTIFY would go to a binding which no longer exists - skip it.
+      continue;
+    }
 
     // Is this subscription present in the new AoR?
     SubscriberDataManager::AoR::Subscriptions::const_iterator aor_current =
@@ -1494,7 +1522,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
       pj_status_t status = NotifyUtils::create_subscription_notify(
                                           &tdata_notify,
                                           s,
-                                          "aor",
+                                          aor_id,
                                           aor_pair->get_orig(),
                                           binding_notify,
                                           reg_state,
@@ -1624,7 +1652,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_current_subscriptions
     pj_status_t status = NotifyUtils::create_subscription_notify(
                                           &tdata_notify,
                                           aor_current->second,
-                                          "aor",
+                                          aor_id,
                                           aor_pair->get_orig(),
                                           binding_notify,
                                           NotifyUtils::RegistrationState::ACTIVE,

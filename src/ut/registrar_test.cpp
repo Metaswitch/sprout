@@ -135,6 +135,7 @@ public:
   }
 
   void check_notify(pjsip_msg* out,
+                    std::string expected_aor,
                     std::string reg_state,
                     std::pair<std::string, std::string> contact_values)
   {
@@ -164,6 +165,7 @@ public:
     rapidxml::xml_node<> *contact = registration->first_node("contact");
     ASSERT_TRUE(contact);
 
+    ASSERT_EQ(expected_aor, std::string(registration->first_attribute("aor")->value()));
     ASSERT_EQ("full", std::string(reg_info->first_attribute("state")->value()));
     ASSERT_EQ(reg_state, std::string(registration->first_attribute("state")->value()));
     ASSERT_EQ(contact_values.first, std::string(contact->first_attribute("state")->value()));
@@ -2123,9 +2125,11 @@ TEST_F(RegistrarTest, RinstanceParameter)
 // are sent
 TEST_F(RegistrarTest, RegistrationWithSubscription)
 {
+  std::string aor = "sip:6505550231@homedomain";
+  std::string aor_brackets = "<" + aor + ">";
   // We have a private ID in this test, so set up the expect response
   // to the query.
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
+  _hss_connection->set_impu_result(aor, "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
 
   // Register a binding
   Message msg;
@@ -2140,19 +2144,19 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   free_txdata();
 
   // Now add a subscription to the store
-  SubscriberDataManager::AoRPair* aor_pair = _sdm->get_aor_data(std::string("sip:6505550231@homedomain"), 0);
+  SubscriberDataManager::AoRPair* aor_pair = _sdm->get_aor_data(aor, 0);
   SubscriberDataManager::AoR::Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
   s1->_req_uri = std::string("sip:6505550231@192.91.191.29:59934;transport=tcp");
-  s1->_from_uri = std::string("<sip:6505550231@cw-ngv.com>");
+  s1->_from_uri = aor_brackets;
   s1->_from_tag = std::string("4321");
-  s1->_to_uri = std::string("<sip:6505550231@cw-ngv.com>");
+  s1->_to_uri = aor_brackets;
   s1->_to_tag = std::string("1234");
   s1->_cid = std::string("xyzabc@192.91.191.29");
   s1->_route_uris.push_back(std::string("sip:abcdefgh@bono1.homedomain;lr"));
   int now = time(NULL);
   s1->_expires = now + 300;
 
-  pj_status_t rc = _sdm->set_aor_data(std::string("sip:6505550231@homedomain"), aor_pair, 0);
+  pj_status_t rc = _sdm->set_aor_data(aor, aor_pair, 0);
   EXPECT_TRUE(rc);
   delete aor_pair; aor_pair = NULL;
 
@@ -2160,7 +2164,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   out = current_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
 
-  check_notify(out, "active", std::make_pair("active", "registered"));
+  check_notify(out, aor, "active", std::make_pair("active", "registered"));
   inject_msg(respond_to_current_txdata(200));
   free_txdata();
 
@@ -2171,7 +2175,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   ASSERT_EQ(2, txdata_count());
   out = pop_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-  check_notify(out, "active", std::make_pair("active", "refreshed"));
+  check_notify(out, aor, "active", std::make_pair("active", "refreshed"));
   inject_msg(respond_to_current_txdata(200));
   free_txdata();
 
@@ -2182,7 +2186,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   ASSERT_EQ(2, txdata_count());
   out = pop_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-  check_notify(out, "active", std::make_pair("active", "shortened"));
+  check_notify(out, aor, "active", std::make_pair("active", "shortened"));
   inject_msg(respond_to_current_txdata(200));
   free_txdata();
 
@@ -2193,16 +2197,78 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   ASSERT_EQ(2, txdata_count());
   out = pop_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-  check_notify(out, "terminated", std::make_pair("terminated", "expired"));
+  check_notify(out, aor, "terminated", std::make_pair("terminated", "expired"));
   inject_msg(respond_to_current_txdata(200));
+  free_txdata();
+}
+
+
+// Make registers with a subscription and check the correct NOTIFYs
+// are sent. Specifically, check that a NOTIFY is not sent to a UE to tell it that it no longer
+// exists.
+TEST_F(RegistrarTest, NoNotifyToUnregisteredUser)
+{
+  std::string aor = "sip:6505550231@homedomain";
+  std::string aor_brackets = "<" + aor + ">";
+  // We have a private ID in this test, so set up the expect response
+  // to the query.
+  _hss_connection->set_impu_result(aor, "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
+
+  // Register a binding
+  Message msg;
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  msg._expires = "Expires: 200";
+  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  free_txdata();
+
+  // Now add a subscription to the store
+  SubscriberDataManager::AoRPair* aor_pair = _sdm->get_aor_data(aor, 0);
+  SubscriberDataManager::AoR::Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
+  s1->_req_uri = msg._contact;
+  s1->_from_uri = aor_brackets;
+  s1->_from_tag = std::string("4321");
+  s1->_to_uri = aor_brackets;
+  s1->_to_tag = std::string("1234");
+  s1->_cid = std::string("xyzabc@192.91.191.29");
+  s1->_route_uris.push_back(std::string("sip:abcdefgh@bono1.homedomain;lr"));
+  int now = time(NULL);
+  s1->_expires = now + 300;
+
+  pj_status_t rc = _sdm->set_aor_data(aor, aor_pair, 0);
+  EXPECT_TRUE(rc);
+  delete aor_pair; aor_pair = NULL;
+
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
+
+  check_notify(out, aor, "active", std::make_pair("active", "registered"));
+  inject_msg(respond_to_current_txdata(200));
+  free_txdata();
+
+  // Delete the registration. We shouldn't get a NOTIFY - it's coming over the unregistered binding.
+  msg._expires = "Expires: 0";
+  msg._cseq = "16570";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
   free_txdata();
 }
 
 TEST_F(RegistrarTest, MultipleRegistrationsWithSubscription)
 {
+  std::string aor = "sip:6505550231@homedomain";
+  std::string aor_brackets = "<" + aor + ">";
   // We have a private ID in this test, so set up the expect response
   // to the query.
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
+  _hss_connection->set_impu_result(aor, "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
 
   // Register a binding
   Message msg;
@@ -2215,25 +2281,25 @@ TEST_F(RegistrarTest, MultipleRegistrationsWithSubscription)
   free_txdata();
 
   // Now add a subscription to the store
-  SubscriberDataManager::AoRPair* aor_pair = _sdm->get_aor_data(std::string("sip:6505550231@homedomain"), 0);
+  SubscriberDataManager::AoRPair* aor_pair = _sdm->get_aor_data(aor, 0);
   SubscriberDataManager::AoR::Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
   s1->_req_uri = std::string("sip:6505550231@192.91.191.29:59934;transport=tcp");
-  s1->_from_uri = std::string("<sip:6505550231@cw-ngv.com>");
+  s1->_from_uri = aor_brackets;
   s1->_from_tag = std::string("4321");
-  s1->_to_uri = std::string("<sip:6505550231@cw-ngv.com>");
+  s1->_to_uri = aor_brackets;
   s1->_to_tag = std::string("1234");
   s1->_cid = std::string("xyzabc@192.91.191.29");
   s1->_route_uris.push_back(std::string("sip:abcdefgh@bono1.homedomain;lr"));
   int now = time(NULL);
   s1->_expires = now + 300;
 
-  pj_status_t rc = _sdm->set_aor_data(std::string("sip:6505550231@homedomain"), aor_pair, 0);
+  pj_status_t rc = _sdm->set_aor_data(aor, aor_pair, 0);
   EXPECT_TRUE(rc);
   delete aor_pair; aor_pair = NULL;
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-  check_notify(out, "active", std::make_pair("active", "registered"));
+  check_notify(out, aor, "active", std::make_pair("active", "registered"));
   inject_msg(respond_to_current_txdata(200));
   free_txdata();
 
@@ -2245,7 +2311,7 @@ TEST_F(RegistrarTest, MultipleRegistrationsWithSubscription)
   ASSERT_EQ(2, txdata_count());
   out = pop_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-  check_notify(out, "active", std::make_pair("active", "created"));
+  check_notify(out, aor, "active", std::make_pair("active", "created"));
   inject_msg(respond_to_current_txdata(200));
   free_txdata();
 
@@ -2256,7 +2322,7 @@ TEST_F(RegistrarTest, MultipleRegistrationsWithSubscription)
   ASSERT_EQ(2, txdata_count());
   out = pop_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-  check_notify(out, "active", std::make_pair("terminated", "expired"));
+  check_notify(out, aor, "active", std::make_pair("terminated", "expired"));
   inject_msg(respond_to_current_txdata(200));
   free_txdata();
 }
