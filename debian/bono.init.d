@@ -172,8 +172,7 @@ get_daemon_args()
                      $min_token_rate_arg
                      $ibcf_arg
                      $billing_cdf_arg
-                     $exception_max_ttl_arg
-                     --non-registering-pbxes=$pbxes"
+                     $exception_max_ttl_arg"
 
         [ "$additional_home_domains" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --additional-domains=$additional_home_domains"
         [ "$sip_blacklist_duration" = "" ]  || DAEMON_ARGS="$DAEMON_ARGS --sip-blacklist-duration=$sip_blacklist_duration"
@@ -181,6 +180,7 @@ get_daemon_args()
         [ "$sip_tcp_connect_timeout" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --sip-tcp-connect-timeout=$sip_tcp_connect_timeout"
         [ "$sip_tcp_send_timeout" = "" ]    || DAEMON_ARGS="$DAEMON_ARGS --sip-tcp-send-timeout=$sip_tcp_send_timeout"
         [ "$pbx_service_route" = "" ]       || DAEMON_ARGS="$DAEMON_ARGS --pbx-service-route=$pbx_service_route"
+        [ "$pbxes" = "" ]                   || DAEMON_ARGS="$DAEMON_ARGS --non-registering-pbxes=$pbxes"
 }
 
 #
