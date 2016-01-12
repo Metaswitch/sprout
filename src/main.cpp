@@ -145,6 +145,9 @@ enum OptionTypes
   OPT_FORCE_THIRD_PARTY_REGISTER_BODY,
   OPT_MEMENTO_NOTIFY_URL,
   OPT_PIDFILE,
+  OPT_LOCAL_SITE_NAME,
+  OPT_REGISTRATION_STORES,
+  OPT_AV_STORE,
 };
 
 
@@ -163,7 +166,9 @@ const static struct pj_getopt_option long_opt[] =
   { "ibcf",                         required_argument, 0, 'I'},
   { "external-icscf",               required_argument, 0, 'j'},
   { "realm",                        required_argument, 0, 'R'},
-  { "registration-stores",          required_argument, 0, 'M'},
+  { "local-site-name",              required_argument, 0, OPT_LOCAL_SITE_NAME},
+  { "registration-stores",          required_argument, 0, OPT_REGISTRATION_STORES},
+  { "av-store",                     required_argument, 0, OPT_AV_STORE},
   { "sas",                          required_argument, 0, 'S'},
   { "hss",                          required_argument, 0, 'H'},
   { "record-routing-model",         required_argument, 0, 'C'},
@@ -270,11 +275,17 @@ static void usage(void)
        "                            Route calls to specified external I-CSCF\n"
        " -R, --realm <realm>        Use specified realm for authentication\n"
        "                            (if not specified, local host name is used)\n"
-       " -M, --registration-stores <domain>[,<domain>,<domain>...]\n"
+       "     --local-site-name <name>\n"
+       "                            The name of the local site (used in a geo-redundant deployment)\n"
+       "     --registration-stores <site_name>=<domain>[,<site_name>=<domain>,<site_name>=<domain>...]\n"
        "                            Enables memcached store for registration state and specifies\n"
-       "                            location of the local site, optionally followed by the location\n"
-       "                            of any remote sites for geo-redundant storage\n"
-       "                            (otherwise uses local store)\n"
+       "                            location of the memcached store in each site. One of the sites must\n"
+       "                            be the local site. Remote sites for geo-redundant storage are optional.\n"
+       "                            (If not provided, local store is used)\n"
+       "     --av-store <domain>    Specifies the location of the memcached store for storing\n"
+       "                            authentication vectors. There is currently no geo-redundant storage\n"
+       "                            for authentication vectors. If this option isn't provided, Sprout uses\n"
+       "                            the local site registration store.\n"
        " -S, --sas <ipv4>,<system name>\n"
        "                            Use specified host as Service Assurance Server and specified\n"
        "                            system name to identify this system to SAS.  If this option isn't\n"
@@ -652,26 +663,27 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       TRC_INFO("Authentication realm %s", pj_optarg);
       break;
 
-    case 'M':
+    case OPT_LOCAL_SITE_NAME:
+      options->local_site_name = std::string(pj_optarg);
+      TRC_INFO("Local site name = %s", pj_optarg);
+      break;
+
+    case OPT_REGISTRATION_STORES:
       {
-        std::string stores_str = std::string(optarg);
-        std::vector<std::string> stores_vector;
-        boost::split(stores_vector, stores_str, boost::is_any_of(","));
-
-        // The first store is in the local site. Any remaining stores are in
-        // remote GR sites.
-        if (!stores_vector.empty())
-        {
-          options->registration_store = stores_vector.front();
-          stores_vector.erase(stores_vector.begin());
-          options->remote_registration_stores = stores_vector;
-
-          TRC_INFO("Using memcached registration stores");
-          TRC_INFO("  Primary store: %s", options->registration_store.c_str());
-          std::string remote_registration_stores_str = boost::algorithm::join(options->remote_registration_stores, ", ");
-          TRC_INFO("  Backup store(s): %s", remote_registration_stores_str.c_str());
-        }
+        // This option has the format
+        // <site_name>=<domain>,[<site_name>=<domain>,<site_name=<domain>,...].
+        // For now, just split into a vector of <site_name>=<domain> strings. We
+        // need to know the local site name to parse this properly, so we'll do
+        // that later.
+        std::string stores_arg = std::string(optarg);
+        boost::split(options->registration_stores,
+                     stores_arg,
+                     boost::is_any_of(","));
       }
+      break;
+
+    case OPT_AV_STORE:
+      options->av_store = std::string(pj_optarg);
       break;
 
     case 'S':
@@ -1335,6 +1347,7 @@ int main(int argc, char* argv[])
   SIPResolver* sip_resolver = NULL;
   AstaireResolver* astaire_resolver = NULL;
   std::vector<Store*> remote_data_stores = {};
+  Store* av_memstore = NULL;
   AvStore* av_store = NULL;
   HttpConnection* ralf_connection = NULL;
   ChronosConnection* chronos_connection = NULL;
@@ -1581,7 +1594,7 @@ int main(int argc, char* argv[])
     TRC_WARNING("XDM server configured on P-CSCF, ignoring");
   }
 
-  if ((opt.registration_store != "") &&
+  if (((!opt.registration_stores.empty()) || (opt.av_store != "")) &&
       (opt.auth_enabled) &&
       (opt.worker_threads == 1))
   {
@@ -1597,6 +1610,104 @@ int main(int argc, char* argv[])
       (!opt.enum_file.empty()))
   {
     TRC_WARNING("Both ENUM server and ENUM file lookup enabled - ignoring ENUM file");
+  }
+
+  // Parse the registration-stores argument.
+  std::string registration_store_location;
+  std::vector<std::string> remote_registration_stores_locations;
+  if (!opt.registration_stores.empty())
+  {
+    if (opt.registration_stores.size() == 1)
+    {
+      // If only one registration store is provided, then it should either just
+      // be the location of the store, or it should explicitly refer to the
+      // local site.
+      std::string store = opt.registration_stores.front();
+      size_t pos = store.find("=");
+      if (pos == std::string::npos)
+      {
+        // The store is not identified by a site.
+        registration_store_location = store;
+      }
+      else if (store.substr(0, pos) == opt.local_site_name)
+      {
+        // The store is identified by a specific site, and it's the local site.
+        registration_store_location = store.substr(pos+1);
+      }
+    }
+    else
+    {
+      // If multiple stores are provided, they should all be identified by a
+      // site. Save the local site's store off separately to the remote sites'
+      // stores.
+      for (std::vector<std::string>::iterator it = opt.registration_stores.begin();
+           it != opt.registration_stores.end();
+           ++it)
+      {
+        size_t pos = (*it).find("=");
+        if (pos == std::string::npos)
+        {
+          // Expected <site_name>=<domain>.
+          TRC_ERROR("Invalid format of regitration-stores program argument");
+          return 1;
+        }
+        std::string site = (*it).substr(0, pos);
+        std::string store = (*it).substr(pos+1);
+        if (site == opt.local_site_name)
+        {
+          // This is the local site's store.
+          registration_store_location = store;
+        }
+        else
+        {
+          // A remote site store.
+          remote_registration_stores_locations.push_back(store);
+        }
+      }
+    }
+
+    if (registration_store_location == "")
+    {
+      // If we've failed to find a local site registration store then Sprout has
+      // been misconfigured.
+      TRC_ERROR("No local site registration store specified");
+      return 1;
+    }
+    else
+    {
+      TRC_INFO("Using memcached registration stores");
+      TRC_INFO("  Primary store: %s", registration_store_location.c_str());
+      std::string remote_registration_stores_str = boost::algorithm::join(remote_registration_stores_locations, ", ");
+      TRC_INFO("  Backup store(s): %s", remote_registration_stores_str.c_str());
+    }
+  }
+
+  // The av-store argument can either just be a string representing the location
+  // of the AV store, or it can be of the format <local_site_name>=<domain>. If
+  // it isn't provided, we just use the local site's registration store later.
+  std::string av_store_location;
+  if (opt.av_store != "")
+  {
+    size_t pos = opt.av_store.find("=");
+    if (pos == std::string::npos)
+    {
+      av_store_location = opt.av_store;
+    }
+    else if (opt.av_store.substr(0, pos) == opt.local_site_name)
+    {
+      av_store_location = opt.av_store.substr(pos+1);
+    }
+    else
+    {
+      // No local site AV store, so Sprout has been misconfigured.
+      TRC_ERROR("No local site AV store specified");
+      return 1;
+    }
+  }
+
+  if (av_store_location != "")
+  {
+    TRC_INFO("Using memcached AV store %s", av_store_location.c_str());
   }
 
   // Ensure our random numbers are unpredictable.
@@ -1957,7 +2068,7 @@ int main(int argc, char* argv[])
                       (ACRFactory*)new RalfACRFactory(ralf_processor, SCSCF) :
                       new ACRFactory();
 
-    if (opt.registration_store != "")
+    if (registration_store_location != "")
     {
       // Use memcached store.
       TRC_STATUS("Using memcached compatible store with binary protocol");
@@ -1966,17 +2077,17 @@ int main(int argc, char* argv[])
                                              stack_data.addr_family,
                                              opt.astaire_blacklist_duration);
 
-      local_data_store = (Store*)new TopologyNeutralMemcachedStore(opt.registration_store,
+      local_data_store = (Store*)new TopologyNeutralMemcachedStore(registration_store_location,
                                                                    astaire_resolver,
                                                                    memcached_comm_monitor);
 
-      if (!opt.remote_registration_stores.empty())
+      if (!remote_registration_stores_locations.empty())
       {
         // Use remote memcached store too.
         TRC_STATUS("Using remote memcached compatible stores with binary protocol");
 
-        for (std::vector<std::string>::iterator it = opt.remote_registration_stores.begin();
-             it != opt.remote_registration_stores.end();
+        for (std::vector<std::string>::iterator it = remote_registration_stores_locations.begin();
+             it != remote_registration_stores_locations.end();
              ++it)
         {
           Store* remote_data_store = (Store*)new TopologyNeutralMemcachedStore(*it,
@@ -2059,7 +2170,20 @@ int main(int argc, char* argv[])
       // Authentication Vectors are only stored for a short period after the
       // relevant challenge is sent.
       TRC_STATUS("Initialise S-CSCF authentication module");
-      av_store = new AvStore(local_data_store);
+
+      if (av_store_location != "")
+      {
+        av_memstore = (Store*)new TopologyNeutralMemcachedStore(av_store_location,
+                                                                astaire_resolver,
+                                                                memcached_comm_monitor);
+        av_store = new AvStore(av_memstore);
+      }
+      else
+      {
+        TRC_INFO("Using registration store for authentication vectors");
+        av_store = new AvStore(local_data_store);
+      }
+
       status = init_authentication(opt.auth_realm,
                                    av_store,
                                    hss_connection,
@@ -2309,6 +2433,10 @@ int main(int argc, char* argv[])
     delete *it;
   }
   remote_data_stores.clear();
+  if (av_memstore != NULL)
+  {
+    delete av_memstore;
+  }
 
   delete ralf_processor;
   delete ralf_connection;
