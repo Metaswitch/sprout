@@ -101,7 +101,7 @@ bool MementoPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     _cass_comm_alarm = new Alarm("memento",
                                  AlarmDef::MEMENTO_AS_CASSANDRA_COMM_ERROR,
                                  AlarmDef::CRITICAL);
-    _cass_comm_monitor = new CommunicationMonitor(_cass_comm_alarm);
+    _cass_comm_monitor = new CommunicationMonitor(_cass_comm_alarm, "Memento", "Memcached");
 
     _call_list_store = new CallListStore::Store();
     _call_list_store->configure_connection("localhost", 9160, _cass_comm_monitor);

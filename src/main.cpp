@@ -1690,22 +1690,34 @@ int main(int argc, char* argv[])
     // Create Sprout's alarm objects.
 
     chronos_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_CHRONOS_COMM_ERROR,
-                                                                        AlarmDef::MAJOR));
+                                                                        AlarmDef::MAJOR),
+                                                              "Sprout",
+                                                              "Chronos");
 
     enum_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_ENUM_COMM_ERROR,
-                                                                     AlarmDef::MAJOR));
+                                                                     AlarmDef::MAJOR),
+                                                           "Sprout",
+                                                           "ENUM");
 
     hss_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_HOMESTEAD_COMM_ERROR,
-                                                                    AlarmDef::CRITICAL));
+                                                                    AlarmDef::CRITICAL),
+                                                          "Sprout",
+                                                          "Homestead");
 
     memcached_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_MEMCACHED_COMM_ERROR,
-                                                                          AlarmDef::CRITICAL));
+                                                                          AlarmDef::CRITICAL),
+                                                                "Sprout",
+                                                                "Memcached");
 
     memcached_remote_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_REMOTE_MEMCACHED_COMM_ERROR,
-                                                                                 AlarmDef::CRITICAL));
+                                                                                 AlarmDef::CRITICAL),
+                                                                       "Sprout",
+                                                                       "remote Memcached");
 
     ralf_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_RALF_COMM_ERROR,
-                                                                     AlarmDef::MAJOR));
+                                                                     AlarmDef::MAJOR),
+                                                           "Sprout",
+                                                           "Ralf");
 
     vbucket_alarm = new Alarm("sprout", AlarmDef::SPROUT_VBUCKET_ERROR,
                                         AlarmDef::MAJOR);
