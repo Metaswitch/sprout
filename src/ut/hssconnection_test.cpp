@@ -61,7 +61,7 @@ class HssConnectionTest : public BaseTest
 
   HssConnectionTest() :
     _resolver("10.42.42.42"),
-    _cm(new Alarm("sprout", AlarmDef::SPROUT_HOMESTEAD_COMM_ERROR, AlarmDef::CRITICAL)),
+    _cm(new Alarm("sprout", AlarmDef::SPROUT_HOMESTEAD_COMM_ERROR, AlarmDef::CRITICAL), "sprout", "homestead"),
     _hss("narcissus",
          &_resolver,
          NULL,

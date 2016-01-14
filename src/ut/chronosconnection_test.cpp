@@ -59,7 +59,7 @@ class ChronosConnectionTest : public BaseTest
 
   ChronosConnectionTest() :
     _resolver("10.42.42.42"),
-    _cm(new Alarm("sprout", AlarmDef::SPROUT_CHRONOS_COMM_ERROR, AlarmDef::MAJOR)),
+    _cm(new Alarm("sprout", AlarmDef::SPROUT_CHRONOS_COMM_ERROR, AlarmDef::MAJOR), "sprout", "chronos"),
     _chronos("narcissus", "localhost:9888", &_resolver, &_cm)
   {
     fakecurl_responses.clear();
