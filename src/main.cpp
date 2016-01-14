@@ -1617,53 +1617,13 @@ int main(int argc, char* argv[])
   std::vector<std::string> remote_registration_stores_locations;
   if (!opt.registration_stores.empty())
   {
-    if (opt.registration_stores.size() == 1)
+    if (!Utils::parse_stores_arg(opt.registration_stores,
+                                 opt.local_site_name,
+                                 registration_store_location,
+                                 remote_registration_stores_locations))
     {
-      // If only one registration store is provided, then it should either just
-      // be the location of the store, or it should explicitly refer to the
-      // local site.
-      std::string store = opt.registration_stores.front();
-      size_t pos = store.find("=");
-      if (pos == std::string::npos)
-      {
-        // The store is not identified by a site.
-        registration_store_location = store;
-      }
-      else if (store.substr(0, pos) == opt.local_site_name)
-      {
-        // The store is identified by a specific site, and it's the local site.
-        registration_store_location = store.substr(pos+1);
-      }
-    }
-    else
-    {
-      // If multiple stores are provided, they should all be identified by a
-      // site. Save the local site's store off separately to the remote sites'
-      // stores.
-      for (std::vector<std::string>::iterator it = opt.registration_stores.begin();
-           it != opt.registration_stores.end();
-           ++it)
-      {
-        size_t pos = (*it).find("=");
-        if (pos == std::string::npos)
-        {
-          // Expected <site_name>=<domain>.
-          TRC_ERROR("Invalid format of regitration-stores program argument");
-          return 1;
-        }
-        std::string site = (*it).substr(0, pos);
-        std::string store = (*it).substr(pos+1);
-        if (site == opt.local_site_name)
-        {
-          // This is the local site's store.
-          registration_store_location = store;
-        }
-        else
-        {
-          // A remote site store.
-          remote_registration_stores_locations.push_back(store);
-        }
-      }
+      TRC_ERROR("Invalid format of regitration-stores program argument");
+      return 1;
     }
 
     if (registration_store_location == "")
@@ -1688,26 +1648,25 @@ int main(int argc, char* argv[])
   std::string av_store_location;
   if (opt.av_store != "")
   {
-    size_t pos = opt.av_store.find("=");
-    if (pos == std::string::npos)
+    std::string site;
+    if (Utils::split_site_store(opt.av_store, site, av_store_location))
     {
-      av_store_location = opt.av_store;
-    }
-    else if (opt.av_store.substr(0, pos) == opt.local_site_name)
-    {
-      av_store_location = opt.av_store.substr(pos+1);
-    }
-    else
-    {
-      // No local site AV store, so Sprout has been misconfigured.
-      TRC_ERROR("No local site AV store specified");
-      return 1;
+      if (site != opt.local_site_name)
+      {
+        // No local site AV store, so Sprout has been misconfigured.
+        TRC_ERROR("No local site AV store specified");
+        return 1;
+      }
     }
   }
 
   if (av_store_location != "")
   {
     TRC_INFO("Using memcached AV store %s", av_store_location.c_str());
+  }
+  else
+  {
+    TRC_INFO("Using registration store for authentication vectors");
   }
 
   // Ensure our random numbers are unpredictable.
@@ -2180,7 +2139,6 @@ int main(int argc, char* argv[])
       }
       else
       {
-        TRC_INFO("Using registration store for authentication vectors");
         av_store = new AvStore(local_data_store);
       }
 
@@ -2433,10 +2391,7 @@ int main(int argc, char* argv[])
     delete *it;
   }
   remote_data_stores.clear();
-  if (av_memstore != NULL)
-  {
-    delete av_memstore;
-  }
+  delete av_memstore;
 
   delete ralf_processor;
   delete ralf_connection;
