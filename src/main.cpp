@@ -675,7 +675,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
         // For now, just split into a vector of <site_name>=<domain> strings. We
         // need to know the local site name to parse this properly, so we'll do
         // that later.
-        std::string stores_arg = std::string(optarg);
+        std::string stores_arg = std::string(pj_optarg);
         boost::split(options->registration_stores,
                      stores_arg,
                      boost::is_any_of(","));
@@ -1622,7 +1622,7 @@ int main(int argc, char* argv[])
                                  registration_store_location,
                                  remote_registration_stores_locations))
     {
-      TRC_ERROR("Invalid format of regitration-stores program argument");
+      TRC_ERROR("Invalid format of registration-stores program argument");
       return 1;
     }
 
