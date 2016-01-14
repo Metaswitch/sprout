@@ -94,8 +94,9 @@ struct options
   std::string                          hss_server;
   std::string                          xdm_server;
   std::string                          chronos_service;
-  std::string                          registration_store;
-  std::vector<std::string>             remote_registration_stores;
+  std::string                          local_site_name;
+  std::vector<std::string>             registration_stores;
+  std::string                          av_store;
   std::string                          ralf_server;
   int                                  ralf_threads;
   std::vector<std::string>             dns_servers;
