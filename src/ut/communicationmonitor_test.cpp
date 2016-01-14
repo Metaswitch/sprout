@@ -91,7 +91,7 @@ TEST_F(CommunicationMonitorTest, UpdateNoAlarmSuccessCleared)
 TEST_F(CommunicationMonitorTest, UpdateNoAlarmFailureSet)
 {
   cwtest_advance_time_ms(31000);
-  EXPECT_CALL(*_ma, alarmed()).WillOnce(Return(true));
+  EXPECT_CALL(*_ma, alarmed()).WillRepeatedly(Return(true));
   EXPECT_CALL(*_ma, set()).Times(0);
   EXPECT_CALL(*_ma, clear()).Times(0);
   _cm.inform_failure();
@@ -100,7 +100,7 @@ TEST_F(CommunicationMonitorTest, UpdateNoAlarmFailureSet)
 TEST_F(CommunicationMonitorTest, UpdateAlarmFailureCleared)
 {
   cwtest_advance_time_ms(16000);
-  EXPECT_CALL(*_ma, alarmed()).WillOnce(Return(false));
+  EXPECT_CALL(*_ma, alarmed()).WillRepeatedly(Return(false));
   EXPECT_CALL(*_ma, set()).Times(1);
   EXPECT_CALL(*_ma, clear()).Times(0);
   _cm.inform_failure();
@@ -109,12 +109,12 @@ TEST_F(CommunicationMonitorTest, UpdateAlarmFailureCleared)
 TEST_F(CommunicationMonitorTest, UpdateAlarmSuccessSet)
 {
   cwtest_advance_time_ms(31000);
-  EXPECT_CALL(*_ma, alarmed()).WillOnce(Return(false));
+  EXPECT_CALL(*_ma, alarmed()).WillRepeatedly(Return(false));
   EXPECT_CALL(*_ma, set()).Times(1);
   _cm.inform_failure();
 
   cwtest_advance_time_ms(31000);
-  EXPECT_CALL(*_ma, alarmed()).WillOnce(Return(true));
+  EXPECT_CALL(*_ma, alarmed()).WillRepeatedly(Return(true));
   EXPECT_CALL(*_ma, set()).Times(0);
   EXPECT_CALL(*_ma, clear()).Times(1);
   _cm.inform_success();
