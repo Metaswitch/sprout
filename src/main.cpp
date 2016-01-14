@@ -277,7 +277,7 @@ static void usage(void)
        "                            (if not specified, local host name is used)\n"
        "     --local-site-name <name>\n"
        "                            The name of the local site (used in a geo-redundant deployment)\n"
-       "     --registration-stores <site_name>=<domain>[,<site_name>=<domain>,<site_name>=<domain>...]\n"
+       "     --registration-stores <site_name>=<domain>[:<port>][,<site_name>=<domain>[:<port>],...]\n"
        "                            Enables memcached store for registration state and specifies\n"
        "                            location of the memcached store in each site. One of the sites must\n"
        "                            be the local site. Remote sites for geo-redundant storage are optional.\n"
