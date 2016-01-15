@@ -524,7 +524,6 @@ std::string get_headers(pjsip_msg* msg, std::string name)
     ret.append(buf, n);
     hdr = hdr->next;
   }
-
   return ret;
 }
 
