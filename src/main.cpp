@@ -1349,7 +1349,11 @@ int main(int argc, char* argv[])
   opt.external_icscf_uri = "";
   opt.auth_enabled = PJ_FALSE;
   opt.enum_suffix = ".e164.arpa";
+
+  // If changing this default for reg_max_expires, note that a corresponding
+  // change is required to debian/homestead.init.d in the homestead repository
   opt.reg_max_expires = 300;
+
   opt.sub_max_expires = 300;
   opt.icscf_enabled = false;
   opt.icscf_port = 0;
