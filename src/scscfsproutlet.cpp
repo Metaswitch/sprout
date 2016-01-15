@@ -815,6 +815,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         // terminating user as served user.
         TRC_INFO("AS is retargeting the request");
         retargeted = true;
+
         _session_case = &SessionCase::OriginatingCdiv;
         served_user = _as_chain_link.served_user();
 
@@ -1247,6 +1248,7 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
       pj_strdup2(pool, &p->name, "sescase");
       pj_strdup2(pool, &p->value, _session_case->to_string().c_str());
       pj_list_insert_before(&psu_hdr->other_param, p);
+
       p = PJ_POOL_ALLOC_T(pool, pjsip_param);
       pj_strdup2(pool, &p->name, "regstate");
       if (_as_chain_link.is_registered())
