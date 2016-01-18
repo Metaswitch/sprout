@@ -1228,10 +1228,10 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     pjsip_routing_hdr* psu_hdr = identity_hdr_create(pool, STR_P_SERVED_USER);
     psu_hdr->name_addr.uri =
                 PJUtils::uri_from_string(_as_chain_link.served_user(), pool);
-    pjsip_param* p = PJ_POOL_ZALLOC_T(pool, pjsip_param);
+    pjsip_param* p = PJ_POOL_ALLOC_T(pool, pjsip_param);
     if (_session_case == &SessionCase::OriginatingCdiv)
     {
-      // If the session case is "Originating_CDIV" we want to include the
+      // If the session case is "Originating_CDIV" we include the
       // "orig-div" header field parameter with just a name and no value.
       // As per 3GPP TS 24.229 this creates a header that looks like: 
       // P-Served-User: <sip:6505551234@homedomain>;orig-cdiv 
