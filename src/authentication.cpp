@@ -255,12 +255,18 @@ pj_status_t user_lookup(pj_pool_t *pool,
     pj_strdup(pool, &cred_info->username, acc_name);
     if (av->HasMember("aka"))
     {
+      pjsip_param* auts_param = pjsip_param_find(&credentials->other_param,
+                                        &STR_AUTS);
+
       // AKA authentication.  The response in the AV must be used as a
       // plain-text password for the MD5 Digest computation.  Convert the text
-      // into binary as this is what PJSIP is expecting.
+      // into binary as this is what PJSIP is expecting. If we find the 'auts'
+      // parameter, then leave the response as the empty string in accordance
+      // with RFC 3310.
       std::string response = "";
       if (((*av)["aka"].HasMember("response")) &&
-          ((*av)["aka"]["response"].IsString()))
+          ((*av)["aka"]["response"].IsString()) &&
+          auts_param != NULL)
       {
         response = (*av)["aka"]["response"].GetString();
       }
