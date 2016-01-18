@@ -1350,8 +1350,10 @@ int main(int argc, char* argv[])
   opt.auth_enabled = PJ_FALSE;
   opt.enum_suffix = ".e164.arpa";
 
-  // If changing this default for reg_max_expires, note that a corresponding
-  // change is required to debian/homestead.init.d in the homestead repository
+  // If changing this default for reg_max_expires, note that
+  // debian/homestead.init.d in the homestead repository also defaults
+  // reg_max_expires, and so the default value set in that file must be changed
+  // also.
   opt.reg_max_expires = 300;
 
   opt.sub_max_expires = 300;
