@@ -146,7 +146,7 @@ TEST_F(CommunicationMonitorTest, TestSetConfirmMs)
   EXPECT_CALL(*_ma, set()).Times(0);
   EXPECT_CALL(*_ma, clear()).Times(0);
   _cm.inform_failure();
-  
+
   // Advance time by less than the set_confirm interval, and set a failure.
   // This should do nothing.
   cwtest_advance_time_ms(10000);
