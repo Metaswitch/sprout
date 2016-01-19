@@ -4435,8 +4435,12 @@ TEST_F(SCSCFTest, Cdiv)
   EXPECT_EQ("sip:6505555678@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
               testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;orig>"));
+  
+  // As the session case is "Originating_CDIV" we want to include the
+  // "orig-div" header field parameter with just a name and no value
+  // as specified in 3GPP TS 24.229.
   EXPECT_THAT(get_headers(out, "P-Served-User"),
-              testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=orig-cdiv"));
+              testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;orig-cdiv"));
 
   // ---------- AS2 turns it around (acting as proxy)
   hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
@@ -4893,7 +4897,7 @@ TEST_F(SCSCFTest, MmtelCdiv)
   EXPECT_THAT(get_headers(out, "Route"),
               testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;orig>"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
-              testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=orig-cdiv"));
+              testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;orig-cdiv"));
   EXPECT_THAT(get_headers(out, "History-Info"),
               testing::MatchesRegex("History-Info: <sip:6505551234@homedomain;Reason=SIP%3[bB]cause%3[dD]480%3[bB]text%3[dD]%22Temporarily%20Unavailable%22>;index=1\r\nHistory-Info: <sip:6505555678@homedomain>;index=1.1"));
 
@@ -5101,7 +5105,7 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
   EXPECT_THAT(get_headers(out, "Route"),
               testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;orig>"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
-              testing::MatchesRegex("P-Served-User: <sip:6505555678@homedomain>;sescase=orig-cdiv"));
+              testing::MatchesRegex("P-Served-User: <sip:6505555678@homedomain>;orig-cdiv"));
   EXPECT_THAT(get_headers(out, "History-Info"),
               testing::MatchesRegex("History-Info: <sip:6505551234@homedomain;Reason=SIP%3[bB]cause%3[dD]480%3[bB]text%3[dD]%22Temporarily%20Unavailable%22>;index=1\r\nHistory-Info: <sip:6505555678@homedomain;Reason=SIP%3[bB]cause%3[dD]480%3[bB]text%3[dD]%22Temporarily%20Unavailable%22>;index=1.1\r\nHistory-Info: <sip:6505559012@homedomain>;index=1.1.1"));
 
@@ -6949,7 +6953,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   EXPECT_THAT(get_headers(out, "Route"),
               testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;orig>"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
-              testing::MatchesRegex("P-Served-User: <sip:6505501234@homedomain>;sescase=orig-cdiv"));
+              testing::MatchesRegex("P-Served-User: <sip:6505501234@homedomain>;orig-cdiv"));
 
   // ---------- AS1 turns it around
   // (acting as routing B2BUA by adding a Via, removing the top Route and changing the target)
