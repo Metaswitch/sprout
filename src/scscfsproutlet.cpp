@@ -1229,11 +1229,26 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     psu_hdr->name_addr.uri =
                 PJUtils::uri_from_string(_as_chain_link.served_user(), pool);
     pjsip_param* p = PJ_POOL_ALLOC_T(pool, pjsip_param);
-    pj_strdup2(pool, &p->name, "sescase");
-    pj_strdup2(pool, &p->value, _session_case->to_string().c_str());
-    pj_list_insert_before(&psu_hdr->other_param, p);
-    if (_session_case != &SessionCase::OriginatingCdiv)
+    if (_session_case == &SessionCase::OriginatingCdiv)
     {
+      // If the session case is "Originating_CDIV" we include the
+      // "orig-div" header field parameter with just a name and no value.
+      // As per 3GPP TS 24.229 this creates a header that looks like: 
+      // P-Served-User: <sip:6505551234@homedomain>;orig-cdiv 
+      pj_strdup2(pool, &p->name, _session_case->to_string().c_str());
+      pj_strdup2(pool, &p->value, "");
+      pj_list_insert_before(&psu_hdr->other_param, p);
+    }
+    else
+    {
+      // If the session case is not "Originating_CDIV" we include the
+      // sescase header field parameter and the regstate header field 
+      // parameter both set to their corresponding values, for example:
+      // P-Served-User: <sip:6505551234@homedomain>;sescase=term;regstate=reg
+      pj_strdup2(pool, &p->name, "sescase");
+      pj_strdup2(pool, &p->value, _session_case->to_string().c_str());
+      pj_list_insert_before(&psu_hdr->other_param, p);
+
       p = PJ_POOL_ALLOC_T(pool, pjsip_param);
       pj_strdup2(pool, &p->name, "regstate");
       if (_as_chain_link.is_registered())
