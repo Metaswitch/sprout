@@ -266,7 +266,7 @@ pj_status_t user_lookup(pj_pool_t *pool,
       std::string response = "";
       if (((*av)["aka"].HasMember("response")) &&
           ((*av)["aka"]["response"].IsString()) &&
-          auts_param != NULL)
+          auts_param == NULL)
       {
         response = (*av)["aka"]["response"].GetString();
       }

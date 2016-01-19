@@ -1214,7 +1214,7 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
   // the nonce was out of sync.
   AuthenticationMessage msg2("REGISTER");
   msg2._algorithm = "AKAv1-MD5";
-  msg2._key = "12345678123456781234567812345678";
+  msg2._key = "";
   msg2._nonce = auth_params["nonce"];
   msg2._opaque = auth_params["opaque"];
   msg2._nc = "00000001";
@@ -1309,7 +1309,7 @@ TEST_F(AuthenticationTest, AKAAuthResyncFail)
   // the nonce was out of sync.
   AuthenticationMessage msg2("REGISTER");
   msg2._algorithm = "AKAv1-MD5";
-  msg2._key = "12345678123456781234567812345678";
+  msg2._key = "";
   msg2._nonce = auth_params["nonce"];
   msg2._opaque = auth_params["opaque"];
   msg2._nc = "00000001";
