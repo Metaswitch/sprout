@@ -41,6 +41,8 @@
 #include "mocktsxhelper.h"
 #include "stack.h"
 #include "pjutils.h"
+#include <iostream>
+#include <ctime>
 
 using namespace std;
 using testing::InSequence;

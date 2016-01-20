@@ -45,11 +45,15 @@
 #include "fakelogger.h"
 #include "stack.h"
 #include "snmp_event_accumulator_table.h"
+#include "statistic.h"
+#include "zmq_lvc.h"
+
+#include "basetest.hpp"
+#include "test_interposer.hpp"
 
 /// Fixture for test.
 class BaseTest : public ::testing::Test
 {
-  BaseTest();
-  virtual ~BaseTest();
+  virtual ~BaseTest(){cwtest_reset_time();}
 };
 

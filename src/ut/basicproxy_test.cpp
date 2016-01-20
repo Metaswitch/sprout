@@ -3636,6 +3636,7 @@ TEST_F(BasicProxyTest, BlacklistOnTimeout)
   EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
   EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
   string server1 = str_pj(tdata->tp_info.transport->remote_name.host);
+  printf("@@@ame2: Checks the first message reaches the first server \n");
   EXPECT_EQ(server1, "10.10.10.100");
   free_txdata();
 
@@ -3672,6 +3673,7 @@ TEST_F(BasicProxyTest, BlacklistOnTimeout)
   EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
   EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
   server1 = str_pj(tdata->tp_info.transport->remote_name.host);
+  printf("@@@ame2: Checks the second message reaches the second server \n");
   EXPECT_EQ(server1, "10.10.10.101");
 
   // Send a 200 OK response.
@@ -3691,6 +3693,9 @@ TEST_F(BasicProxyTest, BlacklistOnTimeout)
 // out.
 TEST_F(BasicProxyTest, StatelessProxyNoBlacklistOnTimeout)
 {
+  // This server doesn't respond, so advance time to trigger the timeout.
+  //cwtest_advance_time_ms(33000000);
+
   pjsip_tx_data* tdata;
 
   // Set up SRV records so that proxy-x has a higher priority than proxy-y,
@@ -3753,6 +3758,7 @@ TEST_F(BasicProxyTest, StatelessProxyNoBlacklistOnTimeout)
   EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
   EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
   string server1 = str_pj(tdata->tp_info.transport->remote_name.host);
+  printf("@@@ame2: Checks the first message reaches the first server \n");
   EXPECT_EQ(server1, "10.10.10.100");
   free_txdata();
 
@@ -3790,6 +3796,7 @@ TEST_F(BasicProxyTest, StatelessProxyNoBlacklistOnTimeout)
   EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
   EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
   server1 = str_pj(tdata->tp_info.transport->remote_name.host);
+  printf("@@@ame2: Checks the second message reaches the first server \n");
   EXPECT_EQ(server1, "10.10.10.100");
 
   // Send a 200 OK response.

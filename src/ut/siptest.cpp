@@ -92,6 +92,8 @@ SipTest::~SipTest()
 {
   _current_instance = NULL;
   for_each(_out.begin(), _out.end(), pjsip_tx_data_dec_ref);
+  cwtest_reset_time();
+  stack_data.sipresolver->clear_blacklist();
 }
 
 
@@ -152,20 +154,12 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
                                   "0.0.0.0",
                                   5060);
 
-  stack_data.stats_aggregator = new LastValueCache(num_known_stats,
-                                                   known_statnames,
-                                                   "6666",
-                                                   10);  // Short period to reduce shutdown delays.
-
   pjsip_endpt_register_module(stack_data.endpt, &mod_siptest);
 }
 
 /// Automatically run once, after the last test.
 void SipTest::TearDownTestCase()
 {
-  delete stack_data.stats_aggregator;
-  stack_data.stats_aggregator = NULL;
-
   // Delete the default TCP transport flow.
   delete _tp_default;
 

@@ -108,7 +108,6 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        faketransport_tcp.cpp \
                        fakednsresolver.cpp \
                        fakechronosconnection.cpp \
-                       basetest.cpp \
                        siptest.cpp \
                        sip_common.cpp \
                        sipresolver_test.cpp \
