@@ -74,15 +74,15 @@ const std::string HSS_NOT_REG_STATE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?
                                         "<RegistrationState>NOT_REGISTERED</RegistrationState>"
                                       "</ClearwaterRegData>";
 
-class RegSubTimeoutTasksTest : public SipTest
+class AoRTimeoutTasksTest : public SipTest
 {
   MockSubscriberDataManager* store;
   MockSubscriberDataManager* remote_store;
   MockHttpStack* stack;
   MockHSSConnection* mock_hss;
   MockHttpStack::Request* req;
-  RegSubTimeoutTask::Config* config;
-  RegSubTimeoutTask* handler;
+  AoRTimeoutTask::Config* config;
+  AoRTimeoutTask* handler;
 
   static void SetUpTestCase()
   {
@@ -110,8 +110,8 @@ class RegSubTimeoutTasksTest : public SipTest
   void build_timeout_request(std::string body, htp_method method)
   {
     req = new MockHttpStack::Request(stack, "/", "timers", "", body, method);
-    config = new RegSubTimeoutTask::Config(store, remote_store, mock_hss);
-    handler = new RegSubTimeoutTask(*req, config, 0);
+    config = new AoRTimeoutTask::Config(store, remote_store, mock_hss);
+    handler = new AoRTimeoutTask(*req, config, 0);
   }
 
   SubscriberDataManager::AoRPair* build_aor(std::string aor_id)
@@ -161,10 +161,10 @@ class RegSubTimeoutTasksTest : public SipTest
 };
 
 // Test main flow, without a remote store.
-TEST_F(RegSubTimeoutTasksTest, MainlineTest)
+TEST_F(AoRTimeoutTasksTest, MainlineTest)
 {
   // Build request
-  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1\"}";
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"notavalidID\"}";
   build_timeout_request(body, htp_method_POST);
 
   // Set up subscriber_data_manager expectations
@@ -183,9 +183,9 @@ TEST_F(RegSubTimeoutTasksTest, MainlineTest)
 }
 
 // Test that an invalid HTTP method fails with HTTP_BADMETHOD
-TEST_F(RegSubTimeoutTasksTest, InvalidHTTPMethodTest)
+TEST_F(AoRTimeoutTasksTest, InvalidHTTPMethodTest)
 {
-  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"binding_id\"}";
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"notavalidID\"}";
   build_timeout_request(body, htp_method_PUT);
 
   EXPECT_CALL(*stack, send_reply(_, 405, _));
@@ -194,11 +194,11 @@ TEST_F(RegSubTimeoutTasksTest, InvalidHTTPMethodTest)
 }
 
 // Test that an invalid JSON body fails in parsing
-TEST_F(RegSubTimeoutTasksTest, InvalidJSONTest)
+TEST_F(AoRTimeoutTasksTest, InvalidJSONTest)
 {
   CapturingTestLogger log(5);
 
-  std::string body = "{\"aor_id\" \"aor_id\", \"binding_id\": \"binding_id\"}";
+  std::string body = "{\"aor_id\" \"aor_id\", \"binding_id\": \"notavalidID\"}";
   build_timeout_request(body, htp_method_POST);
 
   EXPECT_CALL(*stack, send_reply(_, 400, _));
@@ -209,11 +209,11 @@ TEST_F(RegSubTimeoutTasksTest, InvalidJSONTest)
 }
 
 // Test that a body without an AoR ID fails, logging "Badly formed opaque data"
-TEST_F(RegSubTimeoutTasksTest, MissingAorJSONTest)
+TEST_F(AoRTimeoutTasksTest, MissingAorJSONTest)
 {
   CapturingTestLogger log(5);
 
-  std::string body = "{\"binding_id\": \"binding_id\"}";
+  std::string body = "{\"binding_id\": \"notavalidID\"}";
   build_timeout_request(body, htp_method_POST);
 
   EXPECT_CALL(*stack, send_reply(_, 400, _));
@@ -224,9 +224,9 @@ TEST_F(RegSubTimeoutTasksTest, MissingAorJSONTest)
 }
 
 // Test with a remote AoR with no bindings
-TEST_F(RegSubTimeoutTasksTest, RemoteAoRNoBindingsTest)
+TEST_F(AoRTimeoutTasksTest, RemoteAoRNoBindingsTest)
 {
-  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"subscription_id\": \"subscription_id\", \"binding_id\": \"binding_id\"}";
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"notavalidID\"}";
   build_timeout_request(body, htp_method_POST);
 
   // Set up subscriber_data_manager expectations
@@ -253,9 +253,9 @@ TEST_F(RegSubTimeoutTasksTest, RemoteAoRNoBindingsTest)
 }
 
 // Test with a remote store, and a local AoR with no bindings
-TEST_F(RegSubTimeoutTasksTest, LocalAoRNoBindingsTest)
+TEST_F(AoRTimeoutTasksTest, LocalAoRNoBindingsTest)
 {
-  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"subscription_id\": \"subscription_id\"}";
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"notavalidID\"}";
   build_timeout_request(body, htp_method_POST);
 
   // Set up subscriber_data_manager expectations
@@ -288,7 +288,7 @@ TEST_F(RegSubTimeoutTasksTest, LocalAoRNoBindingsTest)
 }
 
 // Test with a remote store, and both AoRs with no bindings
-TEST_F(RegSubTimeoutTasksTest, NoBindingsTest)
+TEST_F(AoRTimeoutTasksTest, NoBindingsTest)
 {
   std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
 
@@ -328,11 +328,11 @@ TEST_F(RegSubTimeoutTasksTest, NoBindingsTest)
 }
 
 // Test with NULL AoRs
-TEST_F(RegSubTimeoutTasksTest, NullAoRTest)
+TEST_F(AoRTimeoutTasksTest, NullAoRTest)
 {
   CapturingTestLogger log(5);
 
-  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"binding_id\"}";
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"notavalidID\"}";
   build_timeout_request(body, htp_method_POST);
 
   // Set up subscriber_data_manager expectations
@@ -353,7 +353,7 @@ TEST_F(RegSubTimeoutTasksTest, NullAoRTest)
   EXPECT_TRUE(log.contains("Failed to get AoR binding for"));
 }
 
-class RegSubTimeoutTasksMockStoreTest : public SipTest
+class AoRTimeoutTasksMockStoreTest : public SipTest
 {
   FakeChronosConnection* chronos_connection;
   MockSubscriberDataManager* store;
@@ -361,9 +361,9 @@ class RegSubTimeoutTasksMockStoreTest : public SipTest
 
   MockHttpStack stack;
   MockHttpStack::Request* req;
-  RegSubTimeoutTask::Config* chronos_config;
+  AoRTimeoutTask::Config* chronos_config;
 
-  RegSubTimeoutTask* handler;
+  AoRTimeoutTask* handler;
 
   static void SetUpTestCase()
   {
@@ -376,8 +376,8 @@ class RegSubTimeoutTasksMockStoreTest : public SipTest
     store = new MockSubscriberDataManager();
     fake_hss = new FakeHSSConnection();
     req = new MockHttpStack::Request(&stack, "/", "timers");
-    chronos_config = new RegSubTimeoutTask::Config(store, NULL, fake_hss);
-    handler = new RegSubTimeoutTask(*req, chronos_config, 0);
+    chronos_config = new AoRTimeoutTask::Config(store, NULL, fake_hss);
+    handler = new AoRTimeoutTask(*req, chronos_config, 0);
   }
 
   void TearDown()
@@ -392,7 +392,7 @@ class RegSubTimeoutTasksMockStoreTest : public SipTest
 
 };
 
-TEST_F(RegSubTimeoutTasksMockStoreTest, SubscriberDataManagerWritesFail)
+TEST_F(AoRTimeoutTasksMockStoreTest, SubscriberDataManagerWritesFail)
 {
   // Set up the SubscriberDataManager to fail all sets and respond to all gets with not
   // found.
@@ -403,7 +403,7 @@ TEST_F(RegSubTimeoutTasksMockStoreTest, SubscriberDataManagerWritesFail)
   EXPECT_CALL(*store, set_aor_data(_, _, _, _, _, _)).WillOnce(Return(Store::ERROR));
 
   // Parse and handle the request
-  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1\"}";
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"notavalidID\"}";
   int status = handler->parse_response(body);
 
   ASSERT_EQ(status, 200);

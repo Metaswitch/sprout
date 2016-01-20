@@ -145,13 +145,14 @@ TYPED_TEST(BasicSubscriberDataManagerTest, BindingTests)
   now = time(NULL);
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
+  aor_data1->get_current()->_timer_id = "AoRtimer";
   EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
   b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
   b1->_expires = now + 300;
-  b1->_timer_id = "00000000000";
+  b1->_timer_id = "shouldbecomeDeprecated";
   b1->_priority = 0;
   b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
   b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
@@ -168,6 +169,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, BindingTests)
   // Get the AoR record from the store.
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
+  EXPECT_EQ("AoRtimer", aor_data1->get_current()->_timer_id);
   EXPECT_EQ(1u, aor_data1->get_current()->bindings().size());
   EXPECT_EQ(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"), aor_data1->get_current()->bindings().begin()->first);
   b1 = aor_data1->get_current()->bindings().begin()->second;
@@ -176,7 +178,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, BindingTests)
   EXPECT_EQ(17038, b1->_cseq);
   EXPECT_EQ(now + 300, b1->_expires);
   EXPECT_EQ(0, b1->_priority);
-  EXPECT_EQ(std::string("00000000000"), b1->_timer_id);
+  EXPECT_EQ(std::string("Deprecated"), b1->_timer_id);
   EXPECT_EQ(1u, b1->_path_headers.size());
   EXPECT_EQ(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"), b1->_path_headers.front());
   EXPECT_EQ(3u, b1->_params.size());
@@ -194,6 +196,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, BindingTests)
 
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
+  EXPECT_EQ("AoRtimer", aor_data1->get_current()->_timer_id);
   EXPECT_EQ(1u, aor_data1->get_current()->bindings().size());
   EXPECT_EQ(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"), aor_data1->get_current()->bindings().begin()->first);
   b1 = aor_data1->get_current()->bindings().begin()->second;
@@ -211,6 +214,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, BindingTests)
 
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
+  EXPECT_EQ("AoRtimer", aor_data1->get_current()->_timer_id);
   EXPECT_EQ(1u, aor_data1->get_current()->bindings().size());
   b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   EXPECT_EQ(std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>"), b1->_uri);
@@ -250,13 +254,14 @@ TYPED_TEST(BasicSubscriberDataManagerTest, SubscriptionTests)
   now = time(NULL);
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
+  aor_data1->get_current()->_timer_id = "AoRtimer";
   EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
   b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
   b1->_expires = now + 300;
-  b1->_timer_id = "00000000000";
+  b1->_timer_id = "shouldbecomeDeprecated";
   b1->_priority = 0;
   b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
   b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
@@ -273,6 +278,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, SubscriptionTests)
   // Get the AoR record from the store.
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
+  EXPECT_EQ("AoRtimer", aor_data1->get_current()->_timer_id);
   EXPECT_EQ(1u, aor_data1->get_current()->bindings().size());
   EXPECT_EQ(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"), aor_data1->get_current()->bindings().begin()->first);
   b1 = aor_data1->get_current()->bindings().begin()->second;
@@ -292,7 +298,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, SubscriptionTests)
   s1->_cid = std::string("xyzabc@192.91.191.29");
   s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
   s1->_expires = now + 300;
-  s1->_timer_id = "11111111111";
+  s1->_timer_id = "shouldbecomeDeprecated";
 
   // Write the record back to the store.
   rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
@@ -302,6 +308,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, SubscriptionTests)
   // Read the record back in and check the subscription is still in place.
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
+  EXPECT_EQ("AoRtimer", aor_data1->get_current()->_timer_id);
   EXPECT_EQ(1u, aor_data1->get_current()->subscriptions().size());
   EXPECT_EQ(std::string("1234"), aor_data1->get_current()->subscriptions().begin()->first);
   s1 = aor_data1->get_current()->get_subscription(std::string("1234"));
@@ -315,6 +322,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, SubscriptionTests)
   EXPECT_EQ(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"), s1->_route_uris.front());
   EXPECT_EQ(now + 300, s1->_expires);
   EXPECT_EQ(3, aor_data1->get_current()->_notify_cseq);
+  EXPECT_EQ("Deprecated", s1->_timer_id);
 
   // Remove the subscription.
   aor_data1->get_current()->remove_subscription(std::string("1234"));
@@ -334,6 +342,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, CopyTests)
   now = time(NULL);
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
+  aor_data1->get_current()->_timer_id = "AoRtimer";
   EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
   EXPECT_EQ(0u, aor_data1->get_current()->subscriptions().size());
 
@@ -344,7 +353,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, CopyTests)
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
   b1->_expires = now + 300;
-  b1->_timer_id = "00000000000";
+  b1->_timer_id = "shouldbecomeDeprecated";
   b1->_priority = 0;
   b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono1.homedomain;lr>"));
   b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
@@ -370,6 +379,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, CopyTests)
 
   // Test AoR copy constructor.
   SubscriberDataManager::AoR* copy = new SubscriberDataManager::AoR(*aor_data1->get_current());
+  EXPECT_EQ("AoRtimer", copy->_timer_id);
   EXPECT_EQ(1u, copy->bindings().size());
   EXPECT_EQ(1u, copy->subscriptions().size());
   EXPECT_EQ(1, copy->_notify_cseq);
@@ -380,6 +390,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, CopyTests)
   // Test AoR assignment.
   copy = new SubscriberDataManager::AoR("sip:name@example.com");
   *copy = *aor_data1->get_current();
+  EXPECT_EQ("AoRtimer", copy->_timer_id);
   EXPECT_EQ(1u, copy->bindings().size());
   EXPECT_EQ(1u, copy->subscriptions().size());
   EXPECT_EQ(1, copy->_notify_cseq);
@@ -405,6 +416,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, ExpiryTests)
   now = time(NULL);
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
+  aor_data1->get_current()->_timer_id = "AoRtimer";
   EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
   EXPECT_EQ(0u, aor_data1->get_current()->subscriptions().size());
 
@@ -416,7 +428,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, ExpiryTests)
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
   b1->_expires = now + 100;
-  b1->_timer_id = "00000000000";
+  b1->_timer_id = "shouldbecomeDeprecated";
   b1->_priority = 0;
   b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
   b1->_params["reg-id"] = "1";
@@ -429,7 +441,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, ExpiryTests)
   b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b2->_cseq = 17038;
   b2->_expires = now + 200;
-  b2->_timer_id = "00000000000";
+  b2->_timer_id = "shouldbecomeDeprecated";
   b2->_priority = 0;
   b2->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
   b2->_params["reg-id"] = "2";
@@ -449,7 +461,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, ExpiryTests)
   s1->_cid = std::string("xyzabc@192.91.191.29");
   s1->_route_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
   s1->_expires = now + 150;
-  s1->_timer_id = "00000000000";
+  s1->_timer_id = "shouldbecomeDeprecated";
   s2 = aor_data1->get_current()->get_subscription("5678");
   EXPECT_EQ(2u, aor_data1->get_current()->subscriptions().size());
   s2->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
@@ -460,7 +472,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, ExpiryTests)
   s2->_cid = std::string("xyzabc@192.91.191.29");
   s2->_route_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
   s2->_expires = now + 300;
-  s2->_timer_id = "00000000000";
+  s2->_timer_id = "shouldbecomeDeprecated";
 
   // Write the record to the store.
   rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
@@ -573,7 +585,7 @@ TYPED_TEST(MultiFormatSubscriberDataManagerTest, AllFormatsCanBeRead)
   b1->_cid = std::string("cid1");
   b1->_cseq = 1000;
   b1->_expires = now + 300;
-  b1->_timer_id = "00000000001";
+  b1->_timer_id = "shouldbecomeDeprecated";
   b1->_priority = 0;
   b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
   b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817621>\"";
@@ -727,9 +739,9 @@ class SubscriberDataManagerChronosRequestsTest : public SipTest
   SubscriberDataManager* _store;
 };
 
-// Test that deleting a subscription when it doesn't have a timer set doesn't generate a
-// Chronos request
-TEST_F(SubscriberDataManagerChronosRequestsTest, SubscriptionTestsDeleteWithoutChronosTimer)
+// Test that adding an AoR to the store generates a chronos POST request, and that
+// voiding the AoR (removing all bindings) sends a DELETE request.
+TEST_F(SubscriberDataManagerChronosRequestsTest, BasicAoRTimerTest)
 {
   SubscriberDataManager::AoRPair* aor_data1;
   SubscriberDataManager::AoR::Binding* b1;
@@ -747,7 +759,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, SubscriptionTestsDeleteWithoutC
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
   b1->_expires = now + 300;
-  b1->_timer_id = "00000000000";
+  b1->_timer_id = "shouldbecomeDeprecated";
   b1->_priority = 0;
   b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
   b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
@@ -767,10 +779,10 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, SubscriptionTestsDeleteWithoutC
   s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
   s1->_expires = now + 300;
 
-  // Write the record back to the store. Have the Chronos request fail
-  EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _));
-  EXPECT_CALL(*(this->_chronos_connection), send_post(s1->_timer_id, _, _, _, _, _)).
-                   WillOnce(Return(503));
+  // Write the record back to the store.
+  EXPECT_CALL(*(this->_chronos_connection), send_post(aor_data1->get_current()->_timer_id, _, _, _, _, _)).
+                   WillOnce(DoAll(SetArgReferee<0>("TIMER_ID"),
+                                  Return(HTTP_OK)));
   rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
@@ -778,28 +790,32 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, SubscriptionTestsDeleteWithoutC
   // Read the record back in and check the timer ID.
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
+  EXPECT_EQ("TIMER_ID", aor_data1->get_current()->_timer_id);
+  EXPECT_EQ(1u, aor_data1->get_current()->bindings().size());
+  EXPECT_EQ(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"), aor_data1->get_current()->bindings().begin()->first);
   EXPECT_EQ(1u, aor_data1->get_current()->subscriptions().size());
   EXPECT_EQ(std::string("1234"), aor_data1->get_current()->subscriptions().begin()->first);
-  s1 = aor_data1->get_current()->get_subscription(std::string("1234"));
-  EXPECT_EQ("", s1->_timer_id);
 
-  // Remove the subscription.
-  aor_data1->get_current()->remove_subscription(std::string("1234"));
-  EXPECT_EQ(0u, aor_data1->get_current()->subscriptions().size());
+  // Remove the binding.
+  aor_data1->get_current()->remove_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
 
-  // Write the record back to the store. Check no delete is sent
-  EXPECT_CALL(*(this->_chronos_connection), send_delete(_, _)).Times(0);
+  // Write the record back to the store. Check DELETE request is sent.
+  EXPECT_CALL(*(this->_chronos_connection), send_delete(aor_data1->get_current()->_timer_id, _)).Times(1);
   rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 }
 
-// Test that adding a subscription generates Chronos Timer requests
-TEST_F(SubscriberDataManagerChronosRequestsTest, SubscriptionTestsChronosRequests)
+// Test that updating an AoR with extra bindings and subscriptions generates a chronos PUT request.
+TEST_F(SubscriberDataManagerChronosRequestsTest, UpdateAoRTimerTest)
 {
   SubscriberDataManager::AoRPair* aor_data1;
   SubscriberDataManager::AoR::Binding* b1;
-  SubscriberDataManager::AoR::Subscription* s1;
+  std::map<std::string, uint32_t> expected_tags;
+  expected_tags["REG"] = 1;
+  expected_tags["BIND"] = 0;
+  expected_tags["SUB"] = 0;
   bool rc;
   int now;
 
@@ -813,7 +829,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, SubscriptionTestsChronosRequest
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
   b1->_expires = now + 300;
-  b1->_timer_id = "00000000000";
+  b1->_timer_id = "shouldbecomeDeprecated";
   b1->_priority = 0;
   b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
   b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
@@ -821,6 +837,107 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, SubscriptionTestsChronosRequest
   b1->_params["+sip.ice"] = "";
   b1->_private_id = "5102175698@cw-ngv.com";
   b1->_emergency_registration = false;
+
+  expected_tags["BIND"]++;
+
+  // Write the record back to the store.
+  EXPECT_CALL(*(this->_chronos_connection), send_post(_, _, _, _, _, expected_tags)).
+                   WillOnce(DoAll(SetArgReferee<0>("TIMER_ID"),
+                                  Return(HTTP_OK)));
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
+
+  // Read the record back in and check the timer ID.
+  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+  EXPECT_EQ("TIMER_ID", aor_data1->get_current()->_timer_id);
+
+  // Add a subscription to the record.
+  SubscriberDataManager::AoR::Subscription* s1;
+  s1 = aor_data1->get_current()->get_subscription("1234");
+  s1->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
+  s1->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s1->_from_tag = std::string("4321");
+  s1->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s1->_to_tag = std::string("1234");
+  s1->_cid = std::string("xyzabc@192.91.191.29");
+  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s1->_expires = now + 300;
+
+  expected_tags["SUB"]++;
+
+  // Write the record back to the store, expecting a chronos PUT request.
+  EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, expected_tags)).
+                   WillOnce(Return(HTTP_OK));
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
+
+  // Read the record back in and check the timer ID.
+  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+
+  // Add another binding to the record.
+  SubscriberDataManager::AoR::Binding* b2;
+  b2 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:2"));
+  b2->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
+  b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b2->_cseq = 17038;
+  b2->_expires = now + 300;
+  b2->_timer_id = "shouldbecomeDeprecated";
+  b2->_priority = 0;
+  b2->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  b2->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b2->_params["reg-id"] = "1";
+  b2->_params["+sip.ice"] = "";
+  b2->_private_id = "5102175698@cw-ngv.com";
+  b2->_emergency_registration = false;
+
+  expected_tags["BIND"]++;
+
+  // Write the record back to the store, expecting a chronos PUT request.
+  EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, expected_tags)).
+                   WillOnce(Return(HTTP_OK));
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
+}
+
+// Test that adding and removing an equal number of bindings or subscriptions
+// does not generate a chronos request.
+TEST_F(SubscriberDataManagerChronosRequestsTest, AoRChangeNoUpdateTimerTest)
+{
+  SubscriberDataManager::AoRPair* aor_data1;
+  SubscriberDataManager::AoR::Binding* b1;
+  SubscriberDataManager::AoR::Subscription* s1;
+  std::map<std::string, uint32_t> expected_tags;
+  expected_tags["REG"] = 1;
+  expected_tags["BIND"] = 0;
+  expected_tags["SUB"] = 0;
+  bool rc;
+  int now;
+
+  // Get an initial empty AoR record and add a binding.
+  now = time(NULL);
+  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+  EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
+  b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_timer_id = "shouldbecomeDeprecated";
+  b1->_priority = 0;
+  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
+  b1->_private_id = "5102175698@cw-ngv.com";
+  b1->_emergency_registration = false;
+
+  expected_tags["BIND"]++;
 
   // Add a subscription to the record.
   s1 = aor_data1->get_current()->get_subscription("1234");
@@ -833,10 +950,12 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, SubscriptionTestsChronosRequest
   s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
   s1->_expires = now + 300;
 
-  // Write the record back to the store. Have the Chronos request fail
-  EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _));
-  EXPECT_CALL(*(this->_chronos_connection), send_post(s1->_timer_id, _, _, _, _, _)).
-                   WillOnce(Return(503));
+  expected_tags["SUB"]++;
+
+  // Write the record back to the store.
+  EXPECT_CALL(*(this->_chronos_connection), send_post(_, _, _, _, _, expected_tags)).
+                   WillOnce(DoAll(SetArgReferee<0>("TIMER_ID"),
+                                  Return(HTTP_OK)));
   rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
@@ -844,53 +963,201 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, SubscriptionTestsChronosRequest
   // Read the record back in and check the timer ID.
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
-  EXPECT_EQ(1u, aor_data1->get_current()->subscriptions().size());
-  EXPECT_EQ(std::string("1234"), aor_data1->get_current()->subscriptions().begin()->first);
-  s1 = aor_data1->get_current()->get_subscription(std::string("1234"));
-  EXPECT_EQ("", s1->_timer_id);
+  EXPECT_EQ("TIMER_ID", aor_data1->get_current()->_timer_id);
 
-  // Write the record back. This time let the Chronos request succeed
-  EXPECT_CALL(*(this->_chronos_connection), send_post(s1->_timer_id, _, _, _, _, _)).
-       WillOnce(DoAll(SetArgReferee<0>("TIMER_ID"), Return(HTTP_OK)));
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
-  EXPECT_TRUE(rc);
-  delete aor_data1; aor_data1 = NULL;
+  // Add another binding to the record.
+  SubscriberDataManager::AoR::Binding* b2;
+  b2 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:2"));
+  b2->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
+  b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b2->_cseq = 17038;
+  b2->_expires = now + 300;
+  b2->_timer_id = "shouldbecomeDeprecated";
+  b2->_priority = 0;
+  b2->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  b2->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b2->_params["reg-id"] = "1";
+  b2->_params["+sip.ice"] = "";
+  b2->_private_id = "5102175698@cw-ngv.com";
+  b2->_emergency_registration = false;
 
-  // Read the record back in and check the timer ID.
-  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
-  ASSERT_TRUE(aor_data1 != NULL);
-  s1 = aor_data1->get_current()->get_subscription(std::string("1234"));
-  EXPECT_EQ("TIMER_ID", s1->_timer_id);
+  expected_tags["BIND"]++;
 
-  // Change the expiry time and check that we still get a Chronos request
-  s1->_expires++;
-  EXPECT_CALL(*(this->_chronos_connection), send_put(s1->_timer_id, _, _, _, _, _)).
-       WillOnce(Return(HTTP_OK));
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
-  EXPECT_TRUE(rc);
-  delete aor_data1; aor_data1 = NULL;
+  // Add another subscription to the record.
+  SubscriberDataManager::AoR::Subscription* s2;
+  s2 = aor_data1->get_current()->get_subscription("5678");
+  s2->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
+  s2->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s2->_from_tag = std::string("4321");
+  s2->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s2->_to_tag = std::string("1234");
+  s2->_cid = std::string("xyzabc@192.91.191.29");
+  s2->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s2->_expires = now + 300;
 
-  // Read the record back in and check the timer ID.
-  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
-  ASSERT_TRUE(aor_data1 != NULL);
-  s1 = aor_data1->get_current()->get_subscription(std::string("1234"));
-  EXPECT_EQ("TIMER_ID", s1->_timer_id);
+  expected_tags["SUB"]++;
 
-  // Don't change the expiry time, and check there's no Chronos request
+  // Remove the original binding and subscription.
+  aor_data1->get_current()->remove_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  aor_data1->get_current()->remove_subscription(std::string("1234"));
+  expected_tags["BIND"]--;  expected_tags["SUB"]--;
+
+  // Write the record back to the store, expecting no chronos PUT request.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _)).Times(0);
   rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
-  // Remove the subscription. Read the record back in and check the timer ID.
+  // Read the record back in and check the new members were added correctly.
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
-  aor_data1->get_current()->remove_subscription(std::string("1234"));
-  EXPECT_EQ(0u, aor_data1->get_current()->subscriptions().size());
+  EXPECT_EQ(1, aor_data1->get_current()->bindings().size());
+  EXPECT_EQ(1, aor_data1->get_current()->subscriptions().size());
+  EXPECT_EQ(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:2"), aor_data1->get_current()->bindings().begin()->first);
+  EXPECT_EQ(std::string("5678"), aor_data1->get_current()->subscriptions().begin()->first);
+  delete aor_data1; aor_data1 = NULL;
+}
 
-  // Write the record back to the store. Check a delete is sent
-  EXPECT_CALL(*(this->_chronos_connection), send_delete(_, _));
+// Test that changing the soonest expiry time of the AoR members generates a chronos PUT request.
+TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
+{
+  SubscriberDataManager::AoRPair* aor_data1;
+  SubscriberDataManager::AoR::Binding* b1;
+  SubscriberDataManager::AoR::Subscription* s1;
+  std::map<std::string, uint32_t> expected_tags;
+  expected_tags["REG"] = 1;
+  expected_tags["BIND"] = 0;
+  expected_tags["SUB"] = 0;
+  bool rc;
+  int now;
+
+  // Get an initial empty AoR record and add a binding.
+  now = time(NULL);
+  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+  EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
+  b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_timer_id = "shouldbecomeDeprecated";
+  b1->_priority = 0;
+  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
+  b1->_private_id = "5102175698@cw-ngv.com";
+  b1->_emergency_registration = false;
+
+  expected_tags["BIND"]++;
+
+  // Add a subscription to the record.
+  s1 = aor_data1->get_current()->get_subscription("1234");
+  s1->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
+  s1->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s1->_from_tag = std::string("4321");
+  s1->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s1->_to_tag = std::string("1234");
+  s1->_cid = std::string("xyzabc@192.91.191.29");
+  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s1->_expires = now + 300;
+
+  expected_tags["SUB"]++;
+
+  // Write the record back to the store.
+  EXPECT_CALL(*(this->_chronos_connection), send_post(_, (now + 300), _, _, _, expected_tags)).
+                   WillOnce(DoAll(SetArgReferee<0>("TIMER_ID"),
+                                  Return(HTTP_OK)));
   rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
   EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
+
+  // Read the record back in and check the timer ID.
+  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+  EXPECT_EQ("TIMER_ID", aor_data1->get_current()->_timer_id);
+
+  // Modify the expiry time of the binding to be later. This should not update the timer.
+  b1 = aor_data1->get_current()->bindings().begin()->second;
+  b1->_expires = now + 500;
+
+  // Write the record back to the store.
+  EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _)).Times(0);
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
+
+  // Read the record back in.
+  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+
+  // Modify the expiry time of the binding to be sooner. This should generate an update.
+  b1 = aor_data1->get_current()->bindings().begin()->second;
+  b1->_expires = now + 200;
+
+  // Write the record back to the store.
+  EXPECT_CALL(*(this->_chronos_connection), send_put(_, (now + 200), _, _, _, _)).
+                   WillOnce(Return(HTTP_OK));
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
+
+  // Read the record back in.
+  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+
+  // Modify the expiry time of the subscription to be sooner. This should also generate an update.
+  s1 = aor_data1->get_current()->subscriptions().begin()->second;
+  s1->_expires = now + 100;
+
+  // Write the record back to the store.
+  EXPECT_CALL(*(this->_chronos_connection), send_put(_, (now + 100), _, _, _, _)).
+                   WillOnce(Return(HTTP_OK));
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
+}
+
+// Test that a failed timer POST does not change the timer ID in the AoR.
+TEST_F(SubscriberDataManagerChronosRequestsTest, AoRTimerBadRequestNoIDTest)
+{
+  SubscriberDataManager::AoRPair* aor_data1;
+  SubscriberDataManager::AoR::Binding* b1;
+  bool rc;
+  int now;
+
+  // Get an initial empty AoR record and add a binding.
+  now = time(NULL);
+  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+  EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
+  b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_timer_id = "shouldbecomeDeprecated";
+  b1->_priority = 0;
+  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
+  b1->_private_id = "5102175698@cw-ngv.com";
+  b1->_emergency_registration = false;
+
+  // Write the record back to the store.
+  EXPECT_CALL(*(this->_chronos_connection), send_post(aor_data1->get_current()->_timer_id, _, _, _, _, _)).
+                   WillOnce(DoAll(SetArgReferee<0>("TIMER_ID"),
+                                  Return(HTTP_BAD_REQUEST)));
+  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
+
+  // Read the record back in and check the timer ID was not saved off.
+  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+  EXPECT_EQ("", aor_data1->get_current()->_timer_id);
+
   delete aor_data1; aor_data1 = NULL;
 }

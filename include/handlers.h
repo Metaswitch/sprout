@@ -63,7 +63,7 @@ public:
   }
 };
 
-class RegSubTimeoutTask : public HttpStackUtils::Task
+class AoRTimeoutTask : public HttpStackUtils::Task
 {
 public:
   struct Config
@@ -80,9 +80,9 @@ public:
     HSSConnection* _hss;
   };
 
-  RegSubTimeoutTask(HttpStack::Request& req,
-                          const Config* cfg,
-                          SAS::TrailId trail) :
+  AoRTimeoutTask(HttpStack::Request& req,
+                       const Config* cfg,
+                       SAS::TrailId trail) :
     HttpStackUtils::Task(req, trail), _cfg(cfg)
   {};
 

@@ -113,7 +113,7 @@ pjsip_module mod_registrar =
 void log_bindings(const std::string& aor_name,
                   SubscriberDataManager::AoR* aor_data)
 {
-  TRC_DEBUG("Bindings for %s", aor_name.c_str());
+  TRC_DEBUG("Bindings for %s, timer ID %s", aor_name.c_str(), aor_data->_timer_id.c_str());
   for (SubscriberDataManager::AoR::Bindings::const_iterator i =
          aor_data->bindings().begin();
        i != aor_data->bindings().end();

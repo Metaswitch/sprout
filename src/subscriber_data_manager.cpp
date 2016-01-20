@@ -497,6 +497,7 @@ SubscriberDataManager::AoR* SubscriberDataManager::Connector::deserialize_aor(
 /// Default constructor.
 SubscriberDataManager::AoR::AoR(std::string sip_uri) :
   _notify_cseq(1),
+  _timer_id(""),
   _bindings(),
   _subscriptions(),
   _cas(0),
@@ -549,6 +550,7 @@ void SubscriberDataManager::AoR::common_constructor(const AoR& other)
   }
 
   _notify_cseq = other._notify_cseq;
+  _timer_id = other._timer_id;
   _cas = other._cas;
   _uri = other._uri;
 }
@@ -731,6 +733,41 @@ std::string SubscriberDataManager::AoR::Binding::pub_gruu_quoted_string(pj_pool_
   return ret;
 }
 
+// Utility function to return the expiry time of the binding or
+// subscription due to expire next.
+int SubscriberDataManager::AoR::get_next_expires()
+{
+  // Set a temp int to INT_MAX to compare expiry times to.
+  int _next_expires = INT_MAX;
+
+  for (SubscriberDataManager::AoR::Bindings::const_iterator b = _bindings.begin();
+       b != _bindings.end();
+       ++b)
+  {
+    if (b->second->_expires < _next_expires)
+    {
+      _next_expires = b->second->_expires;
+    }
+  }
+  for (SubscriberDataManager::AoR::Subscriptions::const_iterator s = _subscriptions.begin();
+       s != _subscriptions.end();
+       ++s)
+  {
+    if (s->second->_expires < _next_expires)
+    {
+      _next_expires = s->second->_expires;
+    }
+  }
+
+  // If nothing has altered the _next_expires, the AoR is empty and invalid.
+  // Return 0 to indicate there is nothing to expire.
+  if (_next_expires == INT_MAX)
+  {
+    return 0;
+  }
+  // Otherwise we return the value found.
+  return _next_expires;
+}
 
 //
 // (De)serializer for the binary SubscriberDataManager format.
@@ -849,6 +886,7 @@ SubscriberDataManager::AoR* SubscriberDataManager::BinarySerializerDeserializer:
   }
 
   iss.read((char*)&aor_data->_notify_cseq, sizeof(int));
+  getline(iss, aor_data->_timer_id, '\0');
 
   return aor_data;
 }
@@ -891,7 +929,9 @@ std::string SubscriberDataManager::BinarySerializerDeserializer::serialize_aor(A
     {
       oss << *i << '\0';
     }
-    oss << b->_timer_id << '\0';
+    // This was the binding timer_id. It is now deprecated, but has to be kept
+    // as an entity for upgrade and UT compatibility. 19/01/16
+    oss << "Deprecated"  << '\0';
     oss << b->_private_id << '\0';
     oss.write((const char *)&b->_emergency_registration, sizeof(int));
   }
@@ -924,11 +964,13 @@ std::string SubscriberDataManager::BinarySerializerDeserializer::serialize_aor(A
       oss << *i << '\0';
     }
     oss.write((const char *)&s->_expires, sizeof(int));
-    oss << s->_timer_id << '\0';
+    // This was the subscription timer_id. It is now deprecated, but has to be
+    // kept as an entity for upgrade and UT compatibility. 19/01/16
+    oss << "Deprecated" << '\0';
   }
 
   oss.write((const char *)&aor_data->_notify_cseq, sizeof(int));
-
+  oss << aor_data->_timer_id << '\0';
   return oss.str();
 }
 
@@ -1027,7 +1069,11 @@ SubscriberDataManager::AoR* SubscriberDataManager::JsonSerializerDeserializer::
         b->_path_headers.push_back(paths_it->GetString());
       }
 
-      JSON_GET_STRING_MEMBER(b_obj, JSON_TIMER_ID, b->_timer_id);
+       b->_timer_id =
+         ((b_obj.HasMember(JSON_TIMER_ID)) && ((b_obj[JSON_TIMER_ID]).IsString()) ?
+                                               (b_obj[JSON_TIMER_ID].GetString()) :
+                                                "");
+//      JSON_GET_STRING_MEMBER(b_obj, JSON_TIMER_ID, b->_timer_id);
       JSON_GET_STRING_MEMBER(b_obj, JSON_PRIVATE_ID, b->_private_id);
       JSON_GET_BOOL_MEMBER(b_obj, JSON_EMERGENCY_REG, b->_emergency_registration);
     }
@@ -1073,6 +1119,10 @@ SubscriberDataManager::AoR* SubscriberDataManager::JsonSerializerDeserializer::
     }
 
     JSON_GET_INT_MEMBER(doc, JSON_NOTIFY_CSEQ, aor->_notify_cseq);
+    aor->_timer_id =
+         ((doc.HasMember(JSON_TIMER_ID)) && ((doc[JSON_TIMER_ID]).IsString()) ?
+                                             (doc[JSON_TIMER_ID].GetString()) :
+                                              "");
   }
   catch(JsonFormatError err)
   {
@@ -1137,7 +1187,7 @@ std::string SubscriberDataManager::JsonSerializerDeserializer::serialize_aor(AoR
           }
           writer.EndArray();
 
-          writer.String(JSON_TIMER_ID); writer.String(b->_timer_id.c_str());
+          writer.String(JSON_TIMER_ID); writer.String("Deprecated"); // b->_timer_id.c_str());
           writer.String(JSON_PRIVATE_ID); writer.String(b->_private_id.c_str());
           writer.String(JSON_EMERGENCY_REG); writer.Bool(b->_emergency_registration);
         }
@@ -1180,7 +1230,7 @@ std::string SubscriberDataManager::JsonSerializerDeserializer::serialize_aor(AoR
           writer.EndArray();
 
           writer.String(JSON_EXPIRES); writer.Int(s->_expires);
-          writer.String(JSON_TIMER_ID); writer.String(s->_timer_id.c_str());
+          writer.String(JSON_TIMER_ID); writer.String("Deprecated"); // s->_timer_id.c_str());
 
         }
         writer.EndObject();
@@ -1190,6 +1240,7 @@ std::string SubscriberDataManager::JsonSerializerDeserializer::serialize_aor(AoR
 
     // Notify Cseq flag
     writer.String(JSON_NOTIFY_CSEQ); writer.Int(aor_data->_notify_cseq);
+    writer.String(JSON_TIMER_ID); writer.String(aor_data->_timer_id.c_str());
   }
   writer.EndObject();
 
@@ -1213,29 +1264,68 @@ SubscriberDataManager::ChronosTimerRequestSender::~ChronosTimerRequestSender()
 {
 }
 
+void SubscriberDataManager::ChronosTimerRequestSender::build_tag_info (
+                                                AoR* aor,
+                                                std::map<std::string, uint32_t>& tag_map)
+{
+  // Each timer is built to represent a single registration i.e. an AoR.
+  tag_map["REG"] = 1;
+  tag_map["BIND"] = aor->get_bindings_count();
+  tag_map["SUB"] = aor->get_subscriptions_count();
+}
+
+
 void SubscriberDataManager::ChronosTimerRequestSender::send_timers(
                              const std::string& aor_id,
                              AoRPair* aor_pair,
                              int now,
                              SAS::TrailId trail)
 {
-  send_binding_timers(aor_id, aor_pair, now, trail);
-  send_subscription_timers(aor_id, aor_pair, now, trail);
+  std::map<std::string, uint32_t> old_tags;
+  std::map<std::string, uint32_t> new_tags;
+
+  build_tag_info(aor_pair->get_orig(), old_tags);
+  build_tag_info(aor_pair->get_current(), new_tags);
+
+  std::string& timer_id = aor_pair->get_current()->_timer_id;
+  // An AoR with no bindings is invalid, and the timer should be deleted.
+  // We do this before getting next_expires to save on processing.
+  if (new_tags["BIND"] == 0)
+  {
+    if (timer_id != "")
+    {
+      _chronos_conn->send_delete(timer_id, trail);
+    }
+    return;
+  }
+
+  int old_next_expires = aor_pair->get_orig()->get_next_expires();
+  int new_next_expires = aor_pair->get_current()->get_next_expires();
+
+  if ((new_tags != old_tags)                 ||
+      (new_next_expires != old_next_expires) ||
+      (timer_id == ""))
+  {
+    set_timer(aor_id,
+              timer_id,
+              new_next_expires,
+              new_tags,
+              trail);
+  }
 }
 
 void SubscriberDataManager::ChronosTimerRequestSender::set_timer(
                                     const std::string& aor_id,
-                                    std::string object_id,
                                     std::string& timer_id,
                                     int expiry,
-                                    std::string id_type,
-                                    std::vector<std::string> tags,
+                                    std::map<std::string, uint32_t> tags,
                                     SAS::TrailId trail)
 {
   std::string temp_timer_id = "";
   HTTPCode status;
-  std::string opaque = "{\"aor_id\": \"" + aor_id + "\", \"" +
-                              id_type + "\": \""+ object_id +"\"}";
+  // Previous versions of handlers.cpp asserted timers contain a "binding_id".
+  // We no longer want this information, but it is included to simplify upgrade.
+  std::string opaque = "{\"aor_id\": \"" + aor_id + "\", \"binding_id\": \"notavalidID\"}";
   std::string callback_uri = "/timers";
 
   // If a timer has been previously set for this binding, send a PUT.
@@ -1265,128 +1355,6 @@ void SubscriberDataManager::ChronosTimerRequestSender::set_timer(
   if (status == HTTP_OK)
   {
     timer_id = temp_timer_id;
-  }
-}
-
-void SubscriberDataManager::ChronosTimerRequestSender::send_binding_timers(
-                                const std::string& aor_id,
-                                SubscriberDataManager::AoRPair* aor_pair,
-                                int now,
-                                SAS::TrailId trail)
-{
-  // Iterate over the bindings in the original AoR, and process any
-  // that aren't in the current AoR
-  for (SubscriberDataManager::AoR::Bindings::const_iterator aor_orig =
-         aor_pair->get_orig()->bindings().begin();
-       aor_orig != aor_pair->get_orig()->bindings().end();
-       ++aor_orig)
-  {
-    SubscriberDataManager::AoR::Binding* b = aor_orig->second;
-    std::string b_id = aor_orig->first;
-
-    // Is this binding present in the new AoR?
-    SubscriberDataManager::AoR::Bindings::const_iterator aor_current =
-      aor_pair->get_current()->bindings().find(b_id);
-
-    if (aor_current == aor_pair->get_current()->bindings().end())
-    {
-      // The binding has been deleted. If a timer id is present,
-      // then delete it (it can be empty because a previous post/put failed).
-      if (b->_timer_id != "")
-      {
-        _chronos_conn->send_delete(b->_timer_id, trail);
-      }
-    }
-  }
-
-  for (SubscriberDataManager::AoR::Bindings::const_iterator aor_current =
-         aor_pair->get_current()->bindings().begin();
-       aor_current != aor_pair->get_current()->bindings().end();
-       ++aor_current)
-  {
-    SubscriberDataManager::AoR::Binding* b = aor_current->second;
-    std::string b_id = aor_current->first;
-
-    // Was the binding present in the original AoR?
-    SubscriberDataManager::AoR::Bindings::const_iterator aor_orig =
-      aor_pair->get_orig()->bindings().find(b_id);
-
-    // Set a timer if the binding is new, if a previous attempt to
-    // set a timer failed, or if the expiry time has changed
-    if ((aor_orig == aor_pair->get_orig()->bindings().end()) ||
-        (b->_timer_id == "") ||
-        (b->_expires != aor_orig->second->_expires))
-    {
-      // It must be a new binding - set a timer
-      set_timer(aor_id,
-                b_id,
-                b->_timer_id,
-                b->_expires - now,
-                "binding_id",
-                SubscriberDataManager::TAGS_REG,
-                trail);
-    }
-  }
-}
-
-void SubscriberDataManager::ChronosTimerRequestSender::send_subscription_timers(
-                               const std::string& aor_id,
-                               SubscriberDataManager::AoRPair* aor_pair,
-                               int now,
-                               SAS::TrailId trail)
-{
-  // Iterate over the subscription in the original AoR, and process any
-  // that aren't in the current AoR
-  for (SubscriberDataManager::AoR::Subscriptions::const_iterator aor_orig =
-         aor_pair->get_orig()->subscriptions().begin();
-       aor_orig != aor_pair->get_orig()->subscriptions().end();
-       ++aor_orig)
-  {
-    SubscriberDataManager::AoR::Subscription* s = aor_orig->second;
-    std::string s_id = aor_orig->first;
-
-    // Is this subscription present in the new AoR?
-    SubscriberDataManager::AoR::Subscriptions::const_iterator aor_current =
-      aor_pair->get_current()->subscriptions().find(s_id);
-
-    if (aor_current == aor_pair->get_current()->subscriptions().end())
-    {
-      // The subscription has been deleted. If a timer id is present,
-      // then delete it (it can be empty because a previous post/put failed).
-      if (s->_timer_id != "")
-      {
-        _chronos_conn->send_delete(s->_timer_id, trail);
-      }
-    }
-  }
-
-  for (SubscriberDataManager::AoR::Subscriptions::const_iterator aor_current =
-         aor_pair->get_current()->subscriptions().begin();
-       aor_current != aor_pair->get_current()->subscriptions().end();
-       ++aor_current)
-  {
-    SubscriberDataManager::AoR::Subscription* s = aor_current->second;
-    std::string s_id = aor_current->first;
-
-    // Was the subscription present in the original AoR?
-    SubscriberDataManager::AoR::Subscriptions::const_iterator aor_orig =
-      aor_pair->get_orig()->subscriptions().find(s_id);
-
-    // Set a timer if the subscription is new, if a previous attempt to
-    // set a timer failed, or if the expiry time has changed
-    if ((aor_orig == aor_pair->get_orig()->subscriptions().end()) ||
-        (s->_timer_id == "") ||
-        (s->_expires != aor_orig->second->_expires))
-    {
-      // It must be a new subscription - set a timer
-      set_timer(aor_id,
-                s_id,
-                s->_timer_id,
-                s->_expires - now,
-                "subscription_id",
-                SubscriberDataManager::TAGS_SUB,
-                trail);
-    }
   }
 }
 
