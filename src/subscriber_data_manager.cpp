@@ -1187,7 +1187,7 @@ std::string SubscriberDataManager::JsonSerializerDeserializer::serialize_aor(AoR
           }
           writer.EndArray();
 
-          writer.String(JSON_TIMER_ID); writer.String("Deprecated"); // b->_timer_id.c_str());
+          writer.String(JSON_TIMER_ID); writer.String("Deprecated");
           writer.String(JSON_PRIVATE_ID); writer.String(b->_private_id.c_str());
           writer.String(JSON_EMERGENCY_REG); writer.Bool(b->_emergency_registration);
         }
@@ -1230,7 +1230,7 @@ std::string SubscriberDataManager::JsonSerializerDeserializer::serialize_aor(AoR
           writer.EndArray();
 
           writer.String(JSON_EXPIRES); writer.Int(s->_expires);
-          writer.String(JSON_TIMER_ID); writer.String("Deprecated"); // s->_timer_id.c_str());
+          writer.String(JSON_TIMER_ID); writer.String("Deprecated");
 
         }
         writer.EndObject();
