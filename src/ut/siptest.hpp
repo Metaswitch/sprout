@@ -140,7 +140,7 @@ protected:
   static void add_host_mapping(const string& hostname, const string& addresses);
 
   /// Inject an inbound SIP message by passing it into the stack.
-  void inject_msg(const string& msg, TransportFlow* tp = _tp_default);
+  void inject_msg(const string& msg, TransportFlow* tp = _tp_default, int expected = -99);
 
   /// Inject an inbound SIP message structure by passing it into the
   /// stack.

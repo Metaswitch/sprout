@@ -358,7 +358,7 @@ void SipTest::add_host_mapping(const string& hostname, const string& addresses)
   _dnsresolver.add_to_cache(hostname, ns_t_a, records);
 }
 
-void SipTest::inject_msg(const string& msg, TransportFlow* tp)
+void SipTest::inject_msg(const string& msg, TransportFlow* tp, int expected)
 {
   pj_pool_t *rdata_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
                                                   PJSIP_POOL_RDATA_LEN,
@@ -370,7 +370,14 @@ void SipTest::inject_msg(const string& msg, TransportFlow* tp)
   log_pjsip_buf(buf, rdata->pkt_info.packet, rdata->pkt_info.len);
   pj_size_t size_eaten = pjsip_tpmgr_receive_packet(rdata->tp_info.transport->tpmgr,
                                                     rdata);
-  EXPECT_EQ((pj_size_t)rdata->pkt_info.len, size_eaten);
+  if (expected == -99)
+  {
+    EXPECT_EQ((pj_size_t)rdata->pkt_info.len, size_eaten);
+  }
+  else
+  {
+    EXPECT_EQ((pj_size_t)expected, size_eaten);
+  }
   pj_pool_reset(rdata_pool);
   pj_pool_release(rdata_pool);
 }
