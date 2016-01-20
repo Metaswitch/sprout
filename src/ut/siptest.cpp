@@ -92,6 +92,9 @@ SipTest::~SipTest()
 {
   _current_instance = NULL;
   for_each(_out.begin(), _out.end(), pjsip_tx_data_dec_ref);
+  // This ensures the UTs clean up: that no test carries over any time it has
+  // advanced and that any servers that have been added to the blacklist are
+  // removed (and hence operational) by the next test.
   cwtest_reset_time();
   stack_data.sipresolver->clear_blacklist();
 }

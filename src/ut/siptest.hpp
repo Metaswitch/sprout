@@ -77,6 +77,7 @@ public:
   static void SetUpTestCase(bool clear_host_mapping = true);
 
   static void TearDownTestCase();
+
 protected:
 
   /// Class containing transport factories for the various ports.

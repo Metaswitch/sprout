@@ -54,6 +54,7 @@
 /// Fixture for test.
 class BaseTest : public ::testing::Test
 {
+  // This ensures the UTs don't carry over any time they've advanced.
   virtual ~BaseTest(){cwtest_reset_time();}
 };
 
