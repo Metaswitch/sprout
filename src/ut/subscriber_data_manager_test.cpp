@@ -1066,7 +1066,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
   expected_tags["SUB"]++;
 
   // Write the record back to the store.
-  EXPECT_CALL(*(this->_chronos_connection), send_post(_, (now + 300), _, _, _, expected_tags)).
+  EXPECT_CALL(*(this->_chronos_connection), send_post(_, (300), _, _, _, expected_tags)).
                    WillOnce(DoAll(SetArgReferee<0>("TIMER_ID"),
                                   Return(HTTP_OK)));
   rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
@@ -1097,7 +1097,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
   b1->_expires = now + 200;
 
   // Write the record back to the store.
-  EXPECT_CALL(*(this->_chronos_connection), send_put(_, (now + 200), _, _, _, _)).
+  EXPECT_CALL(*(this->_chronos_connection), send_put(_, (200), _, _, _, _)).
                    WillOnce(Return(HTTP_OK));
   rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
   EXPECT_TRUE(rc);
@@ -1112,7 +1112,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
   s1->_expires = now + 100;
 
   // Write the record back to the store.
-  EXPECT_CALL(*(this->_chronos_connection), send_put(_, (now + 100), _, _, _, _)).
+  EXPECT_CALL(*(this->_chronos_connection), send_put(_, (100), _, _, _, _)).
                    WillOnce(Return(HTTP_OK));
   rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
   EXPECT_TRUE(rc);

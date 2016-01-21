@@ -1306,9 +1306,12 @@ void SubscriberDataManager::ChronosTimerRequestSender::send_timers(
       (new_next_expires != old_next_expires) ||
       (timer_id == ""))
   {
+    // Set the expiry time to be relative to now
+    int expiry = new_next_expires - now;
+
     set_timer(aor_id,
               timer_id,
-              new_next_expires,
+              expiry,
               new_tags,
               trail);
   }
