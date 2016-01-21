@@ -53,7 +53,7 @@ class CommunicationMonitorTest : public ::testing::Test
 public:
   CommunicationMonitorTest() :
     _ma(new MockAlarm()),
-    _cm(_ma)
+    _cm(_ma, "sprout", "chronos")
   {
     cwtest_completely_control_time();
   }
@@ -68,50 +68,123 @@ private:
   CommunicationMonitor _cm;
 };
 
-TEST_F(CommunicationMonitorTest, SuccessNoUpdate)
+// Tests that the alarm is raised at the corect point as we move up error states.
+TEST_F(CommunicationMonitorTest, ErrorsStateIncrement)
 {
-  EXPECT_CALL(*_ma, alarmed()).Times(0);
+  // Pass in a success and failure to update the communication monitor at the
+  // same time. We do this by setting one, advancing time beyond the 'next_check'
+  // interval, and then setting the other. This should not set or clear any alarm.
   _cm.inform_success();
-}
-
-TEST_F(CommunicationMonitorTest, FailureNoUpdate)
-{
-  EXPECT_CALL(*_ma, alarmed()).Times(0);
-  _cm.inform_failure();
-}
-
-TEST_F(CommunicationMonitorTest, UpdateNoAlarmSuccessCleared)
-{
   cwtest_advance_time_ms(16000);
-  EXPECT_CALL(*_ma, alarmed()).Times(2).WillRepeatedly(Return(false));
-  EXPECT_CALL(*_ma, set()).Times(0);
-  EXPECT_CALL(*_ma, clear()).Times(0);
-  _cm.inform_success();
-}
 
-TEST_F(CommunicationMonitorTest, UpdateNoAlarmFailureSet)
-{
-  cwtest_advance_time_ms(31000);
-  EXPECT_CALL(*_ma, alarmed()).Times(2).WillRepeatedly(Return(true));
   EXPECT_CALL(*_ma, set()).Times(0);
   EXPECT_CALL(*_ma, clear()).Times(0);
   _cm.inform_failure();
-}
 
-TEST_F(CommunicationMonitorTest, UpdateAlarmFailureCleared)
-{
+  // Now we set a failure after the set_confirm interval has passed again.
+  // This should raise the alarm.
   cwtest_advance_time_ms(16000);
-  EXPECT_CALL(*_ma, alarmed()).Times(2).WillRepeatedly(Return(false));
   EXPECT_CALL(*_ma, set()).Times(1);
   EXPECT_CALL(*_ma, clear()).Times(0);
   _cm.inform_failure();
 }
 
-TEST_F(CommunicationMonitorTest, UpdateAlarmSuccessSet)
+// Tests that the alarm is cleared as we move down the error states.
+TEST_F(CommunicationMonitorTest, ErrorStateDecrement)
 {
+  // First pass in a failure after the next_check interval. This should set the alarm.
+  cwtest_advance_time_ms(16000);
+  EXPECT_CALL(*_ma, set()).Times(1);
+  EXPECT_CALL(*_ma, clear()).Times(0);
+  _cm.inform_failure();
+
+  // Now pass in a success and failure together, after the clear_confirm interval.
+  // Again we do this by setting one, advancing time, then setting the other to
+  // trigger the update. This should clear the alarm.
+  _cm.inform_success();
   cwtest_advance_time_ms(31000);
-  EXPECT_CALL(*_ma, alarmed()).Times(2).WillRepeatedly(Return(true));
+
   EXPECT_CALL(*_ma, set()).Times(0);
   EXPECT_CALL(*_ma, clear()).Times(1);
+  _cm.inform_failure();
+
+  // Pass in a success after the set_confirm interval has passed again.
+  // This should not change anything.
+  cwtest_advance_time_ms(16000);
+  EXPECT_CALL(*_ma, set()).Times(0);
+  EXPECT_CALL(*_ma, clear()).Times(0);
+  _cm.inform_success();
+}
+
+// Tests that the alarm is raised and cleared on moving from NO_ERRORS to ONLY_ERRORS and back.
+TEST_F(CommunicationMonitorTest, OnlyErrorsToNoErrorsUpdate)
+{
+  // First pass in a failure after the next_check interval. This should set the alarm.
+  cwtest_advance_time_ms(16000);
+  EXPECT_CALL(*_ma, set()).Times(1);
+  EXPECT_CALL(*_ma, clear()).Times(0);
+  _cm.inform_failure();
+
+  // Now pass in a success after the clear_confirm interval.
+  // This should clear the alarm.
+  cwtest_advance_time_ms(31000);
+  EXPECT_CALL(*_ma, set()).Times(0);
+  EXPECT_CALL(*_ma, clear()).Times(1);
+  _cm.inform_success();
+}
+
+// Tests that the set_confirm_ms check is working.
+// The communication monitor should only update to set an alarm if the
+// time has advanced by the set_confirm_ms interval at the time of update.
+TEST_F(CommunicationMonitorTest, TestSetConfirmMs)
+{
+  // Run through an update with a success and failure together. This should do nothing.
+  // This will set us to the SOME_ERRORS state, and set the next_check interval to now + set_confirm_ms.
+  _cm.inform_success();
+  cwtest_advance_time_ms(16000);
+
+  EXPECT_CALL(*_ma, set()).Times(0);
+  EXPECT_CALL(*_ma, clear()).Times(0);
+  _cm.inform_failure();
+
+  // Advance time by less than the set_confirm interval, and set a failure.
+  // This should do nothing.
+  cwtest_advance_time_ms(10000);
+  EXPECT_CALL(*_ma, set()).Times(0);
+  EXPECT_CALL(*_ma, clear()).Times(0);
+  _cm.inform_failure();
+
+  // Advance time beyond the set_confirm interval, but less than clear_confirm, and set a failure.
+  // This should now set the alarm.
+  cwtest_advance_time_ms(10000);
+  EXPECT_CALL(*_ma, set()).Times(1);
+  EXPECT_CALL(*_ma, clear()).Times(0);
+  _cm.inform_failure();
+}
+
+// Tests that the clear_confirm check is working.
+// The communication monitor should only update to clear an alarm if the
+// time has advanced by the clear_confirm_ms interval at the time of update.
+TEST_F(CommunicationMonitorTest, TestClearConfirmMs)
+{
+  // Pass in a failure after passing the set_confirm interval.
+  // This should set the alarm, and set next_check to now + clear_confirm_ms.
+  cwtest_advance_time_ms(16000);
+  EXPECT_CALL(*_ma, set()).Times(1);
+  EXPECT_CALL(*_ma, clear()).Times(0);
+  _cm.inform_failure();
+
+  // Advance time less than clear_confirm, but more than set_confirm, and inform of a success.
+  // This should do nothing.
+  cwtest_advance_time_ms(16000);
+  EXPECT_CALL(*_ma, set()).Times(0);
+  EXPECT_CALL(*_ma, clear()).Times(0);
+  _cm.inform_success();
+
+  // Advance time again, beyond clear_confirm, and inform of a success.
+  // This should now clear the alarm.
+  EXPECT_CALL(*_ma, set()).Times(0);
+  EXPECT_CALL(*_ma, clear()).Times(1);
+  cwtest_advance_time_ms(16000);
   _cm.inform_success();
 }

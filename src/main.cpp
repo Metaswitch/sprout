@@ -1358,11 +1358,8 @@ int main(int argc, char* argv[])
   CommunicationMonitor* chronos_comm_monitor = NULL;
   CommunicationMonitor* enum_comm_monitor = NULL;
   CommunicationMonitor* hss_comm_monitor = NULL;
-  CommunicationMonitor* memcached_comm_monitor = NULL;
-  CommunicationMonitor* memcached_remote_comm_monitor = NULL;
+  CommunicationMonitor* astaire_comm_monitor = NULL;
   CommunicationMonitor* ralf_comm_monitor = NULL;
-  Alarm* vbucket_alarm = NULL;
-  Alarm* remote_vbucket_alarm = NULL;
 
   // Set up our exception signal handler for asserts and segfaults.
   signal(SIGABRT, signal_handler);
@@ -1382,7 +1379,13 @@ int main(int argc, char* argv[])
   opt.external_icscf_uri = "";
   opt.auth_enabled = PJ_FALSE;
   opt.enum_suffix = ".e164.arpa";
+
+  // If changing this default for reg_max_expires, note that
+  // debian/homestead.init.d in the homestead repository also defaults
+  // reg_max_expires, and so the default value set in that file must be changed
+  // also.
   opt.reg_max_expires = 300;
+
   opt.sub_max_expires = 300;
   opt.icscf_enabled = false;
   opt.icscf_port = 0;
@@ -1781,28 +1784,29 @@ int main(int argc, char* argv[])
     // Create Sprout's alarm objects.
 
     chronos_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_CHRONOS_COMM_ERROR,
-                                                                        AlarmDef::MAJOR));
+                                                                        AlarmDef::MAJOR),
+                                                    "Sprout",
+                                                    "Chronos");
 
     enum_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_ENUM_COMM_ERROR,
-                                                                     AlarmDef::MAJOR));
+                                                                     AlarmDef::MAJOR),
+                                                 "Sprout",
+                                                 "ENUM");
 
     hss_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_HOMESTEAD_COMM_ERROR,
-                                                                    AlarmDef::CRITICAL));
+                                                                    AlarmDef::CRITICAL),
+                                                "Sprout",
+                                                "Homestead");
 
-    memcached_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_MEMCACHED_COMM_ERROR,
-                                                                          AlarmDef::CRITICAL));
-
-    memcached_remote_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_REMOTE_MEMCACHED_COMM_ERROR,
-                                                                                 AlarmDef::CRITICAL));
+    astaire_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_ASTAIRE_COMM_ERROR,
+                                                                        AlarmDef::CRITICAL),
+                                                    "Sprout",
+                                                    "Astaire");
 
     ralf_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_RALF_COMM_ERROR,
-                                                                     AlarmDef::MAJOR));
-
-    vbucket_alarm = new Alarm("sprout", AlarmDef::SPROUT_VBUCKET_ERROR,
-                                        AlarmDef::MAJOR);
-
-    remote_vbucket_alarm = new Alarm("sprout", AlarmDef::SPROUT_REMOTE_VBUCKET_ERROR,
-                                               AlarmDef::MAJOR);
+                                                                     AlarmDef::MAJOR),
+                                                 "Sprout",
+                                                 "Ralf");
 
     // Start the alarm request agent
     AlarmReqAgent::get_instance().start();
@@ -2037,7 +2041,7 @@ int main(int argc, char* argv[])
 
       local_data_store = (Store*)new TopologyNeutralMemcachedStore(registration_store_location,
                                                                    astaire_resolver,
-                                                                   memcached_comm_monitor);
+                                                                   astaire_comm_monitor);
 
       if (!remote_registration_stores_locations.empty())
       {
@@ -2050,7 +2054,7 @@ int main(int argc, char* argv[])
         {
           Store* remote_data_store = (Store*)new TopologyNeutralMemcachedStore(*it,
                                                                                astaire_resolver,
-                                                                               memcached_comm_monitor);
+                                                                               astaire_comm_monitor);
           remote_data_stores.push_back(remote_data_store);
         }
       }
@@ -2064,9 +2068,8 @@ int main(int argc, char* argv[])
 
     if (local_data_store == NULL)
     {
-      CL_SPROUT_MEMCACHE_CONN_FAIL.log();
       closelog();
-      TRC_ERROR("Failed to connect to data store");
+      TRC_ERROR("Failed to connect to local data store");
       exit(0);
     }
 
@@ -2133,7 +2136,7 @@ int main(int argc, char* argv[])
       {
         av_memstore = (Store*)new TopologyNeutralMemcachedStore(av_store_location,
                                                                 astaire_resolver,
-                                                                memcached_comm_monitor);
+                                                                astaire_comm_monitor);
         av_store = new AvStore(av_memstore);
       }
       else
@@ -2414,11 +2417,8 @@ int main(int argc, char* argv[])
     delete chronos_comm_monitor;
     delete enum_comm_monitor;
     delete hss_comm_monitor;
-    delete memcached_comm_monitor;
-    delete memcached_remote_comm_monitor;
+    delete astaire_comm_monitor;
     delete ralf_comm_monitor;
-    delete vbucket_alarm;
-    delete remote_vbucket_alarm;
   }
 
   delete latency_table;

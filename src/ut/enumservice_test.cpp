@@ -195,7 +195,7 @@ struct ares_naptr_reply basic_naptr_reply[] = {
 
 TEST_F(DNSEnumServiceTest, BasicTest)
 {
-  CommunicationMonitor cm_(new Alarm("sprout", AlarmDef::SPROUT_ENUM_COMM_ERROR, AlarmDef::MAJOR));
+  CommunicationMonitor cm_(new Alarm("sprout", AlarmDef::SPROUT_ENUM_COMM_ERROR, AlarmDef::MAJOR), "sprout", "enum");
   FakeDNSResolver::_database.insert(std::make_pair(std::string("4.3.2.1.e164.arpa"), (struct ares_naptr_reply*)basic_naptr_reply));
   DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory(), &cm_);
   ET("1234", "sip:1234@ut.cw-ngv.com").test(enum_);
@@ -368,7 +368,7 @@ TEST_F(DNSEnumServiceTest, DifferentSuffixTest)
 
 TEST_F(DNSEnumServiceTest, ResolverErrorTest)
 {
-  CommunicationMonitor cm_(new Alarm("sprout", AlarmDef::SPROUT_ENUM_COMM_ERROR, AlarmDef::MAJOR));
+  CommunicationMonitor cm_(new Alarm("sprout", AlarmDef::SPROUT_ENUM_COMM_ERROR, AlarmDef::MAJOR), "sprout", "enum");
   DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory(), &cm_);
   ET("1234", "").test(enum_);
 }

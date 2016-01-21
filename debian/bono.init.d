@@ -148,7 +148,7 @@ get_daemon_args()
         [ -z "$max_tokens" ] || max_tokens_arg="--max-tokens=$max_tokens"
         [ -z "$init_token_rate" ] || init_token_rate_arg="--init-token-rate=$init_token_rate"
         [ -z "$min_token_rate" ] || min_token_rate_arg="--min-token-rate=$min_token_rate"
-        [ -z "$signaling_namespace" ] || namespace_prefix="ip netns exec=$signaling_namespace"
+        [ -z "$signaling_namespace" ] || namespace_prefix="ip netns exec $signaling_namespace"
         [ -z "$exception_max_ttl" ] || exception_max_ttl_arg="--exception-max-ttl=$exception_max_ttl"
 
         DAEMON_ARGS="--domain=$home_domain
