@@ -60,6 +60,7 @@ extern "C" {
 #include "authentication.h"
 #include "avstore.h"
 #include "snmp_success_fail_count_table.h"
+#include "base64.h"
 
 
 //
@@ -814,6 +815,11 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
           TRC_DEBUG("AKA SQN resync request from UE");
           std::string auts = PJUtils::pj_str_to_string(&p->value);
           std::string nonce = PJUtils::pj_str_to_string(&credentials->nonce);
+
+          // Convert the auts and nonce to binary for manipulation
+          nonce = base64_decode(nonce);
+          auts  = base64_decode(auts);
+
           if ((auts.length() != 14) ||
               (nonce.length() != 32))
           {
@@ -828,8 +834,9 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
           {
             // auts and nonce are as expected, so create the resync string
             // that needs to be passed to the HSS, and act as if no
-            // authentication information was received.
-            resync = nonce.substr(0,16) + auts;
+            // authentication information was received. The resync string
+            // should be RAND || AUTS.
+            resync = base64_encode(reinterpret_cast<const unsigned char*>((nonce.substr(0, 16) + auts).c_str()), 30);
             status = PJSIP_EAUTHNOAUTH;
             sc = unauth_sc;
           }
