@@ -342,7 +342,7 @@ SubscriberDataManager::AoRPair* AoRTimeoutTask::set_aor_data(
   return aor_pair;
 }
 
-// Retrieve the aor and binding ID from the opaque data
+// Retrieve the aor ID from the opaque data
 HTTPCode AoRTimeoutTask::parse_response(std::string body)
 {
   rapidjson::Document doc;

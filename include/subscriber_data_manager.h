@@ -202,10 +202,10 @@ public:
     inline const Subscriptions& subscriptions() const { return _subscriptions; }
 
     // Return the number of bindings in the AoR.
-    uint32_t get_bindings_count() { return _bindings.size(); }
+    inline uint32_t get_bindings_count() const { return _bindings.size(); }
 
     // Return the number of subscriptions in the AoR.
-    uint32_t get_subscriptions_count() { return _subscriptions.size(); }
+    inline uint32_t get_subscriptions_count() const { return _subscriptions.size(); }
 
     // Return the expiry time of the binding or subscription due to expire next.
     int get_next_expires();

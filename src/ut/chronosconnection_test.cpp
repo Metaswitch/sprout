@@ -101,7 +101,7 @@ TEST_F(ChronosConnectionTest, SendPostWithTags)
   fakecurl_responses["http://10.42.42.42:80/timers"] = Response(headers);
 
   std::string opaque = "{\"aor_id\": \"aor_id\", \"binding_id\": \"binding_id\"}";
-  std::map<std::string, uint32_t> tags; tags["TAG1"]++; tags["TAG2"]++;
+  std::map<std::string, uint32_t> tags = { {"TAG1", 1}, {"TAG2", 1} };
   std::string post_identity = "";
   HTTPCode status = _chronos.send_post(post_identity, 300, "/timers", opaque,  0, tags);
   EXPECT_EQ(status, 200);
@@ -154,7 +154,7 @@ TEST_F(ChronosConnectionTest, SendPutWithTags)
   // We expect Chronos to change the put identity to the value in the Location
   // header.
   std::string opaque = "{\"aor_id\": \"aor_id\", \"binding_id\": \"binding_id\"}";
-  std::map<std::string, uint32_t> tags; tags["TAG1"]++; tags["TAG2"]++;
+  std::map<std::string, uint32_t> tags = { {"TAG1", 1}, {"TAG2", 1} };
   std::string put_identity = "abcd";
   HTTPCode status = _chronos.send_put(put_identity, 300, "/timers", opaque,  0, tags);
   EXPECT_EQ(status, 200);

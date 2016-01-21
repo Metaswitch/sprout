@@ -733,8 +733,10 @@ std::string SubscriberDataManager::AoR::Binding::pub_gruu_quoted_string(pj_pool_
   return ret;
 }
 
-// Utility function to return the expiry time of the binding or
-// subscription due to expire next.
+// Utility function to return the expiry time of the binding or subscription due
+// to expire next. If the function finds no expiry times in the bindings or
+// subscriptions it returns 0. This function should never be called on an empty AoR,
+// so a 0 is indicative of something wrong with the _expires values of AoR members.
 int SubscriberDataManager::AoR::get_next_expires()
 {
   // Set a temp int to INT_MAX to compare expiry times to.
@@ -1283,31 +1285,38 @@ void SubscriberDataManager::ChronosTimerRequestSender::send_timers(
 {
   std::map<std::string, uint32_t> old_tags;
   std::map<std::string, uint32_t> new_tags;
+  AoR* orig_aor = aor_pair->get_orig();
+  AoR* current_aor = aor_pair->get_current();
+  std::string& timer_id = current_aor->_timer_id;
 
-  build_tag_info(aor_pair->get_orig(), old_tags);
-  build_tag_info(aor_pair->get_current(), new_tags);
-
-  std::string& timer_id = aor_pair->get_current()->_timer_id;
   // An AoR with no bindings is invalid, and the timer should be deleted.
   // We do this before getting next_expires to save on processing.
-  if (new_tags["BIND"] == 0)
+  if (current_aor->get_bindings_count() == 0)
   {
     if (timer_id != "")
     {
       _chronos_conn->send_delete(timer_id, trail);
     }
-    return;
+  return;
   }
 
-  int old_next_expires = aor_pair->get_orig()->get_next_expires();
-  int new_next_expires = aor_pair->get_current()->get_next_expires();
+  build_tag_info(orig_aor, old_tags);
+  build_tag_info(current_aor, new_tags);
+  int old_next_expires = orig_aor->get_next_expires();
+  int new_next_expires = current_aor->get_next_expires();
+
+  if ((old_next_expires == 0) || (new_next_expires == 0))
+  {
+    // This should never happen, as an empty AoR should never reach get_next_expires
+    TRC_DEBUG("get_next_expires returned 0. The expiry of AoR members is corrupt, or an empty (invalid) AoR was passed in.");
+  }
 
   if ((new_tags != old_tags)                 ||
       (new_next_expires != old_next_expires) ||
       (timer_id == ""))
   {
-    // Set the expiry time to be relative to now
-    int expiry = new_next_expires - now;
+    // Set the expiry time to be relative to now.
+    int expiry = (new_next_expires > now) ? (new_next_expires - now) : (now);
 
     set_timer(aor_id,
               timer_id,
