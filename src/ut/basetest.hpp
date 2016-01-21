@@ -49,7 +49,6 @@
 /// Fixture for test.
 class BaseTest : public ::testing::Test
 {
-  BaseTest();
   virtual ~BaseTest();
 };
 
