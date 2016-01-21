@@ -155,7 +155,7 @@ extern LoadMonitor* load_monitor;
 extern HSSConnection* hss_connection;
 extern Store* local_data_store;
 extern SubscriberDataManager* local_sdm;
-extern SubscriberDataManager* remote_sdm;
+extern std::vector<SubscriberDataManager*> remote_sdms;
 extern RalfProcessor* ralf_processor;
 extern HttpResolver* http_resolver;
 extern ACRFactory* scscf_acr_factory;
