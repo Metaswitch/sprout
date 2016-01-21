@@ -3691,9 +3691,6 @@ TEST_F(BasicProxyTest, BlacklistOnTimeout)
 // out.
 TEST_F(BasicProxyTest, StatelessProxyNoBlacklistOnTimeout)
 {
-  // This server doesn't respond, so advance time to trigger the timeout.
-  //cwtest_advance_time_ms(33000000);
-
   pjsip_tx_data* tdata;
 
   // Set up SRV records so that proxy-x has a higher priority than proxy-y,

@@ -51,7 +51,6 @@ extern "C" {
 }
 
 #include "stack.h"
-#include "zmq_lvc.h"
 #include "statistic.h"
 #include "faketransport_udp.hpp"
 #include "faketransport_tcp.hpp"

@@ -45,16 +45,10 @@
 #include "fakelogger.h"
 #include "stack.h"
 #include "snmp_event_accumulator_table.h"
-#include "statistic.h"
-#include "zmq_lvc.h"
-
-#include "basetest.hpp"
-#include "test_interposer.hpp"
 
 /// Fixture for test.
 class BaseTest : public ::testing::Test
 {
-  // This ensures the UTs don't carry over any time they've advanced.
-  virtual ~BaseTest(){cwtest_reset_time();}
+  virtual ~BaseTest();
 };
 
