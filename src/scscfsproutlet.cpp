@@ -1791,7 +1791,7 @@ void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
     // header.
     return;
   }
- 
+
   // Look for P-Asserted-Identity header.
   pjsip_routing_hdr* asserted_id =
     (pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(msg,
