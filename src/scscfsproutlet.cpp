@@ -1791,7 +1791,7 @@ void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
     // header.
     return;
   }
-  
+ 
   // Look for P-Asserted-Identity header.
   pjsip_routing_hdr* asserted_id =
     (pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(msg,
@@ -1811,9 +1811,10 @@ void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
     if (PJSIP_URI_SCHEME_IS_SIP(uri))
     {
       // If we have a SIP URI, we add a second P-Asserted-Identity containing a
-      // tel URI if this SIP URI has a tel URI alias. 
+      // tel URI if this SIP URI has a tel URI alias.
       new_p_a_i_str = "tel:";
       new_p_a_i_str += PJUtils::pj_str_to_string(&((pjsip_sip_uri*)uri)->user);
+
       // If the SIP URI has a alias tel URI with the same username we add this
       // tel URI to the P-Asserted-Identity header. If not we select the first
       // tel URI in the alias list to add to the P-Asserted-Identity header.
