@@ -257,7 +257,7 @@ pj_status_t user_lookup(pj_pool_t *pool,
     if (av->HasMember("aka"))
     {
       pjsip_param* auts_param = pjsip_param_find(&credentials->other_param,
-                                        &STR_AUTS);
+                                                 &STR_AUTS);
 
       // AKA authentication.  The response in the AV must be used as a
       // plain-text password for the MD5 Digest computation.  Convert the text
@@ -836,7 +836,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
             // that needs to be passed to the HSS, and act as if no
             // authentication information was received. The resync string
             // should be RAND || AUTS.
-            resync = base64_encode(reinterpret_cast<const unsigned char*>((nonce.substr(0, 16) + auts).c_str()), 30);
+            resync = base64_encode(nonce.substr(0, 16) + auts);
             status = PJSIP_EAUTHNOAUTH;
             sc = unauth_sc;
           }

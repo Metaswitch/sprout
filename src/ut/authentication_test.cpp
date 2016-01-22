@@ -282,12 +282,12 @@ public:
   string get();
 
   static string calculate_digest_response(
-      string algorithm, bool force_aka,
-      string auth_user, string key,
-      string method, string uri,
-      string nonce, string nc,
-      string cnonce, string qop,
-      string auth_realm);
+      const string& algorithm, bool force_aka,
+      const string& auth_user, const string& key,
+      const string& method, const string& uri,
+      const string& nonce, const string& nc,
+      const string& cnonce, const string& qop,
+      const string& auth_realm);
 
 };
 
@@ -303,12 +303,12 @@ std::string AuthenticationMessage::hash2str(md5_byte_t* hash)
 }
 
 string AuthenticationMessage::calculate_digest_response(
-    string algorithm, bool force_aka,
-    string auth_user, string key,
-    string method, string uri,
-    string nonce, string nc,
-    string cnonce, string qop,
-    string auth_realm)
+    const string& algorithm, const bool force_aka,
+    const string& auth_user, const string& key,
+    const string& method, const string& uri,
+    const string& nonce, const string& nc,
+    const string& cnonce, const string& qop,
+    const string& auth_realm)
 {
   md5_state_t md5;
   md5_byte_t resp[16];
@@ -1282,7 +1282,7 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
   EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
   EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes);
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&autn=f3beb9e37db5f3beb9e37db5f3beb9e3df6d77db5df6d77db5df6d77db5d");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&resync-auth=f3beb9e37db5f3beb9e37db5f3beb9e3df6d77db5df6d77db5df6d77db5d");
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
 }
 
