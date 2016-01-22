@@ -60,6 +60,7 @@ extern "C" {
 #include "authentication.h"
 #include "avstore.h"
 #include "snmp_success_fail_count_table.h"
+#include "base64.h"
 
 
 //
@@ -255,12 +256,18 @@ pj_status_t user_lookup(pj_pool_t *pool,
     pj_strdup(pool, &cred_info->username, acc_name);
     if (av->HasMember("aka"))
     {
+      pjsip_param* auts_param = pjsip_param_find(&credentials->other_param,
+                                                 &STR_AUTS);
+
       // AKA authentication.  The response in the AV must be used as a
       // plain-text password for the MD5 Digest computation.  Convert the text
-      // into binary as this is what PJSIP is expecting.
+      // into binary as this is what PJSIP is expecting. If we find the 'auts'
+      // parameter, then leave the response as the empty string in accordance
+      // with RFC 3310.
       std::string response = "";
       if (((*av)["aka"].HasMember("response")) &&
-          ((*av)["aka"]["response"].IsString()))
+          ((*av)["aka"]["response"].IsString()) &&
+          auts_param == NULL)
       {
         response = (*av)["aka"]["response"].GetString();
       }
@@ -808,6 +815,11 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
           TRC_DEBUG("AKA SQN resync request from UE");
           std::string auts = PJUtils::pj_str_to_string(&p->value);
           std::string nonce = PJUtils::pj_str_to_string(&credentials->nonce);
+
+          // Convert the auts and nonce to binary for manipulation
+          nonce = base64_decode(nonce);
+          auts  = base64_decode(auts);
+
           if ((auts.length() != 14) ||
               (nonce.length() != 32))
           {
@@ -822,8 +834,9 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
           {
             // auts and nonce are as expected, so create the resync string
             // that needs to be passed to the HSS, and act as if no
-            // authentication information was received.
-            resync = nonce.substr(0,16) + auts;
+            // authentication information was received. The resync string
+            // should be RAND || AUTS.
+            resync = base64_encode(nonce.substr(0, 16) + auts);
             status = PJSIP_EAUTHNOAUTH;
             sc = unauth_sc;
           }

@@ -277,11 +277,17 @@ public:
   {
   }
 
-  std::string hash2str(md5_byte_t* hash);
-
-  void calculate_digest_response();
+  static std::string hash2str(md5_byte_t* hash);
 
   string get();
+
+  static string calculate_digest_response(
+      const string& algorithm, bool force_aka,
+      const string& auth_user, const string& key,
+      const string& method, const string& uri,
+      const string& nonce, const string& nc,
+      const string& cnonce, const string& qop,
+      const string& auth_realm);
 
 };
 
@@ -296,25 +302,30 @@ std::string AuthenticationMessage::hash2str(md5_byte_t* hash)
   return ss.str();
 }
 
-
-void AuthenticationMessage::calculate_digest_response()
+string AuthenticationMessage::calculate_digest_response(
+    const string& algorithm, const bool force_aka,
+    const string& auth_user, const string& key,
+    const string& method, const string& uri,
+    const string& nonce, const string& nc,
+    const string& cnonce, const string& qop,
+    const string& auth_realm)
 {
   md5_state_t md5;
   md5_byte_t resp[16];
-
+ 
   std::string ha1;
-  if (_algorithm == "AKAv1-MD5" || _force_aka)
+  if (algorithm == "AKAv1-MD5" || force_aka)
   {
     // Key is a plain text password, so convert to HA1
     md5_init(&md5);
-    md5_append(&md5, (md5_byte_t*)_auth_user.data(), _auth_user.length());
+    md5_append(&md5, (md5_byte_t*)auth_user.data(), auth_user.length());
     md5_append(&md5, (md5_byte_t*)":", 1);
-    md5_append(&md5, (md5_byte_t*)_auth_realm.data(), _auth_realm.length());
+    md5_append(&md5, (md5_byte_t*)auth_realm.data(), auth_realm.length());
     md5_append(&md5, (md5_byte_t*)":", 1);
-    for (size_t ii = 0; ii < _key.length(); ii += 2)
+    for (size_t ii = 0; ii < key.length(); ii += 2)
     {
-      md5_byte_t byte = pj_hex_digit_to_val(_key[ii]) * 16 +
-                        pj_hex_digit_to_val(_key[ii+1]);
+      md5_byte_t byte = pj_hex_digit_to_val(key[ii]) * 16 +
+                        pj_hex_digit_to_val(key[ii+1]);
       md5_append(&md5, &byte, 1);
     }
     md5_finish(&md5, resp);
@@ -323,14 +334,14 @@ void AuthenticationMessage::calculate_digest_response()
   else
   {
     // Key is already HA1.
-    ha1 = _key;
+    ha1 = key;
   }
 
   // Calculate HA2
   md5_init(&md5);
-  md5_append(&md5, (md5_byte_t*)_method.data(), _method.length());
+  md5_append(&md5, (md5_byte_t*)method.data(), method.length());
   md5_append(&md5, (md5_byte_t*)":", 1);
-  md5_append(&md5, (md5_byte_t*)_uri.data(), _uri.length());
+  md5_append(&md5, (md5_byte_t*)uri.data(), uri.length());
   md5_finish(&md5, resp);
   std::string ha2 = hash2str(resp);
 
@@ -338,19 +349,18 @@ void AuthenticationMessage::calculate_digest_response()
   md5_init(&md5);
   md5_append(&md5, (md5_byte_t*)ha1.data(), ha1.length());
   md5_append(&md5, (md5_byte_t*)":", 1);
-  md5_append(&md5, (md5_byte_t*)_nonce.data(), _nonce.length());
+  md5_append(&md5, (md5_byte_t*)nonce.data(), nonce.length());
   md5_append(&md5, (md5_byte_t*)":", 1);
-  md5_append(&md5, (md5_byte_t*)_nc.data(), _nc.length());
+  md5_append(&md5, (md5_byte_t*)nc.data(), nc.length());
   md5_append(&md5, (md5_byte_t*)":", 1);
-  md5_append(&md5, (md5_byte_t*)_cnonce.data(), _cnonce.length());
+  md5_append(&md5, (md5_byte_t*)cnonce.data(), cnonce.length());
   md5_append(&md5, (md5_byte_t*)":", 1);
-  md5_append(&md5, (md5_byte_t*)_qop.data(), _qop.length());
+  md5_append(&md5, (md5_byte_t*)qop.data(), qop.length());
   md5_append(&md5, (md5_byte_t*)":", 1);
   md5_append(&md5, (md5_byte_t*)ha2.data(), ha2.length());
   md5_finish(&md5, resp);
-  _response = hash2str(resp);
+  return hash2str(resp);
 }
-
 
 string AuthenticationMessage::get()
 {
@@ -360,7 +370,13 @@ string AuthenticationMessage::get()
       (!_key.empty()))
   {
     // No response provided, but a key is provided, so calculate the response.
-    calculate_digest_response();
+    _response = calculate_digest_response(
+        _algorithm, _force_aka,
+        _auth_user, _key,
+        _method, _uri,
+        _nonce, _nc,
+        _cnonce, _qop,
+        _auth_realm);
   }
 
   if (_cseq == 0)
@@ -1174,7 +1190,7 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
   // the purposes of the test as Clearwater never itself runs the MILENAGE
   // algorithms to generate or extract keys.
   _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
-                              "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
+                              "{\"aka\":{\"challenge\":\"8765432187654321876543218765432187654321432=\","
                               "\"response\":\"12345678123456781234567812345678\","
                               "\"cryptkey\":\"0123456789abcdef\","
                               "\"integritykey\":\"fedcba9876543210\"}}");
@@ -1194,7 +1210,7 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
   std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
   std::map<std::string, std::string> auth_params;
   parse_www_authenticate(auth, auth_params);
-  EXPECT_EQ("87654321876543218765432187654321", auth_params["nonce"]);
+  EXPECT_EQ("8765432187654321876543218765432187654321432=", auth_params["nonce"]);
   EXPECT_EQ("0123456789abcdef", auth_params["ck"]);
   EXPECT_EQ("fedcba9876543210", auth_params["ik"]);
   EXPECT_EQ("auth", auth_params["qop"]);
@@ -1203,8 +1219,8 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
 
   // Set up a second HSS response for the resync query from the authentication
   // module.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&autn=876543218765432132132132132132",
-                              "{\"aka\":{\"challenge\":\"12345678123456781234567812345678\","
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&resync-auth=87654321876543218765499td9td9td9td9td9td",
+                              "{\"aka\":{\"challenge\":\"1234567812345678123456781234567812345678123=\","
                               "\"response\":\"87654321876543218765432187654321\","
                               "\"cryptkey\":\"fedcba9876543210\","
                               "\"integritykey\":\"0123456789abcdef\"}}");
@@ -1214,14 +1230,20 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
   // the nonce was out of sync.
   AuthenticationMessage msg2("REGISTER");
   msg2._algorithm = "AKAv1-MD5";
-  msg2._key = "12345678123456781234567812345678";
   msg2._nonce = auth_params["nonce"];
   msg2._opaque = auth_params["opaque"];
   msg2._nc = "00000001";
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
-  msg2._auts = "32132132132132";
+  msg2._auts = "3213213213213213213=";
   msg2._integ_prot = "yes";
+  msg2._response = AuthenticationMessage::calculate_digest_response(
+    msg2._algorithm, msg2._force_aka,
+    msg2._auth_user, "",
+    msg2._method, msg2._uri,
+    msg2._nonce, msg2._nc,
+    msg2._cnonce, msg2._qop,
+    msg2._auth_realm);
   inject_msg(msg2.get());
 
   // Expect another 401 Not Authorized response with a new challenge.
@@ -1235,7 +1257,7 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
   auth = get_headers(tdata->msg, "WWW-Authenticate");
   auth_params.clear();
   parse_www_authenticate(auth, auth_params);
-  EXPECT_EQ("12345678123456781234567812345678", auth_params["nonce"]);
+  EXPECT_EQ("1234567812345678123456781234567812345678123=", auth_params["nonce"]);
   EXPECT_EQ("fedcba9876543210", auth_params["ck"]);
   EXPECT_EQ("0123456789abcdef", auth_params["ik"]);
   EXPECT_EQ("auth", auth_params["qop"]);
@@ -1260,7 +1282,7 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
   EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
   EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes);
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&autn=876543218765432132132132132132");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&resync-auth=f3beb9e37db5f3beb9e37db5f3beb9e3df6d77db5df6d77db5df6d77db5d");
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
 }
 
@@ -1309,13 +1331,19 @@ TEST_F(AuthenticationTest, AKAAuthResyncFail)
   // the nonce was out of sync.
   AuthenticationMessage msg2("REGISTER");
   msg2._algorithm = "AKAv1-MD5";
-  msg2._key = "12345678123456781234567812345678";
   msg2._nonce = auth_params["nonce"];
   msg2._opaque = auth_params["opaque"];
   msg2._nc = "00000001";
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
   msg2._auts = "321321321321";    // Too short
+  msg2._response = AuthenticationMessage::calculate_digest_response(
+    msg2._algorithm, msg2._force_aka,
+    msg2._auth_user, "",
+    msg2._method, msg2._uri,
+    msg2._nonce, msg2._nc,
+    msg2._cnonce, msg2._qop,
+    msg2._auth_realm);
   inject_msg(msg2.get());
 
   // Expect a 403 Forbidden response.
