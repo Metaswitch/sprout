@@ -7077,7 +7077,7 @@ TEST_F(SCSCFTest, TestAddSecondTelPAIHdrWithAlias)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
 }
 
-// Checks if we have multiple aliases and non of them matches the SIP URI
+// Checks if we have multiple aliases and none of them matches the SIP URI
 // supplied that we add the first tel URI on the alias list to the
 // P-Asserted-Identity header.
 TEST_F(SCSCFTest, TestAddSecondTelPAIHdrMultipleAliasesNoMatch)
