@@ -1830,16 +1830,18 @@ void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
       }
       else
       {
-        for (unsigned int i=0; i<_aliases.size(); i++)
+        for (std::vector<std::string>::iterator it = _aliases.begin();
+             it != _aliases.end();
+             ++it)
         {
-          std::string tel_URI = "tel:";
-          std::size_t found = _aliases[i].rfind(tel_URI.c_str(), 4); 
-          if (found!=std::string::npos)
+          std::string tel_URI_prefix = "tel:";
+          bool has_tel_prefix = ((*it).rfind(tel_URI_prefix.c_str(), 4) != std::string::npos); 
+          if (has_tel_prefix)
           {
-            TRC_DEBUG("Add second P-Assered Identity for %s", _aliases[i].c_str());
+            TRC_DEBUG("Add second P-Asserted Identity for %s", (*it).c_str());
             PJUtils::add_asserted_identity(msg,
                                            get_pool(msg),
-                                           _aliases[i],
+                                           *it,
                                            asserted_id->name_addr.display);
             break;
           }
