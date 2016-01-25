@@ -52,6 +52,23 @@
             ]
         },
         {
+            "index": 1003,
+            "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
+            "name": "SPROUT_REMOTE_ASTAIRE_COMM_ERROR",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "Sprout has re-established connection with remote Astaires.",
+                    "description": "Sprout: Remote Astaire communication error cleared"
+                },
+                {
+                    "severity": "CRITICAL",
+                    "details": "Sprout has failed to make a connection with the Astaire processes in a remote cluster  . If this alarm does not clear, network connection may have been lost, or the Astaire processes may have failed and be in an unrecoverable condition.",
+                    "description": "Sprout: Remote Astaire communication error"
+                }
+            ]
+        },
+        {
             "index": 1004,
             "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
             "name": "SPROUT_CHRONOS_COMM_ERROR",

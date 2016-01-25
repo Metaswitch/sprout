@@ -1359,6 +1359,7 @@ int main(int argc, char* argv[])
   CommunicationMonitor* enum_comm_monitor = NULL;
   CommunicationMonitor* hss_comm_monitor = NULL;
   CommunicationMonitor* astaire_comm_monitor = NULL;
+  CommunicationMonitor* remote_astaire_comm_monitor = NULL;
   CommunicationMonitor* ralf_comm_monitor = NULL;
 
   // Set up our exception signal handler for asserts and segfaults.
@@ -1803,6 +1804,12 @@ int main(int argc, char* argv[])
                                                     "Sprout",
                                                     "Astaire");
 
+    remote_astaire_comm_monitor = new CommunicationMonitor(new Alarm("sprout",
+                                                                     AlarmDef::SPROUT_REMOTE_ASTAIRE_COMM_ERROR,
+                                                                     AlarmDef::CRITICAL),
+                                                    "Sprout",
+                                                    "remote Astaire");
+
     ralf_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_RALF_COMM_ERROR,
                                                                      AlarmDef::MAJOR),
                                                  "Sprout",
@@ -2054,7 +2061,7 @@ int main(int argc, char* argv[])
         {
           Store* remote_data_store = (Store*)new TopologyNeutralMemcachedStore(*it,
                                                                                astaire_resolver,
-                                                                               astaire_comm_monitor);
+                                                                               remote_astaire_comm_monitor);
           remote_data_stores.push_back(remote_data_store);
         }
       }
@@ -2418,6 +2425,7 @@ int main(int argc, char* argv[])
     delete enum_comm_monitor;
     delete hss_comm_monitor;
     delete astaire_comm_monitor;
+    delete remote_astaire_comm_monitor;
     delete ralf_comm_monitor;
   }
 
