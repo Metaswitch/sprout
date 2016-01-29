@@ -140,11 +140,15 @@ protected:
   static void add_host_mapping(const string& hostname, const string& addresses);
 
   /// Inject an inbound SIP message by passing it into the stack.
-  void inject_msg(const string& msg, TransportFlow* tp = _tp_default, int expected = -99);
+  void inject_msg(const string& msg, TransportFlow* tp = _tp_default);
 
   /// Inject an inbound SIP message structure by passing it into the
   /// stack.
   void inject_msg(pjsip_msg* msg, TransportFlow* tp = _tp_default);
+
+  /// Inject an inbound SIP message by passing it into the stack but expect it
+  /// to fail message parsing.
+  void inject_msg_failure(const string& msg, TransportFlow* tp = _tp_default, int expected = -1);
 
   /// Inject message directly into the specified module, bypassing other
   /// layers.  Allows testing which messages we accept into the module.

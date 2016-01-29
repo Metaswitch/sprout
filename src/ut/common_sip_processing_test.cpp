@@ -194,8 +194,8 @@ public:
 
       string requri = target;
       string route = _route.empty() ? "" : _route + "\r\n";
-      char   length[128];
-      snprintf(length, sizeof(length), "Content-Length: %d\r\n", (int)_body.length());
+      char   content_length[128];
+      snprintf(content_length, sizeof(content_length), "Content-Length: %d\r\n", (int)_body.length());
 
       int n = snprintf(buf, sizeof(buf),
                        "%1$s %9$s SIP/2.0\r\n"
@@ -217,7 +217,7 @@ public:
                        /*  2 */ _from.c_str(),
                        /*  3 */ _fromdomain.c_str(),
                        /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
-                       /*  5 */ _contentlength ? length : "",
+                       /*  5 */ _contentlength ? content_length : "",
                        /*  6 */ _body.c_str(),
                        /*  7 */ _extra.empty() ? "" : string(_extra).append("\r\n").c_str(),
                        /*  8 */ _forwards,
@@ -560,7 +560,7 @@ TEST_F(CommonProcessingTest, NoContentLengthDropped)
   // Inject a request with no content length header.
   Message msg1;
   msg1._contentlength = false;
-  inject_msg(msg1.get_request(), _tp, -1);
+  inject_msg_failure(msg1.get_request(), _tp, -PJSIP_EMISSINGHDR);
 
   // Expect it to just vanish.
   ASSERT_EQ(0, txdata_count());
