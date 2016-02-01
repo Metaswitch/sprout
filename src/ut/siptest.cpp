@@ -378,6 +378,23 @@ void SipTest::inject_msg(pjsip_msg* msg, TransportFlow* tp)
   inject_msg(string(buf, len), tp);
 }
 
+void SipTest::inject_msg_failure(const string& msg, TransportFlow* tp, int expected)
+{
+  pj_pool_t *rdata_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
+                                                  PJSIP_POOL_RDATA_LEN,
+                                                  PJSIP_POOL_RDATA_INC);
+  pjsip_rx_data* rdata = build_rxdata(msg, tp, rdata_pool);
+  set_trail(rdata, SAS::new_trail());
+  char buf[100];
+  snprintf(buf, sizeof(buf), "inject_msg on %p (transport %p)", tp, tp->_transport);
+  log_pjsip_buf(buf, rdata->pkt_info.packet, rdata->pkt_info.len);
+  pj_size_t size_eaten = pjsip_tpmgr_receive_packet(rdata->tp_info.transport->tpmgr,
+                                                    rdata);
+  EXPECT_EQ((pj_size_t)expected, size_eaten);
+  pj_pool_reset(rdata_pool);
+  pj_pool_release(rdata_pool);
+}
+
 
 /// Inject message directly into the registrar module, bypassing other
 /// layers.  Allows testing which messages we accept into the module.
