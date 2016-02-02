@@ -34,4 +34,4 @@
 # under which the OpenSSL Project distributes the OpenSSL toolkit software,
 # as those licenses appear in the file LICENSE-OPENSSL.
 
-service bono quiesce
+service bono stop
