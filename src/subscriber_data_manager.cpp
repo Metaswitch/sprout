@@ -67,10 +67,6 @@ extern "C" {
 #include "json_parse_utils.h"
 #include "rapidjson/error/en.h"
 
-const std::vector<std::string> SubscriberDataManager::TAGS_NONE = {};
-const std::vector<std::string> SubscriberDataManager::TAGS_REG = {"REG"};
-const std::vector<std::string> SubscriberDataManager::TAGS_SUB = {"SUB"};
-
 /// SubscriberDataManager Methods
 
 SubscriberDataManager::SubscriberDataManager(Store* data_store,
