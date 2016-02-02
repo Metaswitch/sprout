@@ -48,6 +48,7 @@
 #include "sas.h"
 #include "logger.h"
 #include "test_utils.hpp"
+#include "test_interposer.hpp"
 
 using namespace std;
 
@@ -71,7 +72,9 @@ class Logger2 : public Logger
   Logger2(const std::string& directory, const std::string& filename) :
     Logger(directory, filename),
     _time_sec(0),
-    _time_nsec(0)
+    _time_nsec(0),
+    _monotonic_time_sec(0),
+    _monotonic_time_nsec(0)
   {
   }
 
@@ -92,15 +95,37 @@ class Logger2 : public Logger
     }
   }
 
+  void gettime_monotonic(struct timespec* ts)
+  {
+    if (_monotonic_time_sec == 0 && _monotonic_time_nsec == 0)
+    {
+      Logger::gettime_monotonic(ts);
+    }
+    else
+    {
+      ts->tv_sec = _monotonic_time_sec;
+      ts->tv_nsec = _monotonic_time_nsec;
+    }
+  }
+
   void settime(time_t time_sec, long time_nsec)
   {
     _time_sec = time_sec;
     _time_nsec = time_nsec;
   }
 
+  void settime_monotonic(time_t time_sec, long time_nsec)
+  {
+    _monotonic_time_sec = time_sec;
+    _monotonic_time_nsec = time_nsec;
+  }
+
 private:
   time_t _time_sec;
   long _time_nsec;
+
+  time_t _monotonic_time_sec;
+  long _monotonic_time_nsec;
 };
 
 
@@ -185,6 +210,68 @@ TEST_F(LoggerTest, RealTime)
 
   int rc = system("grep '^[0-3][0-9]-[0-1][0-9]-[0-9][0-9][0-9][0-9] ..:..:..\\.... UTC Wossat it sez for da test' /tmp/logtest_*.txt >/dev/null");
   EXPECT_EQ(0, WEXITSTATUS(rc));
+}
+
+TEST_F(LoggerTest, CycleLogsOnError)
+{
+  // Simulate inability to open files.
+  cwtest_control_fopen(NULL);
+
+  Logger2 log("/tmp", "logtest");
+  time_t midnight = 1356048000u; // 2012-12-21T00:00:00 UTC
+  log.settime(midnight, 0);
+  log.settime_monotonic(midnight, 0);
+
+  // Attempt to open a log file and fail.
+  log.write("Log 1\n");
+
+  // Now allow the logger to open a file.
+  cwtest_release_fopen();
+
+  // Log should not rotate after 3s.
+  log.settime_monotonic(midnight + 3, 0);
+  log.write("Log 2\n");
+
+  // Log should rotate after 6s.
+  log.settime_monotonic(midnight + 6, 0);
+  log.write("Log 3\n");
+
+  log.flush();
+
+  FILE* f = fopen("/tmp/logtest_20121221T000000Z.txt", "r");
+  char linebuf[1024];
+  char* line;
+
+  ASSERT_TRUE(f != NULL);
+  line = fgets(linebuf, sizeof(linebuf), f);
+  EXPECT_STREQ("21-12-2012 00:00:00.000 UTC Failed to open logfile (2 - No such file or directory), 2 logs discarded\n", line);
+  line = fgets(linebuf, sizeof(linebuf), f);
+  EXPECT_STREQ("21-12-2012 00:00:00.000 UTC Log 3\n", line);
+  line = fgets(linebuf, sizeof(linebuf), f);
+  EXPECT_TRUE(line == NULL);
+  fclose(f);
+}
+
+// This test case is interesting because the logger will normally only attempt
+// to open a log file if at least 5s have passed since time zero on the
+// monotonic clock.
+TEST_F(LoggerTest, StartNearTimeZero)
+{
+  Logger2 log("/tmp", "logtest");
+  log.settime(2u, 0);
+  log.settime_monotonic(2u, 0);
+
+  log.write("Log 1\n");
+  log.flush();
+
+  FILE* f = fopen("/tmp/logtest_19700101T000000Z.txt", "r");
+  char linebuf[1024];
+  char* line;
+
+  ASSERT_TRUE(f != NULL);
+  line = fgets(linebuf, sizeof(linebuf), f);
+  EXPECT_STREQ("01-01-1970 00:00:02.000 UTC Log 1\n", line);
+  fclose(f);
 }
 
 TEST_F(LoggerTest, LongLine)
