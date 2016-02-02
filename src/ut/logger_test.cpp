@@ -215,7 +215,7 @@ TEST_F(LoggerTest, RealTime)
 TEST_F(LoggerTest, CycleLogsOnError)
 {
   // Simulate inability to open files.
-  cw_control_fopen(NULL);
+  cwtest_control_fopen(NULL);
 
   Logger2 log("/tmp", "logtest");
   time_t midnight = 1356048000u; // 2012-12-21T00:00:00 UTC
@@ -226,7 +226,7 @@ TEST_F(LoggerTest, CycleLogsOnError)
   log.write("Log 1\n");
 
   // Now allow the logger to open a file.
-  cw_release_fopen();
+  cwtest_release_fopen();
 
   // Log should not rotate after 3s.
   log.settime_monotonic(midnight + 3, 0);
@@ -249,6 +249,28 @@ TEST_F(LoggerTest, CycleLogsOnError)
   EXPECT_STREQ("21-12-2012 00:00:00.000 UTC Log 3\n", line);
   line = fgets(linebuf, sizeof(linebuf), f);
   EXPECT_TRUE(line == NULL);
+  fclose(f);
+}
+
+// This test case is interesting because the logger will normally only attempt
+// to open a log file if at least 5s have passed since time zero on the
+// monotonic clock.
+TEST_F(LoggerTest, StartNearTimeZero)
+{
+  Logger2 log("/tmp", "logtest");
+  log.settime(2u, 0);
+  log.settime_monotonic(2u, 0);
+
+  log.write("Log 1\n");
+  log.flush();
+
+  FILE* f = fopen("/tmp/logtest_19700101T000000Z.txt", "r");
+  char linebuf[1024];
+  char* line;
+
+  ASSERT_TRUE(f != NULL);
+  line = fgets(linebuf, sizeof(linebuf), f);
+  EXPECT_STREQ("01-01-1970 00:00:02.000 UTC Log 1\n", line);
   fclose(f);
 }
 
