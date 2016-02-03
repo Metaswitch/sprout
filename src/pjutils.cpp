@@ -2139,7 +2139,7 @@ bool PJUtils::get_rn(pjsip_uri* uri, std::string& routing_value)
   }
   else if (PJSIP_URI_SCHEME_IS_SIP(uri))
   {
-    // If the URI is a tel URI, pull out the information from the userinfo_params
+    // If the URI is a SIP URI, pull out the information from the userinfo_params
     rn = pjsip_param_find(&((pjsip_sip_uri*)uri)->userinfo_param, &STR_RN);
   }
 
