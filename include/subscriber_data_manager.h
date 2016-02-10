@@ -201,6 +201,15 @@ public:
     /// Retrieve all the subscriptions.
     inline const Subscriptions& subscriptions() const { return _subscriptions; }
 
+    // Return the number of bindings in the AoR.
+    inline uint32_t get_bindings_count() const { return _bindings.size(); }
+
+    // Return the number of subscriptions in the AoR.
+    inline uint32_t get_subscriptions_count() const { return _subscriptions.size(); }
+
+    // Return the expiry time of the binding or subscription due to expire next.
+    int get_next_expires();
+
     /// CSeq value for event notifications for this AoR.  This is initialised
     /// to one when the AoR record is first set up and incremented every time
     /// the record is updated while there are active subscriptions.  (It is
@@ -209,6 +218,9 @@ public:
     /// CSeq=1, and once a subscription dialog is established it should
     /// receive every NOTIFY for the AoR.)
     int _notify_cseq;
+
+    // Chronos Timer ID
+    std::string _timer_id;
 
   private:
     /// Map holding the bindings for a particular AoR indexed by binding ID.
@@ -383,44 +395,22 @@ public:
   private:
     ChronosConnection* _chronos_conn;
 
+    /// Build the tag info map from an AoR
+    virtual void build_tag_info(AoR* aor,
+                                std::map<std::string, uint32_t>& tag_map);
+
     /// Create the Chronos Timer request
     ///
     /// @param aor_id       The AoR ID
-    /// @param object_id    What the JSON ID should be
     /// @param timer_id     The Timer ID
     /// @param expiry       Timer length
-    /// @param id_type      Binding/subscription ID
     /// @param tags         Any tags to add to the Chronos timer
     /// @param trail        SAS trail
     virtual void set_timer(const std::string& aor_id,
-                           std::string object_id,
                            std::string& timer_id,
                            int expiry,
-                           std::string id_type,
-                           std::vector<std::string> tags,
+                           std::map<std::string, uint32_t> tags,
                            SAS::TrailId trail);
-
-    /// Create and send any Chronos requests for bindings
-    ///
-    /// @param aor_id       The AoR ID
-    /// @param aor_pair     The AoR pair to send requests for
-    /// @param now          The current time
-    /// @param trail        SAS trail
-    virtual void send_binding_timers(const std::string& aor_id,
-                                     AoRPair* aor_pair,
-                                     int now,
-                                     SAS::TrailId trail);
-
-    /// Create and send any Chronos requests for subscriptions
-    ///
-    /// @param aor_id       The AoR ID
-    /// @param aor_pair     The AoR pair to send requests for
-    /// @param now          The current time
-    /// @param trail        SAS trail
-    virtual void send_subscription_timers(const std::string& aor_id,
-                                          AoRPair* aor_pair,
-                                          int now,
-                                          SAS::TrailId trail);
   };
 
   /// @class SubscriberDataManager::NotifySender

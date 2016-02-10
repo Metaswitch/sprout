@@ -2185,13 +2185,13 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  RegSubTimeoutTask::Config reg_sub_timeout_config(local_sdm, remote_sdm, hss_connection);
+  AoRTimeoutTask::Config aor_timeout_config(local_sdm, remote_sdm, hss_connection);
   AuthTimeoutTask::Config auth_timeout_config(av_store, hss_connection);
   DeregistrationTask::Config deregistration_config(local_sdm, remote_sdm, hss_connection, sip_resolver);
 
-  // The RegSubTimeoutTask and AuthTimeoutTask both handle
+  // The AoRTimeoutTask and AuthTimeoutTask both handle
   // chronos requests, so use the ChronosHandler.
-  ChronosHandler<RegSubTimeoutTask, RegSubTimeoutTask::Config> reg_timeout_handler(&reg_sub_timeout_config);
+  ChronosHandler<AoRTimeoutTask, AoRTimeoutTask::Config> aor_timeout_handler(&aor_timeout_config);
   ChronosHandler<AuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
   HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
   HttpStackUtils::PingHandler ping_handler;
@@ -2203,7 +2203,7 @@ int main(int argc, char* argv[])
       http_stack->register_handler("^/ping$",
                                    &ping_handler);
       http_stack->register_handler("^/timers$",
-                                   &reg_timeout_handler);
+                                   &aor_timeout_handler);
       http_stack->register_handler("^/authentication-timeout$",
                                    &auth_timeout_handler);
       http_stack->register_handler("^/registrations?*$",

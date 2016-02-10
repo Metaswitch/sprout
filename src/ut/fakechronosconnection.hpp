@@ -61,12 +61,12 @@ private:
                      const std::string& callback_uri,
                      const std::string& opaque_data,
                      SAS::TrailId trail,
-                     const std::vector<std::string>& tags);
+                     const std::map<std::string, uint32_t>& tags);
   HTTPCode send_put(std::string& put_identity,
                     uint32_t timer_interval,
                     const std::string& callback_uri,
                     const std::string& opaque_data,
                     SAS::TrailId trail,
-                    const std::vector<std::string>& tags);
+                    const std::map<std::string, uint32_t>& tags);
   HTTPCode get_result(std::string identity);
 };

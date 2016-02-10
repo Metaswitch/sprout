@@ -4435,7 +4435,7 @@ TEST_F(SCSCFTest, Cdiv)
   EXPECT_EQ("sip:6505555678@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
               testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;orig>"));
-  
+
   // As the session case is "Originating_CDIV" we want to include the
   // "orig-div" header field parameter with just a name and no value
   // as specified in 3GPP TS 24.229.
