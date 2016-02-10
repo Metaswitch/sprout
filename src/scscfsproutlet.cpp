@@ -1815,6 +1815,9 @@ void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
       new_p_a_i_str = "tel:";
       new_p_a_i_str += PJUtils::pj_str_to_string(&((pjsip_sip_uri*)uri)->user);
 
+      // If the SIP URI has a alias tel URI with the same username we add this
+      // tel URI to the P-Asserted-Identity header. If not we select the first
+      // tel URI in the alias list to add to the P-Asserted-Identity header.
       if (find(_aliases.begin(),
                _aliases.end(),
                new_p_a_i_str) != _aliases.end())
@@ -1824,6 +1827,25 @@ void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
                                        get_pool(msg),
                                        new_p_a_i_str,
                                        asserted_id->name_addr.display);
+      }
+      else
+      {
+        for (std::vector<std::string>::iterator alias = _aliases.begin();
+             alias != _aliases.end();
+             ++alias)
+        {
+          std::string tel_URI_prefix = "tel:";
+          bool has_tel_prefix = (alias->rfind(tel_URI_prefix.c_str(), 4) != std::string::npos); 
+          if (has_tel_prefix)
+          {
+            TRC_DEBUG("Add second P-Asserted Identity for %s", alias->c_str());
+            PJUtils::add_asserted_identity(msg,
+                                           get_pool(msg),
+                                           *alias,
+                                           asserted_id->name_addr.display);
+            break;
+          }
+        }
       }
     }
     else if (PJSIP_URI_SCHEME_IS_TEL(uri))

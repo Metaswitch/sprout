@@ -95,7 +95,7 @@ HSSConnection::~HSSConnection()
 HTTPCode HSSConnection::get_auth_vector(const std::string& private_user_identity,
                                         const std::string& public_user_identity,
                                         const std::string& auth_type,
-                                        const std::string& autn,
+                                        const std::string& resync_auth,
                                         rapidjson::Document*& av,
                                         SAS::TrailId trail)
 {
@@ -122,10 +122,10 @@ HTTPCode HSSConnection::get_auth_vector(const std::string& private_user_identity
     path += "?impu=" + Utils::url_escape(public_user_identity);
   }
 
-  if (!autn.empty())
+  if (!resync_auth.empty())
   {
     path += public_user_identity.empty() ? "?" : "&";
-    path += "autn=" + Utils::url_escape(autn);
+    path += "resync-auth=" + Utils::url_escape(resync_auth);
   }
 
   HTTPCode rc = get_json_object(path, av, trail);
