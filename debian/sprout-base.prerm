@@ -92,6 +92,7 @@ case "$1" in
             # logs loses valuable information
             remove_user
             remove_logging
+            rm -rf /var/run/$NAME
         fi
         remove_section /etc/security/limits.conf $NAME
     ;;

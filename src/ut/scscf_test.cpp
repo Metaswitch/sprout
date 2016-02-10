@@ -4435,7 +4435,7 @@ TEST_F(SCSCFTest, Cdiv)
   EXPECT_EQ("sip:6505555678@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
               testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;orig>"));
-  
+
   // As the session case is "Originating_CDIV" we want to include the
   // "orig-div" header field parameter with just a name and no value
   // as specified in 3GPP TS 24.229.
@@ -7056,6 +7056,72 @@ TEST_F(SCSCFTest, TestAddSecondTelPAIHdr)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
 }
 
+// Checks that a tel URI alias is added to the P-Asserted-Identity header even
+// when the username is different from the sip URI.
+TEST_F(SCSCFTest, TestAddSecondTelPAIHdrWithAlias)
+{
+  SCOPED_TRACE("");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:6505551001</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain>", "P-Asserted-Identity: \"Andy\" <tel:6505551001>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+}
+
+// Checks if we have multiple aliases and none of them matches the SIP URI
+// supplied that we add the first tel URI on the alias list to the
+// P-Asserted-Identity header.
+TEST_F(SCSCFTest, TestAddSecondTelPAIHdrMultipleAliasesNoMatch)
+{
+  SCOPED_TRACE("");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:6505551003</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:6505551002</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain>", "P-Asserted-Identity: \"Andy\" <tel:6505551003>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+}
+
+// Checks if we have multiple aliases and one of them matches the SIP URI
+// supplied that we add the matching alias even if it's not the first on the
+// alias list.
+TEST_F(SCSCFTest, TestAddSecondTelPAIHdrMultipleAliases)
+{
+  SCOPED_TRACE("");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:6505551003</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain>", "P-Asserted-Identity: \"Andy\" <tel:6505551000>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+}
 TEST_F(SCSCFTest, TestAddSecondSIPPAIHdr)
 {
   SCOPED_TRACE("");
@@ -7063,6 +7129,26 @@ TEST_F(SCSCFTest, TestAddSecondSIPPAIHdr)
   _hss_connection->set_impu_result("tel:6505551000", "call", HSSConnection::STATE_REGISTERED,
                                    "<IMSSubscription><ServiceProfile>\n"
                                    "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "P-Asserted-Identity: Andy <tel:6505551000>";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <tel:6505551000>", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain;user=phone>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+}
+
+// Checks that a matching SIP URI is added to the P-Asserted-Identity header
+// even when there is no alias of the original tel URI.
+TEST_F(SCSCFTest, TestAddSecondSIPPAIHdrNoSIPUri)
+{
+  SCOPED_TRACE("");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("tel:6505551000", "call", HSSConnection::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
                                    "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
                                    "  <InitialFilterCriteria>\n"
                                    "  </InitialFilterCriteria>\n"

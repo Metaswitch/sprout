@@ -41,7 +41,6 @@
 #include "gtest/gtest.h"
 
 #include "statistic.h"
-#include "zmq_lvc.h"
 #include "stack.h"
 
 #include "basetest.hpp"
@@ -49,22 +48,9 @@
 
 using namespace std;
 
-BaseTest::BaseTest()
-{
-  stack_data.stats_aggregator = new LastValueCache(num_known_stats,
-                                                   known_statnames,
-                                                   "6666",
-                                                   10);  // Short period to reduce shutdown delays.
-}
-
 BaseTest::~BaseTest()
 {
-  // Destroy the LVC before calling cw_reset_time, otherwise ZeroMQ
-  // checks the wrong time against its timeout and the poll loop
-  // continues for several minutes.
-  delete stack_data.stats_aggregator;
-  stack_data.stats_aggregator = NULL;
-
+  // This ensures the UTs don't carry over any time they've advanced.
   cwtest_reset_time();
 };
 

@@ -78,7 +78,7 @@ HTTPCode FakeChronosConnection::send_post(std::string& post_identity,
                                           const std::string& callback_uri,
                                           const std::string& opaque_data,
                                           SAS::TrailId trail,
-                                          const std::vector<std::string>& tags)
+                                          const std::map<std::string, uint32_t>& tags)
 {
   HTTPCode status = get_result(post_identity);
 
@@ -91,7 +91,7 @@ HTTPCode FakeChronosConnection::send_put(std::string& put_identity,
                                          const std::string& callback_uri,
                                          const std::string& opaque_data,
                                          SAS::TrailId trail,
-                                         const std::vector<std::string>& tags)
+                                         const std::map<std::string, uint32_t>& tags)
 {
   HTTPCode status = get_result(put_identity);
 

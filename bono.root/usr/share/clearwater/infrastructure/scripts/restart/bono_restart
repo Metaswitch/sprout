@@ -34,4 +34,6 @@
 # under which the OpenSSL Project distributes the OpenSSL toolkit software,
 # as those licenses appear in the file LICENSE-OPENSSL.
 
-service bono quiesce
+# Use stop rather than quiesce as quiesce is currently bugged
+# (see https://github.com/Metaswitch/sprout/issues/1296).
+service bono stop

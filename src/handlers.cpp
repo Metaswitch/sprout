@@ -186,7 +186,7 @@ static void report_sip_all_register_marker(SAS::TrailId trail, std::string uri_s
 }
 
 //LCOV_EXCL_START - don't want to actually run the handlers in the UT
-void RegSubTimeoutTask::run()
+void AoRTimeoutTask::run()
 {
   if (_req.method() != htp_method_POST)
   {
@@ -287,7 +287,7 @@ void DeregistrationTask::run()
   delete this;
 }
 
-void RegSubTimeoutTask::handle_response()
+void AoRTimeoutTask::handle_response()
 {
   bool all_bindings_expired = false;
   SubscriberDataManager::AoRPair* aor_pair = set_aor_data(_cfg->_sdm,
@@ -334,7 +334,7 @@ void RegSubTimeoutTask::handle_response()
   report_sip_all_register_marker(trail(), _aor_id);
 }
 
-SubscriberDataManager::AoRPair* RegSubTimeoutTask::set_aor_data(
+SubscriberDataManager::AoRPair* AoRTimeoutTask::set_aor_data(
                           SubscriberDataManager* current_sdm,
                           std::string aor_id,
                           SubscriberDataManager::AoRPair* previous_aor_pair,
@@ -370,8 +370,8 @@ SubscriberDataManager::AoRPair* RegSubTimeoutTask::set_aor_data(
   return aor_pair;
 }
 
-// Retrieve the aor and binding ID from the opaque data
-HTTPCode RegSubTimeoutTask::parse_response(std::string body)
+// Retrieve the aor ID from the opaque data
+HTTPCode AoRTimeoutTask::parse_response(std::string body)
 {
   rapidjson::Document doc;
   std::string json_str = body;
@@ -394,33 +394,7 @@ HTTPCode RegSubTimeoutTask::parse_response(std::string body)
     TRC_DEBUG("Badly formed opaque data (missing aor_id)");
     return HTTP_BAD_REQUEST;
   }
-
-  std::string _binding_id = (((doc.HasMember("binding_id"))   &&
-                            ((doc["binding_id"]).IsString())) ?
-                            (doc["binding_id"].GetString()) : "");
-
-  std::string _subscription_id = (((doc.HasMember("subscription_id")) &&
-                                 ((doc["subscription_id"]).IsString())) ?
-                                 (doc["subscription_id"].GetString()) : "");
-
-  if (_binding_id == "" && _subscription_id == "")
-  {
-    TRC_DEBUG("No binding id or subscription id found");
-  }
-  else if (_binding_id != "" && _subscription_id != "")
-  {
-    TRC_DEBUG("Found both binding id: %s and subscription id: %s", _binding_id.c_str(),
-                                                                   _subscription_id.c_str());
-  }
-  else if (_binding_id != "")
-  {
-    TRC_DEBUG("Handling timer pop for binding id: %s", _binding_id.c_str());
-  }
-  else if (_subscription_id != "")
-  {
-    TRC_DEBUG("Handling timer pop for subscription id: %s", _subscription_id.c_str());
-  }
-
+  TRC_DEBUG("Handling timer pop for AoR id: %s", _aor_id.c_str());
   return HTTP_OK;
 }
 

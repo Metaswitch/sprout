@@ -1237,8 +1237,8 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     {
       // If the session case is "Originating_CDIV" we include the
       // "orig-div" header field parameter with just a name and no value.
-      // As per 3GPP TS 24.229 this creates a header that looks like: 
-      // P-Served-User: <sip:6505551234@homedomain>;orig-cdiv 
+      // As per 3GPP TS 24.229 this creates a header that looks like:
+      // P-Served-User: <sip:6505551234@homedomain>;orig-cdiv
       pj_strdup2(pool, &p->name, _session_case->to_string().c_str());
       pj_strdup2(pool, &p->value, "");
       pj_list_insert_before(&psu_hdr->other_param, p);
@@ -1246,7 +1246,7 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     else
     {
       // If the session case is not "Originating_CDIV" we include the
-      // sescase header field parameter and the regstate header field 
+      // sescase header field parameter and the regstate header field
       // parameter both set to their corresponding values, for example:
       // P-Served-User: <sip:6505551234@homedomain>;sescase=term;regstate=reg
       pj_strdup2(pool, &p->name, "sescase");
@@ -1819,6 +1819,9 @@ void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
       new_p_a_i_str = "tel:";
       new_p_a_i_str += PJUtils::pj_str_to_string(&((pjsip_sip_uri*)uri)->user);
 
+      // If the SIP URI has a alias tel URI with the same username we add this
+      // tel URI to the P-Asserted-Identity header. If not we select the first
+      // tel URI in the alias list to add to the P-Asserted-Identity header.
       if (find(_aliases.begin(),
                _aliases.end(),
                new_p_a_i_str) != _aliases.end())
@@ -1828,6 +1831,25 @@ void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
                                        get_pool(msg),
                                        new_p_a_i_str,
                                        asserted_id->name_addr.display);
+      }
+      else
+      {
+        for (std::vector<std::string>::iterator alias = _aliases.begin();
+             alias != _aliases.end();
+             ++alias)
+        {
+          std::string tel_URI_prefix = "tel:";
+          bool has_tel_prefix = (alias->rfind(tel_URI_prefix.c_str(), 4) != std::string::npos); 
+          if (has_tel_prefix)
+          {
+            TRC_DEBUG("Add second P-Asserted Identity for %s", alias->c_str());
+            PJUtils::add_asserted_identity(msg,
+                                           get_pool(msg),
+                                           *alias,
+                                           asserted_id->name_addr.display);
+            break;
+          }
+        }
       }
     }
     else if (PJSIP_URI_SCHEME_IS_TEL(uri))
