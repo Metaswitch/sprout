@@ -309,9 +309,9 @@ static void usage(void)
        "     --sub-max-expires <expiry>\n"
        "                            The maximum allowed subscription period (in seconds)\n"
        "     --default-session-expires <expiry>\n"
-       "                            The session expiry period to request (in seconds)\n"
+       "                            The session expiry period to request (in seconds. Min 90)\n"
        "     --max-session-expires <expiry>\n"
-       "                            The maximum allowed session expiry period (in seconds)\n"
+       "                            The maximum allowed session expiry period (in seconds. Min 90)\n"
        "     --target-latency-us <usecs>\n"
        "                            Target latency above which throttling applies (default: 100000)\n"
        "     --cass-target-latency-us <usecs>\n"
@@ -894,12 +894,22 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case OPT_DEFAULT_SESSION_EXPIRES:
       options->default_session_expires = atoi(pj_optarg);
+      if (options->default_session_expires < 90)
+      {
+        TRC_INFO("Error, invalid default session expires value. Minimum value is 90 seconds");
+        options->default_session_expires = 90;
+      }
       TRC_INFO("Default session expiry set to %d",
                options->default_session_expires);
       break;
 
     case OPT_MAX_SESSION_EXPIRES:
       options->max_session_expires = atoi(pj_optarg);
+      if (options->max_session_expires < 90)
+      {
+        TRC_INFO("Error, invalid maximum session expires value. Minimum value is 90 seconds");
+        options->max_session_expires = 90;
+      }
       TRC_INFO("Max session expiry set to %d",
                options->max_session_expires);
       break;
