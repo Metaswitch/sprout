@@ -898,7 +898,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       options->default_session_expires = atoi(pj_optarg);
       if (options->default_session_expires < 90)
       {
-        TRC_INFO("Error, invalid default session expires value %d. Minimum value is 90 seconds",
+        TRC_INFO("Error, invalid default session expires value %d. Using default value.",
                   options->default_session_expires);
         options->default_session_expires = 90;
       }
@@ -910,7 +910,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       options->max_session_expires = atoi(pj_optarg);
       if (options->max_session_expires < 90)
       {
-        TRC_INFO("Error, invalid maximum session expires value %d. Minimum value is 90 seconds",
+        TRC_INFO("Error, invalid maximum session expires value %d. Using default value.",
                   options->max_session_expires);
         options->max_session_expires = 90;
       }
