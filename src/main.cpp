@@ -894,25 +894,32 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       // Ignore L, F, d and t - these are handled by init_logging_options
       break;
 
+    // The minimum value allowed for session expires is 90 seconds, as per RFC4028, section 4
     case OPT_DEFAULT_SESSION_EXPIRES:
-      options->default_session_expires = atoi(pj_optarg);
-      if (options->default_session_expires < 90)
+      default_session_expires = atoi(pj_optarg);
+      if (default_session_expires >= 90)
       {
-        TRC_INFO("Error, invalid default session expires value %d. Using default value.",
-                  options->default_session_expires);
-        options->default_session_expires = 90;
+        options->default_session_expires = default_session_expires;
+      }
+      else
+      {
+        TRC_INFO("Error, invalid default session expires value %s. Using default value.",
+                 pj_optarg);
       }
       TRC_INFO("Default session expiry set to %d",
                options->default_session_expires);
       break;
 
     case OPT_MAX_SESSION_EXPIRES:
-      options->max_session_expires = atoi(pj_optarg);
-      if (options->max_session_expires < 90)
+      max_session_expires = atoi(pj_optarg);
+      if (max_session_expires >= 90)
       {
-        TRC_INFO("Error, invalid maximum session expires value %d. Using default value.",
-                  options->max_session_expires);
-        options->max_session_expires = 90;
+        options->max_session_expires = max_session_expires;
+      }
+      else
+      {
+        TRC_INFO("Error, invalid maximum session expires value %s. Using default value.",
+                 pj_optarg);
       }
       TRC_INFO("Max session expiry set to %d",
                options->max_session_expires);
