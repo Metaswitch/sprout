@@ -3,45 +3,6 @@
 # tests to Sprout, and for which we have not yet written tests. New
 # code and new files should have 100% code coverage (by lines); it may
 # be acceptable to use exclusion markers to achieve this.
-
-modules/cpp-common/src/accesslogger.cpp
-modules/cpp-common/src/httpstack.cpp
-modules/cpp-common/src/localstore.cpp
-modules/cpp-common/src/memcachedstore.cpp
-modules/cpp-common/src/memcachedstoreview.cpp
-modules/cpp-common/src/memcached_config.cpp
-modules/cpp-common/src/zmq_lvc.cpp
-modules/cpp-common/src/dnscachedresolver.cpp
-modules/cpp-common/src/dnsparser.cpp
-modules/cpp-common/src/baseresolver.cpp
-modules/cpp-common/src/fakelogger.cpp
-modules/cpp-common/src/saslogger.cpp
-modules/cpp-common/src/ipv6utils.cpp
-modules/cpp-common/src/exception_handler.cpp
-modules/cpp-common/src/utils.cpp
-modules/cpp-common/src/sip_string_to_request_type.cpp
-modules/cpp-common/src/namespace_hop.cpp
-
-# SNMP code is covered by clearwater-fv-test
-modules/cpp-common/src/snmp_row.cpp
-
-# 0MQ statistics are being phased out
-modules/cpp-common/src/statistic.cpp
-modules/cpp-common/src/accumulator.cpp
-modules/cpp-common/src/counter.cpp
-
-modules/cpp-common/test_utils/mock_sas.cpp
-modules/cpp-common/test_utils/fakecurl.cpp
-modules/cpp-common/test_utils/fakehttpconnection.cpp
-modules/cpp-common/test_utils/mockhttpstack.hpp
-modules/cpp-common/test_utils/sip_common.cpp
-modules/cpp-common/test_utils/faketransport_tcp.cpp
-modules/cpp-common/test_utils/faketransport_udp.cpp
-modules/cpp-common/test_utils/fakezmq.h
-modules/cpp-common/test_utils/fakezmq.cpp
-
-modules/cpp-common/src/httpconnection.cpp
-
 modules/app-servers/include/appserver.h
 modules/app-servers/test/mockappserver.hpp
 
@@ -67,6 +28,3 @@ bgcfsproutlet.cpp
 icscfsproutlet.cpp
 scscfsproutlet.cpp
 pluginloader.cpp
-
-# Tested as part of homestead
-modules/cpp-common/src/httpstack_utils.cpp
