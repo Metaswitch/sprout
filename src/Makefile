@@ -115,7 +115,6 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        sipresolver_test.cpp \
                        authentication_test.cpp \
                        simservs_test.cpp \
-                       httpconnection_test.cpp \
                        hssconnection_test.cpp \
                        xdmconnection_test.cpp \
                        enumservice_test.cpp \
@@ -125,7 +124,6 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        bono_test.cpp \
                        bgcfservice_test.cpp \
                        options_test.cpp \
-                       logger_test.cpp \
                        utils_test.cpp \
                        aschain_test.cpp \
                        sessioncase_test.cpp \
@@ -135,15 +133,12 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        quiescing_manager_test.cpp \
                        dialog_tracker_test.cpp \
                        flow_test.cpp \
-                       load_monitor_test.cpp \
                        icscfsproutlet_test.cpp \
                        basicproxy_test.cpp \
                        scscfselector_test.cpp \
                        acr_test.cpp \
                        subscription_test.cpp \
-                       chronosconnection_test.cpp \
                        handlers_test.cpp \
-                       httpresolver_test.cpp \
                        mock_sas.cpp \
                        contact_filtering_test.cpp \
                        appserver_test.cpp \
@@ -152,8 +147,6 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        gruu_test.cpp \
                        mobiletwinned_test.cpp \
                        mangelwurzel_test.cpp \
-                       alarm_test.cpp \
-                       communicationmonitor_test.cpp \
                        common_sip_processing_test.cpp \
                        fakesnmp.cpp \
                        fakezmq.cpp \
