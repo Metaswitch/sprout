@@ -231,6 +231,8 @@ QuiescingManager* quiescing_mgr;
 
 const static int QUIESCE_SIGNAL = SIGQUIT;
 const static int UNQUIESCE_SIGNAL = SIGUSR1;
+// Minimum value allowed by rfc4028, section 4
+const static int MIN_SESSION_EXPIRES = 90;
 
 static void usage(void)
 {
@@ -468,6 +470,8 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
   int opt_ind;
   int reg_max_expires;
   int sub_max_expires;
+  int default_session_expires;
+  int max_session_expires;
 
   pj_optind = 0;
   while ((c = pj_getopt_long(argc, argv, pj_options_description.c_str(), long_opt, &opt_ind)) != -1)
@@ -897,7 +901,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     // The minimum value allowed for session expires is 90 seconds, as per RFC4028, section 4
     case OPT_DEFAULT_SESSION_EXPIRES:
       default_session_expires = atoi(pj_optarg);
-      if (default_session_expires >= 90)
+      if (default_session_expires >= MIN_SESSION_EXPIRES)
       {
         options->default_session_expires = default_session_expires;
       }
@@ -912,7 +916,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case OPT_MAX_SESSION_EXPIRES:
       max_session_expires = atoi(pj_optarg);
-      if (max_session_expires >= 90)
+      if (max_session_expires >= MIN_SESSION_EXPIRES)
       {
         options->max_session_expires = max_session_expires;
       }
