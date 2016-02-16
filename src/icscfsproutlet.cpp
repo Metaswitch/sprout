@@ -551,8 +551,11 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   pjsip_sip_uri* scscf_sip_uri = NULL;
 
   // Use the router we just created to query the HSS for an S-CSCF to use.
+  // TS 32.260 Table 5.2.1.1 says an EVENT ACR should be generated on the
+  // completion of a Cx query issued in response to a SIP INVITE
+  bool do_billing = (req->line.req.method.id == PJSIP_INVITE_METHOD);
   pjsip_status_code status_code =
-    (pjsip_status_code)_router->get_scscf(pool, scscf_sip_uri);
+    (pjsip_status_code)_router->get_scscf(pool, scscf_sip_uri, do_billing);
 
   if ((!_originating) && (scscf_not_found(status_code)))
   {
@@ -578,7 +581,9 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       // we do a new LIR we look up the new IMPU.
       impu = PJUtils::public_id_from_uri(PJUtils::term_served_user(req));
       ((ICSCFLIRouter *)_router)->change_impu(impu);
-      status_code = (pjsip_status_code)_router->get_scscf(pool, scscf_sip_uri);
+      status_code = (pjsip_status_code)_router->get_scscf(pool,
+                                                          scscf_sip_uri,
+                                                          do_billing);
     }
 
     // If we still haven't found an S-CSCF, we can now try an ENUM lookup.
@@ -622,7 +627,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
             (uri_class == HOME_DOMAIN_SIP_URI))
         {
           // TEL or local SIP URI.  Look up the S-CSCF again.
-          status_code = (pjsip_status_code)_router->get_scscf(pool, scscf_sip_uri);
+          status_code = (pjsip_status_code)_router->get_scscf(pool, scscf_sip_uri, do_billing);
         }
         else
         {
@@ -726,7 +731,13 @@ void ICSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     pjsip_sip_uri* scscf_sip_uri = NULL;
     pjsip_msg* req = original_request();
     pj_pool_t* pool = get_pool(req);
-    int status_code = _router->get_scscf(pool, scscf_sip_uri);
+
+    // TS 32.260 Table 5.2.1.1 says an EVENT ACR should be generated on the
+    // completion of a Cx query issued in response to a SIP INVITE. It's
+    // ambiguous on whether this should be sent on each Cx query completion
+    // so we err on the side of over-sending events.
+    bool do_billing = (rsp->line.req.method.id == PJSIP_INVITE_METHOD);
+    int status_code = _router->get_scscf(pool, scscf_sip_uri, do_billing);
 
     if (status_code == PJSIP_SC_OK)
     {
