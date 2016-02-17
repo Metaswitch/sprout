@@ -231,6 +231,8 @@ QuiescingManager* quiescing_mgr;
 
 const static int QUIESCE_SIGNAL = SIGQUIT;
 const static int UNQUIESCE_SIGNAL = SIGUSR1;
+// Minimum value allowed by rfc4028, section 4
+const static int MIN_SESSION_EXPIRES = 90;
 
 static void usage(void)
 {
@@ -309,9 +311,11 @@ static void usage(void)
        "     --sub-max-expires <expiry>\n"
        "                            The maximum allowed subscription period (in seconds)\n"
        "     --default-session-expires <expiry>\n"
-       "                            The session expiry period to request (in seconds)\n"
+       "                            The session expiry period to request\n"
+       "                            (in seconds. Min 90. Defaults to 600)\n"
        "     --max-session-expires <expiry>\n"
-       "                            The maximum allowed session expiry period (in seconds)\n"
+       "                            The maximum allowed session expiry period.\n"
+       "                            (in seconds. Min 90. Defaults to 600)\n"
        "     --target-latency-us <usecs>\n"
        "                            Target latency above which throttling applies (default: 100000)\n"
        "     --cass-target-latency-us <usecs>\n"
@@ -466,6 +470,8 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
   int opt_ind;
   int reg_max_expires;
   int sub_max_expires;
+  int default_session_expires;
+  int max_session_expires;
 
   pj_optind = 0;
   while ((c = pj_getopt_long(argc, argv, pj_options_description.c_str(), long_opt, &opt_ind)) != -1)
@@ -892,14 +898,33 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       // Ignore L, F, d and t - these are handled by init_logging_options
       break;
 
+    // The minimum value allowed for session expires is 90 seconds, as per RFC4028, section 4
     case OPT_DEFAULT_SESSION_EXPIRES:
-      options->default_session_expires = atoi(pj_optarg);
+      default_session_expires = atoi(pj_optarg);
+      if (default_session_expires >= MIN_SESSION_EXPIRES)
+      {
+        options->default_session_expires = default_session_expires;
+      }
+      else
+      {
+        TRC_INFO("Error, invalid default session expires value %s. Using default value.",
+                 pj_optarg);
+      }
       TRC_INFO("Default session expiry set to %d",
                options->default_session_expires);
       break;
 
     case OPT_MAX_SESSION_EXPIRES:
-      options->max_session_expires = atoi(pj_optarg);
+      max_session_expires = atoi(pj_optarg);
+      if (max_session_expires >= MIN_SESSION_EXPIRES)
+      {
+        options->max_session_expires = max_session_expires;
+      }
+      else
+      {
+        TRC_INFO("Error, invalid maximum session expires value %s. Using default value.",
+                 pj_optarg);
+      }
       TRC_INFO("Max session expiry set to %d",
                options->max_session_expires);
       break;
