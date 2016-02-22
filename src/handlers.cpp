@@ -281,7 +281,7 @@ void AoRTimeoutTask::handle_response()
     if (all_bindings_expired)
     {
       TRC_DEBUG("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS");
-      _cfg->_hss->update_registration_state(_aor_id, "", HSSConnection::DEREG_TIMEOUT, 0);
+      _cfg->_hss->update_registration_state(_aor_id, "", HSSConnection::DEREG_TIMEOUT, trail());
     }
   }
   else
