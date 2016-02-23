@@ -281,7 +281,17 @@ void AoRTimeoutTask::handle_response()
     if (all_bindings_expired)
     {
       TRC_DEBUG("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS");
+      SAS::Event event(trail(), SASEvent::REGISTRATION_EXPIRED, 0);
+      event.add_var_param(_aor_id);
+      SAS::report_event(event);
+
       _cfg->_hss->update_registration_state(_aor_id, "", HSSConnection::DEREG_TIMEOUT, trail());
+    }
+    else
+    {
+      SAS::Event event(trail(), SASEvent::SOME_BINDINGS_EXPIRED, 0);
+      event.add_var_param(_aor_id);
+      SAS::report_event(event);
     }
   }
   else
