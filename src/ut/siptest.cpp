@@ -84,6 +84,12 @@ SipTest::SipTest(pjsip_module* module) :
   EXPECT_TRUE(_current_instance == NULL) << "Can't run two SipTests in parallel";
   _current_instance = this;
   _module = module;
+
+  // Call cwtest_completely_control_time to freeze time unless explicitly moved
+  // forwards - this prevents spurious failures like, for example, a test taking
+  // 1s longer than expected, getting "expires=299" in a Contact header rather
+  // than "expires=300", and failing the match.
+  cwtest_completely_control_time();
 }
 
 /// Runs after each test.
