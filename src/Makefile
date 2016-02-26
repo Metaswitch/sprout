@@ -186,7 +186,6 @@ SPROUT_COMMON_LDFLAGS := -rdynamic \
                          -lboost_regex \
                          -lboost_system \
                          -lboost_thread \
-                         -lboost_date_time \
                          -lcares \
                          -lzmq \
                          -levhtp \
@@ -204,7 +203,7 @@ SPROUT_COMMON_LDFLAGS := -rdynamic \
 # time, so GCC won't link in the symbols they need unless we explicitly tell
 # it to.
 sprout_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} -Wl,--whole-archive -lpjmedia-x86_64-unknown-linux-gnu -Wl,--no-whole-archive `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --libs libpjproject`
-sprout_test_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --libs libpjproject`
+sprout_test_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} -lboost_date_time `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --libs libpjproject`
 
 # Build rules for sproutlet plugins
 PLUGIN_COMMON_CPPFLAGS := -fPIC \
