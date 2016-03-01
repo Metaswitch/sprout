@@ -70,9 +70,14 @@ bool PluginLoader::load(std::list<Sproutlet*>& sproutlets)
     struct dirent *de;
     while ((de = readdir(d)) != NULL)
     {
-      // We don't bother checking the file name as this isn't a reliable
-      // indication that the file is a shared object.
-      // We also don't check the file type - some filesystems like XFS don't support this.
+      // The file name isn't a reliable indication that the file is a shared
+      // object, but checking for a ".so" extension filters out files like "."
+      // and ".." and prevents spurious error logs. If a file isn't a valid
+      // shared object, dlopen will return NULL and we'll log an error.
+      
+      // We don't check the file type as given by de->d_type - this would also
+      // filter out directories like "." and "..", but some filesystems like
+      // XFS don't support this.
       Plugin p;
       p.name = _path + "/";
       p.name.append(de->d_name);
