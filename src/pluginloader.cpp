@@ -70,75 +70,79 @@ bool PluginLoader::load(std::list<Sproutlet*>& sproutlets)
     struct dirent *de;
     while ((de = readdir(d)) != NULL)
     {
-      if (de->d_type == DT_REG)
+      // We don't bother checking the file name as this isn't a reliable
+      // indication that the file is a shared object.
+      // We also don't check the file type - some filesystems like XFS don't support this.
+      Plugin p;
+      p.name = _path + "/";
+      p.name.append(de->d_name);
+      p.handle = NULL;
+      p.plugin = NULL;
+
+      if (p.name.compare(p.name.length() - 3, 3, ".so") != 0)
       {
-        // Regular file, so attempt to load any sproutlets in it.
-        // (We don't bother checking the file name as this isn't a reliable
-        // indication that the file is a shared object.)
-        Plugin p;
-        p.name = _path + "/";
-        p.name.append(de->d_name);
-        p.handle = NULL;
-        p.plugin = NULL;
-        TRC_STATUS("Attempt to load plug-in %s", p.name.c_str());
+        TRC_DEBUG("Skipping %s - doesn't have .so extension", p.name.c_str());
+        continue;
+      }
 
-        dlerror();
-        p.handle = dlopen(p.name.c_str(), RTLD_NOW);
-        if (p.handle != NULL)
-        {
-          p.plugin = static_cast<SproutletPlugin*>(dlsym(p.handle, "sproutlet_plugin"));
+      TRC_STATUS("Attempt to load plug-in %s", p.name.c_str());
 
-          if (p.plugin != NULL)
-          {
-            std::list<Sproutlet*> plugin_sproutlets;
-            plugins_loaded = p.plugin->load(_opt, plugin_sproutlets);
-            
-            if (!plugins_loaded)
-            {
-              // There was an error loading one of the plugins. Return an error
-              // now so that Sprout is killed, rather than running with 
-              // unexpected plugins.
-              TRC_ERROR("Failed to successfully load plug-in %s", p.name.c_str());
-              break;
-            }
-
-            for (std::list<Sproutlet*>::const_iterator i = plugin_sproutlets.begin();
-                 i != plugin_sproutlets.end();
-                 ++i)
-            {
-              Sproutlet* s = *i;
-              TRC_DEBUG("Sproutlet %s using API version %d",
-                         s->service_name().c_str(), s->api_version());
-              if (api_supported(s->api_version()))
-              {
-                // The API version required by the sproutlet is supported.
-                sproutlets.push_back(s);
-                TRC_STATUS("Loaded sproutlet %s using API version %d",
-                           s->service_name().c_str(), s->api_version());
-              }
-              else
-              {
-                // The API version required by the sproutlet is not supported.
-                TRC_ERROR("Sproutlet %s requires unsupported API version %d",
-                          s->service_name().c_str(), s->api_version());
-              }
-            }
-          }
-        }
+      dlerror();
+      p.handle = dlopen(p.name.c_str(), RTLD_NOW);
+      if (p.handle != NULL)
+      {
+        p.plugin = static_cast<SproutletPlugin*>(dlsym(p.handle, "sproutlet_plugin"));
 
         if (p.plugin != NULL)
         {
-          // Add shared object to the list of loaded plugins.
-          _loaded.push_back(p);
-        }
-        else
-        {
-          TRC_ERROR("Error loading Sproutlet plug-in %s - %s",
-                    p.name.c_str(), dlerror());
-          if (p.handle != NULL)
+          std::list<Sproutlet*> plugin_sproutlets;
+          plugins_loaded = p.plugin->load(_opt, plugin_sproutlets);
+
+          if (!plugins_loaded)
           {
-            dlclose(p.handle);
+            // There was an error loading one of the plugins. Return an error
+            // now so that Sprout is killed, rather than running with 
+            // unexpected plugins.
+            TRC_ERROR("Failed to successfully load plug-in %s", p.name.c_str());
+            break;
           }
+
+          for (std::list<Sproutlet*>::const_iterator i = plugin_sproutlets.begin();
+               i != plugin_sproutlets.end();
+               ++i)
+          {
+            Sproutlet* s = *i;
+            TRC_DEBUG("Sproutlet %s using API version %d",
+                      s->service_name().c_str(), s->api_version());
+            if (api_supported(s->api_version()))
+            {
+              // The API version required by the sproutlet is supported.
+              sproutlets.push_back(s);
+              TRC_STATUS("Loaded sproutlet %s using API version %d",
+                         s->service_name().c_str(), s->api_version());
+            }
+            else
+            {
+              // The API version required by the sproutlet is not supported.
+              TRC_ERROR("Sproutlet %s requires unsupported API version %d",
+                        s->service_name().c_str(), s->api_version());
+            }
+          }
+        }
+      }
+
+      if (p.plugin != NULL)
+      {
+        // Add shared object to the list of loaded plugins.
+        _loaded.push_back(p);
+      }
+      else
+      {
+        TRC_ERROR("Error loading Sproutlet plug-in %s - %s",
+                  p.name.c_str(), dlerror());
+        if (p.handle != NULL)
+        {
+          dlclose(p.handle);
         }
       }
     }
