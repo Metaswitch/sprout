@@ -445,7 +445,6 @@ BasicProxy::UASTsx::~UASTsx()
   pj_assert(_context_count == 0);
 
   cancel_trying_timer();
-  pthread_mutex_destroy(&_trying_timer_lock);
 
   if (_tsx != NULL)
   {
@@ -509,7 +508,6 @@ pj_status_t BasicProxy::UASTsx::init(pjsip_rx_data* rdata)
   _trail = get_trail(rdata);
 
   // initialise deferred trying timer
-  pthread_mutex_init(&_trying_timer_lock, NULL);
   pj_timer_entry_init(&_trying_timer, 0, (void*)this, &trying_timer_callback);
   _trying_timer.id = 0;
 
@@ -1443,7 +1441,13 @@ void BasicProxy::UASTsx::exit_context()
 /// Cancel the trying timer.
 void BasicProxy::UASTsx::cancel_trying_timer()
 {
-  pthread_mutex_lock(&_trying_timer_lock);
+  // We expect to only be called on the PJSIP transport thread, and our data
+  // race/locking safety is based on this assumption. Raise an error log if
+  // this is not the case.
+  if (!is_pjsip_transport_thread())
+  {
+    TRC_ERROR("Function expected to be called on PJSIP transport thread - has been called on different thread");
+  }
 
   if (_trying_timer.id == TRYING_TIMER)
   {
@@ -1451,8 +1455,6 @@ void BasicProxy::UASTsx::cancel_trying_timer()
     _trying_timer.id = 0;
     pjsip_endpt_cancel_timer(stack_data.endpt, &_trying_timer);
   }
-
-  pthread_mutex_unlock(&_trying_timer_lock);
 }
 
 
@@ -1461,7 +1463,13 @@ void BasicProxy::UASTsx::trying_timer_expired()
 {
   enter_context();
 
-  pthread_mutex_lock(&_trying_timer_lock);
+  // We expect to only be called on the PJSIP transport thread, and our data
+  // race/locking safety is based on this assumption. Raise an error log if
+  // this is not the case.
+  if (!is_pjsip_transport_thread())
+  {
+    TRC_ERROR("Function expected to be called on PJSIP transport thread - has been called on different thread");
+  }
 
   TRC_DEBUG("Trying timer expired for %s, transaction state = %s",
             name(),
@@ -1477,8 +1485,6 @@ void BasicProxy::UASTsx::trying_timer_expired()
     send_response(100);
     _trying_timer.id = 0;
   }
-
-  pthread_mutex_unlock(&_trying_timer_lock);
 
   exit_context();
 }
