@@ -66,6 +66,7 @@ struct stack_data_struct
   pj_caching_pool      cp;
   pj_pool_t           *pool;
   pjsip_endpoint      *endpt;
+  pj_thread_t         *pjsip_transport_thread;
   int                  pcscf_untrusted_port;
   pjsip_tpfactory     *pcscf_untrusted_tcp_factory;
   int                  pcscf_trusted_port;
@@ -103,6 +104,11 @@ struct stack_data_struct
 };
 
 extern struct stack_data_struct stack_data;
+
+inline bool is_pjsip_transport_thread()
+{
+  return (pj_thread_this() == stack_data.pjsip_transport_thread);
+}
 
 inline void set_trail(pjsip_rx_data* rdata, SAS::TrailId trail)
 {
@@ -151,7 +157,6 @@ extern pj_status_t init_stack(const std::string& sas_system_name,
                               const std::string& sproutlet_uri,
                               const std::string& alias_hosts,
                               SIPResolver* sipresolver,
-                              int num_pjsip_threads,
                               int record_routing_model,
                               const int default_session_expires,
                               const int max_session_expires,
@@ -159,8 +164,8 @@ extern pj_status_t init_stack(const std::string& sas_system_name,
                               const int sip_tcp_send_timeout,
                               QuiescingManager *quiescing_mgr,
                               const std::string& cdf_domain);
-extern pj_status_t start_pjsip_threads();
-extern pj_status_t stop_pjsip_threads();
+extern pj_status_t start_pjsip_thread();
+extern pj_status_t stop_pjsip_thread();
 extern void stop_stack();
 extern void destroy_stack();
 extern pj_status_t init_pjsip();
