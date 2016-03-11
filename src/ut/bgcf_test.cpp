@@ -192,10 +192,13 @@ public:
   {
     SipTest::SetUpTestCase(false);
 
+    // BGCF selector built with test_bgcf_sproutlet_bgcf.json. This has a
+    // wildcard domain, so the BGCF tests will always route to something
+    _bgcf_service = new BgcfService(string(UT_DIR).append("/test_bgcf_sproutlet_bgcf.json"));
+
     // We only test with a JSONEnumService, not with a DNSEnumService - since
     // it is stateful_proxy.cpp that's under test here, the EnumService
     // implementation doesn't matter.
-    _bgcf_service = new BgcfService(string(UT_DIR).append("/test_bgcf_sproutlet_bgcf.json"));
     _enum_service = new JSONEnumService(string(UT_DIR).append("/test_bgcf_sproutlet_enum.json"));
     _acr_factory = new ACRFactory();
 
