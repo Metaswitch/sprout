@@ -1428,7 +1428,7 @@ int main(int argc, char* argv[])
   // Copy the filename to a string so that we can be sure of its lifespan -
   // the value passed to openlog must be valid for the duration of the program.
   std::string filename = p.filename().c_str();
-  openlog(filename.c_str(), PDLOG_PID, PDLOG_LOCAL6);
+  openlog(filename.c_str(), PDLOG_PID, PDLOG_LOCAL7);
   CL_SPROUT_STARTED.log();
 
   status = init_logging_options(argc, argv, &opt);
