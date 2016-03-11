@@ -1,0 +1,32 @@
+{
+    "routes" : [
+        {   "name" : "Valid SIP URI with port and transport",
+            "domain" : "domainvalid",
+            "route" : ["sip:10.0.0.1:5060;transport=TCP"]
+        },
+        {   "name" : "Valid SIP URI with <>",
+            "domain" : "domainanglebracket",
+            "route" : ["<sip:10.0.0.1:5060;transport=TCP>"]
+        },
+        {   "name" : "Route includes an invalid SIP URI",
+            "domain" : "domainnotasipuri",
+            "route" : ["sip:10.0.0.1:5060","10.0.0.1:5060"]
+        },
+        {   "name" : "Route includes an invalid SIP URI in angle brackets",
+            "domain" : "domainnotasipurianglebracket",
+            "route" : ["<10.0.0.1:5060>"]
+        },
+        {   "name" : "Route includes an invalid SIP URI angle bracket mix",
+            "domain" : "domainnotasipurianglebracketmix",
+            "route" : ["<10.0.0.1:5060>;lr"]
+        },
+        {   "name" : "Routing number",
+            "number" : "+1",
+            "route" : ["<sip:10.0.0.1:5060;transport=TCP>"]
+        },
+        {   "name" : "Wildcard",
+            "domain" : "*",
+            "route" : ["<sip:10.0.0.2:5060;transport=TCP>"]
+        }
+    ]
+}

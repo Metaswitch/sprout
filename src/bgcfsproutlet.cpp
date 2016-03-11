@@ -163,6 +163,14 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     // Find the downstream routes based on the domain.
     bgcf_routes = _bgcf->get_route_from_domain(routing_value, trail());
   }
+  else if ((uri_class == LOCAL_PHONE_NUMBER) ||
+           (uri_class == GLOBAL_PHONE_NUMBER))
+  {
+    // Find the downstream routes based on the domain - this only matches
+    // any wild card routing set up
+    routing_value = "";
+    bgcf_routes = _bgcf->get_route_from_domain(routing_value, trail());
+  }
 
   if (!bgcf_routes.empty())
   {
@@ -254,6 +262,7 @@ void BGCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
 }
 
 
+// LCOV_EXCL_START - TODO add to UTs
 void BGCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
 {
   if ((status_code == PJSIP_SC_REQUEST_TERMINATED) &&
@@ -269,3 +278,4 @@ void BGCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
     delete acr;
   }
 }
+// LCOV_EXCL_STOP

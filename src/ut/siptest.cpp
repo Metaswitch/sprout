@@ -842,6 +842,16 @@ std::ostream& operator<<(std::ostream& os, const PjMsg& msg)
   return os;
 }
 
+std::ostream& operator<<(std::ostream& os, const DumpList& that)
+{
+  os << that._title << std::endl;
+  for (std::list<string>::const_iterator iter = that._list.begin(); iter != that._list.end(); ++iter)
+  {
+    os << "  " << *iter << std::endl;
+  }
+  return os;
+}
+
 void MsgMatcher::matches(pjsip_msg* msg)
 {
   if (_expected_body != "")
