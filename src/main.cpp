@@ -1758,7 +1758,6 @@ int main(int argc, char* argv[])
 
     // Start the alarm request agent
     AlarmReqAgent::get_instance().start();
-    AlarmState::clear_all("sprout");
   }
 
   // Start the load monitor
