@@ -110,6 +110,12 @@ inline bool is_pjsip_transport_thread()
   return (pj_thread_this() == stack_data.pjsip_transport_thread);
 }
 
+#define CHECK_PJ_TRANSPORT_THREAD() \
+  if (!is_pjsip_transport_thread()) \
+  { \
+    TRC_ERROR("Function expected to be called on PJSIP transport thread (%s) - has been called on different thread (%s)", pj_thread_get_name(pj_thread_this())); \
+  };
+
 inline void set_trail(pjsip_rx_data* rdata, SAS::TrailId trail)
 {
   rdata->endpt_info.mod_data[stack_data.sas_logging_module_id] = (void*)trail;

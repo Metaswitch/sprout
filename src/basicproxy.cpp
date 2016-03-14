@@ -1444,10 +1444,7 @@ void BasicProxy::UASTsx::cancel_trying_timer()
   // We expect to only be called on the PJSIP transport thread, and our data
   // race/locking safety is based on this assumption. Raise an error log if
   // this is not the case.
-  if (!is_pjsip_transport_thread())
-  {
-    TRC_ERROR("Function expected to be called on PJSIP transport thread - has been called on different thread");
-  }
+  CHECK_PJ_TRANSPORT_THREAD();
 
   if (_trying_timer.id == TRYING_TIMER)
   {
@@ -1466,10 +1463,7 @@ void BasicProxy::UASTsx::trying_timer_expired()
   // We expect to only be called on the PJSIP transport thread, and our data
   // race/locking safety is based on this assumption. Raise an error log if
   // this is not the case.
-  if (!is_pjsip_transport_thread())
-  {
-    TRC_ERROR("Function expected to be called on PJSIP transport thread - has been called on different thread");
-  }
+  CHECK_PJ_TRANSPORT_THREAD();
 
   TRC_DEBUG("Trying timer expired for %s, transaction state = %s",
             name(),
