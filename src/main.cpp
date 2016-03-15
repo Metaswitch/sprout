@@ -142,6 +142,7 @@ enum OptionTypes
   OPT_FORCE_THIRD_PARTY_REGISTER_BODY,
   OPT_MEMENTO_NOTIFY_URL,
   OPT_PIDFILE,
+  OPT_IMPI_STORE_MODE,
 };
 
 
@@ -218,6 +219,7 @@ const static struct pj_getopt_option long_opt[] =
   { "force-3pr-body",               no_argument,       0, OPT_FORCE_THIRD_PARTY_REGISTER_BODY},
   { "pidfile",                      required_argument, 0, OPT_PIDFILE},
   { "plugin-option",                required_argument, 0, 'N'},
+  { "impi-store-mode",              required_argument, 0, OPT_IMPI_STORE_MODE},
   { NULL,                           0,                 0, 0}
 };
 
@@ -398,6 +400,9 @@ static void usage(void)
        "     --force-3pr-body       Always include the original REGISTER and 200 OK in the body of\n"
        "                            third-party REGISTER messages to application servers, even if the\n"
        "                            User-Data doesn't specify it\n"
+       "     --impi-store-mode (av-impi|impi)\n"
+       "                            Whether to run the IMPI store in AV and IMPI mode (historical) or\n"
+       "                            IMPI-only (forward-looking) mode\n"   
        "     --pidfile=<filename>   Write pidfile\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
@@ -1075,6 +1080,23 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       options->pidfile = std::string(pj_optarg);
       break;
 
+    case OPT_IMPI_STORE_MODE:
+      if (stricmp(pj_optarg, "av-impi") == 0)
+      {
+        options->impi_store_mode = ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI;
+        TRC_INFO("IMPI store mode set to: av-impi");
+      }
+      else if (stricmp(pj_optarg, "impi") == 0)
+      {
+        options->impi_store_mode = ImpiStore::Mode::READ_IMPI_WRITE_IMPI;
+        TRC_INFO("IMPI store mode set to: impi");
+      }
+      else
+      {
+        TRC_ERROR("Unknown IMPI store mode: %s", pj_optarg);
+      }
+      break;
+
     case 'N':
       {
         std::vector<std::string> fields;
@@ -1339,7 +1361,7 @@ int main(int argc, char* argv[])
   DnsCachedResolver* dns_resolver = NULL;
   SIPResolver* sip_resolver = NULL;
   Store* remote_data_store = NULL;
-  AvStore* av_store = NULL;
+  ImpiStore* impi_store = NULL;
   HttpConnection* ralf_connection = NULL;
   ChronosConnection* chronos_connection = NULL;
   ACRFactory* pcscf_acr_factory = NULL;
@@ -1423,6 +1445,7 @@ int main(int argc, char* argv[])
   opt.ralf_threads = 25;
   opt.non_register_auth_mode = NonRegisterAuthentication::NEVER;
   opt.force_third_party_register_body = false;
+  opt.impi_store_mode = ImpiStore::Mode::READ_IMPI_WRITE_IMPI;
 
   boost::filesystem::path p = argv[0];
   // Copy the filename to a string so that we can be sure of its lifespan -
@@ -2082,9 +2105,9 @@ int main(int argc, char* argv[])
       // Authentication Vectors are only stored for a short period after the
       // relevant challenge is sent.
       TRC_STATUS("Initialise S-CSCF authentication module");
-      av_store = new AvStore(local_data_store);
+      impi_store = new ImpiStore(local_data_store, opt.impi_store_mode);
       status = init_authentication(opt.auth_realm,
-                                   av_store,
+                                   impi_store,
                                    hss_connection,
                                    chronos_connection,
                                    scscf_acr_factory,
@@ -2211,7 +2234,7 @@ int main(int argc, char* argv[])
   }
 
   AoRTimeoutTask::Config aor_timeout_config(local_sdm, remote_sdm, hss_connection);
-  AuthTimeoutTask::Config auth_timeout_config(av_store, hss_connection);
+  AuthTimeoutTask::Config auth_timeout_config(impi_store, hss_connection);
   DeregistrationTask::Config deregistration_config(local_sdm, remote_sdm, hss_connection, sip_resolver);
 
   // The AoRTimeoutTask and AuthTimeoutTask both handle
@@ -2314,7 +2337,7 @@ int main(int argc, char* argv[])
   delete load_monitor;
   delete local_sdm;
   delete remote_sdm;
-  delete av_store;
+  delete impi_store;
   delete local_data_store;
   delete remote_data_store;
   delete ralf_processor;

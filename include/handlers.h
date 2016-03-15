@@ -43,7 +43,7 @@
 #include "hssconnection.h"
 #include "subscriber_data_manager.h"
 #include "sipresolver.h"
-#include "avstore.h"
+#include "impistore.h"
 
 /// Common factory for all handlers that deal with chronos timer pops. This is
 /// a subclass of SpawningHandler that requests HTTP flows to be
@@ -151,9 +151,9 @@ class AuthTimeoutTask : public HttpStackUtils::Task
 public:
   struct Config
   {
-  Config(AvStore* store, HSSConnection* hss) :
-    _avstore(store), _hss(hss) {}
-    AvStore* _avstore;
+  Config(ImpiStore* store, HSSConnection* hss) :
+    _impi_store(store), _hss(hss) {}
+    ImpiStore* _impi_store;
     HSSConnection* _hss;
   };
   AuthTimeoutTask(HttpStack::Request& req,

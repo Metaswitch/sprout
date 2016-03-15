@@ -1,5 +1,5 @@
 /**
- * @file avstore.cpp Implementation of store for Authentication Vectors
+ * @file impistore.cpp Implementation of store for Authentication Vectors
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -39,29 +39,96 @@
 
 #include "log.h"
 #include "store.h"
-#include "avstore.h"
+#include "impistore.h"
 #include "sas.h"
 #include "sproutsasevent.h"
 #include <rapidjson/writer.h>
 #include <rapidjson/stringbuffer.h>
 #include "rapidjson/error/en.h"
 
-AvStore::AvStore(Store* data_store) :
-  _data_store(data_store)
+ImpiStore::AuthChallenge* ImpiStore::Impi::get_auth_challenge(const std::string& nonce)
+{
+  // Spin through the list of authentication challenges, looking for a
+  // matching nonce.
+  for (std::vector<AuthChallenge>::iterator it = auth_challenges.begin();
+       it != auth_challenges.end();
+       it++)
+  {
+    if (it->nonce == nonce) {
+      return &(*it);
+    }
+  }
+  return NULL;
+}
+
+
+ImpiStore::ImpiStore(Store* data_store, Mode mode) :
+  _data_store(data_store), _mode(mode)
 {
 }
 
 
-AvStore::~AvStore()
+ImpiStore::~ImpiStore()
 {
 }
 
 
-Store::Status AvStore::set_av(const std::string& impi,
-                              const std::string& nonce,
-                              const rapidjson::Document* av,
-                              uint64_t cas,
-                              SAS::TrailId trail)
+Store::Status ImpiStore::set_impi(Impi* impi,
+                                  SAS::TrailId trail)
+{
+  return Store::Status::OK;
+}
+
+ImpiStore::Impi* ImpiStore::get_impi(const std::string& impi,
+                                     SAS::TrailId trail)
+{
+  return NULL;
+}
+
+ImpiStore::Impi* ImpiStore::get_impi_with_nonce(const std::string& impi_str,
+                                                const std::string& nonce,
+                                                SAS::TrailId trail)
+{
+  ImpiStore::Impi* impi;
+  if (_mode == ImpiStore::Mode::READ_IMPI_WRITE_IMPI)
+  {
+    // Mode is READ_IMPI_WRITE, so just call through to get_impi.
+    impi = get_impi(impi_str, trail);
+  }
+  else
+  {
+    impi = NULL;
+  }
+  return impi;
+}
+
+Store::Status ImpiStore::delete_impi(Impi* impi,
+                                     SAS::TrailId trail)
+{
+  return Store::Status::OK;
+}
+
+void correlate_trail_to_challenge(ImpiStore::AuthChallenge* auth_challenge,
+                                  SAS::TrailId trail)
+{
+  if (auth_challenge->correlator == "")
+  {
+    TRC_WARNING("Could not raise branch correlation marker because the stored authentication challenge has an empty 'correlator' field");
+  }
+  else
+  {
+    SAS::Marker via_marker(trail, MARKER_ID_VIA_BRANCH_PARAM, 1u);
+    via_marker.add_var_param(auth_challenge->correlator);
+    SAS::report_marker(via_marker, SAS::Marker::Scope::Trace);
+  }
+}
+
+#if 0
+Store::Status ImpiStore::set_av(const std::string& impi,
+                                const std::string& nonce,
+                                const rapidjson::Document* av,
+                                uint64_t cas,
+                                SAS::TrailId trail)
 {
   std::string key = impi + '\\' + nonce;
   rapidjson::StringBuffer buffer;
@@ -91,10 +158,10 @@ Store::Status AvStore::set_av(const std::string& impi,
   return status;
 }
 
-rapidjson::Document* AvStore::get_av(const std::string& impi,
-                                     const std::string& nonce,
-                                     uint64_t& cas,
-                                     SAS::TrailId trail)
+rapidjson::Document* ImpiStore::get_av(const std::string& impi,
+                                       const std::string& nonce,
+                                       uint64_t& cas,
+                                       SAS::TrailId trail)
 {
   rapidjson::Document* av = NULL;
   std::string key = impi + '\\' + nonce;
@@ -156,3 +223,5 @@ void correlate_branch_from_av(rapidjson::Document* av, SAS::TrailId trail)
     }
   }
 }
+
+#endif

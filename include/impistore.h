@@ -59,38 +59,6 @@ public:
     READ_IMPI_WRITE_IMPI
   };
 
-  /// @class ImpiStore::Impi
-  ///
-  /// Represents an IMPI, below which AVs may exist
-  class Impi
-  {
-  public:
-    /// Constructor.
-    /// @param _impi         The private ID.
-    Impi(const std::string& _impi) : impi(_impi), auth_challenges(), _cas(0) {};
-
-    /// Helper - get authentication challenge for a given nonce.
-    /// @returns the authentication challenge, or NULL if not found
-    /// @param nonce         The nonce to look up.
-    AuthChallenge* get_auth_challenge(const std::string& nonce);
-
-    /// Private ID
-    std::string impi;
-
-    /// List of authentication challenges that can be used with this IMPI
-    std::vector<AuthChallenge> auth_challenges;
-
-  private:
-    /// Memcached CAS value.
-    uint64_t _cas;
-
-    /// List of nonces that were retrieved from the store.
-    std::vector<std::string> _nonces;
-
-    // The IMPI store is a friend so it can read our CAS value.
-    friend class ImpiStore;
-  };
-
   /// @class ImpiStore::AuthChallenge
   ///
   /// Represents an authentication challenge
@@ -106,6 +74,8 @@ public:
       AKA
     };
 
+    static const int INITIAL_NONCE_COUNT = 1;
+
     /// Constructor.
     /// @param _type         Type of authentication challenge.
     /// @param _nonce        Nonce used for this challenge.
@@ -113,9 +83,9 @@ public:
     AuthChallenge(const Type _type, const std::string& _nonce, uint64_t _expires) :
       type(_type),
       nonce(_nonce),
-      nonce_count(1),
+      nonce_count(INITIAL_NONCE_COUNT),
       expires(_expires),
-      branch_id(),
+      correlator(),
       _cas(0) {};
 
     /// Destructor must be virtual as we're going to extend this class.
@@ -148,7 +118,7 @@ public:
   /// @class ImpiStore::DigestAuthChallenge
   ///
   /// Represents a digest authentication challenge
-  class DigestAuthChallenge : AuthChallenge
+  class DigestAuthChallenge : public AuthChallenge
   {
   public:
     /// Constructor.
@@ -183,7 +153,7 @@ public:
   /// @class ImpiStore::AKAAuthChallenge
   ///
   /// Represents an AKA authentication challenge
-  class AKAAuthChallenge : AuthChallenge
+  class AKAAuthChallenge : public AuthChallenge
   {
   public:
     /// Constructor.
@@ -194,7 +164,6 @@ public:
                      const std::string& _response,
                      uint64_t _expires) :
       AuthChallenge(AuthChallenge::Type::AKA, _nonce, _expires),
-      challenge(_challenge),
       response(_response) {};
 
     /// Destructor.
@@ -204,16 +173,48 @@ public:
     std::string response;
   };
 
+  /// @class ImpiStore::Impi
+  ///
+  /// Represents an IMPI, below which AVs may exist
+  class Impi
+  {
+  public:
+    /// Constructor.
+    /// @param _impi         The private ID.
+    Impi(const std::string& _impi) : impi(_impi), auth_challenges(), _cas(0) {};
+
+    /// Helper - get authentication challenge for a given nonce.
+    /// @returns the authentication challenge, or NULL if not found
+    /// @param nonce         The nonce to look up.
+    ImpiStore::AuthChallenge* get_auth_challenge(const std::string& nonce);
+
+    /// Private ID
+    std::string impi;
+
+    /// List of authentication challenges that can be used with this IMPI
+    std::vector<ImpiStore::AuthChallenge> auth_challenges;
+
+  private:
+    /// Memcached CAS value.
+    uint64_t _cas;
+
+    /// List of nonces that were retrieved from the store.
+    std::vector<std::string> _nonces;
+
+    // The IMPI store is a friend so it can read our CAS value.
+    friend class ImpiStore;
+  };
+
   /// Constructor.
   /// @param data_store    A pointer to the underlying data store.
   /// @param mode          The mode to use when accessing the data store.
-  ImpiStore(Store* data_store, Mode& mode);
+  ImpiStore(Store* data_store, Mode mode);
 
   /// Destructor.
   ~ImpiStore();
 
   /// Store the specified IMPI in the store.
-  /// @returns Store::Status::SUCCESS on success, or an error code on failure.
+  /// @returns Store::Status::OK on success, or an error code on failure.
   /// @param impi      An Impi object representing the IMPI.
   Store::Status set_impi(Impi* impi,
                          SAS::TrailId trail);
@@ -244,7 +245,7 @@ public:
   /// Delete all record of the IMPI.  If using Mode::READ_UV_IMPI_WRITE_AV_IMPI,
   /// this won't necessarily delete all AVs.
   /// @param impi      The private user identity.
-  /// @returns Store::Status::SUCCESS on success, or an error code on failure.
+  /// @returns Store::Status::OK on success, or an error code on failure.
   Store::Status delete_impi(Impi* impi,
                             SAS::TrailId trail);
 

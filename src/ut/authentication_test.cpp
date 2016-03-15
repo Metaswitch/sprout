@@ -48,7 +48,7 @@ extern "C" {
 #include "stack.h"
 #include "analyticslogger.h"
 #include "localstore.h"
-#include "avstore.h"
+#include "impistore.h"
 #include "hssconnection.h"
 #include "authentication.h"
 #include "fakehssconnection.hpp"
@@ -74,7 +74,7 @@ public:
     SipTest::SetUpTestCase();
 
     _local_data_store = new LocalStore();
-    _av_store = new AvStore(_local_data_store);
+    _impi_store = new ImpiStore(_local_data_store);
     _hss_connection = new FakeHSSConnection();
     _chronos_connection = new FakeChronosConnection();
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
@@ -87,7 +87,7 @@ public:
     delete _hss_connection;
     delete _chronos_connection;
     delete _analytics;
-    delete _av_store;
+    delete _impi_store;
     delete _local_data_store;
 
     SipTest::TearDownTestCase();
@@ -159,7 +159,7 @@ public:
 
 protected:
   static LocalStore* _local_data_store;
-  static AvStore* _av_store;
+  static ImpiStore* _impi_store;
   static ACRFactory* _acr_factory;
   static FakeHSSConnection* _hss_connection;
   static FakeChronosConnection* _chronos_connection;
@@ -168,7 +168,7 @@ protected:
 };
 
 LocalStore* BaseAuthenticationTest::_local_data_store;
-AvStore* BaseAuthenticationTest::_av_store;
+ImpiStore* BaseAuthenticationTest::_impi_store;
 ACRFactory* BaseAuthenticationTest::_acr_factory;
 FakeHSSConnection* BaseAuthenticationTest::_hss_connection;
 FakeChronosConnection* BaseAuthenticationTest::_chronos_connection;
@@ -182,7 +182,7 @@ class AuthenticationTest : public BaseAuthenticationTest
   {
     BaseAuthenticationTest::SetUpTestCase();
     pj_status_t ret = init_authentication("homedomain",
-                                          _av_store,
+                                          _impi_store,
                                           _hss_connection,
                                           _chronos_connection,
                                           _acr_factory,
@@ -206,7 +206,7 @@ class AuthenticationPxyAuthHdrTest : public BaseAuthenticationTest
   {
     BaseAuthenticationTest::SetUpTestCase();
     pj_status_t ret = init_authentication("homedomain",
-                                          _av_store,
+                                          _impi_store,
                                           _hss_connection,
                                           _chronos_connection,
                                           _acr_factory,
