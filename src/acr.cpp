@@ -146,7 +146,9 @@ ACRFactory::~ACRFactory()
 {
 }
 
-ACR* ACRFactory::get_acr(SAS::TrailId trail, Initiator initiator, NodeRole role)
+ACR* ACRFactory::get_acr(SAS::TrailId trail,
+                         ACR::Initiator initiator,
+                         ACR::NodeRole role)
 {
   return new ACR();
 }
@@ -1740,7 +1742,7 @@ std::string RalfACR::hdr_contents(pjsip_hdr* hdr)
 
 /// RalfACRFactory Constructor.
 RalfACRFactory::RalfACRFactory(RalfProcessor* ralf,
-                               Node node_functionality) :
+                               ACR::Node node_functionality) :
   _ralf(ralf),
   _node_functionality(node_functionality)
 {
@@ -1755,8 +1757,8 @@ RalfACRFactory::~RalfACRFactory()
 
 /// Get an RalfACR instance from the factory.
 ACR* RalfACRFactory::get_acr(SAS::TrailId trail,
-                             Initiator initiator,
-                             NodeRole role)
+                             ACR::Initiator initiator,
+                             ACR::NodeRole role)
 {
   TRC_DEBUG("Create RalfACR for node type %s with role %s",
             ACR::node_name(_node_functionality).c_str(),

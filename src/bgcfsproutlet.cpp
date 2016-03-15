@@ -109,7 +109,9 @@ std::vector<std::string> BGCFSproutlet::get_route_from_number(
 /// @param trail                SAS trail identifier to use for the ACR.
 ACR* BGCFSproutlet::get_acr(SAS::TrailId trail)
 {
-  return _acr_factory->get_acr(trail, CALLING_PARTY, NODE_ROLE_TERMINATING);
+  return _acr_factory->get_acr(trail,
+                               ACR::CALLING_PARTY,
+                               ACR::NODE_ROLE_TERMINATING);
 }
 
 /// Individual Tsx constructor.
