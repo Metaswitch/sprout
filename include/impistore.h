@@ -69,6 +69,11 @@ public:
     /// @param _impi         The private ID.
     Impi(const std::string& _impi) : impi(_impi), auth_challenges(), _cas(0) {};
 
+    /// Helper - get authentication challenge for a given nonce.
+    /// @returns the authentication challenge, or NULL if not found
+    /// @param nonce         The nonce to look up.
+    AuthChallenge* get_auth_challenge(const std::string& nonce);
+
     /// Private ID
     std::string impi;
 
@@ -78,6 +83,9 @@ public:
   private:
     /// Memcached CAS value.
     uint64_t _cas;
+
+    /// List of nonces that were retrieved from the store.
+    std::vector<std::string> _nonces;
 
     // The IMPI store is a friend so it can read our CAS value.
     friend class ImpiStore;
@@ -111,7 +119,7 @@ public:
       _cas(0) {};
 
     /// Destructor must be virtual as we're going to extend this class.
-    virtual ~Av() {};
+    virtual ~AuthChallenge() {};
 
     /// Type of the AV
     enum Type type;
@@ -120,15 +128,14 @@ public:
     std::string nonce;
 
     /// Minimum nonce count we will accept - any nonce count lower than this
-    /// might be a reply and must be rejected.
+    /// might be a replay and must be rejected.
     uint32_t nonce_count;
 
     /// Expiry time - absolute in seconds since the Epoch
     uint64_t expires;
 
-    /// Branch ID of request on which challenge was issued, or empty if not
-    /// applicable.
-    std::string branch_id;
+    /// Correlator between original challenge and responses.
+    std::string correlator;
 
   private:
     /// Memcached CAS value.  Only used for Mode::READ_AV_IMPU_WRITE_AV_IMPI.
@@ -140,7 +147,7 @@ public:
 
   /// @class ImpiStore::DigestAuthChallenge
   ///
-  /// Represents an authentication vector
+  /// Represents a digest authentication challenge
   class DigestAuthChallenge : AuthChallenge
   {
   public:
@@ -155,53 +162,45 @@ public:
                         const std::string& _qop,
                         const std::string& _ha1,
                         uint64_t _expires) :
-      type(AuthChallenge::Type::DIGEST),
-      nonce(_nonce),
+      AuthChallenge(AuthChallenge::Type::DIGEST, _nonce, _expires),
       realm(_realm),
       qop(_qop),
-      ha1(_ha1),
-      expires(_expires) {};
+      ha1(_ha1) {};
 
     /// Destructor.
     virtual ~DigestAuthChallenge() {};
 
-    /// Digest realm (public)
+    /// Digest realm
     std::string realm;
 
-    /// Digest Quality of Protection (public)
+    /// Digest Quality of Protection
     std::string qop;
 
-    /// Digest HA1 (private)
+    /// Digest HA1
     std::string ha1;
   };
 
   /// @class ImpiStore::AKAAuthChallenge
   ///
-  /// Represents an authentication vector
+  /// Represents an AKA authentication challenge
   class AKAAuthChallenge : AuthChallenge
   {
   public:
     /// Constructor.
     /// @param _nonce        Nonce used for this challenge.
-    /// @param _challenge    AKA challenge.
     /// @param _response     AKA response.
     /// @param _expires      Absolute expiry time in seconds since the epoch.
     AKAAuthChallenge(const std::string& _nonce,
-                     const std::string& _challenge,
                      const std::string& _response,
                      uint64_t _expires) :
-      type(AuthChallenge::Type::AKA),
+      AuthChallenge(AuthChallenge::Type::AKA, _nonce, _expires),
       challenge(_challenge),
-      response(_response),
-      expires(_expires) {};
+      response(_response) {};
 
     /// Destructor.
     virtual ~AKAAuthChallenge() {};
 
-    /// AKA challenge (public)
-    std::string challenge;
-
-    /// AKA expected response (private)
+    /// AKA expected response
     std::string response;
   };
 
@@ -214,8 +213,8 @@ public:
   ~ImpiStore();
 
   /// Store the specified IMPI in the store.
-  /// @param impi      An Impi object representing the IMPI.
   /// @returns Store::Status::SUCCESS on success, or an error code on failure.
+  /// @param impi      An Impi object representing the IMPI.
   Store::Status set_impi(Impi* impi,
                          SAS::TrailId trail);
 
@@ -257,9 +256,9 @@ private:
   Mode _mode;
 };
 
-// Utility function - retrieves the "branch" field from the give challenge
+// Utility function - retrieves the "corrlator" field from the give challenge
 // and raises a correlating transaction marker in the given trail.
-void correlate_branch_from_challenge(ImpiStore::AuthChallenge* auth_challenge,
-                                     SAS::TrailId trail);
+void correlate_trail_to_challenge(ImpiStore::AuthChallenge* auth_challenge,
+                                  SAS::TrailId trail);
 
 #endif
