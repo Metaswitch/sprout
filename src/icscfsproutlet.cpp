@@ -132,7 +132,9 @@ SproutletTsx* ICSCFSproutlet::get_tsx(SproutletTsxHelper* helper,
 /// @param trail                SAS trail identifier to use for the ACR.
 ACR* ICSCFSproutlet::get_acr(SAS::TrailId trail)
 {
-  return _acr_factory->get_acr(trail, CALLING_PARTY, NODE_ROLE_TERMINATING);
+  return _acr_factory->get_acr(trail,
+                               ACR::CALLING_PARTY,
+                               ACR::NODE_ROLE_TERMINATING);
 }
 
 /// Translates a Tel URI to a SIP URI (if ENUM is enabled).

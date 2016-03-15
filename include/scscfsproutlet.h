@@ -155,7 +155,7 @@ private:
   /// @param trail                SAS trail identifier to use for the ACR.
   /// @param initiator            The initiator of the SIP transaction (calling
   ///                             or called party).
-  ACR* get_acr(SAS::TrailId trail, Initiator initiator, NodeRole role);
+  ACR* get_acr(SAS::TrailId trail, ACR::Initiator initiator, ACR::NodeRole role);
 
   friend class SCSCFSproutletTsx;
 
@@ -300,11 +300,13 @@ private:
   /// @param billing_rr   - Whether to add a `billing-role` parameter to the RR
   /// @param billing_role - The contents of the `billing-role` (ignored if
   ///                       `billing_rr` is false)
-  void add_record_route(pjsip_msg* msg, bool billing_rr, NodeRole billing_role);
+  void add_record_route(pjsip_msg* msg,
+                        bool billing_rr,
+                        ACR::NodeRole billing_role);
 
   /// Retrieve the billing role for the incoming message.  This should have been
   /// set during session initiation.
-  NodeRole get_billing_role();
+  ACR::NodeRole get_billing_role();
 
   /// Adds a second P-Asserted-Identity header to a message when required.
   void add_second_p_a_i_hdr(pjsip_msg* msg);

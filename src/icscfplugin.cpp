@@ -93,7 +93,7 @@ bool ICSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 
     // Create the I-CSCF ACR factory.
     _acr_factory = (ralf_processor != NULL) ?
-                        (ACRFactory*)new RalfACRFactory(ralf_processor, ICSCF) :
+                        (ACRFactory*)new RalfACRFactory(ralf_processor, ACR::ICSCF) :
                         new ACRFactory();
 
     // Create the I-CSCF sproutlet.
@@ -105,7 +105,7 @@ bool ICSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           enum_service,
                                           opt.override_npdi);
     _icscf_sproutlet->init();
-    
+
     sproutlets.push_back(_icscf_sproutlet);
   }
 

@@ -54,12 +54,6 @@ extern "C" {
 #include "ralf_processor.h"
 #include "servercaps.h"
 
-typedef enum { SCSCF=0, PCSCF=1, ICSCF=2, BGCF=5, AS=6, IBCF=7 } Node;
-
-typedef enum { CALLED_PARTY=0, CALLING_PARTY=1 } Initiator;
-
-typedef enum { NODE_ROLE_ORIGINATING=0, NODE_ROLE_TERMINATING=1 } NodeRole;
-
 /// Class tracking state required for Rf ACR messages.  An instance of this
 /// class is created for each SIP transaction that requires accounting, and
 /// the class is passed messages and other data during processing of the
@@ -90,6 +84,10 @@ typedef enum { NODE_ROLE_ORIGINATING=0, NODE_ROLE_TERMINATING=1 } NodeRole;
 class ACR
 {
 public:
+  typedef enum { SCSCF=0, PCSCF=1, ICSCF=2, BGCF=5, AS=6, IBCF=7 } Node;
+  typedef enum { CALLED_PARTY=0, CALLING_PARTY=1 } Initiator;
+  typedef enum { NODE_ROLE_ORIGINATING=0, NODE_ROLE_TERMINATING=1 } NodeRole;
+
   /// Unspecified timestamp value.
   static const pj_time_val unspec;
 
@@ -222,7 +220,9 @@ public:
   /// @param trail                SAS trail identifier to use for the ACR.
   /// @param initiator            The initiator of the SIP transaction (calling
   ///                             or called party).
-  virtual ACR* get_acr(SAS::TrailId trail, Initiator initiator, NodeRole role);
+  virtual ACR* get_acr(SAS::TrailId trail,
+                       ACR::Initiator initiator,
+                       ACR::NodeRole role);
 };
 
 
@@ -502,7 +502,7 @@ public:
   ///                             Ralf cluster.
   /// @param node_functionality   Node-Functionality value to set in ACRs.
   RalfACRFactory(RalfProcessor* ralf,
-                 Node node_functionality);
+                 ACR::Node node_functionality);
 
   /// Destructor.
   ~RalfACRFactory();
@@ -513,11 +513,13 @@ public:
   ///                             or called party).
   /// @param role                 The role that this node is playing
   ///                             (originating or terminating).
-  virtual ACR* get_acr(SAS::TrailId trail, Initiator initiator, NodeRole role);
+  virtual ACR* get_acr(SAS::TrailId trail,
+                       ACR::Initiator initiator,
+                       ACR::NodeRole role);
 
 private:
   RalfProcessor* _ralf;
-  Node _node_functionality;
+  ACR::Node _node_functionality;
 };
 
 #endif

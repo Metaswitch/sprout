@@ -271,10 +271,10 @@ TEST_F(ACRTest, SCSCFRegister)
   std::string acr_message;
 
   // Create a Ralf ACR factory for S-CSCF ACRs.
-  RalfACRFactory f(NULL, SCSCF);
+  RalfACRFactory f(NULL, ACR::SCSCF);
 
   // Create an ACR instance for the ACR[EVENT] triggered by the REGISTER.
-  acr = f.get_acr(0, CALLING_PARTY, NODE_ROLE_ORIGINATING);
+  acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_ORIGINATING);
 
   // Build the original REGISTER request.
   SIPRequest reg("REGISTER");
@@ -316,10 +316,10 @@ TEST_F(ACRTest, CancelledACR)
   std::string acr_message;
 
   // Create a Ralf ACR factory for S-CSCF ACRs.
-  RalfACRFactory f(NULL, SCSCF);
+  RalfACRFactory f(NULL, ACR::SCSCF);
 
   // Create an ACR instance for the ACR[EVENT] triggered by the REGISTER.
-  acr = f.get_acr(0, CALLING_PARTY, NODE_ROLE_ORIGINATING);
+  acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_ORIGINATING);
 
   // Build the original REGISTER request.
   SIPRequest reg("REGISTER");
@@ -352,10 +352,10 @@ TEST_F(ACRTest, SCSCFOrigCall)
   std::string acr_message;
 
   // Create a Ralf ACR factory for S-CSCF ACRs.
-  RalfACRFactory f(NULL, SCSCF);
+  RalfACRFactory f(NULL, ACR::SCSCF);
 
   // Create an ACR instance for the ACR[START] triggered by the INVITE.
-  acr = f.get_acr(0, CALLING_PARTY, NODE_ROLE_ORIGINATING);
+  acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_ORIGINATING);
 
   // Build the original INVITE request.
   SIPRequest invite("INVITE");
@@ -595,7 +595,7 @@ TEST_F(ACRTest, SCSCFOrigCall)
   delete acr;
 
   // Create an ACR instance for the ACR[INTERIM] triggered by a reINVITE.
-  acr = f.get_acr(0, CALLING_PARTY, NODE_ROLE_ORIGINATING);
+  acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_ORIGINATING);
 
   // Build the reINVITE request.
   SIPRequest reinvite("INVITE");
@@ -634,7 +634,7 @@ TEST_F(ACRTest, SCSCFOrigCall)
   delete acr;
 
   // Create an ACR instance for the ACR[STOP] triggered by a BYE.
-  acr = f.get_acr(0, CALLING_PARTY, NODE_ROLE_ORIGINATING);
+  acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_ORIGINATING);
 
   // Build the BYE request.
   SIPRequest bye("BYE");
@@ -682,10 +682,10 @@ TEST_F(ACRTest, SCSCFTermCall)
   std::string acr_message;
 
   // Create a Ralf ACR factory for S-CSCF ACRs.
-  RalfACRFactory f(NULL, SCSCF);
+  RalfACRFactory f(NULL, ACR::SCSCF);
 
   // Create an ACR instance for the test.
-  acr = f.get_acr(0, CALLING_PARTY, NODE_ROLE_TERMINATING);
+  acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_TERMINATING);
 
   // Build the original INVITE request.
   SIPRequest invite("INVITE");
@@ -928,7 +928,7 @@ TEST_F(ACRTest, SCSCFTermCall)
   delete acr;
 
   // Create an ACR instance for the ACR[INTERIM] triggered by a reINVITE.
-  acr = f.get_acr(0, CALLING_PARTY, NODE_ROLE_TERMINATING);
+  acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_TERMINATING);
 
   // Build the reINVITE request.
   SIPRequest reinvite("INVITE");
@@ -967,7 +967,7 @@ TEST_F(ACRTest, SCSCFTermCall)
   delete acr;
 
   // Create an ACR instance for the ACR[STOP] triggered by a BYE.
-  acr = f.get_acr(0, CALLING_PARTY, NODE_ROLE_TERMINATING);
+  acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_TERMINATING);
 
   // Build the BYE request.
   SIPRequest bye("BYE");
@@ -1015,10 +1015,10 @@ TEST_F(ACRTest, ICSCFRegister)
   std::string acr_message;
 
   // Create a Ralf ACR factory for I-CSCF ACRs.
-  RalfACRFactory f(NULL, ICSCF);
+  RalfACRFactory f(NULL, ACR::ICSCF);
 
   // Create an ACR instance for the ACR[EVENT] triggered by the REGISTER.
-  acr = f.get_acr(0, CALLING_PARTY, NODE_ROLE_ORIGINATING);
+  acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_ORIGINATING);
 
   // Build the original REGISTER request.
   SIPRequest reg("REGISTER");
@@ -1080,10 +1080,10 @@ TEST_F(ACRTest, SCSCFPublish)
   std::string acr_message;
 
   // Create a Ralf ACR factory for S-CSCF ACRs.
-  RalfACRFactory f(NULL, SCSCF);
+  RalfACRFactory f(NULL, ACR::SCSCF);
 
   // Create an ACR instance for the ACR[EVENT] triggered by the REGISTER.
-  acr = f.get_acr(0, CALLING_PARTY, NODE_ROLE_ORIGINATING);
+  acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_ORIGINATING);
 
   // Build the original REGISTER request.
   SIPRequest pub("PUBLISH");
@@ -1125,10 +1125,10 @@ TEST_F(ACRTest, SCSCFTermChangeCallId)
   std::string acr_message;
 
   // Create a Ralf ACR factory for S-CSCF ACRs.
-  RalfACRFactory f(NULL, SCSCF);
+  RalfACRFactory f(NULL, ACR::SCSCF);
 
   // Create an ACR instance for the test.
-  acr = f.get_acr(0, CALLING_PARTY, NODE_ROLE_TERMINATING);
+  acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_TERMINATING);
 
   // Build the original INVITE request.
   SIPRequest invite("INVITE");

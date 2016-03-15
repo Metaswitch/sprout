@@ -306,7 +306,9 @@ void SCSCFSproutlet::translate_request_uri(pjsip_msg* req,
 /// @param trail                SAS trail identifier to use for the ACR.
 /// @param initiator            The initiator of the SIP transaction (calling
 ///                             or called party).
-ACR* SCSCFSproutlet::get_acr(SAS::TrailId trail, Initiator initiator, NodeRole role)
+ACR* SCSCFSproutlet::get_acr(SAS::TrailId trail,
+                             ACR::Initiator initiator,
+                             ACR::NodeRole role)
 {
   return _acr_factory->get_acr(trail, initiator, role);
 }
@@ -476,7 +478,7 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
 
   // Create an ACR for this request and pass the request to it.
   _in_dialog_acr = _scscf->get_acr(trail(),
-                         CALLING_PARTY,
+                         ACR::CALLING_PARTY,
                          get_billing_role());
 
   // @TODO - request timestamp???
@@ -639,13 +641,13 @@ void SCSCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
       (cancel_req != NULL))
   {
     // Create and send an ACR for the CANCEL request.
-    NodeRole role = NODE_ROLE_ORIGINATING;
+    ACR::NodeRole role = ACR::NODE_ROLE_ORIGINATING;
     if ((_session_case != NULL) &&
         (_session_case->is_terminating()))
     {
-      role = NODE_ROLE_TERMINATING;
+      role = ACR::NODE_ROLE_TERMINATING;
     }
-    ACR* cancel_acr = _scscf->get_acr(trail(), CALLING_PARTY, role);
+    ACR* cancel_acr = _scscf->get_acr(trail(), ACR::CALLING_PARTY, role);
 
     // @TODO - timestamp from request.
     cancel_acr->rx_request(cancel_req);
@@ -859,7 +861,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
           if (stack_data.record_route_on_diversion)
           {
             TRC_DEBUG("Add service to dialog - originating Cdiv");
-            add_record_route(req, false, NODE_ROLE_ORIGINATING);
+            add_record_route(req, false, ACR::NODE_ROLE_ORIGINATING);
           }
         }
         else
@@ -879,11 +881,11 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         TRC_DEBUG("Add service to dialog - AS hop");
         if (_session_case->is_terminating())
         {
-          add_record_route(req, false, NODE_ROLE_TERMINATING);
+          add_record_route(req, false, ACR::NODE_ROLE_TERMINATING);
         }
         else
         {
-          add_record_route(req, false, NODE_ROLE_ORIGINATING);
+          add_record_route(req, false, ACR::NODE_ROLE_ORIGINATING);
         }
       }
     }
@@ -895,9 +897,9 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
 
     // Create a new ACR for this request.
     ACR* acr = _scscf->get_acr(trail(),
-                               CALLING_PARTY,
+                               ACR::CALLING_PARTY,
                                _session_case->is_originating() ?
-                                 NODE_ROLE_ORIGINATING : NODE_ROLE_TERMINATING);
+                                 ACR::NODE_ROLE_ORIGINATING : ACR::NODE_ROLE_TERMINATING);
 
     if (!served_user.empty())
     {
@@ -909,7 +911,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         if (stack_data.record_route_on_initiation_of_terminating)
         {
           TRC_DEBUG("Single Record-Route - initiation of terminating handling");
-          add_record_route(req, false, NODE_ROLE_TERMINATING);
+          add_record_route(req, false, ACR::NODE_ROLE_TERMINATING);
         }
       }
       else if (_session_case->is_originating())
@@ -917,7 +919,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         if (stack_data.record_route_on_initiation_of_originating)
         {
           TRC_DEBUG("Single Record-Route - initiation of originating handling");
-          add_record_route(req, true, NODE_ROLE_ORIGINATING);
+          add_record_route(req, true, ACR::NODE_ROLE_ORIGINATING);
           acr->override_session_id(PJUtils::pj_str_to_string(&PJSIP_MSG_CID_HDR(req)->id));
         }
       }
@@ -1084,7 +1086,7 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
     if (stack_data.record_route_on_completion_of_originating)
     {
       TRC_DEBUG("Add service to dialog - end of originating handling");
-      add_record_route(req, false, NODE_ROLE_ORIGINATING);
+      add_record_route(req, false, ACR::NODE_ROLE_ORIGINATING);
     }
 
     // Attempt to translate the RequestURI using ENUM or an alternative
@@ -1155,7 +1157,7 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
     if (stack_data.record_route_on_completion_of_terminating)
     {
       TRC_DEBUG("Add service to dialog - end of terminating handling");
-      add_record_route(req, true, NODE_ROLE_TERMINATING);
+      add_record_route(req, true, ACR::NODE_ROLE_TERMINATING);
 
       ACR* acr = _as_chain_link.acr();
       if (acr != NULL)
@@ -1619,7 +1621,7 @@ bool SCSCFSproutletTsx::lookup_ifcs(std::string public_id, Ifcs& ifcs)
 /// role that is in use on subsequent in-dialog messages.
 void SCSCFSproutletTsx::add_record_route(pjsip_msg* msg,
                                          bool billing_rr,
-                                         NodeRole billing_role)
+                                         ACR::NodeRole billing_role)
 {
   pj_pool_t* pool = get_pool(msg);
 
@@ -1659,7 +1661,7 @@ void SCSCFSproutletTsx::add_record_route(pjsip_msg* msg,
       param = PJ_POOL_ALLOC_T(pool, pjsip_param);
       pj_strdup(pool, &param->name, &STR_BILLING_ROLE);
 
-      if (billing_role == NODE_ROLE_ORIGINATING)
+      if (billing_role == ACR::NODE_ROLE_ORIGINATING)
       {
         pj_strdup(pool, &param->value, &STR_CHARGE_ORIG);
       }
@@ -1674,9 +1676,9 @@ void SCSCFSproutletTsx::add_record_route(pjsip_msg* msg,
 
 
 /// Retrieve the billing role for an in-dialog message.
-NodeRole SCSCFSproutletTsx::get_billing_role()
+ACR::NodeRole SCSCFSproutletTsx::get_billing_role()
 {
-  NodeRole role;
+  ACR::NodeRole role;
 
   const pjsip_route_hdr* route = route_hdr();
   if ((route != NULL) &&
@@ -1690,30 +1692,30 @@ NodeRole SCSCFSproutletTsx::get_billing_role()
       if (!pj_strcmp(&param->value, &STR_CHARGE_ORIG))
       {
         TRC_INFO("Charging role is originating");
-        role = NODE_ROLE_ORIGINATING;
+        role = ACR::NODE_ROLE_ORIGINATING;
       }
       else if (!pj_strcmp(&param->value, &STR_CHARGE_TERM))
       {
         TRC_INFO("Charging role is terminating");
-        role = NODE_ROLE_TERMINATING;
+        role = ACR::NODE_ROLE_TERMINATING;
       }
       else
       {
         TRC_WARNING("Unknown charging role %.*s, assume originating",
                     param->value.slen, param->value.ptr);
-        role = NODE_ROLE_ORIGINATING;
+        role = ACR::NODE_ROLE_ORIGINATING;
       }
     }
     else
     {
       TRC_WARNING("No charging role in Route header, assume originating");
-      role = NODE_ROLE_ORIGINATING;
+      role = ACR::NODE_ROLE_ORIGINATING;
     }
   }
   else
   {
     TRC_WARNING("Cannot determine charging role as no Route header, assume originating");
-    role = NODE_ROLE_ORIGINATING;
+    role = ACR::NODE_ROLE_ORIGINATING;
   }
 
   return role;
@@ -1835,7 +1837,7 @@ void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
              ++alias)
         {
           std::string tel_URI_prefix = "tel:";
-          bool has_tel_prefix = (alias->rfind(tel_URI_prefix.c_str(), 4) != std::string::npos); 
+          bool has_tel_prefix = (alias->rfind(tel_URI_prefix.c_str(), 4) != std::string::npos);
           if (has_tel_prefix)
           {
             TRC_DEBUG("Add second P-Asserted Identity for %s", alias->c_str());
