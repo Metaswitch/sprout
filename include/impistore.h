@@ -1,0 +1,265 @@
+/**
+ * @file impistore.h  Definition of class for storing IMPIs
+ *
+ * Project Clearwater - IMS in the Cloud
+ * Copyright (C) 2013  Metaswitch Networks Ltd
+ *
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the
+ * Free Software Foundation, either version 3 of the License, or (at your
+ * option) any later version, along with the "Special Exception" for use of
+ * the program along with SSL, set forth below. This program is distributed
+ * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+ * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE.  See the GNU General Public License for more
+ * details. You should have received a copy of the GNU General Public
+ * License along with this program.  If not, see
+ * <http://www.gnu.org/licenses/>.
+ *
+ * The author can be reached by email at clearwater@metaswitch.com or by
+ * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
+ *
+ * Special Exception
+ * Metaswitch Networks Ltd  grants you permission to copy, modify,
+ * propagate, and distribute a work formed by combining OpenSSL with The
+ * Software, or a work derivative of such a combination, even if such
+ * copying, modification, propagation, or distribution would otherwise
+ * violate the terms of the GPL. You must comply with the GPL in all
+ * respects for all of the code used other than OpenSSL.
+ * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
+ * Project and licensed under the OpenSSL Licenses, or a work based on such
+ * software and licensed under the OpenSSL Licenses.
+ * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
+ * under which the OpenSSL Project distributes the OpenSSL toolkit software,
+ * as those licenses appear in the file LICENSE-OPENSSL.
+ */
+
+#ifndef IMPISTORE_H_
+#define IMPISTORE_H_
+
+#include "store.h"
+
+/// Class implementing store of authentication vectors.  This is a wrapper
+/// around an underlying Store class which implements a simple KV store API
+/// with atomic write and record expiry semantics.  The underlying store
+/// can be any implementation that implements the Store API.
+class ImpiStore
+{
+public:
+  /// @class ImpiStore::Mode
+  ///
+  /// Describes the mode to use when accessing the underlying datastore.  Used
+  /// to define "acceptance phases" for clean software upgrade.
+  enum Mode
+  {
+    /// Read nonce-keyed AV data, followed by IMPI data, and then write both
+    /// back.  (This is effectively an acceptance phase.)
+    READ_AV_IMPI_WRITE_AV_IMPI,
+    /// Read IMPI data and write it back.  Ignore nonce-keyed AV data.
+    READ_IMPI_WRITE_IMPI
+  };
+
+  /// @class ImpiStore::Impi
+  ///
+  /// Represents an IMPI, below which AVs may exist
+  class Impi
+  {
+  public:
+    /// Constructor.
+    /// @param _impi         The private ID.
+    Impi(const std::string& _impi) : impi(_impi), auth_challenges(), _cas(0) {};
+
+    /// Private ID
+    std::string impi;
+
+    /// List of authentication challenges that can be used with this IMPI
+    std::vector<AuthChallenge> auth_challenges;
+
+  private:
+    /// Memcached CAS value.
+    uint64_t _cas;
+
+    // The IMPI store is a friend so it can read our CAS value.
+    friend class ImpiStore;
+  };
+
+  /// @class ImpiStore::AuthChallenge
+  ///
+  /// Represents an authentication challenge
+  class AuthChallenge
+  {
+  public:
+    /// @class ImpiStore::AuthChallenge::Type
+    ///
+    /// Describes the type of the challenge
+    enum Type
+    {
+      DIGEST,
+      AKA
+    };
+
+    /// Constructor.
+    /// @param _type         Type of authentication challenge.
+    /// @param _nonce        Nonce used for this challenge.
+    /// @param _expires      Absolute expiry time in seconds since the epoch.
+    AuthChallenge(const Type _type, const std::string& _nonce, uint64_t _expires) :
+      type(_type),
+      nonce(_nonce),
+      nonce_count(1),
+      expires(_expires),
+      branch_id(),
+      _cas(0) {};
+
+    /// Destructor must be virtual as we're going to extend this class.
+    virtual ~Av() {};
+
+    /// Type of the AV
+    enum Type type;
+
+    /// Nonce used for this challenge.
+    std::string nonce;
+
+    /// Minimum nonce count we will accept - any nonce count lower than this
+    /// might be a reply and must be rejected.
+    uint32_t nonce_count;
+
+    /// Expiry time - absolute in seconds since the Epoch
+    uint64_t expires;
+
+    /// Branch ID of request on which challenge was issued, or empty if not
+    /// applicable.
+    std::string branch_id;
+
+  private:
+    /// Memcached CAS value.  Only used for Mode::READ_AV_IMPU_WRITE_AV_IMPI.
+    uint64_t _cas;
+
+    // The IMPI store is a friend so it can read our CAS value.
+    friend class ImpiStore;
+  };
+
+  /// @class ImpiStore::DigestAuthChallenge
+  ///
+  /// Represents an authentication vector
+  class DigestAuthChallenge : AuthChallenge
+  {
+  public:
+    /// Constructor.
+    /// @param _nonce        Nonce used for this challenge.
+    /// @param _realm        Authentication realm.
+    /// @param _qop          Quality of Protection.
+    /// @param _ha1          HA1 digest.
+    /// @param _expires      Absolute expiry time in seconds since the epoch.
+    DigestAuthChallenge(const std::string& _nonce,
+                        const std::string& _realm,
+                        const std::string& _qop,
+                        const std::string& _ha1,
+                        uint64_t _expires) :
+      type(AuthChallenge::Type::DIGEST),
+      nonce(_nonce),
+      realm(_realm),
+      qop(_qop),
+      ha1(_ha1),
+      expires(_expires) {};
+
+    /// Destructor.
+    virtual ~DigestAuthChallenge() {};
+
+    /// Digest realm (public)
+    std::string realm;
+
+    /// Digest Quality of Protection (public)
+    std::string qop;
+
+    /// Digest HA1 (private)
+    std::string ha1;
+  };
+
+  /// @class ImpiStore::AKAAuthChallenge
+  ///
+  /// Represents an authentication vector
+  class AKAAuthChallenge : AuthChallenge
+  {
+  public:
+    /// Constructor.
+    /// @param _nonce        Nonce used for this challenge.
+    /// @param _challenge    AKA challenge.
+    /// @param _response     AKA response.
+    /// @param _expires      Absolute expiry time in seconds since the epoch.
+    AKAAuthChallenge(const std::string& _nonce,
+                     const std::string& _challenge,
+                     const std::string& _response,
+                     uint64_t _expires) :
+      type(AuthChallenge::Type::AKA),
+      challenge(_challenge),
+      response(_response),
+      expires(_expires) {};
+
+    /// Destructor.
+    virtual ~AKAAuthChallenge() {};
+
+    /// AKA challenge (public)
+    std::string challenge;
+
+    /// AKA expected response (private)
+    std::string response;
+  };
+
+  /// Constructor.
+  /// @param data_store    A pointer to the underlying data store.
+  /// @param mode          The mode to use when accessing the data store.
+  ImpiStore(Store* data_store, Mode& mode);
+
+  /// Destructor.
+  ~ImpiStore();
+
+  /// Store the specified IMPI in the store.
+  /// @param impi      An Impi object representing the IMPI.
+  /// @returns Store::Status::SUCCESS on success, or an error code on failure.
+  Store::Status set_impi(Impi* impi,
+                         SAS::TrailId trail);
+
+  /// Retrieves the IMPI for the specified private user identity.  If using
+  /// Mode::READ_AV_IMPI_WRITE_AV_IMPI, this may return incomplete data.
+  /// @returns         A pointer to an Impi object describing the IMPI, or NULL
+  ///                  if no vector found or if the store is corrupt.  The
+  ///                  caller is free to modify this object.
+  /// @param impi      The private user identity.
+  Impi* get_impi(const std::string& impi,
+                 SAS::TrailId trail);
+
+  /// Retrieves the IMPI for the specified private user identity and nonce.  If
+  /// using Mode::READ_AV_IMPI_WRITE_AV_IMPI, this may return incomplete data,
+  /// but data for the specified nonce will be correct.  If using
+  /// Mode::READ_IMPI_WRITE, the specified nonce is ignored, and this is the
+  /// same as calling get_impi.
+  /// @returns         A pointer to an Impi object describing the IMPI, or NULL
+  ///                  if no vector found or if the store is corrupt.  The
+  ///                  caller is free to modify this object.
+  /// @param impi      The private user identity.
+  /// @param nonce     The nonce being looked for.
+  Impi* get_impi_with_nonce(const std::string& impi,
+                            const std::string& nonce,
+                            SAS::TrailId trail);
+
+  /// Delete all record of the IMPI.  If using Mode::READ_UV_IMPI_WRITE_AV_IMPI,
+  /// this won't necessarily delete all AVs.
+  /// @param impi      The private user identity.
+  /// @returns Store::Status::SUCCESS on success, or an error code on failure.
+  Store::Status delete_impi(Impi* impi,
+                            SAS::TrailId trail);
+
+private:
+  /// The underlying data store.
+  Store* _data_store;
+
+  /// The mode to use when accessing the data store.
+  Mode _mode;
+};
+
+// Utility function - retrieves the "branch" field from the give challenge
+// and raises a correlating transaction marker in the given trail.
+void correlate_branch_from_challenge(ImpiStore::AuthChallenge* auth_challenge,
+                                     SAS::TrailId trail);
+
+#endif
