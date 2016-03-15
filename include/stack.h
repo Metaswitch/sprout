@@ -107,7 +107,12 @@ extern struct stack_data_struct stack_data;
 
 inline bool is_pjsip_transport_thread()
 {
+#ifdef UNIT_TEST
+  // This check doesn't make sense in UT, where we use a different threading model
+  return true;
+#else
   return (pj_thread_this() == stack_data.pjsip_transport_thread);
+#endif
 }
 
 #define CHECK_PJ_TRANSPORT_THREAD() \
