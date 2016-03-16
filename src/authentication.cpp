@@ -114,6 +114,9 @@ static AnalyticsLogger* analytics;
 // SNMP tables counting authentication successes and failures.
 static SNMP::AuthenticationStatsTables* auth_stats_tables;
 
+// Whether nonce counts are supported.
+static bool nonce_count_supported = false;
+
 // PJSIP structure for control server authentication functions.
 pjsip_auth_srv auth_srv;
 pjsip_auth_srv auth_srv_proxy;
@@ -1023,7 +1026,8 @@ pj_status_t init_authentication(const std::string& realm_name,
                                 ACRFactory* rfacr_factory,
                                 NonRegisterAuthentication non_register_auth_mode_param,
                                 AnalyticsLogger* analytics_logger,
-                                SNMP::AuthenticationStatsTables* auth_stats_tbls)
+                                SNMP::AuthenticationStatsTables* auth_stats_tbls,
+                                bool nonce_count_supported_arg)
 {
   pj_status_t status;
 
@@ -1034,6 +1038,7 @@ pj_status_t init_authentication(const std::string& realm_name,
   acr_factory = rfacr_factory;
   analytics = analytics_logger;
   auth_stats_tables = auth_stats_tbls;
+  nonce_count_supported = nonce_count_supported_arg;
 
   // Register the authentication module.  This needs to be in the stack
   // before the transaction layer.

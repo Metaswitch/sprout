@@ -63,7 +63,8 @@ pj_status_t init_authentication(const std::string& realm_name,
                                 ACRFactory* rfacr_factory,
                                 NonRegisterAuthentication non_register_auth_mode_param,
                                 AnalyticsLogger* analytics_logger,
-                                SNMP::AuthenticationStatsTables* auth_stats_tables);
+                                SNMP::AuthenticationStatsTables* auth_stats_tables,
+                                bool nonce_count_supported_arg);
 
 void destroy_authentication();
 

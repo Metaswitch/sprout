@@ -147,6 +147,7 @@ struct options
   std::map<std::string, std::multimap<std::string, std::string>>
                                        plugin_options;
   ImpiStore::Mode                      impi_store_mode;
+  bool                                 nonce_count_supported;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
