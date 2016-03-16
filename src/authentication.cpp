@@ -501,7 +501,8 @@ void create_challenge(pjsip_digest_credential* credentials,
     ImpiStore::Impi* impi_obj = impi_store->get_impi(impi, get_trail(rdata));
     if (impi_obj != NULL)
     {
-      impi_obj->auth_challenges.push_back(*auth_challenge);
+      impi_obj->auth_challenges.push_back(auth_challenge);
+      auth_challenge = NULL;
       Store::Status status = impi_store->set_impi(impi_obj, get_trail(rdata));
       if (status == Store::OK)
       {
