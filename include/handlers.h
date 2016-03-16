@@ -111,16 +111,19 @@ public:
     Config(SubscriberDataManager* sdm,
            SubscriberDataManager* remote_sdm,
            HSSConnection* hss,
-           SIPResolver* sipresolver) :
+           SIPResolver* sipresolver,
+           ImpiStore* impi_store) :
       _sdm(sdm),
       _remote_sdm(remote_sdm),
       _hss(hss),
-      _sipresolver(sipresolver)
+      _sipresolver(sipresolver),
+      _impi_store(impi_store)
     {}
     SubscriberDataManager* _sdm;
     SubscriberDataManager* _remote_sdm;
     HSSConnection* _hss;
     SIPResolver* _sipresolver;
+    ImpiStore* _impi_store;
   };
 
 
@@ -133,12 +136,13 @@ public:
   void run();
   HTTPCode handle_request();
   HTTPCode parse_request(std::string body);
-  SubscriberDataManager::AoRPair* set_aor_data(
+  SubscriberDataManager::AoRPair* deregister_bindings(
                     SubscriberDataManager* current_sdm,
                     std::string aor_id,
                     std::string private_id,
                     SubscriberDataManager::AoRPair* previous_aor_data,
-                    SubscriberDataManager* remote_sdm);
+                    SubscriberDataManager* remote_sdm,
+                    std::set<std::string>* impis);
 
 protected:
   const Config* _cfg;

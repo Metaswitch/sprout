@@ -2244,7 +2244,11 @@ int main(int argc, char* argv[])
 
   AoRTimeoutTask::Config aor_timeout_config(local_sdm, remote_sdm, hss_connection);
   AuthTimeoutTask::Config auth_timeout_config(impi_store, hss_connection);
-  DeregistrationTask::Config deregistration_config(local_sdm, remote_sdm, hss_connection, sip_resolver);
+  DeregistrationTask::Config deregistration_config(local_sdm,
+                                                   remote_sdm,
+                                                   hss_connection,
+                                                   sip_resolver,
+                                                   impi_store);
 
   // The AoRTimeoutTask and AuthTimeoutTask both handle
   // chronos requests, so use the ChronosHandler.
