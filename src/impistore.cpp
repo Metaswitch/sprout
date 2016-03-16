@@ -50,12 +50,12 @@ ImpiStore::AuthChallenge* ImpiStore::Impi::get_auth_challenge(const std::string&
 {
   // Spin through the list of authentication challenges, looking for a
   // matching nonce.
-  for (std::vector<AuthChallenge>::iterator it = auth_challenges.begin();
+  for (std::vector<AuthChallenge*>::iterator it = auth_challenges.begin();
        it != auth_challenges.end();
        it++)
   {
-    if (it->nonce == nonce) {
-      return &(*it);
+    if ((*it)->nonce == nonce) {
+      return *it;
     }
   }
   return NULL;

@@ -192,7 +192,7 @@ public:
     std::string impi;
 
     /// List of authentication challenges that can be used with this IMPI
-    std::vector<ImpiStore::AuthChallenge> auth_challenges;
+    std::vector<ImpiStore::AuthChallenge*> auth_challenges;
 
   private:
     /// Memcached CAS value.
