@@ -64,7 +64,7 @@ class ImpiStoreTest : public ::testing::Test
 TEST_F(ImpiStoreTest, CreateStore)
 {
   LocalStore* local_data_store = new LocalStore();
-  ImpiStore* impi_store = new ImpiStore(local_data_store);
+  ImpiStore* impi_store = new ImpiStore(local_data_store, ImpiStore::Mode::READ_IMPI_WRITE_IMPI);
 
   delete impi_store;
   delete local_data_store;

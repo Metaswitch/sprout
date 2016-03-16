@@ -198,7 +198,8 @@ public:
     /// Memcached CAS value.
     uint64_t _cas;
 
-    /// List of nonces that were retrieved from the store.
+    /// List of nonces that were retrieved from the store.  (Only needed when
+    /// using Mode::READ_AV_IMPI_WRITE_AV_IMPI.)
     std::vector<std::string> _nonces;
 
     // The IMPI store is a friend so it can read our CAS value.

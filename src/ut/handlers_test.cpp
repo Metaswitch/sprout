@@ -674,7 +674,7 @@ class AuthTimeoutTest : public SipTest
   {
     chronos_connection = new FakeChronosConnection();
     local_data_store = new LocalStore();
-    store = new ImpiStore(local_data_store);
+    store = new ImpiStore(local_data_store, ImpiStore::Mode::READ_IMPI_WRITE_IMPI);
     fake_hss = new FakeHSSConnection();
     req = new MockHttpStack::Request(&stack, "/", "authentication-timeout");
     chronos_config = new AuthTimeoutTask::Config(store, fake_hss);
@@ -699,10 +699,12 @@ class AuthTimeoutTest : public SipTest
 TEST_F(AuthTimeoutTest, NonceTimedOut)
 {
   fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", HSSConnection::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
-  std::string av_str = "{\"digest\":{}, \"branch\":\"abcde\"}";
-  rapidjson::Document av;
-  av.Parse<0>(av_str.c_str());
-  store->set_av("6505550231@homedomain", "abcdef", &av, 0, 0);
+  ImpiStore::Impi* impi = new ImpiStore::Impi("6505550231@homedomain");
+  ImpiStore::DigestAuthChallenge auth_challenge("abcdef", "", "", "", 30);
+  auth_challenge.correlator = "abcde";
+  impi->auth_challenges.push_back(auth_challenge);
+  store->set_impi(impi, 0);
+
   std::string body = "{\"impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231@homedomain\", \"nonce\": \"abcdef\"}";
   int status = handler->handle_response(body);
 
@@ -710,49 +712,16 @@ TEST_F(AuthTimeoutTest, NonceTimedOut)
   ASSERT_TRUE(fake_hss->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=6505550231%40homedomain", "{\"reqtype\": \"dereg-auth-timeout\"}"));
 }
 
-TEST_F(AuthTimeoutTest, NonceTimedOutWithNoBranch)
+TEST_F(AuthTimeoutTest, NonceTimedOutWithEmptyCorrelator)
 {
   fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", HSSConnection::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
+  ImpiStore::Impi* impi = new ImpiStore::Impi("6505550231@homedomain");
+  ImpiStore::DigestAuthChallenge auth_challenge("abcdef", "", "", "", 30);
+  impi->auth_challenges.push_back(auth_challenge);
+  store->set_impi(impi, 0);
+
   std::string body = "{\"impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231@homedomain\", \"nonce\": \"abcdef\"}";
-  int status = 0;
-  std::string av_str = "{\"digest\":{}}";
-  rapidjson::Document av_nobranch;
-  av_nobranch.Parse<0>(av_str.c_str());
-
-  store->set_av("6505550231@homedomain", "abcdef", &av_nobranch, 0, 0);
-  status = handler->handle_response(body);
-
-  ASSERT_EQ(status, 200);
-  ASSERT_TRUE(fake_hss->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=6505550231%40homedomain", "{\"reqtype\": \"dereg-auth-timeout\"}"));
-}
-
-TEST_F(AuthTimeoutTest, NonceTimedOutWithEmptyBranch)
-{
-  fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", HSSConnection::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
-  std::string body = "{\"impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231@homedomain\", \"nonce\": \"abcdef\"}";
-  int status = 0;
-  std::string av_str = "{\"digest\":{}, \"branch\":\"\"}";
-  rapidjson::Document av_emptybranch;
-  av_emptybranch.Parse<0>(av_str.c_str());
-
-  store->set_av("6505550231@homedomain", "abcdef", &av_emptybranch, 0, 0);
-  status = handler->handle_response(body);
-
-  ASSERT_EQ(status, 200);
-  ASSERT_TRUE(fake_hss->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=6505550231%40homedomain", "{\"reqtype\": \"dereg-auth-timeout\"}"));
-}
-
-TEST_F(AuthTimeoutTest, NonceTimedOutWithIntegerBranch)
-{
-  fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", HSSConnection::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
-  std::string body = "{\"impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231@homedomain\", \"nonce\": \"abcdef\"}";
-  int status = 0;
-  std::string av_str = "{\"digest\":{}, \"branch\":6}";
-  rapidjson::Document av_intbranch;
-  av_intbranch.Parse<0>(av_str.c_str());
-
-  store->set_av("6505550231@homedomain", "abcdef", &av_intbranch, 0, 0);
-  status = handler->handle_response(body);
+  int status = handler->handle_response(body);
 
   ASSERT_EQ(status, 200);
   ASSERT_TRUE(fake_hss->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=6505550231%40homedomain", "{\"reqtype\": \"dereg-auth-timeout\"}"));
@@ -760,11 +729,14 @@ TEST_F(AuthTimeoutTest, NonceTimedOutWithIntegerBranch)
 
 TEST_F(AuthTimeoutTest, MainlineTest)
 {
+  ImpiStore::Impi* impi = new ImpiStore::Impi("test@example.com");
+  ImpiStore::DigestAuthChallenge auth_challenge("abcdef", "", "", "", 30);
+  auth_challenge.nonce_count++; // Indicates that one successful authentication has occurred
+  auth_challenge.correlator = "abcde";
+  impi->auth_challenges.push_back(auth_challenge);
+  store->set_impi(impi, 0);
+
   std::string body = "{\"impu\": \"sip:test@example.com\", \"impi\": \"test@example.com\", \"nonce\": \"abcdef\"}";
-  std::string av_str = "{\"digest\":{}, \"branch\":\"abcde\", \"tombstone\": true}";
-  rapidjson::Document av;
-  av.Parse<0>(av_str.c_str());
-  store->set_av("test@example.com", "abcdef", &av, 0, 0);
   int status = handler->handle_response(body);
 
   ASSERT_EQ(status, 200);
