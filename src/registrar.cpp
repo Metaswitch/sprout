@@ -303,15 +303,7 @@ SubscriberDataManager::AoRPair* write_to_store(
 
     while (contact != NULL)
     {
-      // Calculate the expiry period for the updated binding.
-      expiry = (contact->expires != -1) ? contact->expires :
-               (expires != NULL) ? expires->ivalue :
-                max_expires;
-      if (expiry > max_expires)
-      {
-        // Expiry is too long, set it to the maximum.
-        expiry = max_expires;
-      }
+      expiry = expires_for_binding(contact, expires);
 
       if (contact->star)
       {
@@ -472,9 +464,7 @@ void process_register_request(pjsip_rx_data* rdata)
   while (contact_hdr != NULL)
   {
     pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_EXPIRES, NULL);
-    expiry = (contact_hdr->expires != -1) ? contact_hdr->expires :
-             (expires != NULL) ? expires->ivalue :
-              max_expires;
+    expiry = expires_for_binding(contact_hdr, expires);
 
     if ((contact_hdr->star) && (expiry != 0))
     {
@@ -1080,7 +1070,7 @@ pj_status_t init_registrar(SubscriberDataManager* reg_sdm,
                            AnalyticsLogger* analytics_logger,
                            ACRFactory* rfacr_factory,
                            int cfg_max_expires,
-                           bool force_original_register_inclusion, 
+                           bool force_original_register_inclusion,
                            SNMP::RegistrationStatsTables* reg_stats_tbls,
                            SNMP::RegistrationStatsTables* third_party_reg_stats_tbls)
 {
@@ -1132,6 +1122,19 @@ pj_status_t init_registrar(SubscriberDataManager* reg_sdm,
   return status;
 }
 
+int expires_for_binding(pjsip_contact_hdr* contact, pjsip_expires_hdr* expires)
+{
+  int expiry = (contact->expires != -1) ? contact->expires :
+               (expires != NULL) ? expires->ivalue :
+               max_expires;
+  if (expiry > max_expires)
+  {
+    // Expiry is too long, set it to the maximum.
+    expiry = max_expires;
+  }
+
+  return expiry;
+}
 
 void destroy_registrar()
 {

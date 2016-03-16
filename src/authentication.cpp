@@ -117,6 +117,11 @@ static SNMP::AuthenticationStatsTables* auth_stats_tables;
 // Whether nonce counts are supported.
 static bool nonce_count_supported = false;
 
+// A function that the authentication module can use to work out the expiry
+// time for a given binding. This is needed so that it knows how long to
+// authentication challenges for.
+binding_expiry_func expiry_func;
+
 // PJSIP structure for control server authentication functions.
 pjsip_auth_srv auth_srv;
 pjsip_auth_srv auth_srv_proxy;
@@ -1027,7 +1032,8 @@ pj_status_t init_authentication(const std::string& realm_name,
                                 NonRegisterAuthentication non_register_auth_mode_param,
                                 AnalyticsLogger* analytics_logger,
                                 SNMP::AuthenticationStatsTables* auth_stats_tbls,
-                                bool nonce_count_supported_arg)
+                                bool nonce_count_supported_arg,
+                                binding_expiry_func expiry_func_arg)
 {
   pj_status_t status;
 
@@ -1039,6 +1045,7 @@ pj_status_t init_authentication(const std::string& realm_name,
   analytics = analytics_logger;
   auth_stats_tables = auth_stats_tbls;
   nonce_count_supported = nonce_count_supported_arg;
+  expiry_func = expiry_func_arg;
 
   // Register the authentication module.  This needs to be in the stack
   // before the transaction layer.

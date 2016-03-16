@@ -65,6 +65,14 @@ extern pj_status_t init_registrar(SubscriberDataManager* sdm,
                                   SNMP::RegistrationStatsTables* third_party_reg_stats_tbls);
 
 
+/// Calculate the expiry time for a binding.
+///
+/// @param contact - The binding's contact header.
+/// @param expires - (optional) The expiry header from the request.
+///
+/// @return The expiry time in seconds.
+int expires_for_binding(pjsip_contact_hdr* contact, pjsip_expires_hdr* expires);
+
 extern void destroy_registrar();
 
 #endif
