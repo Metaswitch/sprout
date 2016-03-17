@@ -791,7 +791,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     unsigned long nonce_count = pj_strtoul2(&credentials->nc, NULL, 16);
     nonce_count = (nonce_count == 0) ? 1 : nonce_count;
 
-    if (nonce_count > 1)
+    if ((auth_challenge != NULL) && (auth_challenge->nonce_count > 1))
     {
       // A nonce count > 1 is supplied. Check that it is acceptable. If it is
       // not, pretend that we didn't find the challenge to check against as
@@ -800,14 +800,23 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       {
         TRC_INFO("Nonce count %d supplied but nonce counts are not enabled - ignore it",
                  nonce_count);
+        SAS::Event event(trail, SASEvent::AUTHENTICATION_NC_NOT_SUPP, 0);
+        event.add_static_param(nonce_count);
+        SAS::report_event(event);
+
         status = PJSIP_EAUTHACCNOTFOUND;
         auth_challenge = NULL;
       }
-      else if ((auth_challenge != NULL) && (nonce_count < auth_challenge->nonce_count))
+      else if (nonce_count < auth_challenge->nonce_count)
       {
         // The nonce count is too low - this might be a replay attack.
         TRC_INFO("Nonce count supplied (%d) is lower than expected (%d) - ignore it",
                  nonce_count, auth_challenge->nonce_count);
+        SAS::Event event(trail, SASEvent::AUTHENTICATION_NC_TOO_LOW, 0);
+        event.add_static_param(nonce_count);
+        event.add_static_param(auth_challenge->nonce_count);
+        SAS::report_event(event);
+
         status = PJSIP_EAUTHACCNOTFOUND;
         auth_challenge = NULL;
       }
@@ -817,6 +826,10 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
         // requests we wouldn't know how long to store the challenge for)
         TRC_INFO("Nonce count %d supplied on a non-REGISTER - ignore it",
                  nonce_count);
+        SAS::Event event(trail, SASEvent::AUTHENTICATION_NC_ON_NON_REG, 0);
+        event.add_static_param(nonce_count);
+        SAS::report_event(event);
+
         status = PJSIP_EAUTHACCNOTFOUND;
         auth_challenge = NULL;
       }
