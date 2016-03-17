@@ -38,6 +38,8 @@
 #define IMPISTORE_H_
 
 #include "store.h"
+#include <rapidjson/document.h>
+#include <rapidjson/writer.h>
 
 /// Class implementing store of authentication vectors.  This is a wrapper
 /// around an underlying Store class which implements a simple KV store API
@@ -108,10 +110,45 @@ public:
     std::string correlator;
 
   private:
+    /// Constructor.
+    /// @param _type         Type of authentication challenge.
+    AuthChallenge(const Type _type) :
+      type(_type),
+      nonce(),
+      nonce_count(INITIAL_NONCE_COUNT),
+      expires(0),
+      correlator(),
+      _cas(0) {};
+
+    /// Serialization to JSON (IMPI format).
+    std::string to_json();
+
+    /// Write to JSON writer (IMPI format).
+    virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
+
+    /// Deserialization from JSON (IMPI format).
+    static ImpiStore::AuthChallenge* from_json(const std::string& json);
+
+    /// Deserialization from JSON (IMPI format).
+    static ImpiStore::AuthChallenge* from_json(rapidjson::Value* json);
+
+    /// Serialization to JSON (AV format).
+    std::string to_json_av();
+
+    /// Write to JSON writer (IMPI format).
+    virtual void write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer);
+
+    /// Deserialization from JSON (AV format).
+    static ImpiStore::AuthChallenge* from_json_av(const std::string& nonce, const std::string& json);
+
+    /// Deserialization from JSON (AV format).
+    static ImpiStore::AuthChallenge* from_json_av(const std::string& nonce, rapidjson::Value* json);
+
     /// Memcached CAS value.  Only used for Mode::READ_AV_IMPU_WRITE_AV_IMPI.
     uint64_t _cas;
 
-    // The IMPI store is a friend so it can read our CAS value.
+    // The IMPI store is a friend so it can call our JSON serialization
+    // functions and read our CAS value.
     friend class ImpiStore;
   };
 
@@ -148,6 +185,30 @@ public:
 
     /// Digest HA1
     std::string ha1;
+
+  private:
+    /// Constructor.
+    DigestAuthChallenge() :
+      AuthChallenge(AuthChallenge::Type::DIGEST),
+      realm(),
+      qop(),
+      ha1() {};
+
+    /// Write to JSON writer (IMPI format).
+    virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
+
+    /// Deserialization from JSON (IMPI format).
+    static ImpiStore::DigestAuthChallenge* from_json(rapidjson::Value* json);
+
+    /// Write to JSON writer (AV format).
+    virtual void write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer);
+
+    /// Deserialization from JSON (AV format).
+    static ImpiStore::DigestAuthChallenge* from_json_av(rapidjson::Value* json);
+
+    // The IMPI store is a friend so it can call our JSON serialization
+    // functions.
+    friend class ImpiStore;
   };
 
   /// @class ImpiStore::AKAAuthChallenge
@@ -171,6 +232,28 @@ public:
 
     /// AKA expected response
     std::string response;
+
+  private:
+    /// Constructor.
+    AKAAuthChallenge() :
+      AuthChallenge(AuthChallenge::Type::AKA),
+      response() {};
+
+    /// Write to JSON writer (IMPI format).
+    virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
+
+    /// Deserialization from JSON (IMPI format).
+    static ImpiStore::AKAAuthChallenge* from_json(rapidjson::Value* json);
+
+    /// Write to JSON writer (IMPI format).
+    virtual void write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer);
+
+    /// Deserialization from JSON (AV format).
+    static ImpiStore::AKAAuthChallenge* from_json_av(rapidjson::Value* json);
+
+    // The IMPI store is a friend so it can call our JSON serialization
+    // functions.
+    friend class ImpiStore;
   };
 
   /// @class ImpiStore::Impi
@@ -195,6 +278,18 @@ public:
     std::vector<ImpiStore::AuthChallenge*> auth_challenges;
 
   private:
+    /// Serialization to JSON.
+    std::string to_json();
+
+    /// Write to JSON writer.
+    void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
+
+    /// Deserialization from JSON.
+    static ImpiStore::Impi* from_json(const std::string& impi, const std::string& json);
+
+    /// Deserialization from JSON.
+    static ImpiStore::Impi* from_json(const std::string& impi, rapidjson::Value* json);
+
     /// Memcached CAS value.
     uint64_t _cas;
 
