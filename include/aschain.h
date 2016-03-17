@@ -339,6 +339,12 @@ public:
     _interrupted = true;
   }
 
+  /// @return The URI of the AS associated with this AS chain.
+  std::string uri()
+  {
+    return is_set() ? _as_chain->_as_info[_index].as_uri : "";
+  }
+
 private:
   friend class AsChainTable;
 
