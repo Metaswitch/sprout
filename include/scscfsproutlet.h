@@ -151,6 +151,20 @@ private:
                      std::deque<std::string>& ecfs,
                      SAS::TrailId trail);
 
+  /// Record that communication with an AS failed.
+  ///
+  /// @param uri               - The URI of the AS.
+  /// @param session_continued - Whether the AS uses session continued default
+  ///                            handling (true) or session terminated (false).
+  void track_app_serv_comm_failure(const std::string& uri, bool session_continued);
+
+  /// Record that communication with an AS succeeded.
+  ///
+  /// @param uri               - The URI of the AS.
+  /// @param session_continued - Whether the AS uses session continued default
+  ///                            handling (true) or session terminated (false).
+  void track_app_serv_comm_success(const std::string& uri, bool session_continued);
+
   /// Translate RequestURI using ENUM service if appropriate.
   void translate_request_uri(pjsip_msg* req, pj_pool_t* pool, SAS::TrailId trail);
 

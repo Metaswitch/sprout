@@ -318,6 +318,32 @@ ACR* SCSCFSproutlet::get_acr(SAS::TrailId trail,
 }
 
 
+void SCSCFSproutlet::track_app_serv_comm_failure(const std::string& uri,
+                                                 bool session_continued)
+{
+  AsCommunicationTracker* as_tracker = session_continued ?
+    _sess_cont_as_tracker : _sess_term_as_tracker;
+
+  if (as_tracker != NULL)
+  {
+    as_tracker->on_failure(uri);
+  }
+}
+
+
+void SCSCFSproutlet::track_app_serv_comm_success(const std::string& uri,
+                                                 bool session_continued)
+{
+  AsCommunicationTracker* as_tracker = session_continued ?
+    _sess_cont_as_tracker : _sess_term_as_tracker;
+
+  if (as_tracker != NULL)
+  {
+    as_tracker->on_success(uri);
+  }
+}
+
+
 SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
                                      SCSCFSproutlet* scscf,
                                      pjsip_method_e req_type) :
@@ -527,11 +553,6 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
   int st_code = rsp->line.status.code;
 
-  if (st_code > 100)
-  {
-    _seen_1xx = true;
-  }
-
   if (st_code == SIP_STATUS_FLOW_FAILED)
   {
     // The edge proxy / P-CSCF has reported that this flow has failed.
@@ -574,31 +595,54 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
       // handling.
       if ((!_cancelled) &&
           ((st_code == PJSIP_SC_REQUEST_TIMEOUT) ||
-           (PJSIP_IS_STATUS_IN_CLASS(st_code, 500))) &&
-          (_as_chain_link.continue_session()))
+           (PJSIP_IS_STATUS_IN_CLASS(st_code, 500))))
       {
-        // The AS either timed out or returned a 5xx error, and default
-        // handling is set to continue.
-        TRC_DEBUG("Trigger default_handling=CONTINUE processing");
-        SAS::Event bypass_As(trail(), SASEvent::BYPASS_AS, 1);
-        SAS::report_event(bypass_As);
+        // Default handling will be triggered. Track this as a failed
+        // communication.
+        _scscf->track_app_serv_comm_failure(_as_chain_link.uri(),
+                                            _as_chain_link.continue_session());
 
-        _as_chain_link = _as_chain_link.next();
-        pjsip_msg* req = original_request();
-        _record_routed = false;
-        if (_session_case->is_originating())
+        if (_as_chain_link.continue_session())
         {
-          apply_originating_services(req);
-        }
-        else
-        {
-          apply_terminating_services(req);
-        }
+          // The AS either timed out or returned a 5xx error, and default
+          // handling is set to continue.
+          TRC_DEBUG("Trigger default_handling=CONTINUE processing");
+          SAS::Event bypass_As(trail(), SASEvent::BYPASS_AS, 1);
+          SAS::report_event(bypass_As);
 
-        // Free off the response as we no longer need it.
-        free_msg(rsp);
+          _as_chain_link = _as_chain_link.next();
+          pjsip_msg* req = original_request();
+          _record_routed = false;
+          if (_session_case->is_originating())
+          {
+            apply_originating_services(req);
+          }
+          else
+          {
+            apply_terminating_services(req);
+          }
+
+          // Free off the response as we no longer need it.
+          free_msg(rsp);
+        }
       }
     }
+    else
+    {
+      // Default handling will not be triggered.
+      if (!_seen_1xx)
+      {
+        // This is the first response we've seen from the AS, so track this is
+        // as a successful communication.
+        _scscf->track_app_serv_comm_success(_as_chain_link.uri(),
+                                            _as_chain_link.continue_session());
+      }
+    }
+  }
+
+  if (st_code > 100)
+  {
+    _seen_1xx = true;
   }
 
   if (rsp != NULL)
@@ -1733,6 +1777,10 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
 
   if (_as_chain_link.is_set())
   {
+    // The AS has timed out so track this as a communication failure.
+    _scscf->track_app_serv_comm_failure(_as_chain_link.uri(),
+                                        _as_chain_link.continue_session());
+
     // The request was routed to a downstream AS, so cancel any outstanding
     // forks.
     cancel_pending_forks();
