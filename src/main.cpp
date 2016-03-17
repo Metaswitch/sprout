@@ -2122,7 +2122,7 @@ int main(int argc, char* argv[])
                                    analytics_logger,
                                    &auth_stats_tbls,
                                    opt.nonce_count_supported,
-                                   expires_for_binding);
+                                   expiry_for_binding);
     }
 
     // Launch the registrar.

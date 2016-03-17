@@ -56,7 +56,8 @@ enum struct NonRegisterAuthentication
   IF_PROXY_AUTHORIZATION_PRESENT
 };
 
-typedef int(*binding_expiry_func)(pjsip_contact_hdr* contact, pjsip_expires_hdr* expires);
+typedef int(*get_expiry_for_binding_fn)(pjsip_contact_hdr* contact,
+                                        pjsip_expires_hdr* expires);
 
 pj_status_t init_authentication(const std::string& realm_name,
                                 ImpiStore* impi_store,
@@ -67,7 +68,7 @@ pj_status_t init_authentication(const std::string& realm_name,
                                 AnalyticsLogger* analytics_logger,
                                 SNMP::AuthenticationStatsTables* auth_stats_tables,
                                 bool nonce_count_supported_arg,
-                                binding_expiry_func expiry_func);
+                                get_expiry_for_binding_fn get_expiry_for_binding_arg);
 
 void destroy_authentication();
 

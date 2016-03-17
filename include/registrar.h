@@ -71,7 +71,7 @@ extern pj_status_t init_registrar(SubscriberDataManager* sdm,
 /// @param expires - (optional) The expiry header from the request.
 ///
 /// @return The expiry time in seconds.
-int expires_for_binding(pjsip_contact_hdr* contact, pjsip_expires_hdr* expires);
+int expiry_for_binding(pjsip_contact_hdr* contact, pjsip_expires_hdr* expires);
 
 extern void destroy_registrar();
 

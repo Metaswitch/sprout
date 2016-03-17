@@ -303,7 +303,7 @@ SubscriberDataManager::AoRPair* write_to_store(
 
     while (contact != NULL)
     {
-      expiry = expires_for_binding(contact, expires);
+      expiry = expiry_for_binding(contact, expires);
 
       if (contact->star)
       {
@@ -464,7 +464,7 @@ void process_register_request(pjsip_rx_data* rdata)
   while (contact_hdr != NULL)
   {
     pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_EXPIRES, NULL);
-    expiry = expires_for_binding(contact_hdr, expires);
+    expiry = expiry_for_binding(contact_hdr, expires);
 
     if ((contact_hdr->star) && (expiry != 0))
     {
@@ -1122,7 +1122,7 @@ pj_status_t init_registrar(SubscriberDataManager* reg_sdm,
   return status;
 }
 
-int expires_for_binding(pjsip_contact_hdr* contact, pjsip_expires_hdr* expires)
+int expiry_for_binding(pjsip_contact_hdr* contact, pjsip_expires_hdr* expires)
 {
   int expiry = (contact->expires != -1) ? contact->expires :
                (expires != NULL) ? expires->ivalue :
