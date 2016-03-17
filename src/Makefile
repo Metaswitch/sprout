@@ -83,6 +83,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          namespace_hop.cpp \
                          session_expires_helper.cpp \
                          base64.cpp \
+                         as_communication_tracker.cpp
 
 sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_counter_table.cpp \
