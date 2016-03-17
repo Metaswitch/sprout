@@ -36,6 +36,7 @@
 
 #include <string>
 #include <sstream>
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 extern "C" {
@@ -53,6 +54,7 @@ extern "C" {
 #include "fakehssconnection.hpp"
 
 using std::string;
+using testing::MatchesRegex;
 
 /// Helper: to_string method using ostringstream.
 template <class T>
@@ -376,3 +378,70 @@ inline string str_uri(pjsip_uri* uri, pjsip_uri_context_e context = PJSIP_URI_IN
   int n = pjsip_uri_print(context, uri, buf, sizeof(buf));
   return string(buf, n);
 }
+
+/// Helper to print list to ostream.
+class DumpList
+{
+public:
+  DumpList(const string& title, std::list<string> list) :
+    _title(title), _list(list)
+  {
+  }
+  friend std::ostream& operator<<(std::ostream& os, const DumpList& that);
+private:
+  string _title;
+  std::list<string> _list;
+};
+
+class HeaderMatcher
+{
+public:
+  HeaderMatcher(string header) :
+    _header(header)
+  {
+  }
+
+  HeaderMatcher(string header, string regex1) :
+    _header(header)
+  {
+    _regexes.push_back(regex1);
+  }
+
+  HeaderMatcher(string header, string regex1, string regex2) :
+    _header(header)
+  {
+    _regexes.push_back(regex1);
+    _regexes.push_back(regex2);
+  }
+
+  void match(pjsip_msg* msg)
+  {
+    pj_str_t name_str = { const_cast<char*>(_header.data()), (unsigned int)_header.length() };
+    pjsip_hdr* hdr = NULL;
+    std::list<string> values;
+
+    while (NULL != (hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(msg, &name_str, hdr)))
+    {
+      char buf[1024];
+      int n = pjsip_hdr_print_on(hdr, buf, sizeof(buf));
+      EXPECT_LT(n, (int)sizeof(buf));
+      values.push_back(string(buf,n));
+      hdr = hdr->next;
+    }
+
+    ASSERT_EQ(_regexes.size(), values.size()) << DumpList("Expected", _regexes) << DumpList("Actual", values);
+    std::list<string>::iterator itv = values.begin();
+    std::list<string>::iterator itr = _regexes.begin();
+
+    for (unsigned i = 0; i < _regexes.size(); i++)
+    {
+      EXPECT_THAT(*itv, testing::MatchesRegex(*itr));
+      ++itv;
+      ++itr;
+    }
+  }
+
+private:
+  string _header;
+  std::list<string> _regexes;
+};

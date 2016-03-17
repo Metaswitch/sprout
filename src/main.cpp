@@ -1112,7 +1112,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
- 
+
     case 'h':
       usage();
       return -1;
@@ -1516,7 +1516,7 @@ int main(int argc, char* argv[])
     closelog();
     return 1;
   }
-  
+
   if (opt.pidfile != "")
   {
     int rc = Utils::lock_and_write_pidfile(opt.pidfile);
@@ -1781,7 +1781,6 @@ int main(int argc, char* argv[])
 
     // Start the alarm request agent
     AlarmReqAgent::get_instance().start();
-    AlarmState::clear_all("sprout");
   }
 
   // Start the load monitor
@@ -1946,7 +1945,7 @@ int main(int argc, char* argv[])
   {
     // Create an ACR factory for the P-CSCF.
     pcscf_acr_factory = (ralf_processor != NULL) ?
-                (ACRFactory*)new RalfACRFactory(ralf_processor, PCSCF) :
+                (ACRFactory*)new RalfACRFactory(ralf_processor, ACR::PCSCF) :
                 new ACRFactory();
 
     // Launch stateful proxy as P-CSCF.
@@ -1998,7 +1997,7 @@ int main(int argc, char* argv[])
   if (opt.scscf_enabled)
   {
     scscf_acr_factory = (ralf_processor != NULL) ?
-                      (ACRFactory*)new RalfACRFactory(ralf_processor, SCSCF) :
+                      (ACRFactory*)new RalfACRFactory(ralf_processor, ACR::SCSCF) :
                       new ACRFactory();
 
     if (opt.store_servers != "")

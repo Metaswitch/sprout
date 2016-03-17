@@ -81,8 +81,10 @@ ICSCFRouter::~ICSCFRouter()
 /// @param pool          Pool to parse the SCSCF URI into.  This must be valid
 ///                      for at least as long as the returned SCSCF URI.
 /// @param scscf_sip_uri Output parameter holding the parsed SCSCF URI.  This
-///                      is onle valid if the function returns PJSIP_SC_OK.
-int ICSCFRouter::get_scscf(pj_pool_t* pool, pjsip_sip_uri*& scscf_sip_uri)
+///                      is only valid if the function returns PJSIP_SC_OK.
+/// @param do_billing    Flag to determine whether we send an ACR after the HSS
+///                      query. Defaults to 'false'
+int ICSCFRouter::get_scscf(pj_pool_t* pool, pjsip_sip_uri*& scscf_sip_uri, bool do_billing)
 {
   int status_code = PJSIP_SC_OK;
   std::string scscf;
@@ -93,14 +95,10 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool, pjsip_sip_uri*& scscf_sip_uri)
     // Do the HSS query.
     status_code = hss_query();
 
-    // TS 32.260 table 5.2.1.1 says we should generate an ACR[Event] on
-    // completion of a Cx Query.  We therefore send the ACR here, but
-    // leave it in place so we will send another ACR when the transaction
-    // completes.  (Note that TS 32.260 isn't clear on whether this ACR
-    // should be generated if the Cx Query fails - we are sending on both
-    // success and failure, but that could be wrong.  Also, in the failure
-    // case we will not include a Server-Capabilities AVP.)
-    _acr->send();
+    if (do_billing)
+    {
+      _acr->send();
+    }
   }
 
   if (status_code == PJSIP_SC_OK)

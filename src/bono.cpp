@@ -241,7 +241,7 @@ static int compare_sip_sc(int sc1, int sc2);
 static pj_status_t add_path(pjsip_tx_data* tdata,
                             const Flow* flow_data,
                             const pjsip_rx_data* rdata);
-static NodeRole acr_node_role(pjsip_msg *req);
+static ACR::NodeRole acr_node_role(pjsip_msg *req);
 
 
 // Utility class that automatically flushes a trail ID when it goes out of
@@ -452,7 +452,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
   assert(target);
 
   acr = cscf_acr_factory->get_acr(get_trail(rdata),
-                                  CALLING_PARTY,
+                                  ACR::CALLING_PARTY,
                                   acr_node_role(rdata->msg_info.msg));
   acr->set_default_ccf(PJUtils::pj_str_to_string(&stack_data.cdf_domain));
 
@@ -664,7 +664,7 @@ void process_cancel_request(pjsip_rx_data* rdata)
 
   // Create and send an ACR for the CANCEL request.
   ACR* acr = cscf_acr_factory->get_acr(get_trail(rdata),
-                                       CALLING_PARTY,
+                                       ACR::CALLING_PARTY,
                                        acr_node_role(rdata->msg_info.msg));
   acr->set_default_ccf(PJUtils::pj_str_to_string(&stack_data.cdf_domain));
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
@@ -744,7 +744,7 @@ static void reject_request(pjsip_rx_data* rdata, int status_code)
   pj_status_t status;
 
   ACR* acr = cscf_acr_factory->get_acr(get_trail(rdata),
-                                       CALLING_PARTY,
+                                       ACR::CALLING_PARTY,
                                        acr_node_role(rdata->msg_info.msg));
   acr->set_default_ccf(PJUtils::pj_str_to_string(&stack_data.cdf_domain));
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
@@ -1596,9 +1596,9 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
 
 /// For a given message, calculate the role the message is requesting the
 /// node carry out.
-static NodeRole acr_node_role(pjsip_msg *req)
+static ACR::NodeRole acr_node_role(pjsip_msg *req)
 {
-  NodeRole role;
+  ACR::NodeRole role;
 
   // Determine whether this an originating or terminating request by looking for
   // the `orig` parameter in the top route header.  REGISTERs, are neither, but
@@ -1611,15 +1611,15 @@ static NodeRole acr_node_role(pjsip_msg *req)
       (pjsip_param_find(&((pjsip_sip_uri*)route_hdr->name_addr.uri)->other_param,
                         &STR_ORIG) != NULL))
   {
-    role = NODE_ROLE_ORIGINATING;
+    role = ACR::NODE_ROLE_ORIGINATING;
   }
   else if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
   {
-    role = NODE_ROLE_ORIGINATING;
+    role = ACR::NODE_ROLE_ORIGINATING;
   }
   else
   {
-    role = NODE_ROLE_TERMINATING;
+    role = ACR::NODE_ROLE_TERMINATING;
   }
 
   return role;

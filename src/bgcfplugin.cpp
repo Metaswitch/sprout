@@ -89,14 +89,14 @@ bool BGCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 
     // Create the BGCF ACR factory.
     _acr_factory = (ralf_processor != NULL) ?
-                       (ACRFactory*)new RalfACRFactory(ralf_processor, BGCF) :
+                       (ACRFactory*)new RalfACRFactory(ralf_processor, ACR::BGCF) :
                        new ACRFactory();
 
     // Create the Sproutlet.
-    _bgcf_sproutlet = new BGCFSproutlet(0, 
-                                        _bgcf_service, 
-                                        enum_service, 
-                                        _acr_factory, 
+    _bgcf_sproutlet = new BGCFSproutlet(0,
+                                        _bgcf_service,
+                                        enum_service,
+                                        _acr_factory,
                                         opt.override_npdi);
 
     sproutlets.push_back(_bgcf_sproutlet);

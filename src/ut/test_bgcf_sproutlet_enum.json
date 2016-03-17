@@ -1,0 +1,44 @@
+{
+    "number_blocks" : [
+        {   "name" : "Clearwater external number +15108580271",
+            "prefix" : "+15108580271",
+            "regex"  : "!(^.*$)!sip:\\1@ut.cw-ngv.com!"
+        },
+        {   "name" : "Clearwater external number +15108580272",
+            "prefix" : "+15108580272",
+            "regex"  : "!(^.*$)!sip:\\1@ut.cw-ngv.com!"
+        },
+        {   "name" : "Clearwater external number +15108580273",
+            "prefix" : "+15108580273",
+            "regex"  : "!(^.*$)!sip:\\1@ut.cw-ngv.com!"
+        },
+        {   "name" : "NP data - SIP - routing number +151085804",
+            "prefix" : "+151085804",
+            "regex"  : "!(^.*$)!sip:\\1;npdi;rn=+151085804@homedomain;user=phone!"
+        },
+        {   "name" : "NP data - cic",
+            "prefix" : "+151085805",
+            "regex"  : "!(^.*$)!sip:\\1;cic=12345@homedomain;user=phone!"
+        },
+        {   "name" : "Clearwater internal numbers",
+            "prefix" : "650555",
+            "regex"  : "!(^.*$)!sip:\\1@homedomain!"
+        },
+        {   "name" : "Clearwater internal numbers - rewritten",
+            "prefix" : "111555",
+            "regex"  : "!^111(.*)$!sip:650\\1@homedomain!"
+        },
+        {   "name" : "Clearwater Tel URI",
+            "prefix" : "16505551234",
+            "regex"  : "!(^.*$)!sip:\\1@ut.cw-ngv.com!"
+        },
+        {   "name" : "Setup invalid ENUM rule",
+            "prefix" : "16505551239",
+            "regex"  : "!(^.*$)!sip:1\\1@ut.cw-ngv.com!"
+        },
+        {   "name" : "Invalid ENUM rule",
+            "prefix" : "116505551239",
+            "regex"  : "!\\+(^.*$)!sip:00\\1@ut.cw-ngv.com!"
+        }
+    ]
+}
