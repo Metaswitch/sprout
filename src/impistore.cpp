@@ -147,7 +147,7 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* 
     {
       auth_challenge = ImpiStore::DigestAuthChallenge::from_json(json);
     }
-    else if (type == JSON_TYPE_DIGEST)
+    else if (type == JSON_TYPE_AKA)
     {
       auth_challenge = ImpiStore::AKAAuthChallenge::from_json(json);
     }
@@ -462,6 +462,7 @@ ImpiStore::Impi* ImpiStore::Impi::from_json(const std::string& impi, rapidjson::
   ImpiStore::Impi* impi_obj = NULL;
   if (json->IsObject())
   {
+    impi_obj = new ImpiStore::Impi(impi);
     if ((json->HasMember(JSON_AUTH_CHALLENGES)) &&
         ((*json)[JSON_AUTH_CHALLENGES].IsArray()))
     {
@@ -472,6 +473,7 @@ ImpiStore::Impi* ImpiStore::Impi::from_json(const std::string& impi, rapidjson::
         if (auth_challenge != NULL)
         {
           impi_obj->auth_challenges.push_back(auth_challenge);
+          impi_obj->_nonces.push_back(auth_challenge->nonce);
         }
       }
     }
@@ -483,14 +485,10 @@ ImpiStore::Impi* ImpiStore::Impi::from_json(const std::string& impi, rapidjson::
   return impi_obj;
 }
 
-
-
-
 ImpiStore::ImpiStore(Store* data_store, Mode mode) :
   _data_store(data_store), _mode(mode)
 {
 }
-
 
 ImpiStore::~ImpiStore()
 {
@@ -501,34 +499,80 @@ Store::Status ImpiStore::set_impi(Impi* impi,
 {
   if (_mode == ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI)
   {
-    
+    // TODO: Implement.
   }
-  
 
-  return Store::Status::OK;
+  int expiry = 30000; // TODO: Calculate correctly.
+  std::string data = impi->to_json();
+  TRC_DEBUG("Storing IMPI for %s\n%s", impi->impi.c_str(), data.c_str());
+  Store::Status status = _data_store->set_data("impi",
+                                               impi->impi,
+                                               data,
+                                               impi->_cas,
+                                               expiry,
+                                               trail);
+  if (status == Store::Status::OK)
+  {
+    SAS::Event event(trail, SASEvent::IMPISTORE_IMPI_SET_SUCCESS, 0);
+    event.add_var_param(impi->impi);
+    SAS::report_event(event);
+  }
+  else
+  {
+    // LCOV_EXCL_START
+    TRC_ERROR("Failed to write IMPI for private_id %s", impi->impi.c_str());
+    SAS::Event event(trail, SASEvent::IMPISTORE_IMPI_SET_FAILURE, 0);
+    event.add_var_param(impi->impi);
+    SAS::report_event(event);
+    // LCOV_EXCL_STOP
+  }
+  return status;
 }
 
 ImpiStore::Impi* ImpiStore::get_impi(const std::string& impi,
                                      SAS::TrailId trail)
 {
-  return NULL;
-}
-
-ImpiStore::Impi* ImpiStore::get_impi_with_nonce(const std::string& impi_str,
-                                                const std::string& nonce,
-                                                SAS::TrailId trail)
-{
-  ImpiStore::Impi* impi;
-  if (_mode == ImpiStore::Mode::READ_IMPI_WRITE_IMPI)
+  ImpiStore::Impi* impi_obj = NULL;
+  std::string data;
+  uint64_t cas;
+  Store::Status status = _data_store->get_data("impi", impi, data, cas, trail);
+  if (status == Store::Status::OK)
   {
-    // Mode is READ_IMPI_WRITE, so just call through to get_impi.
-    impi = get_impi(impi_str, trail);
+    TRC_DEBUG("Retrieved IMPI for %s\n%s", impi.c_str(), data.c_str());
+    impi_obj = ImpiStore::Impi::from_json(impi, data);
+    if (impi_obj != NULL)
+    {
+      impi_obj->_cas = cas;
+    }
+    SAS::Event event(trail, SASEvent::IMPISTORE_IMPI_GET_SUCCESS, 0);
+    event.add_var_param(impi);
+    SAS::report_event(event);
   }
   else
   {
-    impi = NULL;
+    SAS::Event event(trail, SASEvent::IMPISTORE_IMPI_GET_FAILURE, 0);
+    event.add_var_param(impi);
+    SAS::report_event(event);
   }
-  return impi;
+  return impi_obj;
+}
+
+ImpiStore::Impi* ImpiStore::get_impi_with_nonce(const std::string& impi,
+                                                const std::string& nonce,
+                                                SAS::TrailId trail)
+{
+  ImpiStore::Impi* impi_obj;
+  if (_mode == ImpiStore::Mode::READ_IMPI_WRITE_IMPI)
+  {
+    // Mode is READ_IMPI_WRITE_IMPI, so just call through to get_impi.
+    impi_obj = get_impi(impi, trail);
+  }
+  else
+  {
+    // TODO: Implement.
+    impi_obj = NULL;
+  }
+  return impi_obj;
 }
 
 Store::Status ImpiStore::delete_impi(Impi* impi,
@@ -542,7 +586,7 @@ void correlate_trail_to_challenge(ImpiStore::AuthChallenge* auth_challenge,
 {
   if (auth_challenge->correlator == "")
   {
-    TRC_WARNING("Could not raise branch correlation marker because the stored authentication challenge has an empty 'correlator' field");
+    TRC_WARNING("Could not raise branch correlation marker because correlator is unknown");
   }
   else
   {

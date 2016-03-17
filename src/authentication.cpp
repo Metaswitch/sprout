@@ -499,21 +499,22 @@ void create_challenge(pjsip_digest_credential* credentials,
     // Write the new authentication challenge to the IMPI store
     TRC_DEBUG("Write authentication challenge to IMPI store");
     ImpiStore::Impi* impi_obj = impi_store->get_impi(impi, get_trail(rdata));
-    if (impi_obj != NULL)
+    if (impi_obj == NULL)
     {
-      impi_obj->auth_challenges.push_back(auth_challenge);
-      auth_challenge = NULL;
-      Store::Status status = impi_store->set_impi(impi_obj, get_trail(rdata));
-      if (status == Store::OK)
-      {
-        // We've written the challenge into the store, so need to set a Chronos
-        // timer so that an AUTHENTICATION_TIMEOUT SAR is sent to the
-        // HSS when it expires.
-        std::string timer_id;
-        std::string chronos_body = "{\"impi\": \"" + impi + "\", \"impu\": \"" + impu +"\", \"nonce\": \"" + nonce +"\"}";
-        TRC_DEBUG("Sending %s to Chronos to set AV timer", chronos_body.c_str());
-        chronos->send_post(timer_id, 30, "/authentication-timeout", chronos_body, get_trail(rdata));
-      }
+      impi_obj = new ImpiStore::Impi(impi);
+    }
+    impi_obj->auth_challenges.push_back(auth_challenge);
+    auth_challenge = NULL;
+    Store::Status status = impi_store->set_impi(impi_obj, get_trail(rdata));
+    if (status == Store::OK)
+    {
+      // We've written the challenge into the store, so need to set a Chronos
+      // timer so that an AUTHENTICATION_TIMEOUT SAR is sent to the
+      // HSS when it expires.
+      std::string timer_id;
+      std::string chronos_body = "{\"impi\": \"" + impi + "\", \"impu\": \"" + impu +"\", \"nonce\": \"" + nonce +"\"}";
+      TRC_DEBUG("Sending %s to Chronos to set AV timer", chronos_body.c_str());
+      chronos->send_post(timer_id, 30, "/authentication-timeout", chronos_body, get_trail(rdata));
     }
 
     delete impi_obj;

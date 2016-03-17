@@ -264,7 +264,7 @@ public:
   public:
     /// Constructor.
     /// @param _impi         The private ID.
-    Impi(const std::string& _impi) : impi(_impi), auth_challenges(), _cas(0) {};
+    Impi(const std::string& _impi) : impi(_impi), auth_challenges(), _cas(0), _nonces() {};
 
     /// Helper - get authentication challenge for a given nonce.
     /// @returns the authentication challenge, or NULL if not found
