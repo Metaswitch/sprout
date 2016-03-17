@@ -66,6 +66,7 @@ extern "C" {
 #include "sproutlet.h"
 #include "snmp_counter_table.h"
 #include "session_expires_helper.h"
+#include "as_communication_tracker.h"
 
 class SCSCFSproutletTsx;
 
@@ -87,7 +88,9 @@ public:
                  ACRFactory* acr_factory,
                  bool override_npdi,
                  int session_continued_timeout = DEFAULT_SESSION_CONTINUED_TIMEOUT,
-                 int session_terminated_timeout = DEFAULT_SESSION_TERMINATED_TIMEOUT);
+                 int session_terminated_timeout = DEFAULT_SESSION_TERMINATED_TIMEOUT,
+                 AsCommunicationTracker* sess_term_as_tracker = NULL,
+                 AsCommunicationTracker* sess_cont_as_tracker = NULL);
   ~SCSCFSproutlet();
 
   bool init();
@@ -199,6 +202,9 @@ private:
   SNMP::CounterTable* _routed_by_preloaded_route_tbl = NULL;
   SNMP::CounterTable* _invites_cancelled_before_1xx_tbl = NULL;
   SNMP::CounterTable* _invites_cancelled_after_1xx_tbl = NULL;
+
+  AsCommunicationTracker* _sess_term_as_tracker;
+  AsCommunicationTracker* _sess_cont_as_tracker;
 };
 
 

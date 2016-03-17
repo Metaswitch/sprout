@@ -43,6 +43,8 @@
 #include "ipv6utils.h"
 #include "sproutletplugin.h"
 #include "scscfsproutlet.h"
+#include "sprout_alarmdefinition.h"
+#include "sprout_pd_definitions.h"
 
 class SCSCFPlugin : public SproutletPlugin
 {
@@ -82,7 +84,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     std::string scscf_cluster_uri = std::string(stack_data.scscf_uri.ptr,
                                                 stack_data.scscf_uri.slen);
     std::string node_ip(stack_data.local_host.ptr, stack_data.local_host.slen);
-    
+
     if (is_ipv6(node_ip))
     {
       node_ip = "[" + node_ip + "]";
@@ -115,6 +117,25 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
       icscf_uri = opt.external_icscf_uri;
     }
 
+    // Create Application Server communication trackers.
+    AsCommunicationTracker* sess_term_as_tracker =
+      new AsCommunicationTracker(
+        new Alarm("sprout",
+                  AlarmDef::SPROUT_SESS_TERMINATED_AS_COMM_ERROR,
+                  AlarmDef::MAJOR),
+        &CL_SPROUT_SESS_TERM_AS_COMM_FAILURE,
+        &CL_SPROUT_SESS_TERM_AS_COMM_SUCCESS
+      );
+
+    AsCommunicationTracker* sess_cont_as_tracker =
+      new AsCommunicationTracker(
+        new Alarm("sprout",
+                  AlarmDef::SPROUT_SESS_CONTINUED_AS_COMM_ERROR,
+                  AlarmDef::MINOR),
+        &CL_SPROUT_SESS_CONT_AS_COMM_FAILURE,
+        &CL_SPROUT_SESS_CONT_AS_COMM_SUCCESS
+      );
+
     _scscf_sproutlet = new SCSCFSproutlet(scscf_cluster_uri,
                                           scscf_node_uri,
                                           icscf_uri,
@@ -127,7 +148,9 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           scscf_acr_factory,
                                           opt.override_npdi,
                                           opt.session_continued_timeout_ms,
-                                          opt.session_terminated_timeout_ms);
+                                          opt.session_terminated_timeout_ms,
+                                          sess_term_as_tracker,
+                                          sess_cont_as_tracker);
     plugin_loaded = _scscf_sproutlet->init();
 
     sproutlets.push_back(_scscf_sproutlet);

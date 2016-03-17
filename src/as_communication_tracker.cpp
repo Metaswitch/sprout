@@ -37,8 +37,8 @@
 #include "as_communication_tracker.h"
 
 AsCommunicationTracker::AsCommunicationTracker(Alarm* alarm,
-                                               PDLog1<const char*>* as_failed_log,
-                                               PDLog1<const char*>* as_ok_log) :
+                                               const PDLog1<const char*>* as_failed_log,
+                                               const PDLog1<const char*>* as_ok_log) :
   _next_check_time_ms(0),
   _alarm(alarm),
   _as_failed_log(as_failed_log),

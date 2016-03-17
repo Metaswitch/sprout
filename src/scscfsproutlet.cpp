@@ -66,7 +66,9 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
                                ACRFactory* acr_factory,
                                bool override_npdi,
                                int session_continued_timeout_ms,
-                               int session_terminated_timeout_ms) :
+                               int session_terminated_timeout_ms,
+                               AsCommunicationTracker* sess_term_as_tracker,
+                               AsCommunicationTracker* sess_cont_as_tracker) :
   Sproutlet("scscf", port),
   _scscf_cluster_uri(NULL),
   _scscf_node_uri(NULL),
@@ -83,7 +85,9 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
   _scscf_cluster_uri_str(scscf_cluster_uri),
   _scscf_node_uri_str(scscf_node_uri),
   _icscf_uri_str(icscf_uri),
-  _bgcf_uri_str(bgcf_uri)
+  _bgcf_uri_str(bgcf_uri),
+  _sess_term_as_tracker(sess_term_as_tracker),
+  _sess_cont_as_tracker(sess_cont_as_tracker)
 {
   _incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("scscf_incoming_sip_transactions",
                                                                                     "1.2.826.0.1.1578918.9.3.20");
