@@ -307,13 +307,13 @@ public:
   ImpiStore(Store* data_store, Mode mode);
 
   /// Destructor.
-  ~ImpiStore();
+  virtual ~ImpiStore();
 
   /// Store the specified IMPI in the store.
   /// @returns Store::Status::OK on success, or an error code on failure.
   /// @param impi      An Impi object representing the IMPI.
-  Store::Status set_impi(Impi* impi,
-                         SAS::TrailId trail);
+  virtual Store::Status set_impi(Impi* impi,
+                                 SAS::TrailId trail);
 
   /// Retrieves the IMPI for the specified private user identity.  If using
   /// Mode::READ_AV_IMPI_WRITE_AV_IMPI, this may return incomplete data.
@@ -321,8 +321,8 @@ public:
   ///                  if no vector found or if the store is corrupt.  The
   ///                  caller is free to modify this object.
   /// @param impi      The private user identity.
-  Impi* get_impi(const std::string& impi,
-                 SAS::TrailId trail);
+  virtual Impi* get_impi(const std::string& impi,
+                         SAS::TrailId trail);
 
   /// Retrieves the IMPI for the specified private user identity and nonce.  If
   /// using Mode::READ_AV_IMPI_WRITE_AV_IMPI, this may return incomplete data,
@@ -334,16 +334,16 @@ public:
   ///                  caller is free to modify this object.
   /// @param impi      The private user identity.
   /// @param nonce     The nonce being looked for.
-  Impi* get_impi_with_nonce(const std::string& impi,
-                            const std::string& nonce,
-                            SAS::TrailId trail);
+  virtual Impi* get_impi_with_nonce(const std::string& impi,
+                                    const std::string& nonce,
+                                    SAS::TrailId trail);
 
   /// Delete all record of the IMPI.  If using Mode::READ_UV_IMPI_WRITE_AV_IMPI,
   /// this won't necessarily delete all AVs.
   /// @param impi      The private user identity.
   /// @returns Store::Status::OK on success, or an error code on failure.
-  Store::Status delete_impi(Impi* impi,
-                            SAS::TrailId trail);
+  virtual Store::Status delete_impi(Impi* impi,
+                                    SAS::TrailId trail);
 
 private:
   /// The underlying data store.

@@ -555,7 +555,7 @@ SubscriberDataManager::AoRPair* DeregistrationTask::deregister_bindings(
 
       if (private_id.empty() || private_id == b->_private_id)
       {
-        if (impis != NULL)
+        if ((impis != NULL) && (!b->_private_id.empty()))
         {
           // Record the IMPIs that we need to delete as a result of deleting
           // this binding.
