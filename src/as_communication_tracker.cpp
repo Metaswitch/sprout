@@ -111,8 +111,11 @@ void AsCommunicationTracker::check_for_healthy_app_servers()
 {
   uint64_t now = current_time_ms();
 
-  if (now > _next_check_time_ms)
+  if ((now > _next_check_time_ms) && !_as_failures.empty())
   {
+    // Don't check again for a while.
+    _next_check_time_ms += NEXT_CHECK_INTERVAL_MS;
+
     TRC_DEBUG("Check for ASs that have become healthy again");
 
     // Iterate through all the AS in our map. If any of them have not had any
@@ -121,13 +124,13 @@ void AsCommunicationTracker::check_for_healthy_app_servers()
     //
     // We mutate the map as we iterate over it. The non-standard loop construct
     // avoids iterator invalidation.
-    std::map<std::string, int>::iterator curr_as;
+    std::map<std::string, int>::iterator curr_as = _as_failures.begin();
     std::map<std::string, int>::iterator next_as;
 
-    for (curr_as = _as_failures.begin(), next_as = std::next(curr_as);
-         curr_as != _as_failures.end();
-         curr_as = next_as)
+    while (curr_as != _as_failures.end())
     {
+      next_as = std::next(curr_as);
+
       if (curr_as->second == 0)
       {
         TRC_DEBUG("AS %s has become healthy", curr_as->first.c_str());
@@ -138,20 +141,15 @@ void AsCommunicationTracker::check_for_healthy_app_servers()
       {
         curr_as->second = 0;
       }
+
+      curr_as = next_as;
     }
 
     if (_as_failures.empty())
     {
-      TRC_DEBUG("Ass Ass OK - clear the alarm");
+      TRC_DEBUG("All ASs OK - clear the alarm");
       // No ASs are currently failed. Clear the alarm.
       _alarm->clear();
-    }
-    else
-    {
-      // There are still some failed ASs. Check again a bit later.
-      TRC_DEBUG("Some Ass still failed - check again in %d ms",
-                NEXT_CHECK_INTERVAL_MS);
-      _next_check_time_ms = NEXT_CHECK_INTERVAL_MS;
     }
   }
 }
