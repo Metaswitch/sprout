@@ -221,7 +221,7 @@ const static struct pj_getopt_option long_opt[] =
   { "pidfile",                      required_argument, 0, OPT_PIDFILE},
   { "plugin-option",                required_argument, 0, 'N'},
   { "impi-store-mode",              required_argument, 0, OPT_IMPI_STORE_MODE},
-  { "impi-store-mode",              no_argument,       0, OPT_NONCE_COUNT_SUPPORTED},
+  { "nonce-count-supported",        no_argument,       0, OPT_NONCE_COUNT_SUPPORTED},
   { NULL,                           0,                 0, 0}
 };
 
