@@ -74,7 +74,7 @@ public:
     SipTest::SetUpTestCase();
 
     _local_data_store = new LocalStore();
-    _impi_store = new ImpiStore(_local_data_store, ImpiStore::Mode::READ_IMPI_WRITE_IMPI);
+    _impi_store = new ImpiStore(_local_data_store, ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI);
     _hss_connection = new FakeHSSConnection();
     _chronos_connection = new FakeChronosConnection();
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);

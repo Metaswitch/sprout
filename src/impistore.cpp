@@ -47,6 +47,9 @@
 #include "rapidjson/error/en.h"
 #include "json_parse_utils.h"
 
+const std::string ImpiStore::TABLE_IMPI = "impi";
+const std::string ImpiStore::TABLE_AV = "av";
+
 ImpiStore::AuthChallenge* ImpiStore::Impi::get_auth_challenge(const std::string& nonce)
 {
   // Spin through the list of authentication challenges, looking for a
@@ -90,6 +93,7 @@ static const char* const JSON_QOP = "qop";
 static const char* const JSON_HA1 = "ha1";
 static const char* const JSON_RESPONSE = "response";
 static const char* const JSON_AUTH_CHALLENGES = "authChallenges";
+static const char* const JSON_TOMBSTONE = "tombstone";
 static const char* const JSON_AV_TYPE_DIGEST = "digest";
 static const char* const JSON_AV_TYPE_AKA = "aka";
 static const char* const JSON_AV_NONCE_COUNT = "nc";
@@ -99,6 +103,7 @@ static const char* const JSON_AV_REALM = "realm";
 static const char* const JSON_AV_QOP = "qop";
 static const char* const JSON_AV_HA1 = "ha1";
 static const char* const JSON_AV_RESPONSE = "response";
+static const char* const JSON_AV_TOMBSTONE = "tombstone";
 
 std::string ImpiStore::AuthChallenge::to_json()
 {
@@ -190,19 +195,19 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* 
   return auth_challenge;
 }
 
-std::string ImpiStore::AuthChallenge::to_json_av()
+std::string ImpiStore::AuthChallenge::to_json_av(bool tombstone)
 {
   rapidjson::StringBuffer buffer;
   rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
   writer.StartObject();
   {
-    write_json_av(&writer);
+    write_json_av(&writer, tombstone);
   }
   writer.EndObject();
   return buffer.GetString();
 }
 
-void ImpiStore::AuthChallenge::write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer)
+void ImpiStore::AuthChallenge::write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer, bool tombstone)
 {
   // Nonce is part of the key, so isn't stored in the JSON.
   writer->String(JSON_AV_NONCE_COUNT); writer->Uint(nonce_count);
@@ -210,6 +215,10 @@ void ImpiStore::AuthChallenge::write_json_av(rapidjson::Writer<rapidjson::String
   if (correlator != "")
   {
     writer->String(JSON_AV_CORRELATOR); writer->String(correlator.c_str());
+  }
+  if (tombstone)
+  {
+    writer->String(JSON_TOMBSTONE); writer->Bool(tombstone);
   }
 }
 
@@ -230,41 +239,46 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json_av(const std::stri
   ImpiStore::AuthChallenge* auth_challenge = NULL;
   if (json->IsObject())
   {
-    if (json->HasMember(JSON_AV_TYPE_DIGEST))
+    bool tombstone = false;
+    JSON_SAFE_GET_BOOL_MEMBER(*json, JSON_TOMBSTONE, tombstone);
+    if (!tombstone)
     {
-      auth_challenge = ImpiStore::DigestAuthChallenge::from_json_av(json);
-      if (json->HasMember(JSON_AV_TYPE_AKA))
+      if (json->HasMember(JSON_AV_TYPE_DIGEST))
       {
-        TRC_WARNING("JSON AV contains both digest and AKA data - ignoring AKA");
+        auth_challenge = ImpiStore::DigestAuthChallenge::from_json_av(json);
+        if (json->HasMember(JSON_AV_TYPE_AKA))
+        {
+          TRC_WARNING("JSON AV contains both digest and AKA data - ignoring AKA");
+        }
       }
-    }
-    else if (json->HasMember(JSON_AV_TYPE_AKA))
-    {
-      auth_challenge = ImpiStore::AKAAuthChallenge::from_json_av(json);
-    }
-    else
-    {
-      TRC_WARNING("JSON AV contains neither digest nor AKA data - dropping");
-    }
-    if (auth_challenge != NULL)
-    {
-      // Fill in remaining fields.
-      auth_challenge->nonce = nonce;
-      JSON_SAFE_GET_UINT_MEMBER(*json, JSON_NONCE_COUNT, auth_challenge->nonce_count);
-      JSON_SAFE_GET_UINT_64_MEMBER(*json, JSON_EXPIRES, auth_challenge->expires);
-      JSON_SAFE_GET_STRING_MEMBER(*json, JSON_CORRELATOR, auth_challenge->correlator);
-      if (auth_challenge->nonce_count == 0)
+      else if (json->HasMember(JSON_AV_TYPE_AKA))
       {
-        TRC_WARNING("No \"%s\" field in JSON AV - defaulting to %u",
-                    JSON_AV_NONCE_COUNT, INITIAL_NONCE_COUNT);
-        auth_challenge->nonce_count = INITIAL_NONCE_COUNT;
+        auth_challenge = ImpiStore::AKAAuthChallenge::from_json_av(json);
       }
-      if (auth_challenge->expires == 0)
+      else
       {
-        TRC_WARNING("No \"%s\" field in JSON authentication challenge - defaulting to ",
-                    JSON_EXPIRES);
+        TRC_WARNING("JSON AV contains neither digest nor AKA data - dropping");
+      }
+      if (auth_challenge != NULL)
+      {
+        // Fill in remaining fields.
+        auth_challenge->nonce = nonce;
+        JSON_SAFE_GET_UINT_MEMBER(*json, JSON_NONCE_COUNT, auth_challenge->nonce_count);
+        JSON_SAFE_GET_UINT_64_MEMBER(*json, JSON_EXPIRES, auth_challenge->expires);
+        JSON_SAFE_GET_STRING_MEMBER(*json, JSON_CORRELATOR, auth_challenge->correlator);
+        if (auth_challenge->nonce_count == 0)
+        {
+          TRC_WARNING("No \"%s\" field in JSON AV - defaulting to %u",
+                      JSON_AV_NONCE_COUNT, INITIAL_NONCE_COUNT);
+          auth_challenge->nonce_count = INITIAL_NONCE_COUNT;
+        }
+        if (auth_challenge->expires == 0)
+        {
+          TRC_WARNING("No \"%s\" field in JSON authentication challenge - defaulting to ",
+                      JSON_EXPIRES);
 //TODO: Default expires field
 //      auth_challenge->expires = 
+        }
       }
     }
   }
@@ -310,12 +324,13 @@ ImpiStore::DigestAuthChallenge* ImpiStore::DigestAuthChallenge::from_json(rapidj
   return auth_challenge;
 }
 
-void ImpiStore::DigestAuthChallenge::write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer)
+void ImpiStore::DigestAuthChallenge::write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer,
+                                                   bool tombstone)
 {
   writer->String(JSON_AV_TYPE_DIGEST);
   writer->StartObject();
   {
-    ImpiStore::AuthChallenge::write_json_av(writer);
+    ImpiStore::AuthChallenge::write_json_av(writer, tombstone);
     writer->String(JSON_AV_REALM); writer->String(realm.c_str());
     writer->String(JSON_AV_QOP); writer->String(qop.c_str());
     writer->String(JSON_AV_HA1); writer->String(ha1.c_str());
@@ -377,12 +392,13 @@ ImpiStore::AKAAuthChallenge* ImpiStore::AKAAuthChallenge::from_json(rapidjson::V
   return auth_challenge;
 }
 
-void ImpiStore::AKAAuthChallenge::write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer)
+void ImpiStore::AKAAuthChallenge::write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer,
+                                                bool tombstone)
 {
   writer->String(JSON_AV_TYPE_AKA);
   writer->StartObject();
   {
-    ImpiStore::AuthChallenge::write_json_av(writer);
+    ImpiStore::AuthChallenge::write_json_av(writer, tombstone);
     writer->String(JSON_AV_RESPONSE); writer->String(response.c_str());
   }
   writer->EndObject();
@@ -410,19 +426,20 @@ ImpiStore::AKAAuthChallenge* ImpiStore::AKAAuthChallenge::from_json_av(rapidjson
   return auth_challenge;
 }
 
-std::string ImpiStore::Impi::to_json()
+std::string ImpiStore::Impi::to_json(bool tombstone)
 {
   rapidjson::StringBuffer buffer;
   rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
   writer.StartObject();
   {
-    write_json(&writer);
+    write_json(&writer, tombstone);
   }
   writer.EndObject();
   return buffer.GetString();
 }
 
-void ImpiStore::Impi::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer)
+void ImpiStore::Impi::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer,
+                                 bool tombstone)
 {
   // Impi is part of the key, so isn't stored in the JSON itself.
   if (auth_challenges.size() > 0)
@@ -443,6 +460,10 @@ void ImpiStore::Impi::write_json(rapidjson::Writer<rapidjson::StringBuffer>* wri
     }
     writer->EndArray();
   }
+  if (tombstone)
+  {
+    writer->String(JSON_TOMBSTONE); writer->Bool(tombstone);
+  }
 }
 
 ImpiStore::Impi* ImpiStore::Impi::from_json(const std::string& impi, const std::string& json)
@@ -462,20 +483,29 @@ ImpiStore::Impi* ImpiStore::Impi::from_json(const std::string& impi, rapidjson::
   ImpiStore::Impi* impi_obj = NULL;
   if (json->IsObject())
   {
-    impi_obj = new ImpiStore::Impi(impi);
-    if ((json->HasMember(JSON_AUTH_CHALLENGES)) &&
-        ((*json)[JSON_AUTH_CHALLENGES].IsArray()))
+    bool tombstone = false;
+    JSON_SAFE_GET_BOOL_MEMBER(*json, JSON_TOMBSTONE, tombstone);
+    if (!tombstone)
     {
-      rapidjson::Value* array = &((*json)[JSON_AUTH_CHALLENGES]);
-      for (unsigned int ii = 0; ii < array->Size(); ii++)
+      impi_obj = new ImpiStore::Impi(impi);
+      if ((json->HasMember(JSON_AUTH_CHALLENGES)) &&
+          ((*json)[JSON_AUTH_CHALLENGES].IsArray()))
       {
-        ImpiStore::AuthChallenge* auth_challenge = ImpiStore::AuthChallenge::from_json(&((*array)[ii]));
-        if (auth_challenge != NULL)
+        rapidjson::Value* array = &((*json)[JSON_AUTH_CHALLENGES]);
+        for (unsigned int ii = 0; ii < array->Size(); ii++)
         {
-          impi_obj->auth_challenges.push_back(auth_challenge);
-          impi_obj->_nonces.push_back(auth_challenge->nonce);
+          ImpiStore::AuthChallenge* auth_challenge = ImpiStore::AuthChallenge::from_json(&((*array)[ii]));
+          if (auth_challenge != NULL)
+          {
+            impi_obj->auth_challenges.push_back(auth_challenge);
+            impi_obj->_nonces.push_back(auth_challenge->nonce);
+          }
         }
       }
+    }
+    else
+    {
+      TRC_WARNING("JSON IMPI is a tombstone - dropping");
     }
   }
   else
@@ -497,15 +527,10 @@ ImpiStore::~ImpiStore()
 Store::Status ImpiStore::set_impi(Impi* impi,
                                   SAS::TrailId trail)
 {
-  if (_mode == ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI)
-  {
-    // TODO: Implement.
-  }
-
   int expiry = 30000; // TODO: Calculate correctly.
   std::string data = impi->to_json();
   TRC_DEBUG("Storing IMPI for %s\n%s", impi->impi.c_str(), data.c_str());
-  Store::Status status = _data_store->set_data("impi",
+  Store::Status status = _data_store->set_data(TABLE_IMPI,
                                                impi->impi,
                                                data,
                                                impi->_cas,
@@ -526,6 +551,49 @@ Store::Status ImpiStore::set_impi(Impi* impi,
     SAS::report_event(event);
     // LCOV_EXCL_STOP
   }
+
+  if (_mode == ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI)
+  {
+    for (std::vector<ImpiStore::AuthChallenge*>::iterator it = impi->auth_challenges.begin();
+         it != impi->auth_challenges.end();
+         it++)
+    {
+      std::string nonce = (*it)->nonce;
+      data = (*it)->to_json_av();
+      // TODO: Calculate expiry correctly.
+      Store::Status local_status = _data_store->set_data(TABLE_AV,
+                                                         impi->impi + '\\' + nonce,
+                                                         data,
+                                                         (*it)->_cas,
+                                                         expiry,
+                                                         trail);
+      if (local_status == Store::Status::OK)
+      {
+        SAS::Event event(trail, SASEvent::IMPISTORE_AV_SET_SUCCESS, 0);
+        event.add_var_param(impi->impi);
+        event.add_var_param(nonce);
+        SAS::report_event(event);
+      }
+      else
+      {
+        // LCOV_EXCL_START
+        TRC_ERROR("Failed to set AV for %s/%s", impi->impi.c_str(), nonce.c_str());
+        SAS::Event event(trail, SASEvent::IMPISTORE_AV_SET_FAILURE, 0);
+        event.add_var_param(impi->impi);
+        event.add_var_param(nonce.c_str());
+        SAS::report_event(event);
+        // Update status, but only if it's not already DATA_CONTENTION - that's
+        // the most significant status.
+        if (status != Store::Status::DATA_CONTENTION)
+        {
+          status = local_status;
+        }
+        // LCOV_EXCL_STOP
+      }
+    }
+    // TODO: Delete AVs
+  }
+
   return status;
 }
 
@@ -535,7 +603,7 @@ ImpiStore::Impi* ImpiStore::get_impi(const std::string& impi,
   ImpiStore::Impi* impi_obj = NULL;
   std::string data;
   uint64_t cas;
-  Store::Status status = _data_store->get_data("impi", impi, data, cas, trail);
+  Store::Status status = _data_store->get_data(TABLE_IMPI, impi, data, cas, trail);
   if (status == Store::Status::OK)
   {
     TRC_DEBUG("Retrieved IMPI for %s\n%s", impi.c_str(), data.c_str());
@@ -561,16 +629,55 @@ ImpiStore::Impi* ImpiStore::get_impi_with_nonce(const std::string& impi,
                                                 const std::string& nonce,
                                                 SAS::TrailId trail)
 {
-  ImpiStore::Impi* impi_obj;
-  if (_mode == ImpiStore::Mode::READ_IMPI_WRITE_IMPI)
+  ImpiStore::Impi* impi_obj = get_impi(impi, trail);
+  if (_mode == ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI)
   {
-    // Mode is READ_IMPI_WRITE_IMPI, so just call through to get_impi.
-    impi_obj = get_impi(impi, trail);
-  }
-  else
-  {
-    // TODO: Implement.
-    impi_obj = NULL;
+    std::string data;
+    uint64_t cas;
+    Store::Status status = _data_store->get_data(TABLE_AV, impi + '\\' + nonce, data, cas, trail);
+    if (status == Store::Status::OK)
+    {
+      TRC_DEBUG("Retrieved AV for %s/%s\n%s", impi.c_str(), nonce.c_str(), data.c_str());
+      ImpiStore::AuthChallenge* auth_challenge = ImpiStore::AuthChallenge::from_json_av(impi, data);
+      if (auth_challenge != NULL)
+      {
+        if (impi_obj == NULL)
+        {
+          impi_obj = new ImpiStore::Impi(impi);
+        }
+        auth_challenge->_cas = cas;
+        bool auth_challenge_found;
+        for (std::vector<ImpiStore::AuthChallenge*>::iterator it = impi_obj->auth_challenges.begin();
+             it != impi_obj->auth_challenges.end();
+             it++)
+        {
+          if ((*it)->nonce == auth_challenge->nonce)
+          {
+            ImpiStore::AuthChallenge* old_auth_challenge = *it;
+            *it = auth_challenge;
+            delete old_auth_challenge;
+            auth_challenge_found = true;
+            break;
+          }
+        }
+        if (!auth_challenge_found)
+        {
+          impi_obj->auth_challenges.push_back(auth_challenge);
+          impi_obj->_nonces.push_back(nonce);
+        }
+      }
+      SAS::Event event(trail, SASEvent::IMPISTORE_AV_GET_SUCCESS, 0);
+      event.add_var_param(impi);
+      event.add_var_param(nonce);
+      SAS::report_event(event);
+    }
+    else
+    {
+      SAS::Event event(trail, SASEvent::IMPISTORE_AV_GET_FAILURE, 0);
+      event.add_var_param(impi);
+      event.add_var_param(nonce);
+      SAS::report_event(event);
+    }
   }
   return impi_obj;
 }
@@ -578,7 +685,64 @@ ImpiStore::Impi* ImpiStore::get_impi_with_nonce(const std::string& impi,
 Store::Status ImpiStore::delete_impi(Impi* impi,
                                      SAS::TrailId trail)
 {
-  return Store::Status::OK;
+  TRC_DEBUG("Deleting IMPI for %s", impi->impi.c_str());
+  Store::Status status = _data_store->delete_data(TABLE_IMPI,
+                                                  impi->impi,
+                                                  trail);
+  if (status == Store::Status::OK)
+  {
+    SAS::Event event(trail, SASEvent::IMPISTORE_IMPI_DELETE_SUCCESS, 0);
+    event.add_var_param(impi->impi);
+    SAS::report_event(event);
+  }
+  else
+  {
+    // LCOV_EXCL_START
+    TRC_ERROR("Failed to delete IMPI for private_id %s", impi->impi.c_str());
+    SAS::Event event(trail, SASEvent::IMPISTORE_IMPI_DELETE_FAILURE, 0);
+    event.add_var_param(impi->impi);
+    SAS::report_event(event);
+    // LCOV_EXCL_STOP
+  }
+
+  if (_mode == ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI)
+  {
+    for (std::vector<ImpiStore::AuthChallenge*>::iterator it = impi->auth_challenges.begin();
+         it != impi->auth_challenges.end();
+         it++)
+    {
+      std::string nonce = (*it)->nonce;
+      TRC_DEBUG("Deleting AV for %s/%s", impi->impi.c_str(), nonce.c_str());
+      Store::Status local_status = _data_store->delete_data(TABLE_AV,
+                                                            impi->impi + '\\' + nonce,
+                                                            trail);
+      if (local_status == Store::Status::OK)
+      {
+        SAS::Event event(trail, SASEvent::IMPISTORE_AV_DELETE_SUCCESS, 0);
+        event.add_var_param(impi->impi);
+        event.add_var_param(nonce);
+        SAS::report_event(event);
+      }
+      else
+      {
+        // LCOV_EXCL_START
+        TRC_ERROR("Failed to delete AV for %s/%s", impi->impi.c_str(), nonce.c_str());
+        SAS::Event event(trail, SASEvent::IMPISTORE_AV_DELETE_FAILURE, 0);
+        event.add_var_param(impi->impi);
+        event.add_var_param(nonce.c_str());
+        SAS::report_event(event);
+        // Update status, but only if it's not already DATA_CONTENTION - that's
+        // the most significant status.
+        if (status != Store::Status::DATA_CONTENTION)
+        {
+          status = local_status;
+        }
+        // LCOV_EXCL_STOP
+      }
+    }
+  }
+
+  return status;
 }
 
 void correlate_trail_to_challenge(ImpiStore::AuthChallenge* auth_challenge,

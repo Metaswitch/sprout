@@ -133,10 +133,11 @@ public:
     static ImpiStore::AuthChallenge* from_json(rapidjson::Value* json);
 
     /// Serialization to JSON (AV format).
-    std::string to_json_av();
+    std::string to_json_av(bool tombstone=false);
 
     /// Write to JSON writer (IMPI format).
-    virtual void write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer);
+    virtual void write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer,
+                               bool tombstone=false);
 
     /// Deserialization from JSON (AV format).
     static ImpiStore::AuthChallenge* from_json_av(const std::string& nonce, const std::string& json);
@@ -201,7 +202,8 @@ public:
     static ImpiStore::DigestAuthChallenge* from_json(rapidjson::Value* json);
 
     /// Write to JSON writer (AV format).
-    virtual void write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer);
+    virtual void write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer,
+                               bool tombstone=false);
 
     /// Deserialization from JSON (AV format).
     static ImpiStore::DigestAuthChallenge* from_json_av(rapidjson::Value* json);
@@ -246,7 +248,8 @@ public:
     static ImpiStore::AKAAuthChallenge* from_json(rapidjson::Value* json);
 
     /// Write to JSON writer (IMPI format).
-    virtual void write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer);
+    virtual void write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer,
+                               bool tombstone=false);
 
     /// Deserialization from JSON (AV format).
     static ImpiStore::AKAAuthChallenge* from_json_av(rapidjson::Value* json);
@@ -279,10 +282,10 @@ public:
 
   private:
     /// Serialization to JSON.
-    std::string to_json();
+    std::string to_json(bool tombstone=false);
 
     /// Write to JSON writer.
-    void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
+    void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer, bool tombstone=false);
 
     /// Deserialization from JSON.
     static ImpiStore::Impi* from_json(const std::string& impi, const std::string& json);
@@ -346,6 +349,12 @@ public:
                             SAS::TrailId trail);
 
 private:
+  /// Identifier for IMPI table.
+  static const std::string TABLE_IMPI;
+
+  /// Identifier for AV table.
+  static const std::string TABLE_AV;
+
   /// The underlying data store.
   Store* _data_store;
 
