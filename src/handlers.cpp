@@ -598,18 +598,21 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
   }
 
   bool success = false;
-  uint64_t cas;
-  rapidjson::Document* av = _cfg->_avstore->get_av(_impi, _nonce, cas, trail());
-  if (av != NULL)
+  ImpiStore::Impi* impi = _cfg->_impi_store->get_impi_with_nonce(_impi, _nonce, trail());
+  ImpiStore::AuthChallenge* auth_challenge = NULL;
+  if (impi != NULL)
+  {
+    auth_challenge = impi->get_auth_challenge(_nonce);
+  }
+  if (auth_challenge != NULL)
   {
     // Use the original REGISTER's branch parameter for SAS
     // correlation
+    correlate_trail_to_challenge(auth_challenge, trail());
 
-    correlate_branch_from_av(av, trail());
-
-    // If authentication completed, we'll have written a marker to
-    // indicate that. Look for it.
-    if (!av->HasMember("tombstone"))
+    // If authentication completed, we'll have incremented the nonce count.
+    // If not, authentication has timed out.
+    if (auth_challenge->nonce_count == ImpiStore::AuthChallenge::INITIAL_NONCE_COUNT)
     {
       TRC_DEBUG("AV for %s:%s has timed out", _impi.c_str(), _nonce.c_str());
 
@@ -640,7 +643,7 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
   {
     TRC_WARNING("Could not find AV for %s:%s when checking authentication timeout", _impi.c_str(), _nonce.c_str()); // LCOV_EXCL_LINE
   }
-  delete av;
+  delete impi;
 
   return success ? HTTP_OK : HTTP_SERVER_ERROR;
 }

@@ -38,7 +38,7 @@
 #ifndef AUTHENTICATION_H__
 #define AUTHENTICATION_H__
 
-#include "avstore.h"
+#include "impistore.h"
 #include "hssconnection.h"
 #include "chronosconnection.h"
 #include "acr.h"
@@ -57,7 +57,7 @@ enum struct NonRegisterAuthentication
 };
 
 pj_status_t init_authentication(const std::string& realm_name,
-                                AvStore* avstore,
+                                ImpiStore* impi_store,
                                 HSSConnection* hss_connection,
                                 ChronosConnection* chronos_connection,
                                 ACRFactory* rfacr_factory,
