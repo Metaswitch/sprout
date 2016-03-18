@@ -414,6 +414,8 @@ TEST_F(AoRTimeoutTasksMockStoreTest, SubscriberDataManagerWritesFail)
 class DeregistrationTaskTest : public SipTest
 {
   MockSubscriberDataManager* _subscriber_data_manager;
+  Store* _local_store;
+  ImpiStore* _impi_store;
   MockHttpStack* _httpstack;
   FakeHSSConnection* _hss;
   MockHttpStack::Request* _req;
@@ -427,6 +429,8 @@ class DeregistrationTaskTest : public SipTest
 
   void SetUp()
   {
+    _local_store = new LocalStore();
+    _impi_store = new ImpiStore(_local_store, ImpiStore::READ_IMPI_WRITE_IMPI);
     _httpstack = new MockHttpStack();
     _subscriber_data_manager = new MockSubscriberDataManager();
     _hss = new FakeHSSConnection();
@@ -440,6 +444,8 @@ class DeregistrationTaskTest : public SipTest
     delete _hss;
     delete _subscriber_data_manager;
     delete _httpstack;
+    delete _impi_store; _impi_store = NULL;
+    delete _local_store; _local_store = NULL;
   }
 
   // Build the deregistration request
@@ -453,7 +459,11 @@ class DeregistrationTaskTest : public SipTest
          "send-notifications=" + notify,
          body,
          method);
-    _cfg = new DeregistrationTask::Config(_subscriber_data_manager, NULL, _hss, NULL);
+    _cfg = new DeregistrationTask::Config(_subscriber_data_manager,
+                                          NULL,
+                                          _hss,
+                                          NULL,
+                                          _impi_store);
     _task = new DeregistrationTask(*_req, _cfg, 0);
   }
 

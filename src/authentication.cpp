@@ -174,7 +174,7 @@ int calculate_challenge_expiration_time(pjsip_rx_data* rdata)
           pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL);
        contact_hdr != NULL;
        contact_hdr = (pjsip_contact_hdr*)
-          pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, contact_hdr))
+          pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, contact_hdr->next))
   {
     expires = std::max(expires, get_expiry_for_binding(contact_hdr, expires_hdr));
   }
@@ -732,7 +732,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
   const int unauth_sc = is_register ? PJSIP_SC_UNAUTHORIZED : PJSIP_SC_PROXY_AUTHENTICATION_REQUIRED;
   int sc = unauth_sc;
-  status = PJSIP_EAUTHNOAUTH;
+  status = PJ_SUCCESS;
 
   pjsip_digest_credential* credentials = get_credentials(rdata);
 
@@ -988,6 +988,11 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
         }
       }
     }
+  }
+  else
+  {
+    // No credentials in request.
+    status = PJSIP_EAUTHNOAUTH;
   }
 
 

@@ -65,6 +65,11 @@ using testing::MatchesRegex;
 using testing::HasSubstr;
 using testing::Not;
 
+int get_binding_expiry(pjsip_contact_hdr* contact, pjsip_expires_hdr* expires)
+{
+  return 300;
+}
+
 /// Fixture for AuthenticationTest.
 class BaseAuthenticationTest : public SipTest
 {
@@ -106,6 +111,10 @@ public:
     ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->reset_count();
     ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->reset_count();
     ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->reset_count();
+
+    // All the AKA tests use the same challenge so flush the data store after
+    // each test to avoid tests interacting.
+    _local_data_store->flush_all();
   }
 
   /// Parses a WWW-Authenticate header to the list of parameters.
@@ -188,7 +197,10 @@ class AuthenticationTest : public BaseAuthenticationTest
                                           _acr_factory,
                                           NonRegisterAuthentication::NEVER,
                                           _analytics,
-                                          &SNMP::FAKE_AUTHENTICATION_STATS_TABLES);
+                                          &SNMP::FAKE_AUTHENTICATION_STATS_TABLES,
+                                          true,
+                                          get_binding_expiry);
+
     ASSERT_EQ(PJ_SUCCESS, ret);
   }
 
@@ -212,7 +224,9 @@ class AuthenticationPxyAuthHdrTest : public BaseAuthenticationTest
                                           _acr_factory,
                                           NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT,
                                           _analytics,
-                                          &SNMP::FAKE_AUTHENTICATION_STATS_TABLES);
+                                          &SNMP::FAKE_AUTHENTICATION_STATS_TABLES,
+                                          true,
+                                          get_binding_expiry);
     ASSERT_EQ(PJ_SUCCESS, ret);
   }
 
@@ -312,7 +326,7 @@ string AuthenticationMessage::calculate_digest_response(
 {
   md5_state_t md5;
   md5_byte_t resp[16];
- 
+
   std::string ha1;
   if (algorithm == "AKAv1-MD5" || force_aka)
   {
