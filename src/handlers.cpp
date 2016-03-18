@@ -485,15 +485,21 @@ HTTPCode DeregistrationTask::handle_request()
     delete aor_pair;
   }
 
+  // Delete IMPIs from the store.
   for(std::set<std::string>::iterator impi = impis_to_delete.begin();
       impi != impis_to_delete.end();
       ++impi)
   {
+    TRC_DEBUG("Delete %s from the IMPI store", impi->c_str());
+
     Store::Status store_rc = Store::OK;
-    ImpiStore::Impi* impi_obj;
+    ImpiStore::Impi* impi_obj = NULL;
 
     do
     {
+      // Free any IMPI we had from the last loop iteration.
+      delete impi_obj; impi_obj = NULL;
+
       impi_obj = _cfg->_impi_store->get_impi(*impi, _trail);
 
       if (impi_obj != NULL)
@@ -502,6 +508,8 @@ HTTPCode DeregistrationTask::handle_request()
       }
     }
     while ((impi_obj != NULL) && (store_rc == Store::DATA_CONTENTION));
+
+    delete impi_obj; impi_obj = NULL;
   }
 
   return HTTP_OK;

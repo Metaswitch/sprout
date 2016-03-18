@@ -521,8 +521,6 @@ TEST_F(DeregistrationTaskTest, MainlineTest)
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
   _task->run();
-
-  delete impi; impi = NULL;
 }
 
 // Test where there are multiple pairs of AoRs and Private IDs and single AoRs
@@ -666,10 +664,9 @@ TEST_F(DeregistrationTaskTest, SubscriberDataManagerWritesFail)
   _task->run();
 }
 
-
 TEST_F(DeregistrationTaskTest, ImpiNotClearedWhenBindingNotDeregistered)
 {
-  // Build the request
+  // Build a request that will not deregister any bindings.
   std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505550231@homedomain\", \"impi\": \"wrong-impi\"}]}";
   build_dereg_request(body);
 
@@ -695,10 +692,10 @@ TEST_F(DeregistrationTaskTest, ImpiNotClearedWhenBindingNotDeregistered)
   _task->run();
 }
 
-
 TEST_F(DeregistrationTaskTest, ImpiClearedWhenBindingUnconditionallyDeregistered)
 {
-  // Build the request
+  // Build a request that deregisters all bindings for an IMPU regardless of
+  // IMPI.
   std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505550231@homedomain\"}]}";
   build_dereg_request(body);
 
@@ -725,10 +722,7 @@ TEST_F(DeregistrationTaskTest, ImpiClearedWhenBindingUnconditionallyDeregistered
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
   _task->run();
-
-  delete impi; impi = NULL;
 }
-
 
 TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
 {
@@ -785,12 +779,7 @@ TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
   _task->run();
-
-  delete impi1; impi1 = NULL;
-  delete impi2; impi2 = NULL;
-  delete impi3; impi3 = NULL;
 }
-
 
 TEST_F(DeregistrationTaskTest, CannotFindImpiToDelete)
 {
@@ -823,7 +812,6 @@ TEST_F(DeregistrationTaskTest, CannotFindImpiToDelete)
   _task->run();
 }
 
-
 TEST_F(DeregistrationTaskTest, ImpiStoreFailure)
 {
   // Build the request
@@ -854,10 +842,7 @@ TEST_F(DeregistrationTaskTest, ImpiStoreFailure)
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
   _task->run();
-
-  delete impi1; impi1 = NULL;
 }
-
 
 TEST_F(DeregistrationTaskTest, ImpiStoreDataContention)
 {
@@ -880,22 +865,23 @@ TEST_F(DeregistrationTaskTest, ImpiStoreDataContention)
   std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair};
   expect_sdm_updates(aor_ids, aors);
 
+  // We need to create two IMPIs when we return one on a call to get_impi we
+  // lose ownership of it.
   ImpiStore::Impi* impi1 = new ImpiStore::Impi("impi1");
+  ImpiStore::Impi* impi1a = new ImpiStore::Impi("impi1");
   {
     // Simulate the IMPI store returning data contention on the first delete.
     // The handler tries again.
     InSequence s;
     EXPECT_CALL(*_impi_store, get_impi("impi1", _)).WillOnce(Return(impi1));
     EXPECT_CALL(*_impi_store, delete_impi(impi1, _)).WillOnce(Return(Store::DATA_CONTENTION));
-    EXPECT_CALL(*_impi_store, get_impi("impi1", _)).WillOnce(Return(impi1));
-    EXPECT_CALL(*_impi_store, delete_impi(impi1, _)).WillOnce(Return(Store::OK));
+    EXPECT_CALL(*_impi_store, get_impi("impi1", _)).WillOnce(Return(impi1a));
+    EXPECT_CALL(*_impi_store, delete_impi(impi1a, _)).WillOnce(Return(Store::OK));
   }
 
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
   _task->run();
-
-  delete impi1; impi1 = NULL;
 }
 
 
@@ -947,9 +933,9 @@ TEST_F(AuthTimeoutTest, NonceTimedOut)
 {
   fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", HSSConnection::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
   ImpiStore::Impi* impi = new ImpiStore::Impi("6505550231@homedomain");
-  ImpiStore::DigestAuthChallenge auth_challenge("abcdef", "example.com", "auth", "ha1", 30);
-  auth_challenge.correlator = "abcde";
-  impi->auth_challenges.push_back(&auth_challenge);
+  ImpiStore::DigestAuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge("abcdef", "example.com", "auth", "ha1", 30);
+  auth_challenge->correlator = "abcde";
+  impi->auth_challenges.push_back(auth_challenge);
   store->set_impi(impi, 0);
 
   std::string body = "{\"impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231@homedomain\", \"nonce\": \"abcdef\"}";
@@ -957,14 +943,16 @@ TEST_F(AuthTimeoutTest, NonceTimedOut)
 
   ASSERT_EQ(status, 200);
   ASSERT_TRUE(fake_hss->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=6505550231%40homedomain", "{\"reqtype\": \"dereg-auth-timeout\"}"));
+
+  delete impi; impi = NULL;
 }
 
 TEST_F(AuthTimeoutTest, NonceTimedOutWithEmptyCorrelator)
 {
   fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", HSSConnection::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
   ImpiStore::Impi* impi = new ImpiStore::Impi("6505550231@homedomain");
-  ImpiStore::DigestAuthChallenge auth_challenge("abcdef", "example.com", "auth", "ha1", 30);
-  impi->auth_challenges.push_back(&auth_challenge);
+  ImpiStore::DigestAuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge("abcdef", "example.com", "auth", "ha1", 30);
+  impi->auth_challenges.push_back(auth_challenge);
   store->set_impi(impi, 0);
 
   std::string body = "{\"impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231@homedomain\", \"nonce\": \"abcdef\"}";
@@ -972,15 +960,17 @@ TEST_F(AuthTimeoutTest, NonceTimedOutWithEmptyCorrelator)
 
   ASSERT_EQ(status, 200);
   ASSERT_TRUE(fake_hss->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=6505550231%40homedomain", "{\"reqtype\": \"dereg-auth-timeout\"}"));
+
+  delete impi; impi = NULL;
 }
 
 TEST_F(AuthTimeoutTest, MainlineTest)
 {
   ImpiStore::Impi* impi = new ImpiStore::Impi("test@example.com");
-  ImpiStore::DigestAuthChallenge auth_challenge("abcdef", "example.com", "auth", "ha1", 30);
-  auth_challenge.nonce_count++; // Indicates that one successful authentication has occurred
-  auth_challenge.correlator = "abcde";
-  impi->auth_challenges.push_back(&auth_challenge);
+  ImpiStore::DigestAuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge("abcdef", "example.com", "auth", "ha1", 30);
+  auth_challenge->nonce_count++; // Indicates that one successful authentication has occurred
+  auth_challenge->correlator = "abcde";
+  impi->auth_challenges.push_back(auth_challenge);
   store->set_impi(impi, 0);
 
   std::string body = "{\"impu\": \"sip:test@example.com\", \"impi\": \"test@example.com\", \"nonce\": \"abcdef\"}";
@@ -988,6 +978,8 @@ TEST_F(AuthTimeoutTest, MainlineTest)
 
   ASSERT_EQ(status, 200);
   ASSERT_FALSE(fake_hss->url_was_requested("/impu/sip%3Atest%40example.com/reg-data?private_id=test%40example.com", "{\"reqtype\": \"dereg-auth-timeout\"}"));
+
+  delete impi; impi = NULL;
 }
 
 TEST_F(AuthTimeoutTest, NoIMPU)
