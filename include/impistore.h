@@ -133,11 +133,10 @@ public:
     static ImpiStore::AuthChallenge* from_json(rapidjson::Value* json);
 
     /// Serialization to JSON (AV format).
-    std::string to_json_av(bool tombstone=false);
+    std::string to_json_av();
 
     /// Write to JSON writer (IMPI format).
-    virtual void write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer,
-                               bool tombstone=false);
+    virtual void write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer);
 
     /// Deserialization from JSON (AV format).
     static ImpiStore::AuthChallenge* from_json_av(const std::string& nonce, const std::string& json);
@@ -202,8 +201,7 @@ public:
     static ImpiStore::DigestAuthChallenge* from_json(rapidjson::Value* json);
 
     /// Write to JSON writer (AV format).
-    virtual void write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer,
-                               bool tombstone=false);
+    virtual void write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer);
 
     /// Deserialization from JSON (AV format).
     static ImpiStore::DigestAuthChallenge* from_json_av(rapidjson::Value* json);
@@ -248,8 +246,7 @@ public:
     static ImpiStore::AKAAuthChallenge* from_json(rapidjson::Value* json);
 
     /// Write to JSON writer (IMPI format).
-    virtual void write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer,
-                               bool tombstone=false);
+    virtual void write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer);
 
     /// Deserialization from JSON (AV format).
     static ImpiStore::AKAAuthChallenge* from_json_av(rapidjson::Value* json);
@@ -282,10 +279,10 @@ public:
 
   private:
     /// Serialization to JSON.
-    std::string to_json(bool tombstone=false);
+    std::string to_json();
 
     /// Write to JSON writer.
-    void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer, bool tombstone=false);
+    void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
 
     /// Deserialization from JSON.
     static ImpiStore::Impi* from_json(const std::string& impi, const std::string& json);

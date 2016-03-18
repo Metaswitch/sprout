@@ -93,7 +93,6 @@ static const char* const JSON_QOP = "qop";
 static const char* const JSON_HA1 = "ha1";
 static const char* const JSON_RESPONSE = "response";
 static const char* const JSON_AUTH_CHALLENGES = "authChallenges";
-static const char* const JSON_TOMBSTONE = "tombstone";
 static const char* const JSON_AV_TYPE_DIGEST = "digest";
 static const char* const JSON_AV_TYPE_AKA = "aka";
 static const char* const JSON_AV_NONCE_COUNT = "nc";
@@ -195,19 +194,19 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* 
   return auth_challenge;
 }
 
-std::string ImpiStore::AuthChallenge::to_json_av(bool tombstone)
+std::string ImpiStore::AuthChallenge::to_json_av()
 {
   rapidjson::StringBuffer buffer;
   rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
   writer.StartObject();
   {
-    write_json_av(&writer, tombstone);
+    write_json_av(&writer);
   }
   writer.EndObject();
   return buffer.GetString();
 }
 
-void ImpiStore::AuthChallenge::write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer, bool tombstone)
+void ImpiStore::AuthChallenge::write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer)
 {
   // Nonce is part of the key, so isn't stored in the JSON.
   writer->String(JSON_AV_NONCE_COUNT); writer->Uint(nonce_count);
@@ -216,9 +215,12 @@ void ImpiStore::AuthChallenge::write_json_av(rapidjson::Writer<rapidjson::String
   {
     writer->String(JSON_AV_CORRELATOR); writer->String(correlator.c_str());
   }
-  if (tombstone)
+  // For backwards-compatibility, set the tombstone flag if this challenge has
+  // ever been used.  This behavior might seem odd, but previously we did not
+  // support reuse of challenges.
+  if (nonce_count > INITIAL_NONCE_COUNT)
   {
-    writer->String(JSON_TOMBSTONE); writer->Bool(tombstone);
+    writer->String(JSON_AV_TOMBSTONE); writer->Bool(true);
   }
 }
 
@@ -239,46 +241,50 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json_av(const std::stri
   ImpiStore::AuthChallenge* auth_challenge = NULL;
   if (json->IsObject())
   {
-    bool tombstone = false;
-    JSON_SAFE_GET_BOOL_MEMBER(*json, JSON_TOMBSTONE, tombstone);
-    if (!tombstone)
+    rapidjson::Value* inner_obj = NULL;
+    if (json->HasMember(JSON_AV_TYPE_DIGEST))
     {
-      if (json->HasMember(JSON_AV_TYPE_DIGEST))
+      auth_challenge = ImpiStore::DigestAuthChallenge::from_json_av(json);
+      inner_obj = &((*json)[JSON_AV_TYPE_DIGEST]);
+      if (json->HasMember(JSON_AV_TYPE_AKA))
       {
-        auth_challenge = ImpiStore::DigestAuthChallenge::from_json_av(json);
-        if (json->HasMember(JSON_AV_TYPE_AKA))
-        {
-          TRC_WARNING("JSON AV contains both digest and AKA data - ignoring AKA");
-        }
+        TRC_WARNING("JSON AV contains both digest and AKA data - ignoring AKA");
       }
-      else if (json->HasMember(JSON_AV_TYPE_AKA))
+    }
+    else if (json->HasMember(JSON_AV_TYPE_AKA))
+    {
+      auth_challenge = ImpiStore::AKAAuthChallenge::from_json_av(json);
+      inner_obj = &((*json)[JSON_AV_TYPE_AKA]);
+    }
+    else
+    {
+      TRC_WARNING("JSON AV contains neither digest nor AKA data - dropping");
+    }
+    if (auth_challenge != NULL)
+    {
+      // Fill in remaining fields.
+      auth_challenge->nonce = nonce;
+      JSON_SAFE_GET_UINT_MEMBER(*inner_obj, JSON_AV_NONCE_COUNT, auth_challenge->nonce_count);
+      JSON_SAFE_GET_UINT_64_MEMBER(*inner_obj, JSON_AV_EXPIRES, auth_challenge->expires);
+      JSON_SAFE_GET_STRING_MEMBER(*inner_obj, JSON_AV_CORRELATOR, auth_challenge->correlator);
+      if (auth_challenge->nonce_count == 0)
       {
-        auth_challenge = ImpiStore::AKAAuthChallenge::from_json_av(json);
+        // No nonce count.  Default to the initial value, unless this challenge
+        // has been tombstoned, in which case we need to increase by 1.  In
+        // previous versions, challenges could only be used once, and would be
+        // tombstoned to prevent reuse.
+        bool tombstone = false;
+        JSON_SAFE_GET_BOOL_MEMBER(*json, JSON_AV_TOMBSTONE, tombstone);
+        auth_challenge->nonce_count = INITIAL_NONCE_COUNT + ((tombstone) ? 1 : 0);
+        TRC_WARNING("No \"%s\" field in JSON AV - defaulting to %u",
+                    JSON_AV_NONCE_COUNT, auth_challenge->nonce_count);
       }
-      else
+      if (auth_challenge->expires == 0)
       {
-        TRC_WARNING("JSON AV contains neither digest nor AKA data - dropping");
-      }
-      if (auth_challenge != NULL)
-      {
-        // Fill in remaining fields.
-        auth_challenge->nonce = nonce;
-        JSON_SAFE_GET_UINT_MEMBER(*json, JSON_NONCE_COUNT, auth_challenge->nonce_count);
-        JSON_SAFE_GET_UINT_64_MEMBER(*json, JSON_EXPIRES, auth_challenge->expires);
-        JSON_SAFE_GET_STRING_MEMBER(*json, JSON_CORRELATOR, auth_challenge->correlator);
-        if (auth_challenge->nonce_count == 0)
-        {
-          TRC_WARNING("No \"%s\" field in JSON AV - defaulting to %u",
-                      JSON_AV_NONCE_COUNT, INITIAL_NONCE_COUNT);
-          auth_challenge->nonce_count = INITIAL_NONCE_COUNT;
-        }
-        if (auth_challenge->expires == 0)
-        {
-          TRC_WARNING("No \"%s\" field in JSON authentication challenge - defaulting to ",
-                      JSON_EXPIRES);
+        TRC_WARNING("No \"%s\" field in JSON authentication challenge - defaulting to ",
+                    JSON_AV_EXPIRES);
 //TODO: Default expires field
 //      auth_challenge->expires = 
-        }
       }
     }
   }
@@ -324,13 +330,12 @@ ImpiStore::DigestAuthChallenge* ImpiStore::DigestAuthChallenge::from_json(rapidj
   return auth_challenge;
 }
 
-void ImpiStore::DigestAuthChallenge::write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer,
-                                                   bool tombstone)
+void ImpiStore::DigestAuthChallenge::write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer)
 {
   writer->String(JSON_AV_TYPE_DIGEST);
   writer->StartObject();
   {
-    ImpiStore::AuthChallenge::write_json_av(writer, tombstone);
+    ImpiStore::AuthChallenge::write_json_av(writer);
     writer->String(JSON_AV_REALM); writer->String(realm.c_str());
     writer->String(JSON_AV_QOP); writer->String(qop.c_str());
     writer->String(JSON_AV_HA1); writer->String(ha1.c_str());
@@ -345,9 +350,9 @@ ImpiStore::DigestAuthChallenge* ImpiStore::DigestAuthChallenge::from_json_av(rap
   if (digest_obj->IsObject())
   {
     auth_challenge = new DigestAuthChallenge();
-    JSON_SAFE_GET_STRING_MEMBER(*json, JSON_AV_REALM, auth_challenge->realm);
-    JSON_SAFE_GET_STRING_MEMBER(*json, JSON_AV_QOP, auth_challenge->qop);
-    JSON_SAFE_GET_STRING_MEMBER(*json, JSON_AV_HA1, auth_challenge->ha1);
+    JSON_SAFE_GET_STRING_MEMBER(*digest_obj, JSON_AV_REALM, auth_challenge->realm);
+    JSON_SAFE_GET_STRING_MEMBER(*digest_obj, JSON_AV_QOP, auth_challenge->qop);
+    JSON_SAFE_GET_STRING_MEMBER(*digest_obj, JSON_AV_HA1, auth_challenge->ha1);
     if (auth_challenge->realm == "")
     {
       TRC_WARNING("No \"%s\" field in JSON authentication challenge - dropping",
@@ -392,13 +397,12 @@ ImpiStore::AKAAuthChallenge* ImpiStore::AKAAuthChallenge::from_json(rapidjson::V
   return auth_challenge;
 }
 
-void ImpiStore::AKAAuthChallenge::write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer,
-                                                bool tombstone)
+void ImpiStore::AKAAuthChallenge::write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer)
 {
   writer->String(JSON_AV_TYPE_AKA);
   writer->StartObject();
   {
-    ImpiStore::AuthChallenge::write_json_av(writer, tombstone);
+    ImpiStore::AuthChallenge::write_json_av(writer);
     writer->String(JSON_AV_RESPONSE); writer->String(response.c_str());
   }
   writer->EndObject();
@@ -411,7 +415,7 @@ ImpiStore::AKAAuthChallenge* ImpiStore::AKAAuthChallenge::from_json_av(rapidjson
   if (aka_obj->IsObject())
   {
     auth_challenge = new AKAAuthChallenge();
-    JSON_SAFE_GET_STRING_MEMBER(*json, JSON_AV_RESPONSE, auth_challenge->response);
+    JSON_SAFE_GET_STRING_MEMBER(*aka_obj, JSON_AV_RESPONSE, auth_challenge->response);
     if (auth_challenge->response == "")
     {
       TRC_WARNING("No \"%s\" field in JSON authentication challenge - dropping",
@@ -426,20 +430,19 @@ ImpiStore::AKAAuthChallenge* ImpiStore::AKAAuthChallenge::from_json_av(rapidjson
   return auth_challenge;
 }
 
-std::string ImpiStore::Impi::to_json(bool tombstone)
+std::string ImpiStore::Impi::to_json()
 {
   rapidjson::StringBuffer buffer;
   rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
   writer.StartObject();
   {
-    write_json(&writer, tombstone);
+    write_json(&writer);
   }
   writer.EndObject();
   return buffer.GetString();
 }
 
-void ImpiStore::Impi::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer,
-                                 bool tombstone)
+void ImpiStore::Impi::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer)
 {
   // Impi is part of the key, so isn't stored in the JSON itself.
   if (auth_challenges.size() > 0)
@@ -460,10 +463,6 @@ void ImpiStore::Impi::write_json(rapidjson::Writer<rapidjson::StringBuffer>* wri
     }
     writer->EndArray();
   }
-  if (tombstone)
-  {
-    writer->String(JSON_TOMBSTONE); writer->Bool(tombstone);
-  }
 }
 
 ImpiStore::Impi* ImpiStore::Impi::from_json(const std::string& impi, const std::string& json)
@@ -483,29 +482,20 @@ ImpiStore::Impi* ImpiStore::Impi::from_json(const std::string& impi, rapidjson::
   ImpiStore::Impi* impi_obj = NULL;
   if (json->IsObject())
   {
-    bool tombstone = false;
-    JSON_SAFE_GET_BOOL_MEMBER(*json, JSON_TOMBSTONE, tombstone);
-    if (!tombstone)
+    impi_obj = new ImpiStore::Impi(impi);
+    if ((json->HasMember(JSON_AUTH_CHALLENGES)) &&
+        ((*json)[JSON_AUTH_CHALLENGES].IsArray()))
     {
-      impi_obj = new ImpiStore::Impi(impi);
-      if ((json->HasMember(JSON_AUTH_CHALLENGES)) &&
-          ((*json)[JSON_AUTH_CHALLENGES].IsArray()))
+      rapidjson::Value* array = &((*json)[JSON_AUTH_CHALLENGES]);
+      for (unsigned int ii = 0; ii < array->Size(); ii++)
       {
-        rapidjson::Value* array = &((*json)[JSON_AUTH_CHALLENGES]);
-        for (unsigned int ii = 0; ii < array->Size(); ii++)
+        ImpiStore::AuthChallenge* auth_challenge = ImpiStore::AuthChallenge::from_json(&((*array)[ii]));
+        if (auth_challenge != NULL)
         {
-          ImpiStore::AuthChallenge* auth_challenge = ImpiStore::AuthChallenge::from_json(&((*array)[ii]));
-          if (auth_challenge != NULL)
-          {
-            impi_obj->auth_challenges.push_back(auth_challenge);
-            impi_obj->_nonces.push_back(auth_challenge->nonce);
-          }
+          impi_obj->auth_challenges.push_back(auth_challenge);
+          impi_obj->_nonces.push_back(auth_challenge->nonce);
         }
       }
-    }
-    else
-    {
-      TRC_WARNING("JSON IMPI is a tombstone - dropping");
     }
   }
   else
@@ -560,6 +550,7 @@ Store::Status ImpiStore::set_impi(Impi* impi,
     {
       std::string nonce = (*it)->nonce;
       data = (*it)->to_json_av();
+      TRC_DEBUG("Storing AV for %s/%s\n%s", impi->impi.c_str(), nonce.c_str(), data.c_str());
       // TODO: Calculate expiry correctly.
       Store::Status local_status = _data_store->set_data(TABLE_AV,
                                                          impi->impi + '\\' + nonce,
@@ -638,7 +629,7 @@ ImpiStore::Impi* ImpiStore::get_impi_with_nonce(const std::string& impi,
     if (status == Store::Status::OK)
     {
       TRC_DEBUG("Retrieved AV for %s/%s\n%s", impi.c_str(), nonce.c_str(), data.c_str());
-      ImpiStore::AuthChallenge* auth_challenge = ImpiStore::AuthChallenge::from_json_av(impi, data);
+      ImpiStore::AuthChallenge* auth_challenge = ImpiStore::AuthChallenge::from_json_av(nonce, data);
       if (auth_challenge != NULL)
       {
         if (impi_obj == NULL)
