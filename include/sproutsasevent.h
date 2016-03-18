@@ -203,6 +203,9 @@ namespace SASEvent
 
   const int NO_CCFS_FOR_ACR = SPROUT_BASE + 0xF0;
 
+  const int AUTHENTICATION_NC_NOT_SUPP = SPROUT_BASE + 0x0100;
+  const int AUTHENTICATION_NC_TOO_LOW = SPROUT_BASE + 0x0101;
+  const int AUTHENTICATION_NC_ON_NON_REG = SPROUT_BASE + 0x0102;
 } //namespace SASEvent
 
 #endif

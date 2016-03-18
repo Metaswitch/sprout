@@ -112,7 +112,7 @@ get_settings()
         # Testing has shown that we can handle at least 250 requests per second per core - this is
         # probably an underestimate, but is a reasonable start.
         init_token_rate=$(($(grep processor /proc/cpuinfo | wc -l) * 250))
-        
+
         log_level=2
         authentication=Y
         . /etc/clearwater/config
@@ -283,6 +283,8 @@ get_daemon_args()
         [ "$stateless_proxies" = "" ]             || DAEMON_ARGS="$DAEMON_ARGS --stateless-proxies=$stateless_proxies"
         [ "$ralf_threads" = "" ]                  || DAEMON_ARGS="$DAEMON_ARGS --ralf-threads=$ralf_threads"
         [ "$non_register_authentication" = "" ]   || DAEMON_ARGS="$DAEMON_ARGS --non-register-authentication=$non_register_authentication"
+        [ "$impi_store_mode" = "" ]               || DAEMON_ARGS="$DAEMON_ARGS --impi-store-mode=$impi_store_mode"
+        [ "$nonce_count_supported" = "Y" ]        && DAEMON_ARGS="$DAEMON_ARGS --nonce-count-supported"
 
         for script in /usr/share/clearwater/sprout/plugin_conf.d/*.plugin_conf
         do

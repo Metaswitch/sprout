@@ -143,6 +143,7 @@ enum OptionTypes
   OPT_MEMENTO_NOTIFY_URL,
   OPT_PIDFILE,
   OPT_IMPI_STORE_MODE,
+  OPT_NONCE_COUNT_SUPPORTED,
 };
 
 
@@ -220,6 +221,7 @@ const static struct pj_getopt_option long_opt[] =
   { "pidfile",                      required_argument, 0, OPT_PIDFILE},
   { "plugin-option",                required_argument, 0, 'N'},
   { "impi-store-mode",              required_argument, 0, OPT_IMPI_STORE_MODE},
+  { "nonce-count-supported",        no_argument,       0, OPT_NONCE_COUNT_SUPPORTED},
   { NULL,                           0,                 0, 0}
 };
 
@@ -402,7 +404,7 @@ static void usage(void)
        "                            User-Data doesn't specify it\n"
        "     --impi-store-mode (av-impi|impi)\n"
        "                            Whether to run the IMPI store in AV and IMPI mode (historical) or\n"
-       "                            IMPI-only (forward-looking) mode\n"   
+       "                            IMPI-only (forward-looking) mode\n"
        "     --pidfile=<filename>   Write pidfile\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
@@ -1097,6 +1099,10 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
+    case OPT_NONCE_COUNT_SUPPORTED:
+      options->nonce_count_supported = true;
+      break;
+
     case 'N':
       {
         std::vector<std::string> fields;
@@ -1446,6 +1452,7 @@ int main(int argc, char* argv[])
   opt.non_register_auth_mode = NonRegisterAuthentication::NEVER;
   opt.force_third_party_register_body = false;
   opt.impi_store_mode = ImpiStore::Mode::READ_IMPI_WRITE_IMPI;
+  opt.nonce_count_supported = false;
 
   boost::filesystem::path p = argv[0];
   // Copy the filename to a string so that we can be sure of its lifespan -
@@ -2112,7 +2119,9 @@ int main(int argc, char* argv[])
                                    scscf_acr_factory,
                                    opt.non_register_auth_mode,
                                    analytics_logger,
-                                   &auth_stats_tbls);
+                                   &auth_stats_tbls,
+                                   opt.nonce_count_supported,
+                                   expiry_for_binding);
     }
 
     // Launch the registrar.
@@ -2234,7 +2243,11 @@ int main(int argc, char* argv[])
 
   AoRTimeoutTask::Config aor_timeout_config(local_sdm, remote_sdm, hss_connection);
   AuthTimeoutTask::Config auth_timeout_config(impi_store, hss_connection);
-  DeregistrationTask::Config deregistration_config(local_sdm, remote_sdm, hss_connection, sip_resolver);
+  DeregistrationTask::Config deregistration_config(local_sdm,
+                                                   remote_sdm,
+                                                   hss_connection,
+                                                   sip_resolver,
+                                                   impi_store);
 
   // The AoRTimeoutTask and AuthTimeoutTask both handle
   // chronos requests, so use the ChronosHandler.
