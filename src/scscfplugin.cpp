@@ -57,6 +57,8 @@ public:
 
 private:
   SCSCFSproutlet* _scscf_sproutlet;
+  Alarm* _sess_cont_as_alarm;
+  Alarm* _sess_term_as_alarm;
 };
 
 /// Export the plug-in using the magic symbol "sproutlet_plugin"
@@ -118,23 +120,21 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     }
 
     // Create Application Server communication trackers.
+    _sess_term_as_alarm = new Alarm("sprout",
+                                    AlarmDef::SPROUT_SESS_TERMINATED_AS_COMM_ERROR,
+                                    AlarmDef::MAJOR);
     AsCommunicationTracker* sess_term_as_tracker =
-      new AsCommunicationTracker(
-        new Alarm("sprout",
-                  AlarmDef::SPROUT_SESS_TERMINATED_AS_COMM_ERROR,
-                  AlarmDef::MAJOR),
-        &CL_SPROUT_SESS_TERM_AS_COMM_FAILURE,
-        &CL_SPROUT_SESS_TERM_AS_COMM_SUCCESS
-      );
+        new AsCommunicationTracker(_sess_term_as_alarm,
+                                   &CL_SPROUT_SESS_TERM_AS_COMM_FAILURE,
+                                   &CL_SPROUT_SESS_TERM_AS_COMM_SUCCESS);
 
+    _sess_cont_as_alarm =  new Alarm("sprout",
+                                     AlarmDef::SPROUT_SESS_CONTINUED_AS_COMM_ERROR,
+                                     AlarmDef::MINOR);
     AsCommunicationTracker* sess_cont_as_tracker =
-      new AsCommunicationTracker(
-        new Alarm("sprout",
-                  AlarmDef::SPROUT_SESS_CONTINUED_AS_COMM_ERROR,
-                  AlarmDef::MINOR),
-        &CL_SPROUT_SESS_CONT_AS_COMM_FAILURE,
-        &CL_SPROUT_SESS_CONT_AS_COMM_SUCCESS
-      );
+        new AsCommunicationTracker(_sess_cont_as_alarm,
+                                   &CL_SPROUT_SESS_CONT_AS_COMM_FAILURE,
+                                   &CL_SPROUT_SESS_CONT_AS_COMM_SUCCESS);
 
     _scscf_sproutlet = new SCSCFSproutlet(scscf_cluster_uri,
                                           scscf_node_uri,
@@ -164,4 +164,6 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 void SCSCFPlugin::unload()
 {
   delete _scscf_sproutlet;
+  delete _sess_term_as_alarm; _sess_term_as_alarm = NULL;
+  delete _sess_cont_as_alarm; _sess_cont_as_alarm = NULL;
 }
