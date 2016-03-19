@@ -83,7 +83,7 @@ private:
 
   // The time (in ms since the epoch) at which we should check the _as_failures
   // to determine if some ASs are now OK again.
-  uint64_t _next_check_time_ms;
+  std::atomic<uint64_t> _next_check_time_ms;
 
   // The length of time that must pass between checks of _as_failures.
   const static uint64_t NEXT_CHECK_INTERVAL_MS = 5 * 60 * 1000;
@@ -104,7 +104,7 @@ private:
   void check_for_healthy_app_servers();
 
   /// @return The current monotonic time in ms. Note that this is not wall time!
-  uint64_t current_time_ms();
+  static uint64_t current_time_ms();
 };
 
 #endif

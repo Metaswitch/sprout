@@ -82,7 +82,7 @@ public:
 
 static void advance_time()
 {
-  cwtest_advance_time_ms(5 * 60 * 1000 + 1);
+  cwtest_advance_time_ms((5 * 60 * 1000) + 1);
 }
 
 

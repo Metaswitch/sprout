@@ -39,7 +39,7 @@
 AsCommunicationTracker::AsCommunicationTracker(Alarm* alarm,
                                                const PDLog1<const char*>* as_failed_log,
                                                const PDLog1<const char*>* as_ok_log) :
-  _next_check_time_ms(0),
+  _next_check_time_ms(current_time_ms() + NEXT_CHECK_INTERVAL_MS),
   _alarm(alarm),
   _as_failed_log(as_failed_log),
   _as_ok_log(as_ok_log)
@@ -57,9 +57,7 @@ AsCommunicationTracker::~AsCommunicationTracker()
 void AsCommunicationTracker::on_success(const std::string& as_uri)
 {
   TRC_DEBUG("Communication with AS %s successful", as_uri.c_str());
-  pthread_mutex_lock(&_lock);
   check_for_healthy_app_servers();
-  pthread_mutex_unlock(&_lock);
 }
 
 
@@ -75,10 +73,6 @@ void AsCommunicationTracker::on_failure(const std::string& as_uri)
   {
     TRC_DEBUG("First failure - raise the alarm");
     _alarm->set();
-
-    // Work out the next time we need to check for ASs that have started
-    // succeeding again.
-    _next_check_time_ms = current_time_ms() + NEXT_CHECK_INTERVAL_MS;
   }
 
   // Add an entry to the failed ASs map (incrementing the count of failures if
@@ -87,70 +81,81 @@ void AsCommunicationTracker::on_failure(const std::string& as_uri)
 
   if (as_iter != _as_failures.end())
   {
-    _as_failures.emplace(as_iter->first, as_iter->second + 1);
+    as_iter->second++;
   }
   else
   {
-    TRC_DEBUG("First failure for this AS - generate log");
-    as_iter->second = 1;
-
     // This is the first time we've spotted that the AS has failed, so log this
     // fact.
+    TRC_DEBUG("First failure for this AS - generate log");
     _as_failed_log->log(as_uri.c_str());
+
+    _as_failures.emplace(as_uri, 1);
   }
+  pthread_mutex_unlock(&_lock);
 
   // Even though communication to this AS has failed, other ASs may have become
   // healthy recently so we still need to check them.
   check_for_healthy_app_servers();
-
-  pthread_mutex_unlock(&_lock);
 }
 
 
 void AsCommunicationTracker::check_for_healthy_app_servers()
 {
   uint64_t now = current_time_ms();
+  TRC_DEBUG("Current time is %ld, next AS check at %ld",
+            now, _next_check_time_ms.load());
 
-  if ((now > _next_check_time_ms) && !_as_failures.empty())
+  if (now > _next_check_time_ms)
   {
-    // Don't check again for a while.
-    _next_check_time_ms += NEXT_CHECK_INTERVAL_MS;
+    pthread_mutex_lock(&_lock);
 
-    TRC_DEBUG("Check for ASs that have become healthy again");
-
-    // Iterate through all the AS in our map. If any of them have not had any
-    // failures in the last time period we will log they are now working
-    // correctly and remove them from the map.
-    //
-    // We mutate the map as we iterate over it. The non-standard loop construct
-    // avoids iterator invalidation.
-    std::map<std::string, int>::iterator curr_as = _as_failures.begin();
-    std::map<std::string, int>::iterator next_as;
-
-    while (curr_as != _as_failures.end())
+    if (now > _next_check_time_ms)
     {
-      next_as = std::next(curr_as);
+      // Don't check again for a while.
+      _next_check_time_ms = current_time_ms() + NEXT_CHECK_INTERVAL_MS;
 
-      if (curr_as->second == 0)
+      if (!_as_failures.empty())
       {
-        TRC_DEBUG("AS %s has become healthy", curr_as->first.c_str());
-        _as_ok_log->log(curr_as->first.c_str());
-        _as_failures.erase(curr_as);
-      }
-      else
-      {
-        curr_as->second = 0;
-      }
+        TRC_DEBUG("Check for ASs that have become healthy again");
 
-      curr_as = next_as;
+        // Iterate through all the AS in our map. If any of them have not had
+        // any failures in the last time period we will log they are now working
+        // correctly and remove them from the map.
+        //
+        // We mutate the map as we iterate over it. The non-standard loop
+        // construct avoids iterator invalidation.
+        std::map<std::string, int>::iterator curr_as = _as_failures.begin();
+        std::map<std::string, int>::iterator next_as;
+
+        while (curr_as != _as_failures.end())
+        {
+          next_as = std::next(curr_as);
+
+          if (curr_as->second == 0)
+          {
+            TRC_DEBUG("AS %s has become healthy", curr_as->first.c_str());
+            _as_ok_log->log(curr_as->first.c_str());
+            _as_failures.erase(curr_as);
+          }
+          else
+          {
+            curr_as->second = 0;
+          }
+
+          curr_as = next_as;
+        }
+
+        if (_as_failures.empty())
+        {
+          TRC_DEBUG("All ASs OK - clear the alarm");
+          // No ASs are currently failed. Clear the alarm.
+          _alarm->clear();
+        }
+      }
     }
 
-    if (_as_failures.empty())
-    {
-      TRC_DEBUG("All ASs OK - clear the alarm");
-      // No ASs are currently failed. Clear the alarm.
-      _alarm->clear();
-    }
+    pthread_mutex_unlock(&_lock);
   }
 }
 
