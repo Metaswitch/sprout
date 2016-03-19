@@ -538,6 +538,7 @@ Store::Status ImpiStore::set_impi(Impi* impi,
     TRC_ERROR("Failed to write IMPI for private_id %s", impi->impi.c_str());
     SAS::Event event(trail, SASEvent::IMPISTORE_IMPI_SET_FAILURE, 0);
     event.add_var_param(impi->impi);
+    event.add_static_param(status);
     SAS::report_event(event);
     // LCOV_EXCL_STOP
   }
@@ -572,6 +573,7 @@ Store::Status ImpiStore::set_impi(Impi* impi,
         SAS::Event event(trail, SASEvent::IMPISTORE_AV_SET_FAILURE, 0);
         event.add_var_param(impi->impi);
         event.add_var_param(nonce.c_str());
+        event.add_static_param(local_status);
         SAS::report_event(event);
         // Update status, but only if it's not already DATA_CONTENTION - that's
         // the most significant status.
@@ -611,6 +613,7 @@ ImpiStore::Impi* ImpiStore::get_impi(const std::string& impi,
   {
     SAS::Event event(trail, SASEvent::IMPISTORE_IMPI_GET_FAILURE, 0);
     event.add_var_param(impi);
+    event.add_static_param(status);
     SAS::report_event(event);
   }
   return impi_obj;
@@ -667,6 +670,7 @@ ImpiStore::Impi* ImpiStore::get_impi_with_nonce(const std::string& impi,
       SAS::Event event(trail, SASEvent::IMPISTORE_AV_GET_FAILURE, 0);
       event.add_var_param(impi);
       event.add_var_param(nonce);
+      event.add_static_param(status);
       SAS::report_event(event);
     }
   }
@@ -692,6 +696,7 @@ Store::Status ImpiStore::delete_impi(Impi* impi,
     TRC_ERROR("Failed to delete IMPI for private_id %s", impi->impi.c_str());
     SAS::Event event(trail, SASEvent::IMPISTORE_IMPI_DELETE_FAILURE, 0);
     event.add_var_param(impi->impi);
+    event.add_static_param(status);
     SAS::report_event(event);
     // LCOV_EXCL_STOP
   }
@@ -721,6 +726,7 @@ Store::Status ImpiStore::delete_impi(Impi* impi,
         SAS::Event event(trail, SASEvent::IMPISTORE_AV_DELETE_FAILURE, 0);
         event.add_var_param(impi->impi);
         event.add_var_param(nonce.c_str());
+        event.add_static_param(local_status);
         SAS::report_event(event);
         // Update status, but only if it's not already DATA_CONTENTION - that's
         // the most significant status.
@@ -750,106 +756,3 @@ void correlate_trail_to_challenge(ImpiStore::AuthChallenge* auth_challenge,
     SAS::report_marker(via_marker, SAS::Marker::Scope::Trace);
   }
 }
-
-#if 0
-Store::Status ImpiStore::set_av(const std::string& impi,
-                                const std::string& nonce,
-                                const rapidjson::Document* av,
-                                uint64_t cas,
-                                SAS::TrailId trail)
-{
-  std::string key = impi + '\\' + nonce;
-  rapidjson::StringBuffer buffer;
-  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-  av->Accept(writer);
-  std::string data = buffer.GetString();
-
-  TRC_DEBUG("Set AV for %s\n%s", key.c_str(), data.c_str());
-  Store::Status status = _data_store->set_data("av", key, data, cas, AV_EXPIRY, trail);
-
-  if (status == Store::Status::OK)
-  {
-    SAS::Event event(trail, SASEvent::AVSTORE_SET_SUCCESS, 0);
-    event.add_var_param(impi);
-    SAS::report_event(event);
-  }
-  else
-  {
-    // LCOV_EXCL_START
-    TRC_ERROR("Failed to write Authentication Vector for private_id %s", impi.c_str());
-    SAS::Event event(trail, SASEvent::AVSTORE_SET_FAILURE, 0);
-    event.add_var_param(impi);
-    SAS::report_event(event);
-    // LCOV_EXCL_STOP
-  }
-
-  return status;
-}
-
-rapidjson::Document* ImpiStore::get_av(const std::string& impi,
-                                       const std::string& nonce,
-                                       uint64_t& cas,
-                                       SAS::TrailId trail)
-{
-  rapidjson::Document* av = NULL;
-  std::string key = impi + '\\' + nonce;
-  std::string data;
-  Store::Status status = _data_store->get_data("av", key, data, cas, trail);
-
-  if (status == Store::Status::OK)
-  {
-    TRC_DEBUG("Retrieved AV for %s\n%s", key.c_str(), data.c_str());
-    av = new rapidjson::Document;
-    av->Parse<0>(data.c_str());
-
-    if (av->HasParseError())
-    {
-      TRC_INFO("Failed to parse AV: %s\nError: %s",
-               data.c_str(),
-               rapidjson::GetParseError_En(av->GetParseError()));
-      delete av;
-      av = NULL;
-    }
-
-    SAS::Event event(trail, SASEvent::AVSTORE_GET_SUCCESS, 0);
-    event.add_var_param(impi);
-    SAS::report_event(event);
-  }
-  else
-  {
-    SAS::Event event(trail, SASEvent::AVSTORE_GET_FAILURE, 0);
-    event.add_var_param(impi);
-    SAS::report_event(event);
-  }
-
-  return av;
-}
-
-void correlate_branch_from_av(rapidjson::Document* av, SAS::TrailId trail)
-{
-  if (!(*av).HasMember("branch"))
-  {
-    TRC_WARNING("Could not raise branch correlation marker because the stored authentication vector is missing 'branch' field");
-  }
-  else if (!(*av)["branch"].IsString())
-  {
-    TRC_WARNING("Could not raise branch correlation marker because the stored authentication vector has a non-string 'branch' field");
-  }
-  else
-  {
-    std::string branch = (*av)["branch"].GetString();
-
-    if (branch == "")
-    {
-      TRC_WARNING("Could not raise branch correlation marker because the stored authentication vector has an empty 'branch' field");
-    }
-    else
-    {
-      SAS::Marker via_marker(trail, MARKER_ID_VIA_BRANCH_PARAM, 1u);
-      via_marker.add_var_param(branch.c_str());
-      SAS::report_marker(via_marker, SAS::Marker::Scope::Trace);
-    }
-  }
-}
-
-#endif
