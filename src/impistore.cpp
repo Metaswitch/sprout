@@ -55,15 +55,18 @@ ImpiStore::AuthChallenge* ImpiStore::Impi::get_auth_challenge(const std::string&
 {
   // Spin through the list of authentication challenges, looking for a
   // matching nonce.
+  ImpiStore::AuthChallenge* auth_challenge = NULL;
   for (std::vector<AuthChallenge*>::iterator it = auth_challenges.begin();
        it != auth_challenges.end();
        it++)
   {
-    if ((*it)->nonce == nonce) {
-      return *it;
+    if ((*it)->nonce == nonce)
+    {
+      auth_challenge = *it;
+      break;
     }
   }
-  return NULL;
+  return auth_challenge;
 }
 
 static rapidjson::Document* json_from_string(const std::string& string)
@@ -105,18 +108,6 @@ static const char* const JSON_AV_HA1 = "ha1";
 static const char* const JSON_AV_RESPONSE = "response";
 static const char* const JSON_AV_TOMBSTONE = "tombstone";
 
-std::string ImpiStore::AuthChallenge::to_json()
-{
-  rapidjson::StringBuffer buffer;
-  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-  writer.StartObject();
-  {
-    write_json(&writer);
-  }
-  writer.EndObject();
-  return buffer.GetString();
-}
-
 void ImpiStore::AuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer)
 {
   writer->String(JSON_TYPE); writer->String(JSON_TYPE_ENUM[type]);
@@ -127,18 +118,6 @@ void ImpiStore::AuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuf
   {
     writer->String(JSON_CORRELATOR); writer->String(correlator.c_str());
   }
-}
-
-ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(const std::string& json)
-{
-  ImpiStore::AuthChallenge* auth_challenge = NULL;
-  rapidjson::Document* json_obj = json_from_string(json);
-  if (json_obj != NULL)
-  {
-    auth_challenge = ImpiStore::AuthChallenge::from_json(json_obj);
-  }
-  delete json_obj;
-  return auth_challenge;
 }
 
 ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* json)
@@ -175,8 +154,8 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* 
       }
       if (auth_challenge->expires == 0)
       {
-        TRC_WARNING("No \"%s\" field in JSON authentication challenge - defaulting to %d",
-                    JSON_EXPIRES, DEFAULT_EXPIRES);
+        TRC_INFO("No \"%s\" field in JSON authentication challenge - defaulting to %d",
+                 JSON_EXPIRES, DEFAULT_EXPIRES);
         auth_challenge->expires = time(NULL) + DEFAULT_EXPIRES;
       }
       if (auth_challenge->nonce == "")
@@ -279,7 +258,7 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json_av(const std::stri
         // previous versions, challenges could only be used once, and would be
         // tombstoned to prevent reuse.
         bool tombstone = false;
-        JSON_SAFE_GET_BOOL_MEMBER(*json, JSON_AV_TOMBSTONE, tombstone);
+        JSON_SAFE_GET_BOOL_MEMBER(*inner_obj, JSON_AV_TOMBSTONE, tombstone);
         auth_challenge->nonce_count = INITIAL_NONCE_COUNT + ((tombstone) ? 1 : 0);
         TRC_WARNING("No \"%s\" field in JSON AV - defaulting to %u",
                     JSON_AV_NONCE_COUNT, auth_challenge->nonce_count);
@@ -573,9 +552,9 @@ Store::Status ImpiStore::set_impi(Impi* impi,
          it != impi->auth_challenges.end();
          it++)
     {
+      std::string nonce = (*it)->nonce;
       if ((*it)->expires > now)
       {
-        std::string nonce = (*it)->nonce;
         data = (*it)->to_json_av();
         TRC_DEBUG("Storing AV for %s/%s\n%s", impi->impi.c_str(), nonce.c_str(), data.c_str());
         Store::Status local_status = _data_store->set_data(TABLE_AV,
@@ -609,9 +588,13 @@ Store::Status ImpiStore::set_impi(Impi* impi,
           // LCOV_EXCL_STOP
         }
       }
+      else
+      {
+        TRC_DEBUG("Not storing AV for %s/%s - expired", impi->impi.c_str(), nonce.c_str());
+      }
       nonces_to_delete.erase(std::remove(nonces_to_delete.begin(),
                                          nonces_to_delete.end(),
-                                         (*it)->nonce),
+                                         nonce),
                              nonces_to_delete.end());
     }
 

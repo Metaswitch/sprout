@@ -119,19 +119,13 @@ public:
     AuthChallenge(const Type _type) :
       type(_type),
       nonce(),
-      nonce_count(INITIAL_NONCE_COUNT),
+      nonce_count(0),
       expires(0),
       correlator(),
       _cas(0) {};
 
-    /// Serialization to JSON (IMPI format).
-    std::string to_json();
-
     /// Write to JSON writer (IMPI format).
     virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
-
-    /// Deserialization from JSON (IMPI format).
-    static ImpiStore::AuthChallenge* from_json(const std::string& json);
 
     /// Deserialization from JSON (IMPI format).
     static ImpiStore::AuthChallenge* from_json(rapidjson::Value* json);
