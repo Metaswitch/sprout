@@ -46,6 +46,7 @@
 #include <rapidjson/stringbuffer.h>
 #include "rapidjson/error/en.h"
 #include "json_parse_utils.h"
+#include <algorithm>
 
 const std::string ImpiStore::TABLE_IMPI = "impi";
 const std::string ImpiStore::TABLE_AV = "av";
@@ -567,6 +568,7 @@ Store::Status ImpiStore::set_impi(Impi* impi,
 
   if (_mode == ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI)
   {
+    std::vector<std::string> nonces_to_delete = impi->_nonces;
     for (std::vector<ImpiStore::AuthChallenge*>::iterator it = impi->auth_challenges.begin();
          it != impi->auth_challenges.end();
          it++)
@@ -607,8 +609,46 @@ Store::Status ImpiStore::set_impi(Impi* impi,
           // LCOV_EXCL_STOP
         }
       }
+      nonces_to_delete.erase(std::remove(nonces_to_delete.begin(),
+                                         nonces_to_delete.end(),
+                                         (*it)->nonce),
+                             nonces_to_delete.end());
     }
-    // TODO: Delete AVs
+
+    for (std::vector<std::string>::iterator it = nonces_to_delete.begin();
+         it != nonces_to_delete.end();
+         it++)
+    {
+      std::string nonce = *it;
+      TRC_DEBUG("Deleting AV for %s/%s", impi->impi.c_str(), nonce.c_str());
+      Store::Status local_status = _data_store->delete_data(TABLE_AV,
+                                                            impi->impi + '\\' + nonce,
+                                                            trail);
+      if (local_status == Store::Status::OK)
+      {
+        SAS::Event event(trail, SASEvent::IMPISTORE_AV_DELETE_SUCCESS, 0);
+        event.add_var_param(impi->impi);
+        event.add_var_param(nonce);
+        SAS::report_event(event);
+      }
+      else
+      {
+        // LCOV_EXCL_START
+        TRC_ERROR("Failed to delete AV for %s/%s", impi->impi.c_str(), nonce.c_str());
+        SAS::Event event(trail, SASEvent::IMPISTORE_AV_DELETE_FAILURE, 0);
+        event.add_var_param(impi->impi);
+        event.add_var_param(nonce.c_str());
+        event.add_static_param(local_status);
+        SAS::report_event(event);
+        // Update status, but only if it's not already DATA_CONTENTION - that's
+        // the most significant status.
+        if (status != Store::Status::DATA_CONTENTION)
+        {
+          status = local_status;
+        }
+        // LCOV_EXCL_STOP
+      }
+    }
   }
 
   return status;
