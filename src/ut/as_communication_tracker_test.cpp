@@ -43,6 +43,7 @@
 #include "test_interposer.hpp"
 
 using ::testing::_;
+using ::testing::StrEq;
 
 class MockLog : public PDLog1<const char*>
 {
@@ -78,14 +79,34 @@ public:
   }
 
   const std::string AS1 = "as1";
+  const std::string AS2 = "as2";
 };
 
+// Advance time to the next AsCommunicationTracker checking period. This is
+// slightly encapsulation breaking (sincec it means the UT knows how long this
+// period is) but is the most practical thing to do in UT.
 static void advance_time()
 {
   cwtest_advance_time_ms((5 * 60 * 1000) + 1);
 }
 
+//
+// Testcases.
+//
+// Note that in these tests for the communication tracker to treat a failed AS
+// as having recovered, it needs to see two success calls in subsequent 5
+// minute periods. This is because the state of the ASs is only checked when
+// you actually calls the communication tracker.
+//
+// As such each on_success call checks the AS health in
+// the previous period. So the first call checks the period in which the AS
+// was failing (so does not treat the AS as being healthy) wheras only on the
+// second call do we see the AS being healthy.
+//
+// This looks worse in UT than in real life!
+//
 
+// Test that is an AS is healthy, nothing happens.
 TEST_F(AsCommunicationTrackerTest, SuccessIsIdempotent)
 {
   _comm_tracker->on_success(AS1);
@@ -94,18 +115,153 @@ TEST_F(AsCommunicationTrackerTest, SuccessIsIdempotent)
 }
 
 
+// Test that a single AS failure raises the alarm and produces a log. When the
+// AS is healthy again, the alarm is cleared and an "OK" log is produced.
 TEST_F(AsCommunicationTrackerTest, SingleAsFailure)
 {
+  // The AS fails.
   EXPECT_CALL(*_mock_alarm, set());
-  EXPECT_CALL(*_mock_error_log, log(_));
+  EXPECT_CALL(*_mock_error_log, log(StrEq(AS1)));
   _comm_tracker->on_failure(AS1);
+
+  // The AS starts succeeding again.
+  EXPECT_CALL(*_mock_alarm, clear());
+  EXPECT_CALL(*_mock_ok_log, log(StrEq(AS1)));
 
   advance_time();
   _comm_tracker->on_success(AS1);
 
+  advance_time();
+  _comm_tracker->on_success(AS1);
+}
+
+
+// Test that with an ongoing AS failure, the logs/alarms are only raised when
+// the failure starts and only cleared when the failure resolves.
+TEST_F(AsCommunicationTrackerTest, OngoingAsFailure)
+{
+  // The AS fails.
+  EXPECT_CALL(*_mock_alarm, set());
+  EXPECT_CALL(*_mock_error_log, log(_));
+  _comm_tracker->on_failure(AS1);
+
+  // The AS is still failed.
+  advance_time();
+  _comm_tracker->on_failure(AS1);
+  advance_time();
+  _comm_tracker->on_failure(AS1);
+  advance_time();
+  _comm_tracker->on_failure(AS1);
+  advance_time();
+  _comm_tracker->on_failure(AS1);
+  advance_time();
+  _comm_tracker->on_failure(AS1);
+
+  // The AS succeeds.
   EXPECT_CALL(*_mock_alarm, clear());
   EXPECT_CALL(*_mock_ok_log, log(_));
 
   advance_time();
   _comm_tracker->on_success(AS1);
+
+  advance_time();
+  _comm_tracker->on_success(AS1);
+}
+
+
+// Test that if an AS fails, then succeeds, then fails again, that the alarm is
+// raised, cleared and re-raised (same for the logs).
+TEST_F(AsCommunicationTrackerTest, FailSucceedFailSucceed)
+{
+  // The AS fails.
+  EXPECT_CALL(*_mock_alarm, set());
+  EXPECT_CALL(*_mock_error_log, log(_));
+  _comm_tracker->on_failure(AS1);
+
+  // The AS succeeds.
+  EXPECT_CALL(*_mock_alarm, clear());
+  EXPECT_CALL(*_mock_ok_log, log(_));
+
+  advance_time();
+  _comm_tracker->on_success(AS1);
+
+  advance_time();
+  _comm_tracker->on_success(AS1);
+
+  // The AS fails again.
+  EXPECT_CALL(*_mock_alarm, set());
+  EXPECT_CALL(*_mock_error_log, log(_));
+  advance_time();
+  _comm_tracker->on_failure(AS1);
+
+  // The AS succeeds again.
+  EXPECT_CALL(*_mock_alarm, clear());
+  EXPECT_CALL(*_mock_ok_log, log(_));
+
+  advance_time();
+  _comm_tracker->on_success(AS1);
+
+  advance_time();
+  _comm_tracker->on_success(AS1);
+
+}
+
+
+// Test that if multiple ASs fail:
+// - The alarm is raised when any ASs start failing and only cleared when all
+//   succeed.
+// - Each AS has its own log and that the "error" and "OK" logs are generated
+//   when *that AS* fails or recovers (independent of the other AS).
+TEST_F(AsCommunicationTrackerTest, MultipleAsFailures)
+{
+  // AS1 fails. AS2 is OK.
+  EXPECT_CALL(*_mock_alarm, set());
+  EXPECT_CALL(*_mock_error_log, log(StrEq(AS1)));
+  _comm_tracker->on_failure(AS1);
+  _comm_tracker->on_success(AS2);
+
+  advance_time();
+  _comm_tracker->on_failure(AS1);
+  _comm_tracker->on_success(AS2);
+
+  advance_time();
+  _comm_tracker->on_failure(AS1);
+  _comm_tracker->on_success(AS2);
+
+  // AS2 starts to fail. AS1 still failed.
+  EXPECT_CALL(*_mock_error_log, log(StrEq(AS2)));
+  advance_time();
+  _comm_tracker->on_failure(AS1);
+  _comm_tracker->on_failure(AS2);
+
+  advance_time();
+  _comm_tracker->on_failure(AS1);
+  _comm_tracker->on_failure(AS2);
+
+  advance_time();
+  _comm_tracker->on_failure(AS1);
+  _comm_tracker->on_failure(AS2);
+
+  // AS1 recovers. AS2 still failed.
+  EXPECT_CALL(*_mock_ok_log, log(StrEq(AS1)));
+
+  advance_time();
+  _comm_tracker->on_success(AS1);
+  _comm_tracker->on_failure(AS2);
+
+  advance_time();
+  _comm_tracker->on_success(AS1);
+  _comm_tracker->on_failure(AS2);
+
+  // Both ASs now Ok.
+  EXPECT_CALL(*_mock_alarm, clear());
+  EXPECT_CALL(*_mock_ok_log, log(StrEq(AS2)));
+
+  advance_time();
+  _comm_tracker->on_success(AS1);
+  _comm_tracker->on_success(AS2);
+
+  advance_time();
+  _comm_tracker->on_success(AS1);
+  _comm_tracker->on_success(AS2);
 }
