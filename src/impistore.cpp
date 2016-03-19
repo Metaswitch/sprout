@@ -121,7 +121,7 @@ void ImpiStore::AuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuf
   writer->String(JSON_TYPE); writer->String(JSON_TYPE_ENUM[type]);
   writer->String(JSON_NONCE); writer->String(nonce.c_str());
   writer->String(JSON_NONCE_COUNT); writer->Uint(nonce_count);
-  writer->String(JSON_EXPIRES); writer->Uint64(expires);
+  writer->String(JSON_EXPIRES); writer->Int(expires);
   if (correlator != "")
   {
     writer->String(JSON_CORRELATOR); writer->String(correlator.c_str());
@@ -164,7 +164,7 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* 
       // Fill in remaining fields.
       JSON_SAFE_GET_STRING_MEMBER(*json, JSON_NONCE, auth_challenge->nonce);
       JSON_SAFE_GET_UINT_MEMBER(*json, JSON_NONCE_COUNT, auth_challenge->nonce_count);
-      JSON_SAFE_GET_UINT_64_MEMBER(*json, JSON_EXPIRES, auth_challenge->expires);
+      JSON_SAFE_GET_INT_MEMBER(*json, JSON_EXPIRES, auth_challenge->expires);
       JSON_SAFE_GET_STRING_MEMBER(*json, JSON_CORRELATOR, auth_challenge->correlator);
       if (auth_challenge->nonce_count == 0)
       {
@@ -174,15 +174,19 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* 
       }
       if (auth_challenge->expires == 0)
       {
-        TRC_WARNING("No \"%s\" field in JSON authentication challenge - defaulting to ",
-                    JSON_EXPIRES);
-//TODO: Default expires field
-//      auth_challenge->expires = 
+        TRC_WARNING("No \"%s\" field in JSON authentication challenge - defaulting to %d",
+                    JSON_EXPIRES, DEFAULT_EXPIRES);
+        auth_challenge->expires = time(NULL) + DEFAULT_EXPIRES;
       }
       if (auth_challenge->nonce == "")
       {
         TRC_WARNING("No \"%s\" field in JSON authentication challenge - dropping",
                     JSON_NONCE);
+        delete auth_challenge; auth_challenge = NULL;
+      }
+      else if (auth_challenge->expires < time(NULL))
+      {
+        TRC_DEBUG("Expires in past - dropping");
         delete auth_challenge; auth_challenge = NULL;
       }
     }
@@ -210,7 +214,7 @@ void ImpiStore::AuthChallenge::write_json_av(rapidjson::Writer<rapidjson::String
 {
   // Nonce is part of the key, so isn't stored in the JSON.
   writer->String(JSON_AV_NONCE_COUNT); writer->Uint(nonce_count);
-  writer->String(JSON_AV_EXPIRES); writer->Uint64(expires);
+  writer->String(JSON_AV_EXPIRES); writer->Int(expires);
   if (correlator != "")
   {
     writer->String(JSON_AV_CORRELATOR); writer->String(correlator.c_str());
@@ -265,7 +269,7 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json_av(const std::stri
       // Fill in remaining fields.
       auth_challenge->nonce = nonce;
       JSON_SAFE_GET_UINT_MEMBER(*inner_obj, JSON_AV_NONCE_COUNT, auth_challenge->nonce_count);
-      JSON_SAFE_GET_UINT_64_MEMBER(*inner_obj, JSON_AV_EXPIRES, auth_challenge->expires);
+      JSON_SAFE_GET_INT_MEMBER(*inner_obj, JSON_AV_EXPIRES, auth_challenge->expires);
       JSON_SAFE_GET_STRING_MEMBER(*inner_obj, JSON_AV_CORRELATOR, auth_challenge->correlator);
       if (auth_challenge->nonce_count == 0)
       {
@@ -281,10 +285,14 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json_av(const std::stri
       }
       if (auth_challenge->expires == 0)
       {
-        TRC_WARNING("No \"%s\" field in JSON authentication challenge - defaulting to ",
-                    JSON_AV_EXPIRES);
-//TODO: Default expires field
-//      auth_challenge->expires = 
+        TRC_WARNING("No \"%s\" field in JSON authentication challenge - defaulting to %d",
+                    JSON_AV_EXPIRES, DEFAULT_EXPIRES);
+        auth_challenge->expires = time(NULL) + DEFAULT_EXPIRES;
+      }
+      if (auth_challenge->expires < time(NULL))
+      {
+        TRC_DEBUG("Expires in past - dropping");
+        delete auth_challenge; auth_challenge = NULL;
       }
     }
   }
@@ -444,15 +452,16 @@ std::string ImpiStore::Impi::to_json()
 
 void ImpiStore::Impi::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer)
 {
+  int now = time(NULL);
   // Impi is part of the key, so isn't stored in the JSON itself.
-  if (auth_challenges.size() > 0)
+  writer->String(JSON_AUTH_CHALLENGES);
+  writer->StartArray();
   {
-    writer->String(JSON_AUTH_CHALLENGES);
-    writer->StartArray();
+    for (std::vector<ImpiStore::AuthChallenge*>::iterator it = auth_challenges.begin();
+         it != auth_challenges.end();
+         it++)
     {
-      for (std::vector<ImpiStore::AuthChallenge*>::iterator it = auth_challenges.begin();
-           it != auth_challenges.end();
-           it++)
+      if ((*it)->expires > now)
       {
         writer->StartObject();
         {
@@ -461,8 +470,8 @@ void ImpiStore::Impi::write_json(rapidjson::Writer<rapidjson::StringBuffer>* wri
         writer->EndObject();
       }
     }
-    writer->EndArray();
   }
+  writer->EndArray();
 }
 
 ImpiStore::Impi* ImpiStore::Impi::from_json(const std::string& impi, const std::string& json)
@@ -505,6 +514,18 @@ ImpiStore::Impi* ImpiStore::Impi::from_json(const std::string& impi, rapidjson::
   return impi_obj;
 }
 
+int ImpiStore::Impi::get_expires()
+{
+  int expires = 0;
+  for (std::vector<ImpiStore::AuthChallenge*>::iterator it = auth_challenges.begin();
+       it != auth_challenges.end();
+       it++)
+  {
+    expires = ((*it)->expires > expires) ? (*it)->expires : expires;
+  }
+  return expires;
+}
+
 ImpiStore::ImpiStore(Store* data_store, Mode mode) :
   _data_store(data_store), _mode(mode)
 {
@@ -517,14 +538,15 @@ ImpiStore::~ImpiStore()
 Store::Status ImpiStore::set_impi(Impi* impi,
                                   SAS::TrailId trail)
 {
-  int expiry = 30000; // TODO: Calculate correctly.
+  int now = time(NULL);
+
   std::string data = impi->to_json();
   TRC_DEBUG("Storing IMPI for %s\n%s", impi->impi.c_str(), data.c_str());
   Store::Status status = _data_store->set_data(TABLE_IMPI,
                                                impi->impi,
                                                data,
                                                impi->_cas,
-                                               expiry,
+                                               impi->get_expires() - now,
                                                trail);
   if (status == Store::Status::OK)
   {
@@ -549,39 +571,41 @@ Store::Status ImpiStore::set_impi(Impi* impi,
          it != impi->auth_challenges.end();
          it++)
     {
-      std::string nonce = (*it)->nonce;
-      data = (*it)->to_json_av();
-      TRC_DEBUG("Storing AV for %s/%s\n%s", impi->impi.c_str(), nonce.c_str(), data.c_str());
-      // TODO: Calculate expiry correctly.
-      Store::Status local_status = _data_store->set_data(TABLE_AV,
-                                                         impi->impi + '\\' + nonce,
-                                                         data,
-                                                         (*it)->_cas,
-                                                         expiry,
-                                                         trail);
-      if (local_status == Store::Status::OK)
+      if ((*it)->expires > now)
       {
-        SAS::Event event(trail, SASEvent::IMPISTORE_AV_SET_SUCCESS, 0);
-        event.add_var_param(impi->impi);
-        event.add_var_param(nonce);
-        SAS::report_event(event);
-      }
-      else
-      {
-        // LCOV_EXCL_START
-        TRC_ERROR("Failed to set AV for %s/%s", impi->impi.c_str(), nonce.c_str());
-        SAS::Event event(trail, SASEvent::IMPISTORE_AV_SET_FAILURE, 0);
-        event.add_var_param(impi->impi);
-        event.add_var_param(nonce.c_str());
-        event.add_static_param(local_status);
-        SAS::report_event(event);
-        // Update status, but only if it's not already DATA_CONTENTION - that's
-        // the most significant status.
-        if (status != Store::Status::DATA_CONTENTION)
+        std::string nonce = (*it)->nonce;
+        data = (*it)->to_json_av();
+        TRC_DEBUG("Storing AV for %s/%s\n%s", impi->impi.c_str(), nonce.c_str(), data.c_str());
+        Store::Status local_status = _data_store->set_data(TABLE_AV,
+                                                           impi->impi + '\\' + nonce,
+                                                           data,
+                                                           (*it)->_cas,
+                                                           (*it)->expires - now,
+                                                           trail);
+        if (local_status == Store::Status::OK)
         {
-          status = local_status;
+          SAS::Event event(trail, SASEvent::IMPISTORE_AV_SET_SUCCESS, 0);
+          event.add_var_param(impi->impi);
+          event.add_var_param(nonce);
+          SAS::report_event(event);
         }
-        // LCOV_EXCL_STOP
+        else
+        {
+          // LCOV_EXCL_START
+          TRC_ERROR("Failed to set AV for %s/%s", impi->impi.c_str(), nonce.c_str());
+          SAS::Event event(trail, SASEvent::IMPISTORE_AV_SET_FAILURE, 0);
+          event.add_var_param(impi->impi);
+          event.add_var_param(nonce.c_str());
+          event.add_static_param(local_status);
+          SAS::report_event(event);
+          // Update status, but only if it's not already DATA_CONTENTION - that's
+          // the most significant status.
+          if (status != Store::Status::DATA_CONTENTION)
+          {
+            status = local_status;
+          }
+          // LCOV_EXCL_STOP
+        }
       }
     }
     // TODO: Delete AVs

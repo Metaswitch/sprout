@@ -467,7 +467,7 @@ void create_challenge(pjsip_digest_credential* credentials,
       // Now build the AuthChallenge so that we can store it in the ImpiStore.
       auth_challenge = new ImpiStore::AKAAuthChallenge(nonce,
                                                        response,
-                                                       AUTH_CHALLENGE_INIT_EXPIRES);
+                                                       time(NULL) + AUTH_CHALLENGE_INIT_EXPIRES);
     }
     else
     {
@@ -515,7 +515,7 @@ void create_challenge(pjsip_digest_credential* credentials,
                                                           realm,
                                                           qop,
                                                           ha1,
-                                                          AUTH_CHALLENGE_INIT_EXPIRES);
+                                                          time(NULL) + AUTH_CHALLENGE_INIT_EXPIRES);
     }
 
     // Add the header to the message.
@@ -874,7 +874,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
         // Work out when the challenge should expire. We only want to keep it
         // around if nonce counts are supported and the UE authenticates by
         // registering.
-        uint64_t new_expiry = auth_challenge->expires;
+        int new_expiry = auth_challenge->expires;
         if (nonce_count_supported && is_register)
         {
           new_expiry = calculate_challenge_expiration_time(rdata);

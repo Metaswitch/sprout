@@ -79,7 +79,7 @@ public:
     SipTest::SetUpTestCase();
 
     _local_data_store = new LocalStore();
-    _impi_store = new ImpiStore(_local_data_store, ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI);
+    _impi_store = new ImpiStore(_local_data_store, ImpiStore::Mode::READ_IMPI_WRITE_IMPI);
     _hss_connection = new FakeHSSConnection();
     _chronos_connection = new FakeChronosConnection();
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
@@ -1199,8 +1199,7 @@ TEST_F(AuthenticationTest, DigestNonceCountTooLow)
 }
 
 
-// TODO enable this test when challenge expiry has been added to the ImpiStore.
-TEST_F(AuthenticationTest, DISABLED_DigestChallengeExpired)
+TEST_F(AuthenticationTest, DigestChallengeExpired)
 {
   // Test a successful SIP Digest authentication flow.
   pjsip_tx_data* tdata;

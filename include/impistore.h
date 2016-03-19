@@ -76,13 +76,17 @@ public:
       AKA
     };
 
+    /// Initial nonce count, when creating new challenges.
     static const int INITIAL_NONCE_COUNT = 1;
+
+    /// Default expiry time, if no value can be read from the store.
+    static const int DEFAULT_EXPIRES = 30;
 
     /// Constructor.
     /// @param _type         Type of authentication challenge.
     /// @param _nonce        Nonce used for this challenge.
     /// @param _expires      Absolute expiry time in seconds since the epoch.
-    AuthChallenge(const Type _type, const std::string& _nonce, uint64_t _expires) :
+    AuthChallenge(const Type _type, const std::string& _nonce, int _expires) :
       type(_type),
       nonce(_nonce),
       nonce_count(INITIAL_NONCE_COUNT),
@@ -104,7 +108,7 @@ public:
     uint32_t nonce_count;
 
     /// Expiry time - absolute in seconds since the Epoch
-    uint64_t expires;
+    int expires;
 
     /// Correlator between original challenge and responses.
     std::string correlator;
@@ -168,7 +172,7 @@ public:
                         const std::string& _realm,
                         const std::string& _qop,
                         const std::string& _ha1,
-                        uint64_t _expires) :
+                        int _expires) :
       AuthChallenge(AuthChallenge::Type::DIGEST, _nonce, _expires),
       realm(_realm),
       qop(_qop),
@@ -223,7 +227,7 @@ public:
     /// @param _expires      Absolute expiry time in seconds since the epoch.
     AKAAuthChallenge(const std::string& _nonce,
                      const std::string& _response,
-                     uint64_t _expires) :
+                     int _expires) :
       AuthChallenge(AuthChallenge::Type::AKA, _nonce, _expires),
       response(_response) {};
 
@@ -289,6 +293,10 @@ public:
 
     /// Deserialization from JSON.
     static ImpiStore::Impi* from_json(const std::string& impi, rapidjson::Value* json);
+
+    /// Get the expiry time for the whole IMPI object.
+    /// @returns the expiry time.
+    int get_expires();
 
     /// Memcached CAS value.
     uint64_t _cas;

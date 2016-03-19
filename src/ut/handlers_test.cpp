@@ -933,7 +933,7 @@ TEST_F(AuthTimeoutTest, NonceTimedOut)
 {
   fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", HSSConnection::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
   ImpiStore::Impi* impi = new ImpiStore::Impi("6505550231@homedomain");
-  ImpiStore::DigestAuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge("abcdef", "example.com", "auth", "ha1", 30);
+  ImpiStore::DigestAuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge("abcdef", "example.com", "auth", "ha1", time(NULL) + 30);
   auth_challenge->correlator = "abcde";
   impi->auth_challenges.push_back(auth_challenge);
   store->set_impi(impi, 0);
@@ -951,7 +951,7 @@ TEST_F(AuthTimeoutTest, NonceTimedOutWithEmptyCorrelator)
 {
   fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", HSSConnection::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
   ImpiStore::Impi* impi = new ImpiStore::Impi("6505550231@homedomain");
-  ImpiStore::DigestAuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge("abcdef", "example.com", "auth", "ha1", 30);
+  ImpiStore::DigestAuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge("abcdef", "example.com", "auth", "ha1", time(NULL) + 30);
   impi->auth_challenges.push_back(auth_challenge);
   store->set_impi(impi, 0);
 
@@ -967,7 +967,7 @@ TEST_F(AuthTimeoutTest, NonceTimedOutWithEmptyCorrelator)
 TEST_F(AuthTimeoutTest, MainlineTest)
 {
   ImpiStore::Impi* impi = new ImpiStore::Impi("test@example.com");
-  ImpiStore::DigestAuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge("abcdef", "example.com", "auth", "ha1", 30);
+  ImpiStore::DigestAuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge("abcdef", "example.com", "auth", "ha1", time(NULL) + 30);
   auth_challenge->nonce_count++; // Indicates that one successful authentication has occurred
   auth_challenge->correlator = "abcde";
   impi->auth_challenges.push_back(auth_challenge);

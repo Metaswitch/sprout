@@ -169,7 +169,7 @@ const std::string NONCE = "nonce";
 ImpiStore::Impi* example_impi1()
 {
   ImpiStore::Impi* impi = new ImpiStore::Impi(IMPI);
-  ImpiStore::AuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge(NONCE, "example.com", "auth", "ha1", 30000);
+  ImpiStore::AuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge(NONCE, "example.com", "auth", "ha1", time(NULL) + 30);
   auth_challenge->correlator = "correlator";
   impi->auth_challenges.push_back(auth_challenge);
   return impi;
