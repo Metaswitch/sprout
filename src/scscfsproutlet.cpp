@@ -319,11 +319,11 @@ ACR* SCSCFSproutlet::get_acr(SAS::TrailId trail,
 
 
 void SCSCFSproutlet::track_app_serv_comm_failure(const std::string& uri,
-                                                 bool session_continued)
+                                                 DefaultHandling default_handling)
 {
-  AsCommunicationTracker* as_tracker = session_continued ?
-    _sess_cont_as_tracker : _sess_term_as_tracker;
-
+  AsCommunicationTracker* as_tracker = (default_handling == SESSION_CONTINUED) ?
+                                       _sess_cont_as_tracker :
+                                       _sess_term_as_tracker;
   if (as_tracker != NULL)
   {
     as_tracker->on_failure(uri);
@@ -332,11 +332,11 @@ void SCSCFSproutlet::track_app_serv_comm_failure(const std::string& uri,
 
 
 void SCSCFSproutlet::track_app_serv_comm_success(const std::string& uri,
-                                                 bool session_continued)
+                                                 DefaultHandling default_handling)
 {
-  AsCommunicationTracker* as_tracker = session_continued ?
-    _sess_cont_as_tracker : _sess_term_as_tracker;
-
+  AsCommunicationTracker* as_tracker = (default_handling == SESSION_CONTINUED) ?
+                                       _sess_cont_as_tracker :
+                                       _sess_term_as_tracker;
   if (as_tracker != NULL)
   {
     as_tracker->on_success(uri);
@@ -364,6 +364,7 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
   _record_routed(false),
   _req_type(req_type),
   _seen_1xx(false),
+  _seen_response(false),
   _impi(),
   _auto_reg(false),
   _se_helper(stack_data.default_session_expires)
@@ -593,14 +594,15 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
       // The AS chain isn't complete, so the response must be from an
       // application server.  Check to see if we need to trigger default
       // handling.
-      if ((!_cancelled) &&
+      if ((!_seen_response) &&
+          (!_cancelled) &&
           ((st_code == PJSIP_SC_REQUEST_TIMEOUT) ||
            (PJSIP_IS_STATUS_IN_CLASS(st_code, 500))))
       {
         // Default handling will be triggered. Track this as a failed
         // communication.
         _scscf->track_app_serv_comm_failure(_as_chain_link.uri(),
-                                            _as_chain_link.continue_session());
+                                            _as_chain_link.default_handling());
 
         if (_as_chain_link.continue_session())
         {
@@ -626,19 +628,21 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
           free_msg(rsp);
         }
       }
-    }
-    else
-    {
-      // Default handling will not be triggered.
-      if (!_seen_1xx)
+      else
       {
-        // This is the first response we've seen from the AS, so track this is
-        // as a successful communication.
-        _scscf->track_app_serv_comm_success(_as_chain_link.uri(),
-                                            _as_chain_link.continue_session());
+        // Default handling will not be triggered.
+        if (!_seen_response)
+        {
+          // This is the first response we've seen from the AS, so track this is
+          // as a successful communication.
+          _scscf->track_app_serv_comm_success(_as_chain_link.uri(),
+                                              _as_chain_link.default_handling());
+        }
       }
     }
   }
+
+  _seen_response = true;
 
   if (st_code > 100)
   {
@@ -1779,7 +1783,7 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
   {
     // The AS has timed out so track this as a communication failure.
     _scscf->track_app_serv_comm_failure(_as_chain_link.uri(),
-                                        _as_chain_link.continue_session());
+                                        _as_chain_link.default_handling());
 
     // The request was routed to a downstream AS, so cancel any outstanding
     // forks.

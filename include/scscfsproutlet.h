@@ -154,16 +154,16 @@ private:
   /// Record that communication with an AS failed.
   ///
   /// @param uri               - The URI of the AS.
-  /// @param session_continued - Whether the AS uses session continued default
-  ///                            handling (true) or session terminated (false).
-  void track_app_serv_comm_failure(const std::string& uri, bool session_continued);
+  /// @param default_handling  - The AS's default handling.
+  void track_app_serv_comm_failure(const std::string& uri,
+                                   DefaultHandling default_handling);
 
   /// Record that communication with an AS succeeded.
   ///
   /// @param uri               - The URI of the AS.
-  /// @param session_continued - Whether the AS uses session continued default
-  ///                            handling (true) or session terminated (false).
-  void track_app_serv_comm_success(const std::string& uri, bool session_continued);
+  /// @param default_handling  - The AS's default handling.
+  void track_app_serv_comm_success(const std::string& uri,
+                                   DefaultHandling default_handling);
 
   /// Translate RequestURI using ENUM service if appropriate.
   void translate_request_uri(pjsip_msg* req, pj_pool_t* pool, SAS::TrailId trail);
@@ -396,6 +396,10 @@ private:
   /// correct stats can be updated.
   pjsip_method_e _req_type;
   bool _seen_1xx;
+
+  // Track whether any response has been seen from the AS. Primarily used for
+  // default handling processing.
+  bool _seen_response;
 
   static const int MAX_FORKING = 10;
 

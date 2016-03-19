@@ -296,6 +296,12 @@ public:
     return (_default_handling == SESSION_CONTINUED) && (!_as_chain->_responsive[_index]);
   }
 
+  /// Returns the default handling for this AS chain link.
+  DefaultHandling default_handling()
+  {
+    return _default_handling;
+  }
+
   /// Called on receipt of each response from the AS.
   void on_response(int status_code);
 
