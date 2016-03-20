@@ -359,6 +359,18 @@ private:
 
   /// The mode to use when accessing the data store.
   Mode _mode;
+
+  /// Retrieves an authentication challenge from the AV store for the specified
+  /// private user identity and nonce.  Only used when using
+  /// Mode::READ_AV_IMPI_WRITE_AV_IMPI.
+  /// @returns         A pointer to an authentication challenge, or NULL if no
+  ///                  vector found or if the store is corrupt.  The caller is
+  ///                  free to modify this object.
+  /// @param impi      The private user identity.
+  /// @param nonce     The nonce.
+  ImpiStore::AuthChallenge* get_av(const std::string& impi,
+                                   const std::string& nonce,
+                                   SAS::TrailId trail);
 };
 
 // Utility function - retrieves the "corrlator" field from the give challenge

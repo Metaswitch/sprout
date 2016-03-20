@@ -637,6 +637,38 @@ Store::Status ImpiStore::set_impi(Impi* impi,
   return status;
 }
 
+ImpiStore::AuthChallenge* ImpiStore::get_av(const std::string& impi,
+                                            const std::string& nonce,
+                                            SAS::TrailId trail)
+{
+  ImpiStore::AuthChallenge* auth_challenge = NULL;
+  std::string data;
+  uint64_t cas;
+  Store::Status status = _data_store->get_data(TABLE_AV, impi + '\\' + nonce, data, cas, trail);
+  if (status == Store::Status::OK)
+  {
+    TRC_DEBUG("Retrieved AV for %s/%s\n%s", impi.c_str(), nonce.c_str(), data.c_str());
+    SAS::Event event(trail, SASEvent::IMPISTORE_AV_GET_SUCCESS, 0);
+    event.add_var_param(impi);
+    event.add_var_param(nonce);
+    SAS::report_event(event);
+    auth_challenge = ImpiStore::AuthChallenge::from_json_av(nonce, data);
+    if (auth_challenge != NULL)
+    {
+      auth_challenge->_cas = cas;
+    }
+  }
+  else
+  {
+    SAS::Event event(trail, SASEvent::IMPISTORE_AV_GET_FAILURE, 0);
+    event.add_var_param(impi);
+    event.add_var_param(nonce);
+    event.add_static_param(status);
+    SAS::report_event(event);
+  }
+  return auth_challenge;
+}
+
 ImpiStore::Impi* ImpiStore::get_impi(const std::string& impi,
                                      SAS::TrailId trail)
 {
@@ -647,14 +679,30 @@ ImpiStore::Impi* ImpiStore::get_impi(const std::string& impi,
   if (status == Store::Status::OK)
   {
     TRC_DEBUG("Retrieved IMPI for %s\n%s", impi.c_str(), data.c_str());
+    SAS::Event event(trail, SASEvent::IMPISTORE_IMPI_GET_SUCCESS, 0);
+    event.add_var_param(impi);
+    SAS::report_event(event);
     impi_obj = ImpiStore::Impi::from_json(impi, data);
     if (impi_obj != NULL)
     {
       impi_obj->_cas = cas;
+      if (_mode == ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI)
+      {
+        for (std::vector<ImpiStore::AuthChallenge*>::iterator it = impi_obj->auth_challenges.begin();
+             it != impi_obj->auth_challenges.end();
+             it++)
+        {
+          ImpiStore::AuthChallenge* auth_challenge_from_impi = *it;
+          ImpiStore::AuthChallenge* auth_challenge_from_av =
+            get_av(impi, auth_challenge_from_impi->nonce, trail);
+          if (auth_challenge_from_av != NULL)
+          {
+            *it = auth_challenge_from_av;
+            delete auth_challenge_from_impi;
+          }
+        }
+      }
     }
-    SAS::Event event(trail, SASEvent::IMPISTORE_IMPI_GET_SUCCESS, 0);
-    event.add_var_param(impi);
-    SAS::report_event(event);
   }
   else
   {
@@ -671,54 +719,19 @@ ImpiStore::Impi* ImpiStore::get_impi_with_nonce(const std::string& impi,
                                                 SAS::TrailId trail)
 {
   ImpiStore::Impi* impi_obj = get_impi(impi, trail);
-  if (_mode == ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI)
+  if ((_mode == ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI) &&
+      ((impi_obj == NULL) ||
+       (impi_obj->get_auth_challenge(nonce) == NULL)))
   {
-    std::string data;
-    uint64_t cas;
-    Store::Status status = _data_store->get_data(TABLE_AV, impi + '\\' + nonce, data, cas, trail);
-    if (status == Store::Status::OK)
+    ImpiStore::AuthChallenge* auth_challenge = get_av(impi, nonce, trail);
+    if (auth_challenge != NULL)
     {
-      TRC_DEBUG("Retrieved AV for %s/%s\n%s", impi.c_str(), nonce.c_str(), data.c_str());
-      ImpiStore::AuthChallenge* auth_challenge = ImpiStore::AuthChallenge::from_json_av(nonce, data);
-      if (auth_challenge != NULL)
+      if (impi_obj == NULL)
       {
-        if (impi_obj == NULL)
-        {
-          impi_obj = new ImpiStore::Impi(impi);
-        }
-        auth_challenge->_cas = cas;
-        bool auth_challenge_found;
-        for (std::vector<ImpiStore::AuthChallenge*>::iterator it = impi_obj->auth_challenges.begin();
-             it != impi_obj->auth_challenges.end();
-             it++)
-        {
-          if ((*it)->nonce == auth_challenge->nonce)
-          {
-            ImpiStore::AuthChallenge* old_auth_challenge = *it;
-            *it = auth_challenge;
-            delete old_auth_challenge;
-            auth_challenge_found = true;
-            break;
-          }
-        }
-        if (!auth_challenge_found)
-        {
-          impi_obj->auth_challenges.push_back(auth_challenge);
-          impi_obj->_nonces.push_back(nonce);
-        }
+        impi_obj = new ImpiStore::Impi(impi);
       }
-      SAS::Event event(trail, SASEvent::IMPISTORE_AV_GET_SUCCESS, 0);
-      event.add_var_param(impi);
-      event.add_var_param(nonce);
-      SAS::report_event(event);
-    }
-    else
-    {
-      SAS::Event event(trail, SASEvent::IMPISTORE_AV_GET_FAILURE, 0);
-      event.add_var_param(impi);
-      event.add_var_param(nonce);
-      event.add_static_param(status);
-      SAS::report_event(event);
+      impi_obj->auth_challenges.push_back(auth_challenge);
+      impi_obj->_nonces.push_back(nonce);
     }
   }
   return impi_obj;

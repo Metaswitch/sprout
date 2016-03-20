@@ -48,6 +48,8 @@
 
 using namespace std;
 
+/// Wrapper around IMPI store implementations, to allow them to be swapped in
+/// and out of different test fixtures.
 class ImpiStoreImpl
 {
 public:
@@ -109,48 +111,8 @@ private:
   Store* _store;
 };
 
-/*
-TODO: Remove?
-class BacklevelImpiStoreImpl : public ImpiStoreImpl {
-public:
-  BacklevelImpiStoreImpl(Store* store) : _store(store) {};
-  virtual Store::Status set_impi(ImpiStore::Impi* impi)
-  {
-    return _store->set_impi(impi);
-  };
-  virtual ImpiStore::Impi* get_impi(const std::string& impi)
-  {
-    return _store->get_impi(impi);
-  };
-  virtual ImpiStore::Impi* get_impi_with_nonce(const std::string& impi, const std::string& nonce)
-  {
-    return _store->get_impi_with_nonce(impi, nonce);
-  };
-  virtual Store::Status delete_impi(ImpiStore::Impi* impi)
-  {
-    return _store->delete_impi(impi);
-  };
-private:
-  Store* store;
-}
-*/
 
-class TwoStoreScenario
-{
-public:
-  TwoStoreScenario(ImpiStoreImpl* _store1, ImpiStoreImpl* _store2) : store1(_store1), store2(_store2) {};
-  ~TwoStoreScenario() {delete store1; delete store2;};
-  ImpiStoreImpl* store1;
-  ImpiStoreImpl* store2;
-};
-
-template<class T1, class T2>
-class TwoStoreScenarioTemplate : public TwoStoreScenario
-{
-public:
-  TwoStoreScenarioTemplate(Store* store) : TwoStoreScenario(new T1(store), new T2(store)) {};
-};
-
+/// Base fixture for all IMPI store tests.
 class ImpiStoreTest : public ::testing::Test
 {
 public:
@@ -163,27 +125,45 @@ public:
   };
 };
 
+/// Constant strings.
 const std::string IMPI = "private@example.com";
-const std::string NONCE = "nonce";
+const std::string NONCE1 = "nonce1";
+const std::string NONCE2 = "nonce2";
 
+/// Example IMPI, with a single digest authentication challenge.
 ImpiStore::Impi* example_impi1()
 {
   ImpiStore::Impi* impi = new ImpiStore::Impi(IMPI);
-  ImpiStore::AuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge(NONCE, "example.com", "auth", "ha1", time(NULL) + 30);
+  ImpiStore::AuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge(NONCE1, "example.com", "auth", "ha1", time(NULL) + 30);
   auth_challenge->correlator = "correlator";
   impi->auth_challenges.push_back(auth_challenge);
   return impi;
 };
 
+/// Example IMPI, with a single AKA authentication challenge.
 ImpiStore::Impi* example_impi2()
 {
   ImpiStore::Impi* impi = new ImpiStore::Impi(IMPI);
-  ImpiStore::AuthChallenge* auth_challenge = new ImpiStore::AKAAuthChallenge(NONCE, "response", time(NULL) + 30);
+  ImpiStore::AuthChallenge* auth_challenge = new ImpiStore::AKAAuthChallenge(NONCE1, "response", time(NULL) + 30);
   auth_challenge->correlator = "correlator";
   impi->auth_challenges.push_back(auth_challenge);
   return impi;
 };
 
+/// Example IMPI, with both a digest and an AKA authentication challenge.
+ImpiStore::Impi* example_impi3()
+{
+  ImpiStore::Impi* impi = new ImpiStore::Impi(IMPI);
+  ImpiStore::AuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge(NONCE1, "example.com", "auth", "ha1", time(NULL) + 30);
+  auth_challenge->correlator = "correlator";
+  impi->auth_challenges.push_back(auth_challenge);
+  auth_challenge = new ImpiStore::AKAAuthChallenge(NONCE2, "response", time(NULL) + 30);
+  auth_challenge->correlator = "correlator";
+  impi->auth_challenges.push_back(auth_challenge);
+  return impi;
+};
+
+/// Check that two IMPIs are equal.
 void expect_impis_equal(ImpiStore::Impi* impi1, ImpiStore::Impi* impi2)
 {
   ASSERT_TRUE(impi1 != NULL);
@@ -235,6 +215,8 @@ void expect_impis_equal(ImpiStore::Impi* impi1, ImpiStore::Impi* impi2)
 ///
 /// The fixture is a template, parameterized over the different IMPI store
 /// implementations.
+///
+/// These tests test the behavior of a single store.
 template<class T> class ImpiOneStoreTest : public ImpiStoreTest
 {
 public:
@@ -272,29 +254,53 @@ TYPED_TEST(ImpiOneStoreTest, SetGetWithNonce)
   ImpiStore::Impi* impi1 = example_impi1();
   Store::Status status = this->impi_store->set_impi(impi1);
   ASSERT_EQ(Store::Status::OK, status);
-  ImpiStore::Impi* impi2 = this->impi_store->get_impi_with_nonce(IMPI, NONCE);
+  ImpiStore::Impi* impi2 = this->impi_store->get_impi_with_nonce(IMPI, NONCE1);
   expect_impis_equal(impi1, impi2);
   delete impi2;
   delete impi1;
 }
 
+
+/// Wrapper class for scenarios that involve 2 different IMPI store
+/// implementations.
+class TwoStoreScenario
+{
+public:
+  TwoStoreScenario(ImpiStoreImpl* _store1, ImpiStoreImpl* _store2) : store1(_store1), store2(_store2) {};
+  ~TwoStoreScenario() {delete store1; delete store2;};
+  ImpiStoreImpl* store1;
+  ImpiStoreImpl* store2;
+};
+
 /// Fixture for ImpiTwoStoreTest.
 ///
 /// The fixture is a template, parameterized over the different IMPI store
 /// implementations.
-template<class T> class ImpiTwoStoreTest : public ImpiStoreTest
+///
+/// These tests test interactions before different IMPI store implementations,
+/// ensuring that they can read and write to a shared store.
+template<class T> class ImpiTwoStoreBaseTest : public ImpiStoreTest
 {
 public:
   TwoStoreScenario* scenario;
-  ImpiTwoStoreTest() :
+  ImpiTwoStoreBaseTest() :
     ImpiStoreTest(),
     scenario(new T(local_store))
      {};
-  virtual ~ImpiTwoStoreTest()
+  virtual ~ImpiTwoStoreBaseTest()
   {
     delete scenario;
   };
 };
+
+template<class T1, class T2>
+class TwoStoreScenarioTemplate : public TwoStoreScenario
+{
+public:
+  TwoStoreScenarioTemplate(Store* store) : TwoStoreScenario(new T1(store), new T2(store)) {};
+};
+
+template<class T> class ImpiTwoStoreTest : public ImpiTwoStoreBaseTest<T> {};
 
 typedef ::testing::Types<
   TwoStoreScenarioTemplate<LiveImpiStoreImplAvImpi, LiveImpiStoreImplAvImpi>,
@@ -316,13 +322,59 @@ TYPED_TEST(ImpiTwoStoreTest, Set1Get2)
   delete impi1;
 }
 
-TYPED_TEST(ImpiTwoStoreTest, Set1GetNonce2)
+TYPED_TEST(ImpiTwoStoreTest, Set1DeleteAC1Get2)
 {
-  ImpiStore::Impi* impi1 = example_impi1();
+  ImpiStore::Impi* impi1 = example_impi3();
   Store::Status status = this->scenario->store1->set_impi(impi1);
   ASSERT_EQ(Store::Status::OK, status);
-  ImpiStore::Impi* impi2 = this->scenario->store2->get_impi_with_nonce(IMPI, NONCE);
-  expect_impis_equal(impi1, impi2);
+  ImpiStore::Impi* impi2 = this->scenario->store1->get_impi(IMPI);
+  ASSERT_TRUE(impi2 != NULL);
+  ASSERT_EQ(2, impi2->auth_challenges.size());
+  delete impi2->auth_challenges[1];
+  impi2->auth_challenges.erase(impi2->auth_challenges.begin() + 1);
+  status = this->scenario->store1->set_impi(impi2);
+  ASSERT_EQ(Store::Status::OK, status);
+  ImpiStore::Impi* impi3 = this->scenario->store2->get_impi(IMPI);
+  expect_impis_equal(impi2, impi3);
+  delete impi3;
+  delete impi2;
+  delete impi1;
+}
+
+TYPED_TEST(ImpiTwoStoreTest, Set1DeleteAC1GetNonce2)
+{
+  ImpiStore::Impi* impi1 = example_impi3();
+  Store::Status status = this->scenario->store1->set_impi(impi1);
+  ASSERT_EQ(Store::Status::OK, status);
+  ImpiStore::Impi* impi2 = this->scenario->store1->get_impi(IMPI);
+  ASSERT_TRUE(impi2 != NULL);
+  ASSERT_EQ(2, impi2->auth_challenges.size());
+  delete impi2->auth_challenges[1];
+  impi2->auth_challenges.erase(impi2->auth_challenges.begin() + 1);
+  status = this->scenario->store1->set_impi(impi2);
+  ASSERT_EQ(Store::Status::OK, status);
+  ImpiStore::Impi* impi3 = this->scenario->store2->get_impi_with_nonce(IMPI, NONCE1);
+  expect_impis_equal(impi2, impi3);
+  delete impi3;
+  delete impi2;
+  delete impi1;
+}
+
+TYPED_TEST(ImpiTwoStoreTest, Set1DeleteAC2GetNonce1)
+{
+  ImpiStore::Impi* impi1 = example_impi3();
+  Store::Status status = this->scenario->store1->set_impi(impi1);
+  ASSERT_EQ(Store::Status::OK, status);
+  ImpiStore::Impi* impi2 = this->scenario->store2->get_impi(IMPI);
+  ASSERT_TRUE(impi2 != NULL);
+  ASSERT_EQ(2, impi2->auth_challenges.size());
+  delete impi2->auth_challenges[1];
+  impi2->auth_challenges.erase(impi2->auth_challenges.begin() + 1);
+  status = this->scenario->store2->set_impi(impi2);
+  ASSERT_EQ(Store::Status::OK, status);
+  ImpiStore::Impi* impi3 = this->scenario->store1->get_impi_with_nonce(IMPI, NONCE1);
+  expect_impis_equal(impi2, impi3);
+  delete impi3;
   delete impi2;
   delete impi1;
 }
@@ -332,57 +384,80 @@ TYPED_TEST(ImpiTwoStoreTest, Write1Delete1Read2)
   ImpiStore::Impi* impi1 = example_impi1();
   Store::Status status = this->scenario->store1->set_impi(impi1);
   ASSERT_EQ(Store::Status::OK, status);
-  status = this->scenario->store1->delete_impi(impi1);
-  ASSERT_EQ(Store::Status::OK, status);
-  ImpiStore::Impi* impi2 = this->scenario->store2->get_impi(IMPI);
-  ASSERT_EQ(NULL, impi2);
-  delete impi1;
-}
-
-/*
-TYPED_TEST(ImpiTwoStoreTest, Write1Read2Write2Read1)
-{
-  ImpiStore::Impi* impi1 = example_impi1();
-  Store::Status status = this->scenario->store1->set_impi(impi1);
-  ASSERT_EQ(Store::Status::OK, status);
-  ImpiStore::Impi* impi2 = this->scenario->store2->get_impi(IMPI);
-  expect_impis_equal(impi1, impi2);
+  ImpiStore::Impi* impi2 = this->scenario->store1->get_impi(IMPI);
   ASSERT_TRUE(impi2 != NULL);
-  status = this->scenario->store2->set_impi(impi2);
+  status = this->scenario->store1->delete_impi(impi2);
   ASSERT_EQ(Store::Status::OK, status);
-  ImpiStore::Impi* impi3 = this->scenario->store1->get_impi(IMPI);
-  expect_impis_equal(impi1, impi3);
-  delete impi3;
-  delete impi2;
-  delete impi1;
-}
-*/
-
-TYPED_TEST(ImpiTwoStoreTest, Write1ReadNonce2Write2ReadNonce1)
-{
-  ImpiStore::Impi* impi1 = example_impi1();
-  Store::Status status = this->scenario->store1->set_impi(impi1);
-  ASSERT_EQ(Store::Status::OK, status);
-  ImpiStore::Impi* impi2 = this->scenario->store2->get_impi_with_nonce(IMPI, NONCE);
-  expect_impis_equal(impi1, impi2);
-  ASSERT_TRUE(impi2 != NULL);
-  status = this->scenario->store2->set_impi(impi2);
-  ASSERT_EQ(Store::Status::OK, status);
-  ImpiStore::Impi* impi3 = this->scenario->store1->get_impi_with_nonce(IMPI, NONCE);
-  expect_impis_equal(impi1, impi3);
-  delete impi3;
+  ImpiStore::Impi* impi3 = this->scenario->store2->get_impi(IMPI);
+  ASSERT_EQ(NULL, impi3);
   delete impi2;
   delete impi1;
 }
 
-/*
+
+/// Fixture for ImpiTwoStoreLostImpiTest.
+///
+/// These tests are similar to ImpiTwoStoreTest, except that they test FT
+/// scenarios that even work when the IMPI record is lost.
+template<class T> class ImpiTwoStoreLostImpiTest : public ImpiTwoStoreBaseTest<T> {};
+
 typedef ::testing::Types<
-  TwoStoreScenarioTemplate<LiveImpiStoreImplAvImpi, LiveImpiStoreImplAvLostImpi>,
-  TwoStoreScenarioTemplate<LiveImpiStoreImplImpi, LiveImpiStoreImplAvLostImpi>,
-  TwoStoreScenarioTemplate<LiveImpiStoreImplAvLostImpi, LiveImpiStoreImplAvLostImpi>
-> TwoStoreScenarios;
-*/
+  TwoStoreScenarioTemplate<LiveImpiStoreImplAvImpi, LiveImpiStoreImplAvImpi>,
+  TwoStoreScenarioTemplate<LiveImpiStoreImplAvImpi, LiveImpiStoreImplImpi>,
+  TwoStoreScenarioTemplate<LiveImpiStoreImplImpi, LiveImpiStoreImplAvImpi>,
+  TwoStoreScenarioTemplate<LiveImpiStoreImplImpi, LiveImpiStoreImplImpi>,
+  TwoStoreScenarioTemplate<LiveImpiStoreImplAvLostImpi, LiveImpiStoreImplAvImpi>
+> TwoStoreLostImpiScenarios;
 
+TYPED_TEST_CASE(ImpiTwoStoreLostImpiTest, TwoStoreLostImpiScenarios);
+
+TYPED_TEST(ImpiTwoStoreLostImpiTest, Set1GetNonce2)
+{
+  ImpiStore::Impi* impi1 = example_impi1();
+  Store::Status status = this->scenario->store1->set_impi(impi1);
+  ASSERT_EQ(Store::Status::OK, status);
+  ImpiStore::Impi* impi2 = this->scenario->store2->get_impi_with_nonce(IMPI, NONCE1);
+  expect_impis_equal(impi1, impi2);
+  delete impi2;
+  delete impi1;
+}
+
+TYPED_TEST(ImpiTwoStoreLostImpiTest, Write1Delete1Read2)
+{
+  ImpiStore::Impi* impi1 = example_impi1();
+  Store::Status status = this->scenario->store1->set_impi(impi1);
+  ASSERT_EQ(Store::Status::OK, status);
+  ImpiStore::Impi* impi2 = this->scenario->store1->get_impi_with_nonce(IMPI, NONCE1);
+  ASSERT_TRUE(impi2 != NULL);
+  status = this->scenario->store1->delete_impi(impi2);
+  ASSERT_EQ(Store::Status::OK, status);
+  ImpiStore::Impi* impi3 = this->scenario->store2->get_impi_with_nonce(IMPI, NONCE1);
+  ASSERT_EQ(NULL, impi3);
+  delete impi2;
+  delete impi1;
+}
+
+TYPED_TEST(ImpiTwoStoreLostImpiTest, Write1ReadNonce2Write2ReadNonce1)
+{
+  ImpiStore::Impi* impi1 = example_impi1();
+  Store::Status status = this->scenario->store1->set_impi(impi1);
+  ASSERT_EQ(Store::Status::OK, status);
+  ImpiStore::Impi* impi2 = this->scenario->store2->get_impi_with_nonce(IMPI, NONCE1);
+  expect_impis_equal(impi1, impi2);
+  ASSERT_TRUE(impi2 != NULL);
+  status = this->scenario->store2->set_impi(impi2);
+  ASSERT_EQ(Store::Status::OK, status);
+  ImpiStore::Impi* impi3 = this->scenario->store1->get_impi_with_nonce(IMPI, NONCE1);
+  expect_impis_equal(impi1, impi3);
+  delete impi3;
+  delete impi2;
+  delete impi1;
+}
+
+
+/// Fixture for ImpiStoreParsingTest.
+///
+/// These tests cover parsing of data from JSON.
 class ImpiStoreParsingTest : public ImpiStoreTest
 {
 public:
@@ -494,22 +569,22 @@ TEST_F(ImpiStoreParsingTest, ChallengeAKAMissingResponse)
 
 TEST_F(ImpiStoreParsingTest, AVCorruptJSON)
 {
-  local_store->set_data("av", IMPI + '\\' + NONCE, "{]", 0, 30, 0L);
-  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE, 0L);
+  local_store->set_data("av", IMPI + '\\' + NONCE1, "{]", 0, 30, 0L);
+  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_EQ(NULL, impi);
 }
 
 TEST_F(ImpiStoreParsingTest, AVNotObject)
 {
-  local_store->set_data("av", IMPI + '\\' + NONCE, "\"not an object\"", 0, 30, 0L);
-  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE, 0L);
+  local_store->set_data("av", IMPI + '\\' + NONCE1, "\"not an object\"", 0, 30, 0L);
+  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_EQ(NULL, impi);
 }
 
 TEST_F(ImpiStoreParsingTest, AVDigest)
 {
-  local_store->set_data("av", IMPI + '\\' + NONCE, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\"}}", 0, 30, 0L);
-  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE, 0L);
+  local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\"}}", 0, 30, 0L);
+  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_TRUE(impi != NULL);
   ASSERT_EQ(1, impi->auth_challenges.size());
   ASSERT_EQ(ImpiStore::AuthChallenge::Type::DIGEST, impi->auth_challenges[0]->type);
@@ -518,8 +593,8 @@ TEST_F(ImpiStoreParsingTest, AVDigest)
 
 TEST_F(ImpiStoreParsingTest, AVAKA)
 {
-  local_store->set_data("av", IMPI + '\\' + NONCE, "{\"aka\":{\"response\":\"response\"}}", 0, 30, 0L);
-  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE, 0L);
+  local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"aka\":{\"response\":\"response\"}}", 0, 30, 0L);
+  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_TRUE(impi != NULL);
   ASSERT_EQ(1, impi->auth_challenges.size());
   ASSERT_EQ(ImpiStore::AuthChallenge::Type::AKA, impi->auth_challenges[0]->type);
@@ -528,8 +603,8 @@ TEST_F(ImpiStoreParsingTest, AVAKA)
 
 TEST_F(ImpiStoreParsingTest, AVDigestAndAKA)
 {
-  local_store->set_data("av", IMPI + '\\' + NONCE, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\"},\"aka\":{\"response\":\"response\"}}", 0, 30, 0L);
-  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE, 0L);
+  local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\"},\"aka\":{\"response\":\"response\"}}", 0, 30, 0L);
+  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_TRUE(impi != NULL);
   ASSERT_EQ(1, impi->auth_challenges.size());
   ASSERT_EQ(ImpiStore::AuthChallenge::Type::DIGEST, impi->auth_challenges[0]->type);
@@ -538,43 +613,43 @@ TEST_F(ImpiStoreParsingTest, AVDigestAndAKA)
 
 TEST_F(ImpiStoreParsingTest, AVEmpty)
 {
-  local_store->set_data("av", IMPI + '\\' + NONCE, "{}", 0, 30, 0L);
-  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE, 0L);
+  local_store->set_data("av", IMPI + '\\' + NONCE1, "{}", 0, 30, 0L);
+  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_EQ(NULL, impi);
 }
 
 TEST_F(ImpiStoreParsingTest, AVDigestMissingRealm)
 {
-  local_store->set_data("av", IMPI + '\\' + NONCE, "{\"digest\":{\"qop\":\"auth\",\"ha1\":\"ha1\"}}", 0, 30, 0L);
-  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE, 0L);
+  local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"qop\":\"auth\",\"ha1\":\"ha1\"}}", 0, 30, 0L);
+  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_EQ(NULL, impi);
 }
 
 TEST_F(ImpiStoreParsingTest, AVDigestMissingQoP)
 {
-  local_store->set_data("av", IMPI + '\\' + NONCE, "{\"digest\":{\"realm\":\"example.com\",\"ha1\":\"ha1\"}}", 0, 30, 0L);
-  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE, 0L);
+  local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"realm\":\"example.com\",\"ha1\":\"ha1\"}}", 0, 30, 0L);
+  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_EQ(NULL, impi);
 }
 
 TEST_F(ImpiStoreParsingTest, AVDigestMissingHA1)
 {
-  local_store->set_data("av", IMPI + '\\' + NONCE, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\"}}", 0, 30, 0L);
-  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE, 0L);
+  local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\"}}", 0, 30, 0L);
+  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_EQ(NULL, impi);
 }
 
 TEST_F(ImpiStoreParsingTest, AVDigestNotObject)
 {
-  local_store->set_data("av", IMPI + '\\' + NONCE, "{\"digest\":\"not an objct\"}", 0, 30, 0L);
-  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE, 0L);
+  local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":\"not an objct\"}", 0, 30, 0L);
+  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_EQ(NULL, impi);
 }
 
 TEST_F(ImpiStoreParsingTest, AVDigestMissingNC1)
 {
-  local_store->set_data("av", IMPI + '\\' + NONCE, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\"}}", 0, 30, 0L);
-  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE, 0L);
+  local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\"}}", 0, 30, 0L);
+  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_TRUE(impi != NULL);
   ASSERT_EQ(1, impi->auth_challenges.size());
   ASSERT_EQ(1, impi->auth_challenges[0]->nonce_count);
@@ -583,8 +658,8 @@ TEST_F(ImpiStoreParsingTest, AVDigestMissingNC1)
 
 TEST_F(ImpiStoreParsingTest, AVDigestMissingNC2)
 {
-  local_store->set_data("av", IMPI + '\\' + NONCE, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\",\"tombstone\":true}}", 0, 30, 0L);
-  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE, 0L);
+  local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\",\"tombstone\":true}}", 0, 30, 0L);
+  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_TRUE(impi != NULL);
   ASSERT_EQ(1, impi->auth_challenges.size());
   ASSERT_EQ(2, impi->auth_challenges[0]->nonce_count);
@@ -593,35 +668,29 @@ TEST_F(ImpiStoreParsingTest, AVDigestMissingNC2)
 
 TEST_F(ImpiStoreParsingTest, AVDigestExpiresInPast)
 {
-  local_store->set_data("av", IMPI + '\\' + NONCE, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\",\"expires\":1}}", 0, 30, 0L);
-  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE, 0L);
+  local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\",\"expires\":1}}", 0, 30, 0L);
+  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_EQ(NULL, impi);
 }
 
 TEST_F(ImpiStoreParsingTest, AVAKAMissingResponse)
 {
-  local_store->set_data("av", IMPI + '\\' + NONCE, "{\"aka\":{}}", 0, 30, 0L);
-  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE, 0L);
+  local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"aka\":{}}", 0, 30, 0L);
+  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_EQ(NULL, impi);
 }
 
 TEST_F(ImpiStoreParsingTest, AVAKANotObject)
 {
-  local_store->set_data("av", IMPI + '\\' + NONCE, "{\"aka\":\"not an objct\"}", 0, 30, 0L);
-  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE, 0L);
+  local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"aka\":\"not an objct\"}", 0, 30, 0L);
+  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_EQ(NULL, impi);
 }
 
-/*
-TEST_F(ImpiStoreParsingTest, DigestMissingRealm)
-{
-  local_store->set_data("impi", IMPI, "{\"authChallenges\":[{\"type\":\"digest\",\"nonce\":\"nonce\",\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\"}]}", 0, 30, 0L);
-  ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
-  ASSERT_TRUE(impi != NULL);
-  EXPECT_EQ(0, impi->auth_challenges.size());
-}
-*/
 
+/// Fixture for ImpiStoreSerializingTest.
+///
+/// These tests cover serialization of data to JSON.
 class ImpiStoreSerializingTest : public ImpiStoreTest
 {
 public:
@@ -642,7 +711,7 @@ public:
 
     std::string data;
     uint64_t cas;
-    status = local_store->get_data("av", IMPI + '\\' + NONCE, data, cas, 0L);
+    status = local_store->get_data("av", IMPI + '\\' + NONCE1, data, cas, 0L);
     EXPECT_EQ(Store::Status::OK, status);
     
     rapidjson::Document* json = new rapidjson::Document;
@@ -696,21 +765,6 @@ TEST_F(ImpiStoreSerializingTest, DigestExpired)
 
   std::string data;
   uint64_t cas;
-  status = local_store->get_data("av", IMPI + '\\' + NONCE, data, cas, 0L);
+  status = local_store->get_data("av", IMPI + '\\' + NONCE1, data, cas, 0L);
   ASSERT_EQ(Store::Status::NOT_FOUND, status);
 }
-
-/*
-  ASSERT_TRUE(!json->HasParseError());
-  ASSERT_TRUE(json->IsObject());
-  ASSERT_TRUE(json->HasMember("authChallenges"));
-  ASSERT_TRUE((*json)["authChallenges"].IsArray());
-  ASSERT_TRUE((*json)["authChallenges"][0].IsObject());
-  ASSERT_TRUE((*json)["authChallenges"][0].HasMember("tombstone"));
-  delete json;
-
-  ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
-  ASSERT_TRUE(impi != NULL);
-  EXPECT_EQ(0, impi->auth_challenges.size());
-}
-*/
