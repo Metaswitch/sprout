@@ -89,8 +89,7 @@ void AsCommunicationTracker::on_failure(const std::string& as_uri)
     // fact.
     TRC_DEBUG("First failure for this AS - generate log");
     _as_failed_log->log(as_uri.c_str());
-
-    _as_failures.emplace(as_uri, 1);
+    _as_failures[as_uri] = 1;
   }
   pthread_mutex_unlock(&_lock);
 

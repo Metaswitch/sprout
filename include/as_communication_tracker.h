@@ -40,8 +40,8 @@
 #include "pdlog.h"
 #include "alarm.h"
 
-#ifndef AS_COMMUNICATION_TRACKER_H__
-#define AS_COMMUNICATION_TRACKER_H__
+#ifndef AS_COMMUNICATION_TRACKER_H_
+#define AS_COMMUNICATION_TRACKER_H_
 
 class AsCommunicationTracker
 {

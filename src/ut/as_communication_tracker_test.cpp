@@ -83,7 +83,7 @@ public:
 };
 
 // Advance time to the next AsCommunicationTracker checking period. This is
-// slightly encapsulation breaking (sincec it means the UT knows how long this
+// slightly encapsulation breaking (since it means the UT knows how long this
 // period is) but is the most practical thing to do in UT.
 static void advance_time()
 {
