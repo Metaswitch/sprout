@@ -1,5 +1,5 @@
 /**
- * @file impistore.cpp Implementation of store for Authentication Vectors
+ * @file impistore.cpp Implementation of store for IMPI data
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -48,27 +48,9 @@
 #include "json_parse_utils.h"
 #include <algorithm>
 
-const std::string ImpiStore::TABLE_IMPI = "impi";
-const std::string ImpiStore::TABLE_AV = "av";
-
-ImpiStore::AuthChallenge* ImpiStore::Impi::get_auth_challenge(const std::string& nonce)
-{
-  // Spin through the list of authentication challenges, looking for a
-  // matching nonce.
-  ImpiStore::AuthChallenge* auth_challenge = NULL;
-  for (std::vector<AuthChallenge*>::iterator it = auth_challenges.begin();
-       it != auth_challenges.end();
-       it++)
-  {
-    if ((*it)->nonce == nonce)
-    {
-      auth_challenge = *it;
-      break;
-    }
-  }
-  return auth_challenge;
-}
-
+/// Parses a string to a JSON document.
+/// @returns a JSON document or NULL.
+/// @param string    the string to parse.
 static rapidjson::Document* json_from_string(const std::string& string)
 {
   rapidjson::Document* json = new rapidjson::Document;
@@ -84,6 +66,12 @@ static rapidjson::Document* json_from_string(const std::string& string)
   return json;
 }
 
+// Constant table names.
+const std::string ImpiStore::TABLE_IMPI = "impi";
+const std::string ImpiStore::TABLE_AV = "av";
+
+// JSON field names and values.  Note that the IMPI and AV formats name some
+// fields differently, so we have different constants for them.
 static const char* const JSON_TYPE = "type";
 static const char* const JSON_TYPE_DIGEST = "digest";
 static const char* const JSON_TYPE_AKA = "aka";
@@ -108,8 +96,27 @@ static const char* const JSON_AV_HA1 = "ha1";
 static const char* const JSON_AV_RESPONSE = "response";
 static const char* const JSON_AV_TOMBSTONE = "tombstone";
 
+ImpiStore::AuthChallenge* ImpiStore::Impi::get_auth_challenge(const std::string& nonce)
+{
+  // Spin through the list of authentication challenges, looking for a
+  // matching nonce.
+  ImpiStore::AuthChallenge* auth_challenge = NULL;
+  for (std::vector<AuthChallenge*>::iterator it = auth_challenges.begin();
+       it != auth_challenges.end();
+       it++)
+  {
+    if ((*it)->nonce == nonce)
+    {
+      auth_challenge = *it;
+      break;
+    }
+  }
+  return auth_challenge;
+}
+
 void ImpiStore::AuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer)
 {
+  // Write all the base AuthChallenge fields to JSON, in the IMPI format.
   writer->String(JSON_TYPE); writer->String(JSON_TYPE_ENUM[type]);
   writer->String(JSON_NONCE); writer->String(nonce.c_str());
   writer->String(JSON_NONCE_COUNT); writer->Uint(nonce_count);
@@ -118,6 +125,7 @@ void ImpiStore::AuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuf
   {
     writer->String(JSON_CORRELATOR); writer->String(correlator.c_str());
   }
+  // We don't serialize the CAS - this is passed to the store on the set_data call.
 }
 
 ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* json)
@@ -125,6 +133,8 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* 
   ImpiStore::AuthChallenge* auth_challenge = NULL;
   if (json->IsObject())
   {
+    // First, identify what type of AuthChallenge this is, and call through to
+    // that class to deserialize.
     std::string type = "";
     JSON_SAFE_GET_STRING_MEMBER(*json, JSON_TYPE, type);
     if (type == JSON_TYPE_DIGEST)
@@ -139,25 +149,36 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* 
     {
       TRC_WARNING("Unknown JSON authentication challenge type: %s", type.c_str());
     }
+
+    // If we successfully parsed the AuthChallenge so far, fill in the
+    // remaining (base) fields.
     if (auth_challenge != NULL)
     {
-      // Fill in remaining fields.
       JSON_SAFE_GET_STRING_MEMBER(*json, JSON_NONCE, auth_challenge->nonce);
       JSON_SAFE_GET_UINT_MEMBER(*json, JSON_NONCE_COUNT, auth_challenge->nonce_count);
       JSON_SAFE_GET_INT_MEMBER(*json, JSON_EXPIRES, auth_challenge->expires);
       JSON_SAFE_GET_STRING_MEMBER(*json, JSON_CORRELATOR, auth_challenge->correlator);
       if (auth_challenge->nonce_count == 0)
       {
+        // We should always have a nonce_count, but to ease version
+        // forward-compatibility, default it if not found.
         TRC_WARNING("No \"%s\" field in JSON authentication challenge - defaulting to %u",
                     JSON_NONCE_COUNT, INITIAL_NONCE_COUNT);
         auth_challenge->nonce_count = INITIAL_NONCE_COUNT;
       }
       if (auth_challenge->expires == 0)
       {
-        TRC_INFO("No \"%s\" field in JSON authentication challenge - defaulting to %d",
-                 JSON_EXPIRES, DEFAULT_EXPIRES);
+        // We should always have an expires, but to ease version forward-
+        // compatibility, default it if not found.  We use the DEFAULT_EXPIRES
+        // as this should allow at least one authentication to succeed, even
+        // if it won't allow re-authentication later.
+        TRC_WARNING("No \"%s\" field in JSON authentication challenge - defaulting to %d",
+                    JSON_EXPIRES, DEFAULT_EXPIRES);
         auth_challenge->expires = time(NULL) + DEFAULT_EXPIRES;
       }
+
+      // Check we have the nonce and the record hasn't expired - otherwise drop
+      // the record.
       if (auth_challenge->nonce == "")
       {
         TRC_WARNING("No \"%s\" field in JSON authentication challenge - dropping",
@@ -180,6 +201,7 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* 
 
 std::string ImpiStore::AuthChallenge::to_json_av()
 {
+  // Build a writer, serialize the AuthChallenge to it and return the result.
   rapidjson::StringBuffer buffer;
   rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
   writer.StartObject();
@@ -192,7 +214,7 @@ std::string ImpiStore::AuthChallenge::to_json_av()
 
 void ImpiStore::AuthChallenge::write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer)
 {
-  // Nonce is part of the key, so isn't stored in the JSON.
+  // Write all the base AuthChallenge fields to JSON, in the AV format.
   writer->String(JSON_AV_NONCE_COUNT); writer->Uint(nonce_count);
   writer->String(JSON_AV_EXPIRES); writer->Int(expires);
   if (correlator != "")
@@ -201,15 +223,18 @@ void ImpiStore::AuthChallenge::write_json_av(rapidjson::Writer<rapidjson::String
   }
   // For backwards-compatibility, set the tombstone flag if this challenge has
   // ever been used.  This behavior might seem odd, but previously we did not
-  // support reuse of challenges.
+  // support reuse of challenges, so this gives the best upgrade behavior.
   if (nonce_count > INITIAL_NONCE_COUNT)
   {
     writer->String(JSON_AV_TOMBSTONE); writer->Bool(true);
   }
+  // Nonce is part of the key, so isn't stored in the JSON.
 }
 
 ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json_av(const std::string& nonce, const std::string& json)
 {
+  // Simply parse the string to JSON, and then call through to the
+  // deserialization function.
   ImpiStore::AuthChallenge* auth_challenge = NULL;
   rapidjson::Document* json_obj = json_from_string(json);
   if (json_obj != NULL)
@@ -225,6 +250,8 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json_av(const std::stri
   ImpiStore::AuthChallenge* auth_challenge = NULL;
   if (json->IsObject())
   {
+    // First, identify what type of AuthChallenge this is, and call through to
+    // that class to deserialize.
     rapidjson::Value* inner_obj = NULL;
     if (json->HasMember(JSON_AV_TYPE_DIGEST))
     {
@@ -232,6 +259,8 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json_av(const std::stri
       inner_obj = &((*json)[JSON_AV_TYPE_DIGEST]);
       if (json->HasMember(JSON_AV_TYPE_AKA))
       {
+        // We don't expect this to happen, but it's worth highlighting if it
+        // does.
         TRC_WARNING("JSON AV contains both digest and AKA data - ignoring AKA");
       }
     }
@@ -244,9 +273,11 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json_av(const std::stri
     {
       TRC_WARNING("JSON AV contains neither digest nor AKA data - dropping");
     }
+
+    // If we successfully parsed the AuthChallenge so far, fill in the
+    // remaining (base) fields.
     if (auth_challenge != NULL)
     {
-      // Fill in remaining fields.
       auth_challenge->nonce = nonce;
       JSON_SAFE_GET_UINT_MEMBER(*inner_obj, JSON_AV_NONCE_COUNT, auth_challenge->nonce_count);
       JSON_SAFE_GET_INT_MEMBER(*inner_obj, JSON_AV_EXPIRES, auth_challenge->expires);
@@ -260,15 +291,20 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json_av(const std::stri
         bool tombstone = false;
         JSON_SAFE_GET_BOOL_MEMBER(*inner_obj, JSON_AV_TOMBSTONE, tombstone);
         auth_challenge->nonce_count = INITIAL_NONCE_COUNT + ((tombstone) ? 1 : 0);
-        TRC_WARNING("No \"%s\" field in JSON AV - defaulting to %u",
-                    JSON_AV_NONCE_COUNT, auth_challenge->nonce_count);
+        TRC_INFO("No \"%s\" field in JSON AV - defaulting to %u",
+                 JSON_AV_NONCE_COUNT, auth_challenge->nonce_count);
       }
       if (auth_challenge->expires == 0)
       {
-        TRC_WARNING("No \"%s\" field in JSON authentication challenge - defaulting to %d",
-                    JSON_AV_EXPIRES, DEFAULT_EXPIRES);
+        // No expires.  Previous versions did not store expires values, so this
+        // is expected during upgrade.  Default it to the expires value used
+        // previously.
+        TRC_INFO("No \"%s\" field in JSON authentication challenge - defaulting to %d",
+                 JSON_AV_EXPIRES, DEFAULT_EXPIRES);
         auth_challenge->expires = time(NULL) + DEFAULT_EXPIRES;
       }
+
+      // Check the record hasn't expired - otherwise drop it.
       if (auth_challenge->expires < time(NULL))
       {
         TRC_DEBUG("Expires in past - dropping");
@@ -285,6 +321,8 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json_av(const std::stri
 
 void ImpiStore::DigestAuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer)
 {
+  // Write all the DigestAuthChallenge fields to JSON, in IMPI format.  We
+  // call into the superclass to write base AuthChallenges fields.
   ImpiStore::AuthChallenge::write_json(writer);
   writer->String(JSON_REALM); writer->String(realm.c_str());
   writer->String(JSON_QOP); writer->String(qop.c_str());
@@ -293,10 +331,13 @@ void ImpiStore::DigestAuthChallenge::write_json(rapidjson::Writer<rapidjson::Str
 
 ImpiStore::DigestAuthChallenge* ImpiStore::DigestAuthChallenge::from_json(rapidjson::Value* json)
 {
+  // Construct a DigestAuthChallenge and fill it in.
   ImpiStore::DigestAuthChallenge* auth_challenge = new DigestAuthChallenge();
   JSON_SAFE_GET_STRING_MEMBER(*json, JSON_REALM, auth_challenge->realm);
   JSON_SAFE_GET_STRING_MEMBER(*json, JSON_QOP, auth_challenge->qop);
   JSON_SAFE_GET_STRING_MEMBER(*json, JSON_HA1, auth_challenge->ha1);
+
+  // Check we have the realm, qop and ha1 - otherwise drop the record.
   if (auth_challenge->realm == "")
   {
     TRC_WARNING("No \"%s\" field in JSON authentication challenge - dropping",
@@ -320,6 +361,8 @@ ImpiStore::DigestAuthChallenge* ImpiStore::DigestAuthChallenge::from_json(rapidj
 
 void ImpiStore::DigestAuthChallenge::write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer)
 {
+  // Write all the DigestAuthChallenge fields to JSON, in AV format.  We call
+  // into the superclass to write base AuthChallenges fields.
   writer->String(JSON_AV_TYPE_DIGEST);
   writer->StartObject();
   {
@@ -333,14 +376,19 @@ void ImpiStore::DigestAuthChallenge::write_json_av(rapidjson::Writer<rapidjson::
 
 ImpiStore::DigestAuthChallenge* ImpiStore::DigestAuthChallenge::from_json_av(rapidjson::Value* json)
 {
+  // First, get the "digest" sub-object.  The caller has checked that this
+  // exists.
   ImpiStore::DigestAuthChallenge* auth_challenge = NULL;
   rapidjson::Value* digest_obj = &((*json)[JSON_AV_TYPE_DIGEST]);
   if (digest_obj->IsObject())
   {
+    // Construct a DigestAuthChallenge and fill it in.
     auth_challenge = new DigestAuthChallenge();
     JSON_SAFE_GET_STRING_MEMBER(*digest_obj, JSON_AV_REALM, auth_challenge->realm);
     JSON_SAFE_GET_STRING_MEMBER(*digest_obj, JSON_AV_QOP, auth_challenge->qop);
     JSON_SAFE_GET_STRING_MEMBER(*digest_obj, JSON_AV_HA1, auth_challenge->ha1);
+
+    // Check we have the realm, qop and ha1 - otherwise drop the record.
     if (auth_challenge->realm == "")
     {
       TRC_WARNING("No \"%s\" field in JSON authentication challenge - dropping",
@@ -369,14 +417,19 @@ ImpiStore::DigestAuthChallenge* ImpiStore::DigestAuthChallenge::from_json_av(rap
 
 void ImpiStore::AKAAuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer)
 {
+  // Write all the AKAAuthChallenge fields to JSON, in IMPI format.  We call
+  // into the superclass to write base AuthChallenges fields.
   ImpiStore::AuthChallenge::write_json(writer);
   writer->String(JSON_RESPONSE); writer->String(response.c_str());
 }
 
 ImpiStore::AKAAuthChallenge* ImpiStore::AKAAuthChallenge::from_json(rapidjson::Value* json)
 {
+  // Construct an AKAAuthChallenge and fill it in.
   ImpiStore::AKAAuthChallenge* auth_challenge = new AKAAuthChallenge();
   JSON_SAFE_GET_STRING_MEMBER(*json, JSON_RESPONSE, auth_challenge->response);
+
+  // Check we have the response field - otherwise drop the record.
   if (auth_challenge->response == "")
   {
     TRC_WARNING("No \"response\" field in JSON authentication challenge - dropping");
@@ -387,6 +440,8 @@ ImpiStore::AKAAuthChallenge* ImpiStore::AKAAuthChallenge::from_json(rapidjson::V
 
 void ImpiStore::AKAAuthChallenge::write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer)
 {
+  // Write all the AKAAuthChallenge fields to JSON, in AV format.  We call into
+  // the superclass to write base AuthChallenges fields.
   writer->String(JSON_AV_TYPE_AKA);
   writer->StartObject();
   {
@@ -398,12 +453,17 @@ void ImpiStore::AKAAuthChallenge::write_json_av(rapidjson::Writer<rapidjson::Str
 
 ImpiStore::AKAAuthChallenge* ImpiStore::AKAAuthChallenge::from_json_av(rapidjson::Value* json)
 {
+  // First, get the "aka" sub-object.  The caller has checked that this
+  // exists.
   ImpiStore::AKAAuthChallenge* auth_challenge = NULL;
   rapidjson::Value* aka_obj = &((*json)[JSON_AV_TYPE_AKA]);
   if (aka_obj->IsObject())
   {
+    // Construct an AKAAuthChallenge and fill it in.
     auth_challenge = new AKAAuthChallenge();
     JSON_SAFE_GET_STRING_MEMBER(*aka_obj, JSON_AV_RESPONSE, auth_challenge->response);
+
+    // Check we have the response field - otherwise drop the record.
     if (auth_challenge->response == "")
     {
       TRC_WARNING("No \"%s\" field in JSON authentication challenge - dropping",
@@ -420,6 +480,7 @@ ImpiStore::AKAAuthChallenge* ImpiStore::AKAAuthChallenge::from_json_av(rapidjson
 
 std::string ImpiStore::Impi::to_json()
 {
+  // Build a writer, serialize the IMPI to it and return the result.
   rapidjson::StringBuffer buffer;
   rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
   writer.StartObject();
@@ -432,8 +493,8 @@ std::string ImpiStore::Impi::to_json()
 
 void ImpiStore::Impi::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer)
 {
+  // Write a JSON array, and then write each of the AuthChallenges into it.
   int now = time(NULL);
-  // Impi is part of the key, so isn't stored in the JSON itself.
   writer->String(JSON_AUTH_CHALLENGES);
   writer->StartArray();
   {
@@ -452,10 +513,13 @@ void ImpiStore::Impi::write_json(rapidjson::Writer<rapidjson::StringBuffer>* wri
     }
   }
   writer->EndArray();
+  // The private ID itself is part of the key, so isn't stored in the JSON itself.
 }
 
 ImpiStore::Impi* ImpiStore::Impi::from_json(const std::string& impi, const std::string& json)
 {
+  // Simply parse the string to JSON, and then call through to the
+  // deserialization function.
   ImpiStore::Impi* impi_obj = NULL;
   rapidjson::Document* json_obj = json_from_string(json);
   if (json_obj != NULL)
@@ -471,16 +535,21 @@ ImpiStore::Impi* ImpiStore::Impi::from_json(const std::string& impi, rapidjson::
   ImpiStore::Impi* impi_obj = NULL;
   if (json->IsObject())
   {
+    // Construct an Impi, and then look for an "authChallenges" array.
     impi_obj = new ImpiStore::Impi(impi);
     if ((json->HasMember(JSON_AUTH_CHALLENGES)) &&
         ((*json)[JSON_AUTH_CHALLENGES].IsArray()))
     {
+      // Spin through the array, trying to parse as AuthChallenges.
       rapidjson::Value* array = &((*json)[JSON_AUTH_CHALLENGES]);
       for (unsigned int ii = 0; ii < array->Size(); ii++)
       {
         ImpiStore::AuthChallenge* auth_challenge = ImpiStore::AuthChallenge::from_json(&((*array)[ii]));
         if (auth_challenge != NULL)
         {
+          // Got an AuthChallenge, so add it to our array and also add its
+          // nonce to the array of nonces we retrieved from the server (so that
+          // we can spot when the user deletes AuthChallenges).
           impi_obj->auth_challenges.push_back(auth_challenge);
           impi_obj->_nonces.push_back(auth_challenge->nonce);
         }
@@ -496,6 +565,7 @@ ImpiStore::Impi* ImpiStore::Impi::from_json(const std::string& impi, rapidjson::
 
 int ImpiStore::Impi::get_expires()
 {
+  // Spin through the AuthChallenges, finding the latest expires time.
   int expires = 0;
   for (std::vector<ImpiStore::AuthChallenge*>::iterator it = auth_challenges.begin();
        it != auth_challenges.end();
@@ -520,6 +590,7 @@ Store::Status ImpiStore::set_impi(Impi* impi,
 {
   int now = time(NULL);
 
+  // First serialize the IMPI and set it in the store.
   std::string data = impi->to_json();
   TRC_DEBUG("Storing IMPI for %s\n%s", impi->impi.c_str(), data.c_str());
   Store::Status status = _data_store->set_data(TABLE_IMPI,
@@ -545,9 +616,15 @@ Store::Status ImpiStore::set_impi(Impi* impi,
     // LCOV_EXCL_STOP
   }
 
+  // If we're in Mode::READ_AV_IMPI_WRITE_AV_IMPI, also set the AVs in the
+  // store.
   if (_mode == ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI)
   {
+    // Build a list of nonces to delete.  We'll remove ones for which
+    // AuthChallenges still exist as we go through serializing them, and then
+    // delete the rest at the end.
     std::vector<std::string> nonces_to_delete = impi->_nonces;
+
     for (std::vector<ImpiStore::AuthChallenge*>::iterator it = impi->auth_challenges.begin();
          it != impi->auth_challenges.end();
          it++)
@@ -555,6 +632,8 @@ Store::Status ImpiStore::set_impi(Impi* impi,
       std::string nonce = (*it)->nonce;
       if ((*it)->expires > now)
       {
+        // The AuthChallenge hasn't expired, so serialize it and set it in the
+        // store.
         data = (*it)->to_json_av();
         TRC_DEBUG("Storing AV for %s/%s\n%s", impi->impi.c_str(), nonce.c_str(), data.c_str());
         Store::Status local_status = _data_store->set_data(TABLE_AV,
@@ -592,12 +671,16 @@ Store::Status ImpiStore::set_impi(Impi* impi,
       {
         TRC_DEBUG("Not storing AV for %s/%s - expired", impi->impi.c_str(), nonce.c_str());
       }
+
+      // Since this AuthChallenge was still in the list, remove it from the
+      // list of nonces to delete.
       nonces_to_delete.erase(std::remove(nonces_to_delete.begin(),
                                          nonces_to_delete.end(),
                                          nonce),
                              nonces_to_delete.end());
     }
 
+    // Now spin through the nonces to delete, deleting them from the AV store.
     for (std::vector<std::string>::iterator it = nonces_to_delete.begin();
          it != nonces_to_delete.end();
          it++)
@@ -637,41 +720,10 @@ Store::Status ImpiStore::set_impi(Impi* impi,
   return status;
 }
 
-ImpiStore::AuthChallenge* ImpiStore::get_av(const std::string& impi,
-                                            const std::string& nonce,
-                                            SAS::TrailId trail)
-{
-  ImpiStore::AuthChallenge* auth_challenge = NULL;
-  std::string data;
-  uint64_t cas;
-  Store::Status status = _data_store->get_data(TABLE_AV, impi + '\\' + nonce, data, cas, trail);
-  if (status == Store::Status::OK)
-  {
-    TRC_DEBUG("Retrieved AV for %s/%s\n%s", impi.c_str(), nonce.c_str(), data.c_str());
-    SAS::Event event(trail, SASEvent::IMPISTORE_AV_GET_SUCCESS, 0);
-    event.add_var_param(impi);
-    event.add_var_param(nonce);
-    SAS::report_event(event);
-    auth_challenge = ImpiStore::AuthChallenge::from_json_av(nonce, data);
-    if (auth_challenge != NULL)
-    {
-      auth_challenge->_cas = cas;
-    }
-  }
-  else
-  {
-    SAS::Event event(trail, SASEvent::IMPISTORE_AV_GET_FAILURE, 0);
-    event.add_var_param(impi);
-    event.add_var_param(nonce);
-    event.add_static_param(status);
-    SAS::report_event(event);
-  }
-  return auth_challenge;
-}
-
 ImpiStore::Impi* ImpiStore::get_impi(const std::string& impi,
                                      SAS::TrailId trail)
 {
+  // Get the IMPI data from the store and deserialize it.
   ImpiStore::Impi* impi_obj = NULL;
   std::string data;
   uint64_t cas;
@@ -685,7 +737,14 @@ ImpiStore::Impi* ImpiStore::get_impi(const std::string& impi,
     impi_obj = ImpiStore::Impi::from_json(impi, data);
     if (impi_obj != NULL)
     {
+      // Got an IMPI.  Fill in the CAS.
       impi_obj->_cas = cas;
+
+      // If we're in Mode::READ_AV_IMPI_WRITE_AV_IMPI, spin through the
+      // AuthChallenges, getting the version from the AV store if it exists.
+      // In particular, this means we have the correct CAS for when we write
+      // back.  This might seem expensive but bear in mind that we expect to
+      // have very few AuthChallenges outstanding.
       if (_mode == ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI)
       {
         for (std::vector<ImpiStore::AuthChallenge*>::iterator it = impi_obj->auth_challenges.begin();
@@ -697,6 +756,8 @@ ImpiStore::Impi* ImpiStore::get_impi(const std::string& impi,
             get_av(impi, auth_challenge_from_impi->nonce, trail);
           if (auth_challenge_from_av != NULL)
           {
+            // We got an AuthChallenge from the AV store, so replace the IMPI-
+            // derived one.
             *it = auth_challenge_from_av;
             delete auth_challenge_from_impi;
           }
@@ -718,7 +779,12 @@ ImpiStore::Impi* ImpiStore::get_impi_with_nonce(const std::string& impi,
                                                 const std::string& nonce,
                                                 SAS::TrailId trail)
 {
+  // First, get the IMPI without worrying about this nonce.
   ImpiStore::Impi* impi_obj = get_impi(impi, trail);
+
+  // If we're in Mode::READ_AV_IMPI_WRITE_AV_IMPI and the IMPI doesn't already
+  // contain an AuthChallenge matching this nonce, look up the nonce
+  // explicitly.
   if ((_mode == ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI) &&
       ((impi_obj == NULL) ||
        (impi_obj->get_auth_challenge(nonce) == NULL)))
@@ -726,6 +792,8 @@ ImpiStore::Impi* ImpiStore::get_impi_with_nonce(const std::string& impi,
     ImpiStore::AuthChallenge* auth_challenge = get_av(impi, nonce, trail);
     if (auth_challenge != NULL)
     {
+      // Found an AuthChallenge.  Add it to the IMPI, creating if it doesn't
+      // exist.
       if (impi_obj == NULL)
       {
         impi_obj = new ImpiStore::Impi(impi);
@@ -740,6 +808,7 @@ ImpiStore::Impi* ImpiStore::get_impi_with_nonce(const std::string& impi,
 Store::Status ImpiStore::delete_impi(Impi* impi,
                                      SAS::TrailId trail)
 {
+  // First, delete the IMPI data from the store.
   TRC_DEBUG("Deleting IMPI for %s", impi->impi.c_str());
   Store::Status status = _data_store->delete_data(TABLE_IMPI,
                                                   impi->impi,
@@ -761,6 +830,8 @@ Store::Status ImpiStore::delete_impi(Impi* impi,
     // LCOV_EXCL_STOP
   }
 
+  // If we're in Mode::READ_AV_IMPI_WRITE_AV_IMPI, also spin through the
+  // AuthChallenges, deleting them.
   if (_mode == ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI)
   {
     for (std::vector<ImpiStore::AuthChallenge*>::iterator it = impi->auth_challenges.begin();
@@ -802,17 +873,51 @@ Store::Status ImpiStore::delete_impi(Impi* impi,
   return status;
 }
 
+ImpiStore::AuthChallenge* ImpiStore::get_av(const std::string& impi,
+                                            const std::string& nonce,
+                                            SAS::TrailId trail)
+{
+  // Get the AuthChallenge data from the store and deserialize it.
+  ImpiStore::AuthChallenge* auth_challenge = NULL;
+  std::string data;
+  uint64_t cas;
+  Store::Status status = _data_store->get_data(TABLE_AV, impi + '\\' + nonce, data, cas, trail);
+  if (status == Store::Status::OK)
+  {
+    TRC_DEBUG("Retrieved AV for %s/%s\n%s", impi.c_str(), nonce.c_str(), data.c_str());
+    SAS::Event event(trail, SASEvent::IMPISTORE_AV_GET_SUCCESS, 0);
+    event.add_var_param(impi);
+    event.add_var_param(nonce);
+    SAS::report_event(event);
+    auth_challenge = ImpiStore::AuthChallenge::from_json_av(nonce, data);
+    if (auth_challenge != NULL)
+    {
+      auth_challenge->_cas = cas;
+    }
+  }
+  else
+  {
+    SAS::Event event(trail, SASEvent::IMPISTORE_AV_GET_FAILURE, 0);
+    event.add_var_param(impi);
+    event.add_var_param(nonce);
+    event.add_static_param(status);
+    SAS::report_event(event);
+  }
+  return auth_challenge;
+}
+
 void correlate_trail_to_challenge(ImpiStore::AuthChallenge* auth_challenge,
                                   SAS::TrailId trail)
 {
-  if (auth_challenge->correlator == "")
-  {
-    TRC_WARNING("Could not raise branch correlation marker because correlator is unknown");
-  }
-  else
+  // Report the correlator as a SAS marker, if it exists.
+  if (auth_challenge->correlator != "")
   {
     SAS::Marker via_marker(trail, MARKER_ID_VIA_BRANCH_PARAM, 1u);
     via_marker.add_var_param(auth_challenge->correlator);
     SAS::report_marker(via_marker, SAS::Marker::Scope::Trace);
+  }
+  else
+  {
+    TRC_WARNING("Could not raise branch correlation marker because correlator is unknown");
   }
 }

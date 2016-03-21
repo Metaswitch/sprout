@@ -41,14 +41,23 @@
 #include <rapidjson/document.h>
 #include <rapidjson/writer.h>
 
-/// Class implementing store of authentication vectors.  This is a wrapper
-/// around an underlying Store class which implements a simple KV store API
-/// with atomic write and record expiry semantics.  The underlying store
-/// can be any implementation that implements the Store API.
+/// Class implementing store of IMPIs, including authentication challenges.
+/// This is a wrapper around an underlying Store class which implements a
+/// simple KV store API with atomic write and record expiry semantics.  The
+/// underlying store can be any implementation that implements the Store API.
+///
+/// Most of the complexity in this class is around backwards-compatibility, and
+/// this revolves around the ImpiStore::Mode enum.  In
+/// Mode::READ_IMPI_WRITE_IMPI, we just read and write a JSON object
+/// representing the full IMPI, including its authentication challenges, keyed
+/// solely off its private ID.  In Mode::READ_AV_IMPI_WRITE_AV_IMPI, we also
+/// read and write individual JSON objects for each AuthChallenge, keyed off
+/// the private ID and nonce.  This is compatible with the format used by the
+/// "AVStore" in previous versions.
 class ImpiStore
 {
 public:
-  /// @class ImpiStore::Mode
+  /// @enum ImpiStore::Mode
   ///
   /// Describes the mode to use when accessing the underlying datastore.  Used
   /// to define "acceptance phases" for clean software upgrade.
@@ -79,8 +88,11 @@ public:
     /// Initial nonce count, when creating new challenges.
     static const int INITIAL_NONCE_COUNT = 1;
 
-    /// Default expiry time, if no value can be read from the store.
-    static const int DEFAULT_EXPIRES = 30;
+    /// Default expiry time, if no value can be read from the store.  This
+    /// should always be long enough for the UE to respond to the
+    /// authentication challenge, and means that on authentication timeout our
+    /// 30-second Chronos timer should pop before it expires.
+    static const int DEFAULT_EXPIRES = 40;
 
     /// Constructor.
     /// @param _type         Type of authentication challenge.
