@@ -44,6 +44,8 @@
 
 using ::testing::_;
 using ::testing::StrEq;
+using ::testing::AtLeast;
+using ::testing::Mock;
 
 class MockLog : public PDLog1<const char*>
 {
@@ -109,8 +111,14 @@ static void advance_time()
 // Test that is an AS is healthy, nothing happens.
 TEST_F(AsCommunicationTrackerTest, SuccessIsIdempotent)
 {
+  EXPECT_CALL(*_mock_alarm, clear()).Times(AtLeast(1));
+  advance_time();
   _comm_tracker->on_success(AS1);
+
+  advance_time();
   _comm_tracker->on_success(AS1);
+
+  advance_time();
   _comm_tracker->on_success(AS1);
 }
 
@@ -122,10 +130,11 @@ TEST_F(AsCommunicationTrackerTest, SingleAsFailure)
   // The AS fails.
   EXPECT_CALL(*_mock_alarm, set());
   EXPECT_CALL(*_mock_error_log, log(StrEq(AS1)));
+  advance_time();
   _comm_tracker->on_failure(AS1);
 
   // The AS starts succeeding again.
-  EXPECT_CALL(*_mock_alarm, clear());
+  EXPECT_CALL(*_mock_alarm, clear()).Times(AtLeast(1));
   EXPECT_CALL(*_mock_ok_log, log(StrEq(AS1)));
 
   advance_time();
@@ -158,7 +167,7 @@ TEST_F(AsCommunicationTrackerTest, OngoingAsFailure)
   _comm_tracker->on_failure(AS1);
 
   // The AS succeeds.
-  EXPECT_CALL(*_mock_alarm, clear());
+  EXPECT_CALL(*_mock_alarm, clear()).Times(AtLeast(1));
   EXPECT_CALL(*_mock_ok_log, log(_));
 
   advance_time();
@@ -179,7 +188,8 @@ TEST_F(AsCommunicationTrackerTest, FailSucceedFailSucceed)
   _comm_tracker->on_failure(AS1);
 
   // The AS succeeds.
-  EXPECT_CALL(*_mock_alarm, clear());
+  Mock::VerifyAndClearExpectations(_mock_alarm);
+  EXPECT_CALL(*_mock_alarm, clear()).Times(AtLeast(1));
   EXPECT_CALL(*_mock_ok_log, log(_));
 
   advance_time();
@@ -188,6 +198,9 @@ TEST_F(AsCommunicationTrackerTest, FailSucceedFailSucceed)
   advance_time();
   _comm_tracker->on_success(AS1);
 
+  // Clear out our mock object so we correctly check when the AS fails again.
+  Mock::VerifyAndClearExpectations(_mock_alarm);
+
   // The AS fails again.
   EXPECT_CALL(*_mock_alarm, set());
   EXPECT_CALL(*_mock_error_log, log(_));
@@ -195,7 +208,7 @@ TEST_F(AsCommunicationTrackerTest, FailSucceedFailSucceed)
   _comm_tracker->on_failure(AS1);
 
   // The AS succeeds again.
-  EXPECT_CALL(*_mock_alarm, clear());
+  EXPECT_CALL(*_mock_alarm, clear()).Times(AtLeast(1));
   EXPECT_CALL(*_mock_ok_log, log(_));
 
   advance_time();
@@ -254,7 +267,7 @@ TEST_F(AsCommunicationTrackerTest, MultipleAsFailures)
   _comm_tracker->on_failure(AS2);
 
   // Both ASs now Ok.
-  EXPECT_CALL(*_mock_alarm, clear());
+  EXPECT_CALL(*_mock_alarm, clear()).Times(AtLeast(1));
   EXPECT_CALL(*_mock_ok_log, log(StrEq(AS2)));
 
   advance_time();

@@ -111,46 +111,43 @@ void AsCommunicationTracker::check_for_healthy_app_servers()
 
     if (now > _next_check_time_ms)
     {
+      TRC_DEBUG("Check for ASs that have become healthy again");
+
       // Don't check again for a while.
       _next_check_time_ms = current_time_ms() + NEXT_CHECK_INTERVAL_MS;
 
-      if (!_as_failures.empty())
+      // Iterate through all the AS in our map. If any of them have not had
+      // any failures in the last time period we will log they are now working
+      // correctly and remove them from the map.
+      //
+      // We mutate the map as we iterate over it. The non-standard loop
+      // construct avoids iterator invalidation.
+      std::map<std::string, int>::iterator curr_as = _as_failures.begin();
+      std::map<std::string, int>::iterator next_as;
+
+      while (curr_as != _as_failures.end())
       {
-        TRC_DEBUG("Check for ASs that have become healthy again");
+        next_as = std::next(curr_as);
 
-        // Iterate through all the AS in our map. If any of them have not had
-        // any failures in the last time period we will log they are now working
-        // correctly and remove them from the map.
-        //
-        // We mutate the map as we iterate over it. The non-standard loop
-        // construct avoids iterator invalidation.
-        std::map<std::string, int>::iterator curr_as = _as_failures.begin();
-        std::map<std::string, int>::iterator next_as;
-
-        while (curr_as != _as_failures.end())
+        if (curr_as->second == 0)
         {
-          next_as = std::next(curr_as);
-
-          if (curr_as->second == 0)
-          {
-            TRC_DEBUG("AS %s has become healthy", curr_as->first.c_str());
-            _as_ok_log->log(curr_as->first.c_str());
-            _as_failures.erase(curr_as);
-          }
-          else
-          {
-            curr_as->second = 0;
-          }
-
-          curr_as = next_as;
+          TRC_DEBUG("AS %s has become healthy", curr_as->first.c_str());
+          _as_ok_log->log(curr_as->first.c_str());
+          _as_failures.erase(curr_as);
+        }
+        else
+        {
+          curr_as->second = 0;
         }
 
-        if (_as_failures.empty())
-        {
-          TRC_DEBUG("All ASs OK - clear the alarm");
-          // No ASs are currently failed. Clear the alarm.
-          _alarm->clear();
-        }
+        curr_as = next_as;
+      }
+
+      if (_as_failures.empty())
+      {
+        TRC_DEBUG("All ASs OK - clear the alarm");
+        // No ASs are currently failed. Clear the alarm.
+        _alarm->clear();
       }
     }
 
