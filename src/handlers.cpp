@@ -449,7 +449,7 @@ HTTPCode DeregistrationTask::handle_request()
                           it->second,
                           NULL,
                           _cfg->_remote_sdm,
-                          &impis_to_delete);
+                          impis_to_delete);
 
     // LCOV_EXCL_START
     if ((aor_pair != NULL) &&
@@ -465,7 +465,7 @@ HTTPCode DeregistrationTask::handle_request()
                               it->second,
                               aor_pair,
                               NULL,
-                              NULL);
+                              impis_to_delete);
         delete remote_aor_pair;
       }
     }
@@ -521,7 +521,7 @@ SubscriberDataManager::AoRPair* DeregistrationTask::deregister_bindings(
                                         std::string private_id,
                                         SubscriberDataManager::AoRPair* previous_aor_pair,
                                         SubscriberDataManager* remote_sdm,
-                                        std::set<std::string>* impis)
+                                        std::set<std::string>& impis_to_delete)
 {
   SubscriberDataManager::AoRPair* aor_pair = NULL;
   bool previous_aor_pair_alloced = false;
@@ -563,11 +563,11 @@ SubscriberDataManager::AoRPair* DeregistrationTask::deregister_bindings(
 
       if (private_id.empty() || private_id == b->_private_id)
       {
-        if ((impis != NULL) && (!b->_private_id.empty()))
+        if (!b->_private_id.empty())
         {
           // Record the IMPIs that we need to delete as a result of deleting
           // this binding.
-          impis->insert(b->_private_id);
+          impis_to_delete.insert(b->_private_id);
         }
         aor_pair->get_current()->remove_binding(b_id);
       }

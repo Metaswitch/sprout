@@ -162,7 +162,7 @@ static pjsip_digest_credential* get_credentials(const pjsip_rx_data* rdata)
 ///
 /// @param rdata - The request in question.
 ///
-/// @return The time (in seconds) to store the challenge for.
+/// @return The expiry time of the binding (in seconds since the epoch).
 int calculate_challenge_expiration_time(pjsip_rx_data* rdata)
 {
   int expires = 0;
@@ -883,10 +883,18 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
         Store::Status store_status;
         do
         {
-          // Work out the next nonce count and expiry to use (in case another
-          // UE authenticated using this challenge at the same time. We don't
-          // currently police against this, but we don't want the expiration or
-          // nonce counts to travel backwards.
+          // Work out the next nonce count and expiry to use. We don't police
+          // against another UE using this nonce at exactly the same time, but
+          // we don't want the expiration or nonce counts to travel backwards in
+          // this case.
+          //
+          // We don't police this race condition because:
+          // * A genuine UE gains no benefit from exploiting it.
+          // * An attacker may be able to clone a genuine UE's auth response,
+          //   and the attacker's response may beat the genuine UE's response
+          //   in a race. If this happens there is no way for us to tell the
+          //   difference between the attacker and the genuine UE. The right
+          //   way to protect against this attack is to use the auth-int qop.
           auth_challenge->nonce_count = std::max(new_nonce_count,
                                                  auth_challenge->nonce_count);
           auth_challenge->expires = std::max(new_expiry,

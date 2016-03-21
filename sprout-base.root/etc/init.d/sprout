@@ -284,7 +284,7 @@ get_daemon_args()
         [ "$ralf_threads" = "" ]                  || DAEMON_ARGS="$DAEMON_ARGS --ralf-threads=$ralf_threads"
         [ "$non_register_authentication" = "" ]   || DAEMON_ARGS="$DAEMON_ARGS --non-register-authentication=$non_register_authentication"
         [ "$impi_store_mode" = "" ]               || DAEMON_ARGS="$DAEMON_ARGS --impi-store-mode=$impi_store_mode"
-        [ "$nonce_count_supported" = "Y" ]        && DAEMON_ARGS="$DAEMON_ARGS --nonce-count-supported"
+        [ "$nonce_count_supported" != "Y" ]       || DAEMON_ARGS="$DAEMON_ARGS --nonce-count-supported"
 
         for script in /usr/share/clearwater/sprout/plugin_conf.d/*.plugin_conf
         do
