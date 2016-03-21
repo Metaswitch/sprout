@@ -134,7 +134,9 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* 
   if (json->IsObject())
   {
     // First, identify what type of AuthChallenge this is, and call through to
-    // that class to deserialize.
+    // that class to deserialize.  Note that we deserialize "bottom-to-top" -
+    // first parsing the type-specific fields and then filling in the general
+    // fields.
     std::string type = "";
     JSON_SAFE_GET_STRING_MEMBER(*json, JSON_TYPE, type);
     if (type == JSON_TYPE_DIGEST)
@@ -158,6 +160,7 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* 
       JSON_SAFE_GET_UINT_MEMBER(*json, JSON_NONCE_COUNT, auth_challenge->nonce_count);
       JSON_SAFE_GET_INT_MEMBER(*json, JSON_EXPIRES, auth_challenge->expires);
       JSON_SAFE_GET_STRING_MEMBER(*json, JSON_CORRELATOR, auth_challenge->correlator);
+
       if (auth_challenge->nonce_count == 0)
       {
         // We should always have a nonce_count, but to ease version
@@ -166,6 +169,7 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* 
                     JSON_NONCE_COUNT, INITIAL_NONCE_COUNT);
         auth_challenge->nonce_count = INITIAL_NONCE_COUNT;
       }
+
       if (auth_challenge->expires == 0)
       {
         // We should always have an expires, but to ease version forward-
@@ -221,6 +225,7 @@ void ImpiStore::AuthChallenge::write_json_av(rapidjson::Writer<rapidjson::String
   {
     writer->String(JSON_AV_CORRELATOR); writer->String(correlator.c_str());
   }
+
   // For backwards-compatibility, set the tombstone flag if this challenge has
   // ever been used.  This behavior might seem odd, but previously we did not
   // support reuse of challenges, so this gives the best upgrade behavior.
@@ -228,6 +233,7 @@ void ImpiStore::AuthChallenge::write_json_av(rapidjson::Writer<rapidjson::String
   {
     writer->String(JSON_AV_TOMBSTONE); writer->Bool(true);
   }
+
   // Nonce is part of the key, so isn't stored in the JSON.
 }
 
@@ -251,7 +257,9 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json_av(const std::stri
   if (json->IsObject())
   {
     // First, identify what type of AuthChallenge this is, and call through to
-    // that class to deserialize.
+    // that class to deserialize.  Note that we deserialize "bottom-to-top" -
+    // first parsing the type-specific fields and then filling in the general
+    // fields.
     rapidjson::Value* inner_obj = NULL;
     if (json->HasMember(JSON_AV_TYPE_DIGEST))
     {
@@ -282,6 +290,7 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json_av(const std::stri
       JSON_SAFE_GET_UINT_MEMBER(*inner_obj, JSON_AV_NONCE_COUNT, auth_challenge->nonce_count);
       JSON_SAFE_GET_INT_MEMBER(*inner_obj, JSON_AV_EXPIRES, auth_challenge->expires);
       JSON_SAFE_GET_STRING_MEMBER(*inner_obj, JSON_AV_CORRELATOR, auth_challenge->correlator);
+
       if (auth_challenge->nonce_count == 0)
       {
         // No nonce count.  Default to the initial value, unless this challenge
@@ -294,6 +303,7 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json_av(const std::stri
         TRC_INFO("No \"%s\" field in JSON AV - defaulting to %u",
                  JSON_AV_NONCE_COUNT, auth_challenge->nonce_count);
       }
+
       if (auth_challenge->expires == 0)
       {
         // No expires.  Previous versions did not store expires values, so this
@@ -571,7 +581,7 @@ int ImpiStore::Impi::get_expires()
        it != auth_challenges.end();
        it++)
   {
-    expires = ((*it)->expires > expires) ? (*it)->expires : expires;
+    expires = std::max(expires, (*it)->expires);
   }
   return expires;
 }

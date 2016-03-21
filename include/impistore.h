@@ -145,7 +145,7 @@ public:
     /// Serialization to JSON (AV format).
     std::string to_json_av();
 
-    /// Write to JSON writer (IMPI format).
+    /// Write to JSON writer (AV format).
     virtual void write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer);
 
     /// Deserialization from JSON (AV format).
@@ -154,7 +154,7 @@ public:
     /// Deserialization from JSON (AV format).
     static ImpiStore::AuthChallenge* from_json_av(const std::string& nonce, rapidjson::Value* json);
 
-    /// Memcached CAS value.  Only used for Mode::READ_AV_IMPU_WRITE_AV_IMPI.
+    /// Memcached CAS value.  Only used for Mode::READ_AV_IMPI_WRITE_AV_IMPI.
     uint64_t _cas;
 
     // The IMPI store is a friend so it can call our JSON serialization
@@ -255,7 +255,7 @@ public:
     /// Deserialization from JSON (IMPI format).
     static ImpiStore::AKAAuthChallenge* from_json(rapidjson::Value* json);
 
-    /// Write to JSON writer (IMPI format).
+    /// Write to JSON writer (AV format).
     virtual void write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer);
 
     /// Deserialization from JSON (AV format).
@@ -284,7 +284,10 @@ public:
     /// Private ID
     std::string impi;
 
-    /// List of authentication challenges that can be used with this IMPI
+    /// List of authentication challenges that can be used with this IMPI.
+    /// Challenges in the list are owned by the Impi (although can be modified
+    /// by the user).  New challenges can be added to the list.  If challenges
+    /// are removed, they must be destroyed by the user.
     std::vector<ImpiStore::AuthChallenge*> auth_challenges;
 
   private:
@@ -325,7 +328,8 @@ public:
 
   /// Store the specified IMPI in the store.
   /// @returns Store::Status::OK on success, or an error code on failure.
-  /// @param impi      An Impi object representing the IMPI.
+  /// @param impi      An Impi object representing the IMPI.  The caller
+  ///                  continues to own this object.
   virtual Store::Status set_impi(Impi* impi,
                                  SAS::TrailId trail);
 
@@ -333,7 +337,7 @@ public:
   /// Mode::READ_AV_IMPI_WRITE_AV_IMPI, this may return incomplete data.
   /// @returns         A pointer to an Impi object describing the IMPI, or NULL
   ///                  if no vector found or if the store is corrupt.  The
-  ///                  caller is free to modify this object.
+  ///                  caller owns the returned object.
   /// @param impi      The private user identity.
   virtual Impi* get_impi(const std::string& impi,
                          SAS::TrailId trail);
@@ -345,7 +349,7 @@ public:
   /// same as calling get_impi.
   /// @returns         A pointer to an Impi object describing the IMPI, or NULL
   ///                  if no vector found or if the store is corrupt.  The
-  ///                  caller is free to modify this object.
+  ///                  caller owns the returned object.
   /// @param impi      The private user identity.
   /// @param nonce     The nonce being looked for.
   virtual Impi* get_impi_with_nonce(const std::string& impi,
@@ -354,7 +358,8 @@ public:
 
   /// Delete all record of the IMPI.  If using Mode::READ_UV_IMPI_WRITE_AV_IMPI,
   /// this won't necessarily delete all AVs.
-  /// @param impi      The private user identity.
+  /// @param impi      An Impi object representing the IMPI.  The caller
+  ///                  continues to own this object.
   /// @returns Store::Status::OK on success, or an error code on failure.
   virtual Store::Status delete_impi(Impi* impi,
                                     SAS::TrailId trail);

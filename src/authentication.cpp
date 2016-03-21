@@ -89,8 +89,11 @@ pjsip_module mod_authentication =
 // Configuring PJSIP with a realm of "*" means that all realms are considered.
 const pj_str_t WILDCARD_REALM = pj_str("*");
 
-// Initial expiry time (in seconds) for authentication challenges.
-const uint32_t AUTH_CHALLENGE_INIT_EXPIRES = 30;
+// Initial expiry time (in seconds) for authentication challenges.  This should
+// always be long enough for the UE to respond to the authentication challenge,
+// and means that on authentication timeout our 30-second Chronos timer should
+// pop before it expires.
+const uint32_t AUTH_CHALLENGE_INIT_EXPIRES = 40;
 
 // Realm to use on AKA challenges.
 static pj_str_t aka_realm;
