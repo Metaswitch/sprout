@@ -594,7 +594,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
       // The AS chain isn't complete, so the response must be from an
       // application server.  Check to see if we need to trigger default
       // handling.
-      if ((!_seen_response) &&
+      if ((!_as_chain_link.responsive()) &&
           (!_cancelled) &&
           ((st_code == PJSIP_SC_REQUEST_TIMEOUT) ||
            (PJSIP_IS_STATUS_IN_CLASS(st_code, 500))))
@@ -604,7 +604,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
         _scscf->track_app_serv_comm_failure(_as_chain_link.uri(),
                                             _as_chain_link.default_handling());
 
-        if (_as_chain_link.continue_session())
+        if (_as_chain_link.default_handling() == SESSION_CONTINUED)
         {
           // The AS either timed out or returned a 5xx error, and default
           // handling is set to continue.
@@ -1321,7 +1321,7 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     send_request(req);
 
     // Start the liveness timer for the AS.
-    int timeout = (_as_chain_link.continue_session() ?
+    int timeout = ((_as_chain_link.default_handling() == SESSION_CONTINUED) ?
                    _scscf->_session_continued_timeout_ms :
                    _scscf->_session_terminated_timeout_ms);
 
@@ -1789,7 +1789,7 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
     // forks.
     cancel_pending_forks();
 
-    if (_as_chain_link.continue_session())
+    if (_as_chain_link.default_handling() == SESSION_CONTINUED)
     {
       // The AS either timed out or returned a 5xx error, and default
       // handling is set to continue.
