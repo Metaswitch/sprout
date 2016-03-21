@@ -142,7 +142,7 @@ public:
                     std::string private_id,
                     SubscriberDataManager::AoRPair* previous_aor_data,
                     SubscriberDataManager* remote_sdm,
-                    std::set<std::string>* impis);
+                    std::set<std::string>& impis_to_delete);
 
 protected:
   const Config* _cfg;
