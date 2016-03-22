@@ -44,6 +44,8 @@
 #include "test_interposer.hpp"
 #include "sproutletproxy.h"
 #include "pjutils.h"
+#include "pjsip.h"
+#include "pjsip_simple.h"
 
 #include <mutex>
 
@@ -577,6 +579,22 @@ class FakeSproutletTsxDelayAfterFwd : public SproutletTsx
   pjsip_msg* _second_request;
 };
 
+class FakeSproutletTsxDummySCSCF : public SproutletTsx
+{
+public:
+  FakeSproutletTsxDummySCSCF(SproutletTsxHelper* helper) :
+    SproutletTsx(helper)
+  {
+  }
+
+  void on_rx_initial_request(pjsip_msg* req)
+  {
+    // We shouldn't get passed any subscribe messages
+    ASSERT_NE(pj_stricmp2(&req->line.req.method.name, "SUBSCRIBE"), 0);
+    send_request(req);
+  }
+};
+
 class SproutletProxyTest : public SipTest
 {
 public:
@@ -608,6 +626,7 @@ public:
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxB2BUA >("b2bua", 0, ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDelayAfterRsp<1> >("delayafterrsp", 0, ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDelayAfterFwd<1> >("delayafterfwd", 0, ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDummySCSCF>("scscf", 44444, "scscf"));
 
     // Create a host alias.
     std::unordered_set<std::string> host_aliases;
@@ -2200,3 +2219,48 @@ TEST_F(SproutletProxyTest, DelayAfterForward)
 
   delete tp;
 }
+
+TEST_F(SproutletProxyTest, LocalSubscription)
+{
+  // Tests standard routing of a local subscription request to ensure it is
+  // not routed via the sproutlet interface.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        44444,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with a Route header not referencing this node or the
+  // home domain.
+  Message msg1;
+  msg1._method = "SUBSCRIBE";
+  msg1._requri = "sip:bob@homedomain";
+  msg1._from = "sip:alice@homedomain";
+  msg1._to = "sip:bob@homedomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:scscf@proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting the forwarded SUBSCRIBE
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  ReqMatcher("SUBSCRIBE").matches(tdata->msg);
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the 200 OK.
+  tdata = current_txdata();
+  RespMatcher(200).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // All done!
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
