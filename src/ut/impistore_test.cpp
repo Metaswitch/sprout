@@ -131,7 +131,7 @@ const std::string NONCE1 = "nonce1";
 const std::string NONCE2 = "nonce2";
 
 /// Example IMPI, with a single digest authentication challenge.
-ImpiStore::Impi* example_impi1()
+ImpiStore::Impi* example_impi_digest()
 {
   ImpiStore::Impi* impi = new ImpiStore::Impi(IMPI);
   ImpiStore::AuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge(NONCE1, "example.com", "auth", "ha1", time(NULL) + 30);
@@ -141,7 +141,7 @@ ImpiStore::Impi* example_impi1()
 };
 
 /// Example IMPI, with a single AKA authentication challenge.
-ImpiStore::Impi* example_impi2()
+ImpiStore::Impi* example_impi_aka()
 {
   ImpiStore::Impi* impi = new ImpiStore::Impi(IMPI);
   ImpiStore::AuthChallenge* auth_challenge = new ImpiStore::AKAAuthChallenge(NONCE1, "response", time(NULL) + 30);
@@ -151,7 +151,7 @@ ImpiStore::Impi* example_impi2()
 };
 
 /// Example IMPI, with both a digest and an AKA authentication challenge.
-ImpiStore::Impi* example_impi3()
+ImpiStore::Impi* example_impi_digest_aka()
 {
   ImpiStore::Impi* impi = new ImpiStore::Impi(IMPI);
   ImpiStore::AuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge(NONCE1, "example.com", "auth", "ha1", time(NULL) + 30);
@@ -240,7 +240,7 @@ TYPED_TEST_CASE(ImpiOneStoreTest, OneStoreScenarios);
 
 TYPED_TEST(ImpiOneStoreTest, SetGet)
 {
-  ImpiStore::Impi* impi1 = example_impi1();
+  ImpiStore::Impi* impi1 = example_impi_digest();
   Store::Status status = this->impi_store->set_impi(impi1);
   ASSERT_EQ(Store::Status::OK, status);
   ImpiStore::Impi* impi2 = this->impi_store->get_impi(IMPI);
@@ -251,7 +251,7 @@ TYPED_TEST(ImpiOneStoreTest, SetGet)
 
 TYPED_TEST(ImpiOneStoreTest, SetGetWithNonce)
 {
-  ImpiStore::Impi* impi1 = example_impi1();
+  ImpiStore::Impi* impi1 = example_impi_digest();
   Store::Status status = this->impi_store->set_impi(impi1);
   ASSERT_EQ(Store::Status::OK, status);
   ImpiStore::Impi* impi2 = this->impi_store->get_impi_with_nonce(IMPI, NONCE1);
@@ -313,7 +313,7 @@ TYPED_TEST_CASE(ImpiTwoStoreTest, TwoStoreScenarios);
 
 TYPED_TEST(ImpiTwoStoreTest, Set1Get2)
 {
-  ImpiStore::Impi* impi1 = example_impi1();
+  ImpiStore::Impi* impi1 = example_impi_digest();
   Store::Status status = this->scenario->store1->set_impi(impi1);
   ASSERT_EQ(Store::Status::OK, status);
   ImpiStore::Impi* impi2 = this->scenario->store2->get_impi(IMPI);
@@ -324,11 +324,12 @@ TYPED_TEST(ImpiTwoStoreTest, Set1Get2)
 
 TYPED_TEST(ImpiTwoStoreTest, Set1DeleteAC1Get2)
 {
-  ImpiStore::Impi* impi1 = example_impi3();
+  ImpiStore::Impi* impi1 = example_impi_digest_aka();
   Store::Status status = this->scenario->store1->set_impi(impi1);
   ASSERT_EQ(Store::Status::OK, status);
   ImpiStore::Impi* impi2 = this->scenario->store1->get_impi(IMPI);
   ASSERT_TRUE(impi2 != NULL);
+  expect_impis_equal(impi1, impi2);
   ASSERT_EQ(2, impi2->auth_challenges.size());
   delete impi2->auth_challenges[1];
   impi2->auth_challenges.erase(impi2->auth_challenges.begin() + 1);
@@ -343,11 +344,12 @@ TYPED_TEST(ImpiTwoStoreTest, Set1DeleteAC1Get2)
 
 TYPED_TEST(ImpiTwoStoreTest, Set1DeleteAC1GetNonce2)
 {
-  ImpiStore::Impi* impi1 = example_impi3();
+  ImpiStore::Impi* impi1 = example_impi_digest_aka();
   Store::Status status = this->scenario->store1->set_impi(impi1);
   ASSERT_EQ(Store::Status::OK, status);
   ImpiStore::Impi* impi2 = this->scenario->store1->get_impi(IMPI);
   ASSERT_TRUE(impi2 != NULL);
+  expect_impis_equal(impi1, impi2);
   ASSERT_EQ(2, impi2->auth_challenges.size());
   delete impi2->auth_challenges[1];
   impi2->auth_challenges.erase(impi2->auth_challenges.begin() + 1);
@@ -362,7 +364,7 @@ TYPED_TEST(ImpiTwoStoreTest, Set1DeleteAC1GetNonce2)
 
 TYPED_TEST(ImpiTwoStoreTest, Set1DeleteAC2GetNonce1)
 {
-  ImpiStore::Impi* impi1 = example_impi3();
+  ImpiStore::Impi* impi1 = example_impi_digest_aka();
   Store::Status status = this->scenario->store1->set_impi(impi1);
   ASSERT_EQ(Store::Status::OK, status);
   ImpiStore::Impi* impi2 = this->scenario->store2->get_impi(IMPI);
@@ -381,7 +383,7 @@ TYPED_TEST(ImpiTwoStoreTest, Set1DeleteAC2GetNonce1)
 
 TYPED_TEST(ImpiTwoStoreTest, Write1Delete1Read2)
 {
-  ImpiStore::Impi* impi1 = example_impi1();
+  ImpiStore::Impi* impi1 = example_impi_digest();
   Store::Status status = this->scenario->store1->set_impi(impi1);
   ASSERT_EQ(Store::Status::OK, status);
   ImpiStore::Impi* impi2 = this->scenario->store1->get_impi(IMPI);
@@ -413,7 +415,7 @@ TYPED_TEST_CASE(ImpiTwoStoreLostImpiTest, TwoStoreLostImpiScenarios);
 
 TYPED_TEST(ImpiTwoStoreLostImpiTest, Set1GetNonce2)
 {
-  ImpiStore::Impi* impi1 = example_impi1();
+  ImpiStore::Impi* impi1 = example_impi_digest();
   Store::Status status = this->scenario->store1->set_impi(impi1);
   ASSERT_EQ(Store::Status::OK, status);
   ImpiStore::Impi* impi2 = this->scenario->store2->get_impi_with_nonce(IMPI, NONCE1);
@@ -424,7 +426,7 @@ TYPED_TEST(ImpiTwoStoreLostImpiTest, Set1GetNonce2)
 
 TYPED_TEST(ImpiTwoStoreLostImpiTest, Write1Delete1Read2)
 {
-  ImpiStore::Impi* impi1 = example_impi1();
+  ImpiStore::Impi* impi1 = example_impi_digest();
   Store::Status status = this->scenario->store1->set_impi(impi1);
   ASSERT_EQ(Store::Status::OK, status);
   ImpiStore::Impi* impi2 = this->scenario->store1->get_impi_with_nonce(IMPI, NONCE1);
@@ -439,7 +441,7 @@ TYPED_TEST(ImpiTwoStoreLostImpiTest, Write1Delete1Read2)
 
 TYPED_TEST(ImpiTwoStoreLostImpiTest, Write1ReadNonce2Write2ReadNonce1)
 {
-  ImpiStore::Impi* impi1 = example_impi1();
+  ImpiStore::Impi* impi1 = example_impi_digest();
   Store::Status status = this->scenario->store1->set_impi(impi1);
   ASSERT_EQ(Store::Status::OK, status);
   ImpiStore::Impi* impi2 = this->scenario->store2->get_impi_with_nonce(IMPI, NONCE1);
@@ -449,6 +451,37 @@ TYPED_TEST(ImpiTwoStoreLostImpiTest, Write1ReadNonce2Write2ReadNonce1)
   ASSERT_EQ(Store::Status::OK, status);
   ImpiStore::Impi* impi3 = this->scenario->store1->get_impi_with_nonce(IMPI, NONCE1);
   expect_impis_equal(impi1, impi3);
+  delete impi3;
+  delete impi2;
+  delete impi1;
+}
+
+TYPED_TEST(ImpiTwoStoreLostImpiTest, Contention)
+{
+  // Set an IMPI.
+  ImpiStore::Impi* impi1 = example_impi_digest();
+  Store::Status status = this->scenario->store1->set_impi(impi1);
+  ASSERT_EQ(Store::Status::OK, status);
+  // Read it back via both stores.
+  ImpiStore::Impi* impi2 = this->scenario->store1->get_impi_with_nonce(IMPI, NONCE1);
+  ASSERT_TRUE(impi2 != NULL);
+  ImpiStore::Impi* impi3 = this->scenario->store2->get_impi_with_nonce(IMPI, NONCE1);
+  ASSERT_TRUE(impi3 != NULL);
+  // Update and write back via the 1st store.
+  impi2->auth_challenges[0]->correlator = "conflict";
+  status = this->scenario->store1->set_impi(impi2);
+  ASSERT_EQ(Store::Status::OK, status);
+  // Now try and update and write back via the 2nd store - fail with contention.
+  impi3->auth_challenges[0]->correlator = "other conflict";
+  status = this->scenario->store2->set_impi(impi3);
+  ASSERT_EQ(Store::Status::DATA_CONTENTION, status);
+  // Now re-read it via the second store, and successfully make the update.
+  delete impi3;
+  impi3 = this->scenario->store2->get_impi_with_nonce(IMPI, NONCE1);
+  ASSERT_TRUE(impi3 != NULL);
+  impi3->auth_challenges[0]->correlator = "other conflict";
+  status = this->scenario->store2->set_impi(impi3);
+  ASSERT_EQ(Store::Status::OK, status);
   delete impi3;
   delete impi2;
   delete impi1;
@@ -723,7 +756,7 @@ public:
 
 TEST_F(ImpiStoreSerializingTest, Digest)
 {
-  ImpiStore::Impi* impi = example_impi1();
+  ImpiStore::Impi* impi = example_impi_digest();
   rapidjson::Document* json = setAndGet(impi);
   ASSERT_TRUE((*json).IsObject());
   ASSERT_TRUE((*json).HasMember("digest"));
@@ -733,7 +766,7 @@ TEST_F(ImpiStoreSerializingTest, Digest)
 
 TEST_F(ImpiStoreSerializingTest, AKA)
 {
-  ImpiStore::Impi* impi = example_impi2();
+  ImpiStore::Impi* impi = example_impi_aka();
   rapidjson::Document* json = setAndGet(impi);
   ASSERT_TRUE((*json).IsObject());
   ASSERT_TRUE((*json).HasMember("aka"));
@@ -743,7 +776,7 @@ TEST_F(ImpiStoreSerializingTest, AKA)
 
 TEST_F(ImpiStoreSerializingTest, DigestTombstone)
 {
-  ImpiStore::Impi* impi = example_impi1();
+  ImpiStore::Impi* impi = example_impi_digest();
   impi->auth_challenges[0]->nonce_count++;
   rapidjson::Document* json = setAndGet(impi);
   ASSERT_TRUE((*json).IsObject());
@@ -757,7 +790,7 @@ TEST_F(ImpiStoreSerializingTest, DigestTombstone)
 
 TEST_F(ImpiStoreSerializingTest, DigestExpired)
 {
-  ImpiStore::Impi* impi = example_impi1();
+  ImpiStore::Impi* impi = example_impi_digest();
   impi->auth_challenges[0]->expires = 1;
   Store::Status status = impi_store->set_impi(impi, 0L);
   ASSERT_EQ(Store::Status::OK, status);
