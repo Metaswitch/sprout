@@ -555,9 +555,14 @@ void create_challenge(pjsip_digest_credential* credentials,
 
       if (challenge != NULL)
       {
-        // The IMPI already has a challenge. This shouldn't happen, but if it
-        // does be defensive and update the existing one (making sure the nonce
-        // count and expiry don't move backwards).
+        // The IMPI already has a challenge. This shouldn't happen in mainline
+        // operation but it can happen if we hit data contention (the IMPI store
+        // may have failed to write data in the new format but succeeded writing
+        // a challenge int he old format meaning the challenge could appear on a
+        // subsequent get.
+        //
+        // Regardless, we want to be defensive and update the existing challenge
+        // (making sure the nonce count and expiry don't move backwards).
         challenge->nonce_count = std::max(auth_challenge->nonce_count,
                                           challenge->nonce_count);
         challenge->expires = std::max(auth_challenge->expires,
