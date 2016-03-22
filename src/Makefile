@@ -83,6 +83,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          namespace_hop.cpp \
                          session_expires_helper.cpp \
                          base64.cpp \
+                         as_communication_tracker.cpp
 
 sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_counter_table.cpp \
@@ -166,7 +167,8 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        call_list_store_processor_test.cpp \
                        mementoappserver_test.cpp \
                        httpnotifier_test.cpp \
-                       bgcf_test.cpp
+                       bgcf_test.cpp \
+                       as_communication_tracker_test.cpp
 
 COVERAGE_ROOT := ..
 sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include|^modules/memento-as/modules|^modules/memento-as/src/ut|^modules/memento-as/include

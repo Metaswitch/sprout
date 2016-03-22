@@ -66,7 +66,9 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
                                ACRFactory* acr_factory,
                                bool override_npdi,
                                int session_continued_timeout_ms,
-                               int session_terminated_timeout_ms) :
+                               int session_terminated_timeout_ms,
+                               AsCommunicationTracker* sess_term_as_tracker,
+                               AsCommunicationTracker* sess_cont_as_tracker) :
   Sproutlet("scscf", port),
   _scscf_cluster_uri(NULL),
   _scscf_node_uri(NULL),
@@ -83,7 +85,9 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
   _scscf_cluster_uri_str(scscf_cluster_uri),
   _scscf_node_uri_str(scscf_node_uri),
   _icscf_uri_str(icscf_uri),
-  _bgcf_uri_str(bgcf_uri)
+  _bgcf_uri_str(bgcf_uri),
+  _sess_term_as_tracker(sess_term_as_tracker),
+  _sess_cont_as_tracker(sess_cont_as_tracker)
 {
   _incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("scscf_incoming_sip_transactions",
                                                                                     "1.2.826.0.1.1578918.9.3.20");
@@ -314,6 +318,32 @@ ACR* SCSCFSproutlet::get_acr(SAS::TrailId trail,
 }
 
 
+void SCSCFSproutlet::track_app_serv_comm_failure(const std::string& uri,
+                                                 DefaultHandling default_handling)
+{
+  AsCommunicationTracker* as_tracker = (default_handling == SESSION_CONTINUED) ?
+                                       _sess_cont_as_tracker :
+                                       _sess_term_as_tracker;
+  if (as_tracker != NULL)
+  {
+    as_tracker->on_failure(uri);
+  }
+}
+
+
+void SCSCFSproutlet::track_app_serv_comm_success(const std::string& uri,
+                                                 DefaultHandling default_handling)
+{
+  AsCommunicationTracker* as_tracker = (default_handling == SESSION_CONTINUED) ?
+                                       _sess_cont_as_tracker :
+                                       _sess_term_as_tracker;
+  if (as_tracker != NULL)
+  {
+    as_tracker->on_success(uri);
+  }
+}
+
+
 SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
                                      SCSCFSproutlet* scscf,
                                      pjsip_method_e req_type) :
@@ -334,6 +364,7 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
   _record_routed(false),
   _req_type(req_type),
   _seen_1xx(false),
+  _seen_response(false),
   _impi(),
   _auto_reg(false),
   _se_helper(stack_data.default_session_expires)
@@ -523,11 +554,6 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
   int st_code = rsp->line.status.code;
 
-  if (st_code > 100)
-  {
-    _seen_1xx = true;
-  }
-
   if (st_code == SIP_STATUS_FLOW_FAILED)
   {
     // The edge proxy / P-CSCF has reported that this flow has failed.
@@ -568,33 +594,59 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
       // The AS chain isn't complete, so the response must be from an
       // application server.  Check to see if we need to trigger default
       // handling.
-      if ((!_cancelled) &&
+      if ((!_as_chain_link.responsive()) &&
+          (!_cancelled) &&
           ((st_code == PJSIP_SC_REQUEST_TIMEOUT) ||
-           (PJSIP_IS_STATUS_IN_CLASS(st_code, 500))) &&
-          (_as_chain_link.continue_session()))
+           (PJSIP_IS_STATUS_IN_CLASS(st_code, 500))))
       {
-        // The AS either timed out or returned a 5xx error, and default
-        // handling is set to continue.
-        TRC_DEBUG("Trigger default_handling=CONTINUE processing");
-        SAS::Event bypass_As(trail(), SASEvent::BYPASS_AS, 1);
-        SAS::report_event(bypass_As);
+        // Default handling will be triggered. Track this as a failed
+        // communication.
+        _scscf->track_app_serv_comm_failure(_as_chain_link.uri(),
+                                            _as_chain_link.default_handling());
 
-        _as_chain_link = _as_chain_link.next();
-        pjsip_msg* req = original_request();
-        _record_routed = false;
-        if (_session_case->is_originating())
+        if (_as_chain_link.default_handling() == SESSION_CONTINUED)
         {
-          apply_originating_services(req);
-        }
-        else
-        {
-          apply_terminating_services(req);
-        }
+          // The AS either timed out or returned a 5xx error, and default
+          // handling is set to continue.
+          TRC_DEBUG("Trigger default_handling=CONTINUE processing");
+          SAS::Event bypass_As(trail(), SASEvent::BYPASS_AS, 1);
+          SAS::report_event(bypass_As);
 
-        // Free off the response as we no longer need it.
-        free_msg(rsp);
+          _as_chain_link = _as_chain_link.next();
+          pjsip_msg* req = original_request();
+          _record_routed = false;
+          if (_session_case->is_originating())
+          {
+            apply_originating_services(req);
+          }
+          else
+          {
+            apply_terminating_services(req);
+          }
+
+          // Free off the response as we no longer need it.
+          free_msg(rsp);
+        }
+      }
+      else
+      {
+        // Default handling will not be triggered.
+        if (!_seen_response)
+        {
+          // This is the first response we've seen from the AS, so track this is
+          // as a successful communication.
+          _scscf->track_app_serv_comm_success(_as_chain_link.uri(),
+                                              _as_chain_link.default_handling());
+        }
       }
     }
+  }
+
+  _seen_response = true;
+
+  if (st_code > 100)
+  {
+    _seen_1xx = true;
   }
 
   if (rsp != NULL)
@@ -1269,7 +1321,7 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     send_request(req);
 
     // Start the liveness timer for the AS.
-    int timeout = (_as_chain_link.continue_session() ?
+    int timeout = ((_as_chain_link.default_handling() == SESSION_CONTINUED) ?
                    _scscf->_session_continued_timeout_ms :
                    _scscf->_session_terminated_timeout_ms);
 
@@ -1729,11 +1781,15 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
 
   if (_as_chain_link.is_set())
   {
+    // The AS has timed out so track this as a communication failure.
+    _scscf->track_app_serv_comm_failure(_as_chain_link.uri(),
+                                        _as_chain_link.default_handling());
+
     // The request was routed to a downstream AS, so cancel any outstanding
     // forks.
     cancel_pending_forks();
 
-    if (_as_chain_link.continue_session())
+    if (_as_chain_link.default_handling() == SESSION_CONTINUED)
     {
       // The AS either timed out or returned a 5xx error, and default
       // handling is set to continue.

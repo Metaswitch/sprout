@@ -66,6 +66,7 @@ extern "C" {
 #include "sproutlet.h"
 #include "snmp_counter_table.h"
 #include "session_expires_helper.h"
+#include "as_communication_tracker.h"
 
 class SCSCFSproutletTsx;
 
@@ -87,7 +88,9 @@ public:
                  ACRFactory* acr_factory,
                  bool override_npdi,
                  int session_continued_timeout = DEFAULT_SESSION_CONTINUED_TIMEOUT,
-                 int session_terminated_timeout = DEFAULT_SESSION_TERMINATED_TIMEOUT);
+                 int session_terminated_timeout = DEFAULT_SESSION_TERMINATED_TIMEOUT,
+                 AsCommunicationTracker* sess_term_as_tracker = NULL,
+                 AsCommunicationTracker* sess_cont_as_tracker = NULL);
   ~SCSCFSproutlet();
 
   bool init();
@@ -148,6 +151,20 @@ private:
                      std::deque<std::string>& ecfs,
                      SAS::TrailId trail);
 
+  /// Record that communication with an AS failed.
+  ///
+  /// @param uri               - The URI of the AS.
+  /// @param default_handling  - The AS's default handling.
+  void track_app_serv_comm_failure(const std::string& uri,
+                                   DefaultHandling default_handling);
+
+  /// Record that communication with an AS succeeded.
+  ///
+  /// @param uri               - The URI of the AS.
+  /// @param default_handling  - The AS's default handling.
+  void track_app_serv_comm_success(const std::string& uri,
+                                   DefaultHandling default_handling);
+
   /// Translate RequestURI using ENUM service if appropriate.
   void translate_request_uri(pjsip_msg* req, pj_pool_t* pool, SAS::TrailId trail);
 
@@ -199,6 +216,9 @@ private:
   SNMP::CounterTable* _routed_by_preloaded_route_tbl = NULL;
   SNMP::CounterTable* _invites_cancelled_before_1xx_tbl = NULL;
   SNMP::CounterTable* _invites_cancelled_after_1xx_tbl = NULL;
+
+  AsCommunicationTracker* _sess_term_as_tracker;
+  AsCommunicationTracker* _sess_cont_as_tracker;
 };
 
 
@@ -376,6 +396,10 @@ private:
   /// correct stats can be updated.
   pjsip_method_e _req_type;
   bool _seen_1xx;
+
+  // Track whether any response has been seen from the AS. Primarily used for
+  // default handling processing.
+  bool _seen_response;
 
   static const int MAX_FORKING = 10;
 
