@@ -531,14 +531,70 @@ void create_challenge(pjsip_digest_credential* credentials,
 
     // Write the new authentication challenge to the IMPI store
     TRC_DEBUG("Write authentication challenge to IMPI store");
-    ImpiStore::Impi* impi_obj = impi_store->get_impi(impi, get_trail(rdata));
-    if (impi_obj == NULL)
+    Store::Status status;
+
+    do
     {
-      impi_obj = new ImpiStore::Impi(impi);
-    }
-    impi_obj->auth_challenges.push_back(auth_challenge);
-    auth_challenge = NULL;
-    Store::Status status = impi_store->set_impi(impi_obj, get_trail(rdata));
+      // Save off the nonce. We will need it to reclaim the auth challenge from
+      // the IMPI at the end of the loop.
+      std::string nonce = auth_challenge->nonce;
+
+      ImpiStore::Impi* impi_obj =
+        impi_store->get_impi_with_nonce(impi,
+                                        nonce,
+                                        get_trail(rdata));
+
+      if (impi_obj == NULL)
+      {
+        impi_obj = new ImpiStore::Impi(impi);
+      }
+
+      // Check whether the IMPI has an existing auth challenge.
+      ImpiStore::AuthChallenge* challenge =
+        impi_obj->get_auth_challenge(auth_challenge->nonce);
+
+      if (challenge != NULL)
+      {
+        // The IMPI already has a challenge. This shouldn't happen in mainline
+        // operation but it can happen if we hit data contention (the IMPI store
+        // may have failed to write data in the new format but succeeded writing
+        // a challenge int he old format meaning the challenge could appear on a
+        // subsequent get.
+        //
+        // Regardless, we want to be defensive and update the existing challenge
+        // (making sure the nonce count and expiry don't move backwards).
+        challenge->nonce_count = std::max(auth_challenge->nonce_count,
+                                          challenge->nonce_count);
+        challenge->expires = std::max(auth_challenge->expires,
+                                      challenge->expires);
+        delete auth_challenge; auth_challenge = NULL;
+      }
+      else
+      {
+        // Add our new challenges to the IMPI.
+        impi_obj->auth_challenges.push_back(auth_challenge);
+        auth_challenge = NULL;
+      }
+
+      status = impi_store->set_impi(impi_obj, get_trail(rdata));
+
+      // Regardless of what happened take the challenge back. If everything
+      // went well we will delete it below. If we hit data contention we will
+      // need it the next time round the loop.
+      auth_challenge = impi_obj->get_auth_challenge(nonce);
+      std::vector<ImpiStore::AuthChallenge*>& challenges = impi_obj->auth_challenges;
+      challenges.erase(std::remove(challenges.begin(),
+                                   challenges.end(),
+                                   auth_challenge),
+                       challenges.end());
+
+      delete impi_obj; impi_obj = NULL;
+
+    } while (status == Store::DATA_CONTENTION);
+
+    // We're done with the auth challenge now.
+    delete auth_challenge; auth_challenge = NULL;
+
     if (status == Store::OK)
     {
       // We've written the challenge into the store, so need to set a Chronos
@@ -550,7 +606,6 @@ void create_challenge(pjsip_digest_credential* credentials,
       chronos->send_post(timer_id, 30, "/authentication-timeout", chronos_body, get_trail(rdata));
     }
 
-    delete impi_obj;
     delete av;
   }
   else

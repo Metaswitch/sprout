@@ -2144,3 +2144,101 @@ TEST_F(AuthenticationNonceCountDisabledTest, DigestAuthSuccessWithNonceCount)
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
+
+TEST_F(AuthenticationTest, DigestAuthSuccessWithDataContention)
+{
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Do an initial registration flow (REGISTER, 401, REGISTER, 200) so that we
+  // get an IMPI into the store.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = false;
+  inject_msg(msg1.get());
+
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+
+  std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  parse_www_authenticate(auth, auth_params);
+  free_txdata();
+
+  AuthenticationMessage msg2("REGISTER");
+  msg2._algorithm = "MD5";
+  msg2._key = "12345678123456781234567812345678";
+  msg2._nonce = auth_params["nonce"];
+  msg2._opaque = auth_params["opaque"];
+  msg2._nc = "00000001";
+  msg2._cnonce = "8765432187654321";
+  msg2._qop = "auth";
+  msg2._integ_prot = "ip-assoc-pending";
+  inject_msg(msg2.get());
+
+  ASSERT_EQ(0, txdata_count());
+
+  // Simulate data contention. This means that the second registration flow
+  // will fail.
+  _local_data_store->force_contention();
+
+  // Do a second initial registration flow (REGISTER, 401, REGISTER, 200). The
+  // first attempt to write the challenge back fails, but the second succeeds.
+  AuthenticationMessage msg3("REGISTER");
+  msg3._auth_hdr = false;
+  inject_msg(msg3.get());
+
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+
+  auth = get_headers(tdata->msg, "WWW-Authenticate");
+  parse_www_authenticate(auth, auth_params);
+  free_txdata();
+
+  AuthenticationMessage msg4("REGISTER");
+  msg4._algorithm = "MD5";
+  msg4._key = "12345678123456781234567812345678";
+  msg4._nonce = auth_params["nonce"];
+  msg4._opaque = auth_params["opaque"];
+  msg4._nc = "00000001";
+  msg4._cnonce = "8765432187654321";
+  msg4._qop = "auth";
+  msg4._integ_prot = "ip-assoc-pending";
+  inject_msg(msg4.get());
+
+  ASSERT_EQ(0, txdata_count());
+
+  // Check that the first challenge can still be used to authenticate with.
+  AuthenticationMessage msg5("REGISTER");
+  msg5._algorithm = "MD5";
+  msg5._key = "12345678123456781234567812345678";
+  msg5._nonce = msg2._nonce;
+  msg5._opaque = auth_params["opaque"];
+  msg5._nc = "00000002";
+  msg5._cnonce = "8765432187654321";
+  msg5._qop = "auth";
+  msg5._integ_prot = "ip-assoc-pending";
+  inject_msg(msg5.get());
+
+  ASSERT_EQ(0, txdata_count());
+
+  // Check that the second challenge can still be used to authenticate with.
+  AuthenticationMessage msg6("REGISTER");
+  msg6._algorithm = "MD5";
+  msg6._key = "12345678123456781234567812345678";
+  msg6._nonce = msg4._nonce;
+  msg6._opaque = auth_params["opaque"];
+  msg6._nc = "00000002";
+  msg6._cnonce = "8765432187654321";
+  msg6._qop = "auth";
+  msg6._integ_prot = "ip-assoc-pending";
+  inject_msg(msg6.get());
+
+  ASSERT_EQ(0, txdata_count());
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+}
