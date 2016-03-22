@@ -54,6 +54,7 @@
 #include "exception_handler.h"
 #include "ralf_processor.h"
 #include "authentication.h"
+#include "sproutlet_options.h"
 
 enum struct MemcachedWriteFormat
 {
@@ -71,10 +72,6 @@ struct options
   int                                  upstream_proxy_connections;
   int                                  upstream_proxy_recycle;
   bool                                 ibcf;
-  bool                                 scscf_enabled;
-  int                                  scscf_port;
-  bool                                 icscf_enabled;
-  int                                  icscf_port;
   std::string                          external_icscf_uri;
   int                                  record_routing_model;
   int                                  default_session_expires;
@@ -83,8 +80,9 @@ struct options
   std::string                          local_host;
   std::string                          public_host;
   std::string                          home_domain;
+  std::string                          sprout_hostname;
+  std::string                          sprout_uri;
   std::string                          additional_home_domains;
-  std::string                          scscf_uri;
   std::string                          alias_hosts;
   std::string                          trusted_hosts;
   bool                                 auth_enabled;
@@ -145,6 +143,9 @@ struct options
   std::string                          pidfile;
   std::map<std::string, std::multimap<std::string, std::string>>
                                        plugin_options;
+  int                                  listen_port;
+  std::set<int>                        sproutlet_ports;
+  SPROUTLET_MACRO(SPROUTLET_CFG_OPTIONS)
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be

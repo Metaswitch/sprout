@@ -108,6 +108,7 @@ extern "C" {
 #include "snmp_agent.h"
 #include "ralf_processor.h"
 #include "sprout_alarmdefinition.h"
+#include "sproutlet_options.h"
 
 enum OptionTypes
 {
@@ -142,19 +143,19 @@ enum OptionTypes
   OPT_FORCE_THIRD_PARTY_REGISTER_BODY,
   OPT_MEMENTO_NOTIFY_URL,
   OPT_PIDFILE,
+  OPT_SPROUT_HOSTNAME,
+  OPT_LISTEN_PORT,
+  SPROUTLET_MACRO(SPROUTLET_ENUM_TYPES)
 };
 
 
 const static struct pj_getopt_option long_opt[] =
 {
   { "pcscf",                        required_argument, 0, 'p'},
-  { "scscf",                        required_argument, 0, 's'},
-  { "icscf",                        required_argument, 0, 'i'},
   { "webrtc-port",                  required_argument, 0, 'w'},
   { "localhost",                    required_argument, 0, 'l'},
   { "domain",                       required_argument, 0, 'D'},
   { "additional-domains",           required_argument, 0, OPT_ADDITIONAL_HOME_DOMAINS},
-  { "scscf-uri",                    required_argument, 0, 'c'},
   { "alias",                        required_argument, 0, 'n'},
   { "routing-proxy",                required_argument, 0, 'r'},
   { "ibcf",                         required_argument, 0, 'I'},
@@ -218,6 +219,9 @@ const static struct pj_getopt_option long_opt[] =
   { "force-3pr-body",               no_argument,       0, OPT_FORCE_THIRD_PARTY_REGISTER_BODY},
   { "pidfile",                      required_argument, 0, OPT_PIDFILE},
   { "plugin-option",                required_argument, 0, 'N'},
+  { "sprout-hostname",              required_argument, 0, OPT_SPROUT_HOSTNAME},
+  { "listen-port",                  required_argument, 0, OPT_LISTEN_PORT},
+  SPROUTLET_MACRO(SPROUTLET_CFG_PJ_STRUCT)
   { NULL,                           0,                 0, 0}
 };
 
@@ -425,6 +429,19 @@ int parse_port(const std::string& port_str)
   return port;
 }
 
+/// Parse a string representing a port.
+/// @returns whether the port is invalid and sets the port
+bool parse_port(const std::string& port_str, int& port)
+{
+  port = atoi(port_str.c_str());
+
+  if ((port < 0) || (port > 0xFFFF))
+  {
+    return false;
+  }
+
+  return true;
+}
 
 static pj_status_t init_logging_options(int argc, char* argv[], struct options* options)
 {
@@ -503,36 +520,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
-    case 's':
-      options->scscf_port = parse_port(std::string(pj_optarg));
-      if (options->scscf_port != 0)
-      {
-        TRC_INFO("S-CSCF enabled on port %d", options->scscf_port);
-        options->scscf_enabled = true;
-      }
-      else
-      {
-        CL_SPROUT_INVALID_S_CSCF_PORT.log(pj_optarg);
-        TRC_ERROR("S-CSCF port %s is invalid\n", pj_optarg);
-        return -1;
-      }
-      break;
-
-    case 'i':
-      options->icscf_port = parse_port(std::string(pj_optarg));
-      if (options->icscf_port != 0)
-      {
-        TRC_INFO("I-CSCF enabled on port %d", options->icscf_port);
-        options->icscf_enabled = true;
-      }
-      else
-      {
-        CL_SPROUT_INVALID_I_CSCF_PORT.log(pj_optarg);
-        TRC_ERROR("I-CSCF port %s is invalid", pj_optarg);
-        return -1;
-      }
-      break;
-
     case 'w':
       options->webrtc_port = parse_port(std::string(pj_optarg));
       if (options->webrtc_port != 0)
@@ -602,11 +589,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case OPT_ADDITIONAL_HOME_DOMAINS:
       options->additional_home_domains = std::string(pj_optarg);
       TRC_INFO("Additional home domains set to %s", pj_optarg);
-      break;
-
-    case 'c':
-      options->scscf_uri = std::string(pj_optarg);
-      TRC_INFO("Sprout cluster URI set to %s", pj_optarg);
       break;
 
     case 'n':
@@ -1090,6 +1072,16 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
+    case OPT_SPROUT_HOSTNAME:
+      options->sprout_hostname = std::string(pj_optarg);
+      options->sprout_uri = "sip:" + options->sprout_hostname + ";transport=tcp";
+      break;
+
+    case OPT_LISTEN_PORT:
+      options->listen_port = atoi(pj_optarg);
+      break;
+
+    SPROUTLET_MACRO(SPROUTLET_OPTIONS)
 
     case 'h':
       usage();
@@ -1369,8 +1361,6 @@ int main(int argc, char* argv[])
   opt.upstream_proxy_port = 0;
   opt.webrtc_port = 0;
   opt.ibcf = PJ_FALSE;
-  opt.scscf_enabled = false;
-  opt.scscf_port = 0;
   opt.external_icscf_uri = "";
   opt.auth_enabled = PJ_FALSE;
   opt.enum_suffix = ".e164.arpa";
@@ -1382,8 +1372,6 @@ int main(int argc, char* argv[])
   opt.reg_max_expires = 300;
 
   opt.sub_max_expires = 300;
-  opt.icscf_enabled = false;
-  opt.icscf_port = 0;
   opt.sas_server = "0.0.0.0";
   opt.chronos_service = "localhost:7253";
   opt.pjsip_threads = 1;
@@ -1423,6 +1411,15 @@ int main(int argc, char* argv[])
   opt.ralf_threads = 25;
   opt.non_register_auth_mode = NonRegisterAuthentication::NEVER;
   opt.force_third_party_register_body = false;
+  opt.listen_port = 0;
+  SPROUTLET_MACRO(SPROUTLET_CFG_OPTIONS_DEFAULT_VALUES)
+
+  // The S-CSCF and BGCF have special case code here to set them to be on by
+  // default
+  opt.port_bgcf = 5054;
+  opt.enabled_bgcf = true;
+  opt.port_scscf = 5054;
+  opt.enabled_scscf = true;
 
   boost::filesystem::path p = argv[0];
   // Copy the filename to a string so that we can be sure of its lifespan -
@@ -1512,7 +1509,9 @@ int main(int argc, char* argv[])
     analytics_logger = new AnalyticsLogger(analytics_logger_logger);
   }
 
-  if ((!opt.pcscf_enabled) && (!opt.scscf_enabled) && (!opt.icscf_enabled))
+  SPROUTLET_MACRO(SPROUTLET_VERIFY_OPTIONS)
+
+  if ((!opt.pcscf_enabled) && (!opt.enabled_scscf) && (!opt.enabled_icscf))
   {
     CL_SPROUT_NO_SI_CSCF.log();
     closelog();
@@ -1520,7 +1519,7 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  if ((opt.pcscf_enabled) && ((opt.scscf_enabled) || (opt.icscf_enabled)))
+  if ((opt.pcscf_enabled) && ((opt.enabled_scscf) || (opt.enabled_icscf)))
   {
     closelog();
     TRC_ERROR("Cannot enable both P-CSCF and S/I-CSCF");
@@ -1549,13 +1548,7 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  if ((opt.scscf_enabled) && (opt.scscf_uri == ""))
-  {
-    TRC_ERROR("S-CSCF enabled, but no S-CSCF URI specified");
-    return 1;
-  }
-
-  if (((opt.scscf_enabled) || (opt.icscf_enabled)) &&
+  if (((opt.enabled_scscf) || (opt.enabled_icscf)) &&
       (opt.hss_server == ""))
   {
     CL_SPROUT_SI_CSCF_NO_HOMESTEAD.log();
@@ -1716,7 +1709,7 @@ int main(int argc, char* argv[])
                                                       ".1.2.826.0.1.1578918.9.3.31");
   }
 
-  if (opt.icscf_enabled || opt.scscf_enabled)
+  if (opt.enabled_icscf || opt.enabled_scscf)
   {
     // Create Sprout's alarm objects.
 
@@ -1795,13 +1788,13 @@ int main(int argc, char* argv[])
                       opt.sas_server,
                       opt.pcscf_trusted_port,
                       opt.pcscf_untrusted_port,
-                      opt.scscf_port,
-                      opt.icscf_port,
+                      opt.port_scscf,
+                      opt.sproutlet_ports,
                       opt.local_host,
                       opt.public_host,
                       opt.home_domain,
                       opt.additional_home_domains,
-                      opt.scscf_uri,
+                      opt.sprout_uri,
                       opt.alias_hosts,
                       sip_resolver,
                       opt.pjsip_threads,
@@ -1877,7 +1870,7 @@ int main(int argc, char* argv[])
                                        hss_comm_monitor);
   }
 
-  if ((opt.scscf_enabled) || (opt.icscf_enabled))
+  if ((opt.enabled_scscf) || (opt.enabled_icscf))
   {
     // Create ENUM service required for I/S-CSCF.
     if (!opt.enum_servers.empty())
@@ -1948,8 +1941,8 @@ int main(int argc, char* argv[])
                                  "",
                                  quiescing_mgr,
                                  NULL,
-                                 opt.icscf_enabled,
-                                 opt.scscf_enabled,
+                                 opt.enabled_icscf,
+                                 opt.enabled_scscf,
                                  opt.emerg_reg_accepted);
     if (status != PJ_SUCCESS)
     {
@@ -1971,7 +1964,7 @@ int main(int argc, char* argv[])
     }
   }
 
-  if (opt.scscf_enabled)
+  if (opt.enabled_scscf)
   {
     scscf_acr_factory = (ralf_processor != NULL) ?
                       (ACRFactory*)new RalfACRFactory(ralf_processor, ACR::SCSCF) :
@@ -2129,7 +2122,8 @@ int main(int argc, char* argv[])
   }
 
   // Load the sproutlet plugins.
-  PluginLoader* loader = new PluginLoader("/usr/share/clearwater/sprout/plugins", opt);
+  PluginLoader* loader = new PluginLoader("/usr/share/clearwater/sprout/plugins",
+                                          opt);
 
   if (!loader->load(sproutlets))
   {
@@ -2163,8 +2157,7 @@ int main(int argc, char* argv[])
 
     sproutlet_proxy = new SproutletProxy(stack_data.endpt,
                                          PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+3,
-                                         std::string(stack_data.scscf_uri.ptr,
-                                                     stack_data.scscf_uri.slen),
+                                         opt.sprout_uri,
                                          host_aliases,
                                          sproutlets,
                                          opt.stateless_proxies);
@@ -2192,7 +2185,6 @@ int main(int argc, char* argv[])
 
   // Create worker threads first as they take work from the PJSIP threads so
   // need to be ready.
-
   status = start_worker_threads();
   if (status != PJ_SUCCESS)
   {
@@ -2220,7 +2212,7 @@ int main(int argc, char* argv[])
   HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
   HttpStackUtils::PingHandler ping_handler;
 
-  if (opt.scscf_enabled)
+  if (opt.enabled_scscf)
   {
     try
     {
@@ -2248,7 +2240,7 @@ int main(int argc, char* argv[])
   snmp_terminate("sprout");
 
   CL_SPROUT_ENDED.log();
-  if (opt.scscf_enabled)
+  if (opt.enabled_scscf)
   {
     try
     {
@@ -2284,7 +2276,7 @@ int main(int argc, char* argv[])
   loader->unload();
   delete loader;
 
-  if (opt.scscf_enabled)
+  if (opt.enabled_scscf)
   {
     destroy_subscription();
     destroy_registrar();
@@ -2328,7 +2320,7 @@ int main(int argc, char* argv[])
   delete analytics_logger;
   delete analytics_logger_logger;
 
-  if (opt.icscf_enabled || opt.scscf_enabled)
+  if (opt.enabled_icscf || opt.enabled_scscf)
   {
     // Stop the alarm request agent
     AlarmReqAgent::get_instance().stop();

@@ -71,10 +71,8 @@ struct stack_data_struct
   int                  pcscf_trusted_port;
   pjsip_tpfactory     *pcscf_trusted_tcp_factory;
   int                  scscf_port;
-  pjsip_tpfactory     *scscf_tcp_factory;
-  int                  icscf_port;
-  pjsip_tpfactory     *icscf_tcp_factory;
-
+  pjsip_tpfactory     *scscf_trusted_tcp_factory;
+  std::map<int, pjsip_tpfactory*> sproutlets;
   int                  sas_logging_module_id;
 
   pj_str_t             local_host;
@@ -145,12 +143,12 @@ extern pj_status_t init_stack(const std::string& sas_system_name,
                               int pcscf_trusted_port,
                               int pcscf_untrusted_port,
                               int scscf_port,
-                              int icscf_port,
+                              std::set<int> sproutlet_ports,
                               const std::string& local_host,
                               const std::string& public_host,
                               const std::string& home_domain,
                               const std::string& additional_home_domains,
-                              const std::string& scscf_uri,
+                              const std::string& sproutlet_uri,
                               const std::string& alias_hosts,
                               SIPResolver* sipresolver,
                               int num_pjsip_threads,

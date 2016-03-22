@@ -82,7 +82,7 @@ bool BGCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
   bool plugin_loaded = true;
 
-  if (opt.scscf_enabled)
+  if (opt.enabled_bgcf)
   {
     // Create BGCF service required for the BGCF Sproutlet.
     _bgcf_service = new BgcfService();
@@ -93,7 +93,7 @@ bool BGCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                        new ACRFactory();
 
     // Create the Sproutlet.
-    _bgcf_sproutlet = new BGCFSproutlet(0,
+    _bgcf_sproutlet = new BGCFSproutlet(opt.port_bgcf,
                                         _bgcf_service,
                                         enum_service,
                                         _acr_factory,

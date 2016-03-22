@@ -87,42 +87,45 @@ bool MementoPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
   bool plugin_loaded = true;
 
-  SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("memento_as_incoming_sip_transactions",
-                                                                                                                             "1.2.826.0.1.1578918.9.8.1.4");
-  SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("memento_as_outgoing_sip_transactions",
-                                                                                                                             "1.2.826.0.1.1578918.9.8.1.5");
-  if (((opt.max_call_list_length == 0) &&
-       (opt.call_list_ttl == 0)))
+  if (opt.enabled_memento)
   {
-    TRC_ERROR("Can't have an unlimited maximum call length and a unlimited TTL for the call list store - disabling Memento");
-  }
-  else
-  {
-    _cass_comm_alarm = new Alarm("memento",
-                                 AlarmDef::MEMENTO_AS_CASSANDRA_COMM_ERROR,
-                                 AlarmDef::CRITICAL);
-    _cass_comm_monitor = new CommunicationMonitor(_cass_comm_alarm, "Memento", "Memcached");
+    SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("memento_as_incoming_sip_transactions",
+                                                                                                                               "1.2.826.0.1.1578918.9.8.1.4");
+    SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("memento_as_outgoing_sip_transactions",
+                                                                                                                               "1.2.826.0.1.1578918.9.8.1.5");
+    if (((opt.max_call_list_length == 0) &&
+         (opt.call_list_ttl == 0)))
+    {
+      TRC_ERROR("Can't have an unlimited maximum call length and a unlimited TTL for the call list store - disabling Memento");
+    }
+    else
+    {
+      _cass_comm_alarm = new Alarm("memento",
+                                   AlarmDef::MEMENTO_AS_CASSANDRA_COMM_ERROR,
+                                   AlarmDef::CRITICAL);
+      _cass_comm_monitor = new CommunicationMonitor(_cass_comm_alarm, "Memento", "Memcached");
 
-    _call_list_store = new CallListStore::Store();
-    _call_list_store->configure_connection("localhost", 9160, _cass_comm_monitor);
+      _call_list_store = new CallListStore::Store();
+      _call_list_store->configure_connection("localhost", 9160, _cass_comm_monitor);
 
-    _memento = new MementoAppServer("memento",
-                                    _call_list_store,
-                                    opt.home_domain,
-                                    opt.max_call_list_length,
-                                    opt.memento_threads,
-                                    opt.call_list_ttl,
-                                    stack_data.stats_aggregator,
-                                    opt.cass_target_latency_us,
-                                    opt.max_tokens,
-                                    opt.init_token_rate,
-                                    opt.min_token_rate,
-                                    exception_handler,
-                                    http_resolver,
-                                    opt.memento_notify_url);
+      _memento = new MementoAppServer("memento",
+                                      _call_list_store,
+                                      opt.home_domain,
+                                      opt.max_call_list_length,
+                                      opt.memento_threads,
+                                      opt.call_list_ttl,
+                                      stack_data.stats_aggregator,
+                                      opt.cass_target_latency_us,
+                                      opt.max_tokens,
+                                      opt.init_token_rate,
+                                      opt.min_token_rate,
+                                      exception_handler,
+                                      http_resolver,
+                                      opt.memento_notify_url);
 
-    _memento_sproutlet = new SproutletAppServerShim(_memento, incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl);
-    sproutlets.push_back(_memento_sproutlet);
+      _memento_sproutlet = new SproutletAppServerShim(_memento, incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl);
+      sproutlets.push_back(_memento_sproutlet);
+    }
   }
 
   return plugin_loaded;

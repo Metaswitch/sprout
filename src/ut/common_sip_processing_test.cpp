@@ -51,13 +51,10 @@
 
 using namespace std;
 
-
 class CommonProcessingTest : public SipTest
 {
 public:
-  /// TX data for testing.  Will be cleaned up.  Each message in a
-  /// forked flow has its URI stored in _uris, and its txdata stored
-  /// in _tdata against that URI.
+  int ICSCF_PORT = 5052;
 
   /// Set up test case.  Caller must clear host_mapping.
   static void SetUpTestCase()
@@ -81,9 +78,9 @@ public:
 
     // Create a TCP connection to the I-CSCF listening port.
     _tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                          stack_data.icscf_port,
-                                          "1.2.3.4",
-                                          49152);
+                            ICSCF_PORT,
+                            "1.2.3.4",
+                            49152);
 
     
     // Load monitor with one token in the bucket at startup.

@@ -83,30 +83,32 @@ bool MMTELASPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
   bool plugin_loaded = true;
 
-  SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions = SNMP::SuccessFailCountByRequestTypeTable::create("mmtel_as_incoming_sip_transactions",
-                                                                                                                         "1.2.826.0.1.1578918.9.3.24");
-  SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions = SNMP::SuccessFailCountByRequestTypeTable::create("mmtel_as_outgoing_sip_transactions",
-                                                                                                                         "1.2.826.0.1.1578918.9.3.25");
-  if (opt.xdm_server != "")
+  if (opt.enabled_mmtel)
   {
-    // Create a connection to the XDMS.
-    TRC_STATUS("Creating connection to XDMS %s", opt.xdm_server.c_str());
-    _xdm_cxn_count_tbl = SNMP::IPCountTable::create("homer-ip-count",
-                                                        ".1.2.826.0.1.1578918.9.3.2.1");
-    _xdm_latency_tbl = SNMP::EventAccumulatorTable::create("homer-latency",
-                                                        ".1.2.826.0.1.1578918.9.3.2.2");
-    _xdm_connection = new XDMConnection(opt.xdm_server,
-                                        http_resolver,
-                                        load_monitor,
-                                        _xdm_cxn_count_tbl,
-                                        _xdm_latency_tbl);
+    SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions = SNMP::SuccessFailCountByRequestTypeTable::create("mmtel_as_incoming_sip_transactions",
+                                                                                                                           "1.2.826.0.1.1578918.9.3.24");
+    SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions = SNMP::SuccessFailCountByRequestTypeTable::create("mmtel_as_outgoing_sip_transactions",
+                                                                                                                           "1.2.826.0.1.1578918.9.3.25");
+    if (opt.xdm_server != "")
+    {
+      // Create a connection to the XDMS.
+      TRC_STATUS("Creating connection to XDMS %s", opt.xdm_server.c_str());
+      _xdm_cxn_count_tbl = SNMP::IPCountTable::create("homer-ip-count",
+                                                          ".1.2.826.0.1.1578918.9.3.2.1");
+      _xdm_latency_tbl = SNMP::EventAccumulatorTable::create("homer-latency",
+                                                          ".1.2.826.0.1.1578918.9.3.2.2");
+      _xdm_connection = new XDMConnection(opt.xdm_server,
+                                          http_resolver,
+                                          load_monitor,
+                                          _xdm_cxn_count_tbl,
+                                          _xdm_latency_tbl);
 
-    // Load the MMTEL AppServer
-    _mmtel = new Mmtel("mmtel", _xdm_connection);
-    _mmtel_sproutlet = new SproutletAppServerShim(_mmtel, incoming_sip_transactions, outgoing_sip_transactions, "mmtel." + opt.home_domain);
-    sproutlets.push_back(_mmtel_sproutlet);
+      // Load the MMTEL AppServer
+      _mmtel = new Mmtel("mmtel", _xdm_connection);
+      _mmtel_sproutlet = new SproutletAppServerShim(_mmtel, incoming_sip_transactions, outgoing_sip_transactions, "mmtel." + opt.home_domain);
+      sproutlets.push_back(_mmtel_sproutlet);
+    }
   }
-
   return plugin_loaded;
 }
 

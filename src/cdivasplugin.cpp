@@ -79,14 +79,17 @@ bool CDivASPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
   bool plugin_loaded = true;
 
-  SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions = SNMP::SuccessFailCountByRequestTypeTable::create("cdiv_as_incoming_sip_transactions",
-                                                                                                                         "1.2.826.0.1.1578918.9.7.2");
-  SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions = SNMP::SuccessFailCountByRequestTypeTable::create("cdiv_as_outgoing_sip_transactions",
+  if (opt.enabled_cdiv)
+  {
+    SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions = SNMP::SuccessFailCountByRequestTypeTable::create("cdiv_as_incoming_sip_transactions",
+                                                                                                                           "1.2.826.0.1.1578918.9.7.2");
+    SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions = SNMP::SuccessFailCountByRequestTypeTable::create("cdiv_as_outgoing_sip_transactions",
                                                                                                                          "1.2.826.0.1.1578918.9.7.3");
-  // Load the CDiv AppServer
-  _cdiv = new CallDiversionAS("communication-diversion");
-  _cdiv_sproutlet = new SproutletAppServerShim(_cdiv, incoming_sip_transactions, outgoing_sip_transactions);
-  sproutlets.push_back(_cdiv_sproutlet);
+    // Load the CDiv AppServer
+    _cdiv = new CallDiversionAS("cdiv");
+    _cdiv_sproutlet = new SproutletAppServerShim(_cdiv, incoming_sip_transactions, outgoing_sip_transactions);
+    sproutlets.push_back(_cdiv_sproutlet);
+  }
 
   return plugin_loaded;
 }
