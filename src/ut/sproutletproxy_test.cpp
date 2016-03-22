@@ -29,7 +29,7 @@
  * propagate, and distribute a work formed by combining OpenSSL with The
  * Software, or a work derivative of such a combination, even if such
  * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. Y must comply with the GPL in all
+ * violate the terms of the GPL. You must comply with the GPL in all
  * respects for all of the code used other than OpenSSL.
  * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
  * Project and licensed under the OpenSSL Licenses, or a work based on such

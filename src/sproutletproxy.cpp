@@ -181,7 +181,7 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
   // authentication module is invoked between the I-CSCF and the S-CSCF
   if (sproutlet && (sproutlet->service_name() == "scscf"))
   {
-    TRC_DEBUG("Ignore SCSCF service");
+    TRC_DEBUG("Only route to SCSCF by port");
     sproutlet = NULL;
   }
 
