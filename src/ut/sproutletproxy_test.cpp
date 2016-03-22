@@ -29,7 +29,7 @@
  * propagate, and distribute a work formed by combining OpenSSL with The
  * Software, or a work derivative of such a combination, even if such
  * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
+ * violate the terms of the GPL. Y must comply with the GPL in all
  * respects for all of the code used other than OpenSSL.
  * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
  * Project and licensed under the OpenSSL Licenses, or a work based on such
@@ -591,7 +591,9 @@ public:
   {
     // We shouldn't get passed any subscribe messages
     ASSERT_NE(pj_stricmp2(&req->line.req.method.name, "SUBSCRIBE"), 0);
-    send_request(req);
+    pjsip_msg* rsp = create_response(req, PJSIP_SC_NOT_FOUND);
+    free_msg(req);
+    send_response(rsp);
   }
 };
 
@@ -2255,6 +2257,51 @@ TEST_F(SproutletProxyTest, LocalSubscription)
   // Check the 200 OK.
   tdata = current_txdata();
   RespMatcher(200).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // All done!
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+TEST_F(SproutletProxyTest, LocalNonSubscribe)
+{
+  // Tests standard routing of a local subscription request to ensure it is
+  // not routed via the sproutlet interface.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        44444,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with a Route header not referencing this node or the
+  // home domain.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@homedomain";
+  msg1._from = "sip:alice@homedomain";
+  msg1._to = "sip:bob@homedomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:scscf@proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting the forwarded SUBSCRIBE
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@homedomain>", get_headers(tdata->msg, "To")); // No tag
+  free_txdata();
+
+  // Check the 486 Loop Detected.
+  tdata = current_txdata();
+  RespMatcher(404).matches(tdata->msg);
   tp->expect_target(tdata);
   free_txdata();
 

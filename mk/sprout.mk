@@ -19,6 +19,9 @@ sprout_test:
 sprout_full_test:
 	${MAKE} -C ${SPROUT_DIR} full_test
 
+sprout_runtest:
+	${MAKE} -C ${SPROUT_DIR} run_test
+
 sprout_clean:
 	${MAKE} -C ${SPROUT_DIR} clean
 
