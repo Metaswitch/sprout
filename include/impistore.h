@@ -276,6 +276,9 @@ public:
     /// @param _impi         The private ID.
     Impi(const std::string& _impi) : impi(_impi), auth_challenges(), _cas(0), _nonces() {};
 
+    /// Destructor.
+    ~Impi();
+
     /// Helper - get authentication challenge for a given nonce.
     /// @returns the authentication challenge, or NULL if not found
     /// @param nonce         The nonce to look up.

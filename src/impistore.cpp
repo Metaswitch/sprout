@@ -488,6 +488,17 @@ ImpiStore::AKAAuthChallenge* ImpiStore::AKAAuthChallenge::from_json_av(rapidjson
   return auth_challenge;
 }
 
+ImpiStore::Impi::~Impi()
+{
+  // Spin through the AuthChallenges, destroying them.
+  for (std::vector<ImpiStore::AuthChallenge*>::iterator it = auth_challenges.begin();
+       it != auth_challenges.end();
+       it++)
+  {
+    delete *it;
+  }
+}
+
 std::string ImpiStore::Impi::to_json()
 {
   // Build a writer, serialize the IMPI to it and return the result.

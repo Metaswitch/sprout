@@ -126,9 +126,9 @@ public:
 };
 
 /// Constant strings.
-const std::string IMPI = "private@example.com";
-const std::string NONCE1 = "nonce1";
-const std::string NONCE2 = "nonce2";
+static const std::string IMPI = "private@example.com";
+static const std::string NONCE1 = "nonce1";
+static const std::string NONCE2 = "nonce2";
 
 /// Example IMPI, with a single digest authentication challenge.
 ImpiStore::Impi* example_impi_digest()
@@ -535,6 +535,7 @@ TEST_F(ImpiStoreParsingTest, ChallengeDigest)
   ASSERT_TRUE(impi != NULL);
   ASSERT_EQ(1, impi->auth_challenges.size());
   ASSERT_EQ(ImpiStore::AuthChallenge::Type::DIGEST, impi->auth_challenges[0]->type);
+  delete impi;
 }
 
 TEST_F(ImpiStoreParsingTest, ChallengeUnknownType)
