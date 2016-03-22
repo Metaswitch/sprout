@@ -1,8 +1,8 @@
 /**
- * @file registrar.h Initialization/termination functions for Sprout's Registrar module
+ * @file mock_impi_store.h
  *
  * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Copyright (C) 2016  Metaswitch Networks Ltd
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -34,45 +34,24 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+#ifndef MOCK_IMPI_STORE_H__
+#define MOCK_IMPI_STORE_H__
 
-#ifndef REGISTRAR_H__
-#define REGISTRAR_H__
+#include "impistore.h"
 
-extern "C" {
-#include <pjsip.h>
-}
+class MockImpiStore : public ImpiStore
+{
+public:
+  MockImpiStore() : ImpiStore(NULL, ImpiStore::READ_IMPI_WRITE_IMPI) {}
+  virtual ~MockImpiStore() {}
 
-#include "subscriber_data_manager.h"
-#include "hssconnection.h"
-#include "chronosconnection.h"
-#include "analyticslogger.h"
-#include "acr.h"
-#include "snmp_success_fail_count_table.h"
-
-extern pjsip_module mod_registrar;
-
-void third_party_register_failed(const std::string& public_id,
-                                 SAS::TrailId trail);
-
-extern pj_status_t init_registrar(SubscriberDataManager* sdm,
-                                  SubscriberDataManager* remote_sdm,
-                                  HSSConnection* hss_connection,
-                                  AnalyticsLogger* analytics_logger,
-                                  ACRFactory* rfacr_factory,
-                                  int cfg_max_expires,
-                                  bool force_third_party_register_body,
-                                  SNMP::RegistrationStatsTables* reg_stats_tbls,
-                                  SNMP::RegistrationStatsTables* third_party_reg_stats_tbls);
-
-
-/// Calculate the expiry time for a binding.
-///
-/// @param contact - The binding's contact header.
-/// @param expires - (optional) The expiry header from the request.
-///
-/// @return The expiry time in seconds.
-int expiry_for_binding(pjsip_contact_hdr* contact, pjsip_expires_hdr* expires);
-
-extern void destroy_registrar();
+  MOCK_METHOD2(set_impi, Store::Status(Impi* impi, SAS::TrailId trail));
+  MOCK_METHOD2(get_impi, Impi*(const std::string& impi, SAS::TrailId trail));
+  MOCK_METHOD3(get_impi_with_nonce, Impi*(const std::string& impi,
+                                          const std::string& nonce,
+                                          SAS::TrailId trail));
+  MOCK_METHOD2(delete_impi, Store::Status(Impi* impi, SAS::TrailId trail));
+};
 
 #endif
+

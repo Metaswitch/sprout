@@ -54,6 +54,7 @@
 #include "exception_handler.h"
 #include "ralf_processor.h"
 #include "authentication.h"
+#include "impistore.h"
 
 enum struct MemcachedWriteFormat
 {
@@ -145,6 +146,8 @@ struct options
   std::string                          pidfile;
   std::map<std::string, std::multimap<std::string, std::string>>
                                        plugin_options;
+  ImpiStore::Mode                      impi_store_mode;
+  bool                                 nonce_count_supported;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be

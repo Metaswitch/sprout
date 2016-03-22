@@ -437,15 +437,19 @@ HTTPCode DeregistrationTask::parse_request(std::string body)
 
 HTTPCode DeregistrationTask::handle_request()
 {
-  for (std::map<std::string, std::string>::iterator it=_bindings.begin(); 
+  std::set<std::string> impis_to_delete;
+
+  for (std::map<std::string, std::string>::iterator it=_bindings.begin();
        it!=_bindings.end();
        ++it)
   {
-    SubscriberDataManager::AoRPair* aor_pair = set_aor_data(_cfg->_sdm,
-                                                            it->first,
-                                                            it->second,
-                                                            NULL,
-                                                            _cfg->_remote_sdm);
+    SubscriberDataManager::AoRPair* aor_pair =
+      deregister_bindings(_cfg->_sdm,
+                          it->first,
+                          it->second,
+                          NULL,
+                          _cfg->_remote_sdm,
+                          impis_to_delete);
 
     // LCOV_EXCL_START
     if ((aor_pair != NULL) &&
@@ -456,11 +460,12 @@ HTTPCode DeregistrationTask::handle_request()
       if (_cfg->_remote_sdm != NULL)
       {
         SubscriberDataManager::AoRPair* remote_aor_pair =
-                                             set_aor_data(_cfg->_remote_sdm,
-                                                          it->first,
-                                                          it->second,
-                                                          aor_pair,
-                                                          NULL);
+          deregister_bindings(_cfg->_remote_sdm,
+                              it->first,
+                              it->second,
+                              aor_pair,
+                              NULL,
+                              impis_to_delete);
         delete remote_aor_pair;
       }
     }
@@ -480,20 +485,49 @@ HTTPCode DeregistrationTask::handle_request()
     delete aor_pair;
   }
 
+  // Delete IMPIs from the store.
+  for(std::set<std::string>::iterator impi = impis_to_delete.begin();
+      impi != impis_to_delete.end();
+      ++impi)
+  {
+    TRC_DEBUG("Delete %s from the IMPI store", impi->c_str());
+
+    Store::Status store_rc = Store::OK;
+    ImpiStore::Impi* impi_obj = NULL;
+
+    do
+    {
+      // Free any IMPI we had from the last loop iteration.
+      delete impi_obj; impi_obj = NULL;
+
+      impi_obj = _cfg->_impi_store->get_impi(*impi, _trail);
+
+      if (impi_obj != NULL)
+      {
+        store_rc = _cfg->_impi_store->delete_impi(impi_obj, _trail);
+      }
+    }
+    while ((impi_obj != NULL) && (store_rc == Store::DATA_CONTENTION));
+
+    delete impi_obj; impi_obj = NULL;
+  }
+
   return HTTP_OK;
 }
 
-SubscriberDataManager::AoRPair* DeregistrationTask::set_aor_data(
+SubscriberDataManager::AoRPair* DeregistrationTask::deregister_bindings(
                                         SubscriberDataManager* current_sdm,
                                         std::string aor_id,
                                         std::string private_id,
                                         SubscriberDataManager::AoRPair* previous_aor_pair,
-                                        SubscriberDataManager* remote_sdm)
+                                        SubscriberDataManager* remote_sdm,
+                                        std::set<std::string>& impis_to_delete)
 {
   SubscriberDataManager::AoRPair* aor_pair = NULL;
   bool previous_aor_pair_alloced = false;
   bool all_bindings_expired = false;
   Store::Status set_rc;
+  std::vector<std::string> impis_to_dereg;
 
   do
   {
@@ -527,8 +561,14 @@ SubscriberDataManager::AoRPair* DeregistrationTask::set_aor_data(
       SubscriberDataManager::AoR::Binding* b =
                                   aor_pair->get_current()->get_binding(b_id);
 
-      if (private_id == "" || private_id == b->_private_id)
+      if (private_id.empty() || private_id == b->_private_id)
       {
+        if (!b->_private_id.empty())
+        {
+          // Record the IMPIs that we need to delete as a result of deleting
+          // this binding.
+          impis_to_delete.insert(b->_private_id);
+        }
         aor_pair->get_current()->remove_binding(b_id);
       }
     }
@@ -598,18 +638,21 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
   }
 
   bool success = false;
-  uint64_t cas;
-  rapidjson::Document* av = _cfg->_avstore->get_av(_impi, _nonce, cas, trail());
-  if (av != NULL)
+  ImpiStore::Impi* impi = _cfg->_impi_store->get_impi_with_nonce(_impi, _nonce, trail());
+  ImpiStore::AuthChallenge* auth_challenge = NULL;
+  if (impi != NULL)
+  {
+    auth_challenge = impi->get_auth_challenge(_nonce);
+  }
+  if (auth_challenge != NULL)
   {
     // Use the original REGISTER's branch parameter for SAS
     // correlation
+    correlate_trail_to_challenge(auth_challenge, trail());
 
-    correlate_branch_from_av(av, trail());
-
-    // If authentication completed, we'll have written a marker to
-    // indicate that. Look for it.
-    if (!av->HasMember("tombstone"))
+    // If authentication completed, we'll have incremented the nonce count.
+    // If not, authentication has timed out.
+    if (auth_challenge->nonce_count == ImpiStore::AuthChallenge::INITIAL_NONCE_COUNT)
     {
       TRC_DEBUG("AV for %s:%s has timed out", _impi.c_str(), _nonce.c_str());
 
@@ -640,7 +683,7 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
   {
     TRC_WARNING("Could not find AV for %s:%s when checking authentication timeout", _impi.c_str(), _nonce.c_str()); // LCOV_EXCL_LINE
   }
-  delete av;
+  delete impi;
 
   return success ? HTTP_OK : HTTP_SERVER_ERROR;
 }

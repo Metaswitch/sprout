@@ -26,7 +26,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          memcachedstore.cpp \
                          memcachedstoreview.cpp \
                          memcached_config.cpp \
-                         avstore.cpp \
+                         impistore.cpp \
                          subscriber_data_manager.cpp \
                          xdmconnection.cpp \
                          simservs.cpp \
@@ -120,7 +120,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        xdmconnection_test.cpp \
                        enumservice_test.cpp \
                        subscriber_data_manager_test.cpp \
-                       avstore_test.cpp \
+                       impistore_test.cpp \
                        registrar_test.cpp \
                        bono_test.cpp \
                        bgcfservice_test.cpp \
