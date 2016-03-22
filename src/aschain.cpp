@@ -71,6 +71,15 @@ AsChain::AsChain(AsChainTable* as_chain_table,
   TRC_DEBUG("Creating AsChain %p with %d IFC and adding to map", this, ifcs.size());
   _as_chain_table->register_(this, _odi_tokens);
   TRC_DEBUG("Attached ACR (%p) to chain", _acr);
+
+  // We need to initialize `_responsive` as bools are PODs which are not
+  // initialized.
+  for(std::vector<bool>::iterator it = _responsive.begin();
+      it != _responsive.end();
+      ++it)
+  {
+    *it = false;
+  }
 }
 
 

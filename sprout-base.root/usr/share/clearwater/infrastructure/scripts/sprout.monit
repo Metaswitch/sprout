@@ -52,7 +52,7 @@ check process sprout_process with pidfile /var/run/sprout/sprout.pid
   if memory > 80% for 6 cycles then exec "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 1000.3; /etc/init.d/sprout abort'"
 
 # Clear any alarms if the process has been running long enough.
-check program sprout_uptime with path "/usr/share/clearwater/bin/check-uptime /var/run/sprout/sprout.pid monit 1000.1"
+check program sprout_uptime with path /usr/share/clearwater/infrastructure/scripts/check-sprout-uptime
   group sprout
   depends on sprout_process
   every 3 cycles
