@@ -1200,7 +1200,6 @@ void signal_handler(int sig)
   exception_handler->handle_exception();
 
   CL_SPROUT_CRASH.log(strsignal(sig));
-  closelog();
 
   // Dump a core.
   abort();
@@ -1457,24 +1456,20 @@ int main(int argc, char* argv[])
   opt.impi_store_mode = ImpiStore::Mode::READ_IMPI_WRITE_IMPI;
   opt.nonce_count_supported = false;
 
-  boost::filesystem::path p = argv[0];
-  // Copy the filename to a string so that we can be sure of its lifespan -
-  // the value passed to openlog must be valid for the duration of the program.
-  std::string filename = p.filename().c_str();
-  openlog(filename.c_str(), PDLOG_PID, PDLOG_LOCAL6);
+  // Initialise ENT logging before making "Started" log
+  PDLogStatic::init(argv[0]);
+
   CL_SPROUT_STARTED.log();
 
   status = init_logging_options(argc, argv, &opt);
 
   if (status != PJ_SUCCESS)
   {
-    closelog();
     return 1;
   }
 
   if (opt.daemon && opt.interactive)
   {
-    closelog();
     TRC_ERROR("Cannot specify both --daemon and --interactive");
     return 1;
   }
@@ -1484,7 +1479,6 @@ int main(int argc, char* argv[])
     int errnum = daemonize();
     if (errnum != 0)
     {
-      closelog();
       TRC_ERROR("Failed to convert to daemon, %d (%s)", errnum, strerror(errnum));
       exit(0);
     }
@@ -1523,7 +1517,6 @@ int main(int argc, char* argv[])
   status = init_options(argc, argv, &opt);
   if (status != PJ_SUCCESS)
   {
-    closelog();
     return 1;
   }
 
@@ -1548,14 +1541,12 @@ int main(int argc, char* argv[])
   if ((!opt.pcscf_enabled) && (!opt.scscf_enabled) && (!opt.icscf_enabled))
   {
     CL_SPROUT_NO_SI_CSCF.log();
-    closelog();
     TRC_ERROR("Must enable P-CSCF, S-CSCF or I-CSCF");
     return 1;
   }
 
   if ((opt.pcscf_enabled) && ((opt.scscf_enabled) || (opt.icscf_enabled)))
   {
-    closelog();
     TRC_ERROR("Cannot enable both P-CSCF and S/I-CSCF");
     return 1;
   }
@@ -1563,21 +1554,18 @@ int main(int argc, char* argv[])
   if ((opt.pcscf_enabled) &&
       (opt.upstream_proxy == ""))
   {
-    closelog();
     TRC_ERROR("Cannot enable P-CSCF without specifying --routing-proxy");
     return 1;
   }
 
   if ((opt.ibcf) && (!opt.pcscf_enabled))
   {
-    closelog();
     TRC_ERROR("Cannot enable IBCF without also enabling P-CSCF");
     return 1;
   }
 
   if ((opt.webrtc_port != 0 ) && (!opt.pcscf_enabled))
   {
-    closelog();
     TRC_ERROR("Cannot enable WebRTC without also enabling P-CSCF");
     return 1;
   }
@@ -1592,7 +1580,6 @@ int main(int argc, char* argv[])
       (opt.hss_server == ""))
   {
     CL_SPROUT_SI_CSCF_NO_HOMESTEAD.log();
-    closelog();
     TRC_ERROR("S/I-CSCF enabled with no Homestead server");
     return 1;
   }
@@ -1600,7 +1587,6 @@ int main(int argc, char* argv[])
   if ((opt.auth_enabled) && (opt.hss_server == ""))
   {
     CL_SPROUT_AUTH_NO_HOMESTEAD.log();
-    closelog();
     TRC_ERROR("Authentication enabled, but no Homestead server specified");
     return 1;
   }
@@ -1608,7 +1594,6 @@ int main(int argc, char* argv[])
   if ((opt.xdm_server != "") && (opt.hss_server == ""))
   {
     CL_SPROUT_XDM_NO_HOMESTEAD.log();
-    closelog();
     TRC_ERROR("XDM server configured for services, but no Homestead server specified");
     return 1;
   }
@@ -2054,7 +2039,6 @@ int main(int argc, char* argv[])
     if (local_data_store == NULL)
     {
       CL_SPROUT_MEMCACHE_CONN_FAIL.log();
-      closelog();
       TRC_ERROR("Failed to connect to data store");
       exit(0);
     }
@@ -2141,7 +2125,6 @@ int main(int argc, char* argv[])
     if (status != PJ_SUCCESS)
     {
       CL_SPROUT_INIT_SERVICE_ROUTE_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
-      closelog();
       TRC_ERROR("Failed to enable S-CSCF registrar");
       return 1;
     }
@@ -2157,7 +2140,6 @@ int main(int argc, char* argv[])
     if (status != PJ_SUCCESS)
     {
       CL_SPROUT_REG_SUBSCRIBER_HAND_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
-      closelog();
       TRC_ERROR("Failed to enable subscription module");
       return 1;
     }
@@ -2169,7 +2151,6 @@ int main(int argc, char* argv[])
   if (!loader->load(sproutlets))
   {
     CL_SPROUT_PLUGIN_FAILURE.log();
-    closelog();
     TRC_ERROR("Failed to successfully load plug-ins");
     return 1;
   }
@@ -2209,7 +2190,6 @@ int main(int argc, char* argv[])
       CL_SPROUT_BGCF_INIT_FAIL.log();
       CL_SPROUT_I_CSCF_INIT_FAIL.log();
       TRC_ERROR("Failed to create SproutletProxy");
-      closelog();
       return 1;
     }
   }
@@ -2239,7 +2219,6 @@ int main(int argc, char* argv[])
   if (status != PJ_SUCCESS)
   {
     CL_SPROUT_SIP_STACK_INIT_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
-    closelog();
     TRC_ERROR("Error starting SIP stack, %s", PJUtils::pj_status_to_string(status).c_str());
     return 1;
   }
@@ -2276,7 +2255,6 @@ int main(int argc, char* argv[])
     catch (HttpStack::Exception& e)
     {
       CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
-      closelog();
       TRC_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
       return 1;
     }
@@ -2432,7 +2410,6 @@ int main(int argc, char* argv[])
 
   sem_destroy(&quiescing_sem);
   sem_destroy(&term_sem);
-  closelog();
 
   return 0;
 }
