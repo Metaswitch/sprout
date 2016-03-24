@@ -98,6 +98,7 @@ get_settings()
         sas_server=0.0.0.0
         sprout_rr_level="pcscf"
         scscf=5054
+        bgcf=5054
         alias_list=""
         default_session_expires=600
         signaling_dns_server=127.0.0.1
