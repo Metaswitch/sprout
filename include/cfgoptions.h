@@ -81,7 +81,6 @@ struct options
   std::string                          public_host;
   std::string                          home_domain;
   std::string                          sprout_hostname;
-  std::string                          sprout_uri;
   std::string                          additional_home_domains;
   std::string                          alias_hosts;
   std::string                          trusted_hosts;

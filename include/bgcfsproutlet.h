@@ -68,7 +68,8 @@ class BGCFSproutletTsx;
 class BGCFSproutlet : public Sproutlet
 {
 public:
-  BGCFSproutlet(int port,
+  BGCFSproutlet(const std::string& bgcf_name,
+                int port,
                 BgcfService* bgcf_service,
                 EnumService* enum_service,
                 ACRFactory* acr_factory,

@@ -75,7 +75,8 @@ public:
   static const int DEFAULT_SESSION_CONTINUED_TIMEOUT = 2000;
   static const int DEFAULT_SESSION_TERMINATED_TIMEOUT = 4000;
 
-  SCSCFSproutlet(const std::string& scscf_cluster_uri,
+  SCSCFSproutlet(const std::string& scscf_name,
+                 const std::string& scscf_cluster_uri,
                  const std::string& scscf_node_uri,
                  const std::string& icscf_uri,
                  const std::string& bgcf_uri,
