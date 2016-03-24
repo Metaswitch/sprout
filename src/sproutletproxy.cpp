@@ -89,6 +89,7 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
                              "." + root_uri + ":" +
                              std::to_string((*it)->port()) +
                              ";transport=tcp";
+    TRC_DEBUG("Record-Route URI = %s", rr_uri_str.c_str());
     pjsip_sip_uri* root_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(
                                                        rr_uri_str,
                                                        stack_data.pool,
@@ -205,7 +206,6 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
   return sproutlet;
 }
 
-
 bool SproutletProxy::does_uri_match_sproutlet(const pjsip_uri* uri,
                                               Sproutlet* sproutlet,
                                               std::string& alias)
@@ -263,37 +263,41 @@ bool SproutletProxy::does_uri_match_sproutlet(const pjsip_uri* uri,
       possible_service_names.push_back(service_name);
     }
   }
-  else
+
+  if (sip_uri->user.slen != 0)
   {
-    if (sip_uri->user.slen != 0)
+    // Use the username
+    TRC_DEBUG("Found user - %.*s", sip_uri->user.slen, sip_uri->user.ptr);
+    service_name = PJUtils::pj_str_to_string(&sip_uri->user);
+
+    if (is_host_local(&sip_uri->host))
     {
-      // Use the username
-      TRC_DEBUG("Found user - %.*s", sip_uri->user.slen, sip_uri->user.ptr);
-      service_name = PJUtils::pj_str_to_string(&sip_uri->user);
-      if (is_host_local(&sip_uri->host))
-      {
-        possible_service_names.push_back(service_name);
-      }
+      possible_service_names.push_back(service_name);
     }
+  }
 
-    // Now spilt the first label off the host and check if the rest is still a
-    // local hostname.  This works for IP addresses since IPv4 addresses cannot
-    // have only 3 octets and IPv6 addresses contain no periods.
-    pj_str_t hostname = sip_uri->host;
-    char* sep = pj_strchr(&hostname, '.');
-    if (sep != NULL)
+  // Spilt the first label off the host and check if the rest is still a
+  // local hostname.  This works for IP addresses since IPv4 addresses cannot
+  // have only 3 octets and IPv6 addresses contain no periods.
+  pj_str_t hostname = sip_uri->host;
+  char* sep = pj_strchr(&hostname, '.');
+
+  if (sep != NULL)
+  {
+    // Extract the possible service name
+    std::string service_name = std::string(hostname.ptr, sep - hostname.ptr);
+
+    TRC_DEBUG("Possible service name - %s", service_name.c_str());
+
+    // Remove the service name part and the period from the hostname.
+    hostname.slen -= (sep - hostname.ptr + 1);
+    hostname.ptr = sep + 1;
+
+    TRC_DEBUG("Hostname - %.*s", hostname.slen, hostname.ptr);
+
+    if (is_host_local(&hostname))
     {
-      // Extract the possible service name
-      service_name = std::string(hostname.ptr, sep - hostname.ptr);
-
-      // Remove the service name part and the period from the hostname.
-      hostname.slen -= (sep - hostname.ptr + 1);
-      hostname.ptr = sep + 1;
-
-      if (is_host_local(&hostname))
-      {
-        possible_service_names.push_back(service_name);
-      }
+      possible_service_names.push_back(service_name);
     }
   }
 
@@ -336,10 +340,6 @@ pjsip_sip_uri* SproutletProxy::create_sproutlet_uri(pj_pool_t* pool,
   pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, _root_uris.find(sproutlet->service_name())->second);
   uri->lr_param = 1;
 
-  TRC_DEBUG(PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                   (pjsip_uri*)uri).c_str());
-
-  //sproutlet->service_name() + "."
   TRC_DEBUG("Add services parameter");
   pjsip_param* p = PJ_POOL_ALLOC_T(pool, pjsip_param);
   pj_strdup(pool, &p->name, &STR_SERVICE);
