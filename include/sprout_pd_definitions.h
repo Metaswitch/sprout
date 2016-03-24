@@ -45,14 +45,14 @@
 
 // The fields for each PDLog instance contains:
 //   Identity - Identifies the log id to be used in the syslog id field.
-//   Severity - One of Emergency, Alert, Critical, Error, Warning, Notice, 
+//   Severity - One of Emergency, Alert, Critical, Error, Warning, Notice,
 //              and Info.  Directly corresponds to the syslog severity types.
-//              Only PDLOG_ERROR or PDLOG_NOTICE are used.  
+//              Only PDLOG_ERROR or PDLOG_NOTICE are used.
 //              See syslog_facade.h for definitions.
 //   Message  - Formatted description of the condition.
 //   Cause    - The cause of the condition.
 //   Effect   - The effect the condition.
-//   Action   - A list of one or more actions to take to resolve the condition 
+//   Action   - A list of one or more actions to take to resolve the condition
 //              if it is an error.
 static const PDLog2<const char*, const char*> CL_SPROUT_INVALID_PORT_SPROUTLET
 (
@@ -158,7 +158,7 @@ static const PDLog1<const char*> CL_SPROUT_SIP_INIT_INTERFACE_FAIL
   "The application will exit and restart until the problem is fixed.",
   "(1). Check the /etc/clearwater/config configuration."
   "(2). Check the /etc/clearwater/user_settings configuration."
-  "(3). Check the network configuration and status." 
+  "(3). Check the network configuration and status."
 );
 
 static const PDLog CL_SPROUT_NO_RALF_CONFIGURED
@@ -222,7 +222,7 @@ static const PDLog2<const char*, int> CL_SPROUT_HTTP_INTERFACE_FAIL
   "An HTTP interface failed to initialize or start in %s with error %d.",
   "An HTTP interface has failed initialization.",
   "The application will exit and restart until the problem is fixed.",
-  "Check the network status and configuration." 
+  "Check the network status and configuration."
 );
 
 static const PDLog CL_SPROUT_ENDED
@@ -432,8 +432,48 @@ static const PDLog CL_SPROUT_BGCF_FILE_INVALID
   PDLOG_ERR,
   "The file listing BGCF routes is not present or empty.",
   "The /etc/clearwater/bgcf.json file, defining which BGCF routes to use, is not valid (due to invalid JSON or missing elements).",
-  "Sprout will not be able to route some or all calls outside the local deployment.", 
+  "Sprout will not be able to route some or all calls outside the local deployment.",
   "If you are expecting to route calls off-net, follow the documentation to create routes in /etc/clearwater/bgcf.json. Otherwise, delete this file."
+);
+
+static const PDLog1<const char *> CL_SPROUT_SESS_TERM_AS_COMM_FAILURE
+(
+  PDLogBase::CL_SPROUT_ID + 48,
+  PDLOG_ERR,
+  "Sprout is currently unable to successfully communicate with an Application Server that uses session terminated default handling. The server's URI is: %s",
+  "Communication is failing to an Application Server",
+  "Probable major loss of service. The precise impact will vary depending on the role of this Application Server.",
+  "Investigate why communication to this Application Server is failing. It might be due to failure of the AS, misconfiguration of Initial Filter Criteria, or network / DNS problems"
+);
+
+static const PDLog1<const char *> CL_SPROUT_SESS_TERM_AS_COMM_SUCCESS
+(
+  PDLogBase::CL_SPROUT_ID + 49,
+  PDLOG_NOTICE,
+  "Sprout is able to successfully communicate with an Application Server that uses session terminated default handling. ",
+  "Communication has been restored to an Application Server",
+  "Full service has been restored.",
+  "No action"
+);
+
+static const PDLog1<const char *> CL_SPROUT_SESS_CONT_AS_COMM_FAILURE
+(
+  PDLogBase::CL_SPROUT_ID + 50,
+  PDLOG_ERR,
+  "Sprout is currently unable to successfully communicate with an Application Server that uses session continued default handling. The server's URI is %s",
+  "Communication is failing to <URI>",
+  "Probable minor degradation of service, or loss of a supplemental service. The precise impact will vary depending on the role of the Application Server in the deployment.",
+  "Investigate why communication to this Application Server is failing. It might be due to failure of the AS, misconfiguration of Initial Filter Criteria, or network / DNS problems"
+);
+
+static const PDLog1<const char *> CL_SPROUT_SESS_CONT_AS_COMM_SUCCESS
+(
+  PDLogBase::CL_SPROUT_ID + 51,
+  PDLOG_NOTICE,
+  "Sprout is able to successfully communicate with an Application Server that uses session continued default handling.",
+  "Communication has been restored to an Application Server",
+  "Full service has been restored.",
+  "No action"
 );
 
 #endif

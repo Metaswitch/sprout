@@ -289,11 +289,16 @@ public:
     return _as_chain->_odi_tokens[_index + 1];
   }
 
-  /// Returns whether or not processing of the AS chain should continue on
-  /// a timeout or 5xx error from the AS.
-  bool continue_session() const
+  /// Returns whether the AS is responsive.
+  bool responsive() const
   {
-    return (_default_handling == SESSION_CONTINUED) && (!_as_chain->_responsive[_index]);
+    return _as_chain->_responsive[_index];
+  }
+
+  /// Returns the default handling for this AS chain link.
+  DefaultHandling default_handling()
+  {
+    return _default_handling;
   }
 
   /// Called on receipt of each response from the AS.
@@ -337,6 +342,12 @@ public:
   void interrupt()
   {
     _interrupted = true;
+  }
+
+  /// @return The URI of the AS associated with this AS chain.
+  std::string uri()
+  {
+    return is_set() ? _as_chain->_as_info[_index].as_uri : "";
   }
 
 private:

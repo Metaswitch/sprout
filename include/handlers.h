@@ -43,7 +43,7 @@
 #include "hssconnection.h"
 #include "subscriber_data_manager.h"
 #include "sipresolver.h"
-#include "avstore.h"
+#include "impistore.h"
 
 /// Common factory for all handlers that deal with chronos timer pops. This is
 /// a subclass of SpawningHandler that requests HTTP flows to be
@@ -111,16 +111,19 @@ public:
     Config(SubscriberDataManager* sdm,
            SubscriberDataManager* remote_sdm,
            HSSConnection* hss,
-           SIPResolver* sipresolver) :
+           SIPResolver* sipresolver,
+           ImpiStore* impi_store) :
       _sdm(sdm),
       _remote_sdm(remote_sdm),
       _hss(hss),
-      _sipresolver(sipresolver)
+      _sipresolver(sipresolver),
+      _impi_store(impi_store)
     {}
     SubscriberDataManager* _sdm;
     SubscriberDataManager* _remote_sdm;
     HSSConnection* _hss;
     SIPResolver* _sipresolver;
+    ImpiStore* _impi_store;
   };
 
 
@@ -133,12 +136,13 @@ public:
   void run();
   HTTPCode handle_request();
   HTTPCode parse_request(std::string body);
-  SubscriberDataManager::AoRPair* set_aor_data(
+  SubscriberDataManager::AoRPair* deregister_bindings(
                     SubscriberDataManager* current_sdm,
                     std::string aor_id,
                     std::string private_id,
                     SubscriberDataManager::AoRPair* previous_aor_data,
-                    SubscriberDataManager* remote_sdm);
+                    SubscriberDataManager* remote_sdm,
+                    std::set<std::string>& impis_to_delete);
 
 protected:
   const Config* _cfg;
@@ -151,9 +155,9 @@ class AuthTimeoutTask : public HttpStackUtils::Task
 public:
   struct Config
   {
-  Config(AvStore* store, HSSConnection* hss) :
-    _avstore(store), _hss(hss) {}
-    AvStore* _avstore;
+  Config(ImpiStore* store, HSSConnection* hss) :
+    _impi_store(store), _hss(hss) {}
+    ImpiStore* _impi_store;
     HSSConnection* _hss;
   };
   AuthTimeoutTask(HttpStack::Request& req,

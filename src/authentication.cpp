@@ -58,7 +58,7 @@ extern "C" {
 #include "analyticslogger.h"
 #include "hssconnection.h"
 #include "authentication.h"
-#include "avstore.h"
+#include "impistore.h"
 #include "snmp_success_fail_count_table.h"
 #include "base64.h"
 
@@ -89,6 +89,12 @@ pjsip_module mod_authentication =
 // Configuring PJSIP with a realm of "*" means that all realms are considered.
 const pj_str_t WILDCARD_REALM = pj_str("*");
 
+// Initial expiry time (in seconds) for authentication challenges.  This should
+// always be long enough for the UE to respond to the authentication challenge,
+// and means that on authentication timeout our 30-second Chronos timer should
+// pop before it expires.
+const uint32_t AUTH_CHALLENGE_INIT_EXPIRES = 40;
+
 // Realm to use on AKA challenges.
 static pj_str_t aka_realm;
 
@@ -101,15 +107,23 @@ static ChronosConnection* chronos;
 static ACRFactory* acr_factory;
 
 
-// AV store used to store Authentication Vectors while waiting for the
-// client to respond to a challenge.
-static AvStore* av_store;
+// IMPI store used to store authentication challenges while waiting for the
+// client to respond.
+static ImpiStore* impi_store;
 
 // Analytics logger.
 static AnalyticsLogger* analytics;
 
 // SNMP tables counting authentication successes and failures.
 static SNMP::AuthenticationStatsTables* auth_stats_tables;
+
+// Whether nonce counts are supported.
+static bool nonce_count_supported = false;
+
+// A function that the authentication module can use to work out the expiry
+// time for a given binding. This is needed so that it knows how long to
+// authentication challenges for.
+get_expiry_for_binding_fn get_expiry_for_binding;
 
 // PJSIP structure for control server authentication functions.
 pjsip_auth_srv auth_srv;
@@ -146,6 +160,30 @@ static pjsip_digest_credential* get_credentials(const pjsip_rx_data* rdata)
   return credentials;
 }
 
+/// Given a request that has passed authentication, calculate the time at which
+/// to expire the challenge.
+///
+/// @param rdata - The request in question.
+///
+/// @return The expiry time of the binding (in seconds since the epoch).
+int calculate_challenge_expiration_time(pjsip_rx_data* rdata)
+{
+  int expires = 0;
+
+  pjsip_expires_hdr* expires_hdr = (pjsip_expires_hdr*)
+    pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_EXPIRES, NULL);
+
+  for (pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
+          pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL);
+       contact_hdr != NULL;
+       contact_hdr = (pjsip_contact_hdr*)
+          pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, contact_hdr->next))
+  {
+    expires = std::max(expires, get_expiry_for_binding(contact_hdr, expires_hdr));
+  }
+
+  return expires + time(NULL);
+}
 
 /// Verifies that the supplied authentication vector is valid.
 bool verify_auth_vector(rapidjson::Document* av, const std::string& impi, SAS::TrailId trail)
@@ -216,16 +254,14 @@ bool verify_auth_vector(rapidjson::Document* av, const std::string& impi, SAS::T
   return rc;
 }
 
-
 pj_status_t user_lookup(pj_pool_t *pool,
                         const pjsip_auth_lookup_cred_param *param,
                         pjsip_cred_info *cred_info,
-                        void* av_param)
+                        void* auth_challenge_param)
 {
   const pj_str_t* acc_name = &param->acc_name;
   const pj_str_t* realm = &param->realm;
   const pjsip_rx_data* rdata = param->rdata;
-  SAS::TrailId trail = get_trail(rdata);
 
   pj_status_t status = PJSIP_EAUTHACCNOTFOUND;
 
@@ -236,48 +272,38 @@ pj_status_t user_lookup(pj_pool_t *pool,
   std::string nonce = PJUtils::pj_str_to_string(&credentials->nonce);
 
   // Get the Authentication Vector from the store.
-  rapidjson::Document* av = (rapidjson::Document*)av_param;
+  ImpiStore::AuthChallenge* auth_challenge = (ImpiStore::AuthChallenge*)auth_challenge_param;
 
-  if (av == NULL)
+  if (auth_challenge == NULL)
   {
-    TRC_WARNING("Received an authentication request for %s with nonce %s, but no matching AV found", impi.c_str(), nonce.c_str());
+    TRC_WARNING("Received an authentication request for %s with nonce %s, but no matching challenge found", impi.c_str(), nonce.c_str());
   }
 
-  if ((av != NULL) &&
-      (!verify_auth_vector(av, impi, trail)))
-  {
-    // Authentication vector is badly formed.
-    av = NULL;                                                 // LCOV_EXCL_LINE
-  }
-
-  if (av != NULL)
+  if (auth_challenge != NULL)
   {
     pj_cstr(&cred_info->scheme, "digest");
     pj_strdup(pool, &cred_info->username, acc_name);
-    if (av->HasMember("aka"))
+    if (auth_challenge->type == ImpiStore::AuthChallenge::Type::AKA)
     {
+      ImpiStore::AKAAuthChallenge* aka_challenge = (ImpiStore::AKAAuthChallenge*)auth_challenge;
       pjsip_param* auts_param = pjsip_param_find(&credentials->other_param,
                                                  &STR_AUTS);
 
-      // AKA authentication.  The response in the AV must be used as a
+      // AKA authentication.  The response in the challenge must be used as a
       // plain-text password for the MD5 Digest computation.  Convert the text
       // into binary as this is what PJSIP is expecting. If we find the 'auts'
       // parameter, then leave the response as the empty string in accordance
       // with RFC 3310.
-      std::string response = "";
-      if (((*av)["aka"].HasMember("response")) &&
-          ((*av)["aka"]["response"].IsString()) &&
-          auts_param == NULL)
+      std::string xres = "";
+      if (auts_param == NULL)
       {
-        response = (*av)["aka"]["response"].GetString();
+        for (size_t ii = 0; ii < aka_challenge->response.length(); ii += 2)
+        {
+          xres.push_back((char)(pj_hex_digit_to_val(aka_challenge->response[ii]) * 16 +
+                                pj_hex_digit_to_val(aka_challenge->response[ii+1])));
+        }
       }
 
-      std::string xres;
-      for (size_t ii = 0; ii < response.length(); ii += 2)
-      {
-        xres.push_back((char)(pj_hex_digit_to_val(response[ii]) * 16 +
-                              pj_hex_digit_to_val(response[ii+1])));
-      }
       cred_info->data_type = PJSIP_CRED_DATA_PLAIN_PASSWD;
       pj_strdup2(pool, &cred_info->data, xres.c_str());
       TRC_DEBUG("Found AKA XRES = %.*s", cred_info->data.slen, cred_info->data.ptr);
@@ -286,27 +312,15 @@ pj_status_t user_lookup(pj_pool_t *pool,
       pj_strdup(pool, &cred_info->realm, realm);
       status = PJ_SUCCESS;
     }
-    else if (av->HasMember("digest"))
+    else if (auth_challenge->type == ImpiStore::AuthChallenge::Type::DIGEST)
     {
-      std::string digest_realm = "";
-      if (((*av)["digest"].HasMember("realm")) &&
-          ((*av)["digest"]["realm"].IsString()))
-      {
-        digest_realm = (*av)["digest"]["realm"].GetString();
-      }
+      ImpiStore::DigestAuthChallenge* digest_challenge = (ImpiStore::DigestAuthChallenge*)auth_challenge;
 
-      if (pj_strcmp2(realm, digest_realm.c_str()) == 0)
+      if (pj_strcmp2(realm, digest_challenge->realm.c_str()) == 0)
       {
         // Digest authentication, so ha1 field is hashed password.
         cred_info->data_type = PJSIP_CRED_DATA_DIGEST;
-        std::string digest_ha1 = "";
-        if (((*av)["digest"].HasMember("ha1")) &&
-            ((*av)["digest"]["ha1"].IsString()))
-        {
-          digest_ha1 = (*av)["digest"]["ha1"].GetString();
-        }
-
-        pj_strdup2(pool, &cred_info->data, digest_ha1.c_str());
+        pj_strdup2(pool, &cred_info->data, digest_challenge->ha1.c_str());
         cred_info->realm = *realm;
         TRC_DEBUG("Found Digest HA1 = %.*s", cred_info->data.slen, cred_info->data.ptr);
         status = PJ_SUCCESS;
@@ -318,8 +332,6 @@ pj_status_t user_lookup(pj_pool_t *pool,
         status = PJSIP_EAUTHNOAUTH;
       }
     }
-
-    correlate_branch_from_av(av, trail);
   }
 
   return status;
@@ -393,6 +405,7 @@ void create_challenge(pjsip_digest_credential* credentials,
     // Digest authentication).
     hdr->scheme = STR_DIGEST;
 
+    ImpiStore::AuthChallenge* auth_challenge;
     if (av->HasMember("aka"))
     {
       // AKA authentication.
@@ -444,6 +457,20 @@ void create_challenge(pjsip_digest_credential* credentials,
       std::string ik = "\"" + integritykey + "\"";
       pj_strdup2(tdata->pool, &ik_param->value, ik.c_str());
       pj_list_insert_before(&hdr->challenge.digest.other_param, ik_param);
+
+      // Get the response.  We must not provide this on the SIP message, but
+      // we will put it in the store.
+      std::string response = "";
+      if ((aka.HasMember("response")) &&
+          (aka["response"].IsString()))
+      {
+        response = aka["response"].GetString();
+      }
+
+      // Now build the AuthChallenge so that we can store it in the ImpiStore.
+      auth_challenge = new ImpiStore::AKAAuthChallenge(nonce,
+                                                       response,
+                                                       time(NULL) + AUTH_CHALLENGE_INIT_EXPIRES);
     }
     else
     {
@@ -476,6 +503,22 @@ void create_challenge(pjsip_digest_credential* credentials,
       pj_strdup(tdata->pool, &hdr->challenge.digest.opaque, &random);
       pj_strdup2(tdata->pool, &hdr->challenge.digest.qop, qop.c_str());
       hdr->challenge.digest.stale = stale;
+
+      // Get the HA1 digest.  We must not provide this on the SIP message, but
+      // we will put it in the store.
+      std::string ha1 = "";
+      if ((digest.HasMember("ha1")) &&
+          (digest["ha1"].IsString()))
+      {
+        ha1 = digest["ha1"].GetString();
+      }
+
+      // Now build the AuthChallenge so that we can store it in the ImpiStore.
+      auth_challenge = new ImpiStore::DigestAuthChallenge(nonce,
+                                                          realm,
+                                                          qop,
+                                                          ha1,
+                                                          time(NULL) + AUTH_CHALLENGE_INIT_EXPIRES);
     }
 
     // Add the header to the message.
@@ -483,19 +526,78 @@ void create_challenge(pjsip_digest_credential* credentials,
 
     // Store the branch parameter in memcached for correlation purposes
     pjsip_via_hdr* via_hdr = (pjsip_via_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_VIA, NULL);
-    std::string branch = (via_hdr != NULL) ? PJUtils::pj_str_to_string(&via_hdr->branch_param) : "";
+    auth_challenge->correlator =
+      (via_hdr != NULL) ? PJUtils::pj_str_to_string(&via_hdr->branch_param) : "";
 
-    rapidjson::Value branch_value;
-    branch_value.SetString(branch.c_str(), (*av).GetAllocator());
-    (*av).AddMember("branch", branch_value, (*av).GetAllocator());
+    // Write the new authentication challenge to the IMPI store
+    TRC_DEBUG("Write authentication challenge to IMPI store");
+    Store::Status status;
 
-    // Write the authentication vector (as a JSON string) into the AV store.
-    TRC_DEBUG("Write AV to store");
-    uint64_t cas = 0;
-    Store::Status status = av_store->set_av(impi, nonce, av, cas, get_trail(rdata));
+    do
+    {
+      // Save off the nonce. We will need it to reclaim the auth challenge from
+      // the IMPI at the end of the loop.
+      std::string nonce = auth_challenge->nonce;
+
+      ImpiStore::Impi* impi_obj =
+        impi_store->get_impi_with_nonce(impi,
+                                        nonce,
+                                        get_trail(rdata));
+
+      if (impi_obj == NULL)
+      {
+        impi_obj = new ImpiStore::Impi(impi);
+      }
+
+      // Check whether the IMPI has an existing auth challenge.
+      ImpiStore::AuthChallenge* challenge =
+        impi_obj->get_auth_challenge(auth_challenge->nonce);
+
+      if (challenge != NULL)
+      {
+        // The IMPI already has a challenge. This shouldn't happen in mainline
+        // operation but it can happen if we hit data contention (the IMPI store
+        // may have failed to write data in the new format but succeeded writing
+        // a challenge int he old format meaning the challenge could appear on a
+        // subsequent get.
+        //
+        // Regardless, we want to be defensive and update the existing challenge
+        // (making sure the nonce count and expiry don't move backwards).
+        challenge->nonce_count = std::max(auth_challenge->nonce_count,
+                                          challenge->nonce_count);
+        challenge->expires = std::max(auth_challenge->expires,
+                                      challenge->expires);
+        delete auth_challenge; auth_challenge = NULL;
+      }
+      else
+      {
+        // Add our new challenges to the IMPI.
+        impi_obj->auth_challenges.push_back(auth_challenge);
+        auth_challenge = NULL;
+      }
+
+      status = impi_store->set_impi(impi_obj, get_trail(rdata));
+
+      // Regardless of what happened take the challenge back. If everything
+      // went well we will delete it below. If we hit data contention we will
+      // need it the next time round the loop.
+      auth_challenge = impi_obj->get_auth_challenge(nonce);
+      std::vector<ImpiStore::AuthChallenge*>& challenges = impi_obj->auth_challenges;
+      challenges.erase(std::remove(challenges.begin(),
+                                   challenges.end(),
+                                   auth_challenge),
+                       challenges.end());
+
+      delete impi_obj; impi_obj = NULL;
+
+    } while (status == Store::DATA_CONTENTION);
+
+    // We're done with the auth challenge now.
+    delete auth_challenge; auth_challenge = NULL;
+
     if (status == Store::OK)
     {
-      // We've written the AV into the store, so need to set a Chronos
+      // We've written the challenge into the store, so need to set a Chronos
       // timer so that an AUTHENTICATION_TIMEOUT SAR is sent to the
       // HSS when it expires.
       std::string timer_id;
@@ -685,21 +787,25 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   }
 
   TRC_DEBUG("Request needs authentication");
-  rapidjson::Document* av = NULL;
 
   const int unauth_sc = is_register ? PJSIP_SC_UNAUTHORIZED : PJSIP_SC_PROXY_AUTHENTICATION_REQUIRED;
   int sc = unauth_sc;
-  status = PJSIP_EAUTHNOAUTH;
+  status = PJ_SUCCESS;
 
   pjsip_digest_credential* credentials = get_credentials(rdata);
 
+  ImpiStore::Impi* impi_obj = NULL;
   if ((credentials != NULL) &&
       (credentials->response.slen != 0))
   {
     std::string impi = PJUtils::pj_str_to_string(&credentials->username);
     std::string nonce = PJUtils::pj_str_to_string(&credentials->nonce);
-    uint64_t cas = 0;
-    av = av_store->get_av(impi, nonce, cas, trail);
+    impi_obj = impi_store->get_impi_with_nonce(impi, nonce, trail);
+    ImpiStore::AuthChallenge* auth_challenge = NULL;
+    if (impi_obj != NULL)
+    {
+      auth_challenge = impi_obj->get_auth_challenge(nonce);
+    }
 
     if (!is_register)
     {
@@ -719,9 +825,9 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       }
       else
       {
-        // Authorization header did not specify an algorithm, so check the av for
+        // Authorization header did not specify an algorithm, so check the challenge for
         // this information instead.
-        if ((av != NULL) && (av->HasMember("aka")))
+        if ((auth_challenge != NULL) && (auth_challenge->type == ImpiStore::AuthChallenge::Type::AKA))
         {
           auth_stats_table = auth_stats_tables->ims_aka_auth_tbl;
         }
@@ -738,125 +844,221 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       auth_stats_table->increment_attempts();
     }
 
-    // Request contains a response to a previous challenge, so pass it to
-    // the authentication module to verify.
-    TRC_DEBUG("Verify authentication information in request");
-    status = pjsip_auth_srv_verify2((is_register ? &auth_srv : &auth_srv_proxy), rdata, &sc, (void*)av);
+    // Calculate the nonce count on the request (if it is not present default
+    // to 1).
+    unsigned long nonce_count = pj_strtoul2(&credentials->nc, NULL, 16);
+    nonce_count = (nonce_count == 0) ? 1 : nonce_count;
+
+    if ((auth_challenge != NULL) && (auth_challenge->nonce_count > 1))
+    {
+      // A nonce count > 1 is supplied. Check that it is acceptable. If it is
+      // not, pretend that we didn't find the challenge to check against as
+      // this will force the code below to re-challenge.
+      if (!nonce_count_supported)
+      {
+        TRC_INFO("Nonce count %d supplied but nonce counts are not enabled - ignore it",
+                 nonce_count);
+        SAS::Event event(trail, SASEvent::AUTHENTICATION_NC_NOT_SUPP, 0);
+        event.add_static_param(nonce_count);
+        SAS::report_event(event);
+
+        status = PJSIP_EAUTHACCNOTFOUND;
+        auth_challenge = NULL;
+      }
+      else if (nonce_count < auth_challenge->nonce_count)
+      {
+        // The nonce count is too low - this might be a replay attack.
+        TRC_INFO("Nonce count supplied (%d) is lower than expected (%d) - ignore it",
+                 nonce_count, auth_challenge->nonce_count);
+        SAS::Event event(trail, SASEvent::AUTHENTICATION_NC_TOO_LOW, 0);
+        event.add_static_param(nonce_count);
+        event.add_static_param(auth_challenge->nonce_count);
+        SAS::report_event(event);
+
+        status = PJSIP_EAUTHACCNOTFOUND;
+        auth_challenge = NULL;
+      }
+      else if (!is_register)
+      {
+        // We only support nonce counts for REGISTER requests (as for other
+        // requests we wouldn't know how long to store the challenge for)
+        TRC_INFO("Nonce count %d supplied on a non-REGISTER - ignore it",
+                 nonce_count);
+        SAS::Event event(trail, SASEvent::AUTHENTICATION_NC_ON_NON_REG, 0);
+        event.add_static_param(nonce_count);
+        SAS::report_event(event);
+
+        status = PJSIP_EAUTHACCNOTFOUND;
+        auth_challenge = NULL;
+      }
+    }
 
     if (status == PJ_SUCCESS)
     {
-      // The authentication information in the request was verified.
-      TRC_DEBUG("Request authenticated successfully");
-
-      SAS::Event event(trail, SASEvent::AUTHENTICATION_SUCCESS, 0);
-      SAS::report_event(event);
-
-      if (auth_stats_table != NULL)
+      // We're about to do the authentication check. If this is the first
+      // response to a challenge correlate it to the flow that issued the
+      // challenge in the first place.
+      if ((auth_challenge != NULL) && (nonce_count == 1))
       {
-        auth_stats_table->increment_successes();
+        correlate_trail_to_challenge(auth_challenge, trail);
       }
 
-      // Write a tombstone flag back to the AV store, handling contention.
-      // We don't actually expect anything else to be writing to this row in
-      // the AV store, but there is a window condition where we failed to read
-      // from the primary, successfully read from the backup (with a different
-      // CAS value) and then try to write back to the primary, which fails due
-      // to "contention".
-      Store::Status store_status;
-      do
-      {
-        // Set the tomestone flag in the JSON authentication vector.
-        rapidjson::Value tombstone_value;
-        tombstone_value.SetBool(true);
-        av->AddMember("tombstone", tombstone_value, (*av).GetAllocator());
-
-        // Store it.  If this fails due to contention, read the updated JSON.
-        store_status = av_store->set_av(impi, nonce, av, cas, trail);
-        if (store_status == Store::DATA_CONTENTION)
-        {
-          // LCOV_EXCL_START - No support for contention in UT
-          TRC_DEBUG("Data contention writing tombstone - retry");
-          delete av;
-          av = av_store->get_av(impi, nonce, cas, trail);
-          if (av == NULL)
-          {
-            store_status = Store::ERROR;
-          }
-          // LCOV_EXCL_STOP
-        }
-      }
-      while (store_status == Store::DATA_CONTENTION);
-
-      if (store_status != Store::OK)
-      {
-        // LCOV_EXCL_START
-        TRC_ERROR("Tried to tombstone AV for %s/%s after processing an authentication, but failed",
-                  impi.c_str(),
-                  nonce.c_str());
-        // LCOV_EXCL_STOP
-      }
-
-      // If doing AKA authentication, check for an AUTS parameter.  We only
-      // check this if the request authenticated as actioning it otherwise
-      // is a potential denial of service attack.
-      if (!pj_strcmp(&credentials->algorithm, &STR_AKAV1_MD5))
-      {
-        TRC_DEBUG("AKA authentication so check for client resync request");
-        pjsip_param* p = pjsip_param_find(&credentials->other_param,
-                                          &STR_AUTS);
-
-        if (p != NULL)
-        {
-          // Found AUTS parameter, so UE is requesting a resync.  We need to
-          // redo the authentication, passing an auts parameter to the HSS
-          // comprising the first 16 octets of the nonce (RAND) and the 14
-          // octets of the auts parameter.  (See TS 33.203 and table 6.3.3 of
-          // TS 29.228 for details.)
-          TRC_DEBUG("AKA SQN resync request from UE");
-          std::string auts = PJUtils::pj_str_to_string(&p->value);
-          std::string nonce = PJUtils::pj_str_to_string(&credentials->nonce);
-
-          // Convert the auts and nonce to binary for manipulation
-          nonce = base64_decode(nonce);
-          auts  = base64_decode(auts);
-
-          if ((auts.length() != 14) ||
-              (nonce.length() != 32))
-          {
-            // AUTS and/or nonce are malformed, so reject the request.
-            TRC_WARNING("Invalid auts/nonce on resync request from private identity %.*s",
-                        credentials->username.slen,
-                        credentials->username.ptr);
-            status = PJSIP_EAUTHINAKACRED;
-            sc = PJSIP_SC_FORBIDDEN;
-          }
-          else
-          {
-            // auts and nonce are as expected, so create the resync string
-            // that needs to be passed to the HSS, and act as if no
-            // authentication information was received. The resync string
-            // should be RAND || AUTS.
-            resync = base64_encode(nonce.substr(0, 16) + auts);
-            status = PJSIP_EAUTHNOAUTH;
-            sc = unauth_sc;
-          }
-        }
-      }
+      // Request contains a response to a previous challenge, so pass it to
+      // the authentication module to verify.
+      TRC_DEBUG("Verify authentication information in request");
+      status = pjsip_auth_srv_verify2((is_register ? &auth_srv : &auth_srv_proxy),
+                                      rdata,
+                                      &sc,
+                                      (void*)auth_challenge);
 
       if (status == PJ_SUCCESS)
       {
-        // Request authentication completed, so let the message through to other
-        // modules. Remove any Proxy-Authorization headers first so they are not
-        // passed to downstream devices. We can't do this for Authorization
-        // headers, as these may need to be included in 3rd party REGISTER
-        // messages.
-        while (pjsip_msg_find_remove_hdr(rdata->msg_info.msg,
-                                         PJSIP_H_PROXY_AUTHORIZATION,
-                                         NULL) != NULL);
-        delete av;
-        return PJ_FALSE;
+        // The authentication information in the request was verified.
+        TRC_DEBUG("Request authenticated successfully");
+
+        SAS::Event event(trail, SASEvent::AUTHENTICATION_SUCCESS, 0);
+        SAS::report_event(event);
+
+        if (auth_stats_table != NULL)
+        {
+          auth_stats_table->increment_successes();
+        }
+
+        // Increment the nonce count and set it back to the AV store, handling
+        // contention.  We don't check for overflow - it will take ~2^32
+        // authentications before it happens.
+        uint32_t new_nonce_count = nonce_count + 1;
+
+        // Work out when the challenge should expire. We only want to keep it
+        // around if nonce counts are supported and the UE authenticates by
+        // registering.
+        int new_expiry = auth_challenge->expires;
+        if (nonce_count_supported && is_register)
+        {
+          new_expiry = calculate_challenge_expiration_time(rdata);
+        }
+
+        Store::Status store_status;
+        do
+        {
+          // Work out the next nonce count and expiry to use. We don't police
+          // against another UE using this nonce at exactly the same time, but
+          // we don't want the expiration or nonce counts to travel backwards in
+          // this case.
+          //
+          // We don't police this race condition because:
+          // * A genuine UE gains no benefit from exploiting it.
+          // * An attacker may be able to clone a genuine UE's auth response,
+          //   and the attacker's response may beat the genuine UE's response
+          //   in a race. If this happens there is no way for us to tell the
+          //   difference between the attacker and the genuine UE. The right
+          //   way to protect against this attack is to use the auth-int qop.
+          auth_challenge->nonce_count = std::max(new_nonce_count,
+                                                 auth_challenge->nonce_count);
+          auth_challenge->expires = std::max(new_expiry,
+                                             auth_challenge->expires);
+
+          // Store it.  If this fails due to contention, read the updated JSON.
+          store_status = impi_store->set_impi(impi_obj, trail);
+
+          if (store_status == Store::DATA_CONTENTION)
+          {
+            // LCOV_EXCL_START - No support for contention in UT
+            TRC_DEBUG("Data contention writing tombstone - retry");
+            delete impi_obj;
+            impi_obj = impi_store->get_impi_with_nonce(impi, nonce, trail);
+            auth_challenge = NULL;
+
+            if (impi_obj != NULL)
+            {
+              auth_challenge = impi_obj->get_auth_challenge(nonce);
+            }
+
+            if (auth_challenge == NULL)
+            {
+              store_status = Store::ERROR;
+            }
+            // LCOV_EXCL_STOP
+          }
+        }
+        while (store_status == Store::DATA_CONTENTION);
+
+        if (store_status != Store::OK)
+        {
+          // LCOV_EXCL_START
+          TRC_ERROR("Tried to update IMPI for %s/%s after processing an authentication, but failed",
+                    impi.c_str(),
+                    nonce.c_str());
+          // LCOV_EXCL_STOP
+        }
+
+        // If doing AKA authentication, check for an AUTS parameter.  We only
+        // check this if the request authenticated as actioning it otherwise
+        // is a potential denial of service attack.
+        if (!pj_strcmp(&credentials->algorithm, &STR_AKAV1_MD5))
+        {
+          TRC_DEBUG("AKA authentication so check for client resync request");
+          pjsip_param* p = pjsip_param_find(&credentials->other_param,
+                                            &STR_AUTS);
+
+          if (p != NULL)
+          {
+            // Found AUTS parameter, so UE is requesting a resync.  We need to
+            // redo the authentication, passing an auts parameter to the HSS
+            // comprising the first 16 octets of the nonce (RAND) and the 14
+            // octets of the auts parameter.  (See TS 33.203 and table 6.3.3 of
+            // TS 29.228 for details.)
+            TRC_DEBUG("AKA SQN resync request from UE");
+            std::string auts = PJUtils::pj_str_to_string(&p->value);
+            std::string nonce = PJUtils::pj_str_to_string(&credentials->nonce);
+
+            // Convert the auts and nonce to binary for manipulation
+            nonce = base64_decode(nonce);
+            auts  = base64_decode(auts);
+
+            if ((auts.length() != 14) ||
+                (nonce.length() != 32))
+            {
+              // AUTS and/or nonce are malformed, so reject the request.
+              TRC_WARNING("Invalid auts/nonce on resync request from private identity %.*s",
+                          credentials->username.slen,
+                          credentials->username.ptr);
+              status = PJSIP_EAUTHINAKACRED;
+              sc = PJSIP_SC_FORBIDDEN;
+            }
+            else
+            {
+              // auts and nonce are as expected, so create the resync string
+              // that needs to be passed to the HSS, and act as if no
+              // authentication information was received. The resync string
+              // should be RAND || AUTS.
+              resync = base64_encode(nonce.substr(0, 16) + auts);
+              status = PJSIP_EAUTHNOAUTH;
+              sc = unauth_sc;
+            }
+          }
+        }
+
+        if (status == PJ_SUCCESS)
+        {
+          // Request authentication completed, so let the message through to other
+          // modules. Remove any Proxy-Authorization headers first so they are not
+          // passed to downstream devices. We can't do this for Authorization
+          // headers, as these may need to be included in 3rd party REGISTER
+          // messages.
+          while (pjsip_msg_find_remove_hdr(rdata->msg_info.msg,
+                                           PJSIP_H_PROXY_AUTHORIZATION,
+                                           NULL) != NULL);
+          delete impi_obj;
+          return PJ_FALSE;
+        }
       }
     }
+  }
+  else
+  {
+    // No credentials in request.
+    status = PJSIP_EAUTHNOAUTH;
   }
 
 
@@ -982,29 +1184,32 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   // Send the ACR.
   acr->send();
   delete acr;
-  delete av;
+  delete impi_obj;
   return PJ_TRUE;
 }
 
-
 pj_status_t init_authentication(const std::string& realm_name,
-                                AvStore* avstore,
+                                ImpiStore* _impi_store,
                                 HSSConnection* hss_connection,
                                 ChronosConnection* chronos_connection,
                                 ACRFactory* rfacr_factory,
                                 NonRegisterAuthentication non_register_auth_mode_param,
                                 AnalyticsLogger* analytics_logger,
-                                SNMP::AuthenticationStatsTables* auth_stats_tbls)
+                                SNMP::AuthenticationStatsTables* auth_stats_tbls,
+                                bool nonce_count_supported_arg,
+                                get_expiry_for_binding_fn get_expiry_for_binding_arg)
 {
   pj_status_t status;
 
   aka_realm = (realm_name != "") ? pj_strdup3(stack_data.pool, realm_name.c_str()) : stack_data.local_host;
-  av_store = avstore;
+  impi_store = _impi_store;
   hss = hss_connection;
   chronos = chronos_connection;
   acr_factory = rfacr_factory;
   analytics = analytics_logger;
   auth_stats_tables = auth_stats_tbls;
+  nonce_count_supported = nonce_count_supported_arg;
+  get_expiry_for_binding = get_expiry_for_binding_arg;
 
   // Register the authentication module.  This needs to be in the stack
   // before the transaction layer.

@@ -1,8 +1,8 @@
 /**
- * @file registrar.h Initialization/termination functions for Sprout's Registrar module
+ * @file mock_as_communication_tracker.h
  *
  * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Copyright (C) 2016  Metaswitch Networks Ltd
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -34,45 +34,20 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+#ifndef MOCK_AS_COMMUNICATION_TRACKER_H__
+#define MOCK_AS_COMMUNICATION_TRACKER_H__
 
-#ifndef REGISTRAR_H__
-#define REGISTRAR_H__
+#include "gmock/gmock.h"
 
-extern "C" {
-#include <pjsip.h>
-}
+class MockAsCommunicationTracker : public AsCommunicationTracker
+{
+public:
+  MockAsCommunicationTracker() : AsCommunicationTracker(NULL, NULL, NULL) {};
+  ~MockAsCommunicationTracker() {}
 
-#include "subscriber_data_manager.h"
-#include "hssconnection.h"
-#include "chronosconnection.h"
-#include "analyticslogger.h"
-#include "acr.h"
-#include "snmp_success_fail_count_table.h"
-
-extern pjsip_module mod_registrar;
-
-void third_party_register_failed(const std::string& public_id,
-                                 SAS::TrailId trail);
-
-extern pj_status_t init_registrar(SubscriberDataManager* sdm,
-                                  SubscriberDataManager* remote_sdm,
-                                  HSSConnection* hss_connection,
-                                  AnalyticsLogger* analytics_logger,
-                                  ACRFactory* rfacr_factory,
-                                  int cfg_max_expires,
-                                  bool force_third_party_register_body,
-                                  SNMP::RegistrationStatsTables* reg_stats_tbls,
-                                  SNMP::RegistrationStatsTables* third_party_reg_stats_tbls);
-
-
-/// Calculate the expiry time for a binding.
-///
-/// @param contact - The binding's contact header.
-/// @param expires - (optional) The expiry header from the request.
-///
-/// @return The expiry time in seconds.
-int expiry_for_binding(pjsip_contact_hdr* contact, pjsip_expires_hdr* expires);
-
-extern void destroy_registrar();
+  MOCK_METHOD1(on_success, void(const std::string&));
+  MOCK_METHOD1(on_failure, void(const std::string&));
+};
 
 #endif
+
