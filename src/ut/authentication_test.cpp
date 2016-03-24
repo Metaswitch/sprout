@@ -74,6 +74,8 @@ int get_binding_expiry(pjsip_contact_hdr* contact, pjsip_expires_hdr* expires)
 class BaseAuthenticationTest : public SipTest
 {
 public:
+  int ICSCF_PORT = 5052;
+
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
@@ -501,7 +503,7 @@ TEST_F(AuthenticationTest, NoAuthorizationPort)
   // Test that the authentication module lets through all requests on ports
   // other than S-CSCF port.
   TransportFlow tp(TransportFlow::Protocol::TCP,
-                   stack_data.icscf_port,
+                   ICSCF_PORT,
                    "10.83.18.37",
                    36531);
   AuthenticationMessage msg("INVITE");

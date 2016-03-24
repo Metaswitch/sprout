@@ -50,6 +50,7 @@
 #include "basicproxy.h"
 #include "sproutlet.h"
 #include "snmp_sip_request_types.h"
+#include "sproutlet_options.h"
 
 class SproutletWrapper;
 
@@ -226,6 +227,8 @@ protected:
   };
 
   pjsip_sip_uri* _root_uri;
+  std::map<std::string, pjsip_sip_uri*> _root_uris;
+
   std::unordered_set<std::string> _host_aliases;
 
   std::list<Sproutlet*> _sproutlets;

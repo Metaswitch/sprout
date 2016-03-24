@@ -80,11 +80,9 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
   bool plugin_loaded = true;
 
-  if (opt.scscf_enabled)
+  if (opt.enabled_scscf)
   {
     // Determine the S-CSCF, BGCF and I-CSCF URIs.
-    std::string scscf_cluster_uri = std::string(stack_data.scscf_uri.ptr,
-                                                stack_data.scscf_uri.slen);
     std::string node_ip(stack_data.local_host.ptr, stack_data.local_host.slen);
 
     if (is_ipv6(node_ip))
@@ -92,27 +90,12 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
       node_ip = "[" + node_ip + "]";
     }
 
-    std::string scscf_node_uri = "sip:" + node_ip + ":" + std::to_string(opt.scscf_port);
-    std::string bgcf_uri = "sip:bgcf@" + scscf_cluster_uri.substr(4);
+    std::string scscf_node_uri = "sip:" + node_ip + ":" + std::to_string(opt.port_scscf);
     std::string icscf_uri;
-    if (opt.icscf_enabled)
-    {
-      // Create a local I-CSCF URI by replacing the S-CSCF port number in the
-      // S-CSCF URI with the I-CSCF port number.
-      icscf_uri = scscf_cluster_uri;
-      size_t pos = icscf_uri.find(std::to_string(opt.scscf_port));
 
-      if (pos != std::string::npos)
-      {
-        icscf_uri.replace(pos,
-                          std::to_string(opt.scscf_port).length(),
-                          std::to_string(opt.icscf_port));
-      }
-      else
-      {
-        // No port number, so best we can do is strap 'icscf@' on the front.
-        icscf_uri = "sip:icscf@" + scscf_cluster_uri.substr(4);
-      }
+    if (opt.enabled_icscf)
+    {
+      icscf_uri = opt.uri_icscf;
     }
     else
     {
@@ -136,11 +119,12 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                    &CL_SPROUT_SESS_CONT_AS_COMM_FAILURE,
                                    &CL_SPROUT_SESS_CONT_AS_COMM_SUCCESS);
 
-    _scscf_sproutlet = new SCSCFSproutlet(scscf_cluster_uri,
+    _scscf_sproutlet = new SCSCFSproutlet(opt.prefix_scscf,
+                                          opt.uri_scscf,
                                           scscf_node_uri,
                                           icscf_uri,
-                                          bgcf_uri,
-                                          opt.scscf_port,
+                                          opt.uri_bgcf,
+                                          opt.port_scscf,
                                           local_sdm,
                                           remote_sdm,
                                           hss_connection,

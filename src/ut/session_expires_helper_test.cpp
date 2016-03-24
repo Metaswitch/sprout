@@ -115,7 +115,7 @@ public:
     // Create the Sproutlet proxy.
     _proxy = new SproutletProxy(stack_data.endpt,
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
-                                "sip:proxy1.homedomain",
+                                "proxy1.homedomain",
                                 std::unordered_set<std::string>(),
                                 _sproutlets,
                                 std::set<std::string>());

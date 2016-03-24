@@ -54,27 +54,15 @@
 //   Effect   - The effect the condition.
 //   Action   - A list of one or more actions to take to resolve the condition
 //              if it is an error.
-static const PDLog1<const char*> CL_SPROUT_INVALID_S_CSCF_PORT
+static const PDLog2<const char*, const char*> CL_SPROUT_INVALID_PORT_SPROUTLET
 (
   PDLogBase::CL_SPROUT_ID + 1,
   PDLOG_ERR,
-  "The S-CSCF port specified in /etc/clearwater/config must be in a range from"
+  "The %s port specified in /etc/clearwater/ must be in a range from"
   "1 to 65535 but has a value of %s.",
-  "The scscf=<port> port value is outside the permitted range.",
+  "The <sproutlet>=<port> port value is outside the permitted range.",
   "The application will exit and restart until the problem is fixed.",
   "Correct the port value.  Typically this is set to 5054."
-);
-
-static const PDLog1<const char*> CL_SPROUT_INVALID_I_CSCF_PORT
-(
-  PDLogBase::CL_SPROUT_ID + 2,
-  PDLOG_ERR,
-  "Fatal - The I-CSCF port specified in /etc/clearwater/config "
-  "must be in a range "
-  "from 1 to 65535 but has a value of %s.",
-  "The icscf=<port> value is outside the permitted range.",
-  "The application will exit and restart until the problem is fixed.",
-  "Correct the port value.  Typically this is set to 5052."
 );
 
 static const PDLog CL_SPROUT_INVALID_SAS_OPTION
@@ -216,28 +204,6 @@ static const PDLog1<const char*> CL_SPROUT_REG_SUBSCRIBER_HAND_FAIL
   "The restart should clear the issue."
 );
 
-static const PDLog CL_SPROUT_S_CSCF_INIT_FAIL
-(
-  PDLogBase::CL_SPROUT_ID + 17,
-  PDLOG_ERR,
-  "Fatal - The S-CSCF service failed to initialize.",
-  "The S-CSCF did not initialize.",
-  "The application will exit and restart until the problem is fixed.",
-  "Ensure that the application has been installed correctly and that it "
-  "has valid configuration."
-);
-
-static const PDLog CL_SPROUT_I_CSCF_INIT_FAIL
-(
-  PDLogBase::CL_SPROUT_ID + 18,
-  PDLOG_ERR,
-  "Fatal - The I-CSCF service failed to initialize.",
-  "The I-CSCF service did not initialize.",
-  "The application will exit and restart until the problem is fixed.",
-  "Ensure that the application has been installed correctly and that it "
-  "has valid configuration."
-);
-
 static const PDLog1<const char*> CL_SPROUT_SIP_STACK_INIT_FAIL
 (
   PDLogBase::CL_SPROUT_ID + 19,
@@ -339,75 +305,35 @@ static const PDLog2<int, const char*> CL_SPROUT_SIP_TCP_SERVICE_START_FAIL
   "(2). Check the network status and configuration."
 );
 
-static const PDLog CL_SPROUT_BGCF_INIT_FAIL
+static const PDLog1<int> CL_SPROUT_SPROUTLET_END
 (
-  PDLogBase::CL_SPROUT_ID + 28,
+  PDLogBase::CL_SPROUT_ID + 30,
   PDLOG_ERR,
-  "Failed to start BGCF service.",
-  "The application could not start the BGCF service.",
+  "All Sproutlets using port %d have ended.",
+  "The Sproutlet services are no longer available.",
   "The application will exit and restart until the problem is fixed.",
   "Ensure that the application has been installed correctly and that it "
   "has valid configuration."
 );
 
-static const PDLog1<int> CL_SPROUT_S_CSCF_END
-(
-  PDLogBase::CL_SPROUT_ID + 30,
-  PDLOG_ERR,
-  "The S-CSCF service on port %d has ended.",
-  "The S-CSCF service is no longer available.",
-  "Call processing is no longer available.",
-  "Monit will restart the application."
-);
-
-static const PDLog1<int> CL_SPROUT_I_CSCF_END
-(
-  PDLogBase::CL_SPROUT_ID + 31,
-  PDLOG_ERR,
-  "The I-CSCF service on port %d has ended.",
-  "The I-CSCF service is no longer available.",
-  "Call processing is no longer available.",
-  "Monit will restart the application."
-);
-
-static const PDLog1<int> CL_SPROUT_S_CSCF_AVAIL
+static const PDLog1<int> CL_SPROUT_SPROUTLET_AVAIL
 (
   PDLogBase::CL_SPROUT_ID + 34,
   PDLOG_NOTICE,
-  "The S-CSCF service on port %d is now available.",
-  "The S-CSCF service is now available.",
+  "The Sproutlet services on port %d are now available.",
+  "The Sproutlet services are now available.",
   "Normal.",
   "None."
 );
 
-static const PDLog1<int> CL_SPROUT_S_CSCF_INIT_FAIL2
+static const PDLog1<int> CL_SPROUT_SPROUTLET_INIT_FAIL2
 (
   PDLogBase::CL_SPROUT_ID + 35,
   PDLOG_ERR,
-  "The S-CSCF service on port %d failed to initialize.",
-  "The S-CSCF service is no longer available.",
+  "The Sproutlet services on port %d failed to initialize.",
+  "The Sproutlet services are no longer available.",
   "The application will exit and restart until the problem is fixed.",
-  "Check the configuration in /etc/clearwater/config."
-);
-
-static const PDLog1<int> CL_SPROUT_I_CSCF_AVAIL
-(
-  PDLogBase::CL_SPROUT_ID + 36,
-  PDLOG_NOTICE,
-  "The I-CSCF service on port %d is now available.",
-  "The I-CSCF service is now available.",
-  "Normal.",
-  "None."
-);
-
-static const PDLog1<int> CL_SPROUT_I_CSCF_INIT_FAIL2
-(
-  PDLogBase::CL_SPROUT_ID + 37,
-  PDLOG_ERR,
-  "The I-CSCF service on port %d failed to initialize.",
-  "The I-CSCF service is no longer available.",
-  "The application will exit and restart until the problem is fixed.",
-  "Check the configuration in /etc/clearwater/config."
+  "Check the configuration files in /etc/clearwater."
 );
 
 static const PDLog CL_SPROUT_PLUGIN_FAILURE

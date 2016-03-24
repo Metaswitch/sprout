@@ -616,7 +616,7 @@ public:
     // Create the Sproutlet proxy.
     _proxy = new SproutletProxy(stack_data.endpt,
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
-                                "sip:proxy1.homedomain",
+                                "proxy1.homedomain",
                                 host_aliases,
                                 _sproutlets,
                                 std::set<std::string>());
@@ -1117,7 +1117,7 @@ TEST_F(SproutletProxyTest, SimpleSproutletForwarderRR)
             get_headers(tdata->msg, "Route"));
 
   // Check a Record-Route header has been added.
-  EXPECT_EQ("Record-Route: <sip:proxy1.homedomain;lr;service=fwdrr;hello=world>",
+  EXPECT_EQ("Record-Route: <sip:fwdrr.proxy1.homedomain;transport=tcp;lr;service=fwdrr;hello=world>",
             get_headers(tdata->msg, "Record-Route"));
 
   // Send a 200 OK response.

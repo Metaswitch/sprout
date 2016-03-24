@@ -203,7 +203,8 @@ public:
     _acr_factory = new ACRFactory();
 
     // Create the BGCF Sproutlet.
-    _bgcf_sproutlet = new BGCFSproutlet(0,
+    _bgcf_sproutlet = new BGCFSproutlet("bgcf",
+                                        5054,
                                         _bgcf_service,
                                         _enum_service,
                                         _acr_factory,
@@ -216,7 +217,7 @@ public:
     aliases.insert("127.0.0.1");
     _proxy = new SproutletProxy(stack_data.endpt,
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
-                                "sip:homedomain:5058",
+                                "homedomain",
                                 aliases,
                                 sproutlets,
                                 std::set<std::string>());

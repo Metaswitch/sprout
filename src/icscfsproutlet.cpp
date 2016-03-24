@@ -63,14 +63,15 @@ extern "C" {
 #define MAX_ENUM_LOOKUPS 2
 
 /// Constructor.
-ICSCFSproutlet::ICSCFSproutlet(const std::string& bgcf_uri,
+ICSCFSproutlet::ICSCFSproutlet(const std::string& icscf_name,
+                               const std::string& bgcf_uri,
                                int port,
                                HSSConnection* hss,
                                ACRFactory* acr_factory,
                                SCSCFSelector* scscf_selector,
                                EnumService* enum_service,
                                bool override_npdi) :
-  Sproutlet("icscf", port),
+  Sproutlet(icscf_name, port),
   _bgcf_uri(NULL),
   _hss(hss),
   _scscf_selector(scscf_selector),
