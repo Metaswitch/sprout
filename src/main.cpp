@@ -1442,13 +1442,6 @@ int main(int argc, char* argv[])
   opt.force_third_party_register_body = false;
   opt.listen_port = 0;
   SPROUTLET_MACRO(SPROUTLET_CFG_OPTIONS_DEFAULT_VALUES)
-
-  // The S-CSCF and BGCF have special case code here to set them to be on by
-  // default
-  opt.port_bgcf = 5054;
-  opt.enabled_bgcf = true;
-  opt.port_scscf = 5054;
-  opt.enabled_scscf = true;
   opt.impi_store_mode = ImpiStore::Mode::READ_IMPI_WRITE_IMPI;
   opt.nonce_count_supported = false;
 
