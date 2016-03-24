@@ -79,7 +79,7 @@ bool MangelwurzelPlugin::load(struct options& opt, std::list<Sproutlet*>& sprout
   if (opt.enabled_mangelwurzel)
   {
     // Create the Sproutlet.
-    _mangelwurzel = new Mangelwurzel();
+    _mangelwurzel = new Mangelwurzel(opt.prefix_mangelwurzel, opt.port_mangelwurzel);
 
     sproutlets.push_back(_mangelwurzel);
   }

@@ -60,7 +60,9 @@ class Mangelwurzel : public Sproutlet
 {
 public:
   /// Constructor.
-  Mangelwurzel() : Sproutlet("mangelwurzel") {}
+  Mangelwurzel(std::string name,
+               int port) :
+    Sproutlet(name, port) {}
 
   /// Destructor.
   ~Mangelwurzel() {}

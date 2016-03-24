@@ -600,7 +600,7 @@ public:
 protected:
   /// Constructor.
   Sproutlet(const std::string& service_name,
-            int port=0,
+            int port,
             const std::string& service_host="") :
     _service_name(service_name),
     _port(port),
