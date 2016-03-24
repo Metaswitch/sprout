@@ -108,7 +108,7 @@ bool MementoPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
       _call_list_store = new CallListStore::Store();
       _call_list_store->configure_connection("localhost", 9160, _cass_comm_monitor);
 
-      _memento = new MementoAppServer("memento",
+      _memento = new MementoAppServer(opt.prefix_memento,
                                       _call_list_store,
                                       opt.home_domain,
                                       opt.max_call_list_length,

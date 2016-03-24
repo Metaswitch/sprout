@@ -145,7 +145,7 @@ enum OptionTypes
   OPT_PIDFILE,
   OPT_SPROUT_HOSTNAME,
   OPT_LISTEN_PORT,
-  SPROUTLET_MACRO(SPROUTLET_ENUM_TYPES)
+  SPROUTLET_MACRO(SPROUTLET_OPTION_TYPES)
 };
 
 
@@ -1074,7 +1074,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case OPT_SPROUT_HOSTNAME:
       options->sprout_hostname = std::string(pj_optarg);
-      options->sprout_uri = "sip:" + options->sprout_hostname + ";transport=tcp";
       break;
 
     case OPT_LISTEN_PORT:
@@ -1794,7 +1793,7 @@ int main(int argc, char* argv[])
                       opt.public_host,
                       opt.home_domain,
                       opt.additional_home_domains,
-                      opt.sprout_uri,
+                      opt.uri_scscf,
                       opt.alias_hosts,
                       sip_resolver,
                       opt.pjsip_threads,
@@ -2157,15 +2156,12 @@ int main(int argc, char* argv[])
 
     sproutlet_proxy = new SproutletProxy(stack_data.endpt,
                                          PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+3,
-                                         opt.sprout_uri,
+                                         opt.sprout_hostname,
                                          host_aliases,
                                          sproutlets,
                                          opt.stateless_proxies);
     if (sproutlet_proxy == NULL)
     {
-      CL_SPROUT_S_CSCF_INIT_FAIL.log();
-      CL_SPROUT_BGCF_INIT_FAIL.log();
-      CL_SPROUT_I_CSCF_INIT_FAIL.log();
       TRC_ERROR("Failed to create SproutletProxy");
       closelog();
       return 1;

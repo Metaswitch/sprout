@@ -104,7 +104,7 @@ bool MMTELASPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           _xdm_latency_tbl);
 
       // Load the MMTEL AppServer
-      _mmtel = new Mmtel("mmtel", _xdm_connection);
+      _mmtel = new Mmtel(opt.prefix_mmtel, _xdm_connection);
       _mmtel_sproutlet = new SproutletAppServerShim(_mmtel, incoming_sip_transactions, outgoing_sip_transactions, "mmtel." + opt.home_domain);
       sproutlets.push_back(_mmtel_sproutlet);
     }

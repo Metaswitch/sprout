@@ -54,7 +54,8 @@
 const char* NO_SERVED_USER = "";
 
 /// SCSCFSproutlet constructor.
-SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
+SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
+                               const std::string& scscf_cluster_uri,
                                const std::string& scscf_node_uri,
                                const std::string& icscf_uri,
                                const std::string& bgcf_uri,
@@ -67,7 +68,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
                                bool override_npdi,
                                int session_continued_timeout_ms,
                                int session_terminated_timeout_ms) :
-  Sproutlet("scscf", port),
+  Sproutlet(scscf_name, port),
   _scscf_cluster_uri(NULL),
   _scscf_node_uri(NULL),
   _icscf_uri(NULL),

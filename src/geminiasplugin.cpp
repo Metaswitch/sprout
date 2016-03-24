@@ -86,7 +86,7 @@ bool GeminiPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions = SNMP::SuccessFailCountByRequestTypeTable::create("gemini_as_outgoing_sip_transactions",
                                                                                                                            "1.2.826.0.1.1578918.9.11.2");
     // Create the Sproutlet.
-    _gemini = new MobileTwinnedAppServer("gemini");
+    _gemini = new MobileTwinnedAppServer(opt.prefix_gemini);
     _gemini_sproutlet = new SproutletAppServerShim(_gemini, incoming_sip_transactions, outgoing_sip_transactions);
 
     sproutlets.push_back(_gemini_sproutlet);

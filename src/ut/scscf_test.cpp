@@ -271,7 +271,8 @@ public:
     _acr_factory = new ACRFactory();
 
     // Create the S-CSCF Sproutlet.
-    _scscf_sproutlet = new SCSCFSproutlet("sip:homedomain:5058",
+    _scscf_sproutlet = new SCSCFSproutlet("scscf",
+                                          "sip:homedomain:5058",
                                           "sip:127.0.0.1:5058",
                                           "",
                                           "sip:bgcf@homedomain:5058",
@@ -288,7 +289,8 @@ public:
     _scscf_sproutlet->init();
 
     // Create the BGCF Sproutlet.
-    _bgcf_sproutlet = new BGCFSproutlet(0,
+    _bgcf_sproutlet = new BGCFSproutlet("bgcf",
+                                        5054,
                                         _bgcf_service,
                                         _enum_service,
                                         _acr_factory,
@@ -310,7 +312,7 @@ public:
     aliases.insert("127.0.0.1");
     _proxy = new SproutletProxy(stack_data.endpt,
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
-                                "sip:homedomain:5058",
+                                "homedomain",
                                 aliases,
                                 sproutlets,
                                 std::set<std::string>());
@@ -3901,12 +3903,12 @@ TEST_F(SCSCFTest, RecordRoutingTest)
   // - AS4's Record-Route
   // - on end of terminating handling
 
-  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-term>\r\n"
+  doFourAppServerFlow("Record-Route: <sip:scscf.homedomain:5058;transport=tcp;lr;service=scscf;billing-role=charge-term>\r\n"
                       "Record-Route: <sip:6.2.3.4>\r\n"
                       "Record-Route: <sip:5.2.3.4>\r\n"
                       "Record-Route: <sip:4.2.3.4>\r\n"
                       "Record-Route: <sip:1.2.3.4>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>", true);
+                      "Record-Route: <sip:scscf.homedomain:5058;transport=tcp;lr;service=scscf;billing-role=charge-orig>", true);
   free_txdata();
 }
 
@@ -3927,14 +3929,14 @@ TEST_F(SCSCFTest, RecordRoutingTestStartAndEnd)
   // - AS4's Record-Route
   // - on end of terminating handling
 
-  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-term>\r\n"
+  doFourAppServerFlow("Record-Route: <sip:scscf.homedomain:5058;transport=tcp;lr;service=scscf;billing-role=charge-term>\r\n"
                       "Record-Route: <sip:6.2.3.4>\r\n"
                       "Record-Route: <sip:5.2.3.4>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf>\r\n"
+                      "Record-Route: <sip:scscf.homedomain:5058;transport=tcp;lr;service=scscf>\r\n"
+                      "Record-Route: <sip:scscf.homedomain:5058;transport=tcp;lr;service=scscf>\r\n"
                       "Record-Route: <sip:4.2.3.4>\r\n"
                       "Record-Route: <sip:1.2.3.4>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>", true);
+                      "Record-Route: <sip:scscf.homedomain:5058;transport=tcp;lr;service=scscf;billing-role=charge-orig>", true);
   stack_data.record_route_on_completion_of_originating = false;
   stack_data.record_route_on_initiation_of_terminating = false;
 }
@@ -3965,16 +3967,16 @@ TEST_F(SCSCFTest, RecordRoutingTestEachHop)
   // AS3, we'd have two - one for conclusion of originating processing
   // and one for initiation of terminating processing) but we don't
   // split originating and terminating handling like that yet.
-  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-term>\r\n"
+  doFourAppServerFlow("Record-Route: <sip:scscf.homedomain:5058;transport=tcp;lr;service=scscf;billing-role=charge-term>\r\n"
                       "Record-Route: <sip:6.2.3.4>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf>\r\n"
+                      "Record-Route: <sip:scscf.homedomain:5058;transport=tcp;lr;service=scscf>\r\n"
                       "Record-Route: <sip:5.2.3.4>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf>\r\n"
+                      "Record-Route: <sip:scscf.homedomain:5058;transport=tcp;lr;service=scscf>\r\n"
+                      "Record-Route: <sip:scscf.homedomain:5058;transport=tcp;lr;service=scscf>\r\n"
                       "Record-Route: <sip:4.2.3.4>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf>\r\n"
+                      "Record-Route: <sip:scscf.homedomain:5058;transport=tcp;lr;service=scscf>\r\n"
                       "Record-Route: <sip:1.2.3.4>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>", true);
+                      "Record-Route: <sip:scscf.homedomain:5058;transport=tcp;lr;service=scscf;billing-role=charge-orig>", true);
 
   stack_data.record_route_on_initiation_of_terminating = false;
   stack_data.record_route_on_completion_of_originating = false;
@@ -3987,8 +3989,8 @@ TEST_F(SCSCFTest, RecordRoutingTestEachHop)
 TEST_F(SCSCFTest, RecordRoutingTestCollapse)
 {
   // Expect 1 Record-Route
-  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-term>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>", false);
+  doFourAppServerFlow("Record-Route: <sip:scscf.homedomain:5058;transport=tcp;lr;service=scscf;billing-role=charge-term>\r\n"
+                      "Record-Route: <sip:scscf.homedomain:5058;transport=tcp;lr;service=scscf;billing-role=charge-orig>", false);
 }
 
 // Test that even when Sprout is configured to Record-Route itself on each
@@ -3998,11 +4000,11 @@ TEST_F(SCSCFTest, RecordRoutingTestCollapseEveryHop)
 {
   stack_data.record_route_on_every_hop = true;
   // Expect 1 Record-Route
-  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-term>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>", false);
+  doFourAppServerFlow("Record-Route: <sip:scscf.homedomain:5058;transport=tcp;lr;service=scscf;billing-role=charge-term>\r\n"
+                      "Record-Route: <sip:scscf.homedomain:5058;transport=tcp;lr;service=scscf>\r\n"
+                      "Record-Route: <sip:scscf.homedomain:5058;transport=tcp;lr;service=scscf>\r\n"
+                      "Record-Route: <sip:scscf.homedomain:5058;transport=tcp;lr;service=scscf>\r\n"
+                      "Record-Route: <sip:scscf.homedomain:5058;transport=tcp;lr;service=scscf;billing-role=charge-orig>", false);
   stack_data.record_route_on_every_hop = false;
 }
 
@@ -7308,7 +7310,7 @@ TEST_F(SCSCFTest, PreloadedRouteChangedReqUri)
             "Route: <sip:3.3.3.3:5060;transport=TCP;lr>");
   // Sprout has also record-routed itself.
   EXPECT_THAT(get_headers(out, "Record-Route"),
-              MatchesRegex("Record-Route: <sip:homedomain:5058;.*billing-role=charge-term.*>"));
+              MatchesRegex("Record-Route: <sip:scscf.homedomain:5058;.*billing-role=charge-term.*>"));
 
   EXPECT_EQ(1, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_routed_by_preloaded_route_tbl)->_count);
   free_txdata();
@@ -7420,7 +7422,7 @@ TEST_F(SCSCFTest, PreloadedRoutePreserveReqUri)
             "Route: <sip:3.3.3.3:5060;transport=TCP;lr>");
   // Sprout has also record-routed itself.
   EXPECT_THAT(get_headers(out, "Record-Route"),
-              MatchesRegex("Record-Route: <sip:homedomain:5058;.*billing-role=charge-term.*>"));
+              MatchesRegex("Record-Route: <sip:scscf.homedomain:5058;.*billing-role=charge-term.*>"));
 
   EXPECT_EQ(1, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_routed_by_preloaded_route_tbl)->_count);
   free_txdata();
@@ -7558,7 +7560,7 @@ TEST_F(SCSCFTest, PreloadedRouteNotLastAs)
             "Route: <sip:3.3.3.3:5060;transport=TCP;lr>");
   // Sprout has also record-routed itself.
   EXPECT_THAT(get_headers(out, "Record-Route"),
-              MatchesRegex("Record-Route: <sip:homedomain:5058;.*billing-role=charge-term.*>"));
+              MatchesRegex("Record-Route: <sip:scscf.homedomain:5058;.*billing-role=charge-term.*>"));
 
   EXPECT_EQ(1, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_routed_by_preloaded_route_tbl)->_count);
   free_txdata();

@@ -77,7 +77,24 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
 {
   /// Store the URI of this SproutletProxy - this is used for Record-Routing.
   TRC_DEBUG("Root Record-Route URI = %s", root_uri.c_str());
-  _root_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(root_uri, stack_data.pool, false);
+  _root_uri = (pjsip_sip_uri*)PJUtils::uri_from_string("sip:" + root_uri + ";transport=tcp",
+                                                       stack_data.pool,
+                                                       false);
+
+  for (std::list<Sproutlet*>::iterator it = _sproutlets.begin();
+       it != _sproutlets.end();
+       ++it)
+  {
+    std::string rr_uri_str = "sip:" + (*it)->service_name() +
+                             "." + root_uri + ":" +
+                             std::to_string((*it)->port()) +
+                             ";transport=tcp";
+    pjsip_sip_uri* root_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(
+                                                       rr_uri_str,
+                                                       stack_data.pool,
+                                                       false);
+    _root_uris.insert(std::pair<std::string, pjsip_sip_uri*>((*it)->service_name(), root_uri));
+  }
 }
 
 
@@ -157,13 +174,6 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
   else
   {
     TRC_DEBUG("Next route for message cannot be a sproutlet");
-  }
-
-  // Force the S-CSCF Sproutlet to only be chosen based on port - this ensures that the PJSIP
-  // authentication module is invoked between the I-CSCF and the S-CSCF
-  if (sproutlet && (sproutlet->service_name() == "scscf"))
-  {
-    sproutlet = NULL;
   }
 
   if ((sproutlet == NULL) &&
@@ -323,9 +333,13 @@ pjsip_sip_uri* SproutletProxy::create_sproutlet_uri(pj_pool_t* pool,
                                                     Sproutlet* sproutlet) const
 {
   TRC_DEBUG("Creating URI for %s", sproutlet->service_name().c_str());
-  pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, _root_uri);
+  pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, _root_uris.find(sproutlet->service_name())->second);
   uri->lr_param = 1;
 
+  TRC_DEBUG(PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                   (pjsip_uri*)uri).c_str());
+
+  //sproutlet->service_name() + "."
   TRC_DEBUG("Add services parameter");
   pjsip_param* p = PJ_POOL_ALLOC_T(pool, pjsip_param);
   pj_strdup(pool, &p->name, &STR_SERVICE);

@@ -1140,7 +1140,8 @@ pj_status_t init_registrar(SubscriberDataManager* reg_sdm,
   else
   {
     // LCOV_EXCL_START - Start up failures not tested in UT
-    TRC_ERROR("Unable to set up Service-Route header for the registrar");
+    TRC_ERROR("Unable to set up Service-Route header for the registrar from %s",
+              stack_data.scscf_uri);
     status = PJ_EINVAL;
     // LCOV_EXCL_STOP
   }

@@ -92,7 +92,8 @@ bool ICSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                         new ACRFactory();
 
     // Create the I-CSCF sproutlet.
-    _icscf_sproutlet = new ICSCFSproutlet(opt.uri_bgcf,
+    _icscf_sproutlet = new ICSCFSproutlet(opt.prefix_icscf,
+                                          opt.uri_bgcf,
                                           opt.port_icscf,
                                           hss_connection,
                                           _acr_factory,

@@ -72,7 +72,8 @@ public:
     _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_icscf.json"));
     _enum_service = new JSONEnumService(string(UT_DIR).append("/test_enum.json"));
 
-    _icscf_sproutlet = new ICSCFSproutlet("sip:bgcf.homedomain",
+    _icscf_sproutlet = new ICSCFSproutlet("icscf",
+                                          "sip:bgcf.homedomain",
                                           ICSCF_PORT,
                                           _hss_connection,
                                           _acr_factory,
@@ -85,7 +86,7 @@ public:
 
     _icscf_proxy = new SproutletProxy(stack_data.endpt,
                                       PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
-                                      "sip:homedomain:" + std::to_string(ICSCF_PORT),
+                                      "homedomain",
                                       std::unordered_set<std::string>(),
                                       sproutlets,
                                       std::set<std::string>());

@@ -98,7 +98,8 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
       icscf_uri = opt.external_icscf_uri;
     }
 
-    _scscf_sproutlet = new SCSCFSproutlet(opt.uri_scscf,
+    _scscf_sproutlet = new SCSCFSproutlet(opt.prefix_scscf,
+                                          opt.uri_scscf,
                                           scscf_node_uri,
                                           icscf_uri,
                                           opt.uri_bgcf,
