@@ -66,6 +66,7 @@ using testing::MatchesRegex;
 using testing::HasSubstr;
 using testing::Not;
 using testing::_;
+using testing::NiceMock;
 
 namespace SP
 {
@@ -264,8 +265,8 @@ public:
     _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_stateful_proxy_scscf.json"));
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
     _xdm_connection = new FakeXDMConnection();
-    _sess_term_comm_tracker = new MockAsCommunicationTracker();
-    _sess_cont_comm_tracker = new MockAsCommunicationTracker();
+    _sess_term_comm_tracker = new NiceMock<MockAsCommunicationTracker>();
+    _sess_cont_comm_tracker = new NiceMock<MockAsCommunicationTracker>();
 
     // We only test with a JSONEnumService, not with a DNSEnumService - since
     // it is stateful_proxy.cpp that's under test here, the EnumService
@@ -563,10 +564,6 @@ void SCSCFTest::doFourAppServerFlow(std::string record_route_regex, bool app_ser
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(StrEq("sip:4.2.3.4:56788;transport=UDP")));
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(StrEq("sip:1.2.3.4:56789;transport=UDP")));
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(StrEq("sip:5.2.3.4:56787;transport=UDP")));
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(StrEq("sip:6.2.3.4:56786;transport=UDP")));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -2181,7 +2178,6 @@ TEST_F(SCSCFTest, SimpleISCMainline)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(StrEq("sip:1.2.3.4:56789;transport=UDP")));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -2301,7 +2297,6 @@ TEST_F(SCSCFTest, ISCRetargetWithoutCdiv)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -2448,7 +2443,6 @@ TEST_F(SCSCFTest, SimpleISCTwoRouteHeaders)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -2640,7 +2634,6 @@ TEST_F(SCSCFTest, SimpleNextOrigFlow)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -2737,7 +2730,6 @@ TEST_F(SCSCFTest, SimpleReject)
                                 "  </InitialFilterCriteria>\n"
                                    "</ServiceProfile></IMSSubscription>");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -2825,7 +2817,6 @@ TEST_F(SCSCFTest, SimpleNonLocalReject)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -2914,7 +2905,6 @@ TEST_F(SCSCFTest, SimpleAccept)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3003,7 +2993,6 @@ TEST_F(SCSCFTest, SimpleRedirect)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3092,7 +3081,6 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3185,7 +3173,6 @@ TEST_F(SCSCFTest, DISABLED_DefaultHandlingTerminateTimeout)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3268,7 +3255,6 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateDisabled)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3368,7 +3354,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueRecordRouting)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_)).Times(2);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
@@ -3433,7 +3418,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistent)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3498,7 +3482,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonResponsive)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3561,7 +3544,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonResponsive)
 
 
 // Test DefaultHandling=CONTINUE for a responsive AS that returns an error.
-TEST_F(SCSCFTest, DefaultHandlingContinueResponsiveError)
+TEST_F(SCSCFTest, DefaultHandlingContinue1xxThenError)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
     _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
@@ -3585,7 +3568,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueResponsiveError)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3622,15 +3604,25 @@ TEST_F(SCSCFTest, DefaultHandlingContinueResponsiveError)
   EXPECT_THAT(get_headers(out, "Route"),
               testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;service=scscf>"));
 
-  // ---------- AS1 sends a 100 Trying to indicate it has received the request.
-  // This will disable the default handling.
-  string fresp = respond_to_txdata(current_txdata(), 100);
+  // ---------- AS1 sends a 183 Session Progress to indicate it is processing the
+  // request.  This will disable the default handling.
+  //
+  // Save off the INVITE TX data so we can build a final response later on.
+  pjsip_tx_data* invite_tx_data = pop_txdata();
+  string fresp = respond_to_txdata(invite_tx_data, 183);
   inject_msg(fresp, &tpAS1);
 
-  // ---------- AS1 now rejects the request with a 500 response.  This gets
-  // returned to the caller because the 100 Trying indicated the AS is live.
-  fresp = respond_to_txdata(current_txdata(), 500);
+  // 183 flows back to Bono.
+  SCOPED_TRACE("183");
+  out = current_txdata()->msg;
+  RespMatcher(183).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
   free_txdata();
+
+  // ---------- AS1 now rejects the request with a 500 response.  This gets
+  // returned to the caller because the 183 indicated the AS is live.
+  fresp = respond_to_txdata(invite_tx_data, 500);
+  pjsip_tx_data_dec_ref(invite_tx_data); invite_tx_data = NULL;
   inject_msg(fresp, &tpAS1);
 
   // ACK goes back to AS1
@@ -3645,11 +3637,136 @@ TEST_F(SCSCFTest, DefaultHandlingContinueResponsiveError)
   RespMatcher(500).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
   msg.set_route(out);
-  msg._cseq++;
   free_txdata();
 
   // ---------- Send ACK from bono
   SCOPED_TRACE("ACK");
+  msg._cseq++;
+  msg._method = "ACK";
+  inject_msg(msg.get_request(), &tpBono);
+}
+
+
+// Test DefaultHandling=CONTINUE for a responsive AS that returns an error.
+TEST_F(SCSCFTest, DefaultHandlingContinueInviteReturnedThenError)
+{
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+    _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain>";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS1
+  SCOPED_TRACE("INVITE (S)");
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS1.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
+
+  // ---------- AS1 sends a 100 Trying to indicate it has received the request.
+  string resp_100 = respond_to_txdata(current_txdata(), 100);
+  inject_msg(resp_100, &tpAS1);
+
+  // We are going to send a 500 response to this request later on in the test
+  // case. Build this now, as it means we can mutate the INVITE for sending
+  // back to sprout.
+  string resp_500 = respond_to_txdata(current_txdata(), 500);
+
+  // ---------- AS1 turns it around (acting as proxy)
+  const pj_str_t STR_ROUTE = pj_str("Route");
+  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS1);
+  free_txdata();
+
+  // 100 Trying goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to final destination
+  SCOPED_TRACE("INVITE (2)");
+  out = current_txdata()->msg;
+  ReqMatcher r2("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r2.matches(out));
+
+  tpBono.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
+  EXPECT_EQ("", get_headers(out, "Route"));
+
+  free_txdata();
+
+  // ---------- AS1 now rejects the request with a 500 response.  The AS is not
+  // bypassed as the INVITE it sent back to sprout indicates that it is live.
+  inject_msg(resp_500, &tpAS1);
+
+  // ACK goes back to AS1
+  SCOPED_TRACE("ACK");
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(ReqMatcher("ACK").matches(out));
+  free_txdata();
+
+  // 500 response goes back to bono
+  SCOPED_TRACE("500");
+  out = current_txdata()->msg;
+  RespMatcher(500).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // ---------- Send ACK from bono
+  SCOPED_TRACE("ACK");
+  msg._cseq++;
   msg._method = "ACK";
   inject_msg(msg.get_request(), &tpBono);
 }
@@ -3682,7 +3799,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeout)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3769,7 +3885,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueDisabled)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3855,7 +3970,6 @@ TEST_F(SCSCFTest, DefaultHandlingMissing)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3920,7 +4034,6 @@ TEST_F(SCSCFTest, DefaultHandlingMalformed)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -4126,7 +4239,6 @@ void SCSCFTest::doAsOriginated(const std::string& msg, bool expect_orig)
                                   "</ApplicationServer>"
                                   "</InitialFilterCriteria>"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_)).Times(expect_orig ? 2 : 1);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS0(TransportFlow::Protocol::UDP, stack_data.scscf_port, "6.2.3.4", 56786);
@@ -4314,8 +4426,6 @@ TEST_F(SCSCFTest, Cdiv)
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(StrEq("sip:1.2.3.4:56789;transport=UDP")));
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(StrEq("sip:5.2.3.4:56787;transport=UDP")));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -4480,7 +4590,6 @@ TEST_F(SCSCFTest, CdivToDifferentDomain)
                                     </ApplicationServer>
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_)).Times(2);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -4614,7 +4723,6 @@ TEST_F(SCSCFTest, BothEndsWithEnumRewrite)
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -4699,7 +4807,6 @@ TEST_F(SCSCFTest, TerminatingWithNoEnumRewrite)
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -4824,7 +4931,6 @@ TEST_F(SCSCFTest, MmtelCdiv)
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_)).Times(2);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -5028,7 +5134,6 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_)).Times(3);
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -5146,7 +5251,6 @@ TEST_F(SCSCFTest, ExpiredChain)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -5797,7 +5901,6 @@ TEST_F(SCSCFTest, SimpleOptionsAccept)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -5875,7 +5978,6 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_));
 
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   TransportFlow tpBono(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -6020,7 +6122,6 @@ TEST_F(SCSCFTest, OriginatingExternal)
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
   _hss_connection->set_impu_result("sip:6505501234@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_));
 
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   TransportFlow tpBono(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -6177,7 +6278,6 @@ TEST_F(SCSCFTest, OriginatingTerminatingAS)
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_)).Times(2);
 
   TransportFlow tpBono(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -6395,7 +6495,6 @@ TEST_F(SCSCFTest, OriginatingTerminatingASTimeout)
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_)).Times(2);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -6682,7 +6781,6 @@ TEST_F(SCSCFTest, OriginatingTerminatingMessageASTimeout)
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_)).Times(2);
 
   // ---------- Send MESSAGE
   // We're within the trust boundary, so no stripping should occur.
@@ -6881,7 +6979,6 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_)).Times(2);
 
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
 
@@ -7382,7 +7479,6 @@ TEST_F(SCSCFTest, PreloadedRouteChangedReqUri)
                                     </ApplicationServer>
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -7502,7 +7598,6 @@ TEST_F(SCSCFTest, PreloadedRoutePreserveReqUri)
                                     </ApplicationServer>
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -7641,7 +7736,6 @@ TEST_F(SCSCFTest, PreloadedRouteNotLastAs)
                                     </ApplicationServer>
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
