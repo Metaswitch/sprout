@@ -125,7 +125,7 @@ To run sprout or bono on the machine it was built on, change to the top-level `s
 
 As an example, to run Sprout as a basic S-CSCF on port 5054 run the following command:
 
-    MIBS="" LD_LIBRARY_PATH=usr/lib:$LD_LIBRARY_PATH build/bin/sprout -t --domain=<Home Domain> --scscf=5054 --scscf-uri="sip:<Sprout cluster>:5054;transport=TCP" --hss=<Homestead cluster> 
+    MIBS="" LD_LIBRARY_PATH=usr/lib:$LD_LIBRARY_PATH build/bin/sprout -t --domain=<Home Domain> --hss=<Homestead cluster>
 
 To run bono as a basic P-CSCF on port 5060 run the following command:
 
