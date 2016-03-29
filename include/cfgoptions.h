@@ -113,8 +113,6 @@ struct options
   int                                  max_call_list_length;
   int                                  memento_threads;
   int                                  call_list_ttl;
-  bool                                 memento_enabled;
-  bool                                 gemini_enabled;
   int                                  worker_threads;
   bool                                 log_to_file;
   std::string                          log_directory;

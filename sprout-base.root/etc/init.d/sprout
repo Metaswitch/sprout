@@ -99,6 +99,7 @@ get_settings()
         sprout_rr_level="pcscf"
         scscf=5054
         bgcf=5054
+        mmtel=5054
         alias_list=""
         default_session_expires=600
         signaling_dns_server=127.0.0.1
