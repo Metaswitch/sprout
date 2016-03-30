@@ -109,7 +109,6 @@ get_settings()
         # Bono doesn't need multi-threading, so set the number of threads to
         # the number of cores.  The number of PJSIP threads must be 1, as its
         # code is not multi-threadable.
-        num_pjsip_threads=1
         num_worker_threads=$(grep processor /proc/cpuinfo | wc -l)
         log_level=2
         upstream_connections=50
@@ -160,7 +159,6 @@ get_daemon_args()
                      $ralf_arg
                      --sas=$sas_server,$NAME@$public_hostname
                      --dns-server=$signaling_dns_server
-                     --pjsip-threads=$num_pjsip_threads
                      --worker-threads=$num_worker_threads
                      --analytics=$log_directory
                      --log-file=$log_directory

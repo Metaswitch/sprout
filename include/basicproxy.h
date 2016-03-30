@@ -256,7 +256,6 @@ protected:
 
     pj_timer_entry       _trying_timer;
     static const int     TRYING_TIMER = 1;
-    pthread_mutex_t      _trying_timer_lock;
 
     friend class UACTsx;
   };

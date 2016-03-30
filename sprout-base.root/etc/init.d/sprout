@@ -107,7 +107,6 @@ get_settings()
 
         # Set up defaults for user settings then pull in any overrides.
         # Sprout uses blocking look-up services, so must run multi-threaded.
-        num_pjsip_threads=1
         num_worker_threads=$(($(grep processor /proc/cpuinfo | wc -l) * 50))
         num_http_threads=$(($(grep processor /proc/cpuinfo | wc -l) * 50))
 
@@ -195,7 +194,6 @@ get_daemon_args()
                      $enum_file_arg
                      --sas=$sas_server,$NAME@$public_hostname
                      --dns-server=$signaling_dns_server
-                     --pjsip-threads=$num_pjsip_threads
                      --worker-threads=$num_worker_threads
                      --http-threads=$num_http_threads
                      --record-routing-model=$sprout_rr_level
