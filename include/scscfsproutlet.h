@@ -398,10 +398,6 @@ private:
   pjsip_method_e _req_type;
   bool _seen_1xx;
 
-  // Track whether any response has been seen from the AS. Primarily used for
-  // default handling processing.
-  bool _seen_response;
-
   static const int MAX_FORKING = 10;
 
   /// The private identity associated with the request. Empty unless the
