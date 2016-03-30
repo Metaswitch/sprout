@@ -365,7 +365,6 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
   _record_routed(false),
   _req_type(req_type),
   _seen_1xx(false),
-  _seen_response(false),
   _impi(),
   _auto_reg(false),
   _se_helper(stack_data.default_session_expires)
@@ -631,11 +630,12 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
       }
       else
       {
-        // Default handling will not be triggered.
-        if (!_seen_response)
+        // Default handling will not be triggered. If this is the first non-100
+        // response we've seen from an AS track it as a successful
+        // communication. This means that no matter how many 1xx responses we
+        // receive we only track one success.
+        if ((st_code > PJSIP_SC_TRYING) && (!_seen_1xx))
         {
-          // This is the first response we've seen from the AS, so track this is
-          // as a successful communication.
           _scscf->track_app_serv_comm_success(_as_chain_link.uri(),
                                               _as_chain_link.default_handling());
         }
@@ -643,9 +643,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     }
   }
 
-  _seen_response = true;
-
-  if (st_code > 100)
+  if (st_code > PJSIP_SC_TRYING)
   {
     _seen_1xx = true;
   }
