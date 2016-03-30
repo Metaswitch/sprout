@@ -403,6 +403,39 @@ public:
     ((SNMP::FakeCounterTable*)_scscf_sproutlet->_routed_by_preloaded_route_tbl)->reset_count();
   }
 
+  /// Send a response back through multiple hops in a dialog. The response is
+  /// injected at the downstream end of the dialog (the end that the request
+  /// flowed towards. The proxied response is received at each hop, the status
+  /// code is checked, and it is then re-injected.
+  ///
+  /// The outbound message queue must be empty when this function is called.
+  ///
+  /// @param req         - The response to inject at the downstream end.
+  /// @param status_code - The status code of the request. This is used to
+  ///                      check that the response it passed through at each
+  ///                      hop.
+  /// @param num_hops    - The number of hops in the dialog.
+  void send_response_back_through_dialog(const std::string& response,
+                                         int status_code,
+                                         int num_hops)
+  {
+    std::string curr_response = response;
+
+    for (int ii = 0; ii < num_hops; ++ii)
+    {
+      inject_msg(curr_response);
+
+      ASSERT_EQ(1, txdata_count());
+      RespMatcher(status_code).matches(current_txdata()->msg);
+
+      char buf[0xffff];
+      pj_ssize_t len = pjsip_msg_print(current_txdata()->msg, buf, sizeof(buf));
+      curr_response.assign(buf, len);
+
+      free_txdata();
+    }
+  }
+
 protected:
   static LocalStore* _local_data_store;
   static FakeChronosConnection* _chronos_connection;
@@ -564,6 +597,10 @@ void SCSCFTest::doFourAppServerFlow(std::string record_route_regex, bool app_ser
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(StrEq("sip:4.2.3.4:56788;transport=UDP")));
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(StrEq("sip:1.2.3.4:56789;transport=UDP")));
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(StrEq("sip:5.2.3.4:56787;transport=UDP")));
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(StrEq("sip:6.2.3.4:56786;transport=UDP")));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -767,14 +804,13 @@ void SCSCFTest::doFourAppServerFlow(std::string record_route_regex, bool app_ser
   // Send a 200 OK back down the line to finish the transaction. This is so that
   // AS communication tracking works correctly. There are a total of 5 hops in
   // total.
-  for (int ii = 0; ii < 5; ++ii)
-  {
-    inject_msg(respond_to_txdata(current_txdata(), 200));
-    free_txdata();
+  pjsip_tx_data* txdata = pop_txdata();
 
-    ASSERT_EQ(1, txdata_count());
-    RespMatcher(200).matches(current_txdata()->msg);
-  }
+  // Send a 200 ringing back down the chain to finish the transaction. This is a
+  // more realistic test of AS communication tracking.
+  send_response_back_through_dialog(respond_to_txdata(txdata, 200), 200, 5);
+
+  pjsip_tx_data_dec_ref(txdata); txdata = NULL;
 }
 
 // Test flows into Sprout (S-CSCF), in particular for header stripping.
@@ -2260,16 +2296,13 @@ TEST_F(SCSCFTest, SimpleISCMainline)
   // Target sends back 100 Trying
   inject_msg(respond_to_txdata(current_txdata(), 100), &tpBono);
 
-  // Send a 200 OK back down the chain to finish the transaction. This is a
-  // more realistic test of AS communication tracking.
-  for (int ii = 0; ii < 2; ++ii)
-  {
-    inject_msg(respond_to_txdata(current_txdata(), 200));
-    free_txdata();
+  pjsip_tx_data* txdata = pop_txdata();
 
-    ASSERT_EQ(1, txdata_count());
-    RespMatcher(200).matches(current_txdata()->msg);
-  }
+  // Send a 200 ringing back down the chain to finish the transaction. This is a
+  // more realistic test of AS communication tracking.
+  send_response_back_through_dialog(respond_to_txdata(txdata, 200), 200, 2);
+
+  pjsip_tx_data_dec_ref(txdata); txdata = NULL;
 }
 
 // Test basic ISC (AS) flow that involves multiple responses to a single
@@ -2373,40 +2406,17 @@ TEST_F(SCSCFTest, ISCMultipleResponses)
   // Target sends back 100 Trying
   inject_msg(respond_to_txdata(current_txdata(), 100), &tpBono);
 
-  // Build the two responses we are going to send.
-  std::string resp_180 = respond_to_txdata(current_txdata(), 180);
-  std::string resp_200 = respond_to_txdata(current_txdata(), 200);
-  free_txdata();
+  pjsip_tx_data* txdata = pop_txdata();
 
   // Send a 180 ringing back down the chain to finish the transaction. This is a
   // more realistic test of AS communication tracking.
-  for (int ii = 0; ii < 2; ++ii)
-  {
-    inject_msg(resp_180);
+  send_response_back_through_dialog(respond_to_txdata(txdata, 180), 180, 2);
 
-    ASSERT_EQ(1, txdata_count());
-    RespMatcher(180).matches(current_txdata()->msg);
+  // Also send a 200 OK to check that the AS only gets tracked as successful
+  // once.
+  send_response_back_through_dialog(respond_to_txdata(txdata, 200), 200, 2);
 
-    char buf[0xffff];
-    pj_ssize_t len = pjsip_msg_print(current_txdata()->msg, buf, sizeof(buf));
-    resp_180.assign(buf, len);
-
-    free_txdata();
-  }
-
-  for (int ii = 0; ii < 2; ++ii)
-  {
-    inject_msg(resp_200);
-
-    ASSERT_EQ(1, txdata_count());
-    RespMatcher(200).matches(current_txdata()->msg);
-
-    char buf[0xffff];
-    pj_ssize_t len = pjsip_msg_print(current_txdata()->msg, buf, sizeof(buf));
-    resp_200.assign(buf, len);
-
-    free_txdata();
-  }
+  pjsip_tx_data_dec_ref(txdata); txdata = NULL;
 }
 // Test that, if we change a SIP URI to an aliased TEL URI, it doesn't count as a retarget for
 // originating-cdiv purposes.
