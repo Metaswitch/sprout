@@ -230,8 +230,8 @@ void AsChainLink::on_response(int status_code)
   }
   else if (status_code < PJSIP_SC_OK)
   {
-    // A 1xx response (which does *not* include 100) means that the AS should
-    // be treated as responsive.
+    // A 1xx response (which does *not* include 100 - see TS 24.229 section 3.2)
+    // means that the AS should be treated as responsive.
     _as_chain->_responsive[_index] = true;
   }
   else

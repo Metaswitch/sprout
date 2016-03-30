@@ -428,9 +428,13 @@ public:
       ASSERT_EQ(1, txdata_count());
       RespMatcher(status_code).matches(current_txdata()->msg);
 
-      char buf[0xffff];
-      pj_ssize_t len = pjsip_msg_print(current_txdata()->msg, buf, sizeof(buf));
-      curr_response.assign(buf, len);
+      // Render the received message to a string so we can re-inject it. 64kB
+      // should be enough space for this.
+      char msg_print_buf[0x10000];
+      pj_ssize_t len = pjsip_msg_print(current_txdata()->msg,
+                                       msg_print_buf,
+                                       sizeof(msg_print_buf));
+      curr_response.assign(msg_print_buf, len);
 
       free_txdata();
     }
@@ -4141,6 +4145,10 @@ TEST_F(SCSCFTest, DefaultHandlingContinueInviteReturnedThenError)
   msg._cseq++;
   msg._method = "ACK";
   inject_msg(msg.get_request(), &tpBono);
+
+  // Check there are no outstanding messages - this confirms sprout did not
+  // create a fork to bypass the AS.
+  ASSERT_EQ(0, txdata_count());
 }
 
 

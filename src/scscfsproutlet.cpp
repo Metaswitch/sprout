@@ -634,7 +634,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
         // response we've seen from an AS track it as a successful
         // communication. This means that no matter how many 1xx responses we
         // receive we only track one success.
-        if ((st_code > 100) && (!_seen_1xx))
+        if ((st_code > PJSIP_SC_TRYING) && (!_seen_1xx))
         {
           _scscf->track_app_serv_comm_success(_as_chain_link.uri(),
                                               _as_chain_link.default_handling());
@@ -643,7 +643,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     }
   }
 
-  if (st_code > 100)
+  if (st_code > PJSIP_SC_TRYING)
   {
     _seen_1xx = true;
   }
