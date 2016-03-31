@@ -233,7 +233,6 @@ static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q
 
 static sem_t term_sem;
 
-static pj_bool_t quiescing = PJ_FALSE;
 static sem_t quiescing_sem;
 QuiescingManager* quiescing_mgr;
 
@@ -1204,12 +1203,12 @@ void quiesce_unquiesce_handler(int sig)
   if (sig == QUIESCE_SIGNAL)
   {
     TRC_STATUS("Quiesce signal received");
-    quiescing = PJ_TRUE;
+    set_quiescing_true();
   }
   else
   {
     TRC_STATUS("Unquiesce signal received");
-    quiescing = PJ_FALSE;
+    set_quiescing_false();
   }
 
   // Wake up the thread that acts on the notification (don't act on it in this
@@ -1224,7 +1223,7 @@ void terminate_handler(int sig)
   sem_post(&term_sem);
 }
 
-
+/*
 void* quiesce_unquiesce_thread_func(void* dummy)
 {
   // First register the thread with PJSIP.
@@ -1276,7 +1275,7 @@ void* quiesce_unquiesce_thread_func(void* dummy)
 
   return NULL;
 }
-
+*/
 class QuiesceCompleteHandler : public QuiesceCompletionInterface
 {
 public:
@@ -1356,7 +1355,7 @@ int main(int argc, char* argv[])
 
   Logger* analytics_logger_logger = NULL;
   AnalyticsLogger* analytics_logger = NULL;
-  pthread_t quiesce_unquiesce_thread;
+//  pthread_t quiesce_unquiesce_thread;
   DnsCachedResolver* dns_resolver = NULL;
   SIPResolver* sip_resolver = NULL;
   Store* remote_data_store = NULL;
@@ -1827,11 +1826,11 @@ int main(int argc, char* argv[])
   // itself. This must happen after init_stack is called, because this
   // calls init_pjsip, which calls pj_init, which sets up the
   // necessary environment for us to register threads with pjsip.
-  sem_init(&quiescing_sem, 0, 0);
-  pthread_create(&quiesce_unquiesce_thread,
-                 NULL,
-                 quiesce_unquiesce_thread_func,
-                 NULL);
+//  sem_init(&quiescing_sem, 0, 0);
+//  pthread_create(&quiesce_unquiesce_thread,
+//                 NULL,
+//                 quiesce_unquiesce_thread_func,
+//                 NULL);
 
   // Set up our signal handler for (un)quiesce signals.
   signal(QUIESCE_SIGNAL, quiesce_unquiesce_handler);
@@ -2386,10 +2385,10 @@ int main(int argc, char* argv[])
 
   // Cancel the (un)quiesce thread (so that we can safely destroy the semaphore
   // it uses).
-  pthread_cancel(quiesce_unquiesce_thread);
-  pthread_join(quiesce_unquiesce_thread, NULL);
+//  pthread_cancel(quiesce_unquiesce_thread);
+//  pthread_join(quiesce_unquiesce_thread, NULL);
 
-  sem_destroy(&quiescing_sem);
+//  sem_destroy(&quiescing_sem);
   sem_destroy(&term_sem);
 
   return 0;

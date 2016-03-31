@@ -148,6 +148,20 @@ const static std::string _known_statnames[] = {
 const std::string* known_statnames = _known_statnames;
 const int num_known_stats = sizeof(_known_statnames) / sizeof(std::string);
 
+static pj_bool_t quiescing = PJ_FALSE;
+
+extern void set_quiescing_true()
+{
+  TRC_DEBUG("Setting quiescing = PJ_TRUE");
+  quiescing = PJ_TRUE;
+}
+
+extern void set_quiescing_false()
+{
+  TRC_DEBUG("Setting quiescing = PJ_FALSE");
+  quiescing = PJ_FALSE;
+}
+
 /// PJSIP threads are donated to PJSIP to handle receiving at transport level
 /// and timers.
 static int pjsip_thread_func(void *p)
@@ -158,9 +172,32 @@ static int pjsip_thread_func(void *p)
 
   TRC_DEBUG("PJSIP thread started");
 
+  pj_bool_t curr_quiescing = PJ_FALSE;
+  pj_bool_t new_quiescing = quiescing;
+
   while (!quit_flag)
   {
     pjsip_endpt_handle_events(stack_data.endpt, &delay);
+
+    // Check if our quiescing state has changed, and act appropriately
+    new_quiescing = quiescing;
+    if (curr_quiescing != new_quiescing)
+    {
+      TRC_DEBUG("quiescing state changed");
+      curr_quiescing = new_quiescing;
+
+      if (new_quiescing)
+      {
+        TRC_DEBUG("calling quiescing manager quiesce");
+        quiescing_mgr->quiesce();
+      }
+      else
+      {
+       TRC_DEBUG("calling quiescing manager unquiesce");
+       quiescing_mgr->unquiesce();
+      }
+    }
+
   }
 
   TRC_DEBUG("PJSIP thread ended");

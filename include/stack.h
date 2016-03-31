@@ -134,6 +134,26 @@ inline SAS::TrailId get_trail(const pjsip_transaction* tsx)
   return (SAS::TrailId)tsx->mod_data[stack_data.sas_logging_module_id];
 }
 
+/*
+// Variable to store our current quiescing state
+static pj_bool_t quiescing = PJ_FALSE;
+
+// Functions to set quiescing state
+inline void set_quiescing_true()
+{
+  quiescing = PJ_TRUE;
+}
+
+inline void set_quiescing_false()
+{
+  quiescing = PJ_FALSE;
+}
+*/
+
+extern void set_quiescing_true();
+extern void set_quiescing_false();
+
+
 extern void init_pjsip_logging(int log_level,
                                pj_bool_t log_to_file,
                                const std::string& directory);
