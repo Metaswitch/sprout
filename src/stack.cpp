@@ -148,6 +148,7 @@ const static std::string _known_statnames[] = {
 const std::string* known_statnames = _known_statnames;
 const int num_known_stats = sizeof(_known_statnames) / sizeof(std::string);
 
+// Variable to hold quiescing state, and interfaces to alter it
 static pj_bool_t quiescing = PJ_FALSE;
 
 extern void set_quiescing_true()
@@ -183,17 +184,15 @@ static int pjsip_thread_func(void *p)
     new_quiescing = quiescing;
     if (curr_quiescing != new_quiescing)
     {
-      TRC_DEBUG("quiescing state changed");
+      TRC_DEBUG("Quiescing state changed");
       curr_quiescing = new_quiescing;
 
       if (new_quiescing)
       {
-        TRC_DEBUG("calling quiescing manager quiesce");
         quiescing_mgr->quiesce();
       }
       else
       {
-       TRC_DEBUG("calling quiescing manager unquiesce");
        quiescing_mgr->unquiesce();
       }
     }

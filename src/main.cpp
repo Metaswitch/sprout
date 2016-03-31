@@ -233,7 +233,6 @@ static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q
 
 static sem_t term_sem;
 
-static sem_t quiescing_sem;
 QuiescingManager* quiescing_mgr;
 
 const static int QUIESCE_SIGNAL = SIGQUIT;
@@ -1210,10 +1209,6 @@ void quiesce_unquiesce_handler(int sig)
     TRC_STATUS("Unquiesce signal received");
     set_quiescing_false();
   }
-
-  // Wake up the thread that acts on the notification (don't act on it in this
-  // thread since we're in a signal handler).
-  sem_post(&quiescing_sem);
 }
 
 
@@ -1223,59 +1218,6 @@ void terminate_handler(int sig)
   sem_post(&term_sem);
 }
 
-/*
-void* quiesce_unquiesce_thread_func(void* dummy)
-{
-  // First register the thread with PJSIP.
-  pj_thread_desc desc;
-  pj_thread_t* thread;
-  pj_status_t status;
-  pj_bzero(desc, sizeof(pj_thread_desc));
-
-  status = pj_thread_register("Quiesce/unquiesce thread", desc, &thread);
-
-  if (status != PJ_SUCCESS)
-  {
-    TRC_ERROR("Error creating quiesce/unquiesce thread (status = %d). "
-              "This function will not be available",
-              status);
-    return NULL;
-  }
-
-  pj_bool_t curr_quiescing = PJ_FALSE;
-  pj_bool_t new_quiescing = quiescing;
-
-  while (PJ_TRUE)
-  {
-    // Only act if the quiescing state has changed.
-    if (curr_quiescing != new_quiescing)
-    {
-      curr_quiescing = new_quiescing;
-
-      if (new_quiescing)
-      {
-        quiescing_mgr->quiesce();
-      }
-      else
-      {
-        quiescing_mgr->unquiesce();
-      }
-    }
-
-    // Wait for the quiescing flag to be written to and read in the new value.
-    // Read into a local variable to avoid issues if the flag changes under our
-    // feet.
-    //
-    // Note that sem_wait is a cancel point, so calling pthread_cancel on this
-    // thread while it is waiting on the semaphore will cause it to cancel.
-    sem_wait(&quiescing_sem);
-    new_quiescing = quiescing;
-    TRC_STATUS("Value of new_quiescing is %s", (new_quiescing == PJ_FALSE) ? "false" : "true");
-  }
-
-  return NULL;
-}
-*/
 class QuiesceCompleteHandler : public QuiesceCompletionInterface
 {
 public:
@@ -1355,7 +1297,6 @@ int main(int argc, char* argv[])
 
   Logger* analytics_logger_logger = NULL;
   AnalyticsLogger* analytics_logger = NULL;
-//  pthread_t quiesce_unquiesce_thread;
   DnsCachedResolver* dns_resolver = NULL;
   SIPResolver* sip_resolver = NULL;
   Store* remote_data_store = NULL;
@@ -1821,16 +1762,6 @@ int main(int argc, char* argv[])
     TRC_ERROR("Error initializing stack %s", PJUtils::pj_status_to_string(status).c_str());
     return 1;
   }
-
-  // Initialize the semaphore that unblocks the quiesce thread, and the thread
-  // itself. This must happen after init_stack is called, because this
-  // calls init_pjsip, which calls pj_init, which sets up the
-  // necessary environment for us to register threads with pjsip.
-//  sem_init(&quiescing_sem, 0, 0);
-//  pthread_create(&quiesce_unquiesce_thread,
-//                 NULL,
-//                 quiesce_unquiesce_thread_func,
-//                 NULL);
 
   // Set up our signal handler for (un)quiesce signals.
   signal(QUIESCE_SIGNAL, quiesce_unquiesce_handler);
@@ -2383,12 +2314,6 @@ int main(int argc, char* argv[])
   signal(UNQUIESCE_SIGNAL, SIG_DFL);
   signal(SIGTERM, SIG_DFL);
 
-  // Cancel the (un)quiesce thread (so that we can safely destroy the semaphore
-  // it uses).
-//  pthread_cancel(quiesce_unquiesce_thread);
-//  pthread_join(quiesce_unquiesce_thread, NULL);
-
-//  sem_destroy(&quiescing_sem);
   sem_destroy(&term_sem);
 
   return 0;
