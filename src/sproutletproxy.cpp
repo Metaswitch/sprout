@@ -682,8 +682,7 @@ void SproutletProxy::UASTsx::on_tsx_state(pjsip_event* event)
   if (_tsx->state == PJSIP_TSX_STATE_DESTROYED)
   {
     TRC_DEBUG("%s - UAS tsx destroyed", _tsx->obj_name);
-    _proxy->unbind_transaction(_tsx);
-    _tsx = NULL;
+    unbind_from_pjsip_tsx();
 
     // Check to see if we can destroy the UASTsx.
     check_destroy();

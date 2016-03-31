@@ -104,7 +104,6 @@ struct options
   std::string                          analytics_directory;
   int                                  reg_max_expires;
   int                                  sub_max_expires;
-  int                                  pjsip_threads;
   std::string                          http_address;
   int                                  http_port;
   int                                  http_threads;
