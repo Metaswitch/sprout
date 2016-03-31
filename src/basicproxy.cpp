@@ -438,18 +438,41 @@ BasicProxy::UASTsx::UASTsx(BasicProxy* proxy) :
 }
 
 
+void BasicProxy::UASTsx::unbind_from_pjsip_tsx()
+{
+  // We expect to only be called on the PJSIP transport thread, and our data
+  // race/locking safety is based on this assumption. Raise an error log if
+  // this is not the case.
+  CHECK_PJ_TRANSPORT_THREAD();
+
+  if (_tsx != NULL)
+  {
+    // Unbind from the PJSIP transaction.
+    _proxy->unbind_transaction(_tsx);
+    _tsx = NULL;
+
+    // The trying timer should be running when we have a PJSIP transaction, so
+    // cancel it as well.
+    cancel_trying_timer();
+  }
+}
+
+
 BasicProxy::UASTsx::~UASTsx()
 {
   TRC_DEBUG("BasicProxy::UASTsx destructor (%p)", this);
 
   pj_assert(_context_count == 0);
 
-  cancel_trying_timer();
-
   if (_tsx != NULL)
   {
     // LCOV_EXCL_START
-    _proxy->unbind_transaction(_tsx);
+    //
+    // This branch should never be hit as the UASTSx should only be destroyed
+    // when there is no underlying PJSIP transaction.  However if we do hit this
+    // branch we try to unbind the UASTsx from PJSIP, otherwise we're almost
+    // guaranteed to reference the UASTsx after it's been deleted.
+    unbind_from_pjsip_tsx();
     // LCOV_EXCL_STOP
   }
 
@@ -1154,8 +1177,7 @@ void BasicProxy::UASTsx::on_tsx_state(pjsip_event* event)
       // pending UAC transactions they should be cancelled.
       cancel_pending_uac_tsx(0, true);
     }
-    _proxy->unbind_transaction(_tsx);
-    _tsx = NULL;
+    unbind_from_pjsip_tsx();
     _pending_destroy = true;
   }
 
@@ -1441,11 +1463,6 @@ void BasicProxy::UASTsx::exit_context()
 /// Cancel the trying timer.
 void BasicProxy::UASTsx::cancel_trying_timer()
 {
-  // We expect to only be called on the PJSIP transport thread, and our data
-  // race/locking safety is based on this assumption. Raise an error log if
-  // this is not the case.
-  CHECK_PJ_TRANSPORT_THREAD();
-
   if (_trying_timer.id == TRYING_TIMER)
   {
     // The deferred trying timer is running, so cancel it.
