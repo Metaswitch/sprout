@@ -451,9 +451,13 @@ void BasicProxy::UASTsx::unbind_from_pjsip_tsx()
     _proxy->unbind_transaction(_tsx);
     _tsx = NULL;
 
-    // The trying timer should be running when we have a PJSIP transaction, so
-    // cancel it as well.
-    cancel_trying_timer();
+    // The trying timer should only be running when we have a PJSIP transaction,
+    // so cancel it if it is running.
+    if (_trying_timer.id == TRYING_TIMER)
+    {
+      _trying_timer.id = 0;
+      pjsip_endpt_cancel_timer(stack_data.endpt, &_trying_timer);
+    }
   }
 }
 
@@ -1456,18 +1460,6 @@ void BasicProxy::UASTsx::exit_context()
   {
     // Release the group lock.
     pj_grp_lock_release(_lock);
-  }
-}
-
-
-/// Cancel the trying timer.
-void BasicProxy::UASTsx::cancel_trying_timer()
-{
-  if (_trying_timer.id == TRYING_TIMER)
-  {
-    // The deferred trying timer is running, so cancel it.
-    _trying_timer.id = 0;
-    pjsip_endpt_cancel_timer(stack_data.endpt, &_trying_timer);
   }
 }
 
