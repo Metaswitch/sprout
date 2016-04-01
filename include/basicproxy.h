@@ -157,7 +157,6 @@ protected:
 
     void trying_timer_expired();
     static void trying_timer_callback(pj_timer_heap_t *timer_heap, struct pj_timer_entry *entry);
-    void cancel_trying_timer();
     pj_status_t send_trying(pjsip_rx_data* rdata);
 
   protected:
