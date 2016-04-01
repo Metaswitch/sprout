@@ -172,6 +172,7 @@
                            opt.prefix_##NAME_LOWER +                           \
                            "." +                                               \
                            opt.sprout_hostname +                               \
+                           ":" + std::to_string(opt.port_##NAME_LOWER) +       \
                            ";transport=TCP";                                   \
   }                                                                            \
                                                                                \
