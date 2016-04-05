@@ -711,10 +711,10 @@ pj_status_t init_stack(const std::string& system_name,
        ++ii)
   {
     pjsip_tpfactory* tcp_factory = NULL;
-    stack_data.sproutlets.insert(std::pair<int, pjsip_tpfactory*>(*ii, tcp_factory));
     status = start_transports(*ii,
                               stack_data.public_host,
                               &tcp_factory);
+    stack_data.sproutlets.insert(std::pair<int, pjsip_tpfactory*>(*ii, tcp_factory));
 
     if (status == PJ_SUCCESS)
     {
