@@ -832,11 +832,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
-    case 'P':
-      options->pjsip_threads = atoi(pj_optarg);
-      TRC_INFO("Use %d PJSIP threads", options->pjsip_threads);
-      break;
-
     case 'W':
       options->worker_threads = atoi(pj_optarg);
       TRC_INFO("Use %d worker threads", options->worker_threads);
@@ -1343,7 +1338,6 @@ int main(int argc, char* argv[])
   opt.sub_max_expires = 300;
   opt.sas_server = "0.0.0.0";
   opt.chronos_service = "localhost:7253";
-  opt.pjsip_threads = 1;
   opt.record_routing_model = 1;
   opt.default_session_expires = 10 * 60;
   opt.max_session_expires = 10 * 60;
@@ -1747,7 +1741,6 @@ int main(int argc, char* argv[])
                       opt.uri_scscf,
                       opt.alias_hosts,
                       sip_resolver,
-                      opt.pjsip_threads,
                       opt.record_routing_model,
                       opt.default_session_expires,
                       opt.max_session_expires,
@@ -2126,7 +2119,7 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  status = start_pjsip_threads();
+  status = start_pjsip_thread();
   if (status != PJ_SUCCESS)
   {
     CL_SPROUT_SIP_STACK_INIT_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
@@ -2190,11 +2183,11 @@ int main(int argc, char* argv[])
     }
   }
 
-  // Terminate the PJSIP threads and the worker threads to exit.  We kill
-  // the PJSIP threads first - if we killed the worker threads first the
+  // Terminate the PJSIP thread and the worker threads to exit.  We kill
+  // the PJSIP thread first - if we killed the worker threads first the
   // rx_msg_q will stop getting serviced so could fill up blocking
-  // PJSIP threads, causing a deadlock.
-  stop_pjsip_threads();
+  // the PJSIP thread, causing a deadlock.
+  stop_pjsip_thread();
   stop_worker_threads();
 
   // We must call stop_stack here because this terminates the

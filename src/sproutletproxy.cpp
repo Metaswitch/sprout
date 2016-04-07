@@ -203,6 +203,18 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
     }
   }
 
+  if (sproutlet && 
+      (sproutlet->service_name() == "scscf") &&
+      pjsip_method_cmp(&req->line.req.method, 
+                       pjsip_get_subscribe_method()) == 0)
+  {
+    // This is a subscribe being routed back to the S-CSCF sproutlet but to 
+    // get this handled correctly we need route it externally to make sure it 
+    // hits the subscription module.
+    TRC_DEBUG("Don't route S-CSCF subscribe message via sproutlet");
+    sproutlet = NULL;
+  }
+  
   return sproutlet;
 }
 
@@ -682,8 +694,7 @@ void SproutletProxy::UASTsx::on_tsx_state(pjsip_event* event)
   if (_tsx->state == PJSIP_TSX_STATE_DESTROYED)
   {
     TRC_DEBUG("%s - UAS tsx destroyed", _tsx->obj_name);
-    _proxy->unbind_transaction(_tsx);
-    _tsx = NULL;
+    unbind_from_pjsip_tsx();
 
     // Check to see if we can destroy the UASTsx.
     check_destroy();
