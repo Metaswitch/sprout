@@ -166,6 +166,11 @@ extern void set_quiescing_false()
 /// and timers.
 static int pjsip_thread_func(void *p)
 {
+  // We expect to only be called on the PJSIP transport thread, and our data
+  // race/locking safety is based on this assumption. Raise an error log if
+  // this is not the case.
+  CHECK_PJ_TRANSPORT_THREAD();
+
   pj_time_val delay = {0, 10};
 
   PJ_UNUSED_ARG(p);
