@@ -126,7 +126,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           opt.uri_bgcf,
                                           opt.port_scscf,
                                           local_sdm,
-                                          remote_sdm,
+                                          {remote_sdm},
                                           hss_connection,
                                           enum_service,
                                           scscf_acr_factory,
