@@ -589,8 +589,6 @@ public:
 
   void on_rx_initial_request(pjsip_msg* req)
   {
-    // We shouldn't get passed any subscribe messages
-    ASSERT_NE(pj_stricmp2(&req->line.req.method.name, "SUBSCRIBE"), 0);
     pjsip_msg* rsp = create_response(req, PJSIP_SC_NOT_FOUND);
     free_msg(req);
     send_response(rsp);
@@ -612,7 +610,7 @@ public:
     add_host_mapping("node2.homedomain", "10.10.18.2");
     add_host_mapping("node2.homedomain", "10.10.18.3");
     add_host_mapping("node2.homedomain", "10.10.18.4");
-
+    add_host_mapping("scscf.proxy1.homedomain", "10.10.19.1");
     add_host_mapping("proxy1.awaydomain", "10.10.20.1");
     add_host_mapping("proxy2.awaydomain", "10.10.20.2");
     add_host_mapping("node1.awaydomain", "10.10.28.1");
@@ -2222,10 +2220,10 @@ TEST_F(SproutletProxyTest, DelayAfterForward)
   delete tp;
 }
 
+// Tests standard routing of a local subscription request to ensure it is
+// not routed via the sproutlet interface.
 TEST_F(SproutletProxyTest, LocalSubscription)
 {
-  // Tests standard routing of a local subscription request to ensure it is
-  // not routed via the sproutlet interface.
   pjsip_tx_data* tdata;
 
   // Create a TCP connection to the listening port.
@@ -2234,21 +2232,23 @@ TEST_F(SproutletProxyTest, LocalSubscription)
                                         "1.2.3.4",
                                         49152);
 
-  // Inject a request with a Route header not referencing this node or the
-  // home domain.
+  // Inject a request that's routed to a sproutlet (the forwarder), then
+  // routed to the S-CSCF
   Message msg1;
   msg1._method = "SUBSCRIBE";
   msg1._requri = "sip:bob@homedomain";
   msg1._from = "sip:alice@homedomain";
   msg1._to = "sip:bob@homedomain";
   msg1._via = tp->to_string(false);
-  msg1._route = "Route: <sip:scscf@proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  msg1._route = "Route: <sip:fwd.proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:scscf.proxy1.homedomain;transport=TCP;lr>";
+  msg1._extra = "Event: reg";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting the forwarded SUBSCRIBE
+  // This should be routed out to scscf.proxy1.homedomain - as the
+  // sproutlet proxy recognises it needs to route this externally
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
-  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  expect_target("TCP", "10.10.19.1", 5060, tdata);
   ReqMatcher("SUBSCRIBE").matches(tdata->msg);
 
   // Send a 200 OK response.
@@ -2266,10 +2266,10 @@ TEST_F(SproutletProxyTest, LocalSubscription)
   delete tp;
 }
 
+// Tests standard routing of a subscription request to ensure it is
+// routed via the sproutlet interface.
 TEST_F(SproutletProxyTest, LocalNonSubscribe)
 {
-  // Tests standard routing of a local subscription request to ensure it is
-  // not routed via the sproutlet interface.
   pjsip_tx_data* tdata;
 
   // Create a TCP connection to the listening port.
@@ -2278,36 +2278,23 @@ TEST_F(SproutletProxyTest, LocalNonSubscribe)
                                         "1.2.3.4",
                                         49152);
 
-  // Inject a request with a Route header not referencing this node or the
-  // home domain.
+  // Inject a SUBSCRIBE request that wouldn't be absorbed by the subscription
+  // module (this should be handled by the S-CSCF)
   Message msg1;
-  msg1._method = "INVITE";
+  msg1._method = "SUBSCRIBE";
   msg1._requri = "sip:bob@homedomain";
   msg1._from = "sip:alice@homedomain";
   msg1._to = "sip:bob@homedomain";
   msg1._via = tp->to_string(false);
-  msg1._route = "Route: <sip:scscf@proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  msg1._route = "Route: <sip:fwd.proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:scscf@proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
   // Expecting the forwarded SUBSCRIBE
-  ASSERT_EQ(2, txdata_count());
+  ASSERT_EQ(1, txdata_count());
 
-  // Check the 100 Trying.
-  tdata = current_txdata();
-  RespMatcher(100).matches(tdata->msg);
-  tp->expect_target(tdata);
-  EXPECT_EQ("To: <sip:bob@homedomain>", get_headers(tdata->msg, "To")); // No tag
-  free_txdata();
-
-  // Check the 486 Loop Detected.
+  // Check the 404 result (the fake sproutlet always returns a 404)
   tdata = current_txdata();
   RespMatcher(404).matches(tdata->msg);
-  tp->expect_target(tdata);
-  free_txdata();
-
-  // All done!
-  ASSERT_EQ(0, txdata_count());
 
   delete tp;
 }
-

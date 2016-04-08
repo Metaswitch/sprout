@@ -627,28 +627,21 @@ void process_subscription_request(pjsip_rx_data* rdata)
   delete aor_pair;
 }
 
-// Reject request unless it's a SUBSCRIBE targeted at the home domain / this node.
-pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
+// Check whether this request should be absorbed by the subscription module
+pj_bool_t request_acceptable_to_subscription_module(pjsip_msg* msg,
+                                                    SAS::TrailId trail)
 {
-  SAS::TrailId trail = get_trail(rdata);
-
-  if (rdata->tp_info.transport->local_name.port != stack_data.scscf_port)
-  {
-    // Not an S-CSCF, so don't handle SUBSCRIBEs.
-    return PJ_FALSE; // LCOV_EXCL_LINE
-  }
-
-  if (pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_subscribe_method()))
+  if (pjsip_method_cmp(&msg->line.req.method, pjsip_get_subscribe_method()))
   {
     // This isn't a SUBSCRIBE, so this module can't process it.
     return PJ_FALSE;
   }
 
-  URIClass uri_class = URIClassifier::classify_uri(rdata->msg_info.msg->line.req.uri);
+  URIClass uri_class = URIClassifier::classify_uri(msg->line.req.uri);
   TRC_INFO("URI class is %d", uri_class);
   if (((uri_class != NODE_LOCAL_SIP_URI) &&
        (uri_class != HOME_DOMAIN_SIP_URI)) ||
-      !PJUtils::check_route_headers(rdata))
+      !PJUtils::check_route_headers(msg))
   {
     TRC_DEBUG("Not processing subscription request not targeted at this domain or node");
     SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_DOMAIN, 0);
@@ -656,9 +649,9 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
     return PJ_FALSE;
   }
 
-  // SUBSCRIBE request targeted at the home domain or specifically at this node. Check
-  // whether it should be processed by this module or passed up to an AS.
-  pjsip_msg *msg = rdata->msg_info.msg;
+  // We now know we have a SUBSCRIBE request targeted at the home domain
+  // or specifically at this node. Check whether it should be processed
+  // by this module or passed up to an AS.
 
   // A valid subscription must have the Event header set to "reg". This is case-sensitive
   pj_str_t event_name = pj_str("Event");
@@ -704,6 +697,7 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
       char accept_hdr_str[256];
       memset(accept_hdr_str, 0, 256);
       pjsip_hdr_print_on(accept, accept_hdr_str, 255);
+
       SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_ACCEPT, 0);
       event.add_var_param(accept_hdr_str);
       SAS::report_event(event);
@@ -712,8 +706,32 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
     }
   }
 
-  process_subscription_request(rdata);
   return PJ_TRUE;
+}
+
+// Reject request unless it's a SUBSCRIBE targeted at the home domain / this node.
+pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
+{
+  SAS::TrailId trail = get_trail(rdata);
+
+  if (rdata->tp_info.transport->local_name.port != stack_data.scscf_port)
+  {
+    // Not an S-CSCF, so don't handle SUBSCRIBEs.
+    return PJ_FALSE; // LCOV_EXCL_LINE
+  }
+
+  pj_bool_t accept =
+          request_acceptable_to_subscription_module(rdata->msg_info.msg, trail);
+
+  if (accept)
+  {
+    process_subscription_request(rdata);
+    return PJ_TRUE;
+  }
+  else
+  {
+    return PJ_FALSE;
+  }
 }
 
 pj_status_t init_subscription(SubscriberDataManager* reg_sdm,

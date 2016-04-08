@@ -56,6 +56,8 @@ extern pj_status_t init_subscription(SubscriberDataManager* sdm,
                                      AnalyticsLogger* analytics_logger,
                                      int cfg_max_expires);
 
+extern pj_bool_t request_acceptable_to_subscription_module(pjsip_msg* msg,
+                                                           SAS::TrailId trail);
 extern void destroy_subscription();
 
 #endif
