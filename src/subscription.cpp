@@ -644,8 +644,13 @@ pj_bool_t request_acceptable_to_subscription_module(pjsip_msg* msg,
       !PJUtils::check_route_headers(msg))
   {
     TRC_DEBUG("Not processing subscription request not targeted at this domain or node");
-    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_DOMAIN, 0);
-    SAS::report_event(event);
+    if (trail != 0)
+    {
+      // LCOV_EXCL_START - No SAS events in UT
+      SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_DOMAIN, 0);
+      SAS::report_event(event);
+      // LCOV_EXCL_STOP
+    }
     return PJ_FALSE;
   }
 
@@ -662,15 +667,20 @@ pj_bool_t request_acceptable_to_subscription_module(pjsip_msg* msg,
     // The Event header is missing or doesn't match "reg"
     TRC_DEBUG("Not processing subscription request that's not for the 'reg' package");
 
-    SAS::Event sas_event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_EVENT, 0);
-    if (event)
+    if (trail != 0)
     {
-      char event_hdr_str[256];
-      memset(event_hdr_str, 0, 256);
-      pjsip_hdr_print_on(event, event_hdr_str, 255);
-      sas_event.add_var_param(event_hdr_str);
+      // LCOV_EXCL_START - No SAS events in UT
+      SAS::Event sas_event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_EVENT, 0);
+      if (event)
+      {
+        char event_hdr_str[256];
+        memset(event_hdr_str, 0, 256);
+        pjsip_hdr_print_on(event, event_hdr_str, 255);
+        sas_event.add_var_param(event_hdr_str);
+      }
+      SAS::report_event(sas_event);
+      // LCOV_EXCL_STOP
     }
-    SAS::report_event(sas_event);
 
     return PJ_FALSE;
   }
@@ -698,9 +708,14 @@ pj_bool_t request_acceptable_to_subscription_module(pjsip_msg* msg,
       memset(accept_hdr_str, 0, 256);
       pjsip_hdr_print_on(accept, accept_hdr_str, 255);
 
-      SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_ACCEPT, 0);
-      event.add_var_param(accept_hdr_str);
-      SAS::report_event(event);
+      if (trail != 0)
+      {
+        // LCOV_EXCL_START - No SAS events in UT
+        SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_ACCEPT, 0);
+        event.add_var_param(accept_hdr_str);
+        SAS::report_event(event);
+        // LCOV_EXCL_STOP
+      }
 
       return PJ_FALSE;
     }

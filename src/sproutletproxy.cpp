@@ -116,12 +116,12 @@ BasicProxy::UASTsx* SproutletProxy::create_uas_tsx()
 Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
                                             int port,
                                             std::string& alias,
-                                            bool& sproutlet_rejected)
+                                            bool& force_external_routing)
 {
   TRC_DEBUG("Find target Sproutlet for request");
 
   Sproutlet* sproutlet = NULL;
-  sproutlet_rejected = false;
+  force_external_routing = false;
   std::string id;
 
   // Find and parse the top Route header.
@@ -215,7 +215,7 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
     // get this handled correctly we need route it externally to make sure it 
     // hits the subscription module.
     TRC_DEBUG("Don't route S-CSCF subscribe message via sproutlet");
-    sproutlet_rejected = true;
+    force_external_routing = true;
     sproutlet = NULL;
   }
   
@@ -509,12 +509,12 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
     // Locate the target Sproutlet for the request, and create the helper and
     // the Sproutlet transaction.
     std::string alias;
-    bool sproutlet_rejected;
+    bool force_external_routing;
     Sproutlet* sproutlet =
                    target_sproutlet(_req->msg,
                                     rdata->tp_info.transport->local_name.port,
                                     alias,
-                                    sproutlet_rejected);
+                                    force_external_routing);
 
     if (sproutlet == NULL)
     {
@@ -530,7 +530,7 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
         // rejected the sproutlet selection - which means that we want to
         // route to the same location but route externally to get the
         // registrar/subscription modules
-        if (!sproutlet_rejected)
+        if (!force_external_routing)
         {
           TRC_INFO("Remove top Route header and forward request");
           pj_list_erase(route);
@@ -720,22 +720,22 @@ Sproutlet* SproutletProxy::UASTsx::target_sproutlet(pjsip_msg* msg,
                                                     int port,
                                                     std::string& alias)
 {
-  bool unused_sproutlet_rejected;
+  bool unused_force_external_routing;
   return _sproutlet_proxy->target_sproutlet(msg,
                                             port,
                                             alias,
-                                            unused_sproutlet_rejected);
+                                            unused_force_external_routing);
 }
 
 Sproutlet* SproutletProxy::UASTsx::target_sproutlet(pjsip_msg* msg,
                                                     int port,
                                                     std::string& alias,
-                                                    bool& sproutlet_rejected)
+                                                    bool& force_external_routing)
 {
   return _sproutlet_proxy->target_sproutlet(msg,
                                             port,
                                             alias,
-                                            sproutlet_rejected);
+                                            force_external_routing);
 }
 
 
