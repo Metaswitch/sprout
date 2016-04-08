@@ -2163,11 +2163,11 @@ int main(int argc, char* argv[])
         impi_memstore = (Store*)new TopologyNeutralMemcachedStore(impi_store_location,
                                                                   astaire_resolver,
                                                                   astaire_comm_monitor);
-        impi_store = new ImpiStore(impi_memstore);
+        impi_store = new ImpiStore(impi_memstore, opt.impi_store_mode);
       }
       else
       {
-        impi_store = new ImpiStore(local_data_store);
+        impi_store = new ImpiStore(local_data_store, opt.impi_store_mode);
       }
 
       status = init_authentication(opt.auth_realm,
@@ -2290,7 +2290,7 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  AoRTimeoutTask::Config aor_timeout_config(local_sdm, remote_sdm, hss_connection);
+  AoRTimeoutTask::Config aor_timeout_config(local_sdm, remote_sdms, hss_connection);
   AuthTimeoutTask::Config auth_timeout_config(impi_store, hss_connection);
   DeregistrationTask::Config deregistration_config(local_sdm,
                                                    remote_sdms,

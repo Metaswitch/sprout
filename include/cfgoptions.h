@@ -94,7 +94,7 @@ struct options
   std::string                          chronos_service;
   std::string                          local_site_name;
   std::vector<std::string>             registration_stores;
-  std::string                          av_store;
+  std::string                          impi_store;
   std::string                          ralf_server;
   int                                  ralf_threads;
   std::vector<std::string>             dns_servers;
