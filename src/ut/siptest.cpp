@@ -107,6 +107,7 @@ SipTest::~SipTest()
 
 SipTest::TransportFlow* SipTest::_tp_default;
 SipTest* SipTest::_current_instance;
+pj_str_t scscf_domain = pj_str("scscf.proxy1.homedomain");
 
 /// Automatically run once, before the first test.
 void SipTest::SetUpTestCase(bool clear_host_mapping)
@@ -124,7 +125,8 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
   stack_data.home_domains.insert("homedomain");
   stack_data.default_home_domain = pj_str("homedomain");
   URIClassifier::home_domains.push_back(&stack_data.default_home_domain);
-  stack_data.scscf_uri = pj_str("sip:sprout.homedomain:5058;transport=TCP");
+  URIClassifier::home_domains.push_back(&scscf_domain);
+  stack_data.scscf_uri = pj_str("sip:scscf.sprout.homedomain:5058;transport=TCP");
   stack_data.cdf_domain = pj_str("cdfdomain");
   stack_data.name_cnt = 0;
   stack_data.name[stack_data.name_cnt] = stack_data.local_host;

@@ -54,6 +54,7 @@ extern "C" {
 #include "sproutsasevent.h"
 #include "sproutletproxy.h"
 #include "snmp_sip_request_types.h"
+#include "subscription.h"
 
 const pj_str_t SproutletProxy::STR_SERVICE = {"service", 7};
 
@@ -111,15 +112,16 @@ BasicProxy::UASTsx* SproutletProxy::create_uas_tsx()
   return (BasicProxy::UASTsx*)new SproutletProxy::UASTsx(this);
 }
 
-
 /// Utility method to find the appropriate Sproutlet to handle a request.
 Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
                                             int port,
-                                            std::string& alias)
+                                            std::string& alias,
+                                            bool& force_external_routing)
 {
   TRC_DEBUG("Find target Sproutlet for request");
 
   Sproutlet* sproutlet = NULL;
+  force_external_routing = false;
   std::string id;
 
   // Find and parse the top Route header.
@@ -203,15 +205,17 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
     }
   }
 
-  if (sproutlet && 
+  // Now check whether we've allocated any sproutlets when we really want to
+  // route the message to the Subscription module instead
+  if ((sproutlet) &&
       (sproutlet->service_name() == "scscf") &&
-      pjsip_method_cmp(&req->line.req.method, 
-                       pjsip_get_subscribe_method()) == 0)
+      (request_acceptable_to_subscription_module(req, 0)))
   {
     // This is a subscribe being routed back to the S-CSCF sproutlet but to 
     // get this handled correctly we need route it externally to make sure it 
     // hits the subscription module.
     TRC_DEBUG("Don't route S-CSCF subscribe message via sproutlet");
+    force_external_routing = true;
     sproutlet = NULL;
   }
   
@@ -505,10 +509,12 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
     // Locate the target Sproutlet for the request, and create the helper and
     // the Sproutlet transaction.
     std::string alias;
+    bool force_external_routing;
     Sproutlet* sproutlet =
                    target_sproutlet(_req->msg,
                                     rdata->tp_info.transport->local_name.port,
-                                    alias);
+                                    alias,
+                                    force_external_routing);
 
     if (sproutlet == NULL)
     {
@@ -520,9 +526,15 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
       {
         // There is a top Route header in the request, which by definition
         // caused the request to be routed to this node, so remove it and
-        // allow the request to be forwarded.
-        TRC_INFO("Remove top Route header and forward request");
-        pj_list_erase(route);
+        // allow the request to be forwarded. The exception here is if we
+        // rejected the sproutlet selection - which means that we want to
+        // route to the same location but route externally to get the
+        // registrar/subscription modules
+        if (!force_external_routing)
+        {
+          TRC_INFO("Remove top Route header and forward request");
+          pj_list_erase(route);
+        }
       }
       else
       {
@@ -708,7 +720,22 @@ Sproutlet* SproutletProxy::UASTsx::target_sproutlet(pjsip_msg* msg,
                                                     int port,
                                                     std::string& alias)
 {
-  return _sproutlet_proxy->target_sproutlet(msg, port, alias);
+  bool unused_force_external_routing;
+  return _sproutlet_proxy->target_sproutlet(msg,
+                                            port,
+                                            alias,
+                                            unused_force_external_routing);
+}
+
+Sproutlet* SproutletProxy::UASTsx::target_sproutlet(pjsip_msg* msg,
+                                                    int port,
+                                                    std::string& alias,
+                                                    bool& force_external_routing)
+{
+  return _sproutlet_proxy->target_sproutlet(msg,
+                                            port,
+                                            alias,
+                                            force_external_routing);
 }
 
 
@@ -762,7 +789,9 @@ void SproutletProxy::UASTsx::schedule_requests()
     else
     {
       std::string alias;
-      Sproutlet* sproutlet = target_sproutlet(req.req->msg, 0, alias);
+      Sproutlet* sproutlet = target_sproutlet(req.req->msg,
+                                              0,
+                                              alias);
 
       if (sproutlet != NULL)
       {

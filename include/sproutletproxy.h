@@ -87,7 +87,10 @@ protected:
 
   /// Gets the next target Sproutlet for the message by analysing the top
   /// Route header.
-  Sproutlet* target_sproutlet(pjsip_msg* req, int port, std::string& alias);
+  Sproutlet* target_sproutlet(pjsip_msg* req,
+                              int port,
+                              std::string& alias,
+                              bool& force_external_routing);
 
   /// Compare a SIP URI to a Sproutlet to see if they are a match (e.g.
   /// a message targeted at that URI would arrive at the given Sproutlet).
@@ -172,7 +175,13 @@ protected:
 
     /// Gets the next target Sproutlet for the message by analysing the top
     /// Route header.
-    Sproutlet* target_sproutlet(pjsip_msg* msg, int port, std::string& alias);
+    Sproutlet* target_sproutlet(pjsip_msg* msg,
+                                int port,
+                                std::string& alias);
+    Sproutlet* target_sproutlet(pjsip_msg* msg,
+                                int port,
+                                std::string& alias,
+                                bool& force_external_routing);
 
     /// Checks to see if it is safe to destroy the UASTsx.
     void check_destroy();
