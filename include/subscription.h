@@ -50,7 +50,7 @@ extern "C" {
 extern pjsip_module mod_subscription;
 
 extern pj_status_t init_subscription(SubscriberDataManager* sdm,
-                                     SubscriberDataManager* remote_sdm,
+                                     std::vector<SubscriberDataManager*> remote_sdms,
                                      HSSConnection* hss_connection,
                                      ACRFactory* rfacr_factory,
                                      AnalyticsLogger* analytics_logger,

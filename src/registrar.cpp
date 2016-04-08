@@ -66,7 +66,7 @@ extern "C" {
 #include "uri_classifier.h"
 
 static SubscriberDataManager* sdm;
-static SubscriberDataManager* remote_sdm;
+static std::vector<SubscriberDataManager*> remote_sdms;
 
 // Connection to the HSS service for retrieving associated public URIs.
 static HSSConnection* hss;
@@ -209,7 +209,10 @@ bool get_private_id(pjsip_rx_data* rdata, std::string& id)
   return success;
 }
 
-/// Write to the registration store.
+/// Write to the registration store. If we can't find the AoR pair in the
+/// primary SDM, we will either use the backup_aor or we will try and look up
+/// the AoR pair in the backup SDMs. Therefore either the backup_aor should be
+/// NULL, or backup_sdms should be empty.
 SubscriberDataManager::AoRPair* write_to_store(
                    SubscriberDataManager* primary_sdm,         ///<store to write to
                    std::string aor,                            ///<address of record to write to
@@ -218,7 +221,8 @@ SubscriberDataManager::AoRPair* write_to_store(
                    int& expiry,                                ///<[out] longest expiry time
                    bool& out_is_initial_registration,
                    SubscriberDataManager::AoRPair* backup_aor, ///<backup data if no entry in store
-                   SubscriberDataManager* backup_sdm,          ///<backup store to read from if no entry in store and no backup data
+                   std::vector<SubscriberDataManager*> backup_sdms,
+                                                               ///<backup stores to read from if no entry in store and no backup data
                    std::string private_id,                     ///<private id that the binding was registered with
                    SAS::TrailId trail)
 {
@@ -257,21 +261,50 @@ SubscriberDataManager::AoRPair* write_to_store(
       break;
     }
 
-    // If we don't have any bindings, try the backup AoR and/or store.
+    // If we don't have any bindings, try the backup AoR and/or stores.
     // LCOV_EXCL_START - remote store tests temp excluded
     if (aor_pair->get_current()->bindings().empty())
     {
-      if ((backup_aor == NULL)   &&
-          (backup_sdm != NULL) &&
-          (backup_sdm->has_servers()))
-      {
-        backup_aor = backup_sdm->get_aor_data(aor, trail);
-        backup_aor_alloced = (backup_aor != NULL);
-      }
+      bool found_binding = false;
 
       if ((backup_aor != NULL) &&
-          (backup_aor->get_current() != NULL) &&
-          (!backup_aor->get_current()->bindings().empty()))
+          (backup_aor->current_contains_bindings()))
+      {
+        found_binding = true;
+      }
+      else
+      {
+        std::vector<SubscriberDataManager*>::iterator it = backup_sdms.begin();
+        SubscriberDataManager::AoRPair* local_backup_aor = NULL;
+
+        while ((it != backup_sdms.end()) && (!found_binding))
+        {
+          local_backup_aor = (*it)->get_aor_data(aor, trail);
+
+          if ((local_backup_aor != NULL) &&
+              (local_backup_aor->current_contains_bindings()))
+          {
+            found_binding = true;
+            backup_aor = local_backup_aor;
+
+            // Flag that we have allocated the memory for the backup pair so
+            // that we can tidy it up later.
+            backup_aor_alloced = true;
+          }
+          else
+          {
+            ++it;
+
+            if (local_backup_aor != NULL)
+            {
+              delete local_backup_aor;
+              local_backup_aor = NULL;
+            }
+          }
+        }
+      }
+
+      if (found_binding)
       {
         for (SubscriberDataManager::AoR::Bindings::const_iterator i = backup_aor->get_current()->bindings().begin();
              i != backup_aor->get_current()->bindings().end();
@@ -424,7 +457,7 @@ SubscriberDataManager::AoRPair* write_to_store(
   // If we allocated the backup AoR, tidy up.
   if (backup_aor_alloced)
   {
-    delete backup_aor;
+    delete backup_aor; // LCOV_EXCL_LINE
   }
 
   if (all_bindings_expired)
@@ -688,7 +721,7 @@ void process_register_request(pjsip_rx_data* rdata)
     return;
   }
 
-  // Write to the local store, checking the remote store if there is no entry locally.
+  // Write to the local store, checking the remote stores if there is no entry locally.
   SubscriberDataManager::AoRPair* aor_pair =
                                   write_to_store(sdm,
                                                 aor,
@@ -697,7 +730,7 @@ void process_register_request(pjsip_rx_data* rdata)
                                                 expiry,
                                                 is_initial_registration,
                                                 NULL,
-                                                remote_sdm,
+                                                remote_sdms,
                                                 private_id_for_binding,
                                                 trail);
 
@@ -706,21 +739,23 @@ void process_register_request(pjsip_rx_data* rdata)
     // Log the bindings.
     log_bindings(aor, aor_pair->get_current());
 
-    // If we have a remote store, try to store this there too.  We don't worry
+    // If we have any remote stores, try to store this in them too.  We don't worry
     // about failures in this case.
-    if ((remote_sdm != NULL) && remote_sdm->has_servers())
+    for (std::vector<SubscriberDataManager*>::iterator it = remote_sdms.begin();
+         it != remote_sdms.end();
+         ++it)
     {
       int tmp_expiry = 0;
       bool ignored;
       SubscriberDataManager::AoRPair* remote_aor_pair =
-                                      write_to_store(remote_sdm,
+                                      write_to_store(*it,
                                                      aor,
                                                      rdata,
                                                      now,
                                                      tmp_expiry,
                                                      ignored,
                                                      aor_pair,
-                                                     NULL,
+                                                     {},
                                                      private_id_for_binding,
                                                      trail);
       delete remote_aor_pair;
@@ -1080,7 +1115,7 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 }
 
 pj_status_t init_registrar(SubscriberDataManager* reg_sdm,
-                           SubscriberDataManager* reg_remote_sdm,
+                           std::vector<SubscriberDataManager*> reg_remote_sdms,
                            HSSConnection* hss_connection,
                            AnalyticsLogger* analytics_logger,
                            ACRFactory* rfacr_factory,
@@ -1092,7 +1127,7 @@ pj_status_t init_registrar(SubscriberDataManager* reg_sdm,
   pj_status_t status;
 
   sdm = reg_sdm;
-  remote_sdm = reg_remote_sdm;
+  remote_sdms = reg_remote_sdms;
   hss = hss_connection;
   analytics = analytics_logger;
   max_expires = cfg_max_expires;

@@ -69,14 +69,14 @@ public:
   struct Config
   {
     Config(SubscriberDataManager* sdm,
-           SubscriberDataManager* remote_sdm,
+           std::vector<SubscriberDataManager*> remote_sdms,
            HSSConnection* hss) :
       _sdm(sdm),
-      _remote_sdm(remote_sdm),
+      _remote_sdms(remote_sdms),
       _hss(hss)
     {}
     SubscriberDataManager* _sdm;
-    SubscriberDataManager* _remote_sdm;
+    std::vector<SubscriberDataManager*> _remote_sdms;
     HSSConnection* _hss;
   };
 
@@ -95,7 +95,7 @@ protected:
                         SubscriberDataManager* current_sdm,
                         std::string aor_id,
                         SubscriberDataManager::AoRPair* previous_aor_data,
-                        SubscriberDataManager* remote_sdm,
+                        std::vector<SubscriberDataManager*> remote_sdms,
                         bool& all_bindings_expired);
 
 protected:
@@ -109,18 +109,18 @@ public:
   struct Config
   {
     Config(SubscriberDataManager* sdm,
-           SubscriberDataManager* remote_sdm,
+           std::vector<SubscriberDataManager*> remote_sdms,
            HSSConnection* hss,
            SIPResolver* sipresolver,
            ImpiStore* impi_store) :
       _sdm(sdm),
-      _remote_sdm(remote_sdm),
+      _remote_sdms(remote_sdms),
       _hss(hss),
       _sipresolver(sipresolver),
       _impi_store(impi_store)
     {}
     SubscriberDataManager* _sdm;
-    SubscriberDataManager* _remote_sdm;
+    std::vector<SubscriberDataManager*> _remote_sdms;
     HSSConnection* _hss;
     SIPResolver* _sipresolver;
     ImpiStore* _impi_store;
@@ -141,7 +141,7 @@ public:
                     std::string aor_id,
                     std::string private_id,
                     SubscriberDataManager::AoRPair* previous_aor_data,
-                    SubscriberDataManager* remote_sdm,
+                    std::vector<SubscriberDataManager*> remote_sdms,
                     std::set<std::string>& impis_to_delete);
 
 protected:

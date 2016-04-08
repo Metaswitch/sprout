@@ -177,13 +177,16 @@ get_daemon_args()
         [ -z "$min_token_rate" ] || min_token_rate_arg="--min-token-rate=$min_token_rate"
         [ -z "$exception_max_ttl" ] || exception_max_ttl_arg="--exception-max-ttl=$exception_max_ttl"
         [ -z "$max_session_expires" ] || max_session_expires_arg="--max-session-expires=$max_session_expires"
+        [ -z "$local_site_name" ] || local_site_name_arg="--local-site-name=$local_site_name"
+        [ -z "$sprout_impi_store" ] || impi_store_arg="--impi-store=$sprout_impi_store"
 
         DAEMON_ARGS="
                      --domain=$home_domain
                      --localhost=$local_ip
                      --realm=$home_domain
-                     --memstore=/etc/clearwater/cluster_settings
-                     --remote-memstore=/etc/clearwater/remote_cluster_settings
+                     $local_site_name_arg
+                     --registration-stores=$sprout_registration_store
+                     $impi_store_arg
                      --hss=$hs_hostname
                      --chronos=$chronos_hostname
                      --sprout-hostname=$sprout_hostname
@@ -278,6 +281,7 @@ get_daemon_args()
         [ "$additional_home_domains" = "" ]       || DAEMON_ARGS="$DAEMON_ARGS --additional-domains=$additional_home_domains"
         [ "$sip_blacklist_duration" = "" ]        || DAEMON_ARGS="$DAEMON_ARGS --sip-blacklist-duration=$sip_blacklist_duration"
         [ "$http_blacklist_duration" = "" ]       || DAEMON_ARGS="$DAEMON_ARGS --http-blacklist-duration=$http_blacklist_duration"
+        [ "$astaire_blacklist_duration" = "" ]    || DAEMON_ARGS="$DAEMON_ARGS --astaire-blacklist-duration=$astaire_blacklist_duration"
         [ "$sip_tcp_connect_timeout" = "" ]       || DAEMON_ARGS="$DAEMON_ARGS --sip-tcp-connect-timeout=$sip_tcp_connect_timeout"
         [ "$sip_tcp_send_timeout" = "" ]          || DAEMON_ARGS="$DAEMON_ARGS --sip-tcp-send-timeout=$sip_tcp_send_timeout"
         [ "$session_continued_timeout_ms" = "" ]  || DAEMON_ARGS="$DAEMON_ARGS --session-continued-timeout=$session_continued_timeout_ms"

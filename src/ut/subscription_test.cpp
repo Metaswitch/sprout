@@ -69,10 +69,11 @@ public:
     _remote_data_store = new LocalStore();
     _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
     _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, false);
+    std::vector<SubscriberDataManager*> remote_sdms = {_remote_sdm};
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
-    pj_status_t ret = init_subscription(_sdm, _remote_sdm, _hss_connection, _acr_factory, _analytics, 300);
+    pj_status_t ret = init_subscription(_sdm, remote_sdms, _hss_connection, _acr_factory, _analytics, 300);
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.scscf_uri = pj_str("sip:all.the.sprout.nodes:5058;transport=TCP");
 
@@ -801,7 +802,7 @@ public:
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
-    pj_status_t ret = init_subscription(_sdm, NULL, _hss_connection, _acr_factory, _analytics, 300);
+    pj_status_t ret = init_subscription(_sdm, {}, _hss_connection, _acr_factory, _analytics, 300);
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.scscf_uri = pj_str("sip:all.the.sprout.nodes:5058;transport=TCP");
 
