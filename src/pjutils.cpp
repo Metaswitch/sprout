@@ -1394,7 +1394,8 @@ pj_status_t PJUtils::respond_stateless(pjsip_endpoint* endpt,
                                        int st_code,
                                        const pj_str_t* st_text,
                                        const pjsip_hdr* hdr_list,
-                                       const pjsip_msg_body* body)
+                                       const pjsip_msg_body* body,
+                                       ACR* acr)
 {
   pj_status_t status;
   pjsip_response_addr res_addr;
@@ -1437,6 +1438,12 @@ pj_status_t PJUtils::respond_stateless(pjsip_endpoint* endpt,
     return status;
   }
 
+  // Show the response to the ACR if we have one.
+  if (acr != NULL)
+  {
+    acr->tx_response(tdata->msg);
+  }
+
   // Send!
   status = pjsip_endpt_send_response(endpt, &res_addr, tdata, NULL, NULL);
   if (status != PJ_SUCCESS)
@@ -1458,7 +1465,8 @@ pj_status_t PJUtils::respond_stateful(pjsip_endpoint* endpt,
                                       int st_code,
                                       const pj_str_t* st_text,
                                       const pjsip_hdr* hdr_list,
-                                      const pjsip_msg_body* body)
+                                      const pjsip_msg_body* body,
+                                      ACR* acr)
 {
   pj_status_t status;
   pjsip_tx_data* tdata;
@@ -1490,6 +1498,12 @@ pj_status_t PJUtils::respond_stateful(pjsip_endpoint* endpt,
       pjsip_tx_data_dec_ref(tdata);
       return status;
     }
+  }
+
+  // Show the response to the ACR if we have one.
+  if (acr != NULL)
+  {
+    acr->tx_response(tdata->msg);
   }
 
   status = pjsip_tsx_send_msg(uas_tsx, tdata);

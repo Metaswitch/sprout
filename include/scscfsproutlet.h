@@ -66,6 +66,7 @@ extern "C" {
 #include "sproutlet.h"
 #include "snmp_counter_table.h"
 #include "session_expires_helper.h"
+#include "as_communication_tracker.h"
 
 class SCSCFSproutletTsx;
 
@@ -75,7 +76,8 @@ public:
   static const int DEFAULT_SESSION_CONTINUED_TIMEOUT = 2000;
   static const int DEFAULT_SESSION_TERMINATED_TIMEOUT = 4000;
 
-  SCSCFSproutlet(const std::string& scscf_cluster_uri,
+  SCSCFSproutlet(const std::string& scscf_name,
+                 const std::string& scscf_cluster_uri,
                  const std::string& scscf_node_uri,
                  const std::string& icscf_uri,
                  const std::string& bgcf_uri,
@@ -87,7 +89,9 @@ public:
                  ACRFactory* acr_factory,
                  bool override_npdi,
                  int session_continued_timeout = DEFAULT_SESSION_CONTINUED_TIMEOUT,
-                 int session_terminated_timeout = DEFAULT_SESSION_TERMINATED_TIMEOUT);
+                 int session_terminated_timeout = DEFAULT_SESSION_TERMINATED_TIMEOUT,
+                 AsCommunicationTracker* sess_term_as_tracker = NULL,
+                 AsCommunicationTracker* sess_cont_as_tracker = NULL);
   ~SCSCFSproutlet();
 
   bool init();
@@ -148,6 +152,20 @@ private:
                      std::deque<std::string>& ecfs,
                      SAS::TrailId trail);
 
+  /// Record that communication with an AS failed.
+  ///
+  /// @param uri               - The URI of the AS.
+  /// @param default_handling  - The AS's default handling.
+  void track_app_serv_comm_failure(const std::string& uri,
+                                   DefaultHandling default_handling);
+
+  /// Record that communication with an AS succeeded.
+  ///
+  /// @param uri               - The URI of the AS.
+  /// @param default_handling  - The AS's default handling.
+  void track_app_serv_comm_success(const std::string& uri,
+                                   DefaultHandling default_handling);
+
   /// Translate RequestURI using ENUM service if appropriate.
   void translate_request_uri(pjsip_msg* req, pj_pool_t* pool, SAS::TrailId trail);
 
@@ -155,7 +173,7 @@ private:
   /// @param trail                SAS trail identifier to use for the ACR.
   /// @param initiator            The initiator of the SIP transaction (calling
   ///                             or called party).
-  ACR* get_acr(SAS::TrailId trail, Initiator initiator, NodeRole role);
+  ACR* get_acr(SAS::TrailId trail, ACR::Initiator initiator, ACR::NodeRole role);
 
   friend class SCSCFSproutletTsx;
 
@@ -199,6 +217,9 @@ private:
   SNMP::CounterTable* _routed_by_preloaded_route_tbl = NULL;
   SNMP::CounterTable* _invites_cancelled_before_1xx_tbl = NULL;
   SNMP::CounterTable* _invites_cancelled_after_1xx_tbl = NULL;
+
+  AsCommunicationTracker* _sess_term_as_tracker;
+  AsCommunicationTracker* _sess_cont_as_tracker;
 };
 
 
@@ -300,11 +321,13 @@ private:
   /// @param billing_rr   - Whether to add a `billing-role` parameter to the RR
   /// @param billing_role - The contents of the `billing-role` (ignored if
   ///                       `billing_rr` is false)
-  void add_record_route(pjsip_msg* msg, bool billing_rr, NodeRole billing_role);
+  void add_record_route(pjsip_msg* msg,
+                        bool billing_rr,
+                        ACR::NodeRole billing_role);
 
   /// Retrieve the billing role for the incoming message.  This should have been
   /// set during session initiation.
-  NodeRole get_billing_role();
+  ACR::NodeRole get_billing_role();
 
   /// Adds a second P-Asserted-Identity header to a message when required.
   void add_second_p_a_i_hdr(pjsip_msg* msg);

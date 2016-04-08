@@ -109,6 +109,7 @@ extern "C" {
 #include "snmp_agent.h"
 #include "ralf_processor.h"
 #include "sprout_alarmdefinition.h"
+#include "sproutlet_options.h"
 
 enum OptionTypes
 {
@@ -144,22 +145,24 @@ enum OptionTypes
   OPT_FORCE_THIRD_PARTY_REGISTER_BODY,
   OPT_MEMENTO_NOTIFY_URL,
   OPT_PIDFILE,
+  OPT_SPROUT_HOSTNAME,
+  OPT_LISTEN_PORT,
+  SPROUTLET_MACRO(SPROUTLET_OPTION_TYPES)
+  OPT_IMPI_STORE_MODE,
+  OPT_NONCE_COUNT_SUPPORTED,
   OPT_LOCAL_SITE_NAME,
   OPT_REGISTRATION_STORES,
-  OPT_AV_STORE,
+  OPT_IMPI_STORE,
 };
 
 
 const static struct pj_getopt_option long_opt[] =
 {
   { "pcscf",                        required_argument, 0, 'p'},
-  { "scscf",                        required_argument, 0, 's'},
-  { "icscf",                        required_argument, 0, 'i'},
   { "webrtc-port",                  required_argument, 0, 'w'},
   { "localhost",                    required_argument, 0, 'l'},
   { "domain",                       required_argument, 0, 'D'},
   { "additional-domains",           required_argument, 0, OPT_ADDITIONAL_HOME_DOMAINS},
-  { "scscf-uri",                    required_argument, 0, 'c'},
   { "alias",                        required_argument, 0, 'n'},
   { "routing-proxy",                required_argument, 0, 'r'},
   { "ibcf",                         required_argument, 0, 'I'},
@@ -167,7 +170,7 @@ const static struct pj_getopt_option long_opt[] =
   { "realm",                        required_argument, 0, 'R'},
   { "local-site-name",              required_argument, 0, OPT_LOCAL_SITE_NAME},
   { "registration-stores",          required_argument, 0, OPT_REGISTRATION_STORES},
-  { "av-store",                     required_argument, 0, OPT_AV_STORE},
+  { "impi-store",                     required_argument, 0, OPT_IMPI_STORE},
   { "sas",                          required_argument, 0, 'S'},
   { "hss",                          required_argument, 0, 'H'},
   { "record-routing-model",         required_argument, 0, 'C'},
@@ -225,6 +228,11 @@ const static struct pj_getopt_option long_opt[] =
   { "force-3pr-body",               no_argument,       0, OPT_FORCE_THIRD_PARTY_REGISTER_BODY},
   { "pidfile",                      required_argument, 0, OPT_PIDFILE},
   { "plugin-option",                required_argument, 0, 'N'},
+  { "sprout-hostname",              required_argument, 0, OPT_SPROUT_HOSTNAME},
+  { "listen-port",                  required_argument, 0, OPT_LISTEN_PORT},
+  SPROUTLET_MACRO(SPROUTLET_CFG_PJ_STRUCT)
+  { "impi-store-mode",              required_argument, 0, OPT_IMPI_STORE_MODE},
+  { "nonce-count-supported",        no_argument,       0, OPT_NONCE_COUNT_SUPPORTED},
   { NULL,                           0,                 0, 0}
 };
 
@@ -238,6 +246,8 @@ QuiescingManager* quiescing_mgr;
 
 const static int QUIESCE_SIGNAL = SIGQUIT;
 const static int UNQUIESCE_SIGNAL = SIGUSR1;
+// Minimum value allowed by rfc4028, section 4
+const static int MIN_SESSION_EXPIRES = 90;
 
 static void usage(void)
 {
@@ -281,7 +291,7 @@ static void usage(void)
        "                            location of the memcached store in each site. One of the sites must\n"
        "                            be the local site. Remote sites for geo-redundant storage are optional.\n"
        "                            (If not provided, local store is used)\n"
-       "     --av-store <domain>    Specifies the location of the memcached store for storing\n"
+       "     --impi-store <domain>  Specifies the location of the memcached store for storing\n"
        "                            authentication vectors. There is currently no geo-redundant storage\n"
        "                            for authentication vectors. If this option isn't provided, Sprout uses\n"
        "                            the local site registration store.\n"
@@ -319,9 +329,11 @@ static void usage(void)
        "     --sub-max-expires <expiry>\n"
        "                            The maximum allowed subscription period (in seconds)\n"
        "     --default-session-expires <expiry>\n"
-       "                            The session expiry period to request (in seconds)\n"
+       "                            The session expiry period to request\n"
+       "                            (in seconds. Min 90. Defaults to 600)\n"
        "     --max-session-expires <expiry>\n"
-       "                            The maximum allowed session expiry period (in seconds)\n"
+       "                            The maximum allowed session expiry period.\n"
+       "                            (in seconds. Min 90. Defaults to 600)\n"
        "     --target-latency-us <usecs>\n"
        "                            Target latency above which throttling applies (default: 100000)\n"
        "     --cass-target-latency-us <usecs>\n"
@@ -406,6 +418,12 @@ static void usage(void)
        "     --force-3pr-body       Always include the original REGISTER and 200 OK in the body of\n"
        "                            third-party REGISTER messages to application servers, even if the\n"
        "                            User-Data doesn't specify it\n"
+       "     --impi-store-mode (av-impi|impi)\n"
+       "                            Whether to run the IMPI store in AV and IMPI mode (historical) or\n"
+       "                            IMPI-only (forward-looking) mode\n"
+       "     --nonce-count-supported\n"
+       "                            Whether sprout accepts authentication responses with a nonce count\n"
+       "                            greater than 1\n"
        "     --pidfile=<filename>   Write pidfile\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
@@ -433,6 +451,19 @@ int parse_port(const std::string& port_str)
   return port;
 }
 
+/// Parse a string representing a port.
+/// @returns whether the port is invalid and sets the port
+bool parse_port(const std::string& port_str, int& port)
+{
+  port = atoi(port_str.c_str());
+
+  if ((port < 0) || (port > 0xFFFF))
+  {
+    return false;
+  }
+
+  return true;
+}
 
 static pj_status_t init_logging_options(int argc, char* argv[], struct options* options)
 {
@@ -478,6 +509,8 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
   int opt_ind;
   int reg_max_expires;
   int sub_max_expires;
+  int default_session_expires;
+  int max_session_expires;
 
   pj_optind = 0;
   while ((c = pj_getopt_long(argc, argv, pj_options_description.c_str(), long_opt, &opt_ind)) != -1)
@@ -506,36 +539,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
           TRC_ERROR("P-CSCF ports %s invalid", pj_optarg);
           return -1;
         }
-      }
-      break;
-
-    case 's':
-      options->scscf_port = parse_port(std::string(pj_optarg));
-      if (options->scscf_port != 0)
-      {
-        TRC_INFO("S-CSCF enabled on port %d", options->scscf_port);
-        options->scscf_enabled = true;
-      }
-      else
-      {
-        CL_SPROUT_INVALID_S_CSCF_PORT.log(pj_optarg);
-        TRC_ERROR("S-CSCF port %s is invalid\n", pj_optarg);
-        return -1;
-      }
-      break;
-
-    case 'i':
-      options->icscf_port = parse_port(std::string(pj_optarg));
-      if (options->icscf_port != 0)
-      {
-        TRC_INFO("I-CSCF enabled on port %d", options->icscf_port);
-        options->icscf_enabled = true;
-      }
-      else
-      {
-        CL_SPROUT_INVALID_I_CSCF_PORT.log(pj_optarg);
-        TRC_ERROR("I-CSCF port %s is invalid", pj_optarg);
-        return -1;
       }
       break;
 
@@ -610,11 +613,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       TRC_INFO("Additional home domains set to %s", pj_optarg);
       break;
 
-    case 'c':
-      options->scscf_uri = std::string(pj_optarg);
-      TRC_INFO("Sprout cluster URI set to %s", pj_optarg);
-      break;
-
     case 'n':
       options->alias_hosts = std::string(pj_optarg);
       TRC_INFO("Alias host names = %s", pj_optarg);
@@ -681,8 +679,8 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
-    case OPT_AV_STORE:
-      options->av_store = std::string(pj_optarg);
+    case OPT_IMPI_STORE:
+      options->impi_store = std::string(pj_optarg);
       break;
 
     case 'S':
@@ -861,11 +859,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
-    case 'P':
-      options->pjsip_threads = atoi(pj_optarg);
-      TRC_INFO("Use %d PJSIP threads", options->pjsip_threads);
-      break;
-
     case 'W':
       options->worker_threads = atoi(pj_optarg);
       TRC_INFO("Use %d worker threads", options->worker_threads);
@@ -917,14 +910,33 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       // Ignore L, F, d and t - these are handled by init_logging_options
       break;
 
+    // The minimum value allowed for session expires is 90 seconds, as per RFC4028, section 4
     case OPT_DEFAULT_SESSION_EXPIRES:
-      options->default_session_expires = atoi(pj_optarg);
+      default_session_expires = atoi(pj_optarg);
+      if (default_session_expires >= MIN_SESSION_EXPIRES)
+      {
+        options->default_session_expires = default_session_expires;
+      }
+      else
+      {
+        TRC_INFO("Error, invalid default session expires value %s. Using default value.",
+                 pj_optarg);
+      }
       TRC_INFO("Default session expiry set to %d",
                options->default_session_expires);
       break;
 
     case OPT_MAX_SESSION_EXPIRES:
-      options->max_session_expires = atoi(pj_optarg);
+      max_session_expires = atoi(pj_optarg);
+      if (max_session_expires >= MIN_SESSION_EXPIRES)
+      {
+        options->max_session_expires = max_session_expires;
+      }
+      else
+      {
+        TRC_INFO("Error, invalid maximum session expires value %s. Using default value.",
+                 pj_optarg);
+      }
       TRC_INFO("Max session expiry set to %d",
                options->max_session_expires);
       break;
@@ -1081,6 +1093,27 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       options->pidfile = std::string(pj_optarg);
       break;
 
+    case OPT_IMPI_STORE_MODE:
+      if (stricmp(pj_optarg, "av-impi") == 0)
+      {
+        options->impi_store_mode = ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI;
+        TRC_INFO("IMPI store mode set to: av-impi");
+      }
+      else if (stricmp(pj_optarg, "impi") == 0)
+      {
+        options->impi_store_mode = ImpiStore::Mode::READ_IMPI_WRITE_IMPI;
+        TRC_INFO("IMPI store mode set to: impi");
+      }
+      else
+      {
+        TRC_ERROR("Unknown IMPI store mode: %s", pj_optarg);
+      }
+      break;
+
+    case OPT_NONCE_COUNT_SUPPORTED:
+      options->nonce_count_supported = true;
+      break;
+
     case 'N':
       {
         std::vector<std::string> fields;
@@ -1096,7 +1129,16 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
- 
+    case OPT_SPROUT_HOSTNAME:
+      options->sprout_hostname = std::string(pj_optarg);
+      break;
+
+    case OPT_LISTEN_PORT:
+      options->listen_port = atoi(pj_optarg);
+      break;
+
+    SPROUTLET_MACRO(SPROUTLET_OPTIONS)
+
     case 'h':
       usage();
       return -1;
@@ -1175,7 +1217,6 @@ void signal_handler(int sig)
   exception_handler->handle_exception();
 
   CL_SPROUT_CRASH.log(strsignal(sig));
-  closelog();
 
   // Dump a core.
   abort();
@@ -1346,8 +1387,8 @@ int main(int argc, char* argv[])
   SIPResolver* sip_resolver = NULL;
   AstaireResolver* astaire_resolver = NULL;
   std::vector<Store*> remote_data_stores = {};
-  Store* av_memstore = NULL;
-  AvStore* av_store = NULL;
+  Store* impi_memstore = NULL;
+  ImpiStore* impi_store = NULL;
   HttpConnection* ralf_connection = NULL;
   ChronosConnection* chronos_connection = NULL;
   ACRFactory* pcscf_acr_factory = NULL;
@@ -1375,8 +1416,6 @@ int main(int argc, char* argv[])
   opt.upstream_proxy_port = 0;
   opt.webrtc_port = 0;
   opt.ibcf = PJ_FALSE;
-  opt.scscf_enabled = false;
-  opt.scscf_port = 0;
   opt.external_icscf_uri = "";
   opt.auth_enabled = PJ_FALSE;
   opt.enum_suffix = ".e164.arpa";
@@ -1388,11 +1427,8 @@ int main(int argc, char* argv[])
   opt.reg_max_expires = 300;
 
   opt.sub_max_expires = 300;
-  opt.icscf_enabled = false;
-  opt.icscf_port = 0;
   opt.sas_server = "0.0.0.0";
   opt.chronos_service = "localhost:7253";
-  opt.pjsip_threads = 1;
   opt.record_routing_model = 1;
   opt.default_session_expires = 10 * 60;
   opt.max_session_expires = 10 * 60;
@@ -1430,25 +1466,25 @@ int main(int argc, char* argv[])
   opt.ralf_threads = 25;
   opt.non_register_auth_mode = NonRegisterAuthentication::NEVER;
   opt.force_third_party_register_body = false;
+  opt.listen_port = 0;
+  SPROUTLET_MACRO(SPROUTLET_CFG_OPTIONS_DEFAULT_VALUES)
+  opt.impi_store_mode = ImpiStore::Mode::READ_IMPI_WRITE_IMPI;
+  opt.nonce_count_supported = false;
 
-  boost::filesystem::path p = argv[0];
-  // Copy the filename to a string so that we can be sure of its lifespan -
-  // the value passed to openlog must be valid for the duration of the program.
-  std::string filename = p.filename().c_str();
-  openlog(filename.c_str(), PDLOG_PID, PDLOG_LOCAL6);
+  // Initialise ENT logging before making "Started" log
+  PDLogStatic::init(argv[0]);
+
   CL_SPROUT_STARTED.log();
 
   status = init_logging_options(argc, argv, &opt);
 
   if (status != PJ_SUCCESS)
   {
-    closelog();
     return 1;
   }
 
   if (opt.daemon && opt.interactive)
   {
-    closelog();
     TRC_ERROR("Cannot specify both --daemon and --interactive");
     return 1;
   }
@@ -1458,7 +1494,6 @@ int main(int argc, char* argv[])
     int errnum = daemonize();
     if (errnum != 0)
     {
-      closelog();
       TRC_ERROR("Failed to convert to daemon, %d (%s)", errnum, strerror(errnum));
       exit(0);
     }
@@ -1497,10 +1532,9 @@ int main(int argc, char* argv[])
   status = init_options(argc, argv, &opt);
   if (status != PJ_SUCCESS)
   {
-    closelog();
     return 1;
   }
-  
+
   if (opt.pidfile != "")
   {
     int rc = Utils::lock_and_write_pidfile(opt.pidfile);
@@ -1519,17 +1553,17 @@ int main(int argc, char* argv[])
     analytics_logger = new AnalyticsLogger(analytics_logger_logger);
   }
 
-  if ((!opt.pcscf_enabled) && (!opt.scscf_enabled) && (!opt.icscf_enabled))
+  SPROUTLET_MACRO(SPROUTLET_VERIFY_OPTIONS)
+
+  if ((!opt.pcscf_enabled) && (!opt.enabled_scscf) && (!opt.enabled_icscf))
   {
     CL_SPROUT_NO_SI_CSCF.log();
-    closelog();
     TRC_ERROR("Must enable P-CSCF, S-CSCF or I-CSCF");
     return 1;
   }
 
-  if ((opt.pcscf_enabled) && ((opt.scscf_enabled) || (opt.icscf_enabled)))
+  if ((opt.pcscf_enabled) && ((opt.enabled_scscf) || (opt.enabled_icscf)))
   {
-    closelog();
     TRC_ERROR("Cannot enable both P-CSCF and S/I-CSCF");
     return 1;
   }
@@ -1537,36 +1571,26 @@ int main(int argc, char* argv[])
   if ((opt.pcscf_enabled) &&
       (opt.upstream_proxy == ""))
   {
-    closelog();
     TRC_ERROR("Cannot enable P-CSCF without specifying --routing-proxy");
     return 1;
   }
 
   if ((opt.ibcf) && (!opt.pcscf_enabled))
   {
-    closelog();
     TRC_ERROR("Cannot enable IBCF without also enabling P-CSCF");
     return 1;
   }
 
   if ((opt.webrtc_port != 0 ) && (!opt.pcscf_enabled))
   {
-    closelog();
     TRC_ERROR("Cannot enable WebRTC without also enabling P-CSCF");
     return 1;
   }
 
-  if ((opt.scscf_enabled) && (opt.scscf_uri == ""))
-  {
-    TRC_ERROR("S-CSCF enabled, but no S-CSCF URI specified");
-    return 1;
-  }
-
-  if (((opt.scscf_enabled) || (opt.icscf_enabled)) &&
+  if (((opt.enabled_scscf) || (opt.enabled_icscf)) &&
       (opt.hss_server == ""))
   {
     CL_SPROUT_SI_CSCF_NO_HOMESTEAD.log();
-    closelog();
     TRC_ERROR("S/I-CSCF enabled with no Homestead server");
     return 1;
   }
@@ -1574,7 +1598,6 @@ int main(int argc, char* argv[])
   if ((opt.auth_enabled) && (opt.hss_server == ""))
   {
     CL_SPROUT_AUTH_NO_HOMESTEAD.log();
-    closelog();
     TRC_ERROR("Authentication enabled, but no Homestead server specified");
     return 1;
   }
@@ -1582,7 +1605,6 @@ int main(int argc, char* argv[])
   if ((opt.xdm_server != "") && (opt.hss_server == ""))
   {
     CL_SPROUT_XDM_NO_HOMESTEAD.log();
-    closelog();
     TRC_ERROR("XDM server configured for services, but no Homestead server specified");
     return 1;
   }
@@ -1597,7 +1619,7 @@ int main(int argc, char* argv[])
     TRC_WARNING("XDM server configured on P-CSCF, ignoring");
   }
 
-  if (((!opt.registration_stores.empty()) || (opt.av_store != "")) &&
+  if (((!opt.registration_stores.empty()) || (opt.impi_store != "")) &&
       (opt.auth_enabled) &&
       (opt.worker_threads == 1))
   {
@@ -1645,14 +1667,14 @@ int main(int argc, char* argv[])
     }
   }
 
-  // The av-store argument can either just be a string representing the location
+  // The impi-store argument can either just be a string representing the location
   // of the AV store, or it can be of the format <local_site_name>=<domain>. If
   // it isn't provided, we just use the local site's registration store later.
-  std::string av_store_location;
-  if (opt.av_store != "")
+  std::string impi_store_location;
+  if (opt.impi_store != "")
   {
     std::string site;
-    if (Utils::split_site_store(opt.av_store, site, av_store_location))
+    if (Utils::split_site_store(opt.impi_store, site, impi_store_location))
     {
       if (site != opt.local_site_name)
       {
@@ -1663,9 +1685,9 @@ int main(int argc, char* argv[])
     }
   }
 
-  if (av_store_location != "")
+  if (impi_store_location != "")
   {
-    TRC_INFO("Using memcached AV store %s", av_store_location.c_str());
+    TRC_INFO("Using memcached AV store %s", impi_store_location.c_str());
   }
   else
   {
@@ -1780,7 +1802,7 @@ int main(int argc, char* argv[])
                                                       ".1.2.826.0.1.1578918.9.3.31");
   }
 
-  if (opt.icscf_enabled || opt.scscf_enabled)
+  if (opt.enabled_icscf || opt.enabled_scscf)
   {
     // Create Sprout's alarm objects.
 
@@ -1817,7 +1839,6 @@ int main(int argc, char* argv[])
 
     // Start the alarm request agent
     AlarmReqAgent::get_instance().start();
-    AlarmState::clear_all("sprout");
   }
 
   // Start the load monitor
@@ -1855,16 +1876,15 @@ int main(int argc, char* argv[])
                       opt.sas_server,
                       opt.pcscf_trusted_port,
                       opt.pcscf_untrusted_port,
-                      opt.scscf_port,
-                      opt.icscf_port,
+                      opt.port_scscf,
+                      opt.sproutlet_ports,
                       opt.local_host,
                       opt.public_host,
                       opt.home_domain,
                       opt.additional_home_domains,
-                      opt.scscf_uri,
+                      opt.uri_scscf,
                       opt.alias_hosts,
                       sip_resolver,
-                      opt.pjsip_threads,
                       opt.record_routing_model,
                       opt.default_session_expires,
                       opt.max_session_expires,
@@ -1937,7 +1957,7 @@ int main(int argc, char* argv[])
                                        hss_comm_monitor);
   }
 
-  if ((opt.scscf_enabled) || (opt.icscf_enabled))
+  if ((opt.enabled_scscf) || (opt.enabled_icscf))
   {
     // Create ENUM service required for I/S-CSCF.
     if (!opt.enum_servers.empty())
@@ -1982,7 +2002,7 @@ int main(int argc, char* argv[])
   {
     // Create an ACR factory for the P-CSCF.
     pcscf_acr_factory = (ralf_processor != NULL) ?
-                (ACRFactory*)new RalfACRFactory(ralf_processor, PCSCF) :
+                (ACRFactory*)new RalfACRFactory(ralf_processor, ACR::PCSCF) :
                 new ACRFactory();
 
     // Launch stateful proxy as P-CSCF.
@@ -2008,8 +2028,8 @@ int main(int argc, char* argv[])
                                  "",
                                  quiescing_mgr,
                                  NULL,
-                                 opt.icscf_enabled,
-                                 opt.scscf_enabled,
+                                 opt.enabled_icscf,
+                                 opt.enabled_scscf,
                                  opt.emerg_reg_accepted);
     if (status != PJ_SUCCESS)
     {
@@ -2031,10 +2051,10 @@ int main(int argc, char* argv[])
     }
   }
 
-  if (opt.scscf_enabled)
+  if (opt.enabled_scscf)
   {
     scscf_acr_factory = (ralf_processor != NULL) ?
-                      (ACRFactory*)new RalfACRFactory(ralf_processor, SCSCF) :
+                      (ACRFactory*)new RalfACRFactory(ralf_processor, ACR::SCSCF) :
                       new ACRFactory();
 
     if (registration_store_location != "")
@@ -2075,7 +2095,6 @@ int main(int argc, char* argv[])
 
     if (local_data_store == NULL)
     {
-      closelog();
       TRC_ERROR("Failed to connect to local data store");
       exit(0);
     }
@@ -2139,26 +2158,28 @@ int main(int argc, char* argv[])
       // relevant challenge is sent.
       TRC_STATUS("Initialise S-CSCF authentication module");
 
-      if (av_store_location != "")
+      if (impi_store_location != "")
       {
-        av_memstore = (Store*)new TopologyNeutralMemcachedStore(av_store_location,
-                                                                astaire_resolver,
-                                                                astaire_comm_monitor);
-        av_store = new AvStore(av_memstore);
+        impi_memstore = (Store*)new TopologyNeutralMemcachedStore(impi_store_location,
+                                                                  astaire_resolver,
+                                                                  astaire_comm_monitor);
+        impi_store = new ImpiStore(impi_memstore);
       }
       else
       {
-        av_store = new AvStore(local_data_store);
+        impi_store = new ImpiStore(local_data_store);
       }
 
       status = init_authentication(opt.auth_realm,
-                                   av_store,
+                                   impi_store,
                                    hss_connection,
                                    chronos_connection,
                                    scscf_acr_factory,
                                    opt.non_register_auth_mode,
                                    analytics_logger,
-                                   &auth_stats_tbls);
+                                   &auth_stats_tbls,
+                                   opt.nonce_count_supported,
+                                   expiry_for_binding);
     }
 
     // Launch the registrar.
@@ -2175,7 +2196,6 @@ int main(int argc, char* argv[])
     if (status != PJ_SUCCESS)
     {
       CL_SPROUT_INIT_SERVICE_ROUTE_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
-      closelog();
       TRC_ERROR("Failed to enable S-CSCF registrar");
       return 1;
     }
@@ -2191,19 +2211,18 @@ int main(int argc, char* argv[])
     if (status != PJ_SUCCESS)
     {
       CL_SPROUT_REG_SUBSCRIBER_HAND_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
-      closelog();
       TRC_ERROR("Failed to enable subscription module");
       return 1;
     }
   }
 
   // Load the sproutlet plugins.
-  PluginLoader* loader = new PluginLoader("/usr/share/clearwater/sprout/plugins", opt);
+  PluginLoader* loader = new PluginLoader("/usr/share/clearwater/sprout/plugins",
+                                          opt);
 
   if (!loader->load(sproutlets))
   {
     CL_SPROUT_PLUGIN_FAILURE.log();
-    closelog();
     TRC_ERROR("Failed to successfully load plug-ins");
     return 1;
   }
@@ -2232,18 +2251,13 @@ int main(int argc, char* argv[])
 
     sproutlet_proxy = new SproutletProxy(stack_data.endpt,
                                          PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+3,
-                                         std::string(stack_data.scscf_uri.ptr,
-                                                     stack_data.scscf_uri.slen),
+                                         opt.sprout_hostname,
                                          host_aliases,
                                          sproutlets,
                                          opt.stateless_proxies);
     if (sproutlet_proxy == NULL)
     {
-      CL_SPROUT_S_CSCF_INIT_FAIL.log();
-      CL_SPROUT_BGCF_INIT_FAIL.log();
-      CL_SPROUT_I_CSCF_INIT_FAIL.log();
       TRC_ERROR("Failed to create SproutletProxy");
-      closelog();
       return 1;
     }
   }
@@ -2261,7 +2275,6 @@ int main(int argc, char* argv[])
 
   // Create worker threads first as they take work from the PJSIP threads so
   // need to be ready.
-
   status = start_worker_threads();
   if (status != PJ_SUCCESS)
   {
@@ -2269,18 +2282,21 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  status = start_pjsip_threads();
+  status = start_pjsip_thread();
   if (status != PJ_SUCCESS)
   {
     CL_SPROUT_SIP_STACK_INIT_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
-    closelog();
     TRC_ERROR("Error starting SIP stack, %s", PJUtils::pj_status_to_string(status).c_str());
     return 1;
   }
 
   AoRTimeoutTask::Config aor_timeout_config(local_sdm, remote_sdm, hss_connection);
-  AuthTimeoutTask::Config auth_timeout_config(av_store, hss_connection);
-  DeregistrationTask::Config deregistration_config(local_sdm, remote_sdms, hss_connection, sip_resolver);
+  AuthTimeoutTask::Config auth_timeout_config(impi_store, hss_connection);
+  DeregistrationTask::Config deregistration_config(local_sdm,
+                                                   remote_sdms,
+                                                   hss_connection,
+                                                   sip_resolver,
+                                                   impi_store);
 
   // The AoRTimeoutTask and AuthTimeoutTask both handle
   // chronos requests, so use the ChronosHandler.
@@ -2289,7 +2305,7 @@ int main(int argc, char* argv[])
   HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
   HttpStackUtils::PingHandler ping_handler;
 
-  if (opt.scscf_enabled)
+  if (opt.enabled_scscf)
   {
     try
     {
@@ -2306,7 +2322,6 @@ int main(int argc, char* argv[])
     catch (HttpStack::Exception& e)
     {
       CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
-      closelog();
       TRC_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
       return 1;
     }
@@ -2317,7 +2332,7 @@ int main(int argc, char* argv[])
   snmp_terminate("sprout");
 
   CL_SPROUT_ENDED.log();
-  if (opt.scscf_enabled)
+  if (opt.enabled_scscf)
   {
     try
     {
@@ -2331,11 +2346,11 @@ int main(int argc, char* argv[])
     }
   }
 
-  // Terminate the PJSIP threads and the worker threads to exit.  We kill
-  // the PJSIP threads first - if we killed the worker threads first the
+  // Terminate the PJSIP thread and the worker threads to exit.  We kill
+  // the PJSIP thread first - if we killed the worker threads first the
   // rx_msg_q will stop getting serviced so could fill up blocking
-  // PJSIP threads, causing a deadlock.
-  stop_pjsip_threads();
+  // the PJSIP thread, causing a deadlock.
+  stop_pjsip_thread();
   stop_worker_threads();
 
   // We must call stop_stack here because this terminates the
@@ -2353,7 +2368,7 @@ int main(int argc, char* argv[])
   loader->unload();
   delete loader;
 
-  if (opt.scscf_enabled)
+  if (opt.enabled_scscf)
   {
     destroy_subscription();
     destroy_registrar();
@@ -2390,7 +2405,7 @@ int main(int argc, char* argv[])
   }
   remote_sdms.clear();
 
-  delete av_store;
+  delete impi_store;
   delete local_data_store;
 
   for (std::vector<Store*>::iterator it = remote_data_stores.begin();
@@ -2400,7 +2415,7 @@ int main(int argc, char* argv[])
     delete *it;
   }
   remote_data_stores.clear();
-  delete av_memstore;
+  delete impi_memstore;
 
   delete ralf_processor;
   delete ralf_connection;
@@ -2415,7 +2430,7 @@ int main(int argc, char* argv[])
   delete analytics_logger;
   delete analytics_logger_logger;
 
-  if (opt.icscf_enabled || opt.scscf_enabled)
+  if (opt.enabled_icscf || opt.enabled_scscf)
   {
     // Stop the alarm request agent
     AlarmReqAgent::get_instance().stop();
@@ -2478,7 +2493,6 @@ int main(int argc, char* argv[])
 
   sem_destroy(&quiescing_sem);
   sem_destroy(&term_sem);
-  closelog();
 
   return 0;
 }

@@ -98,6 +98,8 @@ get_settings()
         sas_server=0.0.0.0
         sprout_rr_level="pcscf"
         scscf=5054
+        bgcf=5054
+        mmtel=5054
         alias_list=""
         default_session_expires=600
         signaling_dns_server=127.0.0.1
@@ -105,14 +107,13 @@ get_settings()
 
         # Set up defaults for user settings then pull in any overrides.
         # Sprout uses blocking look-up services, so must run multi-threaded.
-        num_pjsip_threads=1
         num_worker_threads=$(($(grep processor /proc/cpuinfo | wc -l) * 50))
         num_http_threads=$(($(grep processor /proc/cpuinfo | wc -l) * 50))
 
         # Testing has shown that we can handle at least 250 requests per second per core - this is
         # probably an underestimate, but is a reasonable start.
         init_token_rate=$(($(grep processor /proc/cpuinfo | wc -l) * 250))
-        
+
         log_level=2
         authentication=Y
         . /etc/clearwater/config
@@ -177,7 +178,7 @@ get_daemon_args()
         [ -z "$exception_max_ttl" ] || exception_max_ttl_arg="--exception-max-ttl=$exception_max_ttl"
         [ -z "$max_session_expires" ] || max_session_expires_arg="--max-session-expires=$max_session_expires"
         [ -z "$local_site_name" ] || local_site_name_arg="--local-site-name=$local_site_name"
-        [ -z "$sprout_av_store" ] || av_store_arg="--av-store=$sprout_av_store"
+        [ -z "$sprout_impi_store" ] || impi_store_arg="--impi-store=$sprout_impi_store"
 
         DAEMON_ARGS="
                      --domain=$home_domain
@@ -185,9 +186,10 @@ get_daemon_args()
                      --realm=$home_domain
                      $local_site_name_arg
                      --registration-stores=$sprout_registration_store
-                     $av_store_arg
+                     $impi_store_arg
                      --hss=$hs_hostname
                      --chronos=$chronos_hostname
+                     --sprout-hostname=$sprout_hostname
                      $xdms_hostname_arg
                      $ralf_arg
                      $enum_server_arg
@@ -195,7 +197,6 @@ get_daemon_args()
                      $enum_file_arg
                      --sas=$sas_server,$NAME@$public_hostname
                      --dns-server=$signaling_dns_server
-                     --pjsip-threads=$num_pjsip_threads
                      --worker-threads=$num_worker_threads
                      --http-threads=$num_http_threads
                      --record-routing-model=$sprout_rr_level
@@ -250,32 +251,33 @@ get_daemon_args()
           DAEMON_ARGS="$DAEMON_ARGS --call-list-ttl=$call_list_ttl"
         fi
 
-        # Only add the icscf and scscf arguments if they're not 0
-        if [ -n "$scscf" ] && [ ! $scscf = 0 ]
-        then
-          # S-CSCF function is enabled, so add S-CSCF specific parameters
-          DAEMON_ARGS="$DAEMON_ARGS --scscf=$scscf"
-
-          [ -z "$icscf_uri" ] || DAEMON_ARGS="$DAEMON_ARGS --external-icscf=$icscf_uri"
-
-          if [ -n "$scscf_uri" ]
-          then
-            DAEMON_ARGS="$DAEMON_ARGS --scscf-uri=$scscf_uri"
-          else
-            if [ -n "$sprout_hostname" ]
-            then
-              sprout_ipv46=$(python /usr/share/clearwater/bin/bracket_ipv6_address.py $sprout_hostname)
-              DAEMON_ARGS="$DAEMON_ARGS --scscf-uri=sip:$sprout_ipv46:$scscf;transport=TCP"
-            fi
-          fi
-        fi
-
-        if [ -n "$icscf" ] && [ ! $icscf = 0 ]
-        then
-          # I-CSCF function is enabled
-          DAEMON_ARGS="$DAEMON_ARGS --icscf=$icscf"
-        fi
-
+        # TODO improve this so we don't have to have the same parameters
+        # repeated for each Sproutlet
+        [ "$icscf" = "" ]                         || DAEMON_ARGS="$DAEMON_ARGS --icscf=$icscf"
+        [ "$icscf_prefix" = "" ]                  || DAEMON_ARGS="$DAEMON_ARGS --prefix-icscf=$icscf_prefix"
+        [ "$icscf_uri" = "" ]                     || DAEMON_ARGS="$DAEMON_ARGS --uri-icscf=$icscf_uri"
+        [ "$scscf" = "" ]                         || DAEMON_ARGS="$DAEMON_ARGS --scscf=$scscf"
+        [ "$scscf_prefix" = "" ]                  || DAEMON_ARGS="$DAEMON_ARGS --prefix-scscf=$scscf_prefix"
+        [ "$scscf_uri" = "" ]                     || DAEMON_ARGS="$DAEMON_ARGS --uri-scscf=$scscf_uri"
+        [ "$bgcf" = "" ]                          || DAEMON_ARGS="$DAEMON_ARGS --bgcf=$bgcf"
+        [ "$bgcf_prefix" = "" ]                   || DAEMON_ARGS="$DAEMON_ARGS --prefix-bgcf=$bgcf_prefix"
+        [ "$bgcf_uri" = "" ]                      || DAEMON_ARGS="$DAEMON_ARGS --uri-bgcf=$bgcf_uri"
+        [ "$memento" = "" ]                       || DAEMON_ARGS="$DAEMON_ARGS --memento=$memento"
+        [ "$memento_prefix" = "" ]                || DAEMON_ARGS="$DAEMON_ARGS --prefix-memento=$memento_prefix"
+        [ "$memento_uri" = "" ]                   || DAEMON_ARGS="$DAEMON_ARGS --uri-memento=$memento_uri"
+        [ "$gemini" = "" ]                        || DAEMON_ARGS="$DAEMON_ARGS --gemini=$gemini"
+        [ "$gemini_prefix" = "" ]                 || DAEMON_ARGS="$DAEMON_ARGS --prefix-gemini=$gemini_prefix"
+        [ "$gemini_uri" = "" ]                    || DAEMON_ARGS="$DAEMON_ARGS --uri-gemini=$gemini_uri"
+        [ "$cdiv" = "" ]                          || DAEMON_ARGS="$DAEMON_ARGS --cdiv=$cdiv"
+        [ "$cdiv_prefix" = "" ]                   || DAEMON_ARGS="$DAEMON_ARGS --prefix-cdiv=$cdiv_prefix"
+        [ "$cdiv_uri" = "" ]                      || DAEMON_ARGS="$DAEMON_ARGS --uri-cdiv=$cdiv_uri"
+        [ "$mmtel" = "" ]                         || DAEMON_ARGS="$DAEMON_ARGS --mmtel=$mmtel"
+        [ "$mmtel_prefix" = "" ]                  || DAEMON_ARGS="$DAEMON_ARGS --prefix-mmtel=$mmtel_prefix"
+        [ "$mmtel_uri" = "" ]                     || DAEMON_ARGS="$DAEMON_ARGS --uri-mmtel=$mmtel_uri"
+        [ "$mangelwurzel" = "" ]                  || DAEMON_ARGS="$DAEMON_ARGS --mangelwurzel=$mangelwurzel"
+        [ "$mangelwurzel_prefix" = "" ]           || DAEMON_ARGS="$DAEMON_ARGS --prefix-mangelwurzel=$mangelwurzel_prefix"
+        [ "$mangelwurzel_uri" = "" ]              || DAEMON_ARGS="$DAEMON_ARGS --uri-mangelwurzel=$mangelwurzel_uri"
+        [ "$external_icscf_uri" = "" ]            || DAEMON_ARGS="$DAEMON_ARGS --external-icscf=$external_icscf_uri"
         [ "$additional_home_domains" = "" ]       || DAEMON_ARGS="$DAEMON_ARGS --additional-domains=$additional_home_domains"
         [ "$sip_blacklist_duration" = "" ]        || DAEMON_ARGS="$DAEMON_ARGS --sip-blacklist-duration=$sip_blacklist_duration"
         [ "$http_blacklist_duration" = "" ]       || DAEMON_ARGS="$DAEMON_ARGS --http-blacklist-duration=$http_blacklist_duration"
@@ -287,6 +289,8 @@ get_daemon_args()
         [ "$stateless_proxies" = "" ]             || DAEMON_ARGS="$DAEMON_ARGS --stateless-proxies=$stateless_proxies"
         [ "$ralf_threads" = "" ]                  || DAEMON_ARGS="$DAEMON_ARGS --ralf-threads=$ralf_threads"
         [ "$non_register_authentication" = "" ]   || DAEMON_ARGS="$DAEMON_ARGS --non-register-authentication=$non_register_authentication"
+        [ "$impi_store_mode" = "" ]               || DAEMON_ARGS="$DAEMON_ARGS --impi-store-mode=$impi_store_mode"
+        [ "$nonce_count_supported" != "Y" ]       || DAEMON_ARGS="$DAEMON_ARGS --nonce-count-supported"
 
         for script in /usr/share/clearwater/sprout/plugin_conf.d/*.plugin_conf
         do

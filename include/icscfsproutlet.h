@@ -68,7 +68,8 @@ class ICSCFSproutletRegTsx;
 class ICSCFSproutlet : public Sproutlet
 {
 public:
-  ICSCFSproutlet(const std::string& bgcf_uri,
+  ICSCFSproutlet(const std::string& icscf_name,
+                 const std::string& bgcf_uri,
                  int port,
                  HSSConnection* hss,
                  ACRFactory* acr_factory,

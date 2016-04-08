@@ -54,6 +54,8 @@
 #include "exception_handler.h"
 #include "ralf_processor.h"
 #include "authentication.h"
+#include "sproutlet_options.h"
+#include "impistore.h"
 
 enum struct MemcachedWriteFormat
 {
@@ -71,10 +73,6 @@ struct options
   int                                  upstream_proxy_connections;
   int                                  upstream_proxy_recycle;
   bool                                 ibcf;
-  bool                                 scscf_enabled;
-  int                                  scscf_port;
-  bool                                 icscf_enabled;
-  int                                  icscf_port;
   std::string                          external_icscf_uri;
   int                                  record_routing_model;
   int                                  default_session_expires;
@@ -83,8 +81,8 @@ struct options
   std::string                          local_host;
   std::string                          public_host;
   std::string                          home_domain;
+  std::string                          sprout_hostname;
   std::string                          additional_home_domains;
-  std::string                          scscf_uri;
   std::string                          alias_hosts;
   std::string                          trusted_hosts;
   bool                                 auth_enabled;
@@ -107,7 +105,6 @@ struct options
   std::string                          analytics_directory;
   int                                  reg_max_expires;
   int                                  sub_max_expires;
-  int                                  pjsip_threads;
   std::string                          http_address;
   int                                  http_port;
   int                                  http_threads;
@@ -116,8 +113,6 @@ struct options
   int                                  max_call_list_length;
   int                                  memento_threads;
   int                                  call_list_ttl;
-  bool                                 memento_enabled;
-  bool                                 gemini_enabled;
   int                                  worker_threads;
   bool                                 log_to_file;
   std::string                          log_directory;
@@ -147,6 +142,11 @@ struct options
   std::string                          pidfile;
   std::map<std::string, std::multimap<std::string, std::string>>
                                        plugin_options;
+  int                                  listen_port;
+  std::set<int>                        sproutlet_ports;
+  SPROUTLET_MACRO(SPROUTLET_CFG_OPTIONS)
+  ImpiStore::Mode                      impi_store_mode;
+  bool                                 nonce_count_supported;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be

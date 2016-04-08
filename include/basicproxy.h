@@ -157,7 +157,6 @@ protected:
 
     void trying_timer_expired();
     static void trying_timer_callback(pj_timer_heap_t *timer_heap, struct pj_timer_entry *entry);
-    void cancel_trying_timer();
     pj_status_t send_trying(pjsip_rx_data* rdata);
 
   protected:
@@ -211,6 +210,10 @@ protected:
     /// and vice-versa.  This must be called before destroying either transaction.
     void dissociate(UACTsx* uac_tsx);
 
+    /// Unbind this UASTSx from the PJSIP transaction (if any) and cancel any
+    /// timers that should only be running when the UASTsx is bound.
+    void unbind_from_pjsip_tsx();
+
     /// Creates a new downstream UACTsx object for this transaction.
     virtual BasicProxy::UACTsx* create_uac_tsx(size_t index);
 
@@ -256,7 +259,6 @@ protected:
 
     pj_timer_entry       _trying_timer;
     static const int     TRYING_TIMER = 1;
-    pthread_mutex_t      _trying_timer_lock;
 
     friend class UACTsx;
   };

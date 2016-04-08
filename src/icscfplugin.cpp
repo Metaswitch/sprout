@@ -81,31 +81,27 @@ bool ICSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
   bool plugin_loaded = true;
 
-  if (opt.icscf_enabled)
+  if (opt.enabled_icscf)
   {
-    // Determine the S-CSCF and hence BGCF URIs.
-    std::string scscf_cluster_uri = std::string(stack_data.scscf_uri.ptr,
-                                                stack_data.scscf_uri.slen);
-    std::string bgcf_uri = "sip:bgcf@" + scscf_cluster_uri.substr(4);
-
     // Create the S-CSCF selector.
     _scscf_selector = new SCSCFSelector();
 
     // Create the I-CSCF ACR factory.
     _acr_factory = (ralf_processor != NULL) ?
-                        (ACRFactory*)new RalfACRFactory(ralf_processor, ICSCF) :
+                        (ACRFactory*)new RalfACRFactory(ralf_processor, ACR::ICSCF) :
                         new ACRFactory();
 
     // Create the I-CSCF sproutlet.
-    _icscf_sproutlet = new ICSCFSproutlet(bgcf_uri,
-                                          opt.icscf_port,
+    _icscf_sproutlet = new ICSCFSproutlet(opt.prefix_icscf,
+                                          opt.uri_bgcf,
+                                          opt.port_icscf,
                                           hss_connection,
                                           _acr_factory,
                                           _scscf_selector,
                                           enum_service,
                                           opt.override_npdi);
     _icscf_sproutlet->init();
-    
+
     sproutlets.push_back(_icscf_sproutlet);
   }
 

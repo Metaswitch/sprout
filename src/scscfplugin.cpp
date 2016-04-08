@@ -43,6 +43,8 @@
 #include "ipv6utils.h"
 #include "sproutletplugin.h"
 #include "scscfsproutlet.h"
+#include "sprout_alarmdefinition.h"
+#include "sprout_pd_definitions.h"
 
 class SCSCFPlugin : public SproutletPlugin
 {
@@ -55,6 +57,8 @@ public:
 
 private:
   SCSCFSproutlet* _scscf_sproutlet;
+  Alarm* _sess_cont_as_alarm;
+  Alarm* _sess_term_as_alarm;
 };
 
 /// Export the plug-in using the magic symbol "sproutlet_plugin"
@@ -76,50 +80,51 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
   bool plugin_loaded = true;
 
-  if (opt.scscf_enabled)
+  if (opt.enabled_scscf)
   {
     // Determine the S-CSCF, BGCF and I-CSCF URIs.
-    std::string scscf_cluster_uri = std::string(stack_data.scscf_uri.ptr,
-                                                stack_data.scscf_uri.slen);
     std::string node_ip(stack_data.local_host.ptr, stack_data.local_host.slen);
-    
+
     if (is_ipv6(node_ip))
     {
       node_ip = "[" + node_ip + "]";
     }
 
-    std::string scscf_node_uri = "sip:" + node_ip + ":" + std::to_string(opt.scscf_port);
-    std::string bgcf_uri = "sip:bgcf@" + scscf_cluster_uri.substr(4);
+    std::string scscf_node_uri = "sip:" + node_ip + ":" + std::to_string(opt.port_scscf);
     std::string icscf_uri;
-    if (opt.icscf_enabled)
-    {
-      // Create a local I-CSCF URI by replacing the S-CSCF port number in the
-      // S-CSCF URI with the I-CSCF port number.
-      icscf_uri = scscf_cluster_uri;
-      size_t pos = icscf_uri.find(std::to_string(opt.scscf_port));
 
-      if (pos != std::string::npos)
-      {
-        icscf_uri.replace(pos,
-                          std::to_string(opt.scscf_port).length(),
-                          std::to_string(opt.icscf_port));
-      }
-      else
-      {
-        // No port number, so best we can do is strap 'icscf@' on the front.
-        icscf_uri = "sip:icscf@" + scscf_cluster_uri.substr(4);
-      }
+    if (opt.enabled_icscf)
+    {
+      icscf_uri = opt.uri_icscf;
     }
     else
     {
       icscf_uri = opt.external_icscf_uri;
     }
 
-    _scscf_sproutlet = new SCSCFSproutlet(scscf_cluster_uri,
+    // Create Application Server communication trackers.
+    _sess_term_as_alarm = new Alarm("sprout",
+                                    AlarmDef::SPROUT_SESS_TERMINATED_AS_COMM_ERROR,
+                                    AlarmDef::MAJOR);
+    AsCommunicationTracker* sess_term_as_tracker =
+        new AsCommunicationTracker(_sess_term_as_alarm,
+                                   &CL_SPROUT_SESS_TERM_AS_COMM_FAILURE,
+                                   &CL_SPROUT_SESS_TERM_AS_COMM_SUCCESS);
+
+    _sess_cont_as_alarm =  new Alarm("sprout",
+                                     AlarmDef::SPROUT_SESS_CONTINUED_AS_COMM_ERROR,
+                                     AlarmDef::MINOR);
+    AsCommunicationTracker* sess_cont_as_tracker =
+        new AsCommunicationTracker(_sess_cont_as_alarm,
+                                   &CL_SPROUT_SESS_CONT_AS_COMM_FAILURE,
+                                   &CL_SPROUT_SESS_CONT_AS_COMM_SUCCESS);
+
+    _scscf_sproutlet = new SCSCFSproutlet(opt.prefix_scscf,
+                                          opt.uri_scscf,
                                           scscf_node_uri,
                                           icscf_uri,
-                                          bgcf_uri,
-                                          opt.scscf_port,
+                                          opt.uri_bgcf,
+                                          opt.port_scscf,
                                           local_sdm,
                                           remote_sdms,
                                           hss_connection,
@@ -127,7 +132,9 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           scscf_acr_factory,
                                           opt.override_npdi,
                                           opt.session_continued_timeout_ms,
-                                          opt.session_terminated_timeout_ms);
+                                          opt.session_terminated_timeout_ms,
+                                          sess_term_as_tracker,
+                                          sess_cont_as_tracker);
     plugin_loaded = _scscf_sproutlet->init();
 
     sproutlets.push_back(_scscf_sproutlet);
@@ -141,4 +148,6 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 void SCSCFPlugin::unload()
 {
   delete _scscf_sproutlet;
+  delete _sess_term_as_alarm; _sess_term_as_alarm = NULL;
+  delete _sess_cont_as_alarm; _sess_cont_as_alarm = NULL;
 }

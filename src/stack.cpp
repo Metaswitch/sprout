@@ -87,7 +87,6 @@ static StackQuiesceHandler *stack_quiesce_handler = NULL;
 static ConnectionTracker *connection_tracker = NULL;
 
 static volatile pj_bool_t quit_flag;
-static std::vector<pj_thread_t*> pjsip_threads;
 static pj_bool_t on_rx_msg(pjsip_rx_data* rdata);
 
 // Handles updating the connection tracker when requests are received,
@@ -411,17 +410,15 @@ public:
       destroy_tcp_listener_transport(stack_data.pcscf_trusted_port,
                                      stack_data.pcscf_trusted_tcp_factory);
     }
-    if (stack_data.scscf_tcp_factory != NULL)
+
+    for (std::map<int, pjsip_tpfactory*>::const_iterator ii =
+                                            stack_data.sproutlets.begin();
+                                            ii != stack_data.sproutlets.end();
+                                            ++ii)
     {
-      destroy_tcp_listener_transport(stack_data.scscf_port,
-                                     stack_data.scscf_tcp_factory);
-      CL_SPROUT_S_CSCF_END.log(stack_data.scscf_port);
-    }
-    if (stack_data.icscf_tcp_factory != NULL)
-    {
-      destroy_tcp_listener_transport(stack_data.icscf_port,
-                                     stack_data.icscf_tcp_factory);
-      CL_SPROUT_I_CSCF_END.log(stack_data.icscf_port);
+      destroy_tcp_listener_transport(ii->first,
+                                     ii->second);
+      CL_SPROUT_SPROUTLET_END.log(ii->first);
     }
   }
 
@@ -435,17 +432,15 @@ public:
                                     stack_data.local_host,
                                     &stack_data.pcscf_trusted_tcp_factory);
     }
-    if (stack_data.scscf_port != 0)
+
+    for (std::map<int, pjsip_tpfactory*>::const_iterator ii =
+                                            stack_data.sproutlets.begin();
+                                            ii != stack_data.sproutlets.end();
+                                            ++ii)
     {
-      create_tcp_listener_transport(stack_data.scscf_port,
+      create_tcp_listener_transport(ii->first,
                                     stack_data.local_host,
-                                    &stack_data.scscf_tcp_factory);
-    }
-    if (stack_data.icscf_port != 0)
-    {
-      create_tcp_listener_transport(stack_data.icscf_port,
-                                    stack_data.local_host,
-                                    &stack_data.icscf_tcp_factory);
+                                    (pjsip_tpfactory**)(ii->second));
     }
   }
 
@@ -518,23 +513,17 @@ pj_status_t init_pjsip()
   return PJ_SUCCESS;
 }
 
-pj_status_t start_pjsip_threads()
+pj_status_t start_pjsip_thread()
 {
   pj_status_t status = PJ_SUCCESS;
 
-  for (size_t ii = 0; ii < pjsip_threads.size(); ++ii)
+  status = pj_thread_create(stack_data.pool, "pjsip", &pjsip_thread_func,
+                            NULL, 0, 0, &stack_data.pjsip_transport_thread);
+  if (status != PJ_SUCCESS)
   {
-    pj_thread_t* thread;
-
-    status = pj_thread_create(stack_data.pool, "pjsip", &pjsip_thread_func,
-                              NULL, 0, 0, &thread);
-    if (status != PJ_SUCCESS)
-    {
-        TRC_ERROR("Error creating PJSIP thread, %s",
-                  PJUtils::pj_status_to_string(status).c_str());
-        return 1;
-    }
-    pjsip_threads[ii] = thread;
+    TRC_ERROR("Error creating PJSIP thread, %s",
+              PJUtils::pj_status_to_string(status).c_str());
+    return 1;
   }
 
   return PJ_SUCCESS;
@@ -546,7 +535,7 @@ pj_status_t init_stack(const std::string& system_name,
                        int pcscf_trusted_port,
                        int pcscf_untrusted_port,
                        int scscf_port,
-                       int icscf_port,
+                       std::set<int> sproutlet_ports,
                        const std::string& local_host,
                        const std::string& public_host,
                        const std::string& home_domain,
@@ -554,7 +543,6 @@ pj_status_t init_stack(const std::string& system_name,
                        const std::string& scscf_uri,
                        const std::string& alias_hosts,
                        SIPResolver* sipresolver,
-                       int num_pjsip_threads,
                        int record_routing_model,
                        const int default_session_expires,
                        const int max_session_expires,
@@ -569,28 +557,12 @@ pj_status_t init_stack(const std::string& system_name,
   unsigned addr_cnt = PJ_ARRAY_SIZE(addr_list);
   unsigned i;
 
-  // Set up the vectors of threads.  The threads don't get created until
-  // start_pjsip_threads is called.
-  pjsip_threads.resize(num_pjsip_threads);
-
-
   // Get ports and host names specified on options.  If local host was not
   // specified, use the host name returned by pj_gethostname.
   char* local_host_cstr = strdup(local_host.c_str());
   char* public_host_cstr = strdup(public_host.c_str());
   char* home_domain_cstr = strdup(home_domain.c_str());
-  char* scscf_uri_cstr;
-  if (scscf_uri.empty())
-  {
-    // Create a default S-CSCF URI using the localhost and S-CSCF port.
-    std::string tmp_scscf_uri = "sip:" + local_host + ":" + std::to_string(scscf_port) + ";transport=TCP";
-    scscf_uri_cstr = strdup(tmp_scscf_uri.c_str());
-  }
-  else
-  {
-    // Use the specified URI.
-    scscf_uri_cstr = strdup(scscf_uri.c_str());
-  }
+  char* scscf_uri_cstr = strdup(scscf_uri.c_str());
 
   // This is only set on Bono nodes (it's the empty string otherwise)
   char* cdf_domain_cstr = strdup(cdf_domain.c_str());
@@ -599,7 +571,6 @@ pj_status_t init_stack(const std::string& system_name,
   stack_data.pcscf_trusted_port = pcscf_trusted_port;
   stack_data.pcscf_untrusted_port = pcscf_untrusted_port;
   stack_data.scscf_port = scscf_port;
-  stack_data.icscf_port = icscf_port;
 
   stack_data.sipresolver = sipresolver;
 
@@ -722,37 +693,25 @@ pj_status_t init_stack(const std::string& system_name,
     PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
   }
 
-  stack_data.scscf_tcp_factory = NULL;
-  if (stack_data.scscf_port != 0)
+  for (std::set<int>::iterator ii = sproutlet_ports.begin();
+       ii != sproutlet_ports.end();
+       ++ii)
   {
-    status = start_transports(stack_data.scscf_port,
+    pjsip_tpfactory* tcp_factory = NULL;
+    status = start_transports(*ii,
                               stack_data.public_host,
-                              &stack_data.scscf_tcp_factory);
-    if (status == PJ_SUCCESS)
-    {
-      CL_SPROUT_S_CSCF_AVAIL.log(stack_data.scscf_port);
-    }
-    else
-    {
-      CL_SPROUT_S_CSCF_INIT_FAIL2.log(stack_data.scscf_port);
-    }
-    PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
-  }
+                              &tcp_factory);
+    stack_data.sproutlets.insert(std::pair<int, pjsip_tpfactory*>(*ii, tcp_factory));
 
-  stack_data.icscf_tcp_factory = NULL;
-  if (stack_data.icscf_port != 0)
-  {
-    status = start_transports(stack_data.icscf_port,
-                              stack_data.public_host,
-                              &stack_data.icscf_tcp_factory);
     if (status == PJ_SUCCESS)
     {
-      CL_SPROUT_I_CSCF_AVAIL.log(stack_data.icscf_port);
+      CL_SPROUT_SPROUTLET_AVAIL.log(*ii);
     }
     else
     {
-      CL_SPROUT_I_CSCF_INIT_FAIL2.log(stack_data.icscf_port);
+      CL_SPROUT_SPROUTLET_INIT_FAIL2.log(*ii);
     }
+
     PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
   }
 
@@ -875,20 +834,16 @@ pj_status_t init_stack(const std::string& system_name,
 }
 
 
-pj_status_t stop_pjsip_threads()
+pj_status_t stop_pjsip_thread()
 {
-  // Set the quit flag to signal the PJSIP threads to exit, then wait
+  // Set the quit flag to signal the PJSIP thread to exit, then wait
   // for them to exit.
   quit_flag = PJ_TRUE;
 
-  for (std::vector<pj_thread_t*>::iterator i = pjsip_threads.begin();
-       i != pjsip_threads.end();
-       ++i)
-  {
-    pj_thread_join(*i);
-  }
+  pj_thread_join(stack_data.pjsip_transport_thread);
 
-  pjsip_threads.clear();
+  stack_data.pjsip_transport_thread = NULL;
+
   return PJ_SUCCESS;
 }
 

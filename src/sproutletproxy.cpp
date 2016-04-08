@@ -77,7 +77,25 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
 {
   /// Store the URI of this SproutletProxy - this is used for Record-Routing.
   TRC_DEBUG("Root Record-Route URI = %s", root_uri.c_str());
-  _root_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(root_uri, stack_data.pool, false);
+  _root_uri = (pjsip_sip_uri*)PJUtils::uri_from_string("sip:" + root_uri + ";transport=tcp",
+                                                       stack_data.pool,
+                                                       false);
+
+  for (std::list<Sproutlet*>::iterator it = _sproutlets.begin();
+       it != _sproutlets.end();
+       ++it)
+  {
+    std::string rr_uri_str = "sip:" + (*it)->service_name() +
+                             "." + root_uri + ":" +
+                             std::to_string((*it)->port()) +
+                             ";transport=tcp";
+    TRC_DEBUG("Record-Route URI = %s", rr_uri_str.c_str());
+    pjsip_sip_uri* root_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(
+                                                       rr_uri_str,
+                                                       stack_data.pool,
+                                                       false);
+    _root_uris.insert(std::pair<std::string, pjsip_sip_uri*>((*it)->service_name(), root_uri));
+  }
 }
 
 
@@ -159,13 +177,6 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
     TRC_DEBUG("Next route for message cannot be a sproutlet");
   }
 
-  // Force the S-CSCF Sproutlet to only be chosen based on port - this ensures that the PJSIP
-  // authentication module is invoked between the I-CSCF and the S-CSCF
-  if (sproutlet && (sproutlet->service_name() == "scscf"))
-  {
-    sproutlet = NULL;
-  }
-
   if ((sproutlet == NULL) &&
       (port != 0))
   {
@@ -192,9 +203,20 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
     }
   }
 
+  if (sproutlet && 
+      (sproutlet->service_name() == "scscf") &&
+      pjsip_method_cmp(&req->line.req.method, 
+                       pjsip_get_subscribe_method()) == 0)
+  {
+    // This is a subscribe being routed back to the S-CSCF sproutlet but to 
+    // get this handled correctly we need route it externally to make sure it 
+    // hits the subscription module.
+    TRC_DEBUG("Don't route S-CSCF subscribe message via sproutlet");
+    sproutlet = NULL;
+  }
+  
   return sproutlet;
 }
-
 
 bool SproutletProxy::does_uri_match_sproutlet(const pjsip_uri* uri,
                                               Sproutlet* sproutlet,
@@ -253,37 +275,41 @@ bool SproutletProxy::does_uri_match_sproutlet(const pjsip_uri* uri,
       possible_service_names.push_back(service_name);
     }
   }
-  else
+
+  if (sip_uri->user.slen != 0)
   {
-    if (sip_uri->user.slen != 0)
+    // Use the username
+    TRC_DEBUG("Found user - %.*s", sip_uri->user.slen, sip_uri->user.ptr);
+    service_name = PJUtils::pj_str_to_string(&sip_uri->user);
+
+    if (is_host_local(&sip_uri->host))
     {
-      // Use the username
-      TRC_DEBUG("Found user - %.*s", sip_uri->user.slen, sip_uri->user.ptr);
-      service_name = PJUtils::pj_str_to_string(&sip_uri->user);
-      if (is_host_local(&sip_uri->host))
-      {
-        possible_service_names.push_back(service_name);
-      }
+      possible_service_names.push_back(service_name);
     }
+  }
 
-    // Now spilt the first label off the host and check if the rest is still a
-    // local hostname.  This works for IP addresses since IPv4 addresses cannot
-    // have only 3 octets and IPv6 addresses contain no periods.
-    pj_str_t hostname = sip_uri->host;
-    char* sep = pj_strchr(&hostname, '.');
-    if (sep != NULL)
+  // Spilt the first label off the host and check if the rest is still a
+  // local hostname.  This works for IP addresses since IPv4 addresses cannot
+  // have only 3 octets and IPv6 addresses contain no periods.
+  pj_str_t hostname = sip_uri->host;
+  char* sep = pj_strchr(&hostname, '.');
+
+  if (sep != NULL)
+  {
+    // Extract the possible service name
+    std::string service_name = std::string(hostname.ptr, sep - hostname.ptr);
+
+    TRC_DEBUG("Possible service name - %s", service_name.c_str());
+
+    // Remove the service name part and the period from the hostname.
+    hostname.slen -= (sep - hostname.ptr + 1);
+    hostname.ptr = sep + 1;
+
+    TRC_DEBUG("Hostname - %.*s", hostname.slen, hostname.ptr);
+
+    if (is_host_local(&hostname))
     {
-      // Extract the possible service name
-      service_name = std::string(hostname.ptr, sep - hostname.ptr);
-
-      // Remove the service name part and the period from the hostname.
-      hostname.slen -= (sep - hostname.ptr + 1);
-      hostname.ptr = sep + 1;
-
-      if (is_host_local(&hostname))
-      {
-        possible_service_names.push_back(service_name);
-      }
+      possible_service_names.push_back(service_name);
     }
   }
 
@@ -323,7 +349,7 @@ pjsip_sip_uri* SproutletProxy::create_sproutlet_uri(pj_pool_t* pool,
                                                     Sproutlet* sproutlet) const
 {
   TRC_DEBUG("Creating URI for %s", sproutlet->service_name().c_str());
-  pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, _root_uri);
+  pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, _root_uris.find(sproutlet->service_name())->second);
   uri->lr_param = 1;
 
   TRC_DEBUG("Add services parameter");
@@ -668,8 +694,7 @@ void SproutletProxy::UASTsx::on_tsx_state(pjsip_event* event)
   if (_tsx->state == PJSIP_TSX_STATE_DESTROYED)
   {
     TRC_DEBUG("%s - UAS tsx destroyed", _tsx->obj_name);
-    _proxy->unbind_transaction(_tsx);
-    _tsx = NULL;
+    unbind_from_pjsip_tsx();
 
     // Check to see if we can destroy the UASTsx.
     check_destroy();

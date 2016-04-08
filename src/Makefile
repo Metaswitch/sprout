@@ -26,7 +26,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          memcachedstore.cpp \
                          memcachedstoreview.cpp \
                          memcached_config.cpp \
-                         avstore.cpp \
+                         impistore.cpp \
                          subscriber_data_manager.cpp \
                          xdmconnection.cpp \
                          simservs.cpp \
@@ -83,6 +83,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          namespace_hop.cpp \
                          session_expires_helper.cpp \
                          base64.cpp \
+                         as_communication_tracker.cpp \
                          astaire_resolver.cpp
 
 sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
@@ -90,6 +91,7 @@ sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_ip_count_table.cpp \
                   snmp_success_fail_count_table.cpp \
                   snmp_success_fail_count_by_request_type_table.cpp \
+                  pdlog.cpp \
                   main.cpp
 
 sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
@@ -116,17 +118,15 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        sipresolver_test.cpp \
                        authentication_test.cpp \
                        simservs_test.cpp \
-                       httpconnection_test.cpp \
                        hssconnection_test.cpp \
                        xdmconnection_test.cpp \
                        enumservice_test.cpp \
                        subscriber_data_manager_test.cpp \
-                       avstore_test.cpp \
+                       impistore_test.cpp \
                        registrar_test.cpp \
                        bono_test.cpp \
                        bgcfservice_test.cpp \
                        options_test.cpp \
-                       logger_test.cpp \
                        utils_test.cpp \
                        aschain_test.cpp \
                        sessioncase_test.cpp \
@@ -136,15 +136,12 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        quiescing_manager_test.cpp \
                        dialog_tracker_test.cpp \
                        flow_test.cpp \
-                       load_monitor_test.cpp \
                        icscfsproutlet_test.cpp \
                        basicproxy_test.cpp \
                        scscfselector_test.cpp \
                        acr_test.cpp \
                        subscription_test.cpp \
-                       chronosconnection_test.cpp \
                        handlers_test.cpp \
-                       httpresolver_test.cpp \
                        mock_sas.cpp \
                        contact_filtering_test.cpp \
                        appserver_test.cpp \
@@ -153,8 +150,6 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        gruu_test.cpp \
                        mobiletwinned_test.cpp \
                        mangelwurzel_test.cpp \
-                       alarm_test.cpp \
-                       communicationmonitor_test.cpp \
                        common_sip_processing_test.cpp \
                        fakesnmp.cpp \
                        fakezmq.cpp \
@@ -164,8 +159,21 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        session_expires_helper_test.cpp \
                        mock_subscriber_data_manager.cpp \
                        mock_chronos_connection.cpp \
+                       cassandra_store.cpp \
+                       call_list_store.cpp \
+                       mementosaslogger.cpp \
+                       call_list_store_processor.cpp \
+                       httpnotifier.cpp \
+                       mockhttpnotifier.cpp \
+                       mementoappserver.cpp \
+                       call_list_store_processor_test.cpp \
+                       mementoappserver_test.cpp \
+                       httpnotifier_test.cpp \
+                       bgcf_test.cpp \
+                       as_communication_tracker_test.cpp
 
-sprout_test_COVERAGE_EXCLUSIONS := ^mangelwurzel/ut
+COVERAGE_ROOT := ..
+sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include|^modules/memento-as/modules|^modules/memento-as/src/ut|^modules/memento-as/include
 
 SPROUT_COMMON_CPPFLAGS := -Wno-write-strings \
                           -I../include \
@@ -179,9 +187,12 @@ sprout_CPPFLAGS := ${SPROUT_COMMON_CPPFLAGS}
 sprout_test_CPPFLAGS := ${SPROUT_COMMON_CPPFLAGS} \
                         -I../modules/sipp \
                         -I../modules/app-servers/test \
+                        -I../modules/memento-as/include \
+                        -I../modules/memento-as/modules/memento-common/include \
                         -I../modules/gemini/include \
                         -I../include/mangelwurzel \
-                        -Iut
+                        -Iut \
+                        -DGTEST_USE_OWN_TR1_TUPLE=0
 
 SPROUT_COMMON_LDFLAGS := -rdynamic \
                          -L../usr/lib \
@@ -194,7 +205,6 @@ SPROUT_COMMON_LDFLAGS := -rdynamic \
                          -lboost_regex \
                          -lboost_system \
                          -lboost_thread \
-                         -lboost_date_time \
                          -lcares \
                          -lzmq \
                          -levhtp \
@@ -205,6 +215,8 @@ SPROUT_COMMON_LDFLAGS := -rdynamic \
                          -lz \
                          -lpthread \
                          -lboost_filesystem \
+                         -lthrift \
+                         -lcassandra \
                          `net-snmp-config --netsnmp-agent-libs`
 
 # Explicitly link some pjsip modules. Some plugins require symbols in them
@@ -212,7 +224,7 @@ SPROUT_COMMON_LDFLAGS := -rdynamic \
 # time, so GCC won't link in the symbols they need unless we explicitly tell
 # it to.
 sprout_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} -Wl,--whole-archive -lpjmedia-x86_64-unknown-linux-gnu -Wl,--no-whole-archive `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --libs libpjproject`
-sprout_test_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --libs libpjproject`
+sprout_test_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} -lboost_date_time `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --libs libpjproject`
 
 # Build rules for sproutlet plugins
 PLUGIN_COMMON_CPPFLAGS := -fPIC \
@@ -228,7 +240,7 @@ gemini-as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -I../modules/gemini/include
 gemini-as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
 memento-as.so_SOURCES := sproutletappserver.cpp mementoasplugin.cpp cassandra_store.cpp call_list_store.cpp mementosaslogger.cpp call_list_store_processor.cpp httpnotifier.cpp mementoappserver.cpp
-memento-as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -I../modules/memento/include
+memento-as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -I../modules/memento-as/include -I../modules/memento-as/modules/memento-common/include
 memento-as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS} -lthrift -lcassandra
 
 call-diversion-as.so_SOURCES := mmtel.cpp sproutletappserver.cpp cdivasplugin.cpp
@@ -255,13 +267,14 @@ mangelwurzel-as.so_SOURCES := mangelwurzel.cpp mangelwurzelplugin.cpp
 mangelwurzel-as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -I../include/mangelwurzel
 mangelwurzel-as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
-VPATH = ../modules/cpp-common/src ../modules/cpp-common/test_utils ../modules/app-servers/test ../modules/gemini/src ../modules/gemini/src/ut ../modules/memento/src mangelwurzel mangelwurzel/ut ut
+VPATH = ../modules/cpp-common/src ../modules/cpp-common/test_utils ../modules/app-servers/test ../modules/gemini/src ../modules/gemini/src/ut ../modules/memento-as/src ../modules/memento-as/src/ut ../modules/memento-as/modules/memento-common/src mangelwurzel mangelwurzel/ut ut
 
 include ../build-infra/cpp.mk
 
 # Special extra objects for sprout_test
 ${BUILD_DIR}/bin/sprout_test : ${sprout_test_OBJECT_DIR}/md5.o \
-                               ${sprout_test_OBJECT_DIR}/test_interposer.so
+                               ${sprout_test_OBJECT_DIR}/test_interposer.so \
+                               ${sprout_test_OBJECT_DIR}/curl_interposer.so
 
 # Build rules for SIPp cryptographic modules
 SIPP_DIR := ../modules/sipp
@@ -274,18 +287,22 @@ ${sprout_test_OBJECT_DIR}/test_interposer.so : ../modules/cpp-common/test_utils/
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(sprout_test_CPPFLAGS) -shared -fPIC -ldl $< -o $@
 CLEANS += ${sprout_test_OBJECT_DIR}/test_interposer.so
 
+${sprout_test_OBJECT_DIR}/curl_interposer.so : ../modules/cpp-common/test_utils/curl_interposer.cpp ../modules/cpp-common/test_utils/curl_interposer.hpp ../modules/cpp-common/test_utils/fakecurl.cpp ../modules/cpp-common/test_utils/fakecurl.hpp
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(sprout_test_CPPFLAGS) -shared -fPIC -ldl $< -o $@
+CLEANS += ${sprout_test_OBJECT_DIR}/curl_interposer.so
+
 # Alarm definition generation rules
 ROOT := $(abspath $(shell pwd)/../)
 MODULE_DIR := ${ROOT}/modules
 include ../modules/cpp-common/makefiles/alarm-utils.mk
 
-../usr/include/sprout_alarmdefinition.h : ../build/bin/alarm_header ../sprout-base.root/usr/share/clearwater/infrastructure/alarms/sprout_alarms.json
+../usr/include/sprout_alarmdefinition.h : $(BUILD_DIR)/bin/alarm_header ../sprout-base.root/usr/share/clearwater/infrastructure/alarms/sprout_alarms.json
 	$< -j "../sprout-base.root/usr/share/clearwater/infrastructure/alarms/sprout_alarms.json" -n "sprout"
 	mv sprout_alarmdefinition.h $@
 ${sprout_OBJECT_DIR}/main.o : ../usr/include/sprout_alarmdefinition.h
 CLEANS += ../usr/include/sprout_alarmdefinition.h
 
-../usr/include/memento_as_alarmdefinition.h : ../build/bin/alarm_header ../memento-as.root/usr/share/clearwater/infrastructure/alarms/memento_as_alarms.json
+../usr/include/memento_as_alarmdefinition.h : $(BUILD_DIR)/bin/alarm_header ../memento-as.root/usr/share/clearwater/infrastructure/alarms/memento_as_alarms.json
 	$< -j "../memento-as.root/usr/share/clearwater/infrastructure/alarms/memento_as_alarms.json" -n "memento_as"
 	mv memento_as_alarmdefinition.h $@
 ${memento-as.so_OBJECT_DIR}/mementoasplugin.o : ../usr/include/memento_as_alarmdefinition.h

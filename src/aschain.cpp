@@ -71,6 +71,15 @@ AsChain::AsChain(AsChainTable* as_chain_table,
   TRC_DEBUG("Creating AsChain %p with %d IFC and adding to map", this, ifcs.size());
   _as_chain_table->register_(this, _odi_tokens);
   TRC_DEBUG("Attached ACR (%p) to chain", _acr);
+
+  // We need to initialize `_responsive` as bools are PODs which are not
+  // initialized.
+  for(std::vector<bool>::iterator it = _responsive.begin();
+      it != _responsive.end();
+      ++it)
+  {
+    *it = false;
+  }
 }
 
 
@@ -217,13 +226,17 @@ void AsChainLink::on_response(int status_code)
 {
   if (status_code == PJSIP_SC_TRYING)
   {
-    // The AS has returned a 100 Trying response, which means it must be
-    // viewed as responsive.
+    // Intentionally do nothing on a 100 trying.
+  }
+  else if (status_code < PJSIP_SC_OK)
+  {
+    // A 1xx response (which does *not* include 100 - see TS 24.229 section 3.2)
+    // means that the AS should be treated as responsive.
     _as_chain->_responsive[_index] = true;
   }
-  else if (status_code >= PJSIP_SC_OK)
+  else
   {
-    // Store the status code returned by the AS.
+    // Final response. Store the status code returned by the AS.
     _as_chain->_as_info[_index].status_code = status_code;
   }
 }

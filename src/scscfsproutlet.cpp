@@ -54,7 +54,8 @@
 const char* NO_SERVED_USER = "";
 
 /// SCSCFSproutlet constructor.
-SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
+SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
+                               const std::string& scscf_cluster_uri,
                                const std::string& scscf_node_uri,
                                const std::string& icscf_uri,
                                const std::string& bgcf_uri,
@@ -66,8 +67,10 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
                                ACRFactory* acr_factory,
                                bool override_npdi,
                                int session_continued_timeout_ms,
-                               int session_terminated_timeout_ms) :
-  Sproutlet("scscf", port),
+                               int session_terminated_timeout_ms,
+                               AsCommunicationTracker* sess_term_as_tracker,
+                               AsCommunicationTracker* sess_cont_as_tracker) :
+  Sproutlet(scscf_name, port),
   _scscf_cluster_uri(NULL),
   _scscf_node_uri(NULL),
   _icscf_uri(NULL),
@@ -83,7 +86,9 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
   _scscf_cluster_uri_str(scscf_cluster_uri),
   _scscf_node_uri_str(scscf_node_uri),
   _icscf_uri_str(icscf_uri),
-  _bgcf_uri_str(bgcf_uri)
+  _bgcf_uri_str(bgcf_uri),
+  _sess_term_as_tracker(sess_term_as_tracker),
+  _sess_cont_as_tracker(sess_cont_as_tracker)
 {
   _incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("scscf_incoming_sip_transactions",
                                                                                     "1.2.826.0.1.1578918.9.3.20");
@@ -310,9 +315,37 @@ void SCSCFSproutlet::translate_request_uri(pjsip_msg* req,
 /// @param trail                SAS trail identifier to use for the ACR.
 /// @param initiator            The initiator of the SIP transaction (calling
 ///                             or called party).
-ACR* SCSCFSproutlet::get_acr(SAS::TrailId trail, Initiator initiator, NodeRole role)
+ACR* SCSCFSproutlet::get_acr(SAS::TrailId trail,
+                             ACR::Initiator initiator,
+                             ACR::NodeRole role)
 {
   return _acr_factory->get_acr(trail, initiator, role);
+}
+
+
+void SCSCFSproutlet::track_app_serv_comm_failure(const std::string& uri,
+                                                 DefaultHandling default_handling)
+{
+  AsCommunicationTracker* as_tracker = (default_handling == SESSION_CONTINUED) ?
+                                       _sess_cont_as_tracker :
+                                       _sess_term_as_tracker;
+  if (as_tracker != NULL)
+  {
+    as_tracker->on_failure(uri);
+  }
+}
+
+
+void SCSCFSproutlet::track_app_serv_comm_success(const std::string& uri,
+                                                 DefaultHandling default_handling)
+{
+  AsCommunicationTracker* as_tracker = (default_handling == SESSION_CONTINUED) ?
+                                       _sess_cont_as_tracker :
+                                       _sess_term_as_tracker;
+  if (as_tracker != NULL)
+  {
+    as_tracker->on_success(uri);
+  }
 }
 
 
@@ -480,7 +513,7 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
 
   // Create an ACR for this request and pass the request to it.
   _in_dialog_acr = _scscf->get_acr(trail(),
-                         CALLING_PARTY,
+                         ACR::CALLING_PARTY,
                          get_billing_role());
 
   // @TODO - request timestamp???
@@ -525,11 +558,6 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
   int st_code = rsp->line.status.code;
 
-  if (st_code > 100)
-  {
-    _seen_1xx = true;
-  }
-
   if (st_code == SIP_STATUS_FLOW_FAILED)
   {
     // The edge proxy / P-CSCF has reported that this flow has failed.
@@ -570,33 +598,58 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
       // The AS chain isn't complete, so the response must be from an
       // application server.  Check to see if we need to trigger default
       // handling.
-      if ((!_cancelled) &&
+      if ((!_as_chain_link.responsive()) &&
+          (!_cancelled) &&
           ((st_code == PJSIP_SC_REQUEST_TIMEOUT) ||
-           (PJSIP_IS_STATUS_IN_CLASS(st_code, 500))) &&
-          (_as_chain_link.continue_session()))
+           (PJSIP_IS_STATUS_IN_CLASS(st_code, 500))))
       {
-        // The AS either timed out or returned a 5xx error, and default
-        // handling is set to continue.
-        TRC_DEBUG("Trigger default_handling=CONTINUE processing");
-        SAS::Event bypass_As(trail(), SASEvent::BYPASS_AS, 1);
-        SAS::report_event(bypass_As);
+        // Default handling will be triggered. Track this as a failed
+        // communication.
+        _scscf->track_app_serv_comm_failure(_as_chain_link.uri(),
+                                            _as_chain_link.default_handling());
 
-        _as_chain_link = _as_chain_link.next();
-        pjsip_msg* req = original_request();
-        _record_routed = false;
-        if (_session_case->is_originating())
+        if (_as_chain_link.default_handling() == SESSION_CONTINUED)
         {
-          apply_originating_services(req);
-        }
-        else
-        {
-          apply_terminating_services(req);
-        }
+          // The AS either timed out or returned a 5xx error, and default
+          // handling is set to continue.
+          TRC_DEBUG("Trigger default_handling=CONTINUE processing");
+          SAS::Event bypass_As(trail(), SASEvent::BYPASS_AS, 1);
+          SAS::report_event(bypass_As);
 
-        // Free off the response as we no longer need it.
-        free_msg(rsp);
+          _as_chain_link = _as_chain_link.next();
+          pjsip_msg* req = original_request();
+          _record_routed = false;
+          if (_session_case->is_originating())
+          {
+            apply_originating_services(req);
+          }
+          else
+          {
+            apply_terminating_services(req);
+          }
+
+          // Free off the response as we no longer need it.
+          free_msg(rsp);
+        }
+      }
+      else
+      {
+        // Default handling will not be triggered. If this is the first non-100
+        // response we've seen from an AS track it as a successful
+        // communication. This means that no matter how many 1xx responses we
+        // receive we only track one success.
+        if ((st_code > PJSIP_SC_TRYING) && (!_seen_1xx))
+        {
+          _scscf->track_app_serv_comm_success(_as_chain_link.uri(),
+                                              _as_chain_link.default_handling());
+        }
       }
     }
+  }
+
+  if (st_code > PJSIP_SC_TRYING)
+  {
+    _seen_1xx = true;
   }
 
   if (rsp != NULL)
@@ -643,13 +696,13 @@ void SCSCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
       (cancel_req != NULL))
   {
     // Create and send an ACR for the CANCEL request.
-    NodeRole role = NODE_ROLE_ORIGINATING;
+    ACR::NodeRole role = ACR::NODE_ROLE_ORIGINATING;
     if ((_session_case != NULL) &&
         (_session_case->is_terminating()))
     {
-      role = NODE_ROLE_TERMINATING;
+      role = ACR::NODE_ROLE_TERMINATING;
     }
-    ACR* cancel_acr = _scscf->get_acr(trail(), CALLING_PARTY, role);
+    ACR* cancel_acr = _scscf->get_acr(trail(), ACR::CALLING_PARTY, role);
 
     // @TODO - timestamp from request.
     cancel_acr->rx_request(cancel_req);
@@ -863,7 +916,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
           if (stack_data.record_route_on_diversion)
           {
             TRC_DEBUG("Add service to dialog - originating Cdiv");
-            add_record_route(req, false, NODE_ROLE_ORIGINATING);
+            add_record_route(req, false, ACR::NODE_ROLE_ORIGINATING);
           }
         }
         else
@@ -883,11 +936,11 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         TRC_DEBUG("Add service to dialog - AS hop");
         if (_session_case->is_terminating())
         {
-          add_record_route(req, false, NODE_ROLE_TERMINATING);
+          add_record_route(req, false, ACR::NODE_ROLE_TERMINATING);
         }
         else
         {
-          add_record_route(req, false, NODE_ROLE_ORIGINATING);
+          add_record_route(req, false, ACR::NODE_ROLE_ORIGINATING);
         }
       }
     }
@@ -899,9 +952,9 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
 
     // Create a new ACR for this request.
     ACR* acr = _scscf->get_acr(trail(),
-                               CALLING_PARTY,
+                               ACR::CALLING_PARTY,
                                _session_case->is_originating() ?
-                                 NODE_ROLE_ORIGINATING : NODE_ROLE_TERMINATING);
+                                 ACR::NODE_ROLE_ORIGINATING : ACR::NODE_ROLE_TERMINATING);
 
     if (!served_user.empty())
     {
@@ -913,7 +966,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         if (stack_data.record_route_on_initiation_of_terminating)
         {
           TRC_DEBUG("Single Record-Route - initiation of terminating handling");
-          add_record_route(req, false, NODE_ROLE_TERMINATING);
+          add_record_route(req, false, ACR::NODE_ROLE_TERMINATING);
         }
       }
       else if (_session_case->is_originating())
@@ -921,7 +974,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         if (stack_data.record_route_on_initiation_of_originating)
         {
           TRC_DEBUG("Single Record-Route - initiation of originating handling");
-          add_record_route(req, true, NODE_ROLE_ORIGINATING);
+          add_record_route(req, true, ACR::NODE_ROLE_ORIGINATING);
           acr->override_session_id(PJUtils::pj_str_to_string(&PJSIP_MSG_CID_HDR(req)->id));
         }
       }
@@ -1088,7 +1141,7 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
     if (stack_data.record_route_on_completion_of_originating)
     {
       TRC_DEBUG("Add service to dialog - end of originating handling");
-      add_record_route(req, false, NODE_ROLE_ORIGINATING);
+      add_record_route(req, false, ACR::NODE_ROLE_ORIGINATING);
     }
 
     // Attempt to translate the RequestURI using ENUM or an alternative
@@ -1159,7 +1212,7 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
     if (stack_data.record_route_on_completion_of_terminating)
     {
       TRC_DEBUG("Add service to dialog - end of terminating handling");
-      add_record_route(req, true, NODE_ROLE_TERMINATING);
+      add_record_route(req, true, ACR::NODE_ROLE_TERMINATING);
 
       ACR* acr = _as_chain_link.acr();
       if (acr != NULL)
@@ -1211,6 +1264,13 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
                              pjsip_uri_clone(get_pool(req), _scscf->scscf_node_uri());
     pj_strdup2(get_pool(req), &odi_uri->user, odi_value.c_str());
     odi_uri->transport_param = as_uri->transport_param;  // Use same transport as AS, in case it can only cope with one.
+
+    pjsip_param* services_p = PJ_POOL_ALLOC_T(get_pool(req), pjsip_param);
+    pj_strdup(get_pool(req), &services_p->name, &STR_SERVICE);
+    pj_list_insert_before(&odi_uri->other_param, services_p);
+    std::string services = _scscf->service_name();
+    pj_strdup2(get_pool(req), &services_p->value, services.c_str());
+
     if (_session_case->is_originating())
     {
       pjsip_param *orig_param = PJ_POOL_ALLOC_T(get_pool(req), pjsip_param);
@@ -1271,7 +1331,7 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     send_request(req);
 
     // Start the liveness timer for the AS.
-    int timeout = (_as_chain_link.continue_session() ?
+    int timeout = ((_as_chain_link.default_handling() == SESSION_CONTINUED) ?
                    _scscf->_session_continued_timeout_ms :
                    _scscf->_session_terminated_timeout_ms);
 
@@ -1623,7 +1683,7 @@ bool SCSCFSproutletTsx::lookup_ifcs(std::string public_id, Ifcs& ifcs)
 /// role that is in use on subsequent in-dialog messages.
 void SCSCFSproutletTsx::add_record_route(pjsip_msg* msg,
                                          bool billing_rr,
-                                         NodeRole billing_role)
+                                         ACR::NodeRole billing_role)
 {
   pj_pool_t* pool = get_pool(msg);
 
@@ -1663,7 +1723,7 @@ void SCSCFSproutletTsx::add_record_route(pjsip_msg* msg,
       param = PJ_POOL_ALLOC_T(pool, pjsip_param);
       pj_strdup(pool, &param->name, &STR_BILLING_ROLE);
 
-      if (billing_role == NODE_ROLE_ORIGINATING)
+      if (billing_role == ACR::NODE_ROLE_ORIGINATING)
       {
         pj_strdup(pool, &param->value, &STR_CHARGE_ORIG);
       }
@@ -1678,9 +1738,9 @@ void SCSCFSproutletTsx::add_record_route(pjsip_msg* msg,
 
 
 /// Retrieve the billing role for an in-dialog message.
-NodeRole SCSCFSproutletTsx::get_billing_role()
+ACR::NodeRole SCSCFSproutletTsx::get_billing_role()
 {
-  NodeRole role;
+  ACR::NodeRole role;
 
   const pjsip_route_hdr* route = route_hdr();
   if ((route != NULL) &&
@@ -1694,30 +1754,30 @@ NodeRole SCSCFSproutletTsx::get_billing_role()
       if (!pj_strcmp(&param->value, &STR_CHARGE_ORIG))
       {
         TRC_INFO("Charging role is originating");
-        role = NODE_ROLE_ORIGINATING;
+        role = ACR::NODE_ROLE_ORIGINATING;
       }
       else if (!pj_strcmp(&param->value, &STR_CHARGE_TERM))
       {
         TRC_INFO("Charging role is terminating");
-        role = NODE_ROLE_TERMINATING;
+        role = ACR::NODE_ROLE_TERMINATING;
       }
       else
       {
         TRC_WARNING("Unknown charging role %.*s, assume originating",
                     param->value.slen, param->value.ptr);
-        role = NODE_ROLE_ORIGINATING;
+        role = ACR::NODE_ROLE_ORIGINATING;
       }
     }
     else
     {
       TRC_WARNING("No charging role in Route header, assume originating");
-      role = NODE_ROLE_ORIGINATING;
+      role = ACR::NODE_ROLE_ORIGINATING;
     }
   }
   else
   {
     TRC_WARNING("Cannot determine charging role as no Route header, assume originating");
-    role = NODE_ROLE_ORIGINATING;
+    role = ACR::NODE_ROLE_ORIGINATING;
   }
 
   return role;
@@ -1731,11 +1791,15 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
 
   if (_as_chain_link.is_set())
   {
+    // The AS has timed out so track this as a communication failure.
+    _scscf->track_app_serv_comm_failure(_as_chain_link.uri(),
+                                        _as_chain_link.default_handling());
+
     // The request was routed to a downstream AS, so cancel any outstanding
     // forks.
     cancel_pending_forks();
 
-    if (_as_chain_link.continue_session())
+    if (_as_chain_link.default_handling() == SESSION_CONTINUED)
     {
       // The AS either timed out or returned a 5xx error, and default
       // handling is set to continue.
@@ -1839,7 +1903,7 @@ void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
              ++alias)
         {
           std::string tel_URI_prefix = "tel:";
-          bool has_tel_prefix = (alias->rfind(tel_URI_prefix.c_str(), 4) != std::string::npos); 
+          bool has_tel_prefix = (alias->rfind(tel_URI_prefix.c_str(), 4) != std::string::npos);
           if (has_tel_prefix)
           {
             TRC_DEBUG("Add second P-Asserted Identity for %s", alias->c_str());

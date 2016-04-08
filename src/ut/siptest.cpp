@@ -84,6 +84,12 @@ SipTest::SipTest(pjsip_module* module) :
   EXPECT_TRUE(_current_instance == NULL) << "Can't run two SipTests in parallel";
   _current_instance = this;
   _module = module;
+
+  // Call cwtest_completely_control_time to freeze time unless explicitly moved
+  // forwards - this prevents spurious failures like, for example, a test taking
+  // 1s longer than expected, getting "expires=299" in a Contact header rather
+  // than "expires=300", and failing the match.
+  cwtest_completely_control_time();
 }
 
 /// Runs after each test.
@@ -113,7 +119,6 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
   stack_data.pcscf_untrusted_port = 5060;
   stack_data.pcscf_trusted_port = 5058; // NB - pcscf trusted port must be the
   stack_data.scscf_port = 5058;         // same as the scscf port for the UTs
-  stack_data.icscf_port = 5056;
   stack_data.local_host = pj_str("127.0.0.1");
   stack_data.public_host = pj_str("127.0.0.1");
   stack_data.home_domains.insert("homedomain");
@@ -148,7 +153,6 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
   TransportFlow::udp_transport(stack_data.pcscf_trusted_port);
   TransportFlow::udp_transport(stack_data.pcscf_untrusted_port);
   TransportFlow::udp_transport(stack_data.scscf_port);
-  TransportFlow::udp_transport(stack_data.icscf_port);
 
   // Get a default TCP transport flow to use for injection.  Give it a dummy address.
   _tp_default = new TransportFlow(TransportFlow::Protocol::TCP,
@@ -833,6 +837,16 @@ std::ostream& operator<<(std::ostream& os, const PjMsg& msg)
   char buf[16384];
   pj_ssize_t len = pjsip_msg_print(msg._msg, buf, sizeof(buf));
   os << string(buf,len);
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const DumpList& that)
+{
+  os << that._title << std::endl;
+  for (std::list<string>::const_iterator iter = that._list.begin(); iter != that._list.end(); ++iter)
+  {
+    os << "  " << *iter << std::endl;
+  }
   return os;
 }
 

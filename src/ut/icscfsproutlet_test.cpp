@@ -56,14 +56,12 @@ using testing::MatchesRegex;
 using testing::HasSubstr;
 using testing::Not;
 
+int ICSCF_PORT = 5052;
+
 /// ABC for fixtures for ICSCFSproutletTest.
 class ICSCFSproutletTestBase : public SipTest
 {
 public:
-  /// TX data for testing.  Will be cleaned up.  Each message in a
-  /// forked flow has its URI stored in _uris, and its txdata stored
-  /// in _tdata against that URI.
-
   /// Set up test case.  Caller must clear host_mapping.
   static void SetUpTestCase()
   {
@@ -74,8 +72,9 @@ public:
     _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_icscf.json"));
     _enum_service = new JSONEnumService(string(UT_DIR).append("/test_enum.json"));
 
-    _icscf_sproutlet = new ICSCFSproutlet("sip:bgcf.homedomain",
-                                          stack_data.icscf_port,
+    _icscf_sproutlet = new ICSCFSproutlet("icscf",
+                                          "sip:bgcf.homedomain",
+                                          ICSCF_PORT,
                                           _hss_connection,
                                           _acr_factory,
                                           _scscf_selector,
@@ -87,7 +86,7 @@ public:
 
     _icscf_proxy = new SproutletProxy(stack_data.endpt,
                                       PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
-                                      "sip:homedomain:" + std::to_string(stack_data.icscf_port),
+                                      "homedomain",
                                       std::unordered_set<std::string>(),
                                       sproutlets,
                                       std::set<std::string>());
@@ -342,7 +341,7 @@ protected:
   {
     // Create a TCP connection to the I-CSCF listening port.
     TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                          stack_data.icscf_port,
+                                          ICSCF_PORT,
                                           "1.2.3.4",
                                           49152);
 
@@ -383,7 +382,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSServerName)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -499,7 +498,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSCaps)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -622,7 +621,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSCapsNoMatch)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -670,7 +669,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterICSCFLoop)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -679,7 +678,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterICSCFLoop)
   // rather than an S-CSCF name.
   _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG",
                               "{\"result-code\": 2001,"
-                              " \"scscf\": \"sip:homedomain:" + std::to_string(stack_data.icscf_port) + ";transport=TCP\"}");
+                              " \"scscf\": \"sip:homedomain:" + std::to_string(ICSCF_PORT) + ";transport=TCP\"}");
 
   // Inject a REGISTER request.
   Message msg1;
@@ -717,7 +716,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterSCSCFReturnedCAPAB)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -809,7 +808,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterSCSCFReturnedCAPABAndServerName)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -885,7 +884,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSRetry)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -979,7 +978,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSNoRetry)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -1047,7 +1046,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSMultipleRetry)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -1158,7 +1157,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSMultipleDefaultCapabs)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -1247,7 +1246,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSFail)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -1289,7 +1288,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSBadResponse)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -1425,7 +1424,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterAllSCSCFsTimeOut)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -1516,7 +1515,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSNotFound)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -1583,7 +1582,7 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSServerName)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -1653,7 +1652,7 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSCaps)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -1724,7 +1723,7 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSCapsNoMatch)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -1776,7 +1775,7 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSRetry)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -1875,7 +1874,7 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSFail)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -1952,7 +1951,7 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteCancel)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -2065,7 +2064,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteHSSServerName)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -2135,7 +2134,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteHSSCaps)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -2206,7 +2205,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteNoUnregisteredServices)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -2249,7 +2248,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteHSSRetry)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -2370,7 +2369,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteTelURI)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -2442,7 +2441,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnum)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -2514,7 +2513,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnumBgcf)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -2579,7 +2578,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnumNP)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -2630,7 +2629,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnumExistingNP)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -2680,7 +2679,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteUserPhone)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -2842,7 +2841,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteNumericSIPURI)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -2918,7 +2917,7 @@ TEST_F(ICSCFSproutletTest, ProxyAKARegisterChallenge)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -2974,7 +2973,7 @@ TEST_F(ICSCFSproutletTest, RequestErrors)
 
   // Create a TCP connection to the listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -3032,7 +3031,7 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteBadServerName)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -3122,7 +3121,7 @@ TEST_F(ICSCFSproutletTest, INVITEWithTwoRouteHeaders)
 
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
@@ -3173,7 +3172,7 @@ TEST_F(ICSCFSproutletTest, RouteOutOfDialogAck)
 {
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
+                                        ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
 
