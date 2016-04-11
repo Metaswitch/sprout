@@ -2161,7 +2161,8 @@ int main(int argc, char* argv[])
                                          opt.sprout_hostname,
                                          host_aliases,
                                          sproutlets,
-                                         opt.stateless_proxies);
+                                         opt.stateless_proxies,
+                                         opt.prefix_scscf);
     if (sproutlet_proxy == NULL)
     {
       TRC_ERROR("Failed to create SproutletProxy");

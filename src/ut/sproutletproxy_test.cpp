@@ -638,7 +638,8 @@ public:
                                 "proxy1.homedomain",
                                 host_aliases,
                                 _sproutlets,
-                                std::set<std::string>());
+                                std::set<std::string>(),
+                                "scscf");
 
     // Schedule timers.
     SipTest::poll();
