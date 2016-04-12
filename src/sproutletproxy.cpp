@@ -66,7 +66,8 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
                                const std::string& root_uri,
                                const std::unordered_set<std::string>& host_aliases,
                                const std::list<Sproutlet*>& sproutlets,
-                               const std::set<std::string>& stateless_proxies) :
+                               const std::set<std::string>& stateless_proxies,
+                               const std::string scscf_name) :
   BasicProxy(endpt,
              "mod-sproutlet-controller",
              priority,
@@ -74,7 +75,8 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
              stateless_proxies),
   _root_uri(NULL),
   _host_aliases(host_aliases),
-  _sproutlets(sproutlets)
+  _sproutlets(sproutlets),
+  _scscf_name(scscf_name)
 {
   /// Store the URI of this SproutletProxy - this is used for Record-Routing.
   TRC_DEBUG("Root Record-Route URI = %s", root_uri.c_str());
@@ -116,7 +118,8 @@ BasicProxy::UASTsx* SproutletProxy::create_uas_tsx()
 Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
                                             int port,
                                             std::string& alias,
-                                            bool& force_external_routing)
+                                            bool& force_external_routing,
+                                            SAS::TrailId trail)
 {
   TRC_DEBUG("Find target Sproutlet for request");
 
@@ -151,15 +154,19 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
 
   if (uri != NULL)
   {
-    TRC_DEBUG("Found next routable URI: %s",
-              PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                     (pjsip_uri*)uri).c_str());
+    std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                                 (pjsip_uri*)uri);
+    SAS::Event event(trail, SASEvent::STARTING_SPROUTLET_SELECTION_URI, 0);
+    event.add_var_param(uri_str);
+    SAS::report_event(event);
+
+    TRC_DEBUG("Found next routable URI: %s", uri_str.c_str());
 
     for (std::list<Sproutlet*>::iterator it = _sproutlets.begin();
          it != _sproutlets.end();
          ++it)
     {
-      if (does_uri_match_sproutlet((pjsip_uri*)uri, *it, alias))
+      if (does_uri_match_sproutlet((pjsip_uri*)uri, *it, alias, trail))
       {
         sproutlet = *it;
         break;
@@ -176,7 +183,7 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
   }
   else
   {
-    TRC_DEBUG("Next route for message cannot be a sproutlet");
+    TRC_DEBUG("Can't determine whether the next route is a sproutlet based on the URI");
   }
 
   if ((sproutlet == NULL) &&
@@ -186,11 +193,16 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
     // for the port.  We can only do this if there is either no route header
     // or the URI in the Route header corresponds to our hostname.
     TRC_DEBUG("No Sproutlet found using service name or host");
+
     if ((route == NULL) ||
         (PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri) &&
          (is_host_local(&((pjsip_sip_uri*)route->name_addr.uri)->host))))
     {
       TRC_DEBUG("Find default service for port %d", port);
+      SAS::Event event(trail, SASEvent::STARTING_SPROUTLET_SELECTION_PORT, 0);
+      event.add_static_param(port);
+      SAS::report_event(event);
+
       for (std::list<Sproutlet*>::iterator it = _sproutlets.begin();
            it != _sproutlets.end();
            ++it)
@@ -199,6 +211,12 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
         {
           sproutlet = *it;
           alias = (*it)->service_name();
+
+          SAS::Event event(trail, SASEvent::SPROUTLET_SELECTION_PORT, 0);
+          event.add_var_param(alias);
+          event.add_static_param(port);
+          SAS::report_event(event);
+
           break;
         }
       }
@@ -208,23 +226,31 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
   // Now check whether we've allocated any sproutlets when we really want to
   // route the message to the Subscription module instead
   if ((sproutlet) &&
-      (sproutlet->service_name() == "scscf") &&
+      (sproutlet->service_name() == _scscf_name) &&
       (request_acceptable_to_subscription_module(req, 0)))
   {
-    // This is a subscribe being routed back to the S-CSCF sproutlet but to 
-    // get this handled correctly we need route it externally to make sure it 
+    // This is a subscribe being routed back to the S-CSCF sproutlet but to
+    // get this handled correctly we need to route it externally to make sure it
     // hits the subscription module.
-    TRC_DEBUG("Don't route S-CSCF subscribe message via sproutlet");
+    TRC_DEBUG("Force the SUBSCRIBE message to be routed externally");
+    SAS::Event event(trail, SASEvent::FORCE_EXTERNAL_ROUTING_SUBSCRIBE, 0);
+    SAS::report_event(event);
     force_external_routing = true;
     sproutlet = NULL;
   }
-  
+  else if (sproutlet == NULL)
+  {
+    SAS::Event event(trail, SASEvent::NO_SPROUTLET_SELECTED, 0);
+    SAS::report_event(event);
+  }
+
   return sproutlet;
 }
 
 bool SproutletProxy::does_uri_match_sproutlet(const pjsip_uri* uri,
                                               Sproutlet* sproutlet,
-                                              std::string& alias)
+                                              std::string& alias,
+                                              SAS::TrailId trail)
 {
   if (!PJSIP_URI_SCHEME_IS_SIP(uri))
   {
@@ -237,6 +263,8 @@ bool SproutletProxy::does_uri_match_sproutlet(const pjsip_uri* uri,
   // Now we know we have a SIP URI, cast to one.
   pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)uri;
   bool match = false;
+  std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                                (pjsip_uri*)sip_uri);
 
   // Extract the service name, this can appear in one of three places:
   //
@@ -327,6 +355,10 @@ bool SproutletProxy::does_uri_match_sproutlet(const pjsip_uri* uri,
     {
       alias = *it;
       match = true;
+      SAS::Event event(trail, SASEvent::SPROUTLET_SELECTION_SERVICE_NAME, 0);
+      event.add_var_param(alias);
+      event.add_var_param(uri_str);
+      SAS::report_event(event);
     }
     else
     {
@@ -339,6 +371,11 @@ bool SproutletProxy::does_uri_match_sproutlet(const pjsip_uri* uri,
         {
           alias = *it;
           match = true;
+          SAS::Event event(trail, SASEvent::SPROUTLET_SELECTION_ALIAS, 0);
+          event.add_var_param(alias);
+          event.add_var_param(*jt);
+          event.add_var_param(uri_str);
+          SAS::report_event(event);
           break;
         }
       }
@@ -514,7 +551,8 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
                    target_sproutlet(_req->msg,
                                     rdata->tp_info.transport->local_name.port,
                                     alias,
-                                    force_external_routing);
+                                    force_external_routing,
+                                    trail());
 
     if (sproutlet == NULL)
     {
@@ -718,24 +756,28 @@ void SproutletProxy::UASTsx::on_tsx_state(pjsip_event* event)
 
 Sproutlet* SproutletProxy::UASTsx::target_sproutlet(pjsip_msg* msg,
                                                     int port,
-                                                    std::string& alias)
+                                                    std::string& alias,
+                                                    SAS::TrailId trail)
 {
   bool unused_force_external_routing;
   return _sproutlet_proxy->target_sproutlet(msg,
                                             port,
                                             alias,
-                                            unused_force_external_routing);
+                                            unused_force_external_routing,
+                                            trail);
 }
 
 Sproutlet* SproutletProxy::UASTsx::target_sproutlet(pjsip_msg* msg,
                                                     int port,
                                                     std::string& alias,
-                                                    bool& force_external_routing)
+                                                    bool& force_external_routing,
+                                                    SAS::TrailId trail)
 {
   return _sproutlet_proxy->target_sproutlet(msg,
                                             port,
                                             alias,
-                                            force_external_routing);
+                                            force_external_routing,
+                                            trail);
 }
 
 
@@ -791,7 +833,8 @@ void SproutletProxy::UASTsx::schedule_requests()
       std::string alias;
       Sproutlet* sproutlet = target_sproutlet(req.req->msg,
                                               0,
-                                              alias);
+                                              alias,
+                                              trail());
 
       if (sproutlet != NULL)
       {
@@ -1499,8 +1542,11 @@ SAS::TrailId SproutletWrapper::trail() const
 
 bool SproutletWrapper::is_uri_reflexive(const pjsip_uri* uri) const
 {
-  std::string alias;
-  return _proxy->does_uri_match_sproutlet(uri, _sproutlet, alias);
+  std::string alias_unused;
+  return _proxy->does_uri_match_sproutlet(uri,
+                                          _sproutlet,
+                                          alias_unused,
+                                          trail());
 }
 
 bool SproutletWrapper::is_uri_local(const pjsip_uri* uri) const

@@ -65,12 +65,15 @@ public:
   /// @param  sproutlets        - Sproutlets to load in this proxy.
   /// @param  stateless_proxies - A set of next-hops that are considered to be
   ///                             stateless proxies.
+  /// @param  scscf_name        - The name of the S-CSCF sproutlet (so we can
+  //                              prioritise this if possible)
   SproutletProxy(pjsip_endpoint* endpt,
                  int priority,
                  const std::string& root_uri,
                  const std::unordered_set<std::string>& host_aliases,
                  const std::list<Sproutlet*>& sproutlets,
-                 const std::set<std::string>& stateless_proxies);
+                 const std::set<std::string>& stateless_proxies,
+                 const std::string scscf_name);
 
   /// Destructor.
   virtual ~SproutletProxy();
@@ -90,13 +93,15 @@ protected:
   Sproutlet* target_sproutlet(pjsip_msg* req,
                               int port,
                               std::string& alias,
-                              bool& force_external_routing);
+                              bool& force_external_routing,
+                              SAS::TrailId trail);
 
   /// Compare a SIP URI to a Sproutlet to see if they are a match (e.g.
   /// a message targeted at that URI would arrive at the given Sproutlet).
   bool does_uri_match_sproutlet(const pjsip_uri* uri,
                                 Sproutlet* sproutlet,
-                                std::string& alias);
+                                std::string& alias,
+                                SAS::TrailId trail);
 
   /// Create a URI that routes to a given Sproutlet.
   pjsip_sip_uri* create_sproutlet_uri(pj_pool_t* pool,
@@ -177,11 +182,13 @@ protected:
     /// Route header.
     Sproutlet* target_sproutlet(pjsip_msg* msg,
                                 int port,
-                                std::string& alias);
+                                std::string& alias,
+                                SAS::TrailId trail);
     Sproutlet* target_sproutlet(pjsip_msg* msg,
                                 int port,
                                 std::string& alias,
-                                bool& force_external_routing);
+                                bool& force_external_routing,
+                                SAS::TrailId trail);
 
     /// Checks to see if it is safe to destroy the UASTsx.
     void check_destroy();
@@ -241,6 +248,8 @@ protected:
   std::unordered_set<std::string> _host_aliases;
 
   std::list<Sproutlet*> _sproutlets;
+
+  std::string _scscf_name;
 
   static const pj_str_t STR_SERVICE;
 
