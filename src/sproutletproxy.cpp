@@ -203,31 +203,22 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
       event.add_static_param(port);
       SAS::report_event(event);
 
-      bool sproutlet_set = false;
-
-      // We want to default to using the S-CSCF here - so prioitise this
       for (std::list<Sproutlet*>::iterator it = _sproutlets.begin();
            it != _sproutlets.end();
            ++it)
       {
         if ((*it)->port() == port)
         {
-          if ((!sproutlet_set) ||
-              ((*it)->service_name() == _scscf_name))
-          {
-            sproutlet = *it;
-            alias = (*it)->service_name();
-            sproutlet_set = true;
-          }
-        }
-      }
+          sproutlet = *it;
+          alias = (*it)->service_name();
 
-      if (sproutlet_set)
-      {
-        SAS::Event event(trail, SASEvent::SPROUTLET_SELECTION_PORT, 0);
-        event.add_var_param(alias);
-        event.add_static_param(port);
-        SAS::report_event(event);
+          SAS::Event event(trail, SASEvent::SPROUTLET_SELECTION_PORT, 0);
+          event.add_var_param(alias);
+          event.add_static_param(port);
+          SAS::report_event(event);
+
+          break;
+        }
       }
     }
   }
@@ -239,7 +230,7 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
       (request_acceptable_to_subscription_module(req, 0)))
   {
     // This is a subscribe being routed back to the S-CSCF sproutlet but to
-    // get this handled correctly we need route it externally to make sure it
+    // get this handled correctly we need to route it externally to make sure it
     // hits the subscription module.
     TRC_DEBUG("Force the SUBSCRIBE message to be routed externally");
     SAS::Event event(trail, SASEvent::FORCE_EXTERNAL_ROUTING_SUBSCRIBE, 0);
