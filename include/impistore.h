@@ -148,6 +148,9 @@ public:
     /// Write to JSON writer (AV format).
     virtual void write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer);
 
+    /// Write inner to JSON writer (AV format).
+    void write_json_av_inner(rapidjson::Writer<rapidjson::StringBuffer>* writer);
+
     /// Deserialization from JSON (AV format).
     static ImpiStore::AuthChallenge* from_json_av(const std::string& nonce, const std::string& json);
 
