@@ -218,7 +218,8 @@ std::string ImpiStore::AuthChallenge::to_json_av()
 
 void ImpiStore::AuthChallenge::write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer)
 {
-  // Write the outer base AuthChallenge fields to JSON, in the AV format.  This is just the correlator.
+  // Write the outer base AuthChallenge fields to JSON, in the AV format.  This
+  // is just the correlator.
   if (correlator != "")
   {
     writer->String(JSON_AV_CORRELATOR); writer->String(correlator.c_str());
@@ -243,6 +244,18 @@ void ImpiStore::AuthChallenge::write_json_av_inner(rapidjson::Writer<rapidjson::
   // store the last-used nonce count, rather than the next acceptable one.  We
   // calculate this by decrementing the nonce count.  We undo this when we
   // read the AV back in from_json_av.
+  //
+  // The situation that this solves is:
+  // - Uplevel node is in av-impi mode, generates a challenge and writes an AV
+  //   with a nonce count of 1.
+  // - Downlevel node processes the authentication response, and tombstones the
+  //   AV but does not increment the nonce count (because the downlevel node
+  //   does not support nonce counts).
+  // - An uplevel node reads this AV back and knows the nonce count should have
+  //   been incremented but wasn't, so increments the value it reads back
+  //   before storing in the AuthChallenge object.
+  // - Because of this processing, an uplevel node also needs to decrement the
+  //   nonce count when writing AVs if the tombstone flag is set.
   uint32_t nonce_count_with_tombstone = nonce_count;
   if (nonce_count > INITIAL_NONCE_COUNT)
   {
