@@ -330,7 +330,7 @@ static void usage(void)
        "                            Target latency above which throttling applies for the Cassandra store\n"
        "                            that's part of the Memento application server (default: 1000000)\n"
        "     --max-tokens N         Maximum number of tokens allowed in the token bucket (used by\n"
-       "                            the throttling code (default: 20))\n"
+       "                            the throttling code (default: 100))\n"
        "     --init-token-rate N    Initial token refill rate of tokens in the token bucket (used by\n"
        "                            the throttling code (default: 100.0))\n"
        "     --min-token-rate N     Minimum token refill rate of tokens in the token bucket (used by\n"
@@ -1368,7 +1368,7 @@ int main(int argc, char* argv[])
   opt.call_list_ttl = 604800;
   opt.target_latency_us = 100000;
   opt.cass_target_latency_us = 1000000;
-  opt.max_tokens = 20;
+  opt.max_tokens = 100;
   opt.init_token_rate = 100.0;
   opt.min_token_rate = 10.0;
   opt.log_to_file = PJ_FALSE;
