@@ -89,7 +89,8 @@ public:
                                       "homedomain",
                                       std::unordered_set<std::string>(),
                                       sproutlets,
-                                      std::set<std::string>());
+                                      std::set<std::string>(),
+                                      "scscf");
 
     // Schedule timers.
     SipTest::poll();

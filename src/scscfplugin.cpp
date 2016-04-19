@@ -137,7 +137,9 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           sess_cont_as_tracker);
     plugin_loaded = _scscf_sproutlet->init();
 
-    sproutlets.push_back(_scscf_sproutlet);
+    // We want to prioritise choosing the S-CSCF in ambiguous situations, so
+    // make sure it's at the front of the sproutlet list
+    sproutlets.push_front(_scscf_sproutlet);
   }
 
   return plugin_loaded;

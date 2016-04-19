@@ -240,6 +240,7 @@ void mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* cid_hdr, 
 
 bool is_emergency_registration(pjsip_contact_hdr* contact_hdr);
 
+bool check_route_headers(pjsip_msg* msg);
 bool check_route_headers(pjsip_rx_data* rdata);
 
 void put_unary_param(pjsip_param* params_list,

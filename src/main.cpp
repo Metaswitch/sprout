@@ -330,7 +330,7 @@ static void usage(void)
        "                            Target latency above which throttling applies for the Cassandra store\n"
        "                            that's part of the Memento application server (default: 1000000)\n"
        "     --max-tokens N         Maximum number of tokens allowed in the token bucket (used by\n"
-       "                            the throttling code (default: 20))\n"
+       "                            the throttling code (default: 100))\n"
        "     --init-token-rate N    Initial token refill rate of tokens in the token bucket (used by\n"
        "                            the throttling code (default: 100.0))\n"
        "     --min-token-rate N     Minimum token refill rate of tokens in the token bucket (used by\n"
@@ -1122,52 +1122,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 }
 
 
-int daemonize()
-{
-  TRC_STATUS("Switching to daemon mode");
-
-  pid_t pid = fork();
-  if (pid == -1)
-  {
-    // Fork failed, return error.
-    return errno;
-  }
-  else if (pid > 0)
-  {
-    // Parent process, fork successful, so exit.
-    exit(0);
-  }
-
-  // Must now be running in the context of the child process.
-
-  // Redirect standard files to /dev/null
-  if (freopen("/dev/null", "r", stdin) == NULL)
-  {
-    return errno;
-  }
-  if (freopen("/dev/null", "w", stdout) == NULL)
-  {
-    return errno;
-  }
-  if (freopen("/dev/null", "w", stderr) == NULL)
-  {
-    return errno;
-  }
-
-  if (setsid() == -1)
-  {
-    // Create a new session to divorce the child from the tty of the parent.
-    return errno;
-  }
-
-  signal(SIGHUP, SIG_IGN);
-
-  umask(0);
-
-  return 0;
-}
-
-
 // Signal handler that simply dumps the stack and then crashes out.
 void signal_handler(int sig)
 {
@@ -1414,7 +1368,7 @@ int main(int argc, char* argv[])
   opt.call_list_ttl = 604800;
   opt.target_latency_us = 100000;
   opt.cass_target_latency_us = 1000000;
-  opt.max_tokens = 20;
+  opt.max_tokens = 100;
   opt.init_token_rate = 100.0;
   opt.min_token_rate = 10.0;
   opt.log_to_file = PJ_FALSE;
@@ -1459,7 +1413,7 @@ int main(int argc, char* argv[])
 
   if (opt.daemon)
   {
-    int errnum = daemonize();
+    int errnum = Utils::daemonize();
     if (errnum != 0)
     {
       TRC_ERROR("Failed to convert to daemon, %d (%s)", errnum, strerror(errnum));
@@ -2161,7 +2115,8 @@ int main(int argc, char* argv[])
                                          opt.sprout_hostname,
                                          host_aliases,
                                          sproutlets,
-                                         opt.stateless_proxies);
+                                         opt.stateless_proxies,
+                                         opt.prefix_scscf);
     if (sproutlet_proxy == NULL)
     {
       TRC_ERROR("Failed to create SproutletProxy");

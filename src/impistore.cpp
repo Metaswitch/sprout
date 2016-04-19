@@ -218,9 +218,8 @@ std::string ImpiStore::AuthChallenge::to_json_av()
 
 void ImpiStore::AuthChallenge::write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer)
 {
-  // Write all the base AuthChallenge fields to JSON, in the AV format.
-  writer->String(JSON_AV_NONCE_COUNT); writer->Uint(nonce_count);
-  writer->String(JSON_AV_EXPIRES); writer->Int(expires);
+  // Write the outer base AuthChallenge fields to JSON, in the AV format.  This
+  // is just the correlator.
   if (correlator != "")
   {
     writer->String(JSON_AV_CORRELATOR); writer->String(correlator.c_str());
@@ -235,6 +234,37 @@ void ImpiStore::AuthChallenge::write_json_av(rapidjson::Writer<rapidjson::String
   }
 
   // Nonce is part of the key, so isn't stored in the JSON.
+}
+
+void ImpiStore::AuthChallenge::write_json_av_inner(rapidjson::Writer<rapidjson::StringBuffer>* writer)
+{
+  // Write the inner base AuthChallenge fields to JSON, in the AV format.
+  // Nonce count is a bit complicated.  If the tombstone flag is set (and it
+  // will be if nonce count is greater than the initial value), we need to
+  // store the last-used nonce count, rather than the next acceptable one.  We
+  // calculate this by decrementing the nonce count.  We undo this when we
+  // read the AV back in from_json_av.
+  //
+  // The situation that this solves is:
+  // - Uplevel node is in av-impi mode, generates a challenge and writes an AV
+  //   with a nonce count of 1.
+  // - Downlevel node processes the authentication response, and tombstones the
+  //   AV but does not increment the nonce count (because the downlevel node
+  //   does not support nonce counts).
+  // - An uplevel node reads this AV back and knows the nonce count should have
+  //   been incremented but wasn't, so increments the value it reads back
+  //   before storing in the AuthChallenge object.
+  // - Because of this processing, an uplevel node also needs to decrement the
+  //   nonce count when writing AVs if the tombstone flag is set.
+  uint32_t nonce_count_with_tombstone = nonce_count;
+  if (nonce_count > INITIAL_NONCE_COUNT)
+  {
+    nonce_count_with_tombstone--;
+    TRC_INFO("Entry tombstoned, so decrement nonce count to %u",
+             nonce_count_with_tombstone);
+  }
+  writer->String(JSON_AV_NONCE_COUNT); writer->Uint(nonce_count_with_tombstone);
+  writer->String(JSON_AV_EXPIRES); writer->Int(expires);
 }
 
 ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json_av(const std::string& nonce, const std::string& json)
@@ -287,21 +317,21 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json_av(const std::stri
     if (auth_challenge != NULL)
     {
       auth_challenge->nonce = nonce;
+      auth_challenge->nonce_count = INITIAL_NONCE_COUNT;
       JSON_SAFE_GET_UINT_MEMBER(*inner_obj, JSON_AV_NONCE_COUNT, auth_challenge->nonce_count);
       JSON_SAFE_GET_INT_MEMBER(*inner_obj, JSON_AV_EXPIRES, auth_challenge->expires);
-      JSON_SAFE_GET_STRING_MEMBER(*inner_obj, JSON_AV_CORRELATOR, auth_challenge->correlator);
+      JSON_SAFE_GET_STRING_MEMBER(*json, JSON_AV_CORRELATOR, auth_challenge->correlator);
 
-      if (auth_challenge->nonce_count == 0)
+      // If this challenge has been tombstoned, that means that the retrieved
+      // nonce count is out-dated, so we need to increase it by 1 for the next
+      // valid nonce count.
+      bool tombstone = false;
+      JSON_SAFE_GET_BOOL_MEMBER(*json, JSON_AV_TOMBSTONE, tombstone);
+      if (tombstone)
       {
-        // No nonce count.  Default to the initial value, unless this challenge
-        // has been tombstoned, in which case we need to increase by 1.  In
-        // previous versions, challenges could only be used once, and would be
-        // tombstoned to prevent reuse.
-        bool tombstone = false;
-        JSON_SAFE_GET_BOOL_MEMBER(*inner_obj, JSON_AV_TOMBSTONE, tombstone);
-        auth_challenge->nonce_count = INITIAL_NONCE_COUNT + ((tombstone) ? 1 : 0);
-        TRC_INFO("No \"%s\" field in JSON AV - defaulting to %u",
-                 JSON_AV_NONCE_COUNT, auth_challenge->nonce_count);
+        auth_challenge->nonce_count++;
+        TRC_INFO("Entry tombstoned, so increment nonce count to %u",
+                 auth_challenge->nonce_count);
       }
 
       if (auth_challenge->expires == 0)
@@ -376,12 +406,13 @@ void ImpiStore::DigestAuthChallenge::write_json_av(rapidjson::Writer<rapidjson::
   writer->String(JSON_AV_TYPE_DIGEST);
   writer->StartObject();
   {
-    ImpiStore::AuthChallenge::write_json_av(writer);
+    ImpiStore::AuthChallenge::write_json_av_inner(writer);
     writer->String(JSON_AV_REALM); writer->String(realm.c_str());
     writer->String(JSON_AV_QOP); writer->String(qop.c_str());
     writer->String(JSON_AV_HA1); writer->String(ha1.c_str());
   }
   writer->EndObject();
+  ImpiStore::AuthChallenge::write_json_av(writer);
 }
 
 ImpiStore::DigestAuthChallenge* ImpiStore::DigestAuthChallenge::from_json_av(rapidjson::Value* json)
@@ -455,10 +486,11 @@ void ImpiStore::AKAAuthChallenge::write_json_av(rapidjson::Writer<rapidjson::Str
   writer->String(JSON_AV_TYPE_AKA);
   writer->StartObject();
   {
-    ImpiStore::AuthChallenge::write_json_av(writer);
+    ImpiStore::AuthChallenge::write_json_av_inner(writer);
     writer->String(JSON_AV_RESPONSE); writer->String(response.c_str());
   }
   writer->EndObject();
+  ImpiStore::AuthChallenge::write_json_av(writer);
 }
 
 ImpiStore::AKAAuthChallenge* ImpiStore::AKAAuthChallenge::from_json_av(rapidjson::Value* json)

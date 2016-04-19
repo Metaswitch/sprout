@@ -77,6 +77,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          snmp_event_accumulator_table.cpp \
                          sip_string_to_request_type.cpp \
                          snmp_row.cpp \
+                         snmp_ip_row.cpp \
                          snmp_scalar.cpp \
                          ralf_processor.cpp \
                          uri_classifier.cpp \
