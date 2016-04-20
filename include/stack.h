@@ -151,6 +151,10 @@ inline SAS::TrailId get_trail(const pjsip_transaction* tsx)
   return (SAS::TrailId)tsx->mod_data[stack_data.sas_logging_module_id];
 }
 
+extern void set_quiescing_true();
+
+extern void set_quiescing_false();
+
 extern void init_pjsip_logging(int log_level,
                                pj_bool_t log_to_file,
                                const std::string& directory);
