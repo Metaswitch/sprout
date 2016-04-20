@@ -2045,7 +2045,7 @@ int main(int argc, char* argv[])
 
     // Launch the registrar.
     status = init_registrar(local_sdm,
-                            remote_sdm,
+                            {remote_sdm},
                             hss_connection,
                             analytics_logger,
                             scscf_acr_factory,
@@ -2063,7 +2063,7 @@ int main(int argc, char* argv[])
 
     // Launch the subscription module.
     status = init_subscription(local_sdm,
-                               remote_sdm,
+                               {remote_sdm},
                                hss_connection,
                                scscf_acr_factory,
                                analytics_logger,
@@ -2152,10 +2152,10 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  AoRTimeoutTask::Config aor_timeout_config(local_sdm, remote_sdm, hss_connection);
+  AoRTimeoutTask::Config aor_timeout_config(local_sdm, {remote_sdm}, hss_connection);
   AuthTimeoutTask::Config auth_timeout_config(impi_store, hss_connection);
   DeregistrationTask::Config deregistration_config(local_sdm,
-                                                   remote_sdm,
+                                                   {remote_sdm},
                                                    hss_connection,
                                                    sip_resolver,
                                                    impi_store);

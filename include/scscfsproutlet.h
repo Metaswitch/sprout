@@ -83,7 +83,7 @@ public:
                  const std::string& bgcf_uri,
                  int port,
                  SubscriberDataManager* sdm,
-                 SubscriberDataManager* remote_sdm,
+                 std::vector<SubscriberDataManager*> remote_sdms,
                  HSSConnection* hss,
                  EnumService* enum_service,
                  ACRFactory* acr_factory,
@@ -192,7 +192,7 @@ private:
   pjsip_uri* _bgcf_uri;
 
   SubscriberDataManager* _sdm;
-  SubscriberDataManager* _remote_sdm;
+  std::vector<SubscriberDataManager*> _remote_sdms;
 
   HSSConnection* _hss;
 

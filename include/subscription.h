@@ -50,7 +50,7 @@ extern "C" {
 extern pjsip_module mod_subscription;
 
 pj_status_t init_subscription(SubscriberDataManager* sdm,
-                              SubscriberDataManager* remote_sdm,
+                              std::vector<SubscriberDataManager*> remote_sdms,
                               HSSConnection* hss_connection,
                               ACRFactory* rfacr_factory,
                               AnalyticsLogger* analytics_logger,
@@ -58,6 +58,7 @@ pj_status_t init_subscription(SubscriberDataManager* sdm,
 
 pj_bool_t request_acceptable_to_subscription_module(pjsip_msg* msg,
                                                     SAS::TrailId trail);
+
 void destroy_subscription();
 
 #endif

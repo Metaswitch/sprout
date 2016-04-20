@@ -298,6 +298,71 @@ TEST_F(UtilsTest, BinomialDistribution)
   }
 }
 
+/// Test the parse_stores_arg function with various input parameters.
+TEST_F(UtilsTest, ParseStoresArg)
+{
+  std::vector<std::string> stores_arg = {"local_site=store0",
+                                         "remote_site1=store1",
+                                         "remote_site2=store2"};
+  std::string local_site_name = "local_site";
+  std::string local_store_location;
+  std::vector<std::string> remote_stores_locations;
+
+  bool ret = Utils::parse_stores_arg(stores_arg,
+                                     local_site_name,
+                                     local_store_location,
+                                     remote_stores_locations);
+
+  EXPECT_TRUE(ret);
+  EXPECT_EQ(local_store_location, "store0");
+  EXPECT_EQ(remote_stores_locations.size(), 2);
+  EXPECT_EQ(remote_stores_locations[0], "store1");
+  EXPECT_EQ(remote_stores_locations[1], "store2");
+
+  // Vector is invalid since one of the stores is not identfied by a site.
+  local_store_location = "";
+  remote_stores_locations.clear();
+  stores_arg = {"local_site=store0",
+                "store1",
+                "remote_site2=store2"};
+
+  ret = Utils::parse_stores_arg(stores_arg,
+                                local_site_name,
+                                local_store_location,
+                                remote_stores_locations);
+
+  EXPECT_FALSE(ret);
+
+  // Single site deployment.
+  local_store_location = "";
+  remote_stores_locations.clear();
+  stores_arg = {"local_site=store0"};
+
+  ret = Utils::parse_stores_arg(stores_arg,
+                                local_site_name,
+                                local_store_location,
+                                remote_stores_locations);
+
+  EXPECT_TRUE(ret);
+  EXPECT_EQ(local_store_location, "store0");
+  EXPECT_EQ(remote_stores_locations.size(), 0);
+
+  // Single site deployment where no site is specified - parse_stores_arg
+  // assumes it is the local site.
+  local_store_location = "";
+  remote_stores_locations.clear();
+  stores_arg = {"store0"};
+
+  ret = Utils::parse_stores_arg(stores_arg,
+                                local_site_name,
+                                local_store_location,
+                                remote_stores_locations);
+
+  EXPECT_TRUE(ret);
+  EXPECT_EQ(local_store_location, "store0");
+  EXPECT_EQ(remote_stores_locations.size(), 0);
+}
+
 class StopWatchTest : public ::testing::Test
 {
 public:

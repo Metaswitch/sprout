@@ -71,11 +71,12 @@ public:
     _remote_data_store = new LocalStore();
     _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
     _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, false);
+    std::vector<SubscriberDataManager*> remote_sdms = {_remote_sdm};
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_registrar(_sdm,
-                                     _remote_sdm,
+                                     remote_sdms,
                                      _hss_connection,
                                      _analytics,
                                      _acr_factory,
@@ -2348,7 +2349,7 @@ public:
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_registrar(_sdm,
-                                     NULL,
+                                     {},
                                      _hss_connection,
                                      _analytics,
                                      _acr_factory,

@@ -59,7 +59,7 @@ extern "C" {
 #include "uri_classifier.h"
 
 static SubscriberDataManager* sdm;
-static SubscriberDataManager* remote_sdm;
+static std::vector<SubscriberDataManager*> remote_sdms;
 
 // Connection to the HSS service for retrieving associated public URIs.
 static HSSConnection* hss;
@@ -123,14 +123,18 @@ void log_subscriptions(const std::string& aor_name,
   }
 }
 
-/// Write to the registration store.
+/// Write to the registration store. If we can't find the AoR pair in the
+/// primary SDM, we will either use the backup_aor or we will try and look up
+/// the AoR pair in the backup SDMs. Therefore either the backup_aor should be
+/// NULL, or backup_sdms should be empty.
 SubscriberDataManager::AoRPair* write_subscriptions_to_store(
                    SubscriberDataManager* primary_sdm,        ///<store to write to
                    std::string aor,                           ///<address of record to write to
                    pjsip_rx_data* rdata,                      ///<received message to read headers from
                    int now,                                   ///<time now
                    SubscriberDataManager::AoRPair* backup_aor,///<backup data if no entry in store
-                   SubscriberDataManager* backup_sdm,         ///<backup store to read from if no entry in store and no backup data
+                   std::vector<SubscriberDataManager*> backup_sdms,
+                                                              ///<backup stores to read from if no entry in store and no backup data
                    SAS::TrailId trail,                        ///<SAS trail
                    std::string public_id,                     ///
                    bool send_ok,                              ///<Should we create an OK
@@ -176,23 +180,54 @@ SubscriberDataManager::AoRPair* write_subscriptions_to_store(
       // LCOV_EXCL_STOP
     }
 
-    // If we don't have any subscriptions, try the backup AoR and/or store.
+    // If we don't have any subscriptions, try the backup AoR and/or stores.
     if (aor_pair->get_current()->subscriptions().empty())
     {
-      if ((backup_aor == NULL)   &&
-          (backup_sdm != NULL) &&
-          (backup_sdm->has_servers()))
-      {
-        backup_aor = backup_sdm->get_aor_data(aor, trail);
-        backup_aor_alloced = (backup_aor != NULL);
-      }
+      bool found_subscription = false;
 
       if ((backup_aor != NULL) &&
-          (backup_aor->get_current() != NULL) &&
-          (!backup_aor->get_current()->subscriptions().empty()))
+          (backup_aor->current_contains_subscriptions()))
+      {
+        found_subscription = true;
+      }
+      else
+      {
+        std::vector<SubscriberDataManager*>::iterator it = backup_sdms.begin();
+        SubscriberDataManager::AoRPair* local_backup_aor = NULL;
+
+        while ((it != backup_sdms.end()) && (!found_subscription))
+        {
+          local_backup_aor = (*it)->get_aor_data(aor, trail);
+
+          if ((local_backup_aor != NULL) &&
+              (local_backup_aor->current_contains_subscriptions()))
+          {
+            // LCOV_EXCL_START - this code is very similar to code in handlers.cpp and is unit tested there.
+            found_subscription = true;
+            backup_aor = local_backup_aor;
+
+            // Flag that we have allocated the memory for the backup pair so
+            // that we can tidy it up later.
+            backup_aor_alloced = true;
+            // LCOV_EXCL_STOP
+          }
+          else
+          {
+            ++it;
+
+            if (local_backup_aor != NULL)
+            {
+              delete local_backup_aor;
+              local_backup_aor = NULL;
+            }
+          }
+        }
+      }
+
+      if (found_subscription)
       {
         for (SubscriberDataManager::AoR::Subscriptions::const_iterator i =
-               backup_aor->get_current()->subscriptions().begin();
+             backup_aor->get_current()->subscriptions().begin();
              i != backup_aor->get_current()->subscriptions().end();
              ++i)
         {
@@ -349,7 +384,7 @@ SubscriberDataManager::AoRPair* write_subscriptions_to_store(
   // If we allocated the backup AoR, tidy up.
   if (backup_aor_alloced)
   {
-    delete backup_aor; backup_aor = NULL;
+    delete backup_aor; backup_aor = NULL; // LCOV_EXCL_LINE
   }
 
   return aor_pair;
@@ -512,15 +547,15 @@ void process_subscription_request(pjsip_rx_data* rdata)
   // Get the system time in seconds for calculating absolute expiry times.
   int now = time(NULL);
 
-  // Write to the local store, checking the remote store if there is no entry locally.
-  // If the write to the local store succeeds, then write to the remote store.
+  // Write to the local store, checking the remote stores if there is no entry locally.
+  // If the write to the local store succeeds, then write to the remote stores.
   SubscriberDataManager::AoRPair* aor_pair =
                               write_subscriptions_to_store(sdm,
                                                            aor,
                                                            rdata,
                                                            now,
                                                            NULL,
-                                                           remote_sdm,
+                                                           remote_sdms,
                                                            trail,
                                                            public_id,
                                                            true,
@@ -533,17 +568,19 @@ void process_subscription_request(pjsip_rx_data* rdata)
     // Log the subscriptions.
     log_subscriptions(aor, aor_pair->get_current());
 
-    // If we have a remote store, try to store this there too.  We don't worry
+    // If we have any remote stores, try to store this there too.  We don't worry
     // about failures in this case.
-    if ((remote_sdm != NULL) && remote_sdm->has_servers())
+    for (std::vector<SubscriberDataManager*>::iterator it = remote_sdms.begin();
+         it != remote_sdms.end();
+         ++it)
     {
       SubscriberDataManager::AoRPair* remote_aor_pair =
-         write_subscriptions_to_store(remote_sdm,
+         write_subscriptions_to_store(*it,
                                       aor,
                                       rdata,
                                       now,
                                       aor_pair,
-                                      NULL,
+                                      {},
                                       trail,
                                       public_id,
                                       false,
@@ -750,7 +787,7 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
 }
 
 pj_status_t init_subscription(SubscriberDataManager* reg_sdm,
-                              SubscriberDataManager* reg_remote_sdm,
+                              std::vector<SubscriberDataManager*> reg_remote_sdm,
                               HSSConnection* hss_connection,
                               ACRFactory* rfacr_factory,
                               AnalyticsLogger* analytics_logger,
@@ -759,7 +796,7 @@ pj_status_t init_subscription(SubscriberDataManager* reg_sdm,
   pj_status_t status;
 
   sdm = reg_sdm;
-  remote_sdm = reg_remote_sdm;
+  remote_sdms = reg_remote_sdm;
   hss = hss_connection;
   acr_factory = rfacr_factory;
   analytics = analytics_logger;

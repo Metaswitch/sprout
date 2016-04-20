@@ -61,7 +61,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
                                const std::string& bgcf_uri,
                                int port,
                                SubscriberDataManager* sdm,
-                               SubscriberDataManager* remote_sdm,
+                               std::vector<SubscriberDataManager*> remote_sdms,
                                HSSConnection* hss,
                                EnumService* enum_service,
                                ACRFactory* acr_factory,
@@ -76,7 +76,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
   _icscf_uri(NULL),
   _bgcf_uri(NULL),
   _sdm(sdm),
-  _remote_sdm(remote_sdm),
+  _remote_sdms(remote_sdms),
   _hss(hss),
   _enum_service(enum_service),
   _acr_factory(acr_factory),
@@ -225,16 +225,20 @@ void SCSCFSproutlet::get_bindings(const std::string& aor,
   TRC_INFO("Look up targets in registration store: %s", aor.c_str());
   *aor_pair = _sdm->get_aor_data(aor, trail);
 
-  // If we didn't get bindings from the local store and we have a remote
-  // store, try the remote.
-  if ((_remote_sdm != NULL) &&
-      (_remote_sdm->has_servers()) &&
-      ((*aor_pair == NULL) ||
-       ((*aor_pair)->get_current() == NULL) ||
-       ((*aor_pair)->get_current()->bindings().empty())))
+  // If we didn't get bindings from the local store and we have any remote
+  // stores, try them.
+  if ((*aor_pair == NULL) ||
+      (!(*aor_pair)->current_contains_bindings()))
   {
-    delete *aor_pair;
-    *aor_pair = _remote_sdm->get_aor_data(aor, trail);
+    std::vector<SubscriberDataManager*>::iterator it = _remote_sdms.begin();
+
+    while ((it != _remote_sdms.end()) &&
+           ((*aor_pair == NULL) || !(*aor_pair)->current_contains_bindings()))
+    {
+      delete *aor_pair;
+      *aor_pair = (*it)->get_aor_data(aor, trail);
+      ++it;
+    }
   }
 
   // TODO - Log bindings to SAS

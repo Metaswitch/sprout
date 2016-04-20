@@ -263,6 +263,20 @@ public:
     /// Get the current AoR
     AoR* get_current() { return _current_aor; }
 
+    /// Does the current AoR contain any bindings?
+    bool current_contains_bindings()
+    {
+      return ((_current_aor != NULL) &&
+              (!_current_aor->_bindings.empty()));
+    }
+
+    /// Does the current AoR contain any subscriptions?
+    bool current_contains_subscriptions()
+    {
+      return ((_current_aor != NULL) &&
+              (!_current_aor->subscriptions().empty()));
+    }
+
   private:
     AoR* _orig_aor;
     AoR* _current_aor;

@@ -55,7 +55,7 @@ void third_party_register_failed(const std::string& public_id,
                                  SAS::TrailId trail);
 
 extern pj_status_t init_registrar(SubscriberDataManager* sdm,
-                                  SubscriberDataManager* remote_sdm,
+                                  std::vector<SubscriberDataManager*> remote_sdms,
                                   HSSConnection* hss_connection,
                                   AnalyticsLogger* analytics_logger,
                                   ACRFactory* rfacr_factory,
