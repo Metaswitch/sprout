@@ -640,8 +640,6 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
   {
     TRC_DEBUG("Request does not need authentication - not on S-CSCF port");
     // Request not received on S-CSCF port, so don't authenticate it.
-    SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_NOT_SCSCF_PORT, 0);
-    SAS::report_event(event);
 
     return PJ_FALSE;
   }
