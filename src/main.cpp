@@ -1420,8 +1420,7 @@ int main(int argc, char* argv[])
   if ((!opt.pcscf_enabled) && (!opt.enabled_scscf) && (!opt.enabled_icscf))
   {
     CL_SPROUT_NO_SI_CSCF.log();
-    TRC_ERROR("Must enable P-CSCF, S-CSCF or I-CSCF");
-    return 1;
+    TRC_WARNING("Most Sprout nodes have at least one of P-CSCF, S-CSCF or I-CSCF enabled");
   }
 
   if ((opt.pcscf_enabled) && ((opt.enabled_scscf) || (opt.enabled_icscf)))
