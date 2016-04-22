@@ -1101,31 +1101,29 @@ static void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event)
 
           if (status == PJ_SUCCESS)
           {
-            // The new transaction has been set up.
+            // The new transaction has been set up.  We're now definitely
+            // retrying, so be sure not to run through the tidy-up code at
+            // the end of this function.
+            retrying = true;
 
             // Set the trail ID in the transaction from the message.
             set_trail(retry_tsx, get_trail(tdata));
 
             // Set up the module data for the new transaction to reference
-            // the state information.
+            // the state information, and remove it from the old transaction.
             retry_tsx->mod_data[mod_sprout_util.id] = sss;
+            tsx->mod_data[mod_sprout_util.id] = NULL;
 
             // Increment the reference count of the request as we are passing
             // it to a new transaction.
             pjsip_tx_data_add_ref(tdata);
 
             // Copy across the destination information for a retry and try to
-            // resend the request.
+            // resend the request.  Note that we ignore the return code for
+            // the send - it will always call on_tsx_state on success or
+            // failure, and that will recover.
             PJUtils::set_dest_info(tdata, sss->servers[sss->current_server]);
-            status = pjsip_tsx_send_msg(retry_tsx, tdata);
-
-            if (status == PJ_SUCCESS)
-            {
-              // Successfully sent a retry.  Make sure this callback isn't
-              // invoked again for the previous transaction.
-              tsx->mod_data[mod_sprout_util.id] = NULL;
-              retrying = true;
-            }
+            (void)pjsip_tsx_send_msg(retry_tsx, tdata);
           }
         }
       }
