@@ -1408,6 +1408,8 @@ int main(int argc, char* argv[])
     }
   }
 
+  Utils::start_signal_handlers();
+
   if (opt.analytics_enabled)
   {
     analytics_logger_logger = new Logger(opt.analytics_directory, std::string("log"));
