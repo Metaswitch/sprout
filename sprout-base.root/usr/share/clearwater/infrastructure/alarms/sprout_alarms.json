@@ -42,7 +42,7 @@
                     "description": "Sprout: Homestead communication error.",
                     "cause": "Sprout is unable to contact any Homesteads.",
                     "effect": "If multiple Sprout processes have raised this alarm, then this is potentially a total service affecting failure since the I-CSCF and S-CSCF cannot communicate with the HSS, and all new initial SIP requests will fail and existing SIP transactions may not complete normally. Registrations will eventually timeout and subscribers cannot re-register.",
-                    "action": "Ensure that one or more Homestead nodes are operational and that network connectivity exists between it and Sprout. If this alarm does not clear, then contact your support representative."
+                    "action": "Ensure that one or more Homestead nodes are operational and that network connectivity exists between them and Sprout. If this alarm does not clear, then contact your support representative."
                 }
             ]
         },
