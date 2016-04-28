@@ -438,6 +438,10 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
                                                            NULL);
       _impi = PJUtils::extract_username(proxy_auth_hdr,
                                         PJUtils::orig_served_user(req));
+
+      // Grab the S-CSCF name from the route header (as this route header must
+      // be recognisable as the S-CSCF otherwise we wouldn't have got here in
+      // first place)
       _server_name = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI,
                                             req->line.req.uri);
     }

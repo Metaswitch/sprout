@@ -608,7 +608,6 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
   event.add_var_param(public_user_identity);
   event.add_var_param(private_user_identity);
   event.add_var_param(type);
-  event.add_var_param(server_name);
   SAS::report_event(event);
 
   std::string path = "/impu/" + Utils::url_escape(public_user_identity) + "/reg-data";

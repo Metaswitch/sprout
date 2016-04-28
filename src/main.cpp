@@ -1806,6 +1806,7 @@ int main(int argc, char* argv[])
                       opt.home_domain,
                       opt.additional_home_domains,
                       opt.uri_scscf,
+                      opt.sprout_hostname,
                       opt.alias_hosts,
                       sip_resolver,
                       opt.pjsip_threads,

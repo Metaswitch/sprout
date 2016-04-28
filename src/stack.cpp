@@ -548,6 +548,7 @@ pj_status_t init_stack(const std::string& system_name,
                        const std::string& home_domain,
                        const std::string& additional_home_domains,
                        const std::string& scscf_uri,
+                       const std::string& sprout_hostname,
                        const std::string& alias_hosts,
                        SIPResolver* sipresolver,
                        int num_pjsip_threads,
@@ -784,8 +785,10 @@ pj_status_t init_stack(const std::string& system_name,
 
   // Note that we no longer consider 127.0.0.1 and localhost as aliases.
 
-  // Parse the list of alias host names.
+  // Parse the list of alias host names. Also add the Sprout hostname, and the
+  // sproutlet URIs
   stack_data.aliases = std::unordered_set<std::string>();
+  stack_data.aliases.insert(sprout_hostname);
   for (std::vector<std::string>::iterator it = sproutlet_uris.begin();
        it != sproutlet_uris.end();
        ++it)
@@ -814,21 +817,6 @@ pj_status_t init_stack(const std::string& system_name,
     pj_strdup2(stack_data.pool, &stack_data.name[stack_data.name_cnt], it->c_str());
     stack_data.name_cnt++;
   }
-
-  /*for (std::vector<std::string>::iterator it = sproutlet_uris.begin();
-       it != sproutlet_uris.end();
-       ++it)
-  {
-    pjsip_sip_uri* sproutlet_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(
-                                                       *it,
-                                                       stack_data.pool,
-                                                       false);
-    if (sproutlet_uri)
-    {
-      stack_data.name[stack_data.name_cnt] = sproutlet_uri->host;
-      stack_data.name_cnt++;
-    }
-  }*/
 
   TRC_STATUS("Local host aliases:");
   for (i = 0; i < stack_data.name_cnt; ++i)
