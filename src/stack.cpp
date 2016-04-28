@@ -548,6 +548,7 @@ pj_status_t init_stack(const std::string& system_name,
                        const std::string& home_domain,
                        const std::string& additional_home_domains,
                        const std::string& scscf_uri,
+                       const std::string& sprout_hostname,
                        const std::string& alias_hosts,
                        SIPResolver* sipresolver,
                        int num_pjsip_threads,
@@ -557,7 +558,8 @@ pj_status_t init_stack(const std::string& system_name,
                        const int sip_tcp_connect_timeout,
                        const int sip_tcp_send_timeout,
                        QuiescingManager *quiescing_mgr_arg,
-                       const std::string& cdf_domain)
+                       const std::string& cdf_domain,
+                       std::vector<std::string> sproutlet_uris)
 {
   pj_status_t status;
   pj_sockaddr pri_addr;
@@ -783,20 +785,37 @@ pj_status_t init_stack(const std::string& system_name,
 
   // Note that we no longer consider 127.0.0.1 and localhost as aliases.
 
-  // Parse the list of alias host names.
+  // Parse the list of alias host names. Also add the Sprout hostname, and the
+  // sproutlet URIs
   stack_data.aliases = std::unordered_set<std::string>();
+  stack_data.aliases.insert(sprout_hostname);
+  for (std::vector<std::string>::iterator it = sproutlet_uris.begin();
+       it != sproutlet_uris.end();
+       ++it)
+  {
+    pjsip_sip_uri* sproutlet_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(
+                                                       *it,
+                                                       stack_data.pool,
+                                                       false);
+    if (sproutlet_uri)
+    {
+      stack_data.aliases.insert(PJUtils::pj_str_to_string(&sproutlet_uri->host));
+    }
+  }
+
   if (alias_hosts != "")
   {
     std::list<std::string> aliases;
     Utils::split_string(alias_hosts, ',', aliases, 0, true);
     stack_data.aliases.insert(aliases.begin(), aliases.end());
-    for (std::unordered_set<std::string>::iterator it = stack_data.aliases.begin();
-         it != stack_data.aliases.end();
-         ++it)
-    {
-      pj_strdup2(stack_data.pool, &stack_data.name[stack_data.name_cnt], it->c_str());
-      stack_data.name_cnt++;
-    }
+  }
+
+  for (std::unordered_set<std::string>::iterator it = stack_data.aliases.begin();
+       it != stack_data.aliases.end();
+       ++it)
+  {
+    pj_strdup2(stack_data.pool, &stack_data.name[stack_data.name_cnt], it->c_str());
+    stack_data.name_cnt++;
   }
 
   TRC_STATUS("Local host aliases:");

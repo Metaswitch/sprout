@@ -85,8 +85,9 @@ public:
                                      &SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES);
     ASSERT_EQ(PJ_SUCCESS, ret);
 
+    _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?server_name=sip%3Ahomedomain");
+    _hss_connection->set_impu_result("tel:6505550231", "reg", HSSConnection::STATE_REGISTERED, "", "?server_name=sip%3Ahomedomain");
     _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "");
-    _hss_connection->set_impu_result("tel:6505550231", "reg", HSSConnection::STATE_REGISTERED, "");
     _hss_connection->set_rc("/impu/sip%3A6505550231%40homedomain/reg-data", HTTP_OK);
     _chronos_connection->set_result("", HTTP_OK);
     _chronos_connection->set_result("post_identity", HTTP_OK);
@@ -364,7 +365,7 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
 {
   // We have a private ID in this test, so set up the expect response
   // to the query.
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice&server_name=sip%3Ahomedomain");
 
   Message msg;
   msg._expires = "Expires: 300";
@@ -393,7 +394,7 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeaderWithTelURI)
 {
   // We have a private ID in this test, so set up the expect response
   // to the query.
-  _hss_connection->set_impu_result("tel:6505550231", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
+  _hss_connection->set_impu_result("tel:6505550231", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice&server_name=sip%3Ahomedomain");
   Message msg;
   msg._expires = "Expires: 300";
   msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
@@ -527,7 +528,7 @@ TEST_F(RegistrarTest, GRUUNotSupported)
 {
   // We have a private ID in this test, so set up the expect response
   // to the query.
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice&server_name=sip%3Ahomedomain");
 
   Message msg;
   msg._expires = "Expires: 300";
@@ -749,7 +750,8 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
                               "      <Extension><IncludeRegisterRequest/><IncludeRegisterResponse/></Extension>\n"
                               "  </ApplicationServer>\n"
                               "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                              "</ServiceProfile></IMSSubscription>",
+                                   "?server_name=sip%3Ahomedomain");
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -821,7 +823,8 @@ TEST_F(RegistrarTest, AppServersWithMultipartBodyWithTelURI)
                               "      <Extension><IncludeRegisterRequest/><IncludeRegisterResponse/></Extension>\n"
                               "  </ApplicationServer>\n"
                               "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                              "</ServiceProfile></IMSSubscription>",
+                                   "?server_name=sip%3Ahomedomain");
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -892,7 +895,8 @@ TEST_F(RegistrarTest, AppServersWithOneBody)
                               "      <Extension><IncludeRegisterRequest/></Extension>\n"
                               "    </ApplicationServer>\n"
                               "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                              "</ServiceProfile></IMSSubscription>",
+                                   "?server_name=sip%3Ahomedomain");
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -958,7 +962,8 @@ TEST_F(RegistrarTest, AppServersWithNoBody)
                               "      <DefaultHandling>0</DefaultHandling>\n"
                               "    </ApplicationServer>\n"
                               "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                              "</ServiceProfile></IMSSubscription>",
+                                   "?server_name=sip%3Ahomedomain");
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -1130,7 +1135,8 @@ TEST_F(RegistrarTest, AppServersInitialRegistration)
                                 "    <DefaultHandling>0</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+                                "</ServiceProfile></IMSSubscription>",
+                                   "?server_name=sip%3Ahomedomain");
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -1208,7 +1214,7 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, xml);
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, xml, "?server_name=sip%3Ahomedomain");
   _hss_connection->set_impu_result("sip:6505550231@homedomain", "dereg-admin", HSSConnection::STATE_NOT_REGISTERED, xml);
 
   // We add two identical IP addresses so that we hit the retry behaviour, 
@@ -1302,8 +1308,10 @@ TEST_F(RegistrarTest, AppServersDeRegistrationFailure)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, xml);
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "dereg-admin", HSSConnection::STATE_NOT_REGISTERED, xml);
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, xml,
+                                   "?server_name=sip%3Ahomedomain");
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "dereg-admin", HSSConnection::STATE_NOT_REGISTERED, xml,
+                                   "?server_name=sip%3Ahomedomain");
 
   // We add two identical IP addresses so that we hit the retry behaviour, 
   // but we don't have to worry about which IP address is selected first. 
@@ -1385,7 +1393,8 @@ TEST_F(RegistrarTest, AppServersReRegistrationFailure)
                                 "    <DefaultHandling>1</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+                                "</ServiceProfile></IMSSubscription>",
+                                   "?server_name=sip%3Ahomedomain");
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -1462,7 +1471,8 @@ TEST_F(RegistrarTest, AppServersReRegistration)
                                 "    <DefaultHandling>0</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+                                "</ServiceProfile></IMSSubscription>",
+                                   "?server_name=sip%3Ahomedomain");
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -1558,7 +1568,7 @@ TEST_F(RegistrarTest, AssociatedUrisTimeOut)
 {
   Message msg;
   msg._user = "6505550232";
-  _hss_connection->set_rc("/impu/sip%3A6505550232%40homedomain/reg-data",
+  _hss_connection->set_rc("/impu/sip%3A6505550232%40homedomain/reg-data?server_name=sip%3Ahomedomain",
                           503);
 
   inject_msg(msg.get());
@@ -1584,7 +1594,8 @@ TEST_F(RegistrarTest, MultipleAssociatedUris)
                               "  <PublicIdentity><Identity>sip:6505550234@homedomain</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
                               "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                              "</ServiceProfile></IMSSubscription>",
+                                   "?server_name=sip%3Ahomedomain");
 
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
@@ -1612,7 +1623,8 @@ TEST_F(RegistrarTest, MultipleAssociatedUrisWithTelURI)
                               "  <PublicIdentity><Identity>tel:6505550234</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
                               "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                              "</ServiceProfile></IMSSubscription>",
+                                   "?server_name=sip%3Ahomedomain");
 
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
@@ -1640,7 +1652,8 @@ TEST_F(RegistrarTest, NonPrimaryAssociatedUri)
                               "  <PublicIdentity><Identity>sip:6505550234@homedomain</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
                               "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                              "</ServiceProfile></IMSSubscription>",
+                                   "?server_name=sip%3Ahomedomain");
 
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
@@ -1686,7 +1699,8 @@ TEST_F(RegistrarTest, AppServersWithNoExtension)
                               "      <DefaultHandling>0</DefaultHandling>\n"
                               "    </ApplicationServer>\n"
                               "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                              "</ServiceProfile></IMSSubscription>",
+                                   "?server_name=sip%3Ahomedomain");
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -1750,7 +1764,8 @@ TEST_F(RegistrarTest, AppServersWithSDPIFCs)
                               "      <DefaultHandling>0</DefaultHandling>\n"
                               "    </ApplicationServer>\n"
                               "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                              "</ServiceProfile></IMSSubscription>",
+                                   "?server_name=sip%3Ahomedomain");
 
   SCOPED_TRACE("REGISTER (1)");
   Message msg;
@@ -2422,7 +2437,7 @@ TEST_F(RegistrarTestMockStore, SubscriberDataManagerWritesFail)
 
   // We have a private ID in this test, so set up the expect response
   // to the query.
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice&server_name=sip%3Ahomedomain");
 
   Message msg;
   msg._expires = "Expires: 300";
@@ -2442,7 +2457,7 @@ TEST_F(RegistrarTestMockStore, SubscriberDataManagerGetsFail)
 
   // We have a private ID in this test, so set up the expect response
   // to the query.
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice&server_name=sip%3Ahomedomain");
 
   Message msg;
   msg._expires = "Expires: 300";
