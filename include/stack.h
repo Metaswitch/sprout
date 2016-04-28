@@ -158,7 +158,8 @@ extern pj_status_t init_stack(const std::string& sas_system_name,
                               const int sip_tcp_connect_timeout,
                               const int sip_tcp_send_timeout,
                               QuiescingManager *quiescing_mgr,
-                              const std::string& cdf_domain);
+                              const std::string& cdf_domain,
+                              std::vector<std::string> sproutlet_uris);
 extern pj_status_t start_pjsip_threads();
 extern pj_status_t stop_pjsip_threads();
 extern void stop_stack();

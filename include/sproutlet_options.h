@@ -177,10 +177,17 @@
                                                                                \
   TRC_INFO(""#NAME_LOWER" uri set to %s", opt.uri_##NAME_LOWER.c_str());       \
                                                                                \
-  if ((opt.enabled_##NAME_LOWER) && (opt.uri_##NAME_LOWER == ""))              \
+  if (opt.enabled_##NAME_LOWER)                                                \
   {                                                                            \
-    TRC_ERROR(""#NAME_LOWER" enabled, but no "#NAME_LOWER" URI specified");    \
-    return 1;                                                                  \
+    if (opt.uri_##NAME_LOWER == "")                                            \
+    {                                                                          \
+      TRC_ERROR(""#NAME_LOWER" enabled, but no "#NAME_LOWER" URI specified");  \
+      return 1;                                                                \
+    }                                                                          \
+    else                                                                       \
+    {                                                                          \
+      sproutlet_uris.push_back(opt.uri_##NAME_LOWER);                          \
+    }                                                                          \
   }
 
 #endif

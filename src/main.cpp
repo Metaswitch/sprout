@@ -1527,6 +1527,7 @@ int main(int argc, char* argv[])
     analytics_logger = new AnalyticsLogger(analytics_logger_logger);
   }
 
+  std::vector<std::string> sproutlet_uris;
   SPROUTLET_MACRO(SPROUTLET_VERIFY_OPTIONS)
 
   if ((!opt.pcscf_enabled) && (!opt.enabled_scscf) && (!opt.enabled_icscf))
@@ -1814,7 +1815,8 @@ int main(int argc, char* argv[])
                       opt.sip_tcp_connect_timeout,
                       opt.sip_tcp_send_timeout,
                       quiescing_mgr,
-                      opt.billing_cdf);
+                      opt.billing_cdf,
+                      sproutlet_uris);
 
   if (status != PJ_SUCCESS)
   {
