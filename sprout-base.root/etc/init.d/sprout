@@ -97,9 +97,14 @@ get_settings()
         # Set up defaults and then pull in the settings for this node.
         sas_server=0.0.0.0
         sprout_rr_level="pcscf"
+
+        # These Sproutlets are enabled by default. They listen on different
+        # ports to help ensure that requests have a unambiguous Sproutlet
+        # to route to.
+        bgcf=5053
         scscf=5054
-        bgcf=5054
-        mmtel=5054
+        mmtel=5055
+
         alias_list=""
         default_session_expires=600
         signaling_dns_server=127.0.0.1

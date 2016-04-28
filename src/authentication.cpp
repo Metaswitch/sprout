@@ -1132,8 +1132,13 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       std::string impu;
 
       PJUtils::get_impi_and_impu(rdata, impi, impu);
-
-      hss->update_registration_state(impu, impi, HSSConnection::AUTH_FAIL, trail);
+      hss->update_registration_state(impu,
+                                     impi,
+                                     HSSConnection::AUTH_FAIL,
+                                     PJUtils::uri_to_string(
+                                      PJSIP_URI_IN_REQ_URI,
+                                      rdata->msg_info.msg->line.req.uri),
+                                     trail);
     }
 
     if (analytics != NULL)
