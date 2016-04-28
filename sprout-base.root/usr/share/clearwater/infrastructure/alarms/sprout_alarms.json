@@ -176,7 +176,7 @@
                 },
                 {
                     "severity": "MAJOR",
-                    "details": "Sprout is unable to contact any Memcached processes for a subset of subscribers, and so some subscriber data will be unavailable. If this alarm does not clear, ensure that all Memcached processes are operational and that network connectivity exists between them and Sprout.",
+                    "details": "Sprout is unable to contact any Memcached processes for a subset of subscribers, and so some subscriber data will be unavailable. Ensure that all Memcached processes are operational and that network connectivity exists between them and Sprout.",
                     "description": "Sprout: Memcached vBucket communication error.",
                     "cause": "Sprout is unable to contact any Memcached processes for a subset of subscribers.",
                     "effect": "A subset of the subscribers can no longer register or originate and receive calls because the S-CSCF cannot access the vBucket or the replica vBucket for those subscribers.",
@@ -199,7 +199,7 @@
                 },
                 {
                     "severity": "MAJOR",
-                    "details": "Sprout is unable to contact any remote Memcached processes for a subset of subscribers, so some subscriber data will be unavailable. If this alarm does not clear, ensure that all remote Memcached processes are operational and that network connectivity exists between them and Sprout.",
+                    "details": "Sprout is unable to contact any remote Memcached processes for a subset of subscribers, so some subscriber data will be unavailable. Ensure that all remote Memcached processes are operational and that network connectivity exists between them and Sprout.",
                     "description": "Sprout: Memcached remote vBucket communication error.",
                     "cause": "Sprout is unable to contact any remote Memcached processes for a subset of subscribers.",
                     "effect": "The deployment is no longer geographically redundant for a subset of subscribers because the S-CSCF cannot synchronize registration data and authentication vectors to the remote site.",
