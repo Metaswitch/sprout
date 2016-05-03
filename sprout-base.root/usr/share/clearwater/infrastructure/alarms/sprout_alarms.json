@@ -87,7 +87,7 @@
                     "details": "Sprout is unable to contact any remote Memcached processes. It will periodically attempt to reconnect. If this alarm does not clear, ensure that at least one remote Memcached is operational and that network connectivity exists between it and Sprout.",
                     "description": "Sprout: Remote Memcached communication error.",
                     "cause": "Sprout is unable to contact any remote Memcached processes.",
-                    "effect": "The deployment is no longer geographically redundant because the S-CSCF cannot synchronize registration data the remote site. If subscribers switch to the other geographic site they may have to re-register before becoming operational.",
+                    "effect": "The deployment is no longer geographically redundant because the S-CSCF cannot synchronize registration data to the remote site. If subscribers switch to the other geographic site they may have to re-register before becoming operational.",
                     "action": "Ensure that all remote Memcached processes are operational and that network connectivity exists between them and Sprout. If the alarm does not clear then contact your support representative."
                 }
             ]
@@ -215,7 +215,7 @@
                 {
                     "severity": "cleared",
                     "details": "Sprout communication to all active session terminated Application Servers has been restored.",
-                    "description": "Sprout communication error to session terminated Application Servers cleared.",
+                    "description": "Sprout: Communication error to session terminated Application Servers cleared.",
                     "cause": "Sprout communication to all active Application Servers that use session terminated iFC default handling has been restored. The previously issued alarm has been cleared. ",
                     "effect": "Normal Application Server communications have been restored.",
                     "action": "No action."
@@ -223,7 +223,7 @@
                 {
                     "severity": "major",
                     "details": "Sprout cannot successfully communicate with one or more Application Servers that use session terminated default handling. Check that all ASs are operational, they have network connectivity to Sprout, and iFCs are properly configured.",
-                    "description": "Sprout communication error to session terminated Application Server.",
+                    "description": "Sprout: Communication error to session terminated Application Server.",
                     "cause": "Sprout is unable to successfully communicate with at least one active Application Server that uses session terminated iFC default handling. ",
                     "effect": "Probable major loss of service. The precise impact will vary depending on the role of Application Servers in the deployment. ",
                     "action": "Use ENT logs to identify which Application Servers cannot be successfully communicated with and investigate the cause. It might be due to failure of an AS, misconfiguration of Initial Filter Criteria, or network / DNS problems. Once the issue has been resolved this alarm will clear after approximately 5-10 minutes."
@@ -238,7 +238,7 @@
                 {
                     "severity": "cleared",
                     "details": "Sprout communication to all active session continued Application Servers has been restored",
-                    "description": "Sprout communication error to session continued Application Servers cleared.",
+                    "description": "Sprout: Communication error to session continued Application Servers cleared.",
                     "cause": "Sprout communication to all active Application Servers that use session continued iFC default handling has been restored. The previously issued alarm has been cleared.",
                     "effect": "Normal Application Server communications have been restored",
                     "action": "No action"
@@ -246,7 +246,7 @@
                 {
                     "severity": "minor",
                     "details": "Sprout cannot successfully communicate with one or more Application Servers that use session continued default handling. Check that all ASs are operational, they have network connectivity to Sprout, and iFCs are properly configured.",
-                    "description": "Sprout communication error to session continued Application Server.",
+                    "description": "Sprout: Communication error to session continued Application Server.",
                     "cause": "Sprout is unable to successfully communicate with at least one active Application Server that uses session continued iFC default handling.",
                     "effect": "Probable minor degradation of service, or loss of a supplemental service. The precise impact will vary depending on the role of Application Servers in the deployment.",
                     "action": "Use ENT logs to identify which Application Servers cannot be successfully communicated with and investigate the cause. It might be due to failure of an AS, misconfiguration of Initial Filter Criteria, or network / DNS problems. Once the issue has been resolved this alarm will clear after approximately 5-10 minutes."
