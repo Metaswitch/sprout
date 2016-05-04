@@ -761,13 +761,11 @@ pj_status_t init_stack(const std::string& system_name,
 
   // The first address is important since this would be the one
   // to be added in Record-Route.
-  stack_data.name[stack_data.name_cnt] = stack_data.local_host;
-  stack_data.name_cnt++;
+  stack_data.name.push_back(stack_data.local_host);
 
   if (strcmp(local_host_cstr, public_host_cstr))
   {
-    stack_data.name[stack_data.name_cnt] = stack_data.public_host;
-    stack_data.name_cnt++;
+    stack_data.name.push_back(stack_data.public_host);
   }
 
   if ((scscf_port != 0) &&
@@ -778,16 +776,16 @@ pj_status_t init_stack(const std::string& system_name,
                                                                   stack_data.pool);
     if (uri != NULL)
     {
-      stack_data.name[stack_data.name_cnt] = uri->host;
-      stack_data.name_cnt++;
+      stack_data.name.push_back(uri->host);
     }
   }
 
   if (pj_gethostip(pj_AF_INET(), &pri_addr) == PJ_SUCCESS)
   {
-    pj_strdup2(stack_data.pool, &stack_data.name[stack_data.name_cnt],
+    pj_str_t pri_addr_pj_str;
+    pj_strdup2(stack_data.pool, &pri_addr_pj_str,
                pj_inet_ntoa(pri_addr.ipv4.sin_addr));
-    stack_data.name_cnt++;
+    stack_data.name.push_back(pri_addr_pj_str);
   }
 
   // Get the rest of IP interfaces.
@@ -800,9 +798,10 @@ pj_status_t init_stack(const std::string& system_name,
         continue;
       }
 
-      pj_strdup2(stack_data.pool, &stack_data.name[stack_data.name_cnt],
+      pj_str_t other_addr_pj_str;
+      pj_strdup2(stack_data.pool, &other_addr_pj_str,
                  pj_inet_ntoa(addr_list[i].ipv4.sin_addr));
-      stack_data.name_cnt++;
+      stack_data.name.push_back(other_addr_pj_str);
     }
   }
 
@@ -837,16 +836,19 @@ pj_status_t init_stack(const std::string& system_name,
        it != stack_data.aliases.end();
        ++it)
   {
-    pj_strdup2(stack_data.pool, &stack_data.name[stack_data.name_cnt], it->c_str());
-    stack_data.name_cnt++;
+    pj_str_t alias_pj_str;
+    pj_strdup2(stack_data.pool, &alias_pj_str, it->c_str());
+    stack_data.name.push_back(alias_pj_str);
   }
 
   TRC_STATUS("Local host aliases:");
-  for (i = 0; i < stack_data.name_cnt; ++i)
+  for (std::vector<pj_str_t>::iterator it = stack_data.name.begin();
+       it != stack_data.name.end();
+       ++it)
   {
     TRC_STATUS(" %.*s",
-               (int)stack_data.name[i].slen,
-               stack_data.name[i].ptr);
+               (int)(*it).slen,
+               (*it).ptr);
   }
 
   // Set up the Last Value Cache, accumulators and counters.

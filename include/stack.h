@@ -86,8 +86,7 @@ struct stack_data_struct
 
   int                  addr_family;
 
-  unsigned             name_cnt;
-  pj_str_t             name[30];
+  std::vector<pj_str_t> name;
   LastValueCache *     stats_aggregator;
 
   bool record_route_on_every_hop;
