@@ -197,21 +197,25 @@ SubscriberDataManager::AoRPair* write_subscriptions_to_store(
 
         while ((it != backup_sdms.end()) && (!found_subscription))
         {
-          local_backup_aor = (*it)->get_aor_data(aor, trail);
-
-          if ((local_backup_aor != NULL) &&
-              (local_backup_aor->current_contains_subscriptions()))
+          if ((*it)->has_servers())
           {
-            // LCOV_EXCL_START - this code is very similar to code in handlers.cpp and is unit tested there.
-            found_subscription = true;
-            backup_aor = local_backup_aor;
+            local_backup_aor = (*it)->get_aor_data(aor, trail);
 
-            // Flag that we have allocated the memory for the backup pair so
-            // that we can tidy it up later.
-            backup_aor_alloced = true;
-            // LCOV_EXCL_STOP
+            if ((local_backup_aor != NULL) &&
+                (local_backup_aor->current_contains_subscriptions()))
+            {
+              // LCOV_EXCL_START - this code is very similar to code in handlers.cpp and is unit tested there.
+              found_subscription = true;
+              backup_aor = local_backup_aor;
+
+              // Flag that we have allocated the memory for the backup pair so
+              // that we can tidy it up later.
+              backup_aor_alloced = true;
+              // LCOV_EXCL_STOP
+            }
           }
-          else
+
+          if (!found_subscription)
           {
             ++it;
 
@@ -574,20 +578,23 @@ void process_subscription_request(pjsip_rx_data* rdata)
          it != remote_sdms.end();
          ++it)
     {
-      SubscriberDataManager::AoRPair* remote_aor_pair =
-         write_subscriptions_to_store(*it,
-                                      aor,
-                                      rdata,
-                                      now,
-                                      aor_pair,
-                                      {},
-                                      trail,
-                                      public_id,
-                                      false,
-                                      acr,
-                                      ccfs,
-                                      ecfs);
-      delete remote_aor_pair;
+      if ((*it)->has_servers())
+      {
+        SubscriberDataManager::AoRPair* remote_aor_pair =
+          write_subscriptions_to_store(*it,
+                                       aor,
+                                       rdata,
+                                       now,
+                                       aor_pair,
+                                       {},
+                                       trail,
+                                       public_id,
+                                       false,
+                                       acr,
+                                       ccfs,
+                                       ecfs);
+        delete remote_aor_pair;
+      }
     }
   }
   else

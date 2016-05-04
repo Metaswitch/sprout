@@ -96,19 +96,23 @@ static bool sdm_access_common(SubscriberDataManager::AoRPair** aor_pair,
 
       while ((it != remote_sdms.end()) && (!found_binding))
       {
-        local_backup_aor_pair = (*it)->get_aor_data(aor_id, trail);
-
-        if ((local_backup_aor_pair != NULL) &&
-            (local_backup_aor_pair->current_contains_bindings()))
+        if ((*it)->has_servers())
         {
-          found_binding = true;
-          backup_aor_pair = local_backup_aor_pair;
+          local_backup_aor_pair = (*it)->get_aor_data(aor_id, trail);
 
-          // Flag that we have allocated the memory for the backup pair so
-          // that we can tidy it up later.
-          backup_aor_pair_alloced = true;
+          if ((local_backup_aor_pair != NULL) &&
+              (local_backup_aor_pair->current_contains_bindings()))
+          {
+            found_binding = true;
+            backup_aor_pair = local_backup_aor_pair;
+
+            // Flag that we have allocated the memory for the backup pair so
+            // that we can tidy it up later.
+            backup_aor_pair_alloced = true;
+          }
         }
-        else
+
+        if (!found_binding)
         {
           ++it;
 
@@ -305,14 +309,17 @@ void AoRTimeoutTask::handle_response()
          sdm != _cfg->_remote_sdms.end();
          ++sdm)
     {
-      bool ignored;
-      SubscriberDataManager::AoRPair* remote_aor_pair =
-                                         set_aor_data(*sdm,
-                                                      _aor_id,
-                                                      aor_pair,
-                                                      {},
-                                                      ignored);
-      delete remote_aor_pair;
+      if ((*sdm)->has_servers())
+      {
+        bool ignored;
+        SubscriberDataManager::AoRPair* remote_aor_pair =
+                                                         set_aor_data(*sdm,
+                                                                      _aor_id,
+                                                                      aor_pair,
+                                                                      {},
+                                                                      ignored);
+        delete remote_aor_pair;
+      }
     }
     // LCOV_EXCL_STOP
 
@@ -489,14 +496,17 @@ HTTPCode DeregistrationTask::handle_request()
            sdm != _cfg->_remote_sdms.end();
            ++sdm)
       {
-        SubscriberDataManager::AoRPair* remote_aor_pair =
-          deregister_bindings(*sdm,
-                              it->first,
-                              it->second,
-                              aor_pair,
-                              {},
-                              impis_to_delete);
-        delete remote_aor_pair;
+        if ((*sdm)->has_servers())
+        {
+          SubscriberDataManager::AoRPair* remote_aor_pair =
+            deregister_bindings(*sdm,
+                                it->first,
+                                it->second,
+                                aor_pair,
+                                {},
+                                impis_to_delete);
+          delete remote_aor_pair;
+        }
       }
     }
     // LCOV_EXCL_STOP
