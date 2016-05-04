@@ -83,13 +83,15 @@ static bool is_home_domain(pj_str_t host)
 
 static bool is_local_name(pj_str_t host)
 {
-    for (unsigned int i = 0; i < stack_data.name_cnt; ++i)
+  for (std::vector<pj_str_t>::iterator it = stack_data.name.begin();
+       it != stack_data.name.end();
+       ++it)
+  {
+    if (pj_stricmp(&host, &(*it)) == 0)
     {
-      if (pj_stricmp(&host, &stack_data.name[i]) == 0)
-      {
-        return true;
-      }
+      return true;
     }
+  }
 
   // Doesn't match
   return false;
