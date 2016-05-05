@@ -2397,3 +2397,21 @@ bool PJUtils::should_update_np_data(URIClass old_uri_class,
     return false;
   }
 }
+
+std::string PJUtils::get_next_routing_header(pjsip_msg* msg)
+{
+  pjsip_route_hdr* route = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg,
+                                                                PJSIP_H_ROUTE,
+                                                                NULL);
+
+  if (route == NULL)
+  {
+    return PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI,
+                                  msg->line.req.uri);
+  }
+  else
+  {
+    return PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                  route->name_addr.uri);
+  }
+}

@@ -67,7 +67,8 @@ public:
                 SNMP::EventAccumulatorTable* homestead_sar_latency_tbl,
                 SNMP::EventAccumulatorTable* homestead_uar_latency_tbl,
                 SNMP::EventAccumulatorTable* homestead_lir_latency_tbl,
-                CommunicationMonitor* comm_monitor);
+                CommunicationMonitor* comm_monitor,
+                std::string scscf_uri);
   virtual ~HSSConnection();
 
   HTTPCode get_auth_vector(const std::string& private_user_id,
@@ -91,7 +92,6 @@ public:
   HTTPCode update_registration_state(const std::string& public_user_identity,
                                      const std::string& private_user_identity,
                                      const std::string& type,
-                                     const std::string& server_name,
                                      std::string& regstate,
                                      std::map<std::string, Ifcs >& service_profiles,
                                      std::vector<std::string>& associated_uris,
@@ -103,7 +103,6 @@ public:
   HTTPCode update_registration_state(const std::string& public_user_identity,
                                      const std::string& private_user_identity,
                                      const std::string& type,
-                                     const std::string& server_name,
                                      std::string& regstate,
                                      std::map<std::string, Ifcs >& service_profiles,
                                      std::vector<std::string>& associated_uris,
@@ -113,7 +112,6 @@ public:
   HTTPCode update_registration_state(const std::string& public_user_identity,
                                      const std::string& private_user_identity,
                                      const std::string& type,
-                                     const std::string& server_name,
                                      std::string& regstate,
                                      std::map<std::string, Ifcs >& service_profiles,
                                      std::vector<std::string>& associated_uris,
@@ -122,11 +120,6 @@ public:
                                              const std::string& private_user_identity,
                                              const std::string& type,
                                              SAS::TrailId trail);
-  HTTPCode update_registration_state(const std::string& public_user_identity,
-                                     const std::string& private_user_identity,
-                                     const std::string& type,
-                                     const std::string& server_name,
-                                     SAS::TrailId trail);
   HTTPCode update_registration_state(const std::string& public_user_identity,
                                      const std::string& private_user_identity,
                                      const std::string& type,
@@ -178,6 +171,7 @@ private:
   SNMP::EventAccumulatorTable* _sar_latency_tbl;
   SNMP::EventAccumulatorTable* _uar_latency_tbl;
   SNMP::EventAccumulatorTable* _lir_latency_tbl;
+  std::string _scscf_uri;
 };
 
 #endif

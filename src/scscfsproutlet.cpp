@@ -260,7 +260,6 @@ void SCSCFSproutlet::remove_binding(const std::string& aor,
 bool SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                    const std::string& private_id,
                                    const std::string& req_type,
-                                   const std::string& server_name,
                                    bool cache_allowed,
                                    bool& registered,
                                    std::vector<std::string>& uris,
@@ -276,7 +275,6 @@ bool SCSCFSproutlet::read_hss_data(const std::string& public_id,
   long http_code = _hss->update_registration_state(public_id,
                                                    private_id,
                                                    req_type,
-                                                   server_name,
                                                    regstate,
                                                    ifc_map,
                                                    uris,
@@ -369,7 +367,6 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
   _seen_1xx(false),
   _impi(),
   _auto_reg(false),
-  _server_name(),
   _se_helper(stack_data.default_session_expires)
 {
   TRC_DEBUG("S-CSCF Transaction (%p) created", this);
@@ -438,12 +435,6 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
                                                            NULL);
       _impi = PJUtils::extract_username(proxy_auth_hdr,
                                         PJUtils::orig_served_user(req));
-
-      // Grab the S-CSCF name from the route header (as this route header must
-      // be recognisable as the S-CSCF otherwise we wouldn't have got here in
-      // first place)
-      _server_name = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI,
-                                            req->line.req.uri);
     }
   }
 
@@ -1602,7 +1593,6 @@ bool SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
     if (_scscf->read_hss_data(public_id,
                               _impi,
                               req_type,
-                              _server_name,
                               cache_allowed,
                               _registered,
                               _uris,

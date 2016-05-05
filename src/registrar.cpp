@@ -433,8 +433,6 @@ SubscriberDataManager::AoRPair* write_to_store(
     hss->update_registration_state(aor,
                                    "",
                                    HSSConnection::DEREG_USER,
-                                   PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI,
-                                                          rdata->msg_info.msg->line.req.uri),
                                    trail);
   }
 
@@ -586,9 +584,6 @@ void process_register_request(pjsip_rx_data* rdata)
   HTTPCode http_code = hss->update_registration_state(public_id,
                                                       private_id,
                                                       HSSConnection::REG,
-                                                      PJUtils::uri_to_string(
-                                                       PJSIP_URI_IN_REQ_URI,
-                                                       rdata->msg_info.msg->line.req.uri),
                                                       regstate,
                                                       ifc_map,
                                                       uris,
