@@ -600,11 +600,8 @@ TEST_F(AuthenticationTest, IntegrityProtected)
 
 TEST_F(AuthenticationTest, IntegrityProtectedChangedSCSCF)
 {
-  // Test that the authentication module lets through REGISTER requests
-  // with authorization headers indicating the request has been integrity
-  // protected at the P-CSCF.  Note that, in the AKA case (yes), the requests
-  // must not have a response field in the authorization header, otherwise
-  // this will be checked.
+  // Test that the authentication module challenges requests that are for the
+  // wrong S-CSCF.
   _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 

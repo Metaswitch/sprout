@@ -696,7 +696,8 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
         // should be checked.
 
         // We should still challenge though if we find that the request wasn't
-        // sent to this S-CSCF
+        // sent to this S-CSCF, as this triggers the HSS to accept an S-CSCF
+        // change (by generating the correct MAR).
         if (PJUtils::get_next_routing_header(rdata->msg_info.msg) ==
             PJUtils::pj_str_to_string(&stack_data.scscf_uri))
         {
@@ -719,7 +720,8 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
         // the challenge response if included.
 
         // We should still challenge though if we find that the request wasn't
-        // sent to this S-CSCF
+        // sent to this S-CSCF, as this triggers the HSS to accept an S-CSCF
+        // change (by generating the correct MAR).
         if (PJUtils::get_next_routing_header(rdata->msg_info.msg) ==
             PJUtils::pj_str_to_string(&stack_data.scscf_uri))
         {
