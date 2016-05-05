@@ -1265,6 +1265,7 @@ int main(int argc, char* argv[])
   CommunicationMonitor* ralf_comm_monitor = NULL;
   Alarm* vbucket_alarm = NULL;
   Alarm* remote_vbucket_alarm = NULL;
+  std::vector<SubscriberDataManager*> remote_sdms;
 
   // Set up our exception signal handler for asserts and segfaults.
   signal(SIGABRT, signal_handler);
@@ -1926,7 +1927,7 @@ int main(int argc, char* argv[])
                                           chronos_connection,
                                           true);
 
-    if (remote_data_store != NULL)
+    if ((remote_data_store != NULL) && (remote_data_store->has_servers()))
     {
       create_sdm_plugins(serializer,
                          deserializers,
@@ -1936,6 +1937,7 @@ int main(int argc, char* argv[])
                                              deserializers,
                                              chronos_connection,
                                              false);
+      remote_sdms.push_back(remote_sdm);
     }
 
     // Start the HTTP stack early as plugins might need to register handlers
@@ -1979,7 +1981,7 @@ int main(int argc, char* argv[])
 
     // Launch the registrar.
     status = init_registrar(local_sdm,
-                            {remote_sdm},
+                            remote_sdms,
                             hss_connection,
                             analytics_logger,
                             scscf_acr_factory,
@@ -1997,7 +1999,7 @@ int main(int argc, char* argv[])
 
     // Launch the subscription module.
     status = init_subscription(local_sdm,
-                               {remote_sdm},
+                               remote_sdms,
                                hss_connection,
                                scscf_acr_factory,
                                analytics_logger,
@@ -2086,10 +2088,10 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  AoRTimeoutTask::Config aor_timeout_config(local_sdm, {remote_sdm}, hss_connection);
+  AoRTimeoutTask::Config aor_timeout_config(local_sdm, remote_sdms, hss_connection);
   AuthTimeoutTask::Config auth_timeout_config(impi_store, hss_connection);
   DeregistrationTask::Config deregistration_config(local_sdm,
-                                                   {remote_sdm},
+                                                   remote_sdms,
                                                    hss_connection,
                                                    sip_resolver,
                                                    impi_store);
@@ -2192,7 +2194,14 @@ int main(int argc, char* argv[])
   delete exception_handler;
   delete load_monitor;
   delete local_sdm;
-  delete remote_sdm;
+
+  remote_sdms.clear();
+
+  if (remote_sdm != NULL)
+  {
+    delete remote_sdm;
+  }
+
   delete impi_store;
   delete local_data_store;
   delete remote_data_store;
