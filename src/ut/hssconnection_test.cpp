@@ -71,10 +71,11 @@ class HssConnectionTest : public BaseTest
          &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
          &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
          &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
-         &_cm)
+         &_cm,
+         "server_name")
     {
     fakecurl_responses.clear();
-    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid42/reg-data?server_name=server_name", "{\"reqtype\": \"reg\"}")] =
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid42/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
         "<RegistrationState>REGISTERED</RegistrationState>"
@@ -110,18 +111,18 @@ class HssConnectionTest : public BaseTest
           "<ECF priority=\"1\">ecf1</ECF>"
         "</ChargingAddresses>"
       "</ClearwaterRegData>";
-    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid43/reg-data?server_name=server_name", "{\"reqtype\": \"reg\"}")] =
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid43/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
         "<RegistrationState>NOT_REGISTERED</RegistrationState>"
       "</ClearwaterRegData>";
-    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid42/reg-data", "")] = fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid42/reg-data?server_name=server_name", "{\"reqtype\": \"reg\"}")];
-    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid43/reg-data", "")] = fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid43/reg-data?server_name=server_name", "{\"reqtype\": \"reg\"}")];
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid42/reg-data", "")] = fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid42/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")];
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid43/reg-data", "")] = fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid43/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")];
 
-    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid42_malformed/reg-data?server_name=server_name", "{\"reqtype\": \"reg\"}")] =
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid42_malformed/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
               "<Grou";
-    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid43_malformed/reg-data?server_name=server_name", "{\"reqtype\": \"reg\"}")] =
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid43_malformed/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
         "<RegistrationState>REGISTERED</RegistrationState>"
@@ -151,7 +152,7 @@ class HssConnectionTest : public BaseTest
           "</ServiceProfile>"
         "</NonsenseWord>"
       "</ClearwaterRegData>";
-    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid44/reg-data?server_name=server_name", "{\"reqtype\": \"reg\"}")] = CURLE_REMOTE_FILE_NOT_FOUND;
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid44/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] = CURLE_REMOTE_FILE_NOT_FOUND;
     fakecurl_responses["http://10.42.42.42:80/impi/privid69/registration-status?impu=pubid44"] = "{\"result-code\": 2001, \"scscf\": \"server-name\"}";
     fakecurl_responses["http://10.42.42.42:80/impi/privid69/registration-status?impu=pubid44&visited-network=domain&auth-type=REG"] = "{\"result-code\": 2001, \"mandatory-capabilities\": [1, 2, 3], \"optional-capabilities\": []}";
     fakecurl_responses["http://10.42.42.42:80/impi/privid_corrupt/registration-status?impu=pubid44"] = "{\"result-code\": 2001, \"scscf\"; \"server-name\"}";
@@ -159,39 +160,39 @@ class HssConnectionTest : public BaseTest
     fakecurl_responses["http://10.42.42.42:80/impu/pubid44/location?auth-type=DEREG"] = "{\"result-code\": 2001, \"mandatory-capabilities\": [], \"optional-capabilities\": []}";
     fakecurl_responses["http://10.42.42.42:80/impu/pubid44/location?originating=true&auth-type=CAPAB"] = "{\"result-code\": 2001, \"mandatory-capabilities\": [1, 2, 3], \"optional-capabilities\": []}";
     fakecurl_responses["http://10.42.42.42:80/impu/pubid45/location"] = CURLE_REMOTE_FILE_NOT_FOUND;
-    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid50/reg-data?server_name=server_name", "{\"reqtype\": \"call\"}")] =
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid50/reg-data", "{\"reqtype\": \"call\", \"server_name\": \"server_name\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
         "<RegistrationState>UNREGISTERED</RegistrationState>"
         "<IMSSubscription>"
         "</IMSSubscription>"
       "</ClearwaterRegData>";
-    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid50/reg-data?server_name=server_name", "{\"reqtype\": \"dereg-admin\"}")] =
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid50/reg-data", "{\"reqtype\": \"dereg-admin\", \"server_name\": \"server_name\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
         "<RegistrationState>NOT_REGISTERED</RegistrationState>"
         "<IMSSubscription>"
         "</IMSSubscription>"
       "</ClearwaterRegData>";
-    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement1/reg-data?server_name=server_name", "{\"reqtype\": \"reg\"}")] =
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement1/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
         "<IMSSubscription>"
         "</IMSSubscription>"
       "</ClearwaterRegData>";
-    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement2/reg-data?server_name=server_name", "{\"reqtype\": \"reg\"}")] =
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement2/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
         "<RegistrationState>NOT_REGISTERED</RegistrationState>"
       "</ClearwaterRegData>";
-    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement3/reg-data?server_name=server_name", "{\"reqtype\": \"reg\"}")] =
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement3/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<C>"
         "<RegistrationState>NOT_REGISTERED</RegistrationState>"
         "<IMSSubscription>"
         "</IMSSubscription>"
       "</C>";
-   fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement4/reg-data?server_name=server_name", "{\"reqtype\": \"reg\"}")] =
+   fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement4/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
         "<RegistrationState>REGISTERED</RegistrationState>"
@@ -199,7 +200,7 @@ class HssConnectionTest : public BaseTest
                 "<PrivateID>Unspecified</PrivateID>"
         "</IMSSubscription>"
       "</ClearwaterRegData>";
-    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement5/reg-data?server_name=server_name", "{\"reqtype\": \"reg\"}")] =
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement5/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
         "<RegistrationState>REGISTERED</RegistrationState>"
@@ -209,7 +210,7 @@ class HssConnectionTest : public BaseTest
          "</ServiceProfile>"
         "</IMSSubscription>"
       "</ClearwaterRegData>";
-    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement6/reg-data?server_name=server_name", "{\"reqtype\": \"reg\"}")] =
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement6/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
         "<RegistrationState>REGISTERED</RegistrationState>"
@@ -221,7 +222,7 @@ class HssConnectionTest : public BaseTest
          "</ServiceProfile>"
         "</IMSSubscription>"
       "</ClearwaterRegData>";
-    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid46/reg-data?server_name=server_name", "{\"reqtype\": \"call\"}")] =
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid46/reg-data", "{\"reqtype\": \"call\", \"server_name\": \"server_name\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
         "<RegistrationState>REGISTERED</RegistrationState>"
@@ -306,7 +307,7 @@ class HssConnectionTest : public BaseTest
           "<ECF priority=\"1\">ecf1</ECF>"
         "</ChargingAddresses>"
       "</ClearwaterRegData>";
-    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/public-needs-private/reg-data?private_id=a-private-id&server_name=server_name", "{\"reqtype\": \"reg\"}")] =
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/public-needs-private/reg-data?private_id=a-private-id", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
         "<RegistrationState>REGISTERED</RegistrationState>"
@@ -364,7 +365,7 @@ TEST_F(HssConnectionTest, SimpleUnregistered)
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("pubid50", "", HSSConnection::CALL, "server_name", regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("pubid50", "", HSSConnection::CALL, regstate, ifcs_map, uris, 0);
   EXPECT_EQ("UNREGISTERED", regstate);
 }
 
@@ -373,7 +374,7 @@ TEST_F(HssConnectionTest, SimpleNotRegisteredUpdate)
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("pubid50", "", HSSConnection::DEREG_ADMIN, "server_name", regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("pubid50", "", HSSConnection::DEREG_ADMIN, regstate, ifcs_map, uris, 0);
   EXPECT_EQ("NOT_REGISTERED", regstate);
 }
 
@@ -382,7 +383,7 @@ TEST_F(HssConnectionTest, SimpleIfc)
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("pubid42", "", HSSConnection::REG, "server_name", regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("pubid42", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_FALSE(ifcs_map.empty());
 }
 
@@ -395,7 +396,7 @@ TEST_F(HssConnectionTest, SimpleChargingAddrs)
   std::deque<std::string> actual_ccfs = {"ccf1", "ccf2"};
   std::deque<std::string> ecfs;
   std::deque<std::string> actual_ecfs = {"ecf1", "ecf2"};
-  _hss.update_registration_state("pubid42", "", HSSConnection::REG, "server_name", regstate, ifcs_map, uris, ccfs, ecfs, 0);
+  _hss.update_registration_state("pubid42", "", HSSConnection::REG, regstate, ifcs_map, uris, ccfs, ecfs, 0);
   EXPECT_EQ(actual_ccfs, ccfs);
   EXPECT_EQ(actual_ecfs, ecfs);
 }
@@ -406,7 +407,7 @@ TEST_F(HssConnectionTest, BadXML)
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("pubid42_malformed", "", HSSConnection::REG, "server_name", regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("pubid42_malformed", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
   EXPECT_TRUE(log.contains("Failed to parse Homestead response"));
 }
@@ -418,7 +419,7 @@ TEST_F(HssConnectionTest, BadXML2)
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("pubid43_malformed", "", HSSConnection::REG, "server_name", regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("pubid43_malformed", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
 }
@@ -429,7 +430,7 @@ TEST_F(HssConnectionTest, BadXML_MissingServiceProfile)
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("missingelement4", "", HSSConnection::REG, "server_name", regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("missingelement4", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
 }
@@ -440,7 +441,7 @@ TEST_F(HssConnectionTest, BadXML_MissingPublicIdentity)
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("missingelement5", "", HSSConnection::REG, "server_name", regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("missingelement5", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
   EXPECT_TRUE(log.contains("Malformed ServiceProfile XML"));
 }
@@ -451,7 +452,7 @@ TEST_F(HssConnectionTest, BadXML_MissingIdentity)
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("missingelement6", "", HSSConnection::REG, "server_name", regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("missingelement6", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
   EXPECT_TRUE(log.contains("Malformed PublicIdentity XML"));
 }
@@ -462,7 +463,7 @@ TEST_F(HssConnectionTest, BadXML_MissingRegistrationState)
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("missingelement1", "", HSSConnection::REG, "server_name", regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("missingelement1", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
   EXPECT_TRUE(log.contains("Malformed Homestead XML"));
 }
@@ -473,7 +474,7 @@ TEST_F(HssConnectionTest, BadXML_MissingClearwaterRegData)
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("missingelement3", "", HSSConnection::REG, "server_name", regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("missingelement3", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
   EXPECT_TRUE(log.contains("Malformed Homestead XML"));
 }
@@ -484,7 +485,7 @@ TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription)
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("missingelement2", "", HSSConnection::REG, "server_name", regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("missingelement2", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
 }
@@ -496,10 +497,10 @@ TEST_F(HssConnectionTest, ServerFailure)
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("pubid44", "", HSSConnection::REG, "server_name", regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("pubid44", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_EQ("", regstate);
   EXPECT_TRUE(uris.empty());
-  EXPECT_TRUE(log.contains("http://narcissus/impu/pubid44/reg-data?server_name=server_name failed"));
+  EXPECT_TRUE(log.contains("http://narcissus/impu/pubid44/reg-data failed"));
 }
 
 TEST_F(HssConnectionTest, SimpleUserAuth)
@@ -576,7 +577,6 @@ TEST_F(HssConnectionTest, SimpleAliases)
   _hss.update_registration_state("pubid46",
                                  "",
                                  HSSConnection::CALL,
-                                 "server_name",
                                  regstate,
                                  ifcs_map,
                                  unused_vector,
@@ -601,7 +601,6 @@ TEST_F(HssConnectionTest, CacheNotAllowed)
   HTTPCode rc = _hss.update_registration_state("public-needs-private",
                                                "a-private-id",
                                                HSSConnection::REG,
-                                               "server_name",
                                                regstate,
                                                ifcs_map,
                                                unused_vector,
@@ -612,7 +611,7 @@ TEST_F(HssConnectionTest, CacheNotAllowed)
                                                0);
   // The request has a cache control header on it to prevent cached responses.
   Request& request = fakecurl_requests[
-    "http://10.42.42.42:80/impu/public-needs-private/reg-data?private_id=a-private-id&server_name=server_name"];
+    "http://10.42.42.42:80/impu/public-needs-private/reg-data?private_id=a-private-id"];
   EXPECT_NE(std::find(request._headers.begin(),
                       request._headers.end(),
                       "Cache-control: no-cache"),

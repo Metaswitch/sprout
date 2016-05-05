@@ -54,7 +54,8 @@ public:
                                       &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
                                       &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
                                       &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
-                                      NULL) {};
+                                      NULL,
+                                      "sip:scscf.sprout.homedomain:5058;transport=TCP") {};
   virtual ~MockHSSConnection() {};
 
   MOCK_METHOD4(update_registration_state, HTTPCode(

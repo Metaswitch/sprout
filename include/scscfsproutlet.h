@@ -143,7 +143,6 @@ private:
   bool read_hss_data(const std::string& public_id,
                      const std::string& private_id,
                      const std::string& req_type,
-                     const std::string& server_name,
                      bool cache_allowed,
                      bool& registered,
                      std::vector<std::string>& uris,
@@ -416,11 +415,6 @@ private:
   ///   the way to the HSS (i.e. Homestead may not answer the response solely
   ///   from its cache).
   bool _auto_reg;
-
-  // The S-CSCF name. This should typically be the same as the scscf_uri option
-  // but there's a chance it won't be if you've recently changed the value
-  // of the scscf_uri option.
-  std::string _server_name;
 
   /// Class to handle session-expires processing.
   SessionExpiresHelper _se_helper;

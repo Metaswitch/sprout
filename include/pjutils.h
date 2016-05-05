@@ -290,6 +290,13 @@ bool should_update_np_data(URIClass old_uri_class,
                            std::string& new_uri_str,
                            bool should_override_npdi,
                            SAS::TrailId trail);
+
+// Get a string representation of the top routing header (or the
+// request URI if there's no route headers). This can return
+// an empty string (if the header isn't a valid URI), so callers
+// should validate the result.
+std::string get_next_routing_header(pjsip_msg* msg);
+
 } // namespace PJUtils
 
 #endif
