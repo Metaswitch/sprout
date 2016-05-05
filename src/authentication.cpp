@@ -692,14 +692,22 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
         // The integrity protected indicator is included and set to tls-yes or
         // ip-assoc-yes.  This indicates the client has already been authenticated
         // so we will accept this REGISTER even if there is a challenge response.
-        // (Values of tls-pending or ip-assoc-pending indicate the challenge
-        // should be checked.)
-        TRC_INFO("SIP Digest authenticated request integrity protected by edge proxy");
+        // Values of tls-pending or ip-assoc-pending indicate the challenge
+        // should be checked.
 
-        SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_INTEGRITY_PROTECTED, 0);
-        SAS::report_event(event);
+        // We should still challenge though if we find that the request wasn't
+        // sent to this S-CSCF, as this triggers the HSS to accept an S-CSCF
+        // change (by generating the correct MAR).
+        if (PJUtils::get_next_routing_header(rdata->msg_info.msg) ==
+            PJUtils::pj_str_to_string(&stack_data.scscf_uri))
+        {
+          TRC_INFO("SIP Digest authenticated request integrity protected by edge proxy");
 
-        return PJ_FALSE;
+          SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_INTEGRITY_PROTECTED, 0);
+          SAS::report_event(event);
+
+          return PJ_FALSE;
+        }
       }
       else if ((integrity != NULL) &&
                (pj_stricmp(&integrity->value, &STR_YES) == 0) &&
@@ -710,12 +718,20 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
         // received on an integrity protected channel, so we will let the
         // request through if there is no challenge response, but must check
         // the challenge response if included.
-        TRC_INFO("AKA authenticated request integrity protected by edge proxy");
 
-        SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_INTEGRITY_PROTECTED, 1);
-        SAS::report_event(event);
+        // We should still challenge though if we find that the request wasn't
+        // sent to this S-CSCF, as this triggers the HSS to accept an S-CSCF
+        // change (by generating the correct MAR).
+        if (PJUtils::get_next_routing_header(rdata->msg_info.msg) ==
+            PJUtils::pj_str_to_string(&stack_data.scscf_uri))
+        {
+          TRC_INFO("AKA authenticated request integrity protected by edge proxy");
 
-        return PJ_FALSE;
+          SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_INTEGRITY_PROTECTED, 1);
+          SAS::report_event(event);
+
+          return PJ_FALSE;
+        }
       }
     }
 
@@ -1137,9 +1153,6 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       hss->update_registration_state(impu,
                                      impi,
                                      HSSConnection::AUTH_FAIL,
-                                     PJUtils::uri_to_string(
-                                      PJSIP_URI_IN_REQ_URI,
-                                      rdata->msg_info.msg->line.req.uri),
                                      trail);
     }
 

@@ -1880,7 +1880,8 @@ int main(int argc, char* argv[])
                                        homestead_sar_latency_table,
                                        homestead_uar_latency_table,
                                        homestead_lir_latency_table,
-                                       hss_comm_monitor);
+                                       hss_comm_monitor,
+                                       opt.uri_scscf);
   }
 
   if ((opt.enabled_scscf) || (opt.enabled_icscf))

@@ -293,6 +293,7 @@ public:
   string _extra_contact;
   string _to_tag;
   bool _force_aka;
+  string _route;
 
   AuthenticationMessage(std::string method) :
     _method(method),
@@ -316,7 +317,8 @@ public:
     _sos(false),
     _extra_contact(""),
     _to_tag(""),
-    _force_aka(false)
+    _force_aka(false),
+    _route("sip:sprout.homedomain:5058;transport=TCP")
   {
   }
 
@@ -443,7 +445,7 @@ string AuthenticationMessage::get()
                    "User-Agent: X-Lite release 5.0.0 stamp 67284\r\n"
                    "Contact: <sip:%2$s@uac.example.com:5060;rinstance=f0b20987985b61df;transport=TCP%4$s>\r\n"
                    "%5$s"
-                   "Route: <sip:sprout.ut.cw-ngv.com;transport=tcp;lr>\r\n"
+                   "Route: <%10$s>\r\n"
                    "%6$s"
                    "%7$s"
                    "Content-Length: 0\r\n"
@@ -486,7 +488,8 @@ string AuthenticationMessage::get()
                                 .append("\r\n").c_str() :
                               "",
                     /* 8 */ _cseq,
-                    /* 9 */ _to_tag.c_str()
+                    /* 9 */ _to_tag.c_str(),
+                    /* 10 */ _route.c_str()
     );
 
   EXPECT_LT(n, (int)sizeof(buf));
@@ -595,6 +598,28 @@ TEST_F(AuthenticationTest, IntegrityProtected)
   EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
 }
 
+TEST_F(AuthenticationTest, IntegrityProtectedChangedSCSCF)
+{
+  // Test that the authentication module challenges requests that are for the
+  // wrong S-CSCF.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  AuthenticationMessage msg("REGISTER");
+  msg._auth_hdr = true;
+  msg._integ_prot = "ip-assoc-yes";
+  msg._route = "sip:differentscscf:5058;transport=TCP";
+  pj_bool_t ret = inject_msg_direct(msg.get());
+  EXPECT_EQ(PJ_TRUE, ret);
+
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, txdata_count());
+  pjsip_tx_data* tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+}
 
 // Tests that authentication is needed on registers that have at least one non
 // emergency contact

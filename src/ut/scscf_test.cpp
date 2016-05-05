@@ -8220,7 +8220,7 @@ TEST_F(SCSCFTest, AutomaticRegistration)
 
   // The HSS expects to be invoked with a request type of "reg" and with the
   // right private ID.
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=kermit&server_name=sip%3Anewuser%40domainvalid");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=kermit");
 
   add_host_mapping("domainvalid", "10.9.8.7");
   list<HeaderMatcher> hdrs;
@@ -8240,7 +8240,7 @@ TEST_F(SCSCFTest, AutomaticRegistrationDerivedIMPI)
 
   // The HSS expects to be invoked with a request type of "reg". No
   // Proxy-Authorization present, so derive the IMPI from the IMPU.
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=6505551000%40homedomain&server_name=sip%3Anewuser%40domainvalid");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=6505551000%40homedomain");
 
   add_host_mapping("domainvalid", "10.9.8.7");
   list<HeaderMatcher> hdrs;
