@@ -236,7 +236,12 @@ void SCSCFSproutlet::get_bindings(const std::string& aor,
            ((*aor_pair == NULL) || !(*aor_pair)->current_contains_bindings()))
     {
       delete *aor_pair;
-      *aor_pair = (*it)->get_aor_data(aor, trail);
+
+      if ((*it)->has_servers())
+      {
+        *aor_pair = (*it)->get_aor_data(aor, trail);
+      }
+
       ++it;
     }
   }
