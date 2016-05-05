@@ -1011,8 +1011,8 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRChangeNoUpdateTimerTest)
   // Read the record back in and check the new members were added correctly.
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
-  EXPECT_EQ(1, aor_data1->get_current()->bindings().size());
-  EXPECT_EQ(1, aor_data1->get_current()->subscriptions().size());
+  EXPECT_EQ(1uL, aor_data1->get_current()->bindings().size());
+  EXPECT_EQ(1uL, aor_data1->get_current()->subscriptions().size());
   EXPECT_EQ(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:2"), aor_data1->get_current()->bindings().begin()->first);
   EXPECT_EQ(std::string("5678"), aor_data1->get_current()->subscriptions().begin()->first);
   delete aor_data1; aor_data1 = NULL;

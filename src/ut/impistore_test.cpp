@@ -330,7 +330,7 @@ TYPED_TEST(ImpiTwoStoreTest, Set1DeleteAC1Get2)
   ImpiStore::Impi* impi2 = this->scenario->store1->get_impi(IMPI);
   ASSERT_TRUE(impi2 != NULL);
   expect_impis_equal(impi1, impi2);
-  ASSERT_EQ(2, impi2->auth_challenges.size());
+  ASSERT_EQ(2UL, impi2->auth_challenges.size());
   delete impi2->auth_challenges[1];
   impi2->auth_challenges.erase(impi2->auth_challenges.begin() + 1);
   status = this->scenario->store1->set_impi(impi2);
@@ -350,7 +350,7 @@ TYPED_TEST(ImpiTwoStoreTest, Set1DeleteAC1GetNonce2)
   ImpiStore::Impi* impi2 = this->scenario->store1->get_impi(IMPI);
   ASSERT_TRUE(impi2 != NULL);
   expect_impis_equal(impi1, impi2);
-  ASSERT_EQ(2, impi2->auth_challenges.size());
+  ASSERT_EQ(2UL, impi2->auth_challenges.size());
   delete impi2->auth_challenges[1];
   impi2->auth_challenges.erase(impi2->auth_challenges.begin() + 1);
   status = this->scenario->store1->set_impi(impi2);
@@ -369,7 +369,7 @@ TYPED_TEST(ImpiTwoStoreTest, Set1DeleteAC2GetNonce1)
   ASSERT_EQ(Store::Status::OK, status);
   ImpiStore::Impi* impi2 = this->scenario->store2->get_impi(IMPI);
   ASSERT_TRUE(impi2 != NULL);
-  ASSERT_EQ(2, impi2->auth_challenges.size());
+  ASSERT_EQ(2UL, impi2->auth_challenges.size());
   delete impi2->auth_challenges[1];
   impi2->auth_challenges.erase(impi2->auth_challenges.begin() + 1);
   status = this->scenario->store2->set_impi(impi2);
@@ -524,7 +524,7 @@ TEST_F(ImpiStoreParsingTest, ChallengeNotObject)
   local_store->set_data("impi", IMPI, "{\"authChallenges\":[\"not an object\"]}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
   ASSERT_TRUE(impi != NULL);
-  EXPECT_EQ(0, impi->auth_challenges.size());
+  EXPECT_EQ(0UL, impi->auth_challenges.size());
   delete impi;
 }
 
@@ -533,7 +533,7 @@ TEST_F(ImpiStoreParsingTest, ChallengeDigest)
   local_store->set_data("impi", IMPI, "{\"authChallenges\":[{\"type\":\"digest\",\"nonce\":\"nonce\",\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\"}]}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
   ASSERT_TRUE(impi != NULL);
-  ASSERT_EQ(1, impi->auth_challenges.size());
+  ASSERT_EQ(1UL, impi->auth_challenges.size());
   ASSERT_EQ(ImpiStore::AuthChallenge::Type::DIGEST, impi->auth_challenges[0]->type);
   delete impi;
 }
@@ -543,7 +543,7 @@ TEST_F(ImpiStoreParsingTest, ChallengeUnknownType)
   local_store->set_data("impi", IMPI, "{\"authChallenges\":[{\"type\":\"unknown\"}]}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
   ASSERT_TRUE(impi != NULL);
-  EXPECT_EQ(0, impi->auth_challenges.size());
+  EXPECT_EQ(0UL, impi->auth_challenges.size());
   delete impi;
 }
 
@@ -552,7 +552,7 @@ TEST_F(ImpiStoreParsingTest, ChallengeDigestMissingRealm)
   local_store->set_data("impi", IMPI, "{\"authChallenges\":[{\"type\":\"digest\",\"nonce\":\"nonce\",\"qop\":\"auth\",\"ha1\":\"ha1\"}]}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
   ASSERT_TRUE(impi != NULL);
-  EXPECT_EQ(0, impi->auth_challenges.size());
+  EXPECT_EQ(0UL, impi->auth_challenges.size());
   delete impi;
 }
 
@@ -561,7 +561,7 @@ TEST_F(ImpiStoreParsingTest, ChallengeDigestMissingQoP)
   local_store->set_data("impi", IMPI, "{\"authChallenges\":[{\"type\":\"digest\",\"nonce\":\"nonce\",\"realm\":\"example.com\",\"ha1\":\"ha1\"}]}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
   ASSERT_TRUE(impi != NULL);
-  EXPECT_EQ(0, impi->auth_challenges.size());
+  EXPECT_EQ(0UL, impi->auth_challenges.size());
   delete impi;
 }
 
@@ -570,7 +570,7 @@ TEST_F(ImpiStoreParsingTest, ChallengeDigestMissingHA1)
   local_store->set_data("impi", IMPI, "{\"authChallenges\":[{\"type\":\"digest\",\"nonce\":\"nonce\",\"realm\":\"example.com\",\"qop\":\"auth\"}]}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
   ASSERT_TRUE(impi != NULL);
-  EXPECT_EQ(0, impi->auth_challenges.size());
+  EXPECT_EQ(0UL, impi->auth_challenges.size());
   delete impi;
 }
 
@@ -579,7 +579,7 @@ TEST_F(ImpiStoreParsingTest, ChallengeDigestMissingNonce)
   local_store->set_data("impi", IMPI, "{\"authChallenges\":[{\"type\":\"digest\",\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\"}]}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
   ASSERT_TRUE(impi != NULL);
-  EXPECT_EQ(0, impi->auth_challenges.size());
+  EXPECT_EQ(0UL, impi->auth_challenges.size());
   delete impi;
 }
 
@@ -588,7 +588,7 @@ TEST_F(ImpiStoreParsingTest, ChallengeDigestExpiresInPast)
   local_store->set_data("impi", IMPI, "{\"authChallenges\":[{\"type\":\"digest\",\"nonce\":\"nonce\",\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\",\"expires\":1}]}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
   ASSERT_TRUE(impi != NULL);
-  EXPECT_EQ(0, impi->auth_challenges.size());
+  EXPECT_EQ(0UL, impi->auth_challenges.size());
   delete impi;
 }
 
@@ -597,7 +597,7 @@ TEST_F(ImpiStoreParsingTest, ChallengeAKAMissingResponse)
   local_store->set_data("impi", IMPI, "{\"authChallenges\":[{\"type\":\"aka\",\"nonce\":\"nonce\"}]}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
   ASSERT_TRUE(impi != NULL);
-  EXPECT_EQ(0, impi->auth_challenges.size());
+  EXPECT_EQ(0UL, impi->auth_challenges.size());
   delete impi;
 }
 
@@ -620,7 +620,7 @@ TEST_F(ImpiStoreParsingTest, AVDigest)
   local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\"}}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_TRUE(impi != NULL);
-  ASSERT_EQ(1, impi->auth_challenges.size());
+  ASSERT_EQ(1UL, impi->auth_challenges.size());
   ASSERT_EQ(ImpiStore::AuthChallenge::Type::DIGEST, impi->auth_challenges[0]->type);
   delete impi;
 }
@@ -630,7 +630,7 @@ TEST_F(ImpiStoreParsingTest, AVAKA)
   local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"aka\":{\"response\":\"response\"}}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_TRUE(impi != NULL);
-  ASSERT_EQ(1, impi->auth_challenges.size());
+  ASSERT_EQ(1UL, impi->auth_challenges.size());
   ASSERT_EQ(ImpiStore::AuthChallenge::Type::AKA, impi->auth_challenges[0]->type);
   delete impi;
 }
@@ -640,7 +640,7 @@ TEST_F(ImpiStoreParsingTest, AVDigestAndAKA)
   local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\"},\"aka\":{\"response\":\"response\"}}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_TRUE(impi != NULL);
-  ASSERT_EQ(1, impi->auth_challenges.size());
+  ASSERT_EQ(1UL, impi->auth_challenges.size());
   ASSERT_EQ(ImpiStore::AuthChallenge::Type::DIGEST, impi->auth_challenges[0]->type);
   delete impi;
 }
@@ -685,8 +685,8 @@ TEST_F(ImpiStoreParsingTest, AVDigestNCTombstone)
   local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\",\"nc\":5},\"tombstone\":true}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_TRUE(impi != NULL);
-  ASSERT_EQ(1, impi->auth_challenges.size());
-  ASSERT_EQ(6, impi->auth_challenges[0]->nonce_count);
+  ASSERT_EQ(1UL, impi->auth_challenges.size());
+  ASSERT_EQ(6U, impi->auth_challenges[0]->nonce_count);
   delete impi;
 }
 
@@ -695,8 +695,8 @@ TEST_F(ImpiStoreParsingTest, AVDigestMissingNC1)
   local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\"}}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_TRUE(impi != NULL);
-  ASSERT_EQ(1, impi->auth_challenges.size());
-  ASSERT_EQ(1, impi->auth_challenges[0]->nonce_count);
+  ASSERT_EQ(1UL, impi->auth_challenges.size());
+  ASSERT_EQ(1U, impi->auth_challenges[0]->nonce_count);
   delete impi;
 }
 
@@ -705,8 +705,8 @@ TEST_F(ImpiStoreParsingTest, AVDigestMissingNC2)
   local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\"},\"tombstone\":true}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_TRUE(impi != NULL);
-  ASSERT_EQ(1, impi->auth_challenges.size());
-  ASSERT_EQ(2, impi->auth_challenges[0]->nonce_count);
+  ASSERT_EQ(1UL, impi->auth_challenges.size());
+  ASSERT_EQ(2U, impi->auth_challenges[0]->nonce_count);
   delete impi;
 }
 
@@ -722,7 +722,7 @@ TEST_F(ImpiStoreParsingTest, AVDigestBranch)
   local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\"},\"branch\":\"correlator\"}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_TRUE(impi != NULL);
-  ASSERT_EQ(1, impi->auth_challenges.size());
+  ASSERT_EQ(1UL, impi->auth_challenges.size());
   ASSERT_EQ("correlator", impi->auth_challenges[0]->correlator);
   delete impi;
 }

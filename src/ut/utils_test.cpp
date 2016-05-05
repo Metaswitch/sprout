@@ -315,7 +315,7 @@ TEST_F(UtilsTest, ParseStoresArg)
 
   EXPECT_TRUE(ret);
   EXPECT_EQ(local_store_location, "store0");
-  EXPECT_EQ(remote_stores_locations.size(), 2);
+  EXPECT_EQ(remote_stores_locations.size(), 2UL);
   EXPECT_EQ(remote_stores_locations[0], "store1");
   EXPECT_EQ(remote_stores_locations[1], "store2");
 
@@ -345,7 +345,7 @@ TEST_F(UtilsTest, ParseStoresArg)
 
   EXPECT_TRUE(ret);
   EXPECT_EQ(local_store_location, "store0");
-  EXPECT_EQ(remote_stores_locations.size(), 0);
+  EXPECT_EQ(remote_stores_locations.size(), 0UL);
 
   // Single site deployment where no site is specified - parse_stores_arg
   // assumes it is the local site.
@@ -360,7 +360,7 @@ TEST_F(UtilsTest, ParseStoresArg)
 
   EXPECT_TRUE(ret);
   EXPECT_EQ(local_store_location, "store0");
-  EXPECT_EQ(remote_stores_locations.size(), 0);
+  EXPECT_EQ(remote_stores_locations.size(), 0UL);
 }
 
 class StopWatchTest : public ::testing::Test
