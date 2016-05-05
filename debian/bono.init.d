@@ -102,7 +102,7 @@ get_settings()
         # Set the upsteam hostname to the sprout hostname only if it hasn't
         # already been set (we have to do this after dotting in the config
         # as the sprout_hostname value comes from the config file)
-        [ -n "$upstream_hostname" ] || upstream_hostname=$sprout_hostname
+        [ -n "$upstream_hostname" ] || upstream_hostname=scscf.$sprout_hostname
         [ -n "$upstream_port" ] || upstream_port=5054
 
         # Set up defaults for user settings then pull in any overrides.

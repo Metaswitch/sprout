@@ -318,7 +318,7 @@ public:
     _extra_contact(""),
     _to_tag(""),
     _force_aka(false),
-    _route("sip:sprout.homedomain:5058;transport=TCP")
+    _route("sip:scscf.sprout.homedomain:5058;transport=TCP")
   {
   }
 
