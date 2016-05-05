@@ -11,6 +11,8 @@ ${CASSANDRA_BUILD_DIR}/interface/thrift:
 
 cassandra: ${CASSANDRA_BUILD_DIR}/interface/thrift
 	${INSTALL_DIR}/bin/thrift --gen cpp -o ${CASSANDRA_BUILD_DIR}/interface/thrift ${CASSANDRA_DIR}/interface/cassandra.thrift
+	sed -i "s/apache::thrift::protocol::TInputRecursionTracker/::apache::thrift::protocol::TInputRecursionTracker/" ${CASSANDRA_BUILD_DIR}/interface/thrift/gen-cpp/Cassandra.cpp ${CASSANDRA_BUILD_DIR}/interface/thrift/gen-cpp/cassandra_types.cpp
+	sed -i "s/apache::thrift::protocol::TOutputRecursionTracker/::apache::thrift::protocol::TOutputRecursionTracker/" ${CASSANDRA_BUILD_DIR}/interface/thrift/gen-cpp/Cassandra.cpp ${CASSANDRA_BUILD_DIR}/interface/thrift/gen-cpp/cassandra_types.cpp
 	g++ -shared -Wl,-soname,libcassandra.so -fPIC -o ${INSTALL_DIR}/lib/libcassandra.so -DHAVE_INTTYPES_H -DHAVE_NETINET_IN_H -I ${INSTALL_DIR}/include/ -I ${CASSANDRA_BUILD_DIR}/interface/thrift/gen-cpp/ ${CASSANDRA_BUILD_DIR}/interface/thrift/gen-cpp/Cassandra.cpp ${CASSANDRA_BUILD_DIR}/interface/thrift/gen-cpp/cassandra_types.cpp
 	cp ${CASSANDRA_BUILD_DIR}/interface/thrift/gen-cpp/*.h ${INSTALL_DIR}/include/
 
