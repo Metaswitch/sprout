@@ -59,7 +59,8 @@ using testing::MatchesRegex;
 using testing::HasSubstr;
 using testing::Not;
 
-namespace SP
+// Bono Test
+namespace BT
 {
   class Message
   {
@@ -405,7 +406,7 @@ protected:
                      bool tpAset,
                      TransportFlow* tpB,
                      bool tpBset,
-                     SP::Message& msg,
+                     BT::Message& msg,
                      string route,
                      bool expect_100,
                      bool expect_trusted_headers_on_requests,
@@ -467,7 +468,7 @@ protected:
                       string supported = "outbound, path",
                       bool expectPath = true,
                       string via = "");
-  SP::Message doInviteEdge(string token);
+  BT::Message doInviteEdge(string token);
 };
 
 class StatefulEdgeProxyAcceptRegisterTest : public StatefulProxyTestBase
@@ -552,7 +553,7 @@ public:
 protected:
 };
 
-using SP::Message;
+using BT::Message;
 
 // Test flows into Sprout (S-CSCF), in particular for header stripping.
 // Check the transport each message is on, and the headers.
@@ -561,7 +562,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
                                           bool tpAset,         //< Expect all requests to Alice on same transport?
                                           TransportFlow* tpB,  //< Bob's transport.
                                           bool tpBset,         //< Expect all requests to Bob on same transport?
-                                          SP::Message& msg,    //< Message to use for testing.
+                                          BT::Message& msg,    //< Message to use for testing.
                                           string route,        //< Route header to be used on INVITE
                                           bool expect_100,     //< Will we get a 100 Trying?
                                           bool expect_trusted_headers_on_requests, //< Should P-A-N-I/P-V-N-I be passed on requests?
