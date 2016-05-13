@@ -229,7 +229,10 @@ std::string JSONEnumService::lookup_uri_from_user(const std::string &user, SAS::
 
   if (pfix == NULL)
   {
-    TRC_INFO("No matching number range %s from ENUM lookup", user.c_str());
+    TRC_WARNING("No matching number range %s from ENUM lookup", user.c_str());
+    SAS::Event event(trail, SASEvent::ENUM_INCOMPLETE, 0);
+    event.add_var_param(user);
+    SAS::report_event(event);
     return uri;
   }
 
@@ -242,11 +245,18 @@ std::string JSONEnumService::lookup_uri_from_user(const std::string &user, SAS::
   catch(...) // LCOV_EXCL_START Only throws if expression too complex or similar hard-to-hit conditions
   {
     TRC_ERROR("Failed to translate number with regex");
+    SAS::Event event(trail, SASEvent::ENUM_INCOMPLETE, 1);
+    event.add_var_param(user);
+    SAS::report_event(event);
     return uri;
     // LCOV_EXCL_STOP
   }
 
   TRC_INFO("Number %s found, translated URI = %s", user.c_str(), uri.c_str());
+  SAS::Event event(trail, SASEvent::ENUM_COMPLETE, 0);
+  event.add_var_param(user);
+  event.add_var_param(uri);
+  SAS::report_event(event);
 
   return uri;
 }
