@@ -245,7 +245,7 @@ std::string JSONEnumService::lookup_uri_from_user(const std::string &user, SAS::
   catch(...) // LCOV_EXCL_START Only throws if expression too complex or similar hard-to-hit conditions
   {
     TRC_ERROR("Failed to translate number with regex");
-    SAS::Event event(trail, SASEvent::ENUM_INCOMPLETE, 0);
+    SAS::Event event(trail, SASEvent::ENUM_INCOMPLETE, 1);
     event.add_var_param(user);
     SAS::report_event(event);
     return uri;
