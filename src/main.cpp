@@ -667,11 +667,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
           TRC_INFO("SAS set to %s", options->sas_server.c_str());
           TRC_INFO("System name is set to %s", options->sas_system_name.c_str());
         }
-        else
-        {
-          CL_SPROUT_INVALID_SAS_OPTION.log();
-          TRC_WARNING("Invalid --sas option, SAS disabled");
-        }
       }
       break;
 
@@ -1419,6 +1414,12 @@ int main(int argc, char* argv[])
 
   std::vector<std::string> sproutlet_uris;
   SPROUTLET_MACRO(SPROUTLET_VERIFY_OPTIONS)
+
+  if (opt.sas_server == "0.0.0.0")
+  {
+    TRC_WARNING("SAS server option was invalid or not configured - SAS is disabled");
+    CL_SPROUT_INVALID_SAS_OPTION.log();
+  }
 
   if ((!opt.pcscf_enabled) && (!opt.enabled_scscf) && (!opt.enabled_icscf))
   {
