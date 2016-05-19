@@ -151,7 +151,7 @@ void SIPResolver::resolve(const std::string& name,
         SAS::report_event(event);
       }
 
-      NAPTRReplacement* naptr = _naptr_cache->get(name, dummy_ttl);
+      NAPTRReplacement* naptr = _naptr_cache->get(name, dummy_ttl, trail);
 
       if (naptr != NULL)
       {
@@ -204,7 +204,7 @@ void SIPResolver::resolve(const std::string& name,
         domains.push_back("_sip._udp." + name);
         domains.push_back("_sip._tcp." + name);
         std::vector<DnsResult> results;
-        _dns_client->dns_query(domains, ns_t_srv, results);
+        _dns_client->dns_query(domains, ns_t_srv, results, trail);
         DnsResult& udp_result = results[0];
         TRC_DEBUG("UDP SRV record %s returned %d records",
                   udp_result.domain().c_str(), udp_result.records().size());
@@ -249,7 +249,7 @@ void SIPResolver::resolve(const std::string& name,
         SAS::report_event(event);
       }
 
-      DnsResult result = _dns_client->dns_query("_sip._udp." + name, ns_t_srv);
+      DnsResult result = _dns_client->dns_query("_sip._udp." + name, ns_t_srv, trail);
 
       if (!result.records().empty())
       {
@@ -268,7 +268,7 @@ void SIPResolver::resolve(const std::string& name,
         SAS::report_event(event);
       }
 
-      DnsResult result = _dns_client->dns_query("_sip._tcp." + name, ns_t_srv);
+      DnsResult result = _dns_client->dns_query("_sip._tcp." + name, ns_t_srv, trail);
 
       if (!result.records().empty())
       {
