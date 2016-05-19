@@ -84,7 +84,7 @@ bool ICSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
   if (opt.enabled_icscf)
   {
     // Create the S-CSCF selector.
-    _scscf_selector = new SCSCFSelector();
+    _scscf_selector = new SCSCFSelector(opt.uri_scscf);
 
     // Create the I-CSCF ACR factory.
     _acr_factory = (ralf_processor != NULL) ?

@@ -1833,7 +1833,6 @@ int main(int argc, char* argv[])
                                  NULL,
                                  "",
                                  quiescing_mgr,
-                                 NULL,
                                  opt.enabled_icscf,
                                  opt.enabled_scscf,
                                  opt.emerg_reg_accepted);

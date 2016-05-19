@@ -141,7 +141,6 @@ static AnalyticsLogger* analytics_logger;
 
 static EnumService *enum_service;
 static BgcfService *bgcf_service;
-static SCSCFSelector *scscf_selector;
 
 static ACRFactory* cscf_acr_factory;
 static ACRFactory* bgcf_acr_factory;
@@ -3229,7 +3228,6 @@ pj_status_t init_stateful_proxy(SubscriberDataManager* reg_sdm,
                                 ACRFactory* icscf_rfacr_factory,
                                 const std::string& icscf_uri_str,
                                 QuiescingManager* quiescing_manager,
-                                SCSCFSelector *scscfSelector,
                                 bool icscf_enabled,
                                 bool scscf_enabled,
                                 bool emerg_reg_accepted)
@@ -3348,7 +3346,6 @@ pj_status_t init_stateful_proxy(SubscriberDataManager* reg_sdm,
   enum_service = enumService;
   bgcf_service = bgcfService;
   hss = hss_connection;
-  scscf_selector = scscfSelector;
 
   if (!icscf_uri_str.empty())
   {

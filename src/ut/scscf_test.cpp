@@ -262,7 +262,6 @@ public:
     _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _hss_connection = new FakeHSSConnection();
-    _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_stateful_proxy_scscf.json"));
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
     _xdm_connection = new FakeXDMConnection();
     _sess_term_comm_tracker = new NiceMock<MockAsCommunicationTracker>();
@@ -340,7 +339,6 @@ public:
     delete _mmtel; _mmtel = NULL;
     delete _bgcf_sproutlet; _bgcf_sproutlet = NULL;
     delete _scscf_sproutlet; _scscf_sproutlet = NULL;
-    delete _scscf_selector; _scscf_selector = NULL;
     delete _acr_factory; _acr_factory = NULL;
     delete _sdm; _sdm = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
@@ -451,7 +449,6 @@ protected:
   static BgcfService* _bgcf_service;
   static EnumService* _enum_service;
   static ACRFactory* _acr_factory;
-  static SCSCFSelector* _scscf_selector;
   static SCSCFSproutlet* _scscf_sproutlet;
   static BGCFSproutlet* _bgcf_sproutlet;
   static Mmtel* _mmtel;
@@ -494,7 +491,6 @@ FakeXDMConnection* SCSCFTest::_xdm_connection;
 BgcfService* SCSCFTest::_bgcf_service;
 EnumService* SCSCFTest::_enum_service;
 ACRFactory* SCSCFTest::_acr_factory;
-SCSCFSelector* SCSCFTest::_scscf_selector;
 SCSCFSproutlet* SCSCFTest::_scscf_sproutlet;
 BGCFSproutlet* SCSCFTest::_bgcf_sproutlet;
 Mmtel* SCSCFTest::_mmtel;
