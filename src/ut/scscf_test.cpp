@@ -8274,6 +8274,7 @@ TEST_F(SCSCFTest, TestSessionExpires)
 TEST_F(SCSCFTest, TestSessionExpiresInDialog)
 {
   SCOPED_TRACE("");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
   // Send an UPDATE in-dialog request to which we should always add RR and SE.
@@ -8284,15 +8285,17 @@ TEST_F(SCSCFTest, TestSessionExpiresInDialog)
   msg._in_dialog = true;
 
   list<HeaderMatcher> hdrs;
-  hdrs.push_back(HeaderMatcher("Record-Route", "Record-Route:.*"));
+  hdrs.push_back(HeaderMatcher("Record-Route"));
   hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires:.*"));
 
   list<HeaderMatcher> rsp_hdrs;
-  rsp_hdrs.push_back(HeaderMatcher("Session-Expires"));
+  rsp_hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires:.*;refresher=uac"));
   rsp_hdrs.push_back(HeaderMatcher("Record-Route"));
+
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, false, rsp_hdrs);
 }
 
-TEST_F(SCSCFTest, TestSessionExpiresAStoAS)
+TEST_F(SCSCFTest, TestSessionExpiresWhenNoRecordRoute)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
