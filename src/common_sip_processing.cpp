@@ -284,11 +284,12 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
   // Do logging.
   local_log_rx_msg(rdata);
   sas_log_rx_msg(rdata);
+  SAS::TrailId trail = get_trail(rdata);
 
   requests_counter->increment();
 
   // Check whether the request should be processed
-  if (!(load_monitor->admit_request()) &&
+  if (!(load_monitor->admit_request(trail)) &&
       (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG) &&
       (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD))
   {
@@ -298,8 +299,6 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
     TRC_DEBUG("Rejected request due to overload");
 
     // LCOV_EXCL_START - can't meaningfully verify SAS in UT
-    SAS::TrailId trail = get_trail(rdata);
-
     SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
     SAS::report_marker(start_marker);
 
