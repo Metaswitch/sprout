@@ -99,7 +99,7 @@ get_settings()
         signaling_dns_server=127.0.0.1
         . /etc/clearwater/config
 
-        # Set the upsteam hostname to the sprout hostname only if it hasn't
+        # Set the upstream hostname to the sprout hostname only if it hasn't
         # already been set (we have to do this after dotting in the config
         # as the sprout_hostname value comes from the config file)
         [ -n "$upstream_hostname" ] || upstream_hostname=icscf.$sprout_hostname

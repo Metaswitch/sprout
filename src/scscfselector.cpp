@@ -48,9 +48,9 @@
 #include "sproutsasevent.h"
 #include "sprout_pd_definitions.h"
 
-SCSCFSelector::SCSCFSelector(const std::string& scscf_uri,
+SCSCFSelector::SCSCFSelector(const std::string& fallback_scscf_uri,
                              std::string configuration) :
-  _scscf_uri(scscf_uri),
+  _fallback_scscf_uri(fallback_scscf_uri),
   _configuration(configuration),
   _updater(NULL)
 {
@@ -144,7 +144,7 @@ void SCSCFSelector::update_scscf()
             }
             catch (JsonFormatError err)
             {
-              // Badly formed number block.
+              // Badly formed S-CSCF entry.
               TRC_WARNING("Badly formed S-CSCF entry (hit error at %s:%d)",
                           err._file, err._line);
               CL_SPROUT_SCSCF_FILE_INVALID.log();
@@ -165,7 +165,7 @@ void SCSCFSelector::update_scscf()
     // Add a default option that is our S-CSCF
     TRC_WARNING("The S-CSCF json file is empty/invalid. Using default values");
     scscf_t new_scscf;
-    new_scscf.server = _scscf_uri;
+    new_scscf.server = _fallback_scscf_uri;
     new_scscf.priority = 0;
     new_scscf.weight = 100;
     new_scscfs.push_back(new_scscf);
