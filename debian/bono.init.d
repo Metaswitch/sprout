@@ -99,11 +99,11 @@ get_settings()
         signaling_dns_server=127.0.0.1
         . /etc/clearwater/config
 
-        # Set the upsteam hostname to the sprout hostname only if it hasn't
+        # Set the upstream hostname to the sprout hostname only if it hasn't
         # already been set (we have to do this after dotting in the config
         # as the sprout_hostname value comes from the config file)
-        [ -n "$upstream_hostname" ] || upstream_hostname=scscf.$sprout_hostname
-        [ -n "$upstream_port" ] || upstream_port=5054
+        [ -n "$upstream_hostname" ] || upstream_hostname=icscf.$sprout_hostname
+        [ -n "$upstream_port" ] || upstream_port=5052
 
         # Set up defaults for user settings then pull in any overrides.
         # Bono doesn't need multi-threading, so set the number of threads to

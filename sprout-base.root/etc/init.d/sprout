@@ -101,6 +101,7 @@ get_settings()
         # These Sproutlets are enabled by default. They listen on different
         # ports to help ensure that requests have a unambiguous Sproutlet
         # to route to.
+        icscf=5052
         bgcf=5053
         scscf=5054
         mmtel=5055

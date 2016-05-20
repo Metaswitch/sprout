@@ -48,7 +48,9 @@
 #include "sproutsasevent.h"
 #include "sprout_pd_definitions.h"
 
-SCSCFSelector::SCSCFSelector(std::string configuration) :
+SCSCFSelector::SCSCFSelector(const std::string& fallback_scscf_uri,
+                             std::string configuration) :
+  _fallback_scscf_uri(fallback_scscf_uri),
   _configuration(configuration),
   _updater(NULL)
 {
@@ -58,105 +60,120 @@ SCSCFSelector::SCSCFSelector(std::string configuration) :
 
 void SCSCFSelector::update_scscf()
 {
-  // Check whether the file exists.
+  std::vector<scscf_t> new_scscfs;
+
   struct stat s;
   if ((stat(_configuration.c_str(), &s) != 0) &&
       (errno == ENOENT))
   {
+    // Check whether the file exists. If it doesn't exist at all, then
+    // we'll fall back to a default value for a single S-CSCF
     TRC_STATUS("No S-CSCF configuration data (file %s does not exist)",
                _configuration.c_str());
     CL_SPROUT_SCSCF_FILE_MISSING.log();
-    return;
   }
-
-  TRC_STATUS("Loading S-CSCF configuration from %s", _configuration.c_str());
-
-  // Read from the file
-  std::ifstream fs(_configuration.c_str());
-  std::string scscf_str((std::istreambuf_iterator<char>(fs)),
-                         std::istreambuf_iterator<char>());
-
-  if (scscf_str == "")
+  else
   {
-    // LCOV_EXCL_START
-    TRC_ERROR("Failed to read S-CSCF configuration data from %s",
-              _configuration.c_str());
-    CL_SPROUT_SCSCF_FILE_EMPTY.log();
-    return;
-    // LCOV_EXCL_STOP
-  }
+    TRC_STATUS("Loading S-CSCF configuration from %s", _configuration.c_str());
 
-  // Now parse the document
-  rapidjson::Document doc;
-  doc.Parse<0>(scscf_str.c_str());
+    // Read from the file
+    std::ifstream fs(_configuration.c_str());
+    std::string scscf_str((std::istreambuf_iterator<char>(fs)),
+                           std::istreambuf_iterator<char>());
 
-  if (doc.HasParseError())
-  {
-    TRC_ERROR("Failed to read S-CSCF configuration data: %s\nError: %s",
-              scscf_str.c_str(),
-              rapidjson::GetParseError_En(doc.GetParseError()));
-    CL_SPROUT_SCSCF_FILE_INVALID.log();
-    return;
-  }
-
-  try
-  {
-    std::vector<scscf_t> new_scscfs;
-
-    JSON_ASSERT_CONTAINS(doc, "s-cscfs");
-    JSON_ASSERT_ARRAY(doc["s-cscfs"]);
-    const rapidjson::Value& scscfs_arr = doc["s-cscfs"];
-
-    for (rapidjson::Value::ConstValueIterator scscfs_it = scscfs_arr.Begin();
-         scscfs_it != scscfs_arr.End();
-         ++scscfs_it)
+    if (scscf_str == "")
     {
-      try
+      // LCOV_EXCL_START
+      TRC_ERROR("Failed to read S-CSCF configuration data from %s",
+                _configuration.c_str());
+      CL_SPROUT_SCSCF_FILE_EMPTY.log();
+      // LCOV_EXCL_STOP
+    }
+    else
+    {
+      // Now parse the document
+      rapidjson::Document doc;
+      doc.Parse<0>(scscf_str.c_str());
+
+      if (doc.HasParseError())
       {
-        scscf_t new_scscf;
-        JSON_GET_STRING_MEMBER(*scscfs_it, "server", new_scscf.server);
-        JSON_GET_INT_MEMBER(*scscfs_it, "priority", new_scscf.priority);
-        JSON_GET_INT_MEMBER(*scscfs_it, "weight", new_scscf.weight);
-
-        JSON_ASSERT_CONTAINS(*scscfs_it, "capabilities");
-        JSON_ASSERT_ARRAY((*scscfs_it)["capabilities"]);
-        const rapidjson::Value& cap_arr = (*scscfs_it)["capabilities"];
-        std::vector<int> capabilities_vec;
-
-        for (rapidjson::Value::ConstValueIterator cap_it = cap_arr.Begin();
-             cap_it != cap_arr.End();
-             ++cap_it)
-        {
-          capabilities_vec.push_back((*cap_it).GetInt());
-        }
-
-        // Sort the capabilities and remove duplicates
-        std::sort(capabilities_vec.begin(), capabilities_vec.end());
-        capabilities_vec.erase(unique(capabilities_vec.begin(),
-                                      capabilities_vec.end()),
-                               capabilities_vec.end() );
-        new_scscf.capabilities = capabilities_vec;
-        new_scscfs.push_back(new_scscf);
-        capabilities_vec.clear();
-      }
-      catch (JsonFormatError err)
-      {
-        // Badly formed number block.
-        TRC_WARNING("Badly formed S-CSCF entry (hit error at %s:%d)",
-                    err._file, err._line);
+        TRC_ERROR("Failed to read S-CSCF configuration data: %s\nError: %s",
+                  scscf_str.c_str(),
+                  rapidjson::GetParseError_En(doc.GetParseError()));
         CL_SPROUT_SCSCF_FILE_INVALID.log();
       }
-    }
+      else
+      {
+        try
+        {
+          JSON_ASSERT_CONTAINS(doc, "s-cscfs");
+          JSON_ASSERT_ARRAY(doc["s-cscfs"]);
+          const rapidjson::Value& scscfs_arr = doc["s-cscfs"];
 
-    // Take a write lock on the mutex in RAII style
-    boost::lock_guard<boost::shared_mutex> write_lock(_scscfs_rw_lock);
-    _scscfs = new_scscfs;
+          for (rapidjson::Value::ConstValueIterator scscfs_it = scscfs_arr.Begin();
+               scscfs_it != scscfs_arr.End();
+               ++scscfs_it)
+          {
+            try
+            {
+              scscf_t new_scscf;
+              JSON_GET_STRING_MEMBER(*scscfs_it, "server", new_scscf.server);
+              JSON_GET_INT_MEMBER(*scscfs_it, "priority", new_scscf.priority);
+              JSON_GET_INT_MEMBER(*scscfs_it, "weight", new_scscf.weight);
+
+              JSON_ASSERT_CONTAINS(*scscfs_it, "capabilities");
+              JSON_ASSERT_ARRAY((*scscfs_it)["capabilities"]);
+              const rapidjson::Value& cap_arr = (*scscfs_it)["capabilities"];
+              std::vector<int> capabilities_vec;
+
+              for (rapidjson::Value::ConstValueIterator cap_it = cap_arr.Begin();
+                   cap_it != cap_arr.End();
+                   ++cap_it)
+              {
+                capabilities_vec.push_back((*cap_it).GetInt());
+              }
+
+              // Sort the capabilities and remove duplicates
+              std::sort(capabilities_vec.begin(), capabilities_vec.end());
+              capabilities_vec.erase(unique(capabilities_vec.begin(),
+                                            capabilities_vec.end()),
+                                     capabilities_vec.end() );
+              new_scscf.capabilities = capabilities_vec;
+              new_scscfs.push_back(new_scscf);
+              capabilities_vec.clear();
+            }
+            catch (JsonFormatError err)
+            {
+              // Badly formed S-CSCF entry.
+              TRC_WARNING("Badly formed S-CSCF entry (hit error at %s:%d)",
+                          err._file, err._line);
+              CL_SPROUT_SCSCF_FILE_INVALID.log();
+            }
+          }
+        }
+        catch (JsonFormatError err)
+        {
+          TRC_ERROR("Badly formed S-CSCF configuration file - missing s-cscfs object");
+          CL_SPROUT_SCSCF_FILE_INVALID.log();
+        }
+      }
+    }
   }
-  catch (JsonFormatError err)
+
+  if (new_scscfs.empty())
   {
-    TRC_ERROR("Badly formed S-CSCF configuration file - missing s-cscfs object");
-    CL_SPROUT_SCSCF_FILE_INVALID.log();
+    // Add a default option that is our S-CSCF
+    TRC_WARNING("The S-CSCF json file is empty/invalid. Using default values");
+    scscf_t new_scscf;
+    new_scscf.server = _fallback_scscf_uri;
+    new_scscf.priority = 0;
+    new_scscf.weight = 100;
+    new_scscfs.push_back(new_scscf);
   }
+
+  // Take a write lock on the mutex in RAII style
+  boost::lock_guard<boost::shared_mutex> write_lock(_scscfs_rw_lock);
+  _scscfs = new_scscfs;
 }
 
 SCSCFSelector::~SCSCFSelector()
@@ -175,16 +192,6 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
   // http://www.boost.org/doc/libs/1_41_0/doc/html/thread/synchronization.html
   // for documentation.
   boost::shared_lock<boost::shared_mutex> read_lock(_scscfs_rw_lock);
-
-  // There are no configured S-CSCFs.
-  if (_scscfs.empty())
-  {
-    SAS::Event event(trail, SASEvent::SCSCF_NONE_CONFIGURED, 0);
-    SAS::report_event(event);
-
-    TRC_WARNING("There are no configured S-CSCFs");
-    return std::string();
-  }
 
   // There's at least one S-CSCF, so check if any match the capabilities requested
   std::string reject_str;

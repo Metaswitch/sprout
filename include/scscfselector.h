@@ -48,7 +48,8 @@
 class SCSCFSelector
 {
 public:
-  SCSCFSelector(std::string configuration = "./s-cscf.json");
+  SCSCFSelector(const std::string& fallback_scscf_uri,
+                std::string configuration = "./s-cscf.json");
   ~SCSCFSelector();
 
   // Updates the scscf configuration
@@ -68,6 +69,7 @@ private:
     std::vector<int> capabilities;
   } scscf_t;
 
+  std::string _fallback_scscf_uri;
   std::string _configuration;
   std::vector<scscf> _scscfs;
   Updater<void, SCSCFSelector>* _updater;

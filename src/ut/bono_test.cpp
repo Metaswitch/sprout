@@ -275,7 +275,6 @@ public:
     // implementation doesn't matter.
     _enum_service = new JSONEnumService(string(UT_DIR).append("/test_stateful_proxy_enum.json"));
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
-    _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_stateful_proxy_scscf.json"));
     _edge_upstream_proxy = edge_upstream_proxy;
     _ibcf_trusted_hosts = ibcf_trusted_hosts;
     _icscf_uri_str = icscf_uri_str;
@@ -304,7 +303,6 @@ public:
                                           _acr_factory,
                                           _icscf_uri_str,
                                           &_quiescing_manager,
-                                          _scscf_selector,
                                           _icscf,
                                           _scscf,
                                           _emerg_reg);
@@ -330,7 +328,6 @@ public:
     delete _xdm_connection; _xdm_connection = NULL;
     delete _enum_service; _enum_service = NULL;
     delete _bgcf_service; _bgcf_service = NULL;
-    delete _scscf_selector; _scscf_selector = NULL;
     SipTest::TearDownTestCase();
   }
 
@@ -393,7 +390,6 @@ protected:
   static IfcHandler* _ifc_handler;
   static EnumService* _enum_service;
   static BgcfService* _bgcf_service;
-  static SCSCFSelector* _scscf_selector;
   static ACRFactory* _acr_factory;
   static string _edge_upstream_proxy;
   static string _ibcf_trusted_hosts;
@@ -424,7 +420,6 @@ FakeXDMConnection* StatefulProxyTestBase::_xdm_connection;
 IfcHandler* StatefulProxyTestBase::_ifc_handler;
 EnumService* StatefulProxyTestBase::_enum_service;
 BgcfService* StatefulProxyTestBase::_bgcf_service;
-SCSCFSelector* StatefulProxyTestBase::_scscf_selector;
 ACRFactory* StatefulProxyTestBase::_acr_factory;
 string StatefulProxyTestBase::_edge_upstream_proxy;
 string StatefulProxyTestBase::_ibcf_trusted_hosts;

@@ -69,7 +69,7 @@ public:
 
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
-    _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_icscf.json"));
+    _scscf_selector = new SCSCFSelector("sip:scscf.homedomain", string(UT_DIR).append("/test_icscf.json"));
     _enum_service = new JSONEnumService(string(UT_DIR).append("/test_enum.json"));
 
     _icscf_sproutlet = new ICSCFSproutlet("icscf",
