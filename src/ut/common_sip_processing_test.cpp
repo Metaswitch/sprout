@@ -376,7 +376,7 @@ TEST_F(CommonProcessingTest, RequestRejectedWithOverload)
   pjsip_tx_data* tdata;
 
   // Consume the only token in the bucket.
-  _lm->admit_request();
+  _lm->admit_request(0);
 
   // Inject a request.
   Message msg1;
@@ -397,7 +397,7 @@ TEST_F(CommonProcessingTest, AckRequestAlwaysAllowed)
   // ACK request is not rejected.
 
   // Consume the only token in the bucket.
-  _lm->admit_request();
+  _lm->admit_request(0);
     
   // Inject an ACK request.
   Message msg1;
