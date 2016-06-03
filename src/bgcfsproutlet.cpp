@@ -68,8 +68,6 @@ BGCFSproutlet::BGCFSproutlet(const std::string& bgcf_name,
 /// BGCFSproutlet destructor.
 BGCFSproutlet::~BGCFSproutlet()
 {
-  delete _incoming_sip_transactions_tbl;
-  delete _outgoing_sip_transactions_tbl;
 }
 
 

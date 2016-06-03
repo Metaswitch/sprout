@@ -306,8 +306,8 @@ public:
     _mmtel = new Mmtel("mmtel", _xdm_connection);
     _mmtel_sproutlet = new SproutletAppServerShim(_mmtel,
                                                   5058,
-                                                  &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
-                                                  &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
+                                                  NULL,
+                                                  NULL,
                                                   "mmtel.homedomain");
 
     // Create the SproutletProxy.

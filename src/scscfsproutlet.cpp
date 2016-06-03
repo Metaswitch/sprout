@@ -107,8 +107,6 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
 SCSCFSproutlet::~SCSCFSproutlet()
 {
   delete _as_chain_table;
-  delete _incoming_sip_transactions_tbl;
-  delete _outgoing_sip_transactions_tbl;
   delete _routed_by_preloaded_route_tbl;
   delete _invites_cancelled_before_1xx_tbl;
   delete _invites_cancelled_after_1xx_tbl;
