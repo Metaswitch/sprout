@@ -80,6 +80,13 @@ ICSCFPlugin::~ICSCFPlugin()
 bool ICSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
   bool plugin_loaded = true;
+
+  // Create the SNMP tables here - they should exist based on whether the
+  // plugin is loaded, not whether the Sproutlet is enabled, in order to
+  // simplify SNMP polling of multiple differently-configured Sprout nodes.
+  //
+  // We'll leak these objects if the Sproutlet isn't enabled - this is a small,
+  // fixed-size leak so we don't need to worry about it.
   SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("icscf_incoming_sip_transactions",
                                                                                                                              "1.2.826.0.1.1578918.9.3.18");
   SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("icscf_outgoing_sip_transactions",
