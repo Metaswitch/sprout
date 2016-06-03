@@ -562,11 +562,7 @@ class Sproutlet
 {
 public:
   /// Virtual destructor.
-  virtual ~Sproutlet()
-  {
-    delete _incoming_sip_transactions_tbl;
-    delete _outgoing_sip_transactions_tbl;
-  }
+  virtual ~Sproutlet() {}
 
   SNMP::SuccessFailCountByRequestTypeTable* _incoming_sip_transactions_tbl;
   SNMP::SuccessFailCountByRequestTypeTable* _outgoing_sip_transactions_tbl;
@@ -607,7 +603,7 @@ protected:
             int port,
             const std::string& service_host="",
             SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl = NULL,
-            SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl = NULL):
+            SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl = NULL) :
     _incoming_sip_transactions_tbl(incoming_sip_transactions_tbl),
     _outgoing_sip_transactions_tbl(outgoing_sip_transactions_tbl),
     _service_name(service_name),

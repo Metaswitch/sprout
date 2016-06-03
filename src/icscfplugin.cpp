@@ -58,6 +58,8 @@ private:
   ICSCFSproutlet* _icscf_sproutlet;
   ACRFactory* _acr_factory;
   SCSCFSelector* _scscf_selector;
+  SNMP::SuccessFailCountByRequestTypeTable* _incoming_sip_transactions_tbl;
+  SNMP::SuccessFailCountByRequestTypeTable* _outgoing_sip_transactions_tbl;
 };
 
 /// Export the plug-in using the magic symbol "sproutlet_plugin"
@@ -84,13 +86,10 @@ bool ICSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
   // Create the SNMP tables here - they should exist based on whether the
   // plugin is loaded, not whether the Sproutlet is enabled, in order to
   // simplify SNMP polling of multiple differently-configured Sprout nodes.
-  //
-  // We'll leak these objects if the Sproutlet isn't enabled - this is a small,
-  // fixed-size leak so we don't need to worry about it.
-  SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("icscf_incoming_sip_transactions",
-                                                                                                                             "1.2.826.0.1.1578918.9.3.18");
-  SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("icscf_outgoing_sip_transactions",
-                                                                                                                             "1.2.826.0.1.1578918.9.3.19");
+  _incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("icscf_incoming_sip_transactions",
+                                                                                    "1.2.826.0.1.1578918.9.3.18");
+  _outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("icscf_outgoing_sip_transactions",
+                                                                                    "1.2.826.0.1.1578918.9.3.19");
 
   if (opt.enabled_icscf)
   {
@@ -110,8 +109,8 @@ bool ICSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           _acr_factory,
                                           _scscf_selector,
                                           enum_service,
-                                          incoming_sip_transactions_tbl,
-                                          outgoing_sip_transactions_tbl,
+                                          _incoming_sip_transactions_tbl,
+                                          _outgoing_sip_transactions_tbl,
                                           opt.override_npdi);
     _icscf_sproutlet->init();
 
@@ -127,4 +126,6 @@ void ICSCFPlugin::unload()
   delete _icscf_sproutlet;
   delete _acr_factory;
   delete _scscf_selector;
+  delete _incoming_sip_transactions_tbl;
+  delete _outgoing_sip_transactions_tbl;
 }
