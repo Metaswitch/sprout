@@ -562,11 +562,15 @@ class Sproutlet
 {
 public:
   /// Virtual destructor.
-  virtual ~Sproutlet() {}
+  virtual ~Sproutlet()
+  {
+    delete _incoming_sip_transactions_tbl;
+    delete _outgoing_sip_transactions_tbl;
+  }
 
-  SNMP::SuccessFailCountByRequestTypeTable* _incoming_sip_transactions_tbl = NULL;
-  SNMP::SuccessFailCountByRequestTypeTable* _outgoing_sip_transactions_tbl = NULL;
-  
+  SNMP::SuccessFailCountByRequestTypeTable* _incoming_sip_transactions_tbl;
+  SNMP::SuccessFailCountByRequestTypeTable* _outgoing_sip_transactions_tbl;
+
   /// Called when the system determines the service should be invoked for a
   /// received request.  The Sproutlet can either return NULL indicating it
   /// does not want to process the request, or create a suitable object
@@ -601,7 +605,11 @@ protected:
   /// Constructor.
   Sproutlet(const std::string& service_name,
             int port,
-            const std::string& service_host="") :
+            const std::string& service_host="",
+            SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl = NULL,
+            SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl = NULL):
+    _incoming_sip_transactions_tbl(incoming_sip_transactions_tbl),
+    _outgoing_sip_transactions_tbl(outgoing_sip_transactions_tbl),
     _service_name(service_name),
     _port(port),
     _service_host(service_host)

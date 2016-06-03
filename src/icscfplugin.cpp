@@ -80,6 +80,10 @@ ICSCFPlugin::~ICSCFPlugin()
 bool ICSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
   bool plugin_loaded = true;
+  SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("icscf_incoming_sip_transactions",
+                                                                                                                             "1.2.826.0.1.1578918.9.3.18");
+  SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("icscf_outgoing_sip_transactions",
+                                                                                                                             "1.2.826.0.1.1578918.9.3.19");
 
   if (opt.enabled_icscf)
   {
@@ -99,6 +103,8 @@ bool ICSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           _acr_factory,
                                           _scscf_selector,
                                           enum_service,
+                                          incoming_sip_transactions_tbl,
+                                          outgoing_sip_transactions_tbl,
                                           opt.override_npdi);
     _icscf_sproutlet->init();
 
