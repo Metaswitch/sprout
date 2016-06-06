@@ -286,6 +286,8 @@ public:
                                           _hss_connection,
                                           _enum_service,
                                           _acr_factory,
+                                          &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
+                                          &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
                                           false,
                                           3000, // Session continue timeout - different from default
                                           6000, // Session terminated timeout - different from default
@@ -300,6 +302,8 @@ public:
                                         _bgcf_service,
                                         _enum_service,
                                         _acr_factory,
+                                        nullptr,
+                                        nullptr,
                                         false);
 
     // Create the MMTEL AppServer.

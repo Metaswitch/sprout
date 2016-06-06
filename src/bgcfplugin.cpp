@@ -58,6 +58,8 @@ private:
   BGCFSproutlet* _bgcf_sproutlet;
   ACRFactory* _acr_factory;
   BgcfService* _bgcf_service;
+  SNMP::SuccessFailCountByRequestTypeTable* _incoming_sip_transactions_tbl;
+  SNMP::SuccessFailCountByRequestTypeTable* _outgoing_sip_transactions_tbl;
 };
 
 /// Export the plug-in using the magic symbol "sproutlet_plugin"
@@ -69,12 +71,16 @@ BGCFPlugin sproutlet_plugin;
 BGCFPlugin::BGCFPlugin() :
   _bgcf_sproutlet(NULL),
   _acr_factory(NULL),
-  _bgcf_service(NULL)
+  _bgcf_service(NULL),
+  _incoming_sip_transactions_tbl(NULL),
+  _outgoing_sip_transactions_tbl(NULL)
 {
 }
 
 BGCFPlugin::~BGCFPlugin()
 {
+  delete _incoming_sip_transactions_tbl;
+  delete _outgoing_sip_transactions_tbl;
 }
 
 /// Loads the BGCF plug-in, returning the supported Sproutlets.
@@ -82,6 +88,13 @@ bool BGCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
   bool plugin_loaded = true;
 
+  // Create the SNMP tables here - they should exist based on whether the
+  // plugin is loaded, not whether the Sproutlet is enabled, in order to
+  // simplify SNMP polling of multiple differently-configured Sprout nodes.
+  _incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("bgcf_incoming_sip_transactions",
+                                                                                    "1.2.826.0.1.1578918.9.3.22");
+  _outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("bgcf_outgoing_sip_transactions",
+                                                                                    "1.2.826.0.1.1578918.9.3.23");
   if (opt.enabled_bgcf)
   {
     // Create BGCF service required for the BGCF Sproutlet.
@@ -98,6 +111,8 @@ bool BGCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                         _bgcf_service,
                                         enum_service,
                                         _acr_factory,
+                                        _incoming_sip_transactions_tbl,
+                                        _outgoing_sip_transactions_tbl,
                                         opt.override_npdi);
 
     sproutlets.push_back(_bgcf_sproutlet);
