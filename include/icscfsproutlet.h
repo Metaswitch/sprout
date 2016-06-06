@@ -75,6 +75,8 @@ public:
                  ACRFactory* acr_factory,
                  SCSCFSelector* scscf_selector,
                  EnumService* enum_service,
+                 SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
+                 SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                  bool override_npdi);
 
   virtual ~ICSCFSproutlet();

@@ -59,6 +59,9 @@ private:
   SCSCFSproutlet* _scscf_sproutlet;
   Alarm* _sess_cont_as_alarm;
   Alarm* _sess_term_as_alarm;
+
+  SNMP::SuccessFailCountByRequestTypeTable* _incoming_sip_transactions_tbl;
+  SNMP::SuccessFailCountByRequestTypeTable* _outgoing_sip_transactions_tbl;
 };
 
 /// Export the plug-in using the magic symbol "sproutlet_plugin"
@@ -67,18 +70,30 @@ SCSCFPlugin sproutlet_plugin;
 }
 
 SCSCFPlugin::SCSCFPlugin() :
-  _scscf_sproutlet(NULL)
+  _scscf_sproutlet(NULL),
+  _incoming_sip_transactions_tbl(NULL),
+  _outgoing_sip_transactions_tbl(NULL)
 {
 }
 
 SCSCFPlugin::~SCSCFPlugin()
 {
+  delete _incoming_sip_transactions_tbl;
+  delete _outgoing_sip_transactions_tbl;
 }
 
 /// Loads the S-CSCF plug-in, returning the supported Sproutlets.
 bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
   bool plugin_loaded = true;
+
+  // Create the SNMP tables here - they should exist based on whether the
+  // plugin is loaded, not whether the Sproutlet is enabled, in order to
+  // simplify SNMP polling of multiple differently-configured Sprout nodes.
+  _incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("scscf_incoming_sip_transactions",
+                                                                                    "1.2.826.0.1.1578918.9.3.20");
+  _outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("scscf_outgoing_sip_transactions",
+                                                                                    "1.2.826.0.1.1578918.9.3.21");
 
   if (opt.enabled_scscf)
   {
@@ -130,6 +145,8 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           hss_connection,
                                           enum_service,
                                           scscf_acr_factory,
+                                          _incoming_sip_transactions_tbl,
+                                          _outgoing_sip_transactions_tbl,
                                           opt.override_npdi,
                                           opt.session_continued_timeout_ms,
                                           opt.session_terminated_timeout_ms,

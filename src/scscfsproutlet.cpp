@@ -65,12 +65,14 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
                                HSSConnection* hss,
                                EnumService* enum_service,
                                ACRFactory* acr_factory,
+                               SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
+                               SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                                bool override_npdi,
                                int session_continued_timeout_ms,
                                int session_terminated_timeout_ms,
                                AsCommunicationTracker* sess_term_as_tracker,
                                AsCommunicationTracker* sess_cont_as_tracker) :
-  Sproutlet(scscf_name, port),
+  Sproutlet(scscf_name, port, "", incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl),
   _scscf_cluster_uri(NULL),
   _scscf_node_uri(NULL),
   _icscf_uri(NULL),
@@ -90,10 +92,6 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
   _sess_term_as_tracker(sess_term_as_tracker),
   _sess_cont_as_tracker(sess_cont_as_tracker)
 {
-  _incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("scscf_incoming_sip_transactions",
-                                                                                    "1.2.826.0.1.1578918.9.3.20");
-  _outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("scscf_outgoing_sip_transactions",
-                                                                                    "1.2.826.0.1.1578918.9.3.21");
   _routed_by_preloaded_route_tbl = SNMP::CounterTable::create("scscf_routed_by_preloaded_route",
                                                               "1.2.826.0.1.1578918.9.3.26");
   _invites_cancelled_before_1xx_tbl = SNMP::CounterTable::create("invites_cancelled_before_1xx",
@@ -107,8 +105,6 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
 SCSCFSproutlet::~SCSCFSproutlet()
 {
   delete _as_chain_table;
-  delete _incoming_sip_transactions_tbl;
-  delete _outgoing_sip_transactions_tbl;
   delete _routed_by_preloaded_route_tbl;
   delete _invites_cancelled_before_1xx_tbl;
   delete _invites_cancelled_after_1xx_tbl;

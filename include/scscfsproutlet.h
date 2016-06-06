@@ -87,6 +87,8 @@ public:
                  HSSConnection* hss,
                  EnumService* enum_service,
                  ACRFactory* acr_factory,
+                 SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
+                 SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                  bool override_npdi,
                  int session_continued_timeout = DEFAULT_SESSION_CONTINUED_TIMEOUT,
                  int session_terminated_timeout = DEFAULT_SESSION_TERMINATED_TIMEOUT,
