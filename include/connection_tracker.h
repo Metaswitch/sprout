@@ -84,7 +84,7 @@ public:
   void unquiesce();
 
 private:
-  // This must be held when accessing connection_active, to avoid contention
+  // This must be held when accessing _connection_listeners, to avoid contention
   // between the transport thread and websocket threads.
   pthread_mutex_t _lock;
 
