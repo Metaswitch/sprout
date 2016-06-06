@@ -49,6 +49,11 @@ ConnectionTracker::ConnectionTracker(
   _quiescing(PJ_FALSE),
   _on_quiesced_handler(on_quiesced_handler)
 {
+  pthread_mutexattr_t attrs;
+  pthread_mutexattr_init(&attrs);
+  pthread_mutexattr_settype(&attrs, PTHREAD_MUTEX_RECURSIVE);
+  pthread_mutex_init(&_lock, &attrs);
+  pthread_mutexattr_destroy(&attrs);
 }
 
 
@@ -64,6 +69,7 @@ ConnectionTracker::~ConnectionTracker()
                                           it->second,
                                           (void *)this);
   }
+  pthread_mutex_destroy(&_lock);
 }
 
 
@@ -111,10 +117,17 @@ void ConnectionTracker::connection_active(pjsip_transport *tp)
   // We only track connection-oriented transports.
   if ((tp->flag & PJSIP_TRANSPORT_DATAGRAM) == 0)
   {
-    // We expect to only be called on the PJSIP transport thread, and our data
-    // race/locking safety is based on this assumption. Raise an error log if
-    // this is not the case.
-    CHECK_PJ_TRANSPORT_THREAD();
+    pthread_mutex_lock(&_lock);
+
+    // We expect to be called by only websocket transport threads, or the PJSIP
+    // transport thread. First check if we are on a websocket thread, then run
+    // the standard CHECK_PJ_TRANSPORT_THREAD macro if we aren't.
+    // Race/locking safety is based on this assumption. Raise an error log if
+    // the above is not the case.
+    if ((strcmp(pj_thread_get_name(pj_thread_this()),"websockets")) != 0)
+    {
+      CHECK_PJ_TRANSPORT_THREAD();
+    }
 
     if (_connection_listeners.find(tp) == _connection_listeners.end())
     {
@@ -141,6 +154,7 @@ void ConnectionTracker::connection_active(pjsip_transport *tp)
         pjsip_transport_shutdown(tp);
       }
     }
+    pthread_mutex_unlock(&_lock);
   }
 }
 
