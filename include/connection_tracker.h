@@ -84,6 +84,10 @@ public:
   void unquiesce();
 
 private:
+  // This must be held when accessing _connection_listeners, to avoid contention
+  // between the transport thread and websocket threads.
+  pthread_mutex_t _lock;
+
   // A map of all the connections known to the connection manager, and their
   // state listeners.  This is a set of pjsip transports, but only includes
   // connection-based transports (not datagram transports).
