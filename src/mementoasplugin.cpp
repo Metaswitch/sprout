@@ -56,7 +56,6 @@ public:
   void unload();
 
 private:
-  AlarmManager* _alarm_manager;
   CommunicationMonitor* _cass_comm_monitor;
   CallListStore::Store* _call_list_store;
   MementoAppServer* _memento;
