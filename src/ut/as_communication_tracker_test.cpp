@@ -64,7 +64,8 @@ public:
 
   void SetUp()
   {
-    _mock_alarm = new MockAlarm();
+    AlarmManager am;
+    _mock_alarm = new MockAlarm(&am);
     _mock_error_log = new MockLog();
     _mock_ok_log = new MockLog();
     _comm_tracker = new AsCommunicationTracker(_mock_alarm,

@@ -159,5 +159,6 @@ extern HttpResolver* http_resolver;
 extern ACRFactory* scscf_acr_factory;
 extern EnumService* enum_service;
 extern ExceptionHandler* exception_handler;
+extern AlarmManager* alarm_manager;
 
 #endif

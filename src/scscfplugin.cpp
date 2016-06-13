@@ -118,7 +118,8 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     }
 
     // Create Application Server communication trackers.
-    _sess_term_as_alarm = new Alarm("sprout",
+    _sess_term_as_alarm = new Alarm(alarm_manager,
+                                    "sprout",
                                     AlarmDef::SPROUT_SESS_TERMINATED_AS_COMM_ERROR,
                                     AlarmDef::MAJOR);
     AsCommunicationTracker* sess_term_as_tracker =
@@ -126,7 +127,8 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                    &CL_SPROUT_SESS_TERM_AS_COMM_FAILURE,
                                    &CL_SPROUT_SESS_TERM_AS_COMM_SUCCESS);
 
-    _sess_cont_as_alarm =  new Alarm("sprout",
+    _sess_cont_as_alarm =  new Alarm(alarm_manager,
+                                     "sprout",
                                      AlarmDef::SPROUT_SESS_CONTINUED_AS_COMM_ERROR,
                                      AlarmDef::MINOR);
     AsCommunicationTracker* sess_cont_as_tracker =

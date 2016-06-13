@@ -56,12 +56,13 @@ using namespace std;
 class HssConnectionTest : public BaseTest
 {
   FakeHttpResolver _resolver;
+  AlarmManager _am;
   CommunicationMonitor _cm;
   HSSConnection _hss;
 
   HssConnectionTest() :
     _resolver("10.42.42.42"),
-    _cm(new Alarm("sprout", AlarmDef::SPROUT_HOMESTEAD_COMM_ERROR, AlarmDef::CRITICAL), "sprout", "homestead"),
+    _cm(new Alarm(&_am, "sprout", AlarmDef::SPROUT_HOMESTEAD_COMM_ERROR, AlarmDef::CRITICAL), "sprout", "homestead"),
     _hss("narcissus",
          &_resolver,
          NULL,
