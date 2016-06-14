@@ -1800,7 +1800,7 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
   {
     // The AS has timed out so track this as a communication failure.
     _scscf->track_app_serv_comm_failure(_as_chain_link.uri(),
-                                        "Default Handling Timeout",
+                                        "Default handling timeout",
                                         _as_chain_link.default_handling());
 
     // The request was routed to a downstream AS, so cancel any outstanding
@@ -1992,7 +1992,7 @@ std::string SCSCFSproutletTsx::fork_failure_reason_as_string(int fork_id, int si
   switch (fs.error_state)
   {
   case TIMEOUT:
-    reason = "SIP Timeout";
+    reason = "SIP timeout";
     break;
 
   case TRANSPORT_ERROR:

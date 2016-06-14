@@ -67,6 +67,7 @@ using testing::HasSubstr;
 using testing::Not;
 using testing::_;
 using testing::NiceMock;
+using testing::HasSubstr;
 
 namespace SP
 {
@@ -3254,7 +3255,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_));
+  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("408")));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3347,7 +3348,7 @@ TEST_F(SCSCFTest, DISABLED_DefaultHandlingTerminateTimeout)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_));
+  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3530,6 +3531,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueRecordRouting)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("Transport"))).Times(2);
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
   Message msg;
@@ -3657,7 +3659,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonResponsive)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(StrEq("sip:1.2.3.4:56789;transport=UDP")));
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(StrEq("sip:1.2.3.4:56789;transport=UDP"), _));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3746,7 +3748,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueImmediateError)
 
   // This flow counts as an unsuccessful AS communication, as a 100 trying does
   // not cause an AS to be treated as responsive.
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_));
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("500")));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3840,7 +3842,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinue100ThenError)
 
   // This flow counts as an unsuccessful AS communication, as a 100 trying does
   // not cause an AS to be treated as responsive.
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_));
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, _));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -4180,7 +4182,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeout)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_));
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -4267,7 +4269,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueDisabled)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_));
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, _));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
