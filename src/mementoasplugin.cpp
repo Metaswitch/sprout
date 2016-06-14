@@ -98,7 +98,8 @@ bool MementoPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     }
     else
     {
-      _cass_comm_monitor = new CommunicationMonitor(new Alarm("memento",
+      _cass_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                              "memento",
                                                               AlarmDef::MEMENTO_AS_CASSANDRA_COMM_ERROR,
                                                               AlarmDef::CRITICAL),
                                                     "Memento",

@@ -1230,6 +1230,7 @@ HttpResolver* http_resolver = NULL;
 ACRFactory* scscf_acr_factory = NULL;
 EnumService* enum_service = NULL;
 ExceptionHandler* exception_handler = NULL;
+AlarmManager* alarm_manager = NULL;
 
 /*
  * main()
@@ -1613,45 +1614,59 @@ int main(int argc, char* argv[])
   if (opt.enabled_icscf || opt.enabled_scscf)
   {
     // Create Sprout's alarm objects.
+    alarm_manager = new AlarmManager();
 
-    chronos_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_CHRONOS_COMM_ERROR,
-                                                                        AlarmDef::MAJOR),
+    chronos_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                              "sprout",
+                                                              AlarmDef::SPROUT_CHRONOS_COMM_ERROR,
+                                                              AlarmDef::MAJOR),
                                                     "Sprout",
                                                     "Chronos");
 
-    enum_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_ENUM_COMM_ERROR,
-                                                                     AlarmDef::MAJOR),
+    enum_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                           "sprout",
+                                                           AlarmDef::SPROUT_ENUM_COMM_ERROR,
+                                                           AlarmDef::MAJOR),
                                                  "Sprout",
                                                  "ENUM");
 
-    hss_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_HOMESTEAD_COMM_ERROR,
-                                                                    AlarmDef::CRITICAL),
+    hss_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                          "sprout",
+                                                          AlarmDef::SPROUT_HOMESTEAD_COMM_ERROR,
+                                                          AlarmDef::CRITICAL),
                                                 "Sprout",
                                                 "Homestead");
 
-    memcached_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_MEMCACHED_COMM_ERROR,
-                                                                          AlarmDef::CRITICAL),
+    memcached_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                                "sprout",
+                                                                AlarmDef::SPROUT_MEMCACHED_COMM_ERROR,
+                                                                AlarmDef::CRITICAL),
                                                       "Sprout",
                                                       "Memcached");
 
-    memcached_remote_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_REMOTE_MEMCACHED_COMM_ERROR,
-                                                                                 AlarmDef::CRITICAL),
+    memcached_remote_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                                       "sprout",
+                                                                       AlarmDef::SPROUT_REMOTE_MEMCACHED_COMM_ERROR,
+                                                                       AlarmDef::CRITICAL),
                                                              "Sprout",
                                                              "remote Memcached");
 
-    ralf_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_RALF_COMM_ERROR,
-                                                                     AlarmDef::MAJOR),
+    ralf_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                           "sprout",
+                                                           AlarmDef::SPROUT_RALF_COMM_ERROR,
+                                                           AlarmDef::MAJOR),
                                                  "Sprout",
                                                  "Ralf");
 
-    vbucket_alarm = new Alarm("sprout", AlarmDef::SPROUT_VBUCKET_ERROR,
-                                        AlarmDef::MAJOR);
+    vbucket_alarm = new Alarm(alarm_manager,
+                              "sprout",
+                              AlarmDef::SPROUT_VBUCKET_ERROR,
+                              AlarmDef::MAJOR);
 
-    remote_vbucket_alarm = new Alarm("sprout", AlarmDef::SPROUT_REMOTE_VBUCKET_ERROR,
-                                               AlarmDef::MAJOR);
-
-    // Start the alarm request agent
-    AlarmReqAgent::get_instance().start();
+    remote_vbucket_alarm = new Alarm(alarm_manager,
+                                     "sprout",
+                                     AlarmDef::SPROUT_REMOTE_VBUCKET_ERROR,
+                                     AlarmDef::MAJOR);
   }
 
   // Start the load monitor
@@ -2211,9 +2226,6 @@ int main(int argc, char* argv[])
 
   if (opt.enabled_icscf || opt.enabled_scscf)
   {
-    // Stop the alarm request agent
-    AlarmReqAgent::get_instance().stop();
-
     // Delete Sprout's alarm objects
     delete chronos_comm_monitor;
     delete enum_comm_monitor;
@@ -2223,6 +2235,7 @@ int main(int argc, char* argv[])
     delete ralf_comm_monitor;
     delete vbucket_alarm;
     delete remote_vbucket_alarm;
+    delete alarm_manager;
   }
 
   delete latency_table;
