@@ -57,7 +57,7 @@ public:
   ///
   /// The object takes ownership of the alarm and the logs passed to it.
   AsCommunicationTracker(Alarm* alarm,
-                         const PDLog1<const char*>* as_failed_log,
+                         const PDLog2<const char*, const char*>* as_failed_log,
                          const PDLog1<const char*>* as_ok_log);
 
   /// Destructor.
@@ -71,7 +71,10 @@ public:
   /// Method to be called when communication to an Application Server fails.
   ///
   /// @param as_uri - The URI of the AS in question.
-  virtual void on_failure(const std::string& as_uri);
+  /// @param reason - A short string describing the reason the AS has been
+  ///                 treated as failed. For example "Transport error" or
+  ///                 "SIP 500 response received"
+  virtual void on_failure(const std::string& as_uri, const std::string& reason);
 
 private:
   // A lock that protects all member variables of this class.
@@ -92,11 +95,13 @@ private:
   // failing.
   Alarm* _alarm;
 
-  // Logs that are raised when communications are considered to have failed,
-  // and when they are considered to be OK.
+  // Logs that are raised when communications are considered to have failed, and
+  // when they are considered to be OK.
   //
-  // Each log takes the URI of the AS as a parameter.
-  const PDLog1<const char*>* _as_failed_log;
+  // The failed log has two parameters: the URI of the AS, and the reason the AS
+  // is being treated as failed.  The success log takes one parameter: the URI
+  // of the AS.
+  const PDLog2<const char*, const char*>* _as_failed_log;
   const PDLog1<const char*>* _as_ok_log;
 
   /// Check if any application servers are healthy. If so, log them and

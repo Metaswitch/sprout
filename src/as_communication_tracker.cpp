@@ -37,7 +37,7 @@
 #include "as_communication_tracker.h"
 
 AsCommunicationTracker::AsCommunicationTracker(Alarm* alarm,
-                                               const PDLog1<const char*>* as_failed_log,
+                                               const PDLog2<const char*, const char*>* as_failed_log,
                                                const PDLog1<const char*>* as_ok_log) :
   _next_check_time_ms(current_time_ms() + NEXT_CHECK_INTERVAL_MS),
   _alarm(alarm),
@@ -61,7 +61,8 @@ void AsCommunicationTracker::on_success(const std::string& as_uri)
 }
 
 
-void AsCommunicationTracker::on_failure(const std::string& as_uri)
+void AsCommunicationTracker::on_failure(const std::string& as_uri,
+                                        const std::string& reason)
 {
   TRC_DEBUG("Communication with AS %s failed", as_uri.c_str());
 
@@ -88,7 +89,7 @@ void AsCommunicationTracker::on_failure(const std::string& as_uri)
     // This is the first time we've spotted that the AS has failed, so log this
     // fact.
     TRC_DEBUG("First failure for this AS - generate log");
-    _as_failed_log->log(as_uri.c_str());
+    _as_failed_log->log(as_uri.c_str(), reason.c_str());
     _as_failures[as_uri] = 1;
   }
   pthread_mutex_unlock(&_lock);
