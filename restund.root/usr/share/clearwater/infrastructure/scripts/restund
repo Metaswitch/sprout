@@ -6,10 +6,10 @@
 if [ -n "$local_ip" ] && [ -n "$home_domain" ] && [ -n "$public_ip" ]
 then
   # Add square brackets around the address iff it is an IPv6 address
-  bracketed_ip=$(python /usr/share/clearwater/bin/bracket_ipv6_address.py $local_ip)
+  bracketed_ip=$(/usr/share/clearwater/bin/bracket-ipv6-address $local_ip)
 
   # Set up local_ipv*, defaulting the entry that is not applicable.
-  if /usr/share/clearwater/bin/is_address_ipv6.py $local_ip
+  if /usr/share/clearwater/bin/is-address-ipv6 $local_ip
   then
     local_ipv4=127.0.0.1
     local_ipv6=$local_ip
@@ -19,7 +19,7 @@ then
   fi
 
   # Set up public_ipv4 if we're using an IPv4 address, or default it if not.
-  if /usr/share/clearwater/bin/is_address_ipv6.py $public_ip
+  if /usr/share/clearwater/bin/is-address-ipv6 $public_ip
   then
     public_ipv4=127.0.0.1
   else
