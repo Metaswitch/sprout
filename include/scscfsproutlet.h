@@ -157,8 +157,11 @@ private:
   /// Record that communication with an AS failed.
   ///
   /// @param uri               - The URI of the AS.
+  /// @param reason            - Textual representation of the reason the AS is
+  ///                            being treated as failed.
   /// @param default_handling  - The AS's default handling.
   void track_app_serv_comm_failure(const std::string& uri,
+                                   const std::string& reason,
                                    DefaultHandling default_handling);
 
   /// Record that communication with an AS succeeded.
@@ -344,6 +347,12 @@ private:
   /// through this API, not by inspecting _acr directly, since the ACR may be
   /// owned by the AsChain as a whole.  May return NULL in some cases.
   ACR* get_acr();
+
+  /// Get a string representation of why a fork failed.
+  ///
+  /// @param fork_id  - The fork's number.
+  /// @param sip_code - The reported SIP return code
+  std::string fork_failure_reason_as_string(int fork_id, int sip_code);
 
   /// Pointer to the parent SCSCFSproutlet object - used for various operations
   /// that require access to global configuration or services.

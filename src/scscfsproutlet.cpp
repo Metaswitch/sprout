@@ -325,6 +325,7 @@ ACR* SCSCFSproutlet::get_acr(SAS::TrailId trail,
 
 
 void SCSCFSproutlet::track_app_serv_comm_failure(const std::string& uri,
+                                                 const std::string& reason,
                                                  DefaultHandling default_handling)
 {
   AsCommunicationTracker* as_tracker = (default_handling == SESSION_CONTINUED) ?
@@ -332,7 +333,7 @@ void SCSCFSproutlet::track_app_serv_comm_failure(const std::string& uri,
                                        _sess_term_as_tracker;
   if (as_tracker != NULL)
   {
-    as_tracker->on_failure(uri);
+    as_tracker->on_failure(uri, reason);
   }
 }
 
@@ -610,6 +611,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
         // Default handling will be triggered. Track this as a failed
         // communication.
         _scscf->track_app_serv_comm_failure(_as_chain_link.uri(),
+                                            fork_failure_reason_as_string(fork_id, st_code),
                                             _as_chain_link.default_handling());
 
         if (_as_chain_link.default_handling() == SESSION_CONTINUED)
@@ -1798,6 +1800,7 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
   {
     // The AS has timed out so track this as a communication failure.
     _scscf->track_app_serv_comm_failure(_as_chain_link.uri(),
+                                        "Default handling timeout",
                                         _as_chain_link.default_handling());
 
     // The request was routed to a downstream AS, so cancel any outstanding
@@ -1979,4 +1982,35 @@ ACR* SCSCFSproutletTsx::get_acr()
   {
     return _failed_ood_acr;
   }
+}
+
+std::string SCSCFSproutletTsx::fork_failure_reason_as_string(int fork_id, int sip_code)
+{
+  ForkState fs = fork_state(fork_id);
+  std::string reason;
+
+  switch (fs.error_state)
+  {
+  case TIMEOUT:
+    reason = "SIP timeout";
+    break;
+
+  case TRANSPORT_ERROR:
+    reason = "Transport error";
+    break;
+
+  case NONE:
+    reason = "SIP " + std::to_string(sip_code) + " response received";
+    break;
+
+  default:
+    // LCOV_EXCL_START - hitting this branch implies a logic error which we
+    // don't expect to hit in UT.
+    TRC_ERROR("Unknown ForkErrorState: %d", fs.error_state);
+    reason = "Unknown";
+    break;
+    // LCOV_EXCL_STOP
+  }
+
+  return reason;
 }
