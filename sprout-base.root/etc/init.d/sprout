@@ -138,7 +138,7 @@ get_settings()
         # IP address needs to be surrounded by square brackets if it is IPv6.
         if [ ! -f /etc/clearwater/cluster_settings ]
         then
-          cluster_ip=$(python /usr/share/clearwater/bin/bracket_ipv6_address.py $local_ip)
+          cluster_ip=$(/usr/share/clearwater/bin/bracket-ipv6-address $local_ip)
           echo "servers=$cluster_ip:11211" > /etc/clearwater/cluster_settings
         fi
 
