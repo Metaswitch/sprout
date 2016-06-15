@@ -288,3 +288,37 @@ TEST_F(AsCommunicationTrackerTest, MultipleAsFailures)
   _comm_tracker->on_success(AS1);
   _comm_tracker->on_success(AS2);
 }
+
+
+// Check that the first failure reason is the one that is logged. If another
+// reason occurs while the AS is still uncontactable the new reason is not
+// logged. However if the AS become contactable then fails again for a
+// different reason, the new reason *is* logged.
+TEST_F(AsCommunicationTrackerTest, MultipleFailureReasons)
+{
+  // The AS fails.
+  EXPECT_CALL(*_mock_alarm, set());
+  EXPECT_CALL(*_mock_error_log, log(StrEq(AS1), StrEq("Some failure reason")));
+  advance_time();
+  _comm_tracker->on_failure(AS1, "Some failure reason");
+
+  advance_time();
+  _comm_tracker->on_failure(AS1, "Another failure reason");
+
+  // The AS starts succeeding again.
+  EXPECT_CALL(*_mock_alarm, clear()).Times(AtLeast(1));
+  EXPECT_CALL(*_mock_ok_log, log(StrEq(AS1)));
+
+  advance_time();
+  _comm_tracker->on_success(AS1);
+
+  advance_time();
+  _comm_tracker->on_success(AS1);
+
+  // The AS starts failing again but for a different reason.
+  EXPECT_CALL(*_mock_alarm, set());
+  EXPECT_CALL(*_mock_error_log, log(StrEq(AS1), StrEq("Another failure reason")));
+
+  advance_time();
+  _comm_tracker->on_failure(AS1, "Another failure reason");
+}
