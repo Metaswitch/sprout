@@ -1179,9 +1179,9 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   //  * if a challenged request gets retransmitted, we don't repeat the work
   pjsip_transaction* tsx = NULL;
   status = pjsip_tsx_create_uas2(NULL, rdata, NULL, &tsx);
-  set_trail(tsx, trail);
   if (status != PJ_SUCCESS)
   {
+    set_trail(tdata, trail);
     // LCOV_EXCL_START - defensive code not hit in UT
     TRC_WARNING("Couldn't create PJSIP transaction for authentication response: %d"
                 " (sending statelessly instead)", status);
@@ -1191,6 +1191,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   }
   else
   {
+    set_trail(tsx, trail);
     // Let the tsx know about the original message
     pjsip_tsx_recv_msg(tsx, rdata);
     // Send our response in this transaction
