@@ -1181,8 +1181,8 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   status = pjsip_tsx_create_uas2(NULL, rdata, NULL, &tsx);
   if (status != PJ_SUCCESS)
   {
-    set_trail(tdata, trail);
     // LCOV_EXCL_START - defensive code not hit in UT
+    set_trail(tdata, trail);
     TRC_WARNING("Couldn't create PJSIP transaction for authentication response: %d"
                 " (sending statelessly instead)", status);
     // Send the response statelessly in this case - it's better than nothing
