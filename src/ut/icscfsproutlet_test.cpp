@@ -69,7 +69,7 @@ public:
 
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
-    _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_icscf.json"));
+    _scscf_selector = new SCSCFSelector("sip:scscf.homedomain", string(UT_DIR).append("/test_icscf.json"));
     _enum_service = new JSONEnumService(string(UT_DIR).append("/test_enum.json"));
 
     _icscf_sproutlet = new ICSCFSproutlet("icscf",
@@ -79,6 +79,8 @@ public:
                                           _acr_factory,
                                           _scscf_selector,
                                           _enum_service,
+                                          NULL,
+                                          NULL,
                                           false);
     _icscf_sproutlet->init();
     std::list<Sproutlet*> sproutlets;
@@ -89,7 +91,8 @@ public:
                                       "homedomain",
                                       std::unordered_set<std::string>(),
                                       sproutlets,
-                                      std::set<std::string>());
+                                      std::set<std::string>(),
+                                      "scscf");
 
     // Schedule timers.
     SipTest::poll();

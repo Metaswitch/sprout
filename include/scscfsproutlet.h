@@ -87,6 +87,8 @@ public:
                  HSSConnection* hss,
                  EnumService* enum_service,
                  ACRFactory* acr_factory,
+                 SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
+                 SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                  bool override_npdi,
                  int session_continued_timeout = DEFAULT_SESSION_CONTINUED_TIMEOUT,
                  int session_terminated_timeout = DEFAULT_SESSION_TERMINATED_TIMEOUT,
@@ -155,8 +157,11 @@ private:
   /// Record that communication with an AS failed.
   ///
   /// @param uri               - The URI of the AS.
+  /// @param reason            - Textual representation of the reason the AS is
+  ///                            being treated as failed.
   /// @param default_handling  - The AS's default handling.
   void track_app_serv_comm_failure(const std::string& uri,
+                                   const std::string& reason,
                                    DefaultHandling default_handling);
 
   /// Record that communication with an AS succeeded.
@@ -313,7 +318,7 @@ private:
   bool lookup_ifcs(std::string public_id,
                    Ifcs& ifcs);
 
-  /// Record-Route the S-CSCF sproutlet into a dialog.  The third parameter
+  /// Add the S-CSCF sproutlet into a dialog.  The third parameter
   /// passed may be attached to the Record-Route and can be used to recover the
   /// billing role that is in use on subsequent in-dialog messages.
   ///
@@ -321,9 +326,9 @@ private:
   /// @param billing_rr   - Whether to add a `billing-role` parameter to the RR
   /// @param billing_role - The contents of the `billing-role` (ignored if
   ///                       `billing_rr` is false)
-  void add_record_route(pjsip_msg* msg,
-                        bool billing_rr,
-                        ACR::NodeRole billing_role);
+  void add_to_dialog(pjsip_msg* msg,
+                     bool billing_rr,
+                     ACR::NodeRole billing_role);
 
   /// Retrieve the billing role for the incoming message.  This should have been
   /// set during session initiation.
@@ -342,6 +347,12 @@ private:
   /// through this API, not by inspecting _acr directly, since the ACR may be
   /// owned by the AsChain as a whole.  May return NULL in some cases.
   ACR* get_acr();
+
+  /// Get a string representation of why a fork failed.
+  ///
+  /// @param fork_id  - The fork's number.
+  /// @param sip_code - The reported SIP return code
+  std::string fork_failure_reason_as_string(int fork_id, int sip_code);
 
   /// Pointer to the parent SCSCFSproutlet object - used for various operations
   /// that require access to global configuration or services.

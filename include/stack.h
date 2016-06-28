@@ -86,8 +86,7 @@ struct stack_data_struct
 
   int                  addr_family;
 
-  unsigned             name_cnt;
-  pj_str_t             name[16];
+  std::vector<pj_str_t> name;
   LastValueCache *     stats_aggregator;
 
   bool record_route_on_every_hop;
@@ -118,7 +117,7 @@ inline bool is_pjsip_transport_thread()
 #define CHECK_PJ_TRANSPORT_THREAD() \
   if (!is_pjsip_transport_thread()) \
   { \
-    TRC_ERROR("Function expected to be called on PJSIP transport thread (%s) - has been called on different thread (%s)", pj_thread_get_name(pj_thread_this())); \
+    TRC_ERROR("Function expected to be called on PJSIP transport thread (%s) has been called on different thread (%s)", pj_thread_get_name(stack_data.pjsip_transport_thread), pj_thread_get_name(pj_thread_this())); \
   };
 
 inline void set_trail(pjsip_rx_data* rdata, SAS::TrailId trail)
@@ -151,6 +150,10 @@ inline SAS::TrailId get_trail(const pjsip_transaction* tsx)
   return (SAS::TrailId)tsx->mod_data[stack_data.sas_logging_module_id];
 }
 
+extern void set_quiescing_true();
+
+extern void set_quiescing_false();
+
 extern void init_pjsip_logging(int log_level,
                                pj_bool_t log_to_file,
                                const std::string& directory);
@@ -166,6 +169,7 @@ extern pj_status_t init_stack(const std::string& sas_system_name,
                               const std::string& home_domain,
                               const std::string& additional_home_domains,
                               const std::string& sproutlet_uri,
+                              const std::string& sprout_hostname,
                               const std::string& alias_hosts,
                               SIPResolver* sipresolver,
                               int record_routing_model,
@@ -174,7 +178,8 @@ extern pj_status_t init_stack(const std::string& sas_system_name,
                               const int sip_tcp_connect_timeout,
                               const int sip_tcp_send_timeout,
                               QuiescingManager *quiescing_mgr,
-                              const std::string& cdf_domain);
+                              const std::string& cdf_domain,
+                              std::vector<std::string> sproutlet_uris);
 extern pj_status_t start_pjsip_thread();
 extern pj_status_t stop_pjsip_thread();
 extern void stop_stack();

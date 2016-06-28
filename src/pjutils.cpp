@@ -1101,31 +1101,29 @@ static void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event)
 
           if (status == PJ_SUCCESS)
           {
-            // The new transaction has been set up.
+            // The new transaction has been set up.  We're now definitely
+            // retrying, so be sure not to run through the tidy-up code at
+            // the end of this function.
+            retrying = true;
 
             // Set the trail ID in the transaction from the message.
             set_trail(retry_tsx, get_trail(tdata));
 
             // Set up the module data for the new transaction to reference
-            // the state information.
+            // the state information, and remove it from the old transaction.
             retry_tsx->mod_data[mod_sprout_util.id] = sss;
+            tsx->mod_data[mod_sprout_util.id] = NULL;
 
             // Increment the reference count of the request as we are passing
             // it to a new transaction.
             pjsip_tx_data_add_ref(tdata);
 
             // Copy across the destination information for a retry and try to
-            // resend the request.
+            // resend the request.  Note that we ignore the return code for
+            // the send - it will always call on_tsx_state on success or
+            // failure, and that will recover.
             PJUtils::set_dest_info(tdata, sss->servers[sss->current_server]);
-            status = pjsip_tsx_send_msg(retry_tsx, tdata);
-
-            if (status == PJ_SUCCESS)
-            {
-              // Successfully sent a retry.  Make sure this callback isn't
-              // invoked again for the previous transaction.
-              tsx->mod_data[mod_sprout_util.id] = NULL;
-              retrying = true;
-            }
+            (void)pjsip_tsx_send_msg(retry_tsx, tdata);
           }
         }
       }
@@ -1696,17 +1694,24 @@ bool PJUtils::is_emergency_registration(pjsip_contact_hdr* contact_hdr)
 // which is local
 bool PJUtils::check_route_headers(pjsip_rx_data* rdata)
 {
+  return check_route_headers(rdata->msg_info.msg);
+}
+
+// Return true if there are no route headers, or there is exactly one,
+// which is local
+bool PJUtils::check_route_headers(pjsip_msg* msg)
+{
   // Get all the route headers
   int count = 0;
   bool local = true;
-  pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_ROUTE, NULL);
+  pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, NULL);
 
   while (route_hdr != NULL)
   {
     count++;
     URIClass uri_class = URIClassifier::classify_uri(route_hdr->name_addr.uri);
     local = (uri_class == NODE_LOCAL_SIP_URI) || (uri_class == HOME_DOMAIN_SIP_URI);
-    route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_ROUTE, route_hdr->next);
+    route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, route_hdr->next);
   }
 
   return (count < 2 && local);
@@ -2397,5 +2402,23 @@ bool PJUtils::should_update_np_data(URIClass old_uri_class,
   else
   {
     return false;
+  }
+}
+
+std::string PJUtils::get_next_routing_header(pjsip_msg* msg)
+{
+  pjsip_route_hdr* route = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg,
+                                                                PJSIP_H_ROUTE,
+                                                                NULL);
+
+  if (route == NULL)
+  {
+    return PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI,
+                                  msg->line.req.uri);
+  }
+  else
+  {
+    return PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                  route->name_addr.uri);
   }
 }

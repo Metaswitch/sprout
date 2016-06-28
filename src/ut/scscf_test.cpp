@@ -67,6 +67,7 @@ using testing::HasSubstr;
 using testing::Not;
 using testing::_;
 using testing::NiceMock;
+using testing::HasSubstr;
 
 namespace SP
 {
@@ -262,7 +263,6 @@ public:
     _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _hss_connection = new FakeHSSConnection();
-    _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_stateful_proxy_scscf.json"));
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
     _xdm_connection = new FakeXDMConnection();
     _sess_term_comm_tracker = new NiceMock<MockAsCommunicationTracker>();
@@ -287,6 +287,8 @@ public:
                                           _hss_connection,
                                           _enum_service,
                                           _acr_factory,
+                                          &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
+                                          &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
                                           false,
                                           3000, // Session continue timeout - different from default
                                           6000, // Session terminated timeout - different from default
@@ -301,6 +303,8 @@ public:
                                         _bgcf_service,
                                         _enum_service,
                                         _acr_factory,
+                                        nullptr,
+                                        nullptr,
                                         false);
 
     // Create the MMTEL AppServer.
@@ -323,7 +327,8 @@ public:
                                 "homedomain",
                                 aliases,
                                 sproutlets,
-                                std::set<std::string>());
+                                std::set<std::string>(),
+                                "scscf");
 
     // Schedule timers.
     SipTest::poll();
@@ -339,7 +344,6 @@ public:
     delete _mmtel; _mmtel = NULL;
     delete _bgcf_sproutlet; _bgcf_sproutlet = NULL;
     delete _scscf_sproutlet; _scscf_sproutlet = NULL;
-    delete _scscf_selector; _scscf_selector = NULL;
     delete _acr_factory; _acr_factory = NULL;
     delete _sdm; _sdm = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
@@ -450,7 +454,6 @@ protected:
   static BgcfService* _bgcf_service;
   static EnumService* _enum_service;
   static ACRFactory* _acr_factory;
-  static SCSCFSelector* _scscf_selector;
   static SCSCFSproutlet* _scscf_sproutlet;
   static BGCFSproutlet* _bgcf_sproutlet;
   static Mmtel* _mmtel;
@@ -493,7 +496,6 @@ FakeXDMConnection* SCSCFTest::_xdm_connection;
 BgcfService* SCSCFTest::_bgcf_service;
 EnumService* SCSCFTest::_enum_service;
 ACRFactory* SCSCFTest::_acr_factory;
-SCSCFSelector* SCSCFTest::_scscf_selector;
 SCSCFSproutlet* SCSCFTest::_scscf_sproutlet;
 BGCFSproutlet* SCSCFTest::_bgcf_sproutlet;
 Mmtel* SCSCFTest::_mmtel;
@@ -3253,7 +3255,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_));
+  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("408")));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3346,7 +3348,7 @@ TEST_F(SCSCFTest, DISABLED_DefaultHandlingTerminateTimeout)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_));
+  EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3529,6 +3531,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueRecordRouting)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("Transport"))).Times(2);
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
   Message msg;
@@ -3656,7 +3659,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonResponsive)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(StrEq("sip:1.2.3.4:56789;transport=UDP")));
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(StrEq("sip:1.2.3.4:56789;transport=UDP"), _));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3745,7 +3748,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueImmediateError)
 
   // This flow counts as an unsuccessful AS communication, as a 100 trying does
   // not cause an AS to be treated as responsive.
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_));
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("500")));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3839,7 +3842,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinue100ThenError)
 
   // This flow counts as an unsuccessful AS communication, as a 100 trying does
   // not cause an AS to be treated as responsive.
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_));
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, _));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -4179,7 +4182,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeout)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_));
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -4266,7 +4269,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueDisabled)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_));
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, _));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -8269,3 +8272,133 @@ TEST_F(SCSCFTest, TestSessionExpires)
   rsp_hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires: .*"));
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false, rsp_hdrs);
 }
+
+TEST_F(SCSCFTest, TestSessionExpiresInDialog)
+{
+  SCOPED_TRACE("");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+
+  // Send an UPDATE in-dialog request to which we should always add RR and SE.
+  // Then check that if the UAS strips the SE, that Sprout tells the UAC to be
+  // the refresher. This ensures that our response processing is correct.
+  Message msg;
+  msg._extra = "Supported: timer";
+  msg._in_dialog = true;
+
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Record-Route"));
+  hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires:.*"));
+
+  list<HeaderMatcher> rsp_hdrs;
+  rsp_hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires:.*;refresher=uac"));
+  rsp_hdrs.push_back(HeaderMatcher("Record-Route"));
+
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, false, rsp_hdrs);
+}
+
+TEST_F(SCSCFTest, TestSessionExpiresWhenNoRecordRoute)
+{
+  SCOPED_TRACE("");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                R"(<IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>2</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:4.2.3.4:56788;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                  <InitialFilterCriteria>
+                                    <Priority>1</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
+
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.scscf_port, "4.2.3.4", 56788);
+
+
+  // Send an INVITE
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._todomain = "";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._requri = "sip:6505551234@homedomain";
+  msg._method = "INVITE";
+
+  pjsip_msg* out;
+  inject_msg(msg.get_request());
+
+  // INVITE passed to AS1
+  SCOPED_TRACE("INVITE (1)");
+  ASSERT_EQ(2, txdata_count());
+  free_txdata();
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  ASSERT_TRUE(!get_headers(out, "Record-Route").empty());
+  ASSERT_TRUE(!get_headers(out, "Session-Expires").empty());
+
+
+  // AS proxies INVITE back.
+  const pj_str_t STR_ROUTE = pj_str("Route");
+  const pj_str_t STR_REC_ROUTE = pj_str("Record-Route");
+  const pj_str_t STR_SESS_EXP = pj_str("Session-Expires");
+  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  pjsip_hdr* rr_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_REC_ROUTE, NULL);
+  pjsip_hdr* se_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_SESS_EXP, NULL);
+  pj_list_erase(rr_hdr);
+  pj_list_erase(se_hdr);
+
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+
+  inject_msg(out, &tpAS1);
+  free_txdata();
+
+  // 100 Trying goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS2
+  SCOPED_TRACE("INVITE (2)");
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  tpAS2.expect_target(current_txdata(), false);
+
+  // Should not RR between AS's and therefore shouldn't SE
+  ASSERT_TRUE(get_headers(out, "Record-Route").empty());
+  ASSERT_TRUE(get_headers(out, "Session-Expires").empty());
+}
+

@@ -101,11 +101,12 @@ static const PDLog CL_SPROUT_STARTED
 static const PDLog CL_SPROUT_NO_SI_CSCF
 (
   PDLogBase::CL_SPROUT_ID + 6,
-  PDLOG_ERR,
-  "Fatal - Must enable P-CSCF, S-CSCF or I-CSCF in /etc/clearwater/config.",
+  PDLOG_NOTICE,
+  "Neither P-CSCF, S-CSCF nor I-CSCF functionality is enabled on this node.",
   "Neither a P-CSCF, a S-CSCF nor an I-CSCF was configured in "
   "/etc/clearwater/config.",
-  "The application will exit and restart until the problem is fixed.",
+  "Most Sprout nodes act as either a P-CSCF, a S-CSCF or an I-CSCF. "
+  "None of P-CSCF, S-CSCF or I-CSCF functionality is enabled on this node.",
   "The P-CSCF is configured by setting the pcscf=<port> option. "
   "The S-CSCF is configured by setting the scscf=<port> option. "
   "The I-CSCF is configured by setting the icscf=<port> option."
@@ -370,7 +371,7 @@ static const PDLog CL_SPROUT_SCSCF_FILE_MISSING
   PDLOG_ERR,
   "The file listing S-CSCFs is not present.",
   "Sprout is configured as an I-CSCF, but the /etc/clearwater/s-cscf.json file (defining which S-CSCFs to use) does not exist.",
-  "The Sprout I-CSCF will not be able to select an S-CSCF.",
+  "The Sprout I-CSCF will use the default S-CSCF URI only.",
   "If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd. If you are managing /etc/clearwater/s-cscf.json manually, follow the documentation to create it."
 );
 
@@ -380,7 +381,7 @@ static const PDLog CL_SPROUT_SCSCF_FILE_EMPTY
   PDLOG_ERR,
   "The file listing S-CSCFs is empty.",
   "Sprout is configured as an I-CSCF, but the /etc/clearwater/s-cscf.json file (defining which S-CSCFs to use) is empty.",
-  "The Sprout I-CSCF will not be able to select an S-CSCF.",
+  "The Sprout I-CSCF will use the default S-CSCF URI only.",
   "If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd. If you are managing /etc/clearwater/s-cscf.json manually, follow the documentation to create it."
 );
 
@@ -390,7 +391,7 @@ static const PDLog CL_SPROUT_SCSCF_FILE_INVALID
   PDLOG_ERR,
   "The file listing S-CSCFs is invalid.",
   "Sprout is configured as an I-CSCF, but the /etc/clearwater/s-cscf.json file (defining which S-CSCFs to use) is invalid due to invalid JSON or missing elements.",
-  "The Sprout I-CSCF will not be able to select an S-CSCF.",
+  "The Sprout I-CSCF will use the default S-CSCF URI only.",
   "Follow the documentation to create this file correctly."
 );
 
@@ -424,11 +425,11 @@ static const PDLog CL_SPROUT_BGCF_FILE_INVALID
   "If you are expecting to route calls off-net, follow the documentation to create routes in /etc/clearwater/bgcf.json. Otherwise, delete this file."
 );
 
-static const PDLog1<const char *> CL_SPROUT_SESS_TERM_AS_COMM_FAILURE
+static const PDLog2<const char *, const char*> CL_SPROUT_SESS_TERM_AS_COMM_FAILURE
 (
   PDLogBase::CL_SPROUT_ID + 48,
   PDLOG_ERR,
-  "Sprout is currently unable to successfully communicate with an Application Server that uses session terminated default handling. The server's URI is: %s",
+  "Sprout is currently unable to successfully communicate with an Application Server that uses session terminated default handling. The server's URI is: %s. Failure reason: %s",
   "Communication is failing to an Application Server",
   "Probable major loss of service. The precise impact will vary depending on the role of this Application Server.",
   "Investigate why communication to this Application Server is failing. It might be due to failure of the AS, misconfiguration of Initial Filter Criteria, or network / DNS problems"
@@ -444,11 +445,11 @@ static const PDLog1<const char *> CL_SPROUT_SESS_TERM_AS_COMM_SUCCESS
   "No action"
 );
 
-static const PDLog1<const char *> CL_SPROUT_SESS_CONT_AS_COMM_FAILURE
+static const PDLog2<const char *, const char*> CL_SPROUT_SESS_CONT_AS_COMM_FAILURE
 (
   PDLogBase::CL_SPROUT_ID + 50,
   PDLOG_ERR,
-  "Sprout is currently unable to successfully communicate with an Application Server that uses session continued default handling. The server's URI is %s",
+  "Sprout is currently unable to successfully communicate with an Application Server that uses session continued default handling. The server's URI is %s. Failure reason: %s",
   "Communication is failing to <URI>",
   "Probable minor degradation of service, or loss of a supplemental service. The precise impact will vary depending on the role of the Application Server in the deployment.",
   "Investigate why communication to this Application Server is failing. It might be due to failure of the AS, misconfiguration of Initial Filter Criteria, or network / DNS problems"

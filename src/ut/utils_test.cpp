@@ -301,7 +301,6 @@ TEST_F(UtilsTest, BinomialDistribution)
 /// Test the parse_stores_arg function with various input parameters.
 TEST_F(UtilsTest, ParseStoresArg)
 {
-  // Valid 3-site GR deployment.
   std::vector<std::string> stores_arg = {"local_site=store0",
                                          "remote_site1=store1",
                                          "remote_site2=store2"};

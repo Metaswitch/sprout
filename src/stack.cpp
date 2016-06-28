@@ -147,6 +147,21 @@ const static std::string _known_statnames[] = {
 const std::string* known_statnames = _known_statnames;
 const int num_known_stats = sizeof(_known_statnames) / sizeof(std::string);
 
+// Variable to hold quiescing state, and interfaces to alter it
+static pj_bool_t quiescing = PJ_FALSE;
+
+extern void set_quiescing_true()
+{
+  TRC_DEBUG("Setting quiescing = PJ_TRUE");
+  quiescing = PJ_TRUE;
+}
+
+extern void set_quiescing_false()
+{
+  TRC_DEBUG("Setting quiescing = PJ_FALSE");
+  quiescing = PJ_FALSE;
+}
+
 /// PJSIP threads are donated to PJSIP to handle receiving at transport level
 /// and timers.
 static int pjsip_thread_func(void *p)
@@ -157,9 +172,30 @@ static int pjsip_thread_func(void *p)
 
   TRC_DEBUG("PJSIP thread started");
 
+  pj_bool_t curr_quiescing = PJ_FALSE;
+  pj_bool_t new_quiescing = quiescing;
+
   while (!quit_flag)
   {
     pjsip_endpt_handle_events(stack_data.endpt, &delay);
+
+    // Check if our quiescing state has changed, and act appropriately
+    new_quiescing = quiescing;
+    if (curr_quiescing != new_quiescing)
+    {
+      TRC_DEBUG("Quiescing state changed");
+      curr_quiescing = new_quiescing;
+
+      if (new_quiescing)
+      {
+        quiescing_mgr->quiesce();
+      }
+      else
+      {
+       quiescing_mgr->unquiesce();
+      }
+    }
+
   }
 
   TRC_DEBUG("PJSIP thread ended");
@@ -541,6 +577,7 @@ pj_status_t init_stack(const std::string& system_name,
                        const std::string& home_domain,
                        const std::string& additional_home_domains,
                        const std::string& scscf_uri,
+                       const std::string& sprout_hostname,
                        const std::string& alias_hosts,
                        SIPResolver* sipresolver,
                        int record_routing_model,
@@ -549,7 +586,8 @@ pj_status_t init_stack(const std::string& system_name,
                        const int sip_tcp_connect_timeout,
                        const int sip_tcp_send_timeout,
                        QuiescingManager *quiescing_mgr_arg,
-                       const std::string& cdf_domain)
+                       const std::string& cdf_domain,
+                       std::vector<std::string> sproutlet_uris)
 {
   pj_status_t status;
   pj_sockaddr pri_addr;
@@ -723,13 +761,11 @@ pj_status_t init_stack(const std::string& system_name,
 
   // The first address is important since this would be the one
   // to be added in Record-Route.
-  stack_data.name[stack_data.name_cnt] = stack_data.local_host;
-  stack_data.name_cnt++;
+  stack_data.name.push_back(stack_data.local_host);
 
   if (strcmp(local_host_cstr, public_host_cstr))
   {
-    stack_data.name[stack_data.name_cnt] = stack_data.public_host;
-    stack_data.name_cnt++;
+    stack_data.name.push_back(stack_data.public_host);
   }
 
   if ((scscf_port != 0) &&
@@ -740,16 +776,16 @@ pj_status_t init_stack(const std::string& system_name,
                                                                   stack_data.pool);
     if (uri != NULL)
     {
-      stack_data.name[stack_data.name_cnt] = uri->host;
-      stack_data.name_cnt++;
+      stack_data.name.push_back(uri->host);
     }
   }
 
   if (pj_gethostip(pj_AF_INET(), &pri_addr) == PJ_SUCCESS)
   {
-    pj_strdup2(stack_data.pool, &stack_data.name[stack_data.name_cnt],
+    pj_str_t pri_addr_pj_str;
+    pj_strdup2(stack_data.pool, &pri_addr_pj_str,
                pj_inet_ntoa(pri_addr.ipv4.sin_addr));
-    stack_data.name_cnt++;
+    stack_data.name.push_back(pri_addr_pj_str);
   }
 
   // Get the rest of IP interfaces.
@@ -762,36 +798,57 @@ pj_status_t init_stack(const std::string& system_name,
         continue;
       }
 
-      pj_strdup2(stack_data.pool, &stack_data.name[stack_data.name_cnt],
+      pj_str_t other_addr_pj_str;
+      pj_strdup2(stack_data.pool, &other_addr_pj_str,
                  pj_inet_ntoa(addr_list[i].ipv4.sin_addr));
-      stack_data.name_cnt++;
+      stack_data.name.push_back(other_addr_pj_str);
     }
   }
 
   // Note that we no longer consider 127.0.0.1 and localhost as aliases.
 
-  // Parse the list of alias host names.
+  // Parse the list of alias host names. Also add the Sprout hostname, and the
+  // sproutlet URIs
   stack_data.aliases = std::unordered_set<std::string>();
+  stack_data.aliases.insert(sprout_hostname);
+  for (std::vector<std::string>::iterator it = sproutlet_uris.begin();
+       it != sproutlet_uris.end();
+       ++it)
+  {
+    pjsip_sip_uri* sproutlet_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(
+                                                       *it,
+                                                       stack_data.pool,
+                                                       false);
+    if (sproutlet_uri)
+    {
+      stack_data.aliases.insert(PJUtils::pj_str_to_string(&sproutlet_uri->host));
+    }
+  }
+
   if (alias_hosts != "")
   {
     std::list<std::string> aliases;
     Utils::split_string(alias_hosts, ',', aliases, 0, true);
     stack_data.aliases.insert(aliases.begin(), aliases.end());
-    for (std::unordered_set<std::string>::iterator it = stack_data.aliases.begin();
-         it != stack_data.aliases.end();
-         ++it)
-    {
-      pj_strdup2(stack_data.pool, &stack_data.name[stack_data.name_cnt], it->c_str());
-      stack_data.name_cnt++;
-    }
+  }
+
+  for (std::unordered_set<std::string>::iterator it = stack_data.aliases.begin();
+       it != stack_data.aliases.end();
+       ++it)
+  {
+    pj_str_t alias_pj_str;
+    pj_strdup2(stack_data.pool, &alias_pj_str, it->c_str());
+    stack_data.name.push_back(alias_pj_str);
   }
 
   TRC_STATUS("Local host aliases:");
-  for (i = 0; i < stack_data.name_cnt; ++i)
+  for (std::vector<pj_str_t>::iterator it = stack_data.name.begin();
+       it != stack_data.name.end();
+       ++it)
   {
     TRC_STATUS(" %.*s",
-               (int)stack_data.name[i].slen,
-               stack_data.name[i].ptr);
+               (int)(*it).slen,
+               (*it).ptr);
   }
 
   // Set up the Last Value Cache, accumulators and counters.

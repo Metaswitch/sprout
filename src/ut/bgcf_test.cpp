@@ -208,6 +208,8 @@ public:
                                         _bgcf_service,
                                         _enum_service,
                                         _acr_factory,
+                                        nullptr,
+                                        nullptr,
                                         false);
 
     // Create the SproutletProxy.
@@ -220,7 +222,8 @@ public:
                                 "homedomain",
                                 aliases,
                                 sproutlets,
-                                std::set<std::string>());
+                                std::set<std::string>(),
+                                "scscf");
 
     // Schedule timers.
     SipTest::poll();

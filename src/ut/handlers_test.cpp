@@ -182,8 +182,10 @@ TEST_F(AoRTimeoutTasksTest, MainlineTest)
       EXPECT_CALL(*stack, send_reply(_, 200, _));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor));
       EXPECT_CALL(*store, set_aor_data(aor_id, aor, _, _, _, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote_aor1));
       EXPECT_CALL(*remote_store1, set_aor_data(aor_id, remote_aor1, _, _, _, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote_aor2));
       EXPECT_CALL(*remote_store2, set_aor_data(aor_id, remote_aor2, _, _, _, _)).WillOnce(Return(Store::OK));
   }
@@ -255,9 +257,11 @@ TEST_F(AoRTimeoutTasksTest, RemoteAoRNoBindingsTest)
       EXPECT_CALL(*stack, send_reply(_, 200, _));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor));
       EXPECT_CALL(*store, set_aor_data(aor_id, aor, _, _, _, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair));
       EXPECT_CALL(*remote_store1, set_aor_data(aor_id, remote1_aor_pair, _, _, _, _))
                    .WillOnce(Return(Store::OK));
+      EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair));
       EXPECT_CALL(*remote_store2, set_aor_data(aor_id, remote2_aor_pair, _, _, _, _))
                    .WillOnce(Return(Store::OK));
@@ -291,10 +295,13 @@ TEST_F(AoRTimeoutTasksTest, LocalAoRNoBindingsTest)
     InSequence s;
       EXPECT_CALL(*stack, send_reply(_, 200, _));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
+      EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor1));
       EXPECT_CALL(*store, set_aor_data(aor_id, aor_pair, _, _, _, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor2));
       EXPECT_CALL(*remote_store1, set_aor_data(aor_id, remote1_aor2, _, _, _, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor));
       EXPECT_CALL(*remote_store2, set_aor_data(aor_id, remote2_aor, _, _, _, _)).WillOnce(Return(Store::OK));
   }
@@ -336,11 +343,15 @@ TEST_F(AoRTimeoutTasksTest, NoBindingsTest)
     InSequence s;
       EXPECT_CALL(*stack, send_reply(_, 200, _));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
+      EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair1));
+      EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair1));
       EXPECT_CALL(*store, set_aor_data(aor_id, aor_pair, _, _, _, _)).WillOnce(DoAll(SetArgReferee<3>(true), Return(Store::OK)));
+      EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair2));
       EXPECT_CALL(*remote_store1, set_aor_data(aor_id, remote1_aor_pair2, _, _, _, _)).WillOnce(DoAll(SetArgReferee<3>(true), Return(Store::OK)));
+      EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair2));
       EXPECT_CALL(*remote_store2, set_aor_data(aor_id, remote2_aor_pair2, _, _, _, _)).WillOnce(DoAll(SetArgReferee<3>(true), Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(aor_id, "", HSSConnection::DEREG_TIMEOUT, 0));
@@ -369,8 +380,10 @@ TEST_F(AoRTimeoutTasksTest, NullAoRTest)
       EXPECT_CALL(*stack, send_reply(_, 200, _));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
       EXPECT_CALL(*store, set_aor_data(aor_id, _, _, _, _, _)).Times(0);
+      EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair));
       EXPECT_CALL(*remote_store1, set_aor_data(aor_id, _, _, _, _, _)).Times(0);
+      EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair));
       EXPECT_CALL(*remote_store2, set_aor_data(aor_id, _, _, _, _, _)).Times(0);
   }
@@ -968,7 +981,7 @@ TEST_F(AuthTimeoutTest, NonceTimedOut)
   int status = handler->handle_response(body);
 
   ASSERT_EQ(status, 200);
-  ASSERT_TRUE(fake_hss->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=6505550231%40homedomain", "{\"reqtype\": \"dereg-auth-timeout\"}"));
+  ASSERT_TRUE(fake_hss->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=6505550231%40homedomain", "{\"reqtype\": \"dereg-auth-timeout\", \"server_name\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}"));
 
   delete impi; impi = NULL;
 }
@@ -985,7 +998,7 @@ TEST_F(AuthTimeoutTest, NonceTimedOutWithEmptyCorrelator)
   int status = handler->handle_response(body);
 
   ASSERT_EQ(status, 200);
-  ASSERT_TRUE(fake_hss->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=6505550231%40homedomain", "{\"reqtype\": \"dereg-auth-timeout\"}"));
+  ASSERT_TRUE(fake_hss->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=6505550231%40homedomain", "{\"reqtype\": \"dereg-auth-timeout\", \"server_name\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}"));
 
   delete impi; impi = NULL;
 }

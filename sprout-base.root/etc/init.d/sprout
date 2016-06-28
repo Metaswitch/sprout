@@ -97,9 +97,15 @@ get_settings()
         # Set up defaults and then pull in the settings for this node.
         sas_server=0.0.0.0
         sprout_rr_level="pcscf"
+
+        # These Sproutlets are enabled by default. They listen on different
+        # ports to help ensure that requests have a unambiguous Sproutlet
+        # to route to.
+        icscf=5052
+        bgcf=5053
         scscf=5054
-        bgcf=5054
-        mmtel=5054
+        mmtel=5055
+
         alias_list=""
         default_session_expires=600
         signaling_dns_server=127.0.0.1
@@ -132,7 +138,7 @@ get_settings()
         # IP address needs to be surrounded by square brackets if it is IPv6.
         if [ ! -f /etc/clearwater/cluster_settings ]
         then
-          cluster_ip=$(python /usr/share/clearwater/bin/bracket_ipv6_address.py $local_ip)
+          cluster_ip=$(/usr/share/clearwater/bin/bracket-ipv6-address $local_ip)
           echo "servers=$cluster_ip:11211" > /etc/clearwater/cluster_settings
         fi
 
@@ -218,7 +224,6 @@ get_daemon_args()
                      --analytics=$log_directory
                      --log-file=$log_directory
                      --log-level=$log_level
-                     --pidfile=$PIDFILE
                      --alias=$public_ip,$public_hostname,$alias_list"
 
         if [ -n "$reg_max_expires" ]
@@ -321,7 +326,7 @@ do_start()
         # daemon is not running, so attempt to start it.
         setup_environment
         get_daemon_args
-        /usr/share/clearwater/bin/run-in-signaling-namespace start-stop-daemon --start --quiet --background --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME -- $DAEMON_ARGS \
+        /usr/share/clearwater/bin/run-in-signaling-namespace start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME -- $DAEMON_ARGS --daemon --pidfile=$PIDFILE \
                 || return 2
         # Add code here, if necessary, that waits for the process to be ready
         # to handle requests from services started subsequently which depend

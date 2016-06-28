@@ -56,7 +56,6 @@ public:
   void unload();
 
 private:
-  Alarm* _cass_comm_alarm;
   CommunicationMonitor* _cass_comm_monitor;
   CallListStore::Store* _call_list_store;
   MementoAppServer* _memento;
@@ -70,7 +69,6 @@ MementoPlugin sproutlet_plugin;
 
 
 MementoPlugin::MementoPlugin() :
-  _cass_comm_alarm(NULL),
   _cass_comm_monitor(NULL),
   _call_list_store(NULL),
   _memento(NULL),
@@ -100,10 +98,12 @@ bool MementoPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     }
     else
     {
-      _cass_comm_alarm = new Alarm("memento",
-                                   AlarmDef::MEMENTO_AS_CASSANDRA_COMM_ERROR,
-                                   AlarmDef::CRITICAL);
-      _cass_comm_monitor = new CommunicationMonitor(_cass_comm_alarm, "Memento", "Memcached");
+      _cass_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                              "memento",
+                                                              AlarmDef::MEMENTO_AS_CASSANDRA_COMM_ERROR,
+                                                              AlarmDef::CRITICAL),
+                                                    "Memento",
+                                                    "Memcached");
 
       _call_list_store = new CallListStore::Store();
       _call_list_store->configure_connection("localhost", 9160, _cass_comm_monitor);
@@ -138,5 +138,4 @@ void MementoPlugin::unload()
   delete _memento;
   delete _call_list_store;
   delete _cass_comm_monitor;
-  delete _cass_comm_alarm;
 }

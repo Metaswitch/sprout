@@ -49,7 +49,8 @@ FakeHSSConnection::FakeHSSConnection() : HSSConnection("localhost",
                                                        &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
                                                        &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
                                                        &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
-                                                       NULL)
+                                                       NULL,
+                                                       "sip:scscf.sprout.homedomain:5058;transport=TCP")
 {
 }
 
@@ -99,7 +100,7 @@ void FakeHSSConnection::set_impu_result(const std::string& impu,
                         "<ClearwaterRegData><RegistrationState>" + state + "</RegistrationState>"
                         + subxml + chargingaddrsxml + "</ClearwaterRegData>");
 
-  _results[UrlBody(url, (type.empty() ? "" : "{\"reqtype\": \""+type+"\"}"))] = result;
+  _results[UrlBody(url, (type.empty() ? "" : "{\"reqtype\": \""+type+"\", \"server_name\": \""+_scscf_uri+"\"}"))] = result;
 }
 
 

@@ -84,8 +84,8 @@ AuthenticationStatsTables FAKE_AUTHENTICATION_STATS_TABLES =
 CounterTable* CounterTable::create(std::string name, std::string oid) { return new FakeCounterTable(); };
 
 IPCountTable* IPCountTable::create(std::string name, std::string oid) { return new FakeIPCountTable(); };
-IPCountRow::IPCountRow(struct in_addr addr) {};
-IPCountRow::IPCountRow(struct in6_addr addr) {};
+IPCountRow::IPCountRow(struct in_addr addr) : IPRow(addr) {};
+IPCountRow::IPCountRow(struct in6_addr addr) : IPRow(addr) {};
 
 ColumnData IPCountRow::get_columns()
 {

@@ -240,8 +240,6 @@ static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q
 
 static sem_t term_sem;
 
-static pj_bool_t quiescing = PJ_FALSE;
-static sem_t quiescing_sem;
 QuiescingManager* quiescing_mgr;
 
 const static int QUIESCE_SIGNAL = SIGQUIT;
@@ -340,7 +338,7 @@ static void usage(void)
        "                            Target latency above which throttling applies for the Cassandra store\n"
        "                            that's part of the Memento application server (default: 1000000)\n"
        "     --max-tokens N         Maximum number of tokens allowed in the token bucket (used by\n"
-       "                            the throttling code (default: 20))\n"
+       "                            the throttling code (default: 1000))\n"
        "     --init-token-rate N    Initial token refill rate of tokens in the token bucket (used by\n"
        "                            the throttling code (default: 100.0))\n"
        "     --min-token-rate N     Minimum token refill rate of tokens in the token bucket (used by\n"
@@ -693,11 +691,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
           options->sas_system_name = sas_options[1];
           TRC_INFO("SAS set to %s", options->sas_server.c_str());
           TRC_INFO("System name is set to %s", options->sas_system_name.c_str());
-        }
-        else
-        {
-          CL_SPROUT_INVALID_SAS_OPTION.log();
-          TRC_WARNING("Invalid --sas option, SAS disabled");
         }
       }
       break;
@@ -1153,52 +1146,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 }
 
 
-int daemonize()
-{
-  TRC_STATUS("Switching to daemon mode");
-
-  pid_t pid = fork();
-  if (pid == -1)
-  {
-    // Fork failed, return error.
-    return errno;
-  }
-  else if (pid > 0)
-  {
-    // Parent process, fork successful, so exit.
-    exit(0);
-  }
-
-  // Must now be running in the context of the child process.
-
-  // Redirect standard files to /dev/null
-  if (freopen("/dev/null", "r", stdin) == NULL)
-  {
-    return errno;
-  }
-  if (freopen("/dev/null", "w", stdout) == NULL)
-  {
-    return errno;
-  }
-  if (freopen("/dev/null", "w", stderr) == NULL)
-  {
-    return errno;
-  }
-
-  if (setsid() == -1)
-  {
-    // Create a new session to divorce the child from the tty of the parent.
-    return errno;
-  }
-
-  signal(SIGHUP, SIG_IGN);
-
-  umask(0);
-
-  return 0;
-}
-
-
 // Signal handler that simply dumps the stack and then crashes out.
 void signal_handler(int sig)
 {
@@ -1230,17 +1177,13 @@ void quiesce_unquiesce_handler(int sig)
   if (sig == QUIESCE_SIGNAL)
   {
     TRC_STATUS("Quiesce signal received");
-    quiescing = PJ_TRUE;
+    set_quiescing_true();
   }
   else
   {
     TRC_STATUS("Unquiesce signal received");
-    quiescing = PJ_FALSE;
+    set_quiescing_false();
   }
-
-  // Wake up the thread that acts on the notification (don't act on it in this
-  // thread since we're in a signal handler).
-  sem_post(&quiescing_sem);
 }
 
 
@@ -1248,59 +1191,6 @@ void quiesce_unquiesce_handler(int sig)
 void terminate_handler(int sig)
 {
   sem_post(&term_sem);
-}
-
-
-void* quiesce_unquiesce_thread_func(void* dummy)
-{
-  // First register the thread with PJSIP.
-  pj_thread_desc desc;
-  pj_thread_t* thread;
-  pj_status_t status;
-  pj_bzero(desc, sizeof(pj_thread_desc));
-
-  status = pj_thread_register("Quiesce/unquiesce thread", desc, &thread);
-
-  if (status != PJ_SUCCESS)
-  {
-    TRC_ERROR("Error creating quiesce/unquiesce thread (status = %d). "
-              "This function will not be available",
-              status);
-    return NULL;
-  }
-
-  pj_bool_t curr_quiescing = PJ_FALSE;
-  pj_bool_t new_quiescing = quiescing;
-
-  while (PJ_TRUE)
-  {
-    // Only act if the quiescing state has changed.
-    if (curr_quiescing != new_quiescing)
-    {
-      curr_quiescing = new_quiescing;
-
-      if (new_quiescing)
-      {
-        quiescing_mgr->quiesce();
-      }
-      else
-      {
-        quiescing_mgr->unquiesce();
-      }
-    }
-
-    // Wait for the quiescing flag to be written to and read in the new value.
-    // Read into a local variable to avoid issues if the flag changes under our
-    // feet.
-    //
-    // Note that sem_wait is a cancel point, so calling pthread_cancel on this
-    // thread while it is waiting on the semaphore will cause it to cancel.
-    sem_wait(&quiescing_sem);
-    new_quiescing = quiescing;
-    TRC_STATUS("Value of new_quiescing is %s", (new_quiescing == PJ_FALSE) ? "false" : "true");
-  }
-
-  return NULL;
 }
 
 class QuiesceCompleteHandler : public QuiesceCompletionInterface
@@ -1371,6 +1261,7 @@ HttpResolver* http_resolver = NULL;
 ACRFactory* scscf_acr_factory = NULL;
 EnumService* enum_service = NULL;
 ExceptionHandler* exception_handler = NULL;
+AlarmManager* alarm_manager = NULL;
 
 /*
  * main()
@@ -1382,7 +1273,6 @@ int main(int argc, char* argv[])
 
   Logger* analytics_logger_logger = NULL;
   AnalyticsLogger* analytics_logger = NULL;
-  pthread_t quiesce_unquiesce_thread;
   DnsCachedResolver* dns_resolver = NULL;
   SIPResolver* sip_resolver = NULL;
   AstaireResolver* astaire_resolver = NULL;
@@ -1445,7 +1335,7 @@ int main(int argc, char* argv[])
   opt.call_list_ttl = 604800;
   opt.target_latency_us = 100000;
   opt.cass_target_latency_us = 1000000;
-  opt.max_tokens = 20;
+  opt.max_tokens = 1000;
   opt.init_token_rate = 100.0;
   opt.min_token_rate = 10.0;
   opt.log_to_file = PJ_FALSE;
@@ -1491,7 +1381,7 @@ int main(int argc, char* argv[])
 
   if (opt.daemon)
   {
-    int errnum = daemonize();
+    int errnum = Utils::daemonize();
     if (errnum != 0)
     {
       TRC_ERROR("Failed to convert to daemon, %d (%s)", errnum, strerror(errnum));
@@ -1546,6 +1436,8 @@ int main(int argc, char* argv[])
     }
   }
 
+  start_signal_handlers();
+
   if (opt.analytics_enabled)
   {
     analytics_logger_logger = new Logger(opt.analytics_directory, std::string("log"));
@@ -1553,13 +1445,19 @@ int main(int argc, char* argv[])
     analytics_logger = new AnalyticsLogger(analytics_logger_logger);
   }
 
+  std::vector<std::string> sproutlet_uris;
   SPROUTLET_MACRO(SPROUTLET_VERIFY_OPTIONS)
+
+  if (opt.sas_server == "0.0.0.0")
+  {
+    TRC_WARNING("SAS server option was invalid or not configured - SAS is disabled");
+    CL_SPROUT_INVALID_SAS_OPTION.log();
+  }
 
   if ((!opt.pcscf_enabled) && (!opt.enabled_scscf) && (!opt.enabled_icscf))
   {
     CL_SPROUT_NO_SI_CSCF.log();
-    TRC_ERROR("Must enable P-CSCF, S-CSCF or I-CSCF");
-    return 1;
+    TRC_WARNING("Most Sprout nodes have at least one of P-CSCF, S-CSCF or I-CSCF enabled");
   }
 
   if ((opt.pcscf_enabled) && ((opt.enabled_scscf) || (opt.enabled_icscf)))
@@ -1805,40 +1703,50 @@ int main(int argc, char* argv[])
   if (opt.enabled_icscf || opt.enabled_scscf)
   {
     // Create Sprout's alarm objects.
+    alarm_manager = new AlarmManager();
 
-    chronos_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_CHRONOS_COMM_ERROR,
-                                                                        AlarmDef::MAJOR),
+    chronos_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                              "sprout",
+                                                              AlarmDef::SPROUT_CHRONOS_COMM_ERROR,
+                                                              AlarmDef::MAJOR),
                                                     "Sprout",
                                                     "Chronos");
 
-    enum_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_ENUM_COMM_ERROR,
-                                                                     AlarmDef::MAJOR),
+    enum_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                           "sprout",
+                                                           AlarmDef::SPROUT_ENUM_COMM_ERROR,
+                                                           AlarmDef::MAJOR),
                                                  "Sprout",
                                                  "ENUM");
 
-    hss_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_HOMESTEAD_COMM_ERROR,
-                                                                    AlarmDef::CRITICAL),
+    hss_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                          "sprout",
+                                                          AlarmDef::SPROUT_HOMESTEAD_COMM_ERROR,
+                                                          AlarmDef::CRITICAL),
                                                 "Sprout",
                                                 "Homestead");
 
-    astaire_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_ASTAIRE_COMM_ERROR,
-                                                                        AlarmDef::CRITICAL),
+    astaire_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                              "sprout",
+                                                              AlarmDef::SPROUT_ASTAIRE_COMM_ERROR,
+                                                              AlarmDef::CRITICAL),
                                                     "Sprout",
                                                     "Astaire");
 
-    remote_astaire_comm_monitor = new CommunicationMonitor(new Alarm("sprout",
+    remote_astaire_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                                     "sprout",
                                                                      AlarmDef::SPROUT_REMOTE_ASTAIRE_COMM_ERROR,
                                                                      AlarmDef::CRITICAL),
-                                                    "Sprout",
-                                                    "remote Astaire");
+                                                           "Sprout",
+                                                           "remote Astaire");
 
-    ralf_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_RALF_COMM_ERROR,
-                                                                     AlarmDef::MAJOR),
+    ralf_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                           "sprout",
+                                                           AlarmDef::SPROUT_RALF_COMM_ERROR,
+                                                           AlarmDef::MAJOR),
                                                  "Sprout",
                                                  "Ralf");
 
-    // Start the alarm request agent
-    AlarmReqAgent::get_instance().start();
   }
 
   // Start the load monitor
@@ -1883,6 +1791,7 @@ int main(int argc, char* argv[])
                       opt.home_domain,
                       opt.additional_home_domains,
                       opt.uri_scscf,
+                      opt.sprout_hostname,
                       opt.alias_hosts,
                       sip_resolver,
                       opt.record_routing_model,
@@ -1891,7 +1800,8 @@ int main(int argc, char* argv[])
                       opt.sip_tcp_connect_timeout,
                       opt.sip_tcp_send_timeout,
                       quiescing_mgr,
-                      opt.billing_cdf);
+                      opt.billing_cdf,
+                      sproutlet_uris);
 
   if (status != PJ_SUCCESS)
   {
@@ -1899,16 +1809,6 @@ int main(int argc, char* argv[])
     TRC_ERROR("Error initializing stack %s", PJUtils::pj_status_to_string(status).c_str());
     return 1;
   }
-
-  // Initialize the semaphore that unblocks the quiesce thread, and the thread
-  // itself. This must happen after init_stack is called, because this
-  // calls init_pjsip, which calls pj_init, which sets up the
-  // necessary environment for us to register threads with pjsip.
-  sem_init(&quiescing_sem, 0, 0);
-  pthread_create(&quiesce_unquiesce_thread,
-                 NULL,
-                 quiesce_unquiesce_thread_func,
-                 NULL);
 
   // Set up our signal handler for (un)quiesce signals.
   signal(QUIESCE_SIGNAL, quiesce_unquiesce_handler);
@@ -1954,7 +1854,8 @@ int main(int argc, char* argv[])
                                        homestead_sar_latency_table,
                                        homestead_uar_latency_table,
                                        homestead_lir_latency_table,
-                                       hss_comm_monitor);
+                                       hss_comm_monitor,
+                                       opt.uri_scscf);
   }
 
   if ((opt.enabled_scscf) || (opt.enabled_icscf))
@@ -2027,7 +1928,6 @@ int main(int argc, char* argv[])
                                  NULL,
                                  "",
                                  quiescing_mgr,
-                                 NULL,
                                  opt.enabled_icscf,
                                  opt.enabled_scscf,
                                  opt.emerg_reg_accepted);
@@ -2254,7 +2154,8 @@ int main(int argc, char* argv[])
                                          opt.sprout_hostname,
                                          host_aliases,
                                          sproutlets,
-                                         opt.stateless_proxies);
+                                         opt.stateless_proxies,
+                                         opt.prefix_scscf);
     if (sproutlet_proxy == NULL)
     {
       TRC_ERROR("Failed to create SproutletProxy");
@@ -2432,9 +2333,6 @@ int main(int argc, char* argv[])
 
   if (opt.enabled_icscf || opt.enabled_scscf)
   {
-    // Stop the alarm request agent
-    AlarmReqAgent::get_instance().stop();
-
     // Delete Sprout's alarm objects
     delete chronos_comm_monitor;
     delete enum_comm_monitor;
@@ -2442,6 +2340,7 @@ int main(int argc, char* argv[])
     delete astaire_comm_monitor;
     delete remote_astaire_comm_monitor;
     delete ralf_comm_monitor;
+    delete alarm_manager;
   }
 
   delete latency_table;
@@ -2486,12 +2385,6 @@ int main(int argc, char* argv[])
   signal(UNQUIESCE_SIGNAL, SIG_DFL);
   signal(SIGTERM, SIG_DFL);
 
-  // Cancel the (un)quiesce thread (so that we can safely destroy the semaphore
-  // it uses).
-  pthread_cancel(quiesce_unquiesce_thread);
-  pthread_join(quiesce_unquiesce_thread, NULL);
-
-  sem_destroy(&quiescing_sem);
   sem_destroy(&term_sem);
 
   return 0;

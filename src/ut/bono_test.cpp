@@ -59,7 +59,8 @@ using testing::MatchesRegex;
 using testing::HasSubstr;
 using testing::Not;
 
-namespace SP
+// Bono Test
+namespace BT
 {
   class Message
   {
@@ -274,7 +275,6 @@ public:
     // implementation doesn't matter.
     _enum_service = new JSONEnumService(string(UT_DIR).append("/test_stateful_proxy_enum.json"));
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
-    _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_stateful_proxy_scscf.json"));
     _edge_upstream_proxy = edge_upstream_proxy;
     _ibcf_trusted_hosts = ibcf_trusted_hosts;
     _icscf_uri_str = icscf_uri_str;
@@ -303,7 +303,6 @@ public:
                                           _acr_factory,
                                           _icscf_uri_str,
                                           &_quiescing_manager,
-                                          _scscf_selector,
                                           _icscf,
                                           _scscf,
                                           _emerg_reg);
@@ -329,7 +328,6 @@ public:
     delete _xdm_connection; _xdm_connection = NULL;
     delete _enum_service; _enum_service = NULL;
     delete _bgcf_service; _bgcf_service = NULL;
-    delete _scscf_selector; _scscf_selector = NULL;
     SipTest::TearDownTestCase();
   }
 
@@ -392,7 +390,6 @@ protected:
   static IfcHandler* _ifc_handler;
   static EnumService* _enum_service;
   static BgcfService* _bgcf_service;
-  static SCSCFSelector* _scscf_selector;
   static ACRFactory* _acr_factory;
   static string _edge_upstream_proxy;
   static string _ibcf_trusted_hosts;
@@ -405,7 +402,7 @@ protected:
                      bool tpAset,
                      TransportFlow* tpB,
                      bool tpBset,
-                     SP::Message& msg,
+                     BT::Message& msg,
                      string route,
                      bool expect_100,
                      bool expect_trusted_headers_on_requests,
@@ -423,7 +420,6 @@ FakeXDMConnection* StatefulProxyTestBase::_xdm_connection;
 IfcHandler* StatefulProxyTestBase::_ifc_handler;
 EnumService* StatefulProxyTestBase::_enum_service;
 BgcfService* StatefulProxyTestBase::_bgcf_service;
-SCSCFSelector* StatefulProxyTestBase::_scscf_selector;
 ACRFactory* StatefulProxyTestBase::_acr_factory;
 string StatefulProxyTestBase::_edge_upstream_proxy;
 string StatefulProxyTestBase::_ibcf_trusted_hosts;
@@ -467,7 +463,7 @@ protected:
                       string supported = "outbound, path",
                       bool expectPath = true,
                       string via = "");
-  SP::Message doInviteEdge(string token);
+  BT::Message doInviteEdge(string token);
 };
 
 class StatefulEdgeProxyAcceptRegisterTest : public StatefulProxyTestBase
@@ -552,7 +548,7 @@ public:
 protected:
 };
 
-using SP::Message;
+using BT::Message;
 
 // Test flows into Sprout (S-CSCF), in particular for header stripping.
 // Check the transport each message is on, and the headers.
@@ -561,7 +557,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
                                           bool tpAset,         //< Expect all requests to Alice on same transport?
                                           TransportFlow* tpB,  //< Bob's transport.
                                           bool tpBset,         //< Expect all requests to Bob on same transport?
-                                          SP::Message& msg,    //< Message to use for testing.
+                                          BT::Message& msg,    //< Message to use for testing.
                                           string route,        //< Route header to be used on INVITE
                                           bool expect_100,     //< Will we get a 100 Trying?
                                           bool expect_trusted_headers_on_requests, //< Should P-A-N-I/P-V-N-I be passed on requests?

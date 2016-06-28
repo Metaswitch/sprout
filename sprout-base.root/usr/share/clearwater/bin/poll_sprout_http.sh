@@ -40,7 +40,7 @@ scscf=5054
 # If we have S-CSCF configured, check it.
 rc=0
 if [ "$scscf" != "0" ] ; then
-  http_ip=$(/usr/share/clearwater/bin/bracket_ipv6_address.py $local_ip)
+  http_ip=$(/usr/share/clearwater/bin/bracket-ipv6-address $local_ip)
   /usr/share/clearwater/bin/poll-http $http_ip:9888
   rc=$?
 fi

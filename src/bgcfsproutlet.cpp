@@ -51,25 +51,21 @@ BGCFSproutlet::BGCFSproutlet(const std::string& bgcf_name,
                              BgcfService* bgcf_service,
                              EnumService* enum_service,
                              ACRFactory* acr_factory,
+                             SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
+                             SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                              bool override_npdi) :
-  Sproutlet(bgcf_name, port),
+  Sproutlet(bgcf_name, port, "", incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl),
   _bgcf_service(bgcf_service),
   _enum_service(enum_service),
   _acr_factory(acr_factory),
   _override_npdi(override_npdi)
 {
-  _incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("bgcf_incoming_sip_transactions",
-                                                                                    "1.2.826.0.1.1578918.9.3.22");
-  _outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("bgcf_outgoing_sip_transactions",
-                                                                                    "1.2.826.0.1.1578918.9.3.23");
 }
 
 
 /// BGCFSproutlet destructor.
 BGCFSproutlet::~BGCFSproutlet()
 {
-  delete _incoming_sip_transactions_tbl;
-  delete _outgoing_sip_transactions_tbl;
 }
 
 

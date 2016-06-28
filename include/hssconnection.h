@@ -67,7 +67,8 @@ public:
                 SNMP::EventAccumulatorTable* homestead_sar_latency_tbl,
                 SNMP::EventAccumulatorTable* homestead_uar_latency_tbl,
                 SNMP::EventAccumulatorTable* homestead_lir_latency_tbl,
-                CommunicationMonitor* comm_monitor);
+                CommunicationMonitor* comm_monitor,
+                std::string scscf_uri);
   virtual ~HSSConnection();
 
   HTTPCode get_auth_vector(const std::string& private_user_id,
@@ -125,6 +126,7 @@ public:
                                      std::map<std::string, Ifcs >& service_profiles,
                                      std::vector<std::string>& associated_uris,
                                      SAS::TrailId trail);
+
   HTTPCode get_registration_data(const std::string& public_user_identity,
                                  std::string& regstate,
                                  std::map<std::string, Ifcs >& service_profiles,
@@ -169,6 +171,7 @@ private:
   SNMP::EventAccumulatorTable* _sar_latency_tbl;
   SNMP::EventAccumulatorTable* _uar_latency_tbl;
   SNMP::EventAccumulatorTable* _lir_latency_tbl;
+  std::string _scscf_uri;
 };
 
 #endif

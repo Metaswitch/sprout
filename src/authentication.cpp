@@ -640,8 +640,6 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
   {
     TRC_DEBUG("Request does not need authentication - not on S-CSCF port");
     // Request not received on S-CSCF port, so don't authenticate it.
-    SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_NOT_SCSCF_PORT, 0);
-    SAS::report_event(event);
 
     return PJ_FALSE;
   }
@@ -692,14 +690,22 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
         // The integrity protected indicator is included and set to tls-yes or
         // ip-assoc-yes.  This indicates the client has already been authenticated
         // so we will accept this REGISTER even if there is a challenge response.
-        // (Values of tls-pending or ip-assoc-pending indicate the challenge
-        // should be checked.)
-        TRC_INFO("SIP Digest authenticated request integrity protected by edge proxy");
+        // Values of tls-pending or ip-assoc-pending indicate the challenge
+        // should be checked.
 
-        SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_INTEGRITY_PROTECTED, 0);
-        SAS::report_event(event);
+        // We should still challenge though if we find that the request wasn't
+        // sent to this S-CSCF, as this triggers the HSS to accept an S-CSCF
+        // change (by generating the correct MAR).
+        if (PJUtils::get_next_routing_header(rdata->msg_info.msg) ==
+            PJUtils::pj_str_to_string(&stack_data.scscf_uri))
+        {
+          TRC_INFO("SIP Digest authenticated request integrity protected by edge proxy");
 
-        return PJ_FALSE;
+          SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_INTEGRITY_PROTECTED, 0);
+          SAS::report_event(event);
+
+          return PJ_FALSE;
+        }
       }
       else if ((integrity != NULL) &&
                (pj_stricmp(&integrity->value, &STR_YES) == 0) &&
@@ -710,12 +716,20 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
         // received on an integrity protected channel, so we will let the
         // request through if there is no challenge response, but must check
         // the challenge response if included.
-        TRC_INFO("AKA authenticated request integrity protected by edge proxy");
 
-        SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_INTEGRITY_PROTECTED, 1);
-        SAS::report_event(event);
+        // We should still challenge though if we find that the request wasn't
+        // sent to this S-CSCF, as this triggers the HSS to accept an S-CSCF
+        // change (by generating the correct MAR).
+        if (PJUtils::get_next_routing_header(rdata->msg_info.msg) ==
+            PJUtils::pj_str_to_string(&stack_data.scscf_uri))
+        {
+          TRC_INFO("AKA authenticated request integrity protected by edge proxy");
 
-        return PJ_FALSE;
+          SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_INTEGRITY_PROTECTED, 1);
+          SAS::report_event(event);
+
+          return PJ_FALSE;
+        }
       }
     }
 
@@ -1134,8 +1148,10 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       std::string impu;
 
       PJUtils::get_impi_and_impu(rdata, impi, impu);
-
-      hss->update_registration_state(impu, impi, HSSConnection::AUTH_FAIL, trail);
+      hss->update_registration_state(impu,
+                                     impi,
+                                     HSSConnection::AUTH_FAIL,
+                                     trail);
     }
 
     if (analytics != NULL)
@@ -1163,10 +1179,10 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   //  * if a challenged request gets retransmitted, we don't repeat the work
   pjsip_transaction* tsx = NULL;
   status = pjsip_tsx_create_uas2(NULL, rdata, NULL, &tsx);
-  set_trail(tsx, trail);
   if (status != PJ_SUCCESS)
   {
     // LCOV_EXCL_START - defensive code not hit in UT
+    set_trail(tdata, trail);
     TRC_WARNING("Couldn't create PJSIP transaction for authentication response: %d"
                 " (sending statelessly instead)", status);
     // Send the response statelessly in this case - it's better than nothing
@@ -1175,6 +1191,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   }
   else
   {
+    set_trail(tsx, trail);
     // Let the tsx know about the original message
     pjsip_tsx_recv_msg(tsx, rdata);
     // Send our response in this transaction

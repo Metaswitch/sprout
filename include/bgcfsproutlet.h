@@ -73,6 +73,8 @@ public:
                 BgcfService* bgcf_service,
                 EnumService* enum_service,
                 ACRFactory* acr_factory,
+                SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
+                SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                 bool override_npdi);
   ~BGCFSproutlet();
 

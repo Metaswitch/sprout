@@ -60,7 +60,6 @@ class UACTransaction;
 #include "hssconnection.h"
 #include "aschain.h"
 #include "quiescing_manager.h"
-#include "scscfselector.h"
 #include "icscfrouter.h"
 #include "acr.h"
 #include "session_expires_helper.h"
@@ -376,7 +375,6 @@ pj_status_t init_stateful_proxy(SubscriberDataManager* sdm,
                                 ACRFactory* icscf_rfacr_factory,
                                 const std::string& icscf_uri_str,
                                 QuiescingManager* quiescing_manager,
-                                SCSCFSelector *scscfSelector,
                                 bool icscf_enabled,
                                 bool scscf_enabled,
                                 bool emerg_reg_accepted);

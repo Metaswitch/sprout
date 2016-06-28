@@ -680,6 +680,16 @@ TEST_F(ImpiStoreParsingTest, AVDigestNotObject)
   ASSERT_EQ(NULL, impi);
 }
 
+TEST_F(ImpiStoreParsingTest, AVDigestNCTombstone)
+{
+  local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\",\"nc\":5},\"tombstone\":true}", 0, 30, 0L);
+  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
+  ASSERT_TRUE(impi != NULL);
+  ASSERT_EQ(1, impi->auth_challenges.size());
+  ASSERT_EQ(6, impi->auth_challenges[0]->nonce_count);
+  delete impi;
+}
+
 TEST_F(ImpiStoreParsingTest, AVDigestMissingNC1)
 {
   local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\"}}", 0, 30, 0L);
@@ -692,7 +702,7 @@ TEST_F(ImpiStoreParsingTest, AVDigestMissingNC1)
 
 TEST_F(ImpiStoreParsingTest, AVDigestMissingNC2)
 {
-  local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\",\"tombstone\":true}}", 0, 30, 0L);
+  local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\"},\"tombstone\":true}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_TRUE(impi != NULL);
   ASSERT_EQ(1, impi->auth_challenges.size());
@@ -705,6 +715,16 @@ TEST_F(ImpiStoreParsingTest, AVDigestExpiresInPast)
   local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\",\"expires\":1}}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
   ASSERT_EQ(NULL, impi);
+}
+
+TEST_F(ImpiStoreParsingTest, AVDigestBranch)
+{
+  local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\"},\"branch\":\"correlator\"}", 0, 30, 0L);
+  ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
+  ASSERT_TRUE(impi != NULL);
+  ASSERT_EQ(1, impi->auth_challenges.size());
+  ASSERT_EQ("correlator", impi->auth_challenges[0]->correlator);
+  delete impi;
 }
 
 TEST_F(ImpiStoreParsingTest, AVAKAMissingResponse)
@@ -779,13 +799,17 @@ TEST_F(ImpiStoreSerializingTest, DigestTombstone)
 {
   ImpiStore::Impi* impi = example_impi_digest();
   impi->auth_challenges[0]->nonce_count++;
+  uint32_t nonce_count = impi->auth_challenges[0]->nonce_count;
   rapidjson::Document* json = setAndGet(impi);
   ASSERT_TRUE((*json).IsObject());
   ASSERT_TRUE((*json).HasMember("digest"));
   ASSERT_TRUE((*json)["digest"].IsObject());
-  ASSERT_TRUE((*json)["digest"].HasMember("tombstone"));
-  ASSERT_TRUE((*json)["digest"]["tombstone"].IsBool());
-  ASSERT_TRUE((*json)["digest"]["tombstone"].GetBool());
+  ASSERT_TRUE((*json)["digest"].HasMember("nc"));
+  ASSERT_TRUE((*json)["digest"]["nc"].IsUint());
+  ASSERT_EQ(nonce_count - 1, (*json)["digest"]["nc"].GetUint());
+  ASSERT_TRUE((*json).HasMember("tombstone"));
+  ASSERT_TRUE((*json)["tombstone"].IsBool());
+  ASSERT_TRUE((*json)["tombstone"].GetBool());
   delete json;
 }
 
@@ -801,4 +825,15 @@ TEST_F(ImpiStoreSerializingTest, DigestExpired)
   uint64_t cas;
   status = local_store->get_data("av", IMPI + '\\' + NONCE1, data, cas, 0L);
   ASSERT_EQ(Store::Status::NOT_FOUND, status);
+}
+
+TEST_F(ImpiStoreSerializingTest, DigestCorrelator)
+{
+  ImpiStore::Impi* impi = example_impi_digest();
+  rapidjson::Document* json = setAndGet(impi);
+  ASSERT_TRUE((*json).IsObject());
+  ASSERT_TRUE((*json).HasMember("branch"));
+  ASSERT_TRUE((*json)["branch"].IsString());
+  ASSERT_STREQ("correlator", (*json)["branch"].GetString());
+  delete json;
 }

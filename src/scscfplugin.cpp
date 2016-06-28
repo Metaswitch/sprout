@@ -59,6 +59,9 @@ private:
   SCSCFSproutlet* _scscf_sproutlet;
   Alarm* _sess_cont_as_alarm;
   Alarm* _sess_term_as_alarm;
+
+  SNMP::SuccessFailCountByRequestTypeTable* _incoming_sip_transactions_tbl;
+  SNMP::SuccessFailCountByRequestTypeTable* _outgoing_sip_transactions_tbl;
 };
 
 /// Export the plug-in using the magic symbol "sproutlet_plugin"
@@ -67,18 +70,30 @@ SCSCFPlugin sproutlet_plugin;
 }
 
 SCSCFPlugin::SCSCFPlugin() :
-  _scscf_sproutlet(NULL)
+  _scscf_sproutlet(NULL),
+  _incoming_sip_transactions_tbl(NULL),
+  _outgoing_sip_transactions_tbl(NULL)
 {
 }
 
 SCSCFPlugin::~SCSCFPlugin()
 {
+  delete _incoming_sip_transactions_tbl;
+  delete _outgoing_sip_transactions_tbl;
 }
 
 /// Loads the S-CSCF plug-in, returning the supported Sproutlets.
 bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
   bool plugin_loaded = true;
+
+  // Create the SNMP tables here - they should exist based on whether the
+  // plugin is loaded, not whether the Sproutlet is enabled, in order to
+  // simplify SNMP polling of multiple differently-configured Sprout nodes.
+  _incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("scscf_incoming_sip_transactions",
+                                                                                    "1.2.826.0.1.1578918.9.3.20");
+  _outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("scscf_outgoing_sip_transactions",
+                                                                                    "1.2.826.0.1.1578918.9.3.21");
 
   if (opt.enabled_scscf)
   {
@@ -103,7 +118,8 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     }
 
     // Create Application Server communication trackers.
-    _sess_term_as_alarm = new Alarm("sprout",
+    _sess_term_as_alarm = new Alarm(alarm_manager,
+                                    "sprout",
                                     AlarmDef::SPROUT_SESS_TERMINATED_AS_COMM_ERROR,
                                     AlarmDef::MAJOR);
     AsCommunicationTracker* sess_term_as_tracker =
@@ -111,7 +127,8 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                    &CL_SPROUT_SESS_TERM_AS_COMM_FAILURE,
                                    &CL_SPROUT_SESS_TERM_AS_COMM_SUCCESS);
 
-    _sess_cont_as_alarm =  new Alarm("sprout",
+    _sess_cont_as_alarm =  new Alarm(alarm_manager,
+                                     "sprout",
                                      AlarmDef::SPROUT_SESS_CONTINUED_AS_COMM_ERROR,
                                      AlarmDef::MINOR);
     AsCommunicationTracker* sess_cont_as_tracker =
@@ -130,6 +147,8 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           hss_connection,
                                           enum_service,
                                           scscf_acr_factory,
+                                          _incoming_sip_transactions_tbl,
+                                          _outgoing_sip_transactions_tbl,
                                           opt.override_npdi,
                                           opt.session_continued_timeout_ms,
                                           opt.session_terminated_timeout_ms,
@@ -137,7 +156,9 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           sess_cont_as_tracker);
     plugin_loaded = _scscf_sproutlet->init();
 
-    sproutlets.push_back(_scscf_sproutlet);
+    // We want to prioritise choosing the S-CSCF in ambiguous situations, so
+    // make sure it's at the front of the sproutlet list
+    sproutlets.push_front(_scscf_sproutlet);
   }
 
   return plugin_loaded;

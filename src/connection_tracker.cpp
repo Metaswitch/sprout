@@ -40,6 +40,7 @@
 #include "utils.h"
 #include "pjutils.h"
 #include "connection_tracker.h"
+#include "stack.h"
 
 ConnectionTracker::ConnectionTracker(
                               ConnectionsQuiescedInterface *on_quiesced_handler)
@@ -48,6 +49,7 @@ ConnectionTracker::ConnectionTracker(
   _quiescing(PJ_FALSE),
   _on_quiesced_handler(on_quiesced_handler)
 {
+  // Lock has always been MUTEX_RECURSIVE
   pthread_mutexattr_t attrs;
   pthread_mutexattr_init(&attrs);
   pthread_mutexattr_settype(&attrs, PTHREAD_MUTEX_RECURSIVE);
@@ -68,7 +70,6 @@ ConnectionTracker::~ConnectionTracker()
                                           it->second,
                                           (void *)this);
   }
-
   pthread_mutex_destroy(&_lock);
 }
 
@@ -91,6 +92,10 @@ void ConnectionTracker::connection_state_update(pjsip_transport *tp,
     TRC_DEBUG("Connection %p has been destroyed", tp);
 
     pthread_mutex_lock(&_lock);
+    // We expect to only be called on the PJSIP transport thread, and our data
+    // race/locking safety is based on this assumption. Raise an error log if
+    // this is not the case.
+    CHECK_PJ_TRANSPORT_THREAD();
 
     _connection_listeners.erase(tp);
 
@@ -103,8 +108,8 @@ void ConnectionTracker::connection_state_update(pjsip_transport *tp,
 
     pthread_mutex_unlock(&_lock);
 
-    // If quiescing is now complete notify the quiescing manager.  This is done
-    // without holding the lock to avoid potential deadlocks.
+    // If quiescing is now complete notify the quiescing manager.
+    // Done without the lock to avoid potential deadlock.
     if (quiesce_complete) {
       _on_quiesced_handler->connections_quiesced();
     }
@@ -118,6 +123,15 @@ void ConnectionTracker::connection_active(pjsip_transport *tp)
   if ((tp->flag & PJSIP_TRANSPORT_DATAGRAM) == 0)
   {
     pthread_mutex_lock(&_lock);
+
+    // We expect to be called by only websocket transport threads, or the PJSIP
+    // transport thread. We must NOT be called by the PJSIP worker thread.
+    // Race/locking safety is based on the above assumption. Raise an error log
+    // if the above is not the case.
+    if ((strcmp(pj_thread_get_name(pj_thread_this()), "websockets")) != 0)
+    {
+      CHECK_PJ_TRANSPORT_THREAD();
+    }
 
     if (_connection_listeners.find(tp) == _connection_listeners.end())
     {
@@ -144,7 +158,6 @@ void ConnectionTracker::connection_active(pjsip_transport *tp)
         pjsip_transport_shutdown(tp);
       }
     }
-
     pthread_mutex_unlock(&_lock);
   }
 }
@@ -157,6 +170,10 @@ void ConnectionTracker::quiesce()
   TRC_DEBUG("Start quiescing connections");
 
   pthread_mutex_lock(&_lock);
+  // We expect to only be called on the PJSIP transport thread, and our data
+  // race/locking safety is based on this assumption. Raise an error log if
+  // this is not the case.
+  CHECK_PJ_TRANSPORT_THREAD();
 
   // Flag that we're now quiescing. It is illegal to call this method if we're
   // already quiescing.
@@ -186,8 +203,8 @@ void ConnectionTracker::quiesce()
 
   pthread_mutex_unlock(&_lock);
 
-  // If quiescing is now complete notify the quiescing manager.  This is done
-  // without holding the lock to avoid potential deadlocks.
+  // If quiescing is now complete notify the quiescing manager.
+  // Done without the lock to avoid potential deadlock.
   if (quiesce_complete) {
     _on_quiesced_handler->connections_quiesced();
   }
@@ -199,6 +216,10 @@ void ConnectionTracker::unquiesce()
   TRC_DEBUG("Unquiesce connections");
 
   pthread_mutex_lock(&_lock);
+  // We expect to only be called on the PJSIP transport thread, and our data
+  // race/locking safety is based on this assumption. Raise an error log if
+  // this is not the case.
+  CHECK_PJ_TRANSPORT_THREAD();
 
   // It is not possible to "un-shutdown" a pjsip transport.  All connections
   // that were previously active will eventually be closed. Instead we just

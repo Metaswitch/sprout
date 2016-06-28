@@ -70,8 +70,10 @@ ICSCFSproutlet::ICSCFSproutlet(const std::string& icscf_name,
                                ACRFactory* acr_factory,
                                SCSCFSelector* scscf_selector,
                                EnumService* enum_service,
+                               SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
+                               SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                                bool override_npdi) :
-  Sproutlet(icscf_name, port),
+  Sproutlet(icscf_name, port, "", incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl),
   _bgcf_uri(NULL),
   _hss(hss),
   _scscf_selector(scscf_selector),
@@ -80,18 +82,12 @@ ICSCFSproutlet::ICSCFSproutlet(const std::string& icscf_name,
   _override_npdi(override_npdi),
   _bgcf_uri_str(bgcf_uri)
 {
-  _incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("icscf_incoming_sip_transactions",
-                                                                                    "1.2.826.0.1.1578918.9.3.18");
-  _outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("icscf_outgoing_sip_transactions",
-                                                                                    "1.2.826.0.1.1578918.9.3.19");
 }
 
 
 /// Destructor.
 ICSCFSproutlet::~ICSCFSproutlet()
 {
-  delete _incoming_sip_transactions_tbl;
-  delete _outgoing_sip_transactions_tbl;
 }
 
 bool ICSCFSproutlet::init()

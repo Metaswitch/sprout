@@ -90,7 +90,7 @@ TEST_F(SCSCFSelectorTest, ValidConfig)
   CapturingTestLogger log(5);
   // Parse a valid file. There should be no warnings in the logs. If this
   // test fails, so will the Select* tests below
-  SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf.json"));
+  SCSCFSelector scscf_("scscf_uri", string(UT_DIR).append("/test_scscf.json"));
   EXPECT_FALSE(log.contains("Failed to read S-CSCF configuration data"));
   EXPECT_FALSE(log.contains("Badly formed S-CSCF entry"));
   EXPECT_FALSE(log.contains("Badly formed S-CSCF configuration file - missing s-cscfs object"));
@@ -100,7 +100,7 @@ TEST_F(SCSCFSelectorTest, ValidConfig)
 TEST_F(SCSCFSelectorTest, SelectMandatoryCapabilities)
 {
   // Parse a valid file.
-  SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf.json"));
+  SCSCFSelector scscf_("scscf_uri", string(UT_DIR).append("/test_scscf.json"));
 
   // Test when there's no S-CSCF with all the mandatory capabilities
   ST({9999}, {}, {}, "").test(scscf_);
@@ -112,7 +112,7 @@ TEST_F(SCSCFSelectorTest, SelectMandatoryCapabilities)
 TEST_F(SCSCFSelectorTest, SelectOptionalCapabilities)
 {
   // Parse a valid file.
-  SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf.json"));
+  SCSCFSelector scscf_("scscf_uri", string(UT_DIR).append("/test_scscf.json"));
 
   // Test with two S-CSCFs with the mandatory capabilities, and one has more optional capabilites
   ST({123, 432}, {654}, {}, "cw-scscf2.cw-ngv.com").test(scscf_);
@@ -121,7 +121,7 @@ TEST_F(SCSCFSelectorTest, SelectOptionalCapabilities)
 TEST_F(SCSCFSelectorTest, SelectPriorities)
 {
   // Parse a valid file.
-  SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf.json"));
+  SCSCFSelector scscf_("scscf_uri", string(UT_DIR).append("/test_scscf.json"));
 
   // Test with S-CSCFs with the same mandatory and optional capabilities, but different priorities
   ST({}, {654, 567}, {}, "cw-scscf4.cw-ngv.com").test(scscf_);
@@ -130,7 +130,7 @@ TEST_F(SCSCFSelectorTest, SelectPriorities)
 TEST_F(SCSCFSelectorTest, SelectWeights)
 {
   // Parse a valid file.
-  SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf.json"));
+  SCSCFSelector scscf_("scscf_uri", string(UT_DIR).append("/test_scscf.json"));
 
   // Test with two S-CSCFs with the same capabilities and priorites, but different weights.
   // One of the weights is 0 - this is for code coverage reasons to ensure that the first S-CSCF
@@ -142,7 +142,7 @@ TEST_F(SCSCFSelectorTest, SelectWeights)
 TEST_F(SCSCFSelectorTest, RejectSCSCFs)
 {
   // Parse a valid file.
-  SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf.json"));
+  SCSCFSelector scscf_("scscf_uri", string(UT_DIR).append("/test_scscf.json"));
 
   // Test when there's only one S-CSCF with all the mandatory capabilities, but it's on the
   // reject list
@@ -156,17 +156,17 @@ TEST_F(SCSCFSelectorTest, RejectSCSCFs)
 TEST_F(SCSCFSelectorTest, ParseError)
 {
   CapturingTestLogger log;
-  SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf_parse_error.json"));
+  SCSCFSelector scscf_("scscf_uri", string(UT_DIR).append("/test_scscf_parse_error.json"));
   EXPECT_TRUE(log.contains("Failed to read S-CSCF configuration data"));
 
-  // Check that no S-CSCF is returned
-  ST({}, {}, {}, "").test(scscf_);
+  // Check that one default S-CSCF is returned
+  ST({}, {}, {}, "scscf_uri").test(scscf_);
 }
 
 TEST_F(SCSCFSelectorTest, MissingParts)
 {
   CapturingTestLogger log;
-  SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf_missing_parts.json"));
+  SCSCFSelector scscf_("scscf_uri", string(UT_DIR).append("/test_scscf_missing_parts.json"));
   EXPECT_TRUE(log.contains("Badly formed S-CSCF entry"));
 
   // Check that only one S-CSCF returned (with low priority), as the others couldn't
@@ -177,19 +177,19 @@ TEST_F(SCSCFSelectorTest, MissingParts)
 TEST_F(SCSCFSelectorTest, MissingBlock)
 {
   CapturingTestLogger log;
-  SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf_missing_block.json"));
+  SCSCFSelector scscf_("scscf_uri", string(UT_DIR).append("/test_scscf_missing_block.json"));
   EXPECT_TRUE(log.contains("Badly formed S-CSCF configuration file - missing s-cscfs object"));
 
-  // Check that no S-CSCF is returned
-  ST({}, {}, {}, "").test(scscf_);
+  // Check that one default S-CSCF is returned
+  ST({}, {}, {}, "scscf_uri").test(scscf_);
 }
 
 TEST_F(SCSCFSelectorTest, MissingFile)
 {
   CapturingTestLogger log;
-  SCSCFSelector scscf_(string(UT_DIR).append("/NONEXISTENT_FILE.json"));
+  SCSCFSelector scscf_("scscf_uri", string(UT_DIR).append("/NONEXISTENT_FILE.json"));
   EXPECT_TRUE(log.contains("No S-CSCF configuration data"));
 
-  // Check that no S-CSCF is returned
-  ST({}, {}, {}, "").test(scscf_);
+  // Check that one default S-CSCF is returned
+  ST({}, {}, {}, "scscf_uri").test(scscf_);
 }

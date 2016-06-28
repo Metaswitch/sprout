@@ -68,7 +68,8 @@ HSSConnection::HSSConnection(const std::string& server,
                              SNMP::EventAccumulatorTable* homestead_sar_latency_tbl,
                              SNMP::EventAccumulatorTable* homestead_uar_latency_tbl,
                              SNMP::EventAccumulatorTable* homestead_lir_latency_tbl,
-                             CommunicationMonitor* comm_monitor) :
+                             CommunicationMonitor* comm_monitor,
+                             std::string scscf_uri) :
   _http(new HttpConnection(server,
                            false,
                            resolver,
@@ -80,7 +81,8 @@ HSSConnection::HSSConnection(const std::string& server,
   _mar_latency_tbl(homestead_mar_latency_tbl),
   _sar_latency_tbl(homestead_sar_latency_tbl),
   _uar_latency_tbl(homestead_uar_latency_tbl),
-  _lir_latency_tbl(homestead_lir_latency_tbl)
+  _lir_latency_tbl(homestead_lir_latency_tbl),
+  _scscf_uri(scscf_uri)
 {
 }
 
@@ -490,14 +492,14 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                                   std::vector<std::string>& associated_uris,
                                                   SAS::TrailId trail)
 {
-  std::string unused;
+  std::string unused_regstate;
   std::vector<std::string> unused_aliases;
   std::deque<std::string> unused_ccfs;
   std::deque<std::string> unused_ecfs;
   return update_registration_state(public_user_identity,
                                    private_user_identity,
                                    type,
-                                   unused,
+                                   unused_regstate,
                                    ifcs_map,
                                    associated_uris,
                                    unused_aliases,
@@ -514,14 +516,14 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
 {
   std::map<std::string, Ifcs > ifcs_map;
   std::vector<std::string> associated_uris;
-  std::string unused;
+  std::string unused_regstate;
   std::vector<std::string> unused_aliases;
   std::deque<std::string> unused_ccfs;
   std::deque<std::string> unused_ecfs;
   return update_registration_state(public_user_identity,
                                    private_user_identity,
                                    type,
-                                   unused,
+                                   unused_regstate,
                                    ifcs_map,
                                    associated_uris,
                                    unused_aliases,
@@ -589,7 +591,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
 
   rapidxml::xml_document<>* root_underlying_ptr = NULL;
   HTTPCode http_code = put_for_xml_object(path,
-                                          "{\"reqtype\": \""+type+"\"}",
+                                          "{\"reqtype\": \""+type+"\", \"server_name\": \""+_scscf_uri+"\"}",
                                           cache_allowed,
                                           root_underlying_ptr,
                                           trail);

@@ -279,19 +279,23 @@ SubscriberDataManager::AoRPair* write_to_store(
 
         while ((it != backup_sdms.end()) && (!found_binding))
         {
-          local_backup_aor = (*it)->get_aor_data(aor, trail);
-
-          if ((local_backup_aor != NULL) &&
-              (local_backup_aor->current_contains_bindings()))
+          if ((*it)->has_servers())
           {
-            found_binding = true;
-            backup_aor = local_backup_aor;
+            local_backup_aor = (*it)->get_aor_data(aor, trail);
 
-            // Flag that we have allocated the memory for the backup pair so
-            // that we can tidy it up later.
-            backup_aor_alloced = true;
+            if ((local_backup_aor != NULL) &&
+                (local_backup_aor->current_contains_bindings()))
+            {
+              found_binding = true;
+              backup_aor = local_backup_aor;
+
+              // Flag that we have allocated the memory for the backup pair so
+              // that we can tidy it up later.
+              backup_aor_alloced = true;
+            }
           }
-          else
+
+          if (!found_binding)
           {
             ++it;
 
@@ -463,7 +467,10 @@ SubscriberDataManager::AoRPair* write_to_store(
   if (all_bindings_expired)
   {
     TRC_DEBUG("All bindings have expired - triggering deregistration at the HSS");
-    hss->update_registration_state(aor, "", HSSConnection::DEREG_USER, trail);
+    hss->update_registration_state(aor,
+                                   "",
+                                   HSSConnection::DEREG_USER,
+                                   trail);
   }
 
   out_is_initial_registration = is_initial_registration;
@@ -745,20 +752,23 @@ void process_register_request(pjsip_rx_data* rdata)
          it != remote_sdms.end();
          ++it)
     {
-      int tmp_expiry = 0;
-      bool ignored;
-      SubscriberDataManager::AoRPair* remote_aor_pair =
-                                      write_to_store(*it,
-                                                     aor,
-                                                     rdata,
-                                                     now,
-                                                     tmp_expiry,
-                                                     ignored,
-                                                     aor_pair,
-                                                     {},
-                                                     private_id_for_binding,
-                                                     trail);
-      delete remote_aor_pair;
+      if ((*it)->has_servers())
+      {
+        int tmp_expiry = 0;
+        bool ignored;
+        SubscriberDataManager::AoRPair* remote_aor_pair =
+          write_to_store(*it,
+                         aor,
+                         rdata,
+                         now,
+                         tmp_expiry,
+                         ignored,
+                         aor_pair,
+                         {},
+                         private_id_for_binding,
+                         trail);
+        delete remote_aor_pair;
+      }
     }
   }
   else

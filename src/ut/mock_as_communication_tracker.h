@@ -46,7 +46,7 @@ public:
   ~MockAsCommunicationTracker() {}
 
   MOCK_METHOD1(on_success, void(const std::string&));
-  MOCK_METHOD1(on_failure, void(const std::string&));
+  MOCK_METHOD2(on_failure, void(const std::string&, const std::string&));
 };
 
 #endif
