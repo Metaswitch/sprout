@@ -1582,6 +1582,25 @@ TEST_F(RegistrarTest, DeRegAssociatedUrisNotFound)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_failures); 
 }
 
+/// Homestead fails to interpret URI request
+TEST_F(RegistrarTest, AssociatedUriFails)
+{
+  Message msg;
+  msg._user = "6505550232";
+  _hss_connection->set_rc("/impu/sip%3A6505550232%40homedomain/reg-data",
+                          500);
+
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(500, out->line.status.code);
+  EXPECT_EQ("Internal Server Error", str_pj(out->line.status.reason));
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_failures);
+
+  _hss_connection->delete_rc("/impu/sip%3A6505550232%40homedomain/reg-data");
+}
+
 /// Homestead fails associated URI request
 TEST_F(RegistrarTest, AssociatedUrisTimeOut)
 {

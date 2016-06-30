@@ -50,6 +50,7 @@ extern "C" {
 #include "stack.h"
 #include "memcachedstore.h"
 #include "hssconnection.h"
+#include "hss_sip_mapping.h"
 #include "subscription.h"
 #include "log.h"
 #include "notify_utils.h"
@@ -511,33 +512,14 @@ void process_subscription_request(pjsip_rx_data* rdata)
                                                   ccfs,
                                                   ecfs,
                                                   trail);
-  if ((http_code != HTTP_OK) || (state != "REGISTERED"))
+
+  if (process_hss_sip_failure(http_code,
+                              state,
+                              rdata,
+                              stack_data,
+                              NULL,
+                              "SUBSCRIBE"))
   {
-    // We failed to get the list of associated URIs.  This indicates that the
-    // HSS is unavailable, the public identity doesn't exist or the public
-    // identity doesn't belong to the private identity.
-
-    // The client shouldn't retry when the subscriber isn't present in the
-    // HSS; reject with a 403 in this case.
-    //
-    // The client should retry on timeout but no other Clearwater nodes should
-    // (as Sprout will already have retried on timeout). Reject with a 504
-    // (503 is used for overload).
-    st_code = PJSIP_SC_SERVER_TIMEOUT;
-
-    if (http_code == HTTP_NOT_FOUND)
-    {
-      st_code = PJSIP_SC_FORBIDDEN;
-    }
-
-    TRC_ERROR("Rejecting SUBSCRIBE request");
-
-    PJUtils::respond_stateless(stack_data.endpt,
-                               rdata,
-                               st_code,
-                               NULL,
-                               NULL,
-                               NULL);
     delete acr;
     return;
   }
