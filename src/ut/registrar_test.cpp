@@ -1601,7 +1601,7 @@ TEST_F(RegistrarTest, AssociatedUriFails)
   _hss_connection->delete_rc("/impu/sip%3A6505550232%40homedomain/reg-data");
 }
 
-/// Homestead fails associated URI request
+/// Homestead times out associated URI request
 TEST_F(RegistrarTest, AssociatedUrisTimeOut)
 {
   Message msg;
@@ -1616,6 +1616,27 @@ TEST_F(RegistrarTest, AssociatedUrisTimeOut)
   EXPECT_EQ("Server Timeout", str_pj(out->line.status.reason));
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts); 
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_failures); 
+
+  _hss_connection->delete_rc("/impu/sip%3A6505550232%40homedomain/reg-data");
+}
+
+/// Homestead fails associated URI request with unexpected failure
+TEST_F(RegistrarTest, AssociatedUrisUnexpectedFailure)
+{
+  Message msg;
+  msg._user = "6505550232";
+
+  // We don't expected to get Not Implemented back from Homstead
+  _hss_connection->set_rc("/impu/sip%3A6505550232%40homedomain/reg-data",
+                          501);
+
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(504, out->line.status.code);
+  EXPECT_EQ("Server Timeout", str_pj(out->line.status.reason));
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_failures);
 
   _hss_connection->delete_rc("/impu/sip%3A6505550232%40homedomain/reg-data");
 }
