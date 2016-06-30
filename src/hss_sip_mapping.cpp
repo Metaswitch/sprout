@@ -45,7 +45,7 @@ bool process_hss_sip_failure(HTTPCode http_code,
                              pjsip_rx_data* rdata,
                              struct stack_data_struct& stack_data,
                              ACR* acr,
-                             const char* type)
+                             const char* sip_msg_type)
 {
   int st_code = PJSIP_SC_OK;
 
@@ -55,47 +55,50 @@ bool process_hss_sip_failure(HTTPCode http_code,
     // the HSS is unavilable, the public identity doesn't exist, the public
     // identity doesn't belong to the private identity, or there was an error
     // communicating with the HSS.
-
-    if (http_code == HTTP_OK)
+    switch (http_code)
     {
-      TRC_ERROR("Rejecting %s request following failure to register on the HSS: %s",
-                type, regstate.c_str());
+      case HTTP_OK:
+        TRC_ERROR("Rejecting %s request following failure to register on the HSS: %s",
+                  sip_msg_type, regstate.c_str());
 
-      st_code = PJSIP_SC_SERVER_TIMEOUT;
-    }
-    else if (http_code == HTTP_NOT_FOUND)
-    {
-      // The client shouldn't retry when the subscriber isn't present in the
-      // HSS; reject with a 403 in this case.
-      TRC_ERROR("Rejecting %s request as subscriber not present on the HSS",
-                type);
+        st_code = PJSIP_SC_SERVER_TIMEOUT;
+        break;
 
-      st_code = PJSIP_SC_FORBIDDEN;
-    }
-    else if (http_code == HTTP_SERVER_UNAVAILABLE ||
-             http_code == HTTP_GATEWAY_TIMEOUT)
-    {
-      // The HSS is unavailable - the client should retry on timeout but no
-      // other Clearwater nodes should (as Sprout will already have retried on
-      // timeout). Reject with a 504 (503 is used for overload).
-      TRC_ERROR("Rejecting %s request as unable to contact HSS: %d",
-                type, http_code);
+      case HTTP_NOT_FOUND:
+        // The client shouldn't retry when the subscriber isn't present in the
+        // HSS; reject with a 403 in this case.
+        TRC_ERROR("Rejecting %s request as subscriber not present on the HSS",
+                  sip_msg_type);
 
-      st_code = PJSIP_SC_SERVER_TIMEOUT;
-    }
-    else if (http_code == HTTP_SERVER_ERROR)
-    {
-      // This is either a server error on the HSS, or a error decoding the
-      // response
-      TRC_ERROR("Rejecting %s request following error communicating with the HSS",
-                type);
+        st_code = PJSIP_SC_FORBIDDEN;
+        break;
 
-      st_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
-    }
-    else
-    {
-      TRC_ERROR("Rejecting %s request following response %d from HSS",
-                type, http_code);
+      case http_code == HTTP_SERVER_UNAVAILABLE:
+      case http_code == HTTP_GATEWAY_TIMEOUT:
+        // The HSS is unavailable - the client should retry on timeout but no
+        // other Clearwater nodes should (as Sprout will already have retried on
+        // timeout). Reject with a 504 (503 is used for overload).
+        TRC_ERROR("Rejecting %s request as unable to contact HSS: %d",
+                  sip_msg_type, http_code);
+
+        st_code = PJSIP_SC_SERVER_TIMEOUT;
+        break;
+
+      case http_code == HTTP_SERVER_ERROR:
+        // This is either a server error on the HSS, or a error decoding the
+        // response
+        TRC_ERROR("Rejecting %s request following error communicating with the HSS",
+                  sip_msg_type);
+
+        st_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
+        break;
+
+      default:
+        TRC_ERROR("Rejecting %s request following response %d from HSS",
+                  sip_msg_type, http_code);
+
+        st_code = PJSIP_SC_SERVER_TIMEOUT;
+        break;
     }
 
     PJUtils::respond_stateless(stack_data.endpt,
@@ -109,4 +112,3 @@ bool process_hss_sip_failure(HTTPCode http_code,
 
   return st_code != PJSIP_SC_OK;
 }
-

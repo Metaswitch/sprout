@@ -44,12 +44,19 @@ extern "C" {
 
 #include "acr.h"
 
+/// Process failures following making a request to the HSS
+//
+// If the response from the HSS represents a failure to register, then an
+// appropriate SIP response will be sent to the provided request.
+// @param sip_msg_type Type of SIP Message being responded to for logging
+// purposes
+// @returns true if the response was a failure that has been handled, else
+// false.
 bool process_hss_sip_failure(HTTPCode http_code,
                              std::string& reg_state,
                              pjsip_rx_data* rdata,
                              struct stack_data_struct& stack_data,
                              ACR* acr,
-                             const char* type);
+                             const char* sip_msg_type);
 
 #endif
-
