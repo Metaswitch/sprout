@@ -58,11 +58,13 @@ bool process_hss_sip_failure(HTTPCode http_code,
     switch (http_code)
     {
       case HTTP_OK:
+        // LCOV_EXCL_START
         TRC_ERROR("Rejecting %s request following failure to register on the HSS: %s",
                   sip_msg_type, regstate.c_str());
 
         st_code = PJSIP_SC_SERVER_TIMEOUT;
         break;
+        // LCOV_EXCL_STOP
 
       case HTTP_NOT_FOUND:
         // The client shouldn't retry when the subscriber isn't present in the
@@ -73,8 +75,8 @@ bool process_hss_sip_failure(HTTPCode http_code,
         st_code = PJSIP_SC_FORBIDDEN;
         break;
 
-      case http_code == HTTP_SERVER_UNAVAILABLE:
-      case http_code == HTTP_GATEWAY_TIMEOUT:
+      case HTTP_SERVER_UNAVAILABLE:
+      case HTTP_GATEWAY_TIMEOUT:
         // The HSS is unavailable - the client should retry on timeout but no
         // other Clearwater nodes should (as Sprout will already have retried on
         // timeout). Reject with a 504 (503 is used for overload).
@@ -84,7 +86,7 @@ bool process_hss_sip_failure(HTTPCode http_code,
         st_code = PJSIP_SC_SERVER_TIMEOUT;
         break;
 
-      case http_code == HTTP_SERVER_ERROR:
+      case HTTP_SERVER_ERROR:
         // This is either a server error on the HSS, or a error decoding the
         // response
         TRC_ERROR("Rejecting %s request following error communicating with the HSS",
