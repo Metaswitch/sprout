@@ -64,6 +64,7 @@ public:
 class AsCommunicationTrackerTest : public ::testing::Test
 {
 public:
+  AlarmManager* _am;
   AsCommunicationTracker* _comm_tracker;
   MockAlarm* _mock_alarm;
   const MockLog2* _mock_error_log;
@@ -71,8 +72,8 @@ public:
 
   void SetUp()
   {
-    AlarmManager am;
-    _mock_alarm = new MockAlarm(&am);
+    _am = new AlarmManager();
+    _mock_alarm = new MockAlarm(_am);
     _mock_error_log = new MockLog2();
     _mock_ok_log = new MockLog1();
     _comm_tracker = new AsCommunicationTracker(_mock_alarm,
@@ -86,6 +87,7 @@ public:
     delete _mock_alarm;
     delete _mock_error_log;
     delete _mock_ok_log;
+    delete _am;
   }
 
   const std::string AS1 = "as1";
