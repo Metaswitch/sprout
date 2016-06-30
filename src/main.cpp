@@ -240,6 +240,9 @@ const static int UNQUIESCE_SIGNAL = SIGUSR1;
 // Minimum value allowed by rfc4028, section 4
 const static int MIN_SESSION_EXPIRES = 90;
 
+const static char* STANDARD_OUT_FILE = "sprout_out.log";
+const static char* STANDARD_ERR_FILE = "sprout_err.log";
+
 static void usage(void)
 {
   puts("Options:\n"
@@ -1349,7 +1352,8 @@ int main(int argc, char* argv[])
 
   if (opt.daemon)
   {
-    int errnum = Utils::daemonize();
+    int errnum = Utils::daemonize(opt.log_directory + "/" + STANDARD_OUT_FILE,
+                                  opt.log_directory + "/" + STANDARD_ERR_FILE);
     if (errnum != 0)
     {
       TRC_ERROR("Failed to convert to daemon, %d (%s)", errnum, strerror(errnum));
