@@ -521,7 +521,7 @@ TEST_F(SubscriptionTest, CorrectAcceptsHeader)
   check_subscriptions("sip:6505550231@homedomain", 1u);
 }
 
-/// Homestead fails associated URI request
+/// Homestead fails associated URI request as the subscriber doesn't exist
 TEST_F(SubscriptionTest, ErrorAssociatedUris)
 {
   SubscribeMessage msg;
@@ -536,6 +536,24 @@ TEST_F(SubscriptionTest, ErrorAssociatedUris)
 }
 
 /// Homestead fails associated URI request
+TEST_F(SubscriptionTest, AssociatedUrisFailure)
+{
+  SubscribeMessage msg;
+  msg._user = "6505550232";
+  _hss_connection->set_rc("/impu/sip%3A6505550232%40homedomain/reg-data",
+                          500);
+
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(500, out->line.status.code);
+  EXPECT_EQ("Internal Server Error", str_pj(out->line.status.reason));
+  check_subscriptions("sip:6505550232@homedomain", 0u);
+
+  _hss_connection->delete_rc("/impu/sip%3A6505550232%40homedomain/reg-data");
+}
+
+/// Homestead times out associated URI request
 TEST_F(SubscriptionTest, AssociatedUrisTimeOut)
 {
   SubscribeMessage msg;
