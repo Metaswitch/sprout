@@ -1854,7 +1854,7 @@ int main(int argc, char* argv[])
       chronos_callback_host = "[::1]:" + port_str;
     }
 
-    std::string chronos_service = "localhost:7253";
+    std::string chronos_service = "127.0.0.1:7253";
     TRC_STATUS("Creating connection to Chronos %s using %s as the callback URI",
                chronos_service.c_str(),
                chronos_callback_host.c_str());
