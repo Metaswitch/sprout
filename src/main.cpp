@@ -148,6 +148,7 @@ enum OptionTypes
   SPROUTLET_MACRO(SPROUTLET_OPTION_TYPES)
   OPT_IMPI_STORE_MODE,
   OPT_NONCE_COUNT_SUPPORTED,
+  OPT_SCSCF_NODE_URI,
 };
 
 
@@ -225,6 +226,7 @@ const static struct pj_getopt_option long_opt[] =
   SPROUTLET_MACRO(SPROUTLET_CFG_PJ_STRUCT)
   { "impi-store-mode",              required_argument, 0, OPT_IMPI_STORE_MODE},
   { "nonce-count-supported",        no_argument,       0, OPT_NONCE_COUNT_SUPPORTED},
+  { "scscf-node-uri",               required_argument, 0, OPT_SCSCF_NODE_URI},
   { NULL,                           0,                 0, 0}
 };
 
@@ -256,10 +258,6 @@ static void usage(void)
        " -D, --domain <name>        The home domain name\n"
        "     --additional-domains <names>\n"
        "                            Comma-separated list of additional home domain names\n"
-       " -c, --scscf-uri <name>     The Sprout S-CSCF cluster domain URI.  This URI\n"
-       "                            must route requests to the S-CSCF port on the Sprout\n"
-       "                            cluster, either by specifying the port explicitly or\n"
-       "                            using DNS SRV records to specify the port.\n"
        " -n, --alias <names>        Optional list of alias host names\n"
        " -r, --routing-proxy <name>[,<port>[,<connections>[,<recycle time>]]]\n"
        "                            Operate as an access proxy using the specified node\n"
@@ -408,6 +406,9 @@ static void usage(void)
        "     --nonce-count-supported\n"
        "                            Whether sprout accepts authentication responses with a nonce count\n"
        "                            greater than 1\n"
+       "     --scsf-node-uri <URI>\n"
+       "                            The URI of this S-CSCF used by other servers, including AS, to contact\n"
+       "                            this specific node. Defaults to \"sip:<localhost>:<port_scscf>\"."
        "     --pidfile=<filename>   Write pidfile\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
@@ -1084,6 +1085,10 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
+    case OPT_SCSCF_NODE_URI:
+      options->scscf_node_uri = std::string(pj_optarg);
+      break;
+
     case OPT_SPROUT_HOSTNAME:
       options->sprout_hostname = std::string(pj_optarg);
       break;
@@ -1320,6 +1325,7 @@ int main(int argc, char* argv[])
   SPROUTLET_MACRO(SPROUTLET_CFG_OPTIONS_DEFAULT_VALUES)
   opt.impi_store_mode = ImpiStore::Mode::READ_IMPI_WRITE_IMPI;
   opt.nonce_count_supported = false;
+  opt.scscf_node_uri = "";
 
   // Initialise ENT logging before making "Started" log
   PDLogStatic::init(argv[0]);

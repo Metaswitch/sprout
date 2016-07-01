@@ -144,6 +144,7 @@ struct options
   SPROUTLET_MACRO(SPROUTLET_CFG_OPTIONS)
   ImpiStore::Mode                      impi_store_mode;
   bool                                 nonce_count_supported;
+  std::string                          scscf_node_uri;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
