@@ -172,7 +172,6 @@ const static struct pj_getopt_option long_opt[] =
   { "max-session-expires",          required_argument, 0, OPT_MAX_SESSION_EXPIRES},
   { "target-latency-us",            required_argument, 0, OPT_TARGET_LATENCY_US},
   { "xdms",                         required_argument, 0, 'X'},
-  { "chronos",                      required_argument, 0, 'K'},
   { "ralf",                         required_argument, 0, 'G'},
   { "dns-server",                   required_argument, 0, OPT_DNS_SERVER },
   { "enum",                         required_argument, 0, 'E'},
@@ -284,7 +283,6 @@ static void usage(void)
        "                            system name to identify this system to SAS.  If this option isn't\n"
        "                            specified SAS is disabled\n"
        " -H, --hss <server>         Name/IP address of the Homestead cluster\n"
-       " -K, --chronos              Name/IP address of the local chronos service\n"
        " -C, --record-routing-model <model>\n"
        "                            If 'pcscf', Sprout Record-Routes itself only on initiation of\n"
        "                            originating processing and completion of terminating\n"
@@ -674,11 +672,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case 'X':
       options->xdm_server = std::string(pj_optarg);
       TRC_INFO("XDM server set to %s", pj_optarg);
-      break;
-
-    case 'K':
-      options->chronos_service = std::string(pj_optarg);
-      TRC_INFO("Chronos service set to %s", pj_optarg);
       break;
 
     case 'G':
@@ -1283,7 +1276,6 @@ int main(int argc, char* argv[])
 
   opt.sub_max_expires = 300;
   opt.sas_server = "0.0.0.0";
-  opt.chronos_service = "localhost:7253";
   opt.record_routing_model = 1;
   opt.default_session_expires = 10 * 60;
   opt.max_session_expires = 10 * 60;
@@ -1343,9 +1335,28 @@ int main(int argc, char* argv[])
     return 1;
   }
 
+  // Work out the program name from argv[0], stripping anything before the final slash.
+  char* prog_name = argv[0];
+  char* slash_ptr = rindex(argv[0], '/');
+  if (slash_ptr != NULL)
+  {
+    prog_name = slash_ptr + 1;
+  }
+
   if (opt.daemon)
   {
-    int errnum = Utils::daemonize();
+    int errnum;
+
+    if (opt.log_directory != "")
+    {
+      errnum = Utils::daemonize(opt.log_directory + "/" + prog_name + "_out.log",
+                                opt.log_directory + "/" + prog_name + "_err.log");
+    }
+    else
+    {
+      errnum = Utils::daemonize();
+    }
+
     if (errnum != 0)
     {
       TRC_ERROR("Failed to convert to daemon, %d (%s)", errnum, strerror(errnum));
@@ -1358,13 +1369,6 @@ int main(int argc, char* argv[])
 
   if ((opt.log_to_file) && (opt.log_directory != ""))
   {
-    // Work out the program name from argv[0], stripping anything before the final slash.
-    char* prog_name = argv[0];
-    char* slash_ptr = rindex(argv[0], '/');
-    if (slash_ptr != NULL)
-    {
-      prog_name = slash_ptr + 1;
-    }
     Log::setLogger(new Logger(opt.log_directory, prog_name));
 
     TRC_STATUS("Access logging enabled to %s", opt.log_directory.c_str());
@@ -1792,28 +1796,6 @@ int main(int argc, char* argv[])
     }
   }
 
-  if (opt.chronos_service != "")
-  {
-    std::string port_str = std::to_string(opt.http_port);
-    std::string chronos_callback_host = "127.0.0.1:" + port_str;
-
-    // We want Chronos to call back to its local sprout instance so that we can
-    // handle Sprouts failing without missing timers.
-    if (is_ipv6(opt.http_address))
-    {
-      chronos_callback_host = "[::1]:" + port_str;
-    }
-
-    // Create a connection to Chronos.
-    TRC_STATUS("Creating connection to Chronos %s using %s as the callback URI",
-               opt.chronos_service.c_str(),
-               chronos_callback_host.c_str());
-    chronos_connection = new ChronosConnection(opt.chronos_service,
-                                               chronos_callback_host,
-                                               http_resolver,
-                                               chronos_comm_monitor);
-  }
-
   HttpStack* http_stack = HttpStack::get_instance();
   if (opt.pcscf_enabled)
   {
@@ -1869,6 +1851,26 @@ int main(int argc, char* argv[])
 
   if (opt.enabled_scscf)
   {
+    // Create a connection to Chronos.
+    std::string port_str = std::to_string(opt.http_port);
+    std::string chronos_callback_host = "127.0.0.1:" + port_str;
+
+    // We want Chronos to call back to its local sprout instance so that we can
+    // handle Sprouts failing without missing timers.
+    if (is_ipv6(opt.http_address))
+    {
+      chronos_callback_host = "[::1]:" + port_str;
+    }
+
+    std::string chronos_service = "127.0.0.1:7253";
+    TRC_STATUS("Creating connection to Chronos %s using %s as the callback URI",
+               chronos_service.c_str(),
+               chronos_callback_host.c_str());
+    chronos_connection = new ChronosConnection(chronos_service,
+                                               chronos_callback_host,
+                                               http_resolver,
+                                               chronos_comm_monitor);
+
     scscf_acr_factory = (ralf_processor != NULL) ?
                       (ACRFactory*)new RalfACRFactory(ralf_processor, ACR::SCSCF) :
                       new ACRFactory();
