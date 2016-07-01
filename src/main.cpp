@@ -1347,9 +1347,28 @@ int main(int argc, char* argv[])
     return 1;
   }
 
+  // Work out the program name from argv[0], stripping anything before the final slash.
+  char* prog_name = argv[0];
+  char* slash_ptr = rindex(argv[0], '/');
+  if (slash_ptr != NULL)
+  {
+    prog_name = slash_ptr + 1;
+  }
+
   if (opt.daemon)
   {
-    int errnum = Utils::daemonize();
+    int errnum;
+
+    if (opt.log_directory != "")
+    {
+      errnum = Utils::daemonize(opt.log_directory + "/" + prog_name + "_out.log",
+                                opt.log_directory + "/" + prog_name + "_err.log");
+    }
+    else
+    {
+      errnum = Utils::daemonize();
+    }
+
     if (errnum != 0)
     {
       TRC_ERROR("Failed to convert to daemon, %d (%s)", errnum, strerror(errnum));
@@ -1362,13 +1381,6 @@ int main(int argc, char* argv[])
 
   if ((opt.log_to_file) && (opt.log_directory != ""))
   {
-    // Work out the program name from argv[0], stripping anything before the final slash.
-    char* prog_name = argv[0];
-    char* slash_ptr = rindex(argv[0], '/');
-    if (slash_ptr != NULL)
-    {
-      prog_name = slash_ptr + 1;
-    }
     Log::setLogger(new Logger(opt.log_directory, prog_name));
 
     TRC_STATUS("Access logging enabled to %s", opt.log_directory.c_str());
