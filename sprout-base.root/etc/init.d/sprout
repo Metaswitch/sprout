@@ -109,6 +109,7 @@ get_settings()
         alias_list=""
         default_session_expires=600
         signaling_dns_server=127.0.0.1
+        scscf_node_uri=""
 
         # Set up defaults for user settings then pull in any overrides.
         # Sprout uses blocking look-up services, so must run multi-threaded.
@@ -191,6 +192,7 @@ get_daemon_args()
                      --remote-memstore=/etc/clearwater/remote_cluster_settings
                      --hss=$hs_hostname
                      --sprout-hostname=$sprout_hostname
+                     --scscf-node-uri=$scscf_node_uri
                      $xdms_hostname_arg
                      $ralf_arg
                      $enum_server_arg
