@@ -1,0 +1,12 @@
+/var/log/bono/bono_out.log /var/log/bono/bono_err.log {
+        rotate 4
+        weekly
+        minsize 1M
+        missingok
+        create 640 root adm
+        notifempty
+        compress
+        delaycompress
+        copytruncate
+}
+
