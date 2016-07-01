@@ -109,7 +109,6 @@ get_settings()
         alias_list=""
         default_session_expires=600
         signaling_dns_server=127.0.0.1
-        chronos_hostname=127.0.0.1:7253
 
         # Set up defaults for user settings then pull in any overrides.
         # Sprout uses blocking look-up services, so must run multi-threaded.
@@ -191,7 +190,6 @@ get_daemon_args()
                      --memstore=/etc/clearwater/cluster_settings
                      --remote-memstore=/etc/clearwater/remote_cluster_settings
                      --hss=$hs_hostname
-                     --chronos=$chronos_hostname
                      --sprout-hostname=$sprout_hostname
                      $xdms_hostname_arg
                      $ralf_arg
