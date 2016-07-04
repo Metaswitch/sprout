@@ -681,7 +681,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case 'G':
       options->ralf_server = std::string(pj_optarg);
-      fprintf(stdout, "Ralf server set to %s\n", pj_optarg);
+      TRC_INFO("Ralf server set to %s", pj_optarg);
       break;
 
     case OPT_RALF_THREADS:
