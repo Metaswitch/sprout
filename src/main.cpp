@@ -1345,47 +1345,20 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  // Work out the program name from argv[0], stripping anything before the final slash.
-  char* prog_name = argv[0];
-  char* slash_ptr = rindex(argv[0], '/');
-  if (slash_ptr != NULL)
-  {
-    prog_name = slash_ptr + 1;
-  }
-
-  if (opt.daemon)
-  {
-    int errnum;
-
-    if (opt.log_directory != "")
-    {
-      errnum = Utils::daemonize(opt.log_directory + "/" + prog_name + "_out.log",
-                                opt.log_directory + "/" + prog_name + "_err.log");
-    }
-    else
-    {
-      errnum = Utils::daemonize();
-    }
-
-    if (errnum != 0)
-    {
-      TRC_ERROR("Failed to convert to daemon, %d (%s)", errnum, strerror(errnum));
-      exit(0);
-    }
-  }
-
-  Log::setLoggingLevel(opt.log_level);
-  init_pjsip_logging(opt.log_level, opt.log_to_file, opt.log_directory);
+  Utils::daemon_log_setup(argc,
+                          argv,
+                          opt.daemon,
+                          opt.log_directory,
+                          opt.log_level,
+                          opt.log_to_file);
 
   if ((opt.log_to_file) && (opt.log_directory != ""))
   {
-    Log::setLogger(new Logger(opt.log_directory, prog_name));
-
     TRC_STATUS("Access logging enabled to %s", opt.log_directory.c_str());
     access_logger = new AccessLogger(opt.log_directory);
   }
 
-  TRC_STATUS("Log level set to %d", opt.log_level);
+  init_pjsip_logging(opt.log_level, opt.log_to_file, opt.log_directory);
 
   std::stringstream options_ss;
   for (int ii = 0; ii < argc; ii++)
