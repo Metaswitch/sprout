@@ -30,16 +30,36 @@ DEB_NAMES += clearwater-sip-stress clearwater-sip-stress-stats clearwater-sip-pe
 INCLUDE_DIR := ${INSTALL_DIR}/include
 LIB_DIR := ${INSTALL_DIR}/lib
 
+# Each submodule installs itself, thus updating timestamps of include and
+# library files.
+#
+# To work around this, we install them elsewhere, and then synchronize them to allow
+# incremental builds to work
+PRE_ROOT := ${ROOT}/build/module-install
+PRE_PREFIX := ${PRE_ROOT}/usr
+PRE_INSTALL_DIR := ${PRE_PREFIX}
+PRE_INCLUDE_DIR := ${PRE_INSTALL_DIR}/include
+PRE_LIB_DIR := ${PRE_INSTALL_DIR}/lib
+
+sync_install:
+	# pkg-config generates files which explcitly refer to the pre synchronized
+	# directory, so we need to fix them up
+	sed -e 's/build\/module-install\///g' -i ${PRE_INSTALL_DIR}/lib/pkgconfig/*.pc
+
+	# rsync using checksums, as the modification time is wrong. This may lead
+	# to false negatives, but they are very unlikely and tricky to workaround
+	rsync --links -v -r --checksum ${PRE_INSTALL_DIR}/ ${INSTALL_DIR}/
+
 SUBMODULES := pjsip c-ares curl libevhtp libmemcached libre restund openssl websocketpp sipp sas-client thrift cassandra
 
 include $(patsubst %, ${MK_DIR}/%.mk, ${SUBMODULES})
 include ${MK_DIR}/sprout.mk
 
-build: ${SUBMODULES} sprout scripts/sipp-stats/clearwater-sipp-stats-1.0.0.gem plugins-build
+build: ${SUBMODULES} sync_install sprout scripts/sipp-stats/clearwater-sipp-stats-1.0.0.gem plugins-build
 
-test: ${SUBMODULES} sprout_test plugins-test
+test: ${SUBMODULES} sync_install sprout_test plugins-test
 
-full_test: ${SUBMODULES} sprout_full_test plugins-test
+full_test: ${SUBMODULES} sync_install sprout_full_test plugins-test
 
 testall: $(patsubst %, %_test, ${SUBMODULES}) full_test
 

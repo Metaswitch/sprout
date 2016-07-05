@@ -10,9 +10,9 @@ ${CASSANDRA_BUILD_DIR}/interface/thrift:
 	mkdir -p ${CASSANDRA_BUILD_DIR}/interface/thrift
 
 cassandra: ${CASSANDRA_BUILD_DIR}/interface/thrift
-	${INSTALL_DIR}/bin/thrift --gen cpp -o ${CASSANDRA_BUILD_DIR}/interface/thrift ${CASSANDRA_DIR}/interface/cassandra.thrift
-	g++ -shared -Wl,-soname,libcassandra.so -fPIC -o ${INSTALL_DIR}/lib/libcassandra.so -DHAVE_INTTYPES_H -DHAVE_NETINET_IN_H -I ${INSTALL_DIR}/include/ -I ${CASSANDRA_BUILD_DIR}/interface/thrift/gen-cpp/ ${CASSANDRA_BUILD_DIR}/interface/thrift/gen-cpp/Cassandra.cpp ${CASSANDRA_BUILD_DIR}/interface/thrift/gen-cpp/cassandra_types.cpp
-	cp ${CASSANDRA_BUILD_DIR}/interface/thrift/gen-cpp/*.h ${INSTALL_DIR}/include/
+	${PRE_INSTALL_DIR}/bin/thrift --gen cpp -o ${CASSANDRA_BUILD_DIR}/interface/thrift ${CASSANDRA_DIR}/interface/cassandra.thrift
+	g++ -shared -Wl,-soname,libcassandra.so -fPIC -o ${PRE_INSTALL_DIR}/lib/libcassandra.so -DHAVE_INTTYPES_H -DHAVE_NETINET_IN_H -I ${PRE_INSTALL_DIR}/include/ -I ${CASSANDRA_BUILD_DIR}/interface/thrift/gen-cpp/ ${CASSANDRA_BUILD_DIR}/interface/thrift/gen-cpp/Cassandra.cpp ${CASSANDRA_BUILD_DIR}/interface/thrift/gen-cpp/cassandra_types.cpp
+	cp ${CASSANDRA_BUILD_DIR}/interface/thrift/gen-cpp/*.h ${PRE_INSTALL_DIR}/include/
 
 cassandra_test:
 
