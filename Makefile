@@ -41,6 +41,7 @@ PRE_INSTALL_DIR := ${PRE_PREFIX}
 PRE_INCLUDE_DIR := ${PRE_INSTALL_DIR}/include
 PRE_LIB_DIR := ${PRE_INSTALL_DIR}/lib
 
+.PHONY: sync_install
 sync_install:
 	# pkg-config generates files which explcitly refer to the pre synchronized
 	# directory, so we need to fix them up
