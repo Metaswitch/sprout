@@ -253,6 +253,7 @@ void SCSCFSproutlet::remove_binding(const std::string& aor,
                                     SAS::TrailId trail)
 {
   RegistrationUtils::remove_bindings(_sdm,
+                                     _remote_sdms,
                                      _hss,
                                      aor,
                                      binding_id,

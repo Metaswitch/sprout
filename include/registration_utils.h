@@ -56,6 +56,7 @@ void init(SNMP::RegistrationStatsTables* third_party_reg_stats_tables_arg,
           bool force_third_party_register_body_arg);
 
 void remove_bindings(SubscriberDataManager* sdm,
+                     std::vector<SubscriberDataManager*> remote_sdms,
                      HSSConnection* hss,
                      const std::string& aor,
                      const std::string& binding_id,
