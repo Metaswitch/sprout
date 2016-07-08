@@ -133,21 +133,6 @@ get_settings()
             [ -r $file ] && . $file
           done
         fi
-
-        # Set up a default cluster_settings file if it does not exist.  The local
-        # IP address needs to be surrounded by square brackets if it is IPv6.
-        if [ ! -f /etc/clearwater/cluster_settings ]
-        then
-          cluster_ip=$(/usr/share/clearwater/bin/bracket-ipv6-address $local_ip)
-          echo "servers=$cluster_ip:11211" > /etc/clearwater/cluster_settings
-        fi
-
-        # Create /etc/clearwater/remote_cluster_settings if it doesn't exist
-        # This means 'service sprout reload' will pick up changes
-        if [ ! -f /etc/clearwater/remote_cluster_settings ]
-        then
-          echo "servers=" > /etc/clearwater/remote_cluster_settings
-        fi
 }
 
 #
