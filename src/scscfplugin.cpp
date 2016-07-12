@@ -97,15 +97,25 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 
   if (opt.enabled_scscf)
   {
-    // Determine the S-CSCF, BGCF and I-CSCF URIs.
-    std::string node_ip(stack_data.local_host.ptr, stack_data.local_host.slen);
+    // Determine the S-CSCF node URI and then S-SCSCF, BGCF and I-CSCF cluster URIs.
+    std::string scscf_node_uri;
 
-    if (is_ipv6(node_ip))
+    if (opt.scscf_node_uri != "")
     {
-      node_ip = "[" + node_ip + "]";
+      scscf_node_uri = opt.scscf_node_uri;
+    }
+    else
+    {
+      std::string node_host(stack_data.local_host.ptr, stack_data.public_host.slen);
+
+      if (is_ipv6(node_host))
+      {
+        node_host = "[" + node_host + "]";
+      }
+
+      scscf_node_uri = "sip:" + node_host + ":" + std::to_string(opt.port_scscf);
     }
 
-    std::string scscf_node_uri = "sip:" + node_ip + ":" + std::to_string(opt.port_scscf);
     std::string icscf_uri;
 
     if (opt.enabled_icscf)

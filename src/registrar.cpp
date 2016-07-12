@@ -56,6 +56,7 @@ extern "C" {
 #include "stack.h"
 #include "memcachedstore.h"
 #include "hssconnection.h"
+#include "hss_sip_mapping.h"
 #include "registrar.h"
 #include "registration_utils.h"
 #include "constants.h"
@@ -627,39 +628,19 @@ void process_register_request(pjsip_rx_data* rdata)
                                                       ccfs,
                                                       ecfs,
                                                       trail);
-  if ((http_code != HTTP_OK) || (regstate != HSSConnection::STATE_REGISTERED))
+
+  if (process_hss_sip_failure(http_code,
+                              regstate,
+                              rdata,
+                              stack_data,
+                              acr,
+                              "REGISTER"))
   {
-    // We failed to register this subscriber at the HSS.  This indicates that the
-    // HSS is unavailable, the public identity doesn't exist or the public
-    // identity doesn't belong to the private identity.
-
-    // The client shouldn't retry when the subscriber isn't present in the
-    // HSS; reject with a 403 in this case.
-    //
-    // The client should retry on timeout but no other Clearwater nodes should
-    // (as Sprout will already have retried on timeout). Reject with a 504
-    // (503 is used for overload).
-    st_code = PJSIP_SC_SERVER_TIMEOUT;
-
-    if (http_code == HTTP_NOT_FOUND)
-    {
-      st_code = PJSIP_SC_FORBIDDEN;
-    }
-
-    TRC_ERROR("Rejecting register request with invalid public/private identity");
-
     SAS::Event event(trail, SASEvent::REGISTER_FAILED_INVALIDPUBPRIV, 0);
     event.add_var_param(public_id);
     event.add_var_param(private_id);
     SAS::report_event(event);
 
-    PJUtils::respond_stateless(stack_data.endpt,
-                               rdata,
-                               st_code,
-                               NULL,
-                               NULL,
-                               NULL,
-                               acr);
     acr->send();
     delete acr;
 
@@ -1099,6 +1080,7 @@ void third_party_register_failed(const std::string& public_id,
   // where SESSION_TERMINATED is set means that we should deregister "the
   // currently registered public user identity" - i.e. all bindings
   RegistrationUtils::remove_bindings(sdm,
+                                     remote_sdms,
                                      hss,
                                      public_id,
                                      "*",

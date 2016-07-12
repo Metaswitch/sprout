@@ -1,8 +1,8 @@
 /**
- * @file registration_utils.h
+ * @file hss_sip_mapping.h Map HSS responses to SIP responses
  *
  * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Copyright (C) 2016  Metaswitch Networks Ltd
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -34,49 +34,29 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#ifndef REGISTRATION_UTILS_H__
-#define REGISTRATION_UTILS_H__
+
+#ifndef HSS_SIP_MAPPING_H__
+#define HSS_SIP_MAPPING_H__
 
 extern "C" {
 #include <pjsip.h>
-#include <pjlib-util.h>
-#include <pjlib.h>
-#include <stdint.h>
 }
 
-#include <string>
-#include "subscriber_data_manager.h"
-#include "ifchandler.h"
-#include "hssconnection.h"
-#include "snmp_success_fail_count_table.h"
+#include "acr.h"
 
-namespace RegistrationUtils {
-
-void init(SNMP::RegistrationStatsTables* third_party_reg_stats_tables_arg,
-          bool force_third_party_register_body_arg);
-
-void remove_bindings(SubscriberDataManager* sdm,
-                     std::vector<SubscriberDataManager*> remote_sdms,
-                     HSSConnection* hss,
-                     const std::string& aor,
-                     const std::string& binding_id,
-                     const std::string& dereg_type,
-                     SAS::TrailId trail);
-
-void register_with_application_servers(Ifcs& ifcs,
-                                       SubscriberDataManager* sdm,
-                                       pjsip_rx_data* received_register,
-                                       pjsip_tx_data* ok_response,
-                                       int expires,
-                                       bool is_initial_registration,
-                                       const std::string& served_user,
-                                       SAS::TrailId trail);
-
-void deregister_with_application_servers(Ifcs&,
-                                         SubscriberDataManager* sdm,
-                                         const std::string&,
-                                         SAS::TrailId trail);
-
-} // namespace RegistrationUtils
+/// Process failures following making a request to the HSS
+//
+// If the response from the HSS represents a failure to register, then an
+// appropriate SIP response will be sent to the provided request.
+// @param sip_msg_type Type of SIP Message being responded to for logging
+// purposes
+// @returns true if the response was a failure that has been handled, else
+// false.
+bool process_hss_sip_failure(HTTPCode http_code,
+                             std::string& reg_state,
+                             pjsip_rx_data* rdata,
+                             struct stack_data_struct& stack_data,
+                             ACR* acr,
+                             const char* sip_msg_type);
 
 #endif

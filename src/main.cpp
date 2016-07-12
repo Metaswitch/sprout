@@ -153,6 +153,7 @@ enum OptionTypes
   OPT_LOCAL_SITE_NAME,
   OPT_REGISTRATION_STORES,
   OPT_IMPI_STORE,
+  OPT_SCSCF_NODE_URI,
 };
 
 
@@ -178,7 +179,6 @@ const static struct pj_getopt_option long_opt[] =
   { "max-session-expires",          required_argument, 0, OPT_MAX_SESSION_EXPIRES},
   { "target-latency-us",            required_argument, 0, OPT_TARGET_LATENCY_US},
   { "xdms",                         required_argument, 0, 'X'},
-  { "chronos",                      required_argument, 0, 'K'},
   { "ralf",                         required_argument, 0, 'G'},
   { "dns-server",                   required_argument, 0, OPT_DNS_SERVER },
   { "enum",                         required_argument, 0, 'E'},
@@ -233,6 +233,7 @@ const static struct pj_getopt_option long_opt[] =
   SPROUTLET_MACRO(SPROUTLET_CFG_PJ_STRUCT)
   { "impi-store-mode",              required_argument, 0, OPT_IMPI_STORE_MODE},
   { "nonce-count-supported",        no_argument,       0, OPT_NONCE_COUNT_SUPPORTED},
+  { "scscf-node-uri",               required_argument, 0, OPT_SCSCF_NODE_URI},
   { NULL,                           0,                 0, 0}
 };
 
@@ -264,10 +265,6 @@ static void usage(void)
        " -D, --domain <name>        The home domain name\n"
        "     --additional-domains <names>\n"
        "                            Comma-separated list of additional home domain names\n"
-       " -c, --scscf-uri <name>     The Sprout S-CSCF cluster domain URI.  This URI\n"
-       "                            must route requests to the S-CSCF port on the Sprout\n"
-       "                            cluster, either by specifying the port explicitly or\n"
-       "                            using DNS SRV records to specify the port.\n"
        " -n, --alias <names>        Optional list of alias host names\n"
        " -r, --routing-proxy <name>[,<port>[,<connections>[,<recycle time>]]]\n"
        "                            Operate as an access proxy using the specified node\n"
@@ -298,7 +295,6 @@ static void usage(void)
        "                            system name to identify this system to SAS.  If this option isn't\n"
        "                            specified SAS is disabled\n"
        " -H, --hss <server>         Name/IP address of the Homestead cluster\n"
-       " -K, --chronos              Name/IP address of the local chronos service\n"
        " -C, --record-routing-model <model>\n"
        "                            If 'pcscf', Sprout Record-Routes itself only on initiation of\n"
        "                            originating processing and completion of terminating\n"
@@ -422,6 +418,9 @@ static void usage(void)
        "     --nonce-count-supported\n"
        "                            Whether sprout accepts authentication responses with a nonce count\n"
        "                            greater than 1\n"
+       "     --scsf-node-uri <URI>\n"
+       "                            The URI of this S-CSCF used by other servers, including AS, to contact\n"
+       "                            this specific node. Defaults to \"sip:<localhost>:<port_scscf>\"."
        "     --pidfile=<filename>   Write pidfile\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
@@ -705,14 +704,9 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       TRC_INFO("XDM server set to %s", pj_optarg);
       break;
 
-    case 'K':
-      options->chronos_service = std::string(pj_optarg);
-      TRC_INFO("Chronos service set to %s", pj_optarg);
-      break;
-
     case 'G':
       options->ralf_server = std::string(pj_optarg);
-      fprintf(stdout, "Ralf server set to %s\n", pj_optarg);
+      TRC_INFO("Ralf server set to %s", pj_optarg);
       break;
 
     case OPT_RALF_THREADS:
@@ -1122,6 +1116,10 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
+    case OPT_SCSCF_NODE_URI:
+      options->scscf_node_uri = std::string(pj_optarg);
+      break;
+
     case OPT_SPROUT_HOSTNAME:
       options->sprout_hostname = std::string(pj_optarg);
       break;
@@ -1318,7 +1316,6 @@ int main(int argc, char* argv[])
 
   opt.sub_max_expires = 300;
   opt.sas_server = "0.0.0.0";
-  opt.chronos_service = "localhost:7253";
   opt.record_routing_model = 1;
   opt.default_session_expires = 10 * 60;
   opt.max_session_expires = 10 * 60;
@@ -1360,6 +1357,7 @@ int main(int argc, char* argv[])
   SPROUTLET_MACRO(SPROUTLET_CFG_OPTIONS_DEFAULT_VALUES)
   opt.impi_store_mode = ImpiStore::Mode::READ_IMPI_WRITE_IMPI;
   opt.nonce_count_supported = false;
+  opt.scscf_node_uri = "";
 
   // Initialise ENT logging before making "Started" log
   PDLogStatic::init(argv[0]);
@@ -1379,35 +1377,20 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  if (opt.daemon)
-  {
-    int errnum = Utils::daemonize();
-    if (errnum != 0)
-    {
-      TRC_ERROR("Failed to convert to daemon, %d (%s)", errnum, strerror(errnum));
-      exit(0);
-    }
-  }
-
-  Log::setLoggingLevel(opt.log_level);
-  init_pjsip_logging(opt.log_level, opt.log_to_file, opt.log_directory);
+  Utils::daemon_log_setup(argc,
+                          argv,
+                          opt.daemon,
+                          opt.log_directory,
+                          opt.log_level,
+                          opt.log_to_file);
 
   if ((opt.log_to_file) && (opt.log_directory != ""))
   {
-    // Work out the program name from argv[0], stripping anything before the final slash.
-    char* prog_name = argv[0];
-    char* slash_ptr = rindex(argv[0], '/');
-    if (slash_ptr != NULL)
-    {
-      prog_name = slash_ptr + 1;
-    }
-    Log::setLogger(new Logger(opt.log_directory, prog_name));
-
     TRC_STATUS("Access logging enabled to %s", opt.log_directory.c_str());
     access_logger = new AccessLogger(opt.log_directory);
   }
 
-  TRC_STATUS("Log level set to %d", opt.log_level);
+  init_pjsip_logging(opt.log_level, opt.log_to_file, opt.log_directory);
 
   std::stringstream options_ss;
   for (int ii = 0; ii < argc; ii++)
@@ -1876,28 +1859,6 @@ int main(int argc, char* argv[])
     }
   }
 
-  if (opt.chronos_service != "")
-  {
-    std::string port_str = std::to_string(opt.http_port);
-    std::string chronos_callback_host = "127.0.0.1:" + port_str;
-
-    // We want Chronos to call back to its local sprout instance so that we can
-    // handle Sprouts failing without missing timers.
-    if (is_ipv6(opt.http_address))
-    {
-      chronos_callback_host = "[::1]:" + port_str;
-    }
-
-    // Create a connection to Chronos.
-    TRC_STATUS("Creating connection to Chronos %s using %s as the callback URI",
-               opt.chronos_service.c_str(),
-               chronos_callback_host.c_str());
-    chronos_connection = new ChronosConnection(opt.chronos_service,
-                                               chronos_callback_host,
-                                               http_resolver,
-                                               chronos_comm_monitor);
-  }
-
   HttpStack* http_stack = HttpStack::get_instance();
   if (opt.pcscf_enabled)
   {
@@ -1953,6 +1914,26 @@ int main(int argc, char* argv[])
 
   if (opt.enabled_scscf)
   {
+    // Create a connection to Chronos.
+    std::string port_str = std::to_string(opt.http_port);
+    std::string chronos_callback_host = "127.0.0.1:" + port_str;
+
+    // We want Chronos to call back to its local sprout instance so that we can
+    // handle Sprouts failing without missing timers.
+    if (is_ipv6(opt.http_address))
+    {
+      chronos_callback_host = "[::1]:" + port_str;
+    }
+
+    std::string chronos_service = "127.0.0.1:7253";
+    TRC_STATUS("Creating connection to Chronos %s using %s as the callback URI",
+               chronos_service.c_str(),
+               chronos_callback_host.c_str());
+    chronos_connection = new ChronosConnection(chronos_service,
+                                               chronos_callback_host,
+                                               http_resolver,
+                                               chronos_comm_monitor);
+
     scscf_acr_factory = (ralf_processor != NULL) ?
                       (ACRFactory*)new RalfACRFactory(ralf_processor, ACR::SCSCF) :
                       new ACRFactory();

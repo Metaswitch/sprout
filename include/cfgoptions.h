@@ -91,7 +91,6 @@ struct options
   std::string                          sas_system_name;
   std::string                          hss_server;
   std::string                          xdm_server;
-  std::string                          chronos_service;
   std::string                          local_site_name;
   std::vector<std::string>             registration_stores;
   std::string                          impi_store;
@@ -147,6 +146,7 @@ struct options
   SPROUTLET_MACRO(SPROUTLET_CFG_OPTIONS)
   ImpiStore::Mode                      impi_store_mode;
   bool                                 nonce_count_supported;
+  std::string                          scscf_node_uri;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
