@@ -71,6 +71,7 @@ public:
   ICSCFSproutlet(const std::string& icscf_name,
                  const std::string& bgcf_uri,
                  int port,
+                 const std::string& uri,
                  HSSConnection* hss,
                  ACRFactory* acr_factory,
                  SCSCFSelector* scscf_selector,
