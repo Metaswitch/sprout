@@ -75,6 +75,7 @@ public:
     _icscf_sproutlet = new ICSCFSproutlet("icscf",
                                           "sip:bgcf.homedomain",
                                           ICSCF_PORT,
+                                          "sip:icscf.homedomain:5052;transport=tcp",
                                           _hss_connection,
                                           _acr_factory,
                                           _scscf_selector,

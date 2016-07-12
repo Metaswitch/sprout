@@ -282,6 +282,7 @@ public:
                                           "",
                                           "sip:bgcf@homedomain:5058",
                                           5058,
+                                          "sip:scscf.homedomain:5058;transport=tcp",
                                           _sdm,
                                           {},
                                           _hss_connection,
@@ -300,6 +301,7 @@ public:
     // Create the BGCF Sproutlet.
     _bgcf_sproutlet = new BGCFSproutlet("bgcf",
                                         5054,
+                                        "sip:bgcf.homedomain:5054;transport=tcp",
                                         _bgcf_service,
                                         _enum_service,
                                         _acr_factory,
@@ -311,6 +313,7 @@ public:
     _mmtel = new Mmtel("mmtel", _xdm_connection);
     _mmtel_sproutlet = new SproutletAppServerShim(_mmtel,
                                                   5058,
+                                                  "sip:mmtel.homedomain:5058;transport=tcp",
                                                   &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
                                                   &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
                                                   "mmtel.homedomain");

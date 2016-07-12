@@ -105,6 +105,7 @@ bool ICSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     _icscf_sproutlet = new ICSCFSproutlet(opt.prefix_icscf,
                                           opt.uri_bgcf,
                                           opt.port_icscf,
+                                          opt.uri_icscf,
                                           hss_connection,
                                           _acr_factory,
                                           _scscf_selector,
