@@ -105,7 +105,12 @@ bool MMTELASPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 
       // Load the MMTEL AppServer
       _mmtel = new Mmtel(opt.prefix_mmtel, _xdm_connection);
-      _mmtel_sproutlet = new SproutletAppServerShim(_mmtel, opt.port_mmtel, incoming_sip_transactions, outgoing_sip_transactions, "mmtel." + opt.home_domain);
+      _mmtel_sproutlet = new SproutletAppServerShim(_mmtel,
+                                                    opt.port_mmtel,
+                                                    opt.uri_mmtel,
+                                                    incoming_sip_transactions,
+                                                    outgoing_sip_transactions,
+                                                    "mmtel." + opt.home_domain);
       sproutlets.push_back(_mmtel_sproutlet);
     }
   }

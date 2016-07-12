@@ -70,6 +70,7 @@ class BGCFSproutlet : public Sproutlet
 public:
   BGCFSproutlet(const std::string& bgcf_name,
                 int port,
+                const std::string& uri,
                 BgcfService* bgcf_service,
                 EnumService* enum_service,
                 ACRFactory* acr_factory,

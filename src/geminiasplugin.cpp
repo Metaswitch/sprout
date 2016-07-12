@@ -87,7 +87,11 @@ bool GeminiPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                                                                                                            "1.2.826.0.1.1578918.9.11.2");
     // Create the Sproutlet.
     _gemini = new MobileTwinnedAppServer(opt.prefix_gemini);
-    _gemini_sproutlet = new SproutletAppServerShim(_gemini, opt.port_gemini, incoming_sip_transactions, outgoing_sip_transactions);
+    _gemini_sproutlet = new SproutletAppServerShim(_gemini,
+                                                   opt.port_gemini,
+                                                   opt.uri_gemini,
+                                                   incoming_sip_transactions,
+                                                   outgoing_sip_transactions);
 
     sproutlets.push_back(_gemini_sproutlet);
   }

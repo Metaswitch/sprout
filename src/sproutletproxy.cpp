@@ -88,16 +88,12 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
        it != _sproutlets.end();
        ++it)
   {
-    std::string rr_uri_str = "sip:" + (*it)->service_name() +
-                             "." + root_uri + ":" +
-                             std::to_string((*it)->port()) +
-                             ";transport=tcp";
-    TRC_DEBUG("Record-Route URI = %s", rr_uri_str.c_str());
     pjsip_sip_uri* root_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(
-                                                       rr_uri_str,
+                                                       (*it)->uri_as_str(),
                                                        stack_data.pool,
                                                        false);
-    _root_uris.insert(std::pair<std::string, pjsip_sip_uri*>((*it)->service_name(), root_uri));
+    _root_uris.insert(std::pair<std::string, pjsip_sip_uri*>(
+                                              (*it)->service_name(), root_uri));
   }
 }
 

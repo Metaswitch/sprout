@@ -235,6 +235,7 @@ public:
   /// Constructor.
   SproutletAppServerShim(AppServer* app,
                          const int port,
+                         const std::string& uri,
                          SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl = NULL,
                          SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl = NULL,
                          const std::string& service_host="");
