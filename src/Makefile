@@ -161,7 +161,6 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        session_expires_helper_test.cpp \
                        mock_subscriber_data_manager.cpp \
                        mock_chronos_connection.cpp \
-                       cassandra_store.cpp \
                        call_list_store.cpp \
                        mementosaslogger.cpp \
                        call_list_store_processor.cpp \
@@ -218,8 +217,6 @@ SPROUT_COMMON_LDFLAGS := -rdynamic \
                          -lz \
                          -lpthread \
                          -lboost_filesystem \
-                         -lthrift \
-                         -lcassandra \
                          `net-snmp-config --netsnmp-agent-libs`
 
 # Explicitly link some pjsip modules. Some plugins require symbols in them
