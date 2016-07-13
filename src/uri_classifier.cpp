@@ -112,7 +112,7 @@ URIClass URIClassifier::classify_uri(const pjsip_uri* uri, bool prefer_sip)
   // First, check to see if this URI has number portability data - this takes priority
   bool has_rn = false;
   bool has_npdi = false;
-  URIClass dn_type = URIClassifier::contains_dn_as_user(uri, prefer_sip);
+  URIClass user_type = URIClassifier::classify_user_type(uri, prefer_sip);
 
   if (PJSIP_URI_SCHEME_IS_TEL(uri))
   {
@@ -139,10 +139,10 @@ URIClass URIClassifier::classify_uri(const pjsip_uri* uri, bool prefer_sip)
     }
   }
   // No number portability data
-  else if (dn_type != URIClass::UNKNOWN)
+  else if (user_type != URIClass::UNKNOWN)
   {
     // we have a phone number
-    ret = dn_type;
+    ret = user_type;
   }
   else if(PJSIP_URI_SCHEME_IS_SIP(uri))
   {
@@ -175,8 +175,8 @@ URIClass URIClassifier::classify_uri(const pjsip_uri* uri, bool prefer_sip)
   return ret;
 }
 
-URIClass URIClassifier::contains_dn_as_user(const pjsip_uri* uri,
-                                            bool prefer_sip)
+URIClass URIClassifier::classify_user_type(const pjsip_uri* uri,
+                                           bool prefer_sip)
 {
   URIClass ret = URIClass::UNKNOWN;
 

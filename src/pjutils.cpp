@@ -2171,14 +2171,12 @@ bool PJUtils::get_rn(pjsip_uri* uri, std::string& routing_value)
   return rn_set;
 }
 
-bool PJUtils::get_dn(pjsip_uri* uri, std::string& routing_value)
+bool PJUtils::user_as_string_from_uri(pjsip_uri* uri,
+                                      std::string& routing_value)
 {
-  bool dn_set = false;
-  pj_str_t dn = PJUtils::user_from_uri(uri);
-  routing_value = pj_str_to_string(&dn);
-  dn_set = (routing_value.size() > 0);
-
-  return dn_set;
+  pj_str_t user = PJUtils::user_from_uri(uri);
+  routing_value = pj_str_to_string(&user);
+  return (routing_value.size() > 0);
 }
 
 /// Attempt ENUM lookup if appropriate.

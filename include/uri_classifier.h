@@ -56,7 +56,10 @@ enum URIClass
 namespace URIClassifier
 {
   URIClass classify_uri(const pjsip_uri* uri, bool prefer_sip = true);
-  URIClass contains_dn_as_user(const pjsip_uri* uri, bool prefer_sip = true);
+
+  // Classifies the user type, either returns LOCAL_PHONE_NUMBER,
+  // GLOBAL_PHONE_NUMBER or UNKNOWN.
+  URIClass classify_user_type(const pjsip_uri* uri, bool prefer_sip = true);
 
   bool is_user_numeric(pj_str_t user);
 
