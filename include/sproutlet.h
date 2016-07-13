@@ -584,7 +584,7 @@ public:
   /// Returns the name of this service.
   const std::string service_name() const { return _service_name; }
 
-  /// Returns the uri of this service (as a string)
+  /// Returns the URI of this service (as a string)
   const std::string uri_as_str() const { return _uri; }
 
   /// Returns the API version required by this Sproutlet.

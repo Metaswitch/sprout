@@ -92,8 +92,7 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
                                                        (*it)->uri_as_str(),
                                                        stack_data.pool,
                                                        false);
-    _root_uris.insert(std::pair<std::string, pjsip_sip_uri*>(
-                                              (*it)->service_name(), root_uri));
+    _root_uris.insert(std::make_pair((*it)->service_name(), root_uri));
   }
 }
 
