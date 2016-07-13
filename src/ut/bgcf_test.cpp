@@ -205,6 +205,7 @@ public:
     // Create the BGCF Sproutlet.
     _bgcf_sproutlet = new BGCFSproutlet("bgcf",
                                         5054,
+                                        "sip:bgcf.homedomain:5058;transport=tcp",
                                         _bgcf_service,
                                         _enum_service,
                                         _acr_factory,

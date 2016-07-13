@@ -123,7 +123,11 @@ bool MementoPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                       http_resolver,
                                       opt.memento_notify_url);
 
-      _memento_sproutlet = new SproutletAppServerShim(_memento, opt.port_memento, incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl);
+      _memento_sproutlet = new SproutletAppServerShim(_memento,
+                                                      opt.port_memento,
+                                                      opt.uri_memento,
+                                                      incoming_sip_transactions_tbl,
+                                                      outgoing_sip_transactions_tbl);
       sproutlets.push_back(_memento_sproutlet);
     }
   }

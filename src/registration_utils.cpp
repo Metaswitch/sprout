@@ -228,7 +228,7 @@ static void send_register_cb(void* token, pjsip_event *event)
 
     third_party_register_failed(tsxdata->public_id, tsxdata->trail);
   }
-  
+
   if (third_party_reg_stats_tables != NULL)
   {
     if (tsx->status_code == 200)
@@ -466,6 +466,7 @@ static bool expire_bindings(SubscriberDataManager *sdm,
 }
 
 void RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
+                                        std::vector<SubscriberDataManager*> remote_sdms,
                                         HSSConnection* hss,
                                         const std::string& aor,
                                         const std::string& binding_id,
@@ -495,5 +496,17 @@ void RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
       deregister_with_application_servers(ifc_map[aor], sdm, aor, trail);
       notify_application_servers();
     }
+  }
+
+  // Now go through the remote SDMs and remove bindings there too.  We don't
+  // make any effort to check whether the local and remote stores are in sync --
+  // we'll do this next time we get the data from the store and before we do
+  // anything with it.
+  for (std::vector<SubscriberDataManager*>::const_iterator remote_sdm =
+       remote_sdms.begin();
+       remote_sdm != remote_sdms.end();
+       ++remote_sdm)
+  {
+    (void) expire_bindings(*remote_sdm, aor, binding_id, trail);
   }
 };

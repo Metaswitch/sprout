@@ -213,7 +213,7 @@ TEST_F(MangelwurzelTest, Reverse)
 /// config should all be defaulted correctly.
 TEST_F(MangelwurzelTest, CreateDefaults)
 {
-  Mangelwurzel mangelwurzel("mangelwurzel", 5058);
+  Mangelwurzel mangelwurzel("mangelwurzel", 5058, "sip:mangelwurzel.homedomain:5058;transport=tcp");
   Message msg;
   pjsip_msg* req = parse_msg(msg.get_request());
   pjsip_route_hdr* hdr = pjsip_rr_hdr_create(stack_data.pool);
@@ -242,7 +242,7 @@ TEST_F(MangelwurzelTest, CreateDefaults)
 /// Test creating a mangelwurzel transaction with all the config options set.
 TEST_F(MangelwurzelTest, CreateFullConfig)
 {
-  Mangelwurzel mangelwurzel("mangelwurzel", 5058);
+  Mangelwurzel mangelwurzel("mangelwurzel", 5058, "sip:mangelwurzel.homedomain:5058;transport=tcp");
   Message msg;
   pjsip_msg* req = parse_msg(msg.get_request());
   pjsip_route_hdr* hdr = pjsip_rr_hdr_create(stack_data.pool);
@@ -275,7 +275,7 @@ TEST_F(MangelwurzelTest, CreateFullConfig)
 /// rot13.
 TEST_F(MangelwurzelTest, CreateRot13)
 {
-  Mangelwurzel mangelwurzel("mangelwurzel", 5058);
+  Mangelwurzel mangelwurzel("mangelwurzel", 5058, "sip:mangelwurzel.homedomain:5058;transport=tcp");
   Message msg;
   pjsip_msg* req = parse_msg(msg.get_request());
   pjsip_route_hdr* hdr = pjsip_rr_hdr_create(stack_data.pool);
@@ -300,7 +300,7 @@ TEST_F(MangelwurzelTest, CreateRot13)
 TEST_F(MangelwurzelTest, CreateInvalidMangalgorithm)
 {
   CapturingTestLogger log;
-  Mangelwurzel mangelwurzel("mangelwurzel", 5058);
+  Mangelwurzel mangelwurzel("mangelwurzel", 5058, "sip:mangelwurzel.homedomain:5058;transport=tcp");
   Message msg;
   pjsip_msg* req = parse_msg(msg.get_request());
   pjsip_route_hdr* hdr = pjsip_rr_hdr_create(stack_data.pool);
@@ -327,7 +327,7 @@ TEST_F(MangelwurzelTest, CreateInvalidMangalgorithm)
 /// We won't create a transaction.
 TEST_F(MangelwurzelTest, CreateNoRouteHdr)
 {
-  Mangelwurzel mangelwurzel("mangelwurzel", 5058);
+  Mangelwurzel mangelwurzel("mangelwurzel", 5058, "sip:mangelwurzel.homedomain:5058;transport=tcp");
   Message msg;
   pjsip_msg* req = parse_msg(msg.get_request());
 

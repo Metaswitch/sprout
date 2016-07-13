@@ -1080,6 +1080,7 @@ void third_party_register_failed(const std::string& public_id,
   // where SESSION_TERMINATED is set means that we should deregister "the
   // currently registered public user identity" - i.e. all bindings
   RegistrationUtils::remove_bindings(sdm,
+                                     remote_sdms,
                                      hss,
                                      public_id,
                                      "*",

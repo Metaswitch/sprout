@@ -108,6 +108,7 @@ bool BGCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     // Create the Sproutlet.
     _bgcf_sproutlet = new BGCFSproutlet(opt.prefix_bgcf,
                                         opt.port_bgcf,
+                                        opt.uri_bgcf,
                                         _bgcf_service,
                                         enum_service,
                                         _acr_factory,
