@@ -45,6 +45,7 @@
 #include "scscfsproutlet.h"
 #include "sprout_alarmdefinition.h"
 #include "sprout_pd_definitions.h"
+#include "log.h"
 
 class SCSCFPlugin : public SproutletPlugin
 {
@@ -97,6 +98,8 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 
   if (opt.enabled_scscf)
   {
+    TRC_STATUS("S-CSCF plugin enabled");
+
     // Determine the S-CSCF node URI and then S-SCSCF, BGCF and I-CSCF cluster URIs.
     std::string scscf_node_uri;
 

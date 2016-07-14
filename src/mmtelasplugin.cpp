@@ -43,6 +43,7 @@
 #include "sproutletplugin.h"
 #include "sproutletappserver.h"
 #include "mmtel.h"
+#include "log.h"
 
 class MMTELASPlugin : public SproutletPlugin
 {
@@ -85,6 +86,8 @@ bool MMTELASPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 
   if (opt.enabled_mmtel)
   {
+    TRC_STATUS("MMTel AS plugin enabled");
+
     SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions = SNMP::SuccessFailCountByRequestTypeTable::create("mmtel_as_incoming_sip_transactions",
                                                                                                                            "1.2.826.0.1.1578918.9.3.24");
     SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions = SNMP::SuccessFailCountByRequestTypeTable::create("mmtel_as_outgoing_sip_transactions",

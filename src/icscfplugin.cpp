@@ -44,6 +44,7 @@
 #include "stack.h"
 #include "scscfselector.h"
 #include "icscfsproutlet.h"
+#include "log.h"
 
 class ICSCFPlugin : public SproutletPlugin
 {
@@ -93,6 +94,8 @@ bool ICSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 
   if (opt.enabled_icscf)
   {
+    TRC_STATUS("I-CSCF plugin enabled");
+
     // Create the S-CSCF selector.
     _scscf_selector = new SCSCFSelector(opt.uri_scscf);
 

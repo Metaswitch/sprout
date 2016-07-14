@@ -45,6 +45,7 @@
 #include "call_list_store.h"
 #include "sproutletappserver.h"
 #include "memento_as_alarmdefinition.h"
+#include "log.h"
 
 class MementoPlugin : public SproutletPlugin
 {
@@ -87,6 +88,8 @@ bool MementoPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 
   if (opt.enabled_memento)
   {
+    TRC_STATUS("Memento plugin enabled");
+
     SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("memento_as_incoming_sip_transactions",
                                                                                                                                "1.2.826.0.1.1578918.9.8.1.4");
     SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("memento_as_outgoing_sip_transactions",

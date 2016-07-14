@@ -74,7 +74,7 @@ bool PluginLoader::load(std::list<Sproutlet*>& sproutlets)
       // object, but checking for a ".so" extension filters out files like "."
       // and ".." and prevents spurious error logs. If a file isn't a valid
       // shared object, dlopen will return NULL and we'll log an error.
-      
+
       // We don't check the file type as given by de->d_type - this would also
       // filter out directories like "." and "..", but some filesystems like
       // XFS don't support this.
@@ -106,7 +106,7 @@ bool PluginLoader::load(std::list<Sproutlet*>& sproutlets)
           if (!plugins_loaded)
           {
             // There was an error loading one of the plugins. Return an error
-            // now so that Sprout is killed, rather than running with 
+            // now so that Sprout is killed, rather than running with
             // unexpected plugins.
             TRC_ERROR("Failed to successfully load plug-in %s", p.name.c_str());
             break;
