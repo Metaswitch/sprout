@@ -94,7 +94,7 @@ bool ICSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 
   if (opt.enabled_icscf)
   {
-    TRC_INFO("I-CSCF plugin enabled.");
+    TRC_STATUS("I-CSCF plugin enabled");
 
     // Create the S-CSCF selector.
     _scscf_selector = new SCSCFSelector(opt.uri_scscf);

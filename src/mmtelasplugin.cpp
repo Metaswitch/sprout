@@ -86,7 +86,7 @@ bool MMTELASPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 
   if (opt.enabled_mmtel)
   {
-    TRC_INFO("MMTel AS plugin enabled.");
+    TRC_STATUS("MMTel AS plugin enabled");
 
     SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions = SNMP::SuccessFailCountByRequestTypeTable::create("mmtel_as_incoming_sip_transactions",
                                                                                                                            "1.2.826.0.1.1578918.9.3.24");

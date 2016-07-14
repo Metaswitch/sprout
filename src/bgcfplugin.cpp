@@ -98,7 +98,7 @@ bool BGCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                                                                     "1.2.826.0.1.1578918.9.3.23");
   if (opt.enabled_bgcf)
   {
-    TRC_INFO("BGCF plugin enabled.");
+    TRC_STATUS("BGCF plugin enabled");
 
     // Create BGCF service required for the BGCF Sproutlet.
     _bgcf_service = new BgcfService();

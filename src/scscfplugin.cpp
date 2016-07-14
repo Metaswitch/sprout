@@ -98,7 +98,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 
   if (opt.enabled_scscf)
   {
-    TRC_INFO("S-CSCF plugin enabled.");
+    TRC_STATUS("S-CSCF plugin enabled");
 
     // Determine the S-CSCF node URI and then S-SCSCF, BGCF and I-CSCF cluster URIs.
     std::string scscf_node_uri;

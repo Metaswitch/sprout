@@ -82,7 +82,7 @@ bool GeminiPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 
   if (opt.enabled_gemini)
   {
-    TRC_INFO("Gemini plugin enabled.");
+    TRC_STATUS("Gemini plugin enabled");
 
     SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions = SNMP::SuccessFailCountByRequestTypeTable::create("gemini_as_incoming_sip_transactions",
                                                                                                                            "1.2.826.0.1.1578918.9.11.1");
