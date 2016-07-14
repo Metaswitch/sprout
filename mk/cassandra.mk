@@ -11,9 +11,9 @@ LIB_FILE := libcassandra.so
 C_PATHS := ${patsubst %.cpp,${CASSANDRA_GEN_DIR}/%.cpp,${CPP_FILES}}
 O_PATHS := ${patsubst %.cpp,${CASSANDRA_GEN_DIR}/%.o,${CPP_FILES}}
 D_PATHS := ${patsubst %.cpp,${CASSANDRA_GEN_DIR}/%.d,${CPP_FILES}}
-LIB_PATH := ${PRE_INSTALL_DIR}/lib/${LIB_FILE}
+LIB_PATH := ${INSTALL_DIR}/lib/${LIB_FILE}
 
-CPP_FLAGS := -DHAVE_INTTYPES_H -DHAVE_NETINET_IN_H -I ${PRE_INSTALL_DIR}/include/ -I ${CASSANDRA_GEN_DIR}/ -fPIC
+CPP_FLAGS := -DHAVE_INTTYPES_H -DHAVE_NETINET_IN_H -I ${INSTALL_DIR}/include/ -I ${CASSANDRA_GEN_DIR}/ -fPIC
 LD_FLAGS := -shared -Wl,-soname,${LIB_FILE}
 
 ${CASSANDRA_BUILD_DIR}:
@@ -24,9 +24,9 @@ ${CASSANDRA_BUILD_DIR}/interface/thrift:
 
 cassandra: ${LIB_PATH}
 
-${C_PATHS}: ${CASSANDRA_DIR}/interface/cassandra.thrift ${CASSANDRA_THRIFT_DIR}
-	${PRE_INSTALL_DIR}/bin/thrift --gen cpp -o ${CASSANDRA_THRIFT_DIR} ${CASSANDRA_DIR}/interface/cassandra.thrift
-	cp ${CASSANDRA_GEN_DIR}/*.h ${PRE_INSTALL_DIR}/include/
+${C_PATHS}: ${CASSANDRA_DIR}/interface/cassandra.thrift ${CASSANDRA_THRIFT_DIR} ${INSTALL_DIR}/bin/thrift
+	${INSTALL_DIR}/bin/thrift --gen cpp -o ${CASSANDRA_THRIFT_DIR} ${CASSANDRA_DIR}/interface/cassandra.thrift
+	cp ${CASSANDRA_GEN_DIR}/*.h ${INSTALL_DIR}/include/
 
 ${CASSANDRA_GEN_DIR}/%.d: ${CASSANDRA_GEN_DIR}/%.cpp
 	g++ -MM ${CPP_FLAGS} $< > $@

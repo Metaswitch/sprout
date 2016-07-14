@@ -4,8 +4,8 @@ SAS_CLIENT_DIR := ${MODULE_DIR}/sas-client
 
 sas-client: 
 	${MAKE} -C ${SAS_CLIENT_DIR}
-	cp ${SAS_CLIENT_DIR}/*.a ${PRE_LIB_DIR}/
-	cp ${SAS_CLIENT_DIR}/include/*.h ${PRE_INCLUDE_DIR}
+	cp ${SAS_CLIENT_DIR}/*.a ${LIB_DIR}/
+	cp ${SAS_CLIENT_DIR}/include/*.h ${INCLUDE_DIR}
 
 sas-client_test:
 	@echo "No tests for sas-client"

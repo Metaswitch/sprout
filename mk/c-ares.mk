@@ -8,7 +8,7 @@ ${C_ARES_CONFIGURE}:
 	cd ${C_ARES_DIR} && ./buildconf
 
 ${C_ARES_MAKEFILE}: ${C_ARES_CONFIGURE}
-	cd ${C_ARES_DIR} && ./configure --prefix=${PRE_INSTALL_DIR}
+	cd ${C_ARES_DIR} && ./configure --prefix=${INSTALL_DIR}
 
 c-ares: ${C_ARES_MAKEFILE}
 	${MAKE} -C ${C_ARES_DIR}

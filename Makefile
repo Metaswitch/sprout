@@ -37,11 +37,14 @@ include build-infra/cw-module-install.mk
 include $(patsubst %, ${MK_DIR}/%.mk, ${SUBMODULES})
 include ${MK_DIR}/sprout.mk
 
-build: ${SUBMODULES} sync_install sprout scripts/sipp-stats/clearwater-sipp-stats-1.0.0.gem plugins-build
+.PHONY: update_submodules
+update_submodules: ${SUBMODULES} sync_install
 
-test: ${SUBMODULES} sync_install sprout_test plugins-test
+build: update_submodules sprout scripts/sipp-stats/clearwater-sipp-stats-1.0.0.gem plugins-build
 
-full_test: ${SUBMODULES} sync_install sprout_full_test plugins-test
+test: update_submodules sprout_test plugins-test
+
+full_test: update_submodules sprout_full_test plugins-test
 
 testall: $(patsubst %, %_test, ${SUBMODULES}) full_test
 

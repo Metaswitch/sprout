@@ -4,7 +4,7 @@ WEBSOCKETPP_DIR := ${MODULE_DIR}/websocketpp
 
 websocketpp:
 	${MAKE} -C ${WEBSOCKETPP_DIR}
-	${MAKE} -C ${WEBSOCKETPP_DIR} install prefix=${PRE_PREFIX}
+	${MAKE} -C ${WEBSOCKETPP_DIR} install prefix=${PREFIX}
 
 websocketpp_test:
 	${MAKE} -C ${WEBSOCKETPP_DIR}/test/basic BOOST_LIB_PATH=/usr/lib

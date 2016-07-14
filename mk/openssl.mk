@@ -7,7 +7,7 @@ OPENSSL_MAKEFILE := ${OPENSSL_DIR}/Makefile
 
 ${OPENSSL_CONFIG_MARKER}:
 	cd ${OPENSSL_DIR}; \
-	./config --prefix=${PRE_INSTALL_DIR} -fPIC
+	./config --prefix=${INSTALL_DIR} -fPIC
 	touch ${OPENSSL_CONFIG_MARKER}
 
 openssl: ${OPENSSL_CONFIG_MARKER}

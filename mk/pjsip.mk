@@ -4,7 +4,7 @@ PJSIP_DIR := ${MODULE_DIR}/pjsip
 PJSIP_CONFIG_ARTIFACT := ${PJSIP_DIR}/build.mak
 
 ${PJSIP_CONFIG_ARTIFACT}: 
-	cd ${MODULE_DIR}/pjsip && ./configure --without-ffmpeg --disable-ffmpeg --prefix=${PRE_INSTALL_DIR} --enable-epoll CFLAGS=-ggdb3
+	cd ${MODULE_DIR}/pjsip && ./configure --without-ffmpeg --disable-ffmpeg --prefix=${INSTALL_DIR} --enable-epoll CFLAGS=-ggdb3
 
 pjsip: ${PJSIP_CONFIG_ARTIFACT}
 	${MAKE} -C ${MODULE_DIR}/pjsip dep

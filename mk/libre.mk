@@ -5,7 +5,7 @@ LIBRE_FLAGS := EXTRA_CFLAGS="-D_GNU_SOURCE"
 
 libre:
 	${MAKE} -C ${LIBRE_DIR} ${LIBRE_FLAGS}
-	${MAKE} -C ${LIBRE_DIR} install DESTDIR=${PRE_ROOT} ${LIBRE_FLAGS}
+	${MAKE} -C ${LIBRE_DIR} install DESTDIR=${ROOT} ${LIBRE_FLAGS}
 
 libre_test:
 	@echo "No tests for libre"

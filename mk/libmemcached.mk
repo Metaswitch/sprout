@@ -8,10 +8,10 @@ ${LIBMEM_CONFIGURE}:
 	cd ${LIBMEM_DIR} && ./config/autorun.sh
 
 ${LIBMEM_MAKEFILE}: ${LIBMEM_CONFIGURE}
-	cd ${LIBMEM_DIR} && ./configure --prefix=${PRE_INSTALL_DIR} \
-		--with-lib-prefix=${PRE_INSTALL_DIR} \
-		CFLAGS="-I${PRE_INSTALL_DIR}/include" \
-		LDFLAGS="-L${PRE_INSTALL_DIR}/lib"
+	cd ${LIBMEM_DIR} && ./configure --prefix=${INSTALL_DIR} \
+		--with-lib-prefix=${INSTALL_DIR} \
+		CFLAGS="-I${INSTALL_DIR}/include" \
+		LDFLAGS="-L${INSTALL_DIR}/lib"
 
 libmemcached: libevhtp ${LIBMEM_MAKEFILE}
 	${MAKE} -C ${LIBMEM_DIR}

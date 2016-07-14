@@ -8,9 +8,9 @@ RESTUND_DIR := ${MODULE_DIR}/restund
 
 restund: libre
 	${MAKE} -C ${RESTUND_DIR} LIBRE_MK=${LIBRE_DIR}/mk/re.mk \
-		EXTRA_CFLAGS='-I${PRE_INCLUDE_DIR}/re -I${RESTUND_DIR}/include -D_GNU_SOURCE' \
-                LIBRE_SO='${PRE_LIB_DIR}'
-	${MAKE} -C ${RESTUND_DIR} install DESTDIR=${PRE_ROOT} \
+		EXTRA_CFLAGS='-I${INCLUDE_DIR}/re -I${RESTUND_DIR}/include -D_GNU_SOURCE' \
+                LIBRE_SO='${LIB_DIR}'
+	${MAKE} -C ${RESTUND_DIR} install DESTDIR=${ROOT} \
 		LIBRE_MK=${LIBRE_DIR}/mk/re.mk
 
 restund_test:
