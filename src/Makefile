@@ -218,16 +218,18 @@ SPROUT_COMMON_LDFLAGS := -rdynamic \
                          -lz \
                          -lpthread \
                          -lboost_filesystem \
-                         -lthrift \
-                         -lcassandra \
                          `net-snmp-config --netsnmp-agent-libs`
 
 # Explicitly link some pjsip modules. Some plugins require symbols in them
 # (which sprout-base doesn't), and the plugins are dynamically linked at run
 # time, so GCC won't link in the symbols they need unless we explicitly tell
 # it to.
-sprout_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} -Wl,--whole-archive -lpjmedia-x86_64-unknown-linux-gnu -Wl,--no-whole-archive `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --libs libpjproject`
-sprout_test_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} -lboost_date_time `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --libs libpjproject`
+sprout_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} \-Wl,--whole-archive -lpjmedia-x86_64-unknown-linux-gnu -Wl,--no-whole-archive `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --libs libpjproject`
+sprout_test_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} \
+                       -lthrift \
+                       -lcassandra \
+                       -lboost_date_time \
+                       `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --libs libpjproject`
 
 # Build rules for sproutlet plugins
 PLUGIN_COMMON_CPPFLAGS := -fPIC \
