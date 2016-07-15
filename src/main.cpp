@@ -149,6 +149,7 @@ enum OptionTypes
   OPT_IMPI_STORE_MODE,
   OPT_NONCE_COUNT_SUPPORTED,
   OPT_SCSCF_NODE_URI,
+  OPT_SAS_USE_SIGNALING_IF,
 };
 
 
@@ -227,6 +228,7 @@ const static struct pj_getopt_option long_opt[] =
   { "impi-store-mode",              required_argument, 0, OPT_IMPI_STORE_MODE},
   { "nonce-count-supported",        no_argument,       0, OPT_NONCE_COUNT_SUPPORTED},
   { "scscf-node-uri",               required_argument, 0, OPT_SCSCF_NODE_URI},
+  { "sas-use-signaling-interface",  no_argument,       0, OPT_SAS_USE_SIGNALING_IF},
   { NULL,                           0,                 0, 0}
 };
 
@@ -409,6 +411,9 @@ static void usage(void)
        "     --scsf-node-uri <URI>\n"
        "                            The URI of this S-CSCF used by other servers, including AS, to contact\n"
        "                            this specific node. Defaults to \"sip:<localhost>:<port_scscf>\"."
+       "     --sas-use-signaling-interface\n"
+       "                            Whether SAS traffic is to be dispatched over the signaling network\n"
+       "                            interface rather than the default management interface\n"
        "     --pidfile=<filename>   Write pidfile\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
@@ -1070,6 +1075,10 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       options->nonce_count_supported = true;
       break;
 
+    case OPT_SAS_USE_SIGNALING_IF:
+      options->sas_signaling_if = true;
+      break;
+
     case 'N':
       {
         std::vector<std::string> fields;
@@ -1326,6 +1335,7 @@ int main(int argc, char* argv[])
   opt.impi_store_mode = ImpiStore::Mode::READ_IMPI_WRITE_IMPI;
   opt.nonce_count_supported = false;
   opt.scscf_node_uri = "";
+  opt.sas_signaling_if = false;
 
   // Initialise ENT logging before making "Started" log
   PDLogStatic::init(argv[0]);
@@ -1688,6 +1698,7 @@ int main(int argc, char* argv[])
                       opt.pcscf_trusted_port,
                       opt.pcscf_untrusted_port,
                       opt.port_scscf,
+                      opt.sas_signaling_if,
                       opt.sproutlet_ports,
                       opt.local_host,
                       opt.public_host,
