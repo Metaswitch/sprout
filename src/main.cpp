@@ -154,6 +154,7 @@ enum OptionTypes
   OPT_REGISTRATION_STORES,
   OPT_IMPI_STORE,
   OPT_SCSCF_NODE_URI,
+  OPT_CHRONOS_HOSTNAME,
 };
 
 
@@ -234,6 +235,7 @@ const static struct pj_getopt_option long_opt[] =
   { "impi-store-mode",              required_argument, 0, OPT_IMPI_STORE_MODE},
   { "nonce-count-supported",        no_argument,       0, OPT_NONCE_COUNT_SUPPORTED},
   { "scscf-node-uri",               required_argument, 0, OPT_SCSCF_NODE_URI},
+  { "chronos-hostname",             required_argument, 0, OPT_CHRONOS_HOSTNAME},
   { NULL,                           0,                 0, 0}
 };
 
@@ -422,6 +424,8 @@ static void usage(void)
        "                            The URI of this S-CSCF used by other servers, including AS, to contact\n"
        "                            this specific node. Defaults to \"sip:<localhost>:<port_scscf>\"."
        "     --pidfile=<filename>   Write pidfile\n"
+       "     --chronos-hostname <hostname>\n"
+       "                            Specify the hostname of a remote Chronos cluster\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
        " -F, --log-file <directory>\n"
@@ -1123,6 +1127,9 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case OPT_SPROUT_HOSTNAME:
       options->sprout_hostname = std::string(pj_optarg);
       break;
+
+    case OPT_CHRONOS_HOSTNAME:
+      options->chronos_hostname = std::string(pj_optarg);
 
     case OPT_LISTEN_PORT:
       options->listen_port = atoi(pj_optarg);
@@ -1916,16 +1923,29 @@ int main(int argc, char* argv[])
   {
     // Create a connection to Chronos.
     std::string port_str = std::to_string(opt.http_port);
-    std::string chronos_callback_host = "127.0.0.1:" + port_str;
 
-    // We want Chronos to call back to its local sprout instance so that we can
-    // handle Sprouts failing without missing timers.
-    if (is_ipv6(opt.http_address))
+    std::string chronos_service;
+    std::string chronos_callback_host;
+
+    if (opt.chronos_hostname == "")
     {
-      chronos_callback_host = "[::1]:" + port_str;
+      chronos_service = "127.0.0.1:7253";
+
+      if (is_ipv6(opt.http_address))
+      {
+        chronos_callback_host = "[::1]:" + port_str;
+      }
+      else
+      {
+        chronos_callback_host = "127.0.0.1:" + port_str;
+      }
+    }
+    else
+    {
+      chronos_service = opt.chronos_hostname + ":7253";
+      chronos_callback_host = opt.sprout_hostname + ":" + port_str;
     }
 
-    std::string chronos_service = "127.0.0.1:7253";
     TRC_STATUS("Creating connection to Chronos %s using %s as the callback URI",
                chronos_service.c_str(),
                chronos_callback_host.c_str());
