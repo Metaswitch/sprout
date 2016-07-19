@@ -341,7 +341,7 @@ pj_status_t create_tcp_listener_transport(int port, pj_str_t& host, pjsip_tpfact
   {
     CL_SPROUT_SIP_TCP_START_FAIL.log(port,
                                      PJUtils::pj_status_to_string(status).c_str());
-    TRC_ERROR("Failed to fill in TCP transport for port %d  (%s)",
+    TRC_ERROR("Failed to fill in TCP transport for port %d (%s)",
               port,
               PJUtils::pj_status_to_string(status).c_str());
 
