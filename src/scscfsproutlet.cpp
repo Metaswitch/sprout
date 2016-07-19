@@ -499,9 +499,12 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     else
     {
       // No AS chain set, so don't apply services to the request.
-      // Default action is to route the request directly to the BGCF.
-      TRC_INFO("Route request to BGCF without applying services");
-      route_to_bgcf(req);
+      // Default action will be to try to route following remaining Route
+      // headers or to the RequestURI.
+      TRC_INFO("Route request without applying services");
+      SAS::Event no_as_route(trail(), SASEvent::NO_AS_CHAIN_ROUTE, 0);
+      SAS::report_event(no_as_route);
+      send_request(req);
     }
   }
 }
