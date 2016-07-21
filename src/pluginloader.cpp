@@ -102,6 +102,7 @@ bool PluginLoader::load(std::list<Sproutlet*>& sproutlets)
         {
           std::list<Sproutlet*> plugin_sproutlets;
           plugins_loaded = p.plugin->load(_opt, plugin_sproutlets);
+          TRC_STATUS("Plug-in %s has loaded %u Sproutlets", p.name.c_str(), plugin_sproutlets.size());
 
           if (!plugins_loaded)
           {
