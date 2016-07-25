@@ -605,6 +605,16 @@ void create_challenge(pjsip_digest_credential* credentials,
       TRC_DEBUG("Sending %s to Chronos to set AV timer", chronos_body.c_str());
       chronos->send_post(timer_id, 30, "/authentication-timeout", chronos_body, get_trail(rdata));
     }
+    else
+    {
+      // We've failed to store the nonce in memcached, so we have no hope of
+      // successfuly authenticating any repsonse to a 401 Unauthorized.  Send
+      // a 503 Servce Unavailable instead.
+      TRC_DEBUG("Failed to store nonce in memcached.");
+      tdata->msg->line.status.code = PJSIP_SC_SERVICE_UNAVAILABLE;
+      tdata->msg->line.status.reason = *pjsip_get_status_text(PJSIP_SC_SERVICE_UNAVAILABLE);
+      pjsip_tx_data_invalidate_msg(tdata);
+    }
 
     delete av;
   }
