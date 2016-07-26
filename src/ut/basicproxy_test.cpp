@@ -2268,7 +2268,8 @@ TEST_F(BasicProxyTest, StatelessForwardACK)
 TEST_F(BasicProxyTest, StatelessForwardLargeACK)
 {
   // Tests stateless forwarding of a large ACK where the onward hop is
-  // over UDP.  This tests that switching to TCP works.
+  // over UDP.  We've disabled UDP-to-TCP uplift so this now tests that
+  // switching to TCP doesn't happen.
   pjsip_tx_data* tdata;
 
   // Create a TCP connection to the listening port.
@@ -2291,11 +2292,11 @@ TEST_F(BasicProxyTest, StatelessForwardLargeACK)
   msg._body = std::string(1300, '!');
   inject_msg(msg.get_request(), tp);
 
-  // Request is forwarded to the node in the second Route header, over TCP
-  // not UDP.
+  // Request is forwarded to the node in the second Route header, over UDP
+  // not TCP.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
-  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  expect_target("FAKE_UDP", "0.0.0.0", 0, tdata);
   ReqMatcher("ACK").matches(tdata->msg);
   free_txdata();
 
