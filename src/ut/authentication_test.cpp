@@ -2269,3 +2269,30 @@ TEST_F(AuthenticationTest, DigestAuthSuccessWithDataContention)
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
+
+
+TEST_F(AuthenticationTest, DigestAuthFailureWithSetError)
+{
+  // Test an unsuccessful SIP Digest authentication flow.  A failure occurs
+  // because we fail to write to memcached.
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Force an error on the SET.  This means that we'll respond with a 500
+  // Server Internal Error.
+  _local_data_store->force_error();
+
+  // Send in a REGISTER request with no authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = false;
+  inject_msg(msg1.get());
+
+  // Expect a 500 Server Internal Error response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(500).matches(tdata->msg);
+}
