@@ -2340,6 +2340,8 @@ TEST_F(BasicProxyTest, StatelessForwardLargeACKNoUplift)
   // switching to TCP doesn't happen.
   pjsip_tx_data* tdata;
 
+  // Set the disable TCP switch option in PJSIP so that uplift does not
+  // happen.
   pjsip_cfg_t* pjsip_config = pjsip_cfg();
   pjsip_config->endpt.disable_tcp_switch = true;
 
