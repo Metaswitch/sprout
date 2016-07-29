@@ -202,7 +202,7 @@ Description: Debugging symbols for the Clearwater build of SIPp, used for runnin
 Package: clearwater-sip-stress
 Architecture: any
 Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-sipp
-Conflicts: sprout, bono, restund
+Conflicts: sprout, sprout-node, bono, restund
 Suggests: clearwater-logging, clearwater-snmpd, clearwater-sip-stress-stats
 Description: Runs SIP stress against Clearwater
 
@@ -214,7 +214,7 @@ Description: Exposes SIP stress statistics over the clearwater statistics interf
 Package: clearwater-sip-perf
 Architecture: any
 Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-sipp
-Conflicts: sprout, bono, restund
+Conflicts: sprout, sprout-node, bono, restund
 Suggests: clearwater-logging, clearwater-snmpd
 Description: Runs SIP performance tests against Clearwater
 
