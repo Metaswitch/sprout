@@ -176,6 +176,7 @@ get_daemon_args()
         [ "$override_npdi" != "Y" ] || override_npdi_arg="--override-npdi"
         [ "$force_third_party_reg_body" != "Y" ] || force_3pr_body_arg="--force-3pr-body"
         [ "$sas_use_signaling_interface" != "Y" ] || sas_signaling_if_arg="--sas-use-signaling-interface"
+        [ "$disable_tcp_switch" != "Y" ] || disable_tcp_switch_arg="--disable-tcp-switch"
 
         [ -z "$target_latency_us" ] || target_latency_us_arg="--target-latency-us=$target_latency_us"
         [ -z "$cass_target_latency_us" ] || cass_target_latency_us_arg="--cass-target-latency-us=$cass_target_latency_us"
@@ -214,6 +215,7 @@ get_daemon_args()
                      $authentication_arg
                      $user_phone_arg
                      $sas_signaling_if_arg
+                     $disable_tcp_switch_arg
                      $global_only_lookups_arg
                      $override_npdi_arg
                      $exception_max_ttl_arg
