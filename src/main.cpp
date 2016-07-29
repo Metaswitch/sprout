@@ -150,6 +150,7 @@ enum OptionTypes
   OPT_NONCE_COUNT_SUPPORTED,
   OPT_SCSCF_NODE_URI,
   OPT_SAS_USE_SIGNALING_IF,
+  OPT_DISABLE_TCP_SWITCH,
 };
 
 
@@ -229,6 +230,7 @@ const static struct pj_getopt_option long_opt[] =
   { "nonce-count-supported",        no_argument,       0, OPT_NONCE_COUNT_SUPPORTED},
   { "scscf-node-uri",               required_argument, 0, OPT_SCSCF_NODE_URI},
   { "sas-use-signaling-interface",  no_argument,       0, OPT_SAS_USE_SIGNALING_IF},
+  { "disable-tcp-switch",           no_argument,       0, OPT_DISABLE_TCP_SWITCH},
   { NULL,                           0,                 0, 0}
 };
 
@@ -408,12 +410,15 @@ static void usage(void)
        "     --nonce-count-supported\n"
        "                            Whether sprout accepts authentication responses with a nonce count\n"
        "                            greater than 1\n"
-       "     --scsf-node-uri <URI>\n"
+       "     --scscf-node-uri <URI>\n"
        "                            The URI of this S-CSCF used by other servers, including AS, to contact\n"
-       "                            this specific node. Defaults to \"sip:<localhost>:<port_scscf>\"."
+       "                            this specific node. Defaults to \"sip:<localhost>:<port_scscf>\".\n"
        "     --sas-use-signaling-interface\n"
        "                            Whether SAS traffic is to be dispatched over the signaling network\n"
        "                            interface rather than the default management interface\n"
+       "     --disable-tcp-switch\n"
+       "                            Whether to disable TCP-to-UDP uplift when messages are greater than.\n"
+       "                            1300 bytes.\n"
        "     --pidfile=<filename>   Write pidfile\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
@@ -1079,6 +1084,10 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       options->sas_signaling_if = true;
       break;
 
+    case OPT_DISABLE_TCP_SWITCH:
+      options->disable_tcp_switch = true;
+      break;
+
     case 'N':
       {
         std::vector<std::string> fields;
@@ -1336,6 +1345,7 @@ int main(int argc, char* argv[])
   opt.nonce_count_supported = false;
   opt.scscf_node_uri = "";
   opt.sas_signaling_if = false;
+  opt.disable_tcp_switch = false;
 
   // Initialise ENT logging before making "Started" log
   PDLogStatic::init(argv[0]);
@@ -1722,6 +1732,14 @@ int main(int argc, char* argv[])
     CL_SPROUT_SIP_INIT_INTERFACE_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
     TRC_ERROR("Error initializing stack %s", PJUtils::pj_status_to_string(status).c_str());
     return 1;
+  }
+
+  //If the flag is set, disable UDP-to-TCP uplift.
+  if (opt.disable_tcp_switch)
+  {
+    TRC_STATUS("Disabling UDP-to-TCP uplift");
+    pjsip_cfg_t* pjsip_config = pjsip_cfg();
+    pjsip_config->endpt.disable_tcp_switch = true;
   }
 
   // Set up our signal handler for (un)quiesce signals.

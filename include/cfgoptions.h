@@ -146,6 +146,7 @@ struct options
   bool                                 nonce_count_supported;
   std::string                          scscf_node_uri;
   bool                                 sas_signaling_if;
+  bool                                 disable_tcp_switch;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
