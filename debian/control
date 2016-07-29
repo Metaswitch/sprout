@@ -22,16 +22,16 @@ Depends: sprout-libs (= ${binary:Version})
 Recommends: gdb,
 Description: Debugging symbols for sprout-libs
 
-Package: sprout-classic
+Package: sprout-node
 Architecture: any
 Depends: sprout, clearwater-memcached, chronos, astaire
-Description: sprout-classic, the SIP Router and database
+Description: sprout-node, the SIP Router
 
-Package: sprout-classic-dbg
+Package: sprout-node-dbg
 Architecture: any
-Depends: sprout-classic (= ${binary:Version})
+Depends: sprout-node (= ${binary:Version})
 Recommends: sprout-dbg, chronos-dbg
-Description: Debugging symbols for sprout-classic, the SIP Router and database
+Description: Debugging symbols for sprout-node, the SIP Router
 
 Package: sprout
 Architecture: any
