@@ -242,33 +242,16 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
   return sproutlet;
 }
 
-bool SproutletProxy::does_uri_match_sproutlet(const pjsip_uri* uri,
-                                              Sproutlet* sproutlet,
-                                              std::string& alias,
-                                              SAS::TrailId trail)
+// Extract the service name, this can appear in one of three places:
+//
+//  - Username
+//  - `services` parameter
+//  - First domain label
+//
+// In each case, the domain name (minus the prefix in the third case) also
+// has to be one of the registered local domains.
+std::list<std::string> SproutletProxy::extract_possible_services(const pjsip_sip_uri* sip_uri)
 {
-  if (!PJSIP_URI_SCHEME_IS_SIP(uri))
-  {
-    // LCOV_EXCL_START
-    TRC_DEBUG("Sproutlet's cannot match non-SIP URIs");
-    return false;
-    // LCOV_EXCL_STOP
-  }
-
-  // Now we know we have a SIP URI, cast to one.
-  pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)uri;
-  bool match = false;
-  std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                                (pjsip_uri*)sip_uri);
-
-  // Extract the service name, this can appear in one of three places:
-  //
-  //  - Username
-  //  - `services` parameter
-  //  - First domain label
-  //
-  // In each case, the domain name (minus the prefix in the third case) also
-  // has to be one of the registered local domains.
   std::string service_name;
   std::list<std::string> possible_service_names;
   std::string domain;
@@ -340,6 +323,29 @@ bool SproutletProxy::does_uri_match_sproutlet(const pjsip_uri* uri,
     }
   }
 
+  return possible_service_names;
+}
+
+bool SproutletProxy::does_uri_match_sproutlet(const pjsip_uri* uri,
+                                              Sproutlet* sproutlet,
+                                              std::string& alias,
+                                              SAS::TrailId trail)
+{
+  if (!PJSIP_URI_SCHEME_IS_SIP(uri))
+  {
+    // LCOV_EXCL_START
+    TRC_DEBUG("Sproutlets cannot match non-SIP URIs");
+    return false;
+    // LCOV_EXCL_STOP
+  }
+  
+  pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)uri;
+  std::list<std::string> possible_service_names = extract_possible_services(sip_uri);
+
+  // Now we know we have a SIP URI, cast to one.
+  bool match = false;
+  std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                                (pjsip_uri*)sip_uri);
   // Check if any of the possible service names from the URI match any of the
   // aliases for the sproutlet.
   for (std::list<std::string>::iterator it = possible_service_names.begin();

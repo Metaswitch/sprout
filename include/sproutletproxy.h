@@ -103,6 +103,10 @@ protected:
                                 std::string& alias,
                                 SAS::TrailId trail);
 
+  /// Given a SIP URI, check for possible Sproutlet names it could be targeted
+  /// at.
+  std::list<std::string> extract_possible_services(const pjsip_sip_uri* sip_uri);
+
   /// Create a URI that routes to a given Sproutlet.
   pjsip_sip_uri* create_sproutlet_uri(pj_pool_t* pool,
                                       Sproutlet* sproutlet) const;
