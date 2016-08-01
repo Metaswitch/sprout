@@ -43,6 +43,7 @@
 #include "log.h"
 #include "sproutsasevent.h"
 #include "bgcfsproutlet.h"
+#include "constants.h"
 #include <fstream>
 
 /// BGCFSproutlet constructor.
@@ -174,6 +175,10 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
   if (!bgcf_routes.empty())
   {
+    // The BGCF should be in control of what routes get added - delete existing
+    // ones first.
+    PJUtils::remove_hdr(req, &STR_ROUTE);
+
     for (std::vector<std::string>::iterator ii = bgcf_routes.begin();
          ii != bgcf_routes.end();
          ++ii)
