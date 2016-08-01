@@ -646,8 +646,11 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     }
     else
     {
-      // ENUM is not configured, so if the target is not in the HSS, the only
-      // thing we can do is assume it is off-net and pass it to the BGCF.
+      // The user is not in the HSS and ENUM is not configured. TS 24.229
+      // says that, as an alternative to ENUM, we can "forward the request to
+      // the transit functionality for subsequent routeing". Let's do that
+      // (currently, we assume the BGCF is the transit functionality, but that
+      // may be made configurable in future).
       route_to_bgcf(req);
       return;
     }
