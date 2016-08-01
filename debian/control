@@ -166,6 +166,17 @@ Priority: extra
 Depends: mangelwurzel-as (= ${binary:Version})
 Description: Debugging symbols for mangelwurzel, the B2BUA and SCC-AS emulator
 
+Package: bono-node
+Architecture: any
+Depends: bono
+Description: bono-node, the SIP edge proxy
+
+Package: bono-node-dbg:
+Architecture: any
+Depends: bono-node (= ${binary:Version})
+Recommends: bono-dbg
+Description: Debugging symbols for bono-node, the SIP Router
+
 Package: bono
 Architecture: any
 Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-log-cleanup, sprout-libs, libboost-regex1.54.0, libboost-system1.54.0, libboost-thread1.54.0, libzmq3, libevent-pthreads-2.0-5, clearwater-socket-factory, libboost-filesystem1.54.0, libsnmp30 (>= 5.7.2~dfsg-clearwater4), clearwater-monit

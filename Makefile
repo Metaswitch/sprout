@@ -25,6 +25,7 @@ DEB_NAMES += memento-as memento-as-dbg
 DEB_NAMES += call-diversion-as call-diversion-as-dbg
 DEB_NAMES += mangelwurzel-as mangelwurzel-as-dbg
 DEB_NAMES += bono bono-dbg restund
+DEB_NAMES += bono-node bono-node-dbg
 DEB_NAMES += clearwater-sipp clearwater-sipp-dbg
 DEB_NAMES += clearwater-sip-stress clearwater-sip-stress-stats clearwater-sip-perf
 
