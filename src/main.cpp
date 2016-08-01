@@ -151,6 +151,7 @@ enum OptionTypes
   OPT_SCSCF_NODE_URI,
   OPT_SAS_USE_SIGNALING_IF,
   OPT_DISABLE_TCP_SWITCH,
+  OPT_FAKE_ENUM,
 };
 
 
@@ -180,6 +181,7 @@ const static struct pj_getopt_option long_opt[] =
   { "enum",                         required_argument, 0, 'E'},
   { "enum-suffix",                  required_argument, 0, 'x'},
   { "enum-file",                    required_argument, 0, 'f'},
+  { "fake-enum",                    required_argument, 0, OPT_FAKE_ENUM},
   { "enforce-user-phone",           no_argument,       0, 'u'},
   { "enforce-global-only-lookups",  no_argument,       0, 'g'},
   { "reg-max-expires",              required_argument, 0, 'e'},
@@ -307,6 +309,8 @@ static void usage(void)
        " -x, --enum-suffix <suffix> Suffix appended to ENUM domains (default: .e164.arpa)\n"
        " -f, --enum-file <file>     JSON ENUM config file (can't be enabled at same time as\n"
        "                            -E)\n"
+       "     --fake-enum            If no ENUM file or server is configured, fake ENUM lookups\n"
+       "                            by converting tel:+1234 to sip:+1234@homedomain\n"
        " -u, --enforce-user-phone   Controls whether ENUM lookups are only done on SIP URIs if they\n"
        "                            contain the SIP URI parameter user=phone (defaults to false)\n"
        " -g, --enforce-global-only-lookups\n"
@@ -715,6 +719,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case 'f':
       options->enum_file = std::string(pj_optarg);
       TRC_INFO("ENUM file set to %s", pj_optarg);
+      break;
+
+    case OPT_FAKE_ENUM:
+      options->fake_enum = true;
+      TRC_INFO("Dummy ENUM lookups available as a fallback");
       break;
 
     case 'u':
@@ -1294,6 +1303,7 @@ int main(int argc, char* argv[])
   opt.external_icscf_uri = "";
   opt.auth_enabled = PJ_FALSE;
   opt.enum_suffix = ".e164.arpa";
+  opt.fake_enum = false;
 
   // If changing this default for reg_max_expires, note that
   // debian/homestead.init.d in the homestead repository also defaults
