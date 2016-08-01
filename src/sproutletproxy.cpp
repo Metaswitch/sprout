@@ -245,7 +245,6 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
 // Extract the service name, this can appear in one of three places:
 //
 //  - Username
-//  - `services` parameter
 //  - First domain label
 //
 // In each case, the domain name (minus the prefix in the third case) also
@@ -255,36 +254,6 @@ std::list<std::string> SproutletProxy::extract_possible_services(const pjsip_sip
   std::string service_name;
   std::list<std::string> possible_service_names;
   std::string domain;
-
-  // Check services parameter.
-  pjsip_param* services_param = pjsip_param_find(&sip_uri->other_param,
-                                                 &STR_SERVICE);
-  if (services_param != NULL)
-  {
-    // Check the services param
-    TRC_DEBUG("Found services param - %.*s",
-              services_param->value.slen,
-              services_param->value.ptr);
-    pj_str_t service_str = services_param->value;
-
-    // Scan for a separator between services.
-    char* sep = pj_strchr(&service_str, '&');
-    if (sep != NULL)
-    {
-      // Found a separator, so service is the string up to the
-      // separator.
-      //LCOV_EXCL_START - not currently supported
-      service_str.slen = sep - service_str.ptr;
-      //LCOV_EXCL_STOP
-    }
-
-    service_name = PJUtils::pj_str_to_string(&service_str);
-
-    if (is_host_local(&sip_uri->host))
-    {
-      possible_service_names.push_back(service_name);
-    }
-  }
 
   if (sip_uri->user.slen != 0)
   {
