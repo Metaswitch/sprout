@@ -1806,6 +1806,11 @@ int main(int argc, char* argv[])
       TRC_STATUS("Reading from an ENUM file");
       enum_service = new JSONEnumService(opt.enum_file);
     }
+    else if (opt.fake_enum)
+    {
+      TRC_STATUS("Setting up fake ENUM service");
+      enum_service = new DummyEnumService(opt.home_domain);
+    }
   }
 
   HttpStack* http_stack = HttpStack::get_instance();

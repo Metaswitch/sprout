@@ -2185,47 +2185,20 @@ static std::string query_enum(pjsip_msg* req,
     // ENUM is enabled.
     TRC_DEBUG("ENUM is enabled");
 
-
-    // Check whether we have a global number or whether we allow
-    // ENUM lookups for local numbers
-
-    {
-      // Perform an ENUM lookup if we have a tel URI, or if we have
-      // a SIP URI which is being treated as a phone number.
-      pj_str_t pj_user = PJUtils::user_from_uri(uri);
-      user = PJUtils::pj_str_to_string(&pj_user);
-      TRC_DEBUG("Performing ENUM lookup for user %s", user.c_str());
-      new_uri = enum_service->lookup_uri_from_user(user, trail);
-    }
+    // Perform an ENUM lookup if we have a tel URI, or if we have
+    // a SIP URI which is being treated as a phone number.
+    pj_str_t pj_user = PJUtils::user_from_uri(uri);
+    user = PJUtils::pj_str_to_string(&pj_user);
+    TRC_DEBUG("Performing ENUM lookup for user %s", user.c_str());
+    new_uri = enum_service->lookup_uri_from_user(user, trail);
   }
   else
   {
-    // If we have no ENUM server configured, we act as if all ENUM lookups
-    // return a successful response and perform the following mappings:
-    //  - tel:<number> to sip:<number>@<homedomain>
-    //  - sip:<number>@<homedomain> to itself
-    //
-    // We do this in order to avoid needing to setup an ENUM server on test
-    // systems just to allow local calls to work.
-    TRC_DEBUG("No ENUM server configured, perform default translation");
+    TRC_DEBUG("No ENUM server configured, and fake ENUM disabled - do nothing");
     SAS::Event event(trail, SASEvent::ENUM_NOT_ENABLED, 0);
     SAS::report_event(event);
-
-    if (PJSIP_URI_SCHEME_IS_TEL(uri))
-    {
-      new_uri = "sip:";
-      new_uri += PJUtils::pj_str_to_string(&((pjsip_tel_uri*)uri)->number);
-      new_uri += "@";
-      new_uri += PJUtils::pj_str_to_string(&stack_data.default_home_domain);
-      TRC_DEBUG("Translate tel URI to SIP URI %s", new_uri.c_str());
-    }
-    else
-    {
-      new_uri = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, uri);
-      TRC_DEBUG("Translate SIP URI %s to itself", new_uri.c_str());
-    }
   }
-
+  
   return new_uri;
 }
 

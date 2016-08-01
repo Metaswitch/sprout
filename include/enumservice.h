@@ -81,6 +81,23 @@ public:
 };
 
 
+/// @class DummyEnumService
+///
+/// Provides an "ENUM service" which just translates tel:whatever to sip:whatever.
+class DummyEnumService : public EnumService
+{
+public:
+  DummyEnumService(std::string home_domain):
+    EnumService(),
+    _default_home_domain(home_domain)
+  {}
+  std::string lookup_uri_from_user(const std::string& user, SAS::TrailId trail) const;
+
+private:
+  std::string _default_home_domain;
+};
+
+
 /// @class JSONEnumService
 ///
 /// Provides an "ENUM service" based on configuration read from a JSON file.
