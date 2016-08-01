@@ -173,7 +173,7 @@ Architecture: any
 Depends: bono
 Description: bono-node, the SIP edge proxy
 
-Package: bono-node-dbg:
+Package: bono-node-dbg
 Architecture: any
 Section: debug
 Priority: extra
