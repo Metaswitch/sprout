@@ -29,6 +29,8 @@ Description: sprout-node, the SIP Router
 
 Package: sprout-node-dbg
 Architecture: any
+Section: debug
+Priority: extra
 Depends: sprout-node (= ${binary:Version})
 Recommends: sprout-dbg, chronos-dbg
 Description: Debugging symbols for sprout-node, the SIP Router
@@ -173,6 +175,8 @@ Description: bono-node, the SIP edge proxy
 
 Package: bono-node-dbg:
 Architecture: any
+Section: debug
+Priority: extra
 Depends: bono-node (= ${binary:Version})
 Recommends: bono-dbg
 Description: Debugging symbols for bono-node, the SIP Router
