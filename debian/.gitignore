@@ -5,6 +5,8 @@
 /files
 /bono-dbg/
 /bono/
+/bono-node-dbg/
+/bono-node/
 /clearwater-sipp/
 /clearwater-sipp-dbg/
 /clearwater-sip-stress/
@@ -14,6 +16,8 @@
 /sprout-dbg/
 /sprout-libs-dbg/
 /sprout-libs/
+/sprout-node-dbg/
+/sprout-node/
 /sprout/
 /sprout-base/
 /sprout-base-dbg/
