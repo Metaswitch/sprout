@@ -71,6 +71,26 @@ public:
     _acr_factory = new ACRFactory();
     _scscf_selector = new SCSCFSelector("sip:scscf.homedomain", string(UT_DIR).append("/test_icscf.json"));
     _enum_service = new JSONEnumService(string(UT_DIR).append("/test_enum.json"));
+    // Schedule timers.
+    SipTest::poll();
+  }
+
+  static void TearDownTestCase()
+  {
+    // Shut down the transaction module first, before we destroy the
+    // objects that might handle any callbacks!
+    pjsip_tsx_layer_destroy();
+    delete _enum_service; _enum_service = NULL;
+    delete _acr_factory; _acr_factory = NULL;
+    delete _hss_connection; _hss_connection = NULL;
+    delete _scscf_selector; _scscf_selector = NULL;
+    SipTest::TearDownTestCase();
+  }
+
+  ICSCFSproutletTestBase()
+  {
+    _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
+    _hss_connection->flush_all();
 
     _icscf_sproutlet = new ICSCFSproutlet("icscf",
                                           "sip:bgcf.homedomain",
@@ -94,29 +114,6 @@ public:
                                       sproutlets,
                                       std::set<std::string>(),
                                       "scscf");
-
-    // Schedule timers.
-    SipTest::poll();
-  }
-
-  static void TearDownTestCase()
-  {
-    // Shut down the transaction module first, before we destroy the
-    // objects that might handle any callbacks!
-    pjsip_tsx_layer_destroy();
-    delete _icscf_proxy; _icscf_proxy = NULL;
-    delete _icscf_sproutlet; _icscf_sproutlet = NULL;
-    delete _enum_service; _enum_service = NULL;
-    delete _acr_factory; _acr_factory = NULL;
-    delete _hss_connection; _hss_connection = NULL;
-    delete _scscf_selector; _scscf_selector = NULL;
-    SipTest::TearDownTestCase();
-  }
-
-  ICSCFSproutletTestBase()
-  {
-    _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
-    _hss_connection->flush_all();
   }
 
   ~ICSCFSproutletTestBase()
@@ -143,6 +140,9 @@ public:
     // Stop and restart the transaction layer just in case
     pjsip_tsx_layer_instance()->stop();
     pjsip_tsx_layer_instance()->start();
+
+    delete _icscf_proxy; _icscf_proxy = NULL;
+    delete _icscf_sproutlet; _icscf_sproutlet = NULL;
   }
 
   class Message
@@ -297,18 +297,14 @@ protected:
   static FakeHSSConnection* _hss_connection;
   static SCSCFSelector* _scscf_selector;
   static JSONEnumService* _enum_service;
-  static ICSCFSproutlet* _icscf_sproutlet;
-  static SproutletProxy* _icscf_proxy;
-
+  ICSCFSproutlet* _icscf_sproutlet;
+  SproutletProxy* _icscf_proxy;
 };
 
 ACRFactory* ICSCFSproutletTestBase::_acr_factory;
 FakeHSSConnection* ICSCFSproutletTestBase::_hss_connection;
 SCSCFSelector* ICSCFSproutletTestBase::_scscf_selector;
 JSONEnumService* ICSCFSproutletTestBase::_enum_service;
-ICSCFSproutlet* ICSCFSproutletTestBase::_icscf_sproutlet;
-SproutletProxy* ICSCFSproutletTestBase::_icscf_proxy;
-
 
 class ICSCFSproutletTest : public ICSCFSproutletTestBase
 {
@@ -2676,6 +2672,61 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnumExistingNP)
   free_txdata();
   delete tp;
 }
+
+// Test the case where the I-CSCF routes requests to subscribers not in the HSS
+// to a transit function, rather than doing an ENUM lookup. When the ENUM
+// service is disabled, calls should just go to the BGCF.
+TEST_F(ICSCFSproutletTest, RouteTermInviteTransitFunction)
+{
+  // Disable ENUM.
+  _icscf_sproutlet->_enum_service = NULL;
+ 
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        ICSCF_PORT,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject an INVITE request to a tel URI
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._toscheme = "tel";
+  msg1._to = "+1690100001";
+  msg1._todomain = "";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // INVITE request should be forwarded to the BGCF.
+  tdata = current_txdata();
+  expect_target("FAKE_UDP", "0.0.0.0", 0, tdata);
+  ReqMatcher r1("INVITE");
+  r1.matches(tdata->msg);
+
+  string route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("Route: <sip:bgcf.homedomain;lr>", route);
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher r2(200);
+  r2.matches(tdata->msg);
+
+  free_txdata();
+  delete tp;
+}
+
 
 TEST_F(ICSCFSproutletTest, RouteTermInviteUserPhone)
 {
