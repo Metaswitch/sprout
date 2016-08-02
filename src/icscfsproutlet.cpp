@@ -651,6 +651,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       // the transit functionality for subsequent routeing". Let's do that
       // (currently, we assume the BGCF is the transit functionality, but that
       // may be made configurable in future).
+      TRC_DEBUG("No ENUM service available - outing request directly to transit function (BGCF)");
       route_to_bgcf(req);
       return;
     }

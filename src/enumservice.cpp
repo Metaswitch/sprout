@@ -66,7 +66,7 @@ std::string DummyEnumService::lookup_uri_from_user(const std::string &user, SAS:
   //
   // We do this in order to avoid needing to setup an ENUM server on test
   // systems just to allow local calls to work.
-  TRC_DEBUG("No ENUM server configured, perform default translation");
+  TRC_DEBUG("No ENUM server or ENUM file configured, perform default translation");
   SAS::Event event(trail, SASEvent::ENUM_NOT_ENABLED, 0);
   SAS::report_event(event);
 
@@ -76,12 +76,12 @@ std::string DummyEnumService::lookup_uri_from_user(const std::string &user, SAS:
   new_uri += user;
   new_uri += "@";
   new_uri += _default_home_domain;
-  TRC_DEBUG("Translate tel URI to SIP URI %s", new_uri.c_str());
+  TRC_DEBUG("Translate telephone number %s to SIP URI %s",
+            user.c_str(),
+            new_uri.c_str());
 
   return new_uri;
 }
-
-
 
 bool EnumService::parse_regex_replace(const std::string& regex_replace, boost::regex& regex, std::string& replace)
 {

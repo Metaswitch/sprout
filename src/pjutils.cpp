@@ -2182,14 +2182,11 @@ static std::string query_enum(pjsip_msg* req,
 
   if (enum_service != NULL)
   {
-    // ENUM is enabled.
-    TRC_DEBUG("ENUM is enabled");
-
     // Perform an ENUM lookup if we have a tel URI, or if we have
     // a SIP URI which is being treated as a phone number.
     pj_str_t pj_user = PJUtils::user_from_uri(uri);
     user = PJUtils::pj_str_to_string(&pj_user);
-    TRC_DEBUG("Performing ENUM lookup for user %s", user.c_str());
+    TRC_DEBUG("Performing ENUM translation for user %s", user.c_str());
     new_uri = enum_service->lookup_uri_from_user(user, trail);
   }
   else

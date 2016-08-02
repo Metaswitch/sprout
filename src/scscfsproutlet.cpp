@@ -1196,6 +1196,7 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
       // ENUM is not configured so we have no way to tell if this request is
       // on-net or off-net. Route it to the I-CSCF, which should be able to
       // look it up in the HSS.
+      TRC_DEBUG("No ENUM lookup available - routing to I-CSCF");
       route_to_icscf(req);
     }
   }
