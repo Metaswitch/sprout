@@ -111,6 +111,9 @@ get_settings()
         signaling_dns_server=127.0.0.1
         scscf_node_uri=""
 
+        # Enable no-ENUM TEL URI translation fallback by default for backwards compatibility
+        default_tel_uri_translation="Y"
+
         # Set up defaults for user settings then pull in any overrides.
         # Sprout uses blocking look-up services, so must run multi-threaded.
         num_worker_threads=$(($(grep processor /proc/cpuinfo | wc -l) * 50))
@@ -161,6 +164,7 @@ get_daemon_args()
         [ -z "$enum_server" ] || enum_server_arg="--enum=$enum_server"
         [ -z "$enum_suffix" ] || enum_suffix_arg="--enum-suffix=$enum_suffix"
         [ -z "$enum_file" ] || enum_file_arg="--enum-file=$enum_file"
+        [ "$default_tel_uri_translation" != "Y" ] || default_tel_uri_translation_arg="--default-tel-uri-translation"
 
         if [ $MMTEL_SERVICES_ENABLED = Y ]
         then
@@ -200,6 +204,7 @@ get_daemon_args()
                      $enum_server_arg
                      $enum_suffix_arg
                      $enum_file_arg
+                     $default_tel_uri_translation_arg
                      --sas=$sas_server,$NAME@$public_hostname
                      --dns-server=$signaling_dns_server
                      --worker-threads=$num_worker_threads

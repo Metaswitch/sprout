@@ -586,60 +586,74 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
                                                           do_billing);
     }
 
-    // If we still haven't found an S-CSCF, we can now try an ENUM lookup.
-    // We put this processing in a loop because in theory we may go round
-    // several times before finding an S-CSCF. In reality this is unlikely
-    // so we set MAX_ENUM_LOOKUPS to 2.
-    for (int ii = 0;
-         (ii < MAX_ENUM_LOOKUPS) && (scscf_not_found(status_code));
-         ++ii)
+    if (_icscf->_enum_service)
     {
-      if (PJSIP_URI_SCHEME_IS_TEL(uri))
+      // If we still haven't found an S-CSCF, we can now try an ENUM lookup.
+      // We put this processing in a loop because in theory we may go round
+      // several times before finding an S-CSCF. In reality this is unlikely
+      // so we set MAX_ENUM_LOOKUPS to 2.
+      for (int ii = 0;
+           (ii < MAX_ENUM_LOOKUPS) && (scscf_not_found(status_code));
+           ++ii)
       {
-        // Do an ENUM lookup and see if we should translate the TEL URI
-        pjsip_uri* original_req_uri = req->line.req.uri;
-        _icscf->translate_request_uri(req, get_pool(req), trail());
-        uri = req->line.req.uri;
-        URIClass uri_class = URIClassifier::classify_uri(uri, false);
-
-        std::string rn;
-
-        if ((uri_class == NP_DATA) ||
-            (uri_class == FINAL_NP_DATA))
+        if (PJSIP_URI_SCHEME_IS_TEL(uri))
         {
-          // We got number portability information from ENUM - drop out and route to the BGCF.
-          route_to_bgcf(req);
-          return;
-        }
-        else if (pjsip_uri_cmp(PJSIP_URI_IN_REQ_URI,
-                               original_req_uri,
-                               req->line.req.uri) != PJ_SUCCESS)
-        {
-          // The URI has changed, so make sure we do a LIR lookup on it.
-          impu = PJUtils::public_id_from_uri(req->line.req.uri);
-          ((ICSCFLIRouter *)_router)->change_impu(impu);
-        }
+          // Do an ENUM lookup and see if we should translate the TEL URI
+          pjsip_uri* original_req_uri = req->line.req.uri;
+          _icscf->translate_request_uri(req, get_pool(req), trail());
+          uri = req->line.req.uri;
+          URIClass uri_class = URIClassifier::classify_uri(uri, false);
 
-        // If we successfully translate the req URI and end up with either another TEL URI or a
-        // local SIP URI, we should look for an S-CSCF again.
-        if ((uri_class == LOCAL_PHONE_NUMBER) ||
-            (uri_class == GLOBAL_PHONE_NUMBER) ||
-            (uri_class == HOME_DOMAIN_SIP_URI))
-        {
-          // TEL or local SIP URI.  Look up the S-CSCF again.
-          status_code = (pjsip_status_code)_router->get_scscf(pool, scscf_sip_uri, do_billing);
+          std::string rn;
+
+          if ((uri_class == NP_DATA) ||
+              (uri_class == FINAL_NP_DATA))
+          {
+            // We got number portability information from ENUM - drop out and route to the BGCF.
+            route_to_bgcf(req);
+            return;
+          }
+          else if (pjsip_uri_cmp(PJSIP_URI_IN_REQ_URI,
+                                 original_req_uri,
+                                 req->line.req.uri) != PJ_SUCCESS)
+          {
+            // The URI has changed, so make sure we do a LIR lookup on it.
+            impu = PJUtils::public_id_from_uri(req->line.req.uri);
+            ((ICSCFLIRouter *)_router)->change_impu(impu);
+          }
+
+          // If we successfully translate the req URI and end up with either another TEL URI or a
+          // local SIP URI, we should look for an S-CSCF again.
+          if ((uri_class == LOCAL_PHONE_NUMBER) ||
+              (uri_class == GLOBAL_PHONE_NUMBER) ||
+              (uri_class == HOME_DOMAIN_SIP_URI))
+          {
+            // TEL or local SIP URI.  Look up the S-CSCF again.
+            status_code = (pjsip_status_code)_router->get_scscf(pool, scscf_sip_uri, do_billing);
+          }
+          else
+          {
+            // Number translated to off-switch.  Drop out of the loop.
+            ii = MAX_ENUM_LOOKUPS;
+          }
         }
         else
         {
-          // Number translated to off-switch.  Drop out of the loop.
+          // Can't translate the number, skip to the end of the loop.
           ii = MAX_ENUM_LOOKUPS;
         }
       }
-      else
-      {
-        // Can't translate the number, skip to the end of the loop.
-        ii = MAX_ENUM_LOOKUPS;
-      }
+    }
+    else
+    {
+      // The user is not in the HSS and ENUM is not configured. TS 24.229
+      // says that, as an alternative to ENUM, we can "forward the request to
+      // the transit functionality for subsequent routeing". Let's do that
+      // (currently, we assume the BGCF is the transit functionality, but that
+      // may be made configurable in future).
+      TRC_DEBUG("No ENUM service available - outing request directly to transit function (BGCF)");
+      route_to_bgcf(req);
+      return;
     }
   }
 

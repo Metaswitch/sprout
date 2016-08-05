@@ -57,6 +57,31 @@
 const boost::regex EnumService::CHARS_TO_STRIP_FROM_UAS = boost::regex("([^0-9+]|(?<=.)[^0-9])");
 const boost::regex DNSEnumService::CHARS_TO_STRIP_FROM_DOMAIN = boost::regex("[^0-9]");
 
+std::string DummyEnumService::lookup_uri_from_user(const std::string &user, SAS::TrailId trail) const
+{
+  // If we have no ENUM server configured, we act as if all ENUM lookups
+  // return a successful response and perform the following mappings:
+  //  - tel:<number> to sip:<number>@<homedomain>
+  //  - sip:<number>@<homedomain> to itself
+  //
+  // We do this in order to avoid needing to setup an ENUM server on test
+  // systems just to allow local calls to work.
+  TRC_DEBUG("No ENUM server or ENUM file configured, perform default translation");
+  SAS::Event event(trail, SASEvent::ENUM_NOT_ENABLED, 0);
+  SAS::report_event(event);
+
+  std::string new_uri;
+
+  new_uri = "sip:";
+  new_uri += user;
+  new_uri += "@";
+  new_uri += _default_home_domain;
+  TRC_DEBUG("Translate telephone number %s to SIP URI %s",
+            user.c_str(),
+            new_uri.c_str());
+
+  return new_uri;
+}
 
 bool EnumService::parse_regex_replace(const std::string& regex_replace, boost::regex& regex, std::string& replace)
 {

@@ -1155,37 +1155,48 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
       add_to_dialog(req, false, ACR::NODE_ROLE_ORIGINATING);
     }
 
-    // Attempt to translate the RequestURI using ENUM or an alternative
-    // database.
-    _scscf->translate_request_uri(req, get_pool(req), trail());
-
-    URIClass uri_class = URIClassifier::classify_uri(req->line.req.uri);
-    std::string new_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req->line.req.uri);
-    TRC_INFO("New URI string is %s", new_uri_str.c_str());
-
-    if ((uri_class == LOCAL_PHONE_NUMBER) ||
-        (uri_class == GLOBAL_PHONE_NUMBER) ||
-        (uri_class == NP_DATA) ||
-        (uri_class == FINAL_NP_DATA))
+    if (_scscf->_enum_service)
     {
-      TRC_DEBUG("Routing to BGCF");
-      SAS::Event event(trail(), SASEvent::PHONE_ROUTING_TO_BGCF, 0);
-      event.add_var_param(new_uri_str);
-      SAS::report_event(event);
-      route_to_bgcf(req);
-    }
-    else if (uri_class == OFFNET_SIP_URI)
-    {
-      // Destination is off-net, so route to the BGCF.
-      TRC_DEBUG("Routing to BGCF");
-      SAS::Event event(trail(), SASEvent::OFFNET_ROUTING_TO_BGCF, 0);
-      event.add_var_param(new_uri_str);
-      SAS::report_event(event);
-      route_to_bgcf(req);
+      // Attempt to translate the RequestURI using ENUM or an alternative
+      // database.
+      _scscf->translate_request_uri(req, get_pool(req), trail());
+
+      URIClass uri_class = URIClassifier::classify_uri(req->line.req.uri);
+      std::string new_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req->line.req.uri);
+      TRC_INFO("New URI string is %s", new_uri_str.c_str());
+
+      if ((uri_class == LOCAL_PHONE_NUMBER) ||
+          (uri_class == GLOBAL_PHONE_NUMBER) ||
+          (uri_class == NP_DATA) ||
+          (uri_class == FINAL_NP_DATA))
+      {
+        TRC_DEBUG("Routing to BGCF");
+        SAS::Event event(trail(), SASEvent::PHONE_ROUTING_TO_BGCF, 0);
+        event.add_var_param(new_uri_str);
+        SAS::report_event(event);
+        route_to_bgcf(req);
+      }
+      else if (uri_class == OFFNET_SIP_URI)
+      {
+        // Destination is off-net, so route to the BGCF.
+        TRC_DEBUG("Routing to BGCF");
+        SAS::Event event(trail(), SASEvent::OFFNET_ROUTING_TO_BGCF, 0);
+        event.add_var_param(new_uri_str);
+        SAS::report_event(event);
+        route_to_bgcf(req);
+      }
+      else
+      {
+        // Destination is on-net so route to the I-CSCF.
+        route_to_icscf(req);
+      }
     }
     else
     {
-      // Destination is on-net so route to the I-CSCF.
+      // ENUM is not configured so we have no way to tell if this request is
+      // on-net or off-net. Route it to the I-CSCF, which should be able to
+      // look it up in the HSS.
+      TRC_DEBUG("No ENUM lookup available - routing to I-CSCF");
       route_to_icscf(req);
     }
   }

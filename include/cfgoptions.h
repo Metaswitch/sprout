@@ -99,6 +99,7 @@ struct options
   std::vector<std::string>             enum_servers;
   std::string                          enum_suffix;
   std::string                          enum_file;
+  bool                                 default_tel_uri_translation;
   bool                                 analytics_enabled;
   std::string                          analytics_directory;
   int                                  reg_max_expires;

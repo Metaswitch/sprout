@@ -274,6 +274,38 @@ public:
     _enum_service = new JSONEnumService(string(UT_DIR).append("/test_stateful_proxy_enum.json"));
 
     _acr_factory = new ACRFactory();
+    // Schedule timers.
+    SipTest::poll();
+  }
+
+  static void TearDownTestCase()
+  {
+    // Shut down the transaction module first, before we destroy the
+    // objects that might handle any callbacks!
+    pjsip_tsx_layer_destroy();
+    delete _acr_factory; _acr_factory = NULL;
+    delete _sdm; _sdm = NULL;
+    delete _chronos_connection; _chronos_connection = NULL;
+    delete _local_data_store; _local_data_store = NULL;
+    delete _analytics; _analytics = NULL;
+    delete _hss_connection; _hss_connection = NULL;
+    delete _enum_service; _enum_service = NULL;
+    delete _bgcf_service; _bgcf_service = NULL;
+    delete _xdm_connection; _xdm_connection = NULL;
+    delete _sess_cont_comm_tracker; _sess_cont_comm_tracker = NULL;
+    delete _sess_term_comm_tracker; _sess_term_comm_tracker = NULL;
+    SipTest::TearDownTestCase();
+  }
+
+  SCSCFTest()
+  {
+    _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
+    _local_data_store->flush_all();  // start from a clean slate on each test
+    if (_hss_connection)
+    {
+      _hss_connection->flush_all();
+    }
+
 
     // Create the S-CSCF Sproutlet.
     _scscf_sproutlet = new SCSCFSproutlet("scscf",
@@ -333,42 +365,7 @@ public:
                                 std::set<std::string>(),
                                 "scscf");
 
-    // Schedule timers.
-    SipTest::poll();
-  }
 
-  static void TearDownTestCase()
-  {
-    // Shut down the transaction module first, before we destroy the
-    // objects that might handle any callbacks!
-    pjsip_tsx_layer_destroy();
-    delete _proxy; _proxy = NULL;
-    delete _mmtel_sproutlet; _mmtel_sproutlet = NULL;
-    delete _mmtel; _mmtel = NULL;
-    delete _bgcf_sproutlet; _bgcf_sproutlet = NULL;
-    delete _scscf_sproutlet; _scscf_sproutlet = NULL;
-    delete _acr_factory; _acr_factory = NULL;
-    delete _sdm; _sdm = NULL;
-    delete _chronos_connection; _chronos_connection = NULL;
-    delete _local_data_store; _local_data_store = NULL;
-    delete _analytics; _analytics = NULL;
-    delete _hss_connection; _hss_connection = NULL;
-    delete _enum_service; _enum_service = NULL;
-    delete _bgcf_service; _bgcf_service = NULL;
-    delete _xdm_connection; _xdm_connection = NULL;
-    delete _sess_cont_comm_tracker; _sess_cont_comm_tracker = NULL;
-    delete _sess_term_comm_tracker; _sess_term_comm_tracker = NULL;
-    SipTest::TearDownTestCase();
-  }
-
-  SCSCFTest()
-  {
-    _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
-    _local_data_store->flush_all();  // start from a clean slate on each test
-    if (_hss_connection)
-    {
-      _hss_connection->flush_all();
-    }
   }
 
   ~SCSCFTest()
@@ -404,10 +401,14 @@ public:
     // Reset any configuration changes
     URIClassifier::enforce_user_phone = false;
     URIClassifier::enforce_global = false;
-    _scscf_sproutlet->set_override_npdi(false);
-    _scscf_sproutlet->set_session_continued_timeout(3000);
-    _scscf_sproutlet->set_session_terminated_timeout(6000);
     ((SNMP::FakeCounterTable*)_scscf_sproutlet->_routed_by_preloaded_route_tbl)->reset_count();
+
+    delete _proxy; _proxy = NULL;
+    delete _mmtel_sproutlet; _mmtel_sproutlet = NULL;
+    delete _mmtel; _mmtel = NULL;
+    delete _bgcf_sproutlet; _bgcf_sproutlet = NULL;
+    delete _scscf_sproutlet; _scscf_sproutlet = NULL;
+
   }
 
   /// Send a response back through multiple hops in a dialog. The response is
@@ -457,11 +458,11 @@ protected:
   static BgcfService* _bgcf_service;
   static EnumService* _enum_service;
   static ACRFactory* _acr_factory;
-  static SCSCFSproutlet* _scscf_sproutlet;
-  static BGCFSproutlet* _bgcf_sproutlet;
-  static Mmtel* _mmtel;
-  static SproutletAppServerShim* _mmtel_sproutlet;
-  static SproutletProxy* _proxy;
+  SCSCFSproutlet* _scscf_sproutlet;
+  BGCFSproutlet* _bgcf_sproutlet;
+  Mmtel* _mmtel;
+  SproutletAppServerShim* _mmtel_sproutlet;
+  SproutletProxy* _proxy;
   static MockAsCommunicationTracker* _sess_term_comm_tracker;
   static MockAsCommunicationTracker* _sess_cont_comm_tracker;
 
@@ -499,11 +500,6 @@ FakeXDMConnection* SCSCFTest::_xdm_connection;
 BgcfService* SCSCFTest::_bgcf_service;
 EnumService* SCSCFTest::_enum_service;
 ACRFactory* SCSCFTest::_acr_factory;
-SCSCFSproutlet* SCSCFTest::_scscf_sproutlet;
-BGCFSproutlet* SCSCFTest::_bgcf_sproutlet;
-Mmtel* SCSCFTest::_mmtel;
-SproutletAppServerShim* SCSCFTest::_mmtel_sproutlet;
-SproutletProxy* SCSCFTest::_proxy;
 MockAsCommunicationTracker* SCSCFTest::_sess_term_comm_tracker;
 MockAsCommunicationTracker* SCSCFTest::_sess_cont_comm_tracker;
 
@@ -1832,6 +1828,33 @@ TEST_F(SCSCFTest, TestEnumNPBGCFTel)
   hdrs.push_back(HeaderMatcher("Route", "Route: <sip:10.0.0.1:5060;transport=TCP;lr>"));
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580401;rn.*+151085804;npdi@homedomain.*"), hdrs, false);
 }
+
+// We can run with no ENUM service - in this case we expect the Request-URI to
+// be unchanged (as there's no lookup which can change it) and for it to just
+// be routed normally to the I-CSCF.
+TEST_F(SCSCFTest, TestWithoutEnum)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+
+  // Disable ENUM.
+  _scscf_sproutlet->_enum_service = NULL;
+
+  Message msg;
+  msg._to = "+15108580271";
+  msg._requri = "sip:+15108580271@homedomain;user=phone";
+  
+  // We only do ENUM on originating calls
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+
+  // Skip the ACK and BYE on this request by setting the last
+  // parameter to false, as we're only testing Sprout functionality
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@homedomain;user=phone.*"), hdrs, false);
+}
+
 
 /// Test a forked flow - setup phase.
 void SCSCFTest::setupForkedFlow(SP::Message& msg)
