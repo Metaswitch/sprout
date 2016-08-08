@@ -25,7 +25,7 @@ Description: Debugging symbols for sprout-libs
 Package: sprout-node
 Architecture: any
 Depends: sprout, clearwater-memcached, chronos, astaire
-Description: sprout-node, the SIP Router
+Description: sprout-node, the SIP Router node
 
 Package: sprout-node-dbg
 Architecture: any
@@ -33,7 +33,7 @@ Section: debug
 Priority: extra
 Depends: sprout-node (= ${binary:Version})
 Recommends: sprout-dbg, chronos-dbg
-Description: Debugging symbols for sprout-node, the SIP Router
+Description: Debugging symbols for sprout-node, the SIP Router node
 
 Package: sprout
 Architecture: any
@@ -171,7 +171,7 @@ Description: Debugging symbols for mangelwurzel, the B2BUA and SCC-AS emulator
 Package: bono-node
 Architecture: any
 Depends: bono
-Description: bono-node, the SIP edge proxy
+Description: bono-node, the SIP edge proxy node
 
 Package: bono-node-dbg
 Architecture: any
@@ -179,7 +179,7 @@ Section: debug
 Priority: extra
 Depends: bono-node (= ${binary:Version})
 Recommends: bono-dbg
-Description: Debugging symbols for bono-node, the SIP Router
+Description: Debugging symbols for bono-node, the SIP edge proxy node
 
 Package: bono
 Architecture: any
