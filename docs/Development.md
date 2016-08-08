@@ -76,46 +76,7 @@ environment variable to the user and server name.
 
 ## Running Unit Tests
 
-To run the sprout unit test suite, change to the `src` subdirectory below
-the top-level `sprout` directory and issue `make test`.
-
-Sprout unit tests use the [Google Test](https://code.google.com/p/googletest/)
-framework, so the output from the test run looks something like this.
-
-    [==========] Running 92 tests from 20 test cases.
-    [----------] Global test environment set-up.
-    [----------] 1 test from AuthenticationTest
-    [ RUN      ] AuthenticationTest.NoAuthorization
-    [       OK ] AuthenticationTest.NoAuthorization (27 ms)
-    [----------] 1 test from AuthenticationTest (27 ms total)
-
-    [----------] 6 tests from SimServsTest
-    [ RUN      ] SimServsTest.EmptyXml
-    [       OK ] SimServsTest.EmptyXml (1 ms)
-    ...
-    [ RUN      ] SessionCaseTest.Names
-    [       OK ] SessionCaseTest.Names (0 ms)
-    [----------] 1 test from SessionCaseTest (0 ms total)
-
-    [----------] Global test environment tear-down
-    [==========] 92 tests from 20 test cases ran. (27347 ms total)
-    [  PASSED  ] 92 tests.
-
-`make test` also automatically runs code coverage (using
-[gcov](http://gcc.gnu.org/onlinedocs/gcc/Gcov.html)) and memory leak checks
-(using [Valgrind](http://valgrind.org/)).  If code coverage decreases or
-memory is leaked during the tests, an error is displayed. To see the detailed
-code coverage results, run `make coverage_raw`.
-
-The sprout makefile offers the following additional options and targets.
-
-*   `make run_test` just runs the tests without doing code coverage or memory
-    leak checks.
-*   Passing `JUSTTEST=testname` just runs the specified test case.
-*   Passing `NOISY=T` enables verbose logging during the tests; you can add
-    a logging level (e.g., `NOISY=T:99`) to control which logs you see.
-*   `make debug` runs the tests under gdb.
-*   `make vg_raw` just runs the memory leak checks.
+Sprout uses our common infrastructure to run the unit tests. How to run the UTs, and the different options available when running the UTs are described [here](http://clearwater.readthedocs.io/en/latest/Running_unit_tests.html#c-unit-tests).
 
 ## Running Sprout and Bono Locally
 
