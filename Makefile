@@ -14,6 +14,7 @@ DEB_COMPONENT := sprout
 DEB_MAJOR_VERSION := 1.0${DEB_VERSION_QUALIFIER}
 DEB_NAMES := sprout-libs sprout-libs-dbg
 DEB_NAMES += sprout sprout-dbg
+DEB_NAMES += sprout-node sprout-node-dbg
 DEB_NAMES += sprout-base sprout-base-dbg
 DEB_NAMES += sprout-scscf sprout-scscf-dbg
 DEB_NAMES += sprout-icscf sprout-icscf-dbg
@@ -24,6 +25,7 @@ DEB_NAMES += memento-as memento-as-dbg
 DEB_NAMES += call-diversion-as call-diversion-as-dbg
 DEB_NAMES += mangelwurzel-as mangelwurzel-as-dbg
 DEB_NAMES += bono bono-dbg restund
+DEB_NAMES += bono-node bono-node-dbg
 DEB_NAMES += clearwater-sipp clearwater-sipp-dbg
 DEB_NAMES += clearwater-sip-stress clearwater-sip-stress-stats clearwater-sip-perf
 
