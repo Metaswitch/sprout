@@ -236,6 +236,21 @@ Store::Status SubscriberDataManager::set_aor_data(
   return Store::Status::OK;
 }
 
+/// Test specific version of set_aor_data that assumes that the aor is the
+/// only IMPU in the Implicit Registration Set.
+Store::Status SubscriberDataManager::set_aor_data(
+                                     const std::string& aor_id,
+                                     AoRPair* aor_pair,
+                                     SAS::TrailId trail,
+                                     bool& all_bindings_expired,
+                                     pjsip_rx_data* extra_message_rdata,
+                                     pjsip_tx_data* extra_message_tdata)
+{
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back(aor_id);
+  return set_aor_data(aor_id, irs_impus, aor_pair, trail, all_bindings_expired, extra_message_rdata, extra_message_tdata);
+}
+
 int SubscriberDataManager::expire_aor_members(AoRPair* aor_pair,
                                               int now)
 {

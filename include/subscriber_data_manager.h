@@ -560,6 +560,19 @@ public:
                                      pjsip_rx_data* extra_message_rdata = NULL,
                                      pjsip_tx_data* extra_message_tdata = NULL);
 
+  /// Test-specific version of the above function that assumes that the AoR is
+  /// the only IMPU in the Implicit Registration Set.
+  ///
+  /// Production code should not use this entry point as it should be determining
+  /// this list by querying homestead (assuming it doesn't have the list in hand
+  /// already).
+  virtual Store::Status set_aor_data(const std::string& aor_id,
+                                     AoRPair* aor_pair,
+                                     SAS::TrailId trail,
+                                     bool& all_bindings_expired = unused_bool,
+                                     pjsip_rx_data* extra_message_rdata = NULL,
+                                     pjsip_tx_data* extra_message_tdata = NULL);
+
 private:
   // Expire any out of date bindings in the current AoR
   //

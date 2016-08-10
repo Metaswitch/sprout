@@ -593,7 +593,9 @@ void SipTest::register_uri(SubscriberDataManager* sdm,
   {
     binding->_params["+sip.instance"] = instance_id;
   }
-  bool ret = sdm->set_aor_data(uri, aor, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back(uri);
+  bool ret = sdm->set_aor_data(uri, irs_impus, aor, 0);
   delete aor;
   EXPECT_TRUE(ret);
 };
