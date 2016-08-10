@@ -242,12 +242,10 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
   return sproutlet;
 }
 
-// Extract the service name, this can appear in one of three places:
+// Extract the service name. This can appear in either the username or the
+// first domain label.
 //
-//  - Username
-//  - First domain label
-//
-// In each case, the domain name (minus the prefix in the third case) also
+// In each case, the domain name (minus the prefix in the latter case) also
 // has to be one of the registered local domains.
 std::list<std::string> SproutletProxy::extract_possible_services(const pjsip_sip_uri* sip_uri)
 {
@@ -263,13 +261,16 @@ std::list<std::string> SproutletProxy::extract_possible_services(const pjsip_sip
 
     if (is_host_local(&sip_uri->host))
     {
+      TRC_DEBUG("Adding possible service name %s based on userpart", service_name.c_str());
       possible_service_names.push_back(service_name);
     }
   }
 
-  // Spilt the first label off the host and check if the rest is still a
-  // local hostname.  This works for IP addresses since IPv4 addresses cannot
-  // have only 3 octets and IPv6 addresses contain no periods.
+  // Now we want to check based off the hostname - for example,
+  // "scscf.sprout.example.com" should match the "scscf" sproutlet. Split the
+  // first label off the host and check if the rest is still a local hostname.
+  // This works for IP addresses since IPv4 addresses cannot have only 3 octets
+  // and IPv6 addresses contain no periods.
   pj_str_t hostname = sip_uri->host;
   char* sep = pj_strchr(&hostname, '.');
 
@@ -278,16 +279,18 @@ std::list<std::string> SproutletProxy::extract_possible_services(const pjsip_sip
     // Extract the possible service name
     std::string service_name = std::string(hostname.ptr, sep - hostname.ptr);
 
-    TRC_DEBUG("Possible service name - %s", service_name.c_str());
-
     // Remove the service name part and the period from the hostname.
     hostname.slen -= (sep - hostname.ptr + 1);
     hostname.ptr = sep + 1;
 
-    TRC_DEBUG("Hostname - %.*s", hostname.slen, hostname.ptr);
+    TRC_DEBUG("Possible service name %s will be used if %.*s is a local hostname",
+              service_name.c_str(),
+              hostname.slen,
+              hostname.ptr);
 
     if (is_host_local(&hostname))
     {
+      TRC_DEBUG("Adding possible service name %s based on domain", service_name.c_str());
       possible_service_names.push_back(service_name);
     }
   }
@@ -308,51 +311,41 @@ bool SproutletProxy::does_uri_match_sproutlet(const pjsip_uri* uri,
     // LCOV_EXCL_STOP
   }
   
+  // Now we know we have a SIP URI, cast to one.
   pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)uri;
   std::list<std::string> possible_service_names = extract_possible_services(sip_uri);
 
-  // Now we know we have a SIP URI, cast to one.
-  bool match = false;
-  std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                                (pjsip_uri*)sip_uri);
   // Check if any of the possible service names from the URI match any of the
   // aliases for the sproutlet.
-  for (std::list<std::string>::iterator it = possible_service_names.begin();
-       (it != possible_service_names.end()) && (match != true);
-       ++it)
+  for (std::string alias_from_msg : possible_service_names)
   {
-    if (*it == sproutlet->service_name())
+    if (alias_from_msg == sproutlet->service_name())
     {
-      alias = *it;
-      match = true;
+      std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri);
+      alias = alias_from_msg;
       SAS::Event event(trail, SASEvent::SPROUTLET_SELECTION_SERVICE_NAME, 0);
       event.add_var_param(alias);
       event.add_var_param(uri_str);
       SAS::report_event(event);
+      return true;
     }
-    else
+
+    std::list<std::string> aliases = sproutlet->aliases();
+    std::list<std::string>::const_iterator it = std::find(aliases.begin(), aliases.end(), alias_from_msg);
+    if (it != aliases.end())
     {
-      std::list<std::string> aliases = sproutlet->aliases();
-      for (std::list<std::string>::const_iterator jt = aliases.begin();
-           jt != aliases.end();
-           ++jt)
-      {
-        if (*it == *jt)
-        {
-          alias = *it;
-          match = true;
-          SAS::Event event(trail, SASEvent::SPROUTLET_SELECTION_ALIAS, 0);
-          event.add_var_param(alias);
-          event.add_var_param(*jt);
-          event.add_var_param(uri_str);
-          SAS::report_event(event);
-          break;
-        }
-      }
+      std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri);
+      alias = alias_from_msg;
+      SAS::Event event(trail, SASEvent::SPROUTLET_SELECTION_ALIAS, 0);
+      event.add_var_param(sproutlet->service_name());
+      event.add_var_param(alias);
+      event.add_var_param(uri_str);
+      SAS::report_event(event);
+      return true;
     }
   }
 
-  return match;
+  return false;
 }
 
 
