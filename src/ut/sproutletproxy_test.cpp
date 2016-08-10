@@ -2312,20 +2312,18 @@ TEST_F(SproutletProxyTest, ServiceExtraction)
 {
   std::list<std::string> names;
 
-  names = extract_services("sip:alice@homedomain");
+  names = extract_services("sip:alice@proxy1.homedomain");
 
   ASSERT_EQ(1, names.size());
   ASSERT_EQ("alice", names.front());
 
-  names = extract_services("sip:scscf.homedomain");
+  names = extract_services("sip:scscf.proxy1.homedomain");
 
   ASSERT_EQ(1, names.size());
   ASSERT_EQ("scscf", names.front());
 
-  names = extract_services("sip:alice@scscf.homedomain");
+  names = extract_services("sip:alice@otherdomain");
 
-  ASSERT_EQ(2, names.size());
-  ASSERT_EQ("alice", names.front());
-  ASSERT_EQ("scscf", names.back());
+  ASSERT_EQ(0, names.size());
 }
 
