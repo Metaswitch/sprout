@@ -53,7 +53,7 @@ extern "C" {
 
 namespace NotifyUtils
 {
-  // See RFC 3265 
+  // See RFC 3265
   enum class DocState { FULL, PARTIAL };
   enum class RegistrationState { ACTIVE, TERMINATED };
   enum class ContactState { ACTIVE, TERMINATED };
@@ -79,6 +79,7 @@ namespace NotifyUtils
   pj_status_t create_subscription_notify(pjsip_tx_data** tdata_notify,
                                          SubscriberDataManager::AoR::Subscription* s,
                                          std::string aor,
+                                         std::vector<std::string> irs_impus,
                                          SubscriberDataManager::AoR* aor_data,
                                          std::vector<BindingNotifyInformation*> bnis,
                                          NotifyUtils::RegistrationState reg_state,
@@ -86,7 +87,8 @@ namespace NotifyUtils
 
   pj_status_t create_notify(pjsip_tx_data** tdata_notify,
                             SubscriberDataManager::AoR::Subscription* subscription,
-                            std::string aor, 
+                            std::string aor,
+                            std::vector<std::string> irs_impus,
                             int cseq,
                             std::vector<BindingNotifyInformation*> bnis,
                             NotifyUtils::RegistrationState reg_state,

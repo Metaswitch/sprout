@@ -131,6 +131,7 @@ void log_subscriptions(const std::string& aor_name,
 SubscriberDataManager::AoRPair* write_subscriptions_to_store(
                    SubscriberDataManager* primary_sdm,        ///<store to write to
                    std::string aor,                           ///<address of record to write to
+                   std::vector<std::string> irs_impus,        ///(IMPUs in Implicit Registration Set
                    pjsip_rx_data* rdata,                      ///<received message to read headers from
                    int now,                                   ///<time now
                    SubscriberDataManager::AoRPair* backup_aor,///<backup data if no entry in store
@@ -368,7 +369,7 @@ SubscriberDataManager::AoRPair* write_subscriptions_to_store(
 
     // Try to write the AoR back to the store.
     bool unused;
-    set_rc = primary_sdm->set_aor_data(aor, aor_pair, trail, unused, rdata, tdata);
+    set_rc = primary_sdm->set_aor_data(aor, irs_impus, aor_pair, trail, unused, rdata, tdata);
 
     if (set_rc != Store::OK)
     {
@@ -538,6 +539,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
   SubscriberDataManager::AoRPair* aor_pair =
                               write_subscriptions_to_store(sdm,
                                                            aor,
+                                                           uris,
                                                            rdata,
                                                            now,
                                                            NULL,
@@ -565,6 +567,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
         SubscriberDataManager::AoRPair* remote_aor_pair =
           write_subscriptions_to_store(*it,
                                        aor,
+                                       uris,
                                        rdata,
                                        now,
                                        aor_pair,

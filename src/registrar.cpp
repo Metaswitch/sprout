@@ -217,6 +217,7 @@ bool get_private_id(pjsip_rx_data* rdata, std::string& id)
 SubscriberDataManager::AoRPair* write_to_store(
                    SubscriberDataManager* primary_sdm,         ///<store to write to
                    std::string aor,                            ///<address of record to write to
+                   std::vector<std::string> irs_impus,         ///(IMPUs in Implicit Registration Set
                    pjsip_rx_data* rdata,                       ///<received message to read headers from
                    int now,                                    ///<time now
                    int& expiry,                                ///<[out] longest expiry time
@@ -449,6 +450,7 @@ SubscriberDataManager::AoRPair* write_to_store(
     }
 
     set_rc = primary_sdm->set_aor_data(aor,
+                                       irs_impus,
                                        aor_pair,
                                        trail,
                                        all_bindings_expired);
@@ -713,6 +715,7 @@ void process_register_request(pjsip_rx_data* rdata)
   SubscriberDataManager::AoRPair* aor_pair =
                                   write_to_store(sdm,
                                                 aor,
+                                                uris,
                                                 rdata,
                                                 now,
                                                 expiry,
@@ -740,6 +743,7 @@ void process_register_request(pjsip_rx_data* rdata)
         SubscriberDataManager::AoRPair* remote_aor_pair =
           write_to_store(*it,
                          aor,
+                         uris,
                          rdata,
                          now,
                          tmp_expiry,
