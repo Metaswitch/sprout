@@ -1276,7 +1276,13 @@ pjsip_hdr* parse_hdr_accept_contact(pjsip_parse_ctx* ctx)
   pj_str_t header_value;
   pj_scan_get(scanner, &pc->pjsip_TOKEN_SPEC, &header_value);
 
-  for (;;)
+  // Skip any following whitespace (to the end of the line)
+  pj_scan_skip_whitespace(scanner);
+
+  // If we're EOF or looking at a newline, we're done.
+  while (!pj_scan_is_eof(scanner) &&
+         (*scanner->curptr != '\r') &&
+         (*scanner->curptr != '\n'))
   {
     // We might need to swallow the ';'.
     if (!pj_scan_is_eof(scanner) && *scanner->curptr == ';')
@@ -1302,14 +1308,8 @@ pjsip_hdr* parse_hdr_accept_contact(pjsip_parse_ctx* ctx)
       pj_list_insert_before(&hdr->feature_set, param);
     }
 
-    // If we're EOF or looking at a newline, we're done.
+    // Skip any following whitespace (to the end of the line)
     pj_scan_skip_whitespace(scanner);
-    if (pj_scan_is_eof(scanner) ||
-        (*scanner->curptr == '\r') ||
-        (*scanner->curptr == '\n'))
-    {
-      break;
-    }
   }
 
   // We're done parsing this header.
