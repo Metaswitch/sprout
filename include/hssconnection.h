@@ -134,11 +134,11 @@ public:
                                  std::deque<std::string>& ccfs,
                                  std::deque<std::string>& ecfs,
                                  SAS::TrailId trail);
-  HTTPCode get_registration_data(const std::string& public_user_identity,
-                                 std::string& regstate,
-                                 std::map<std::string, Ifcs >& service_profiles,
-                                 std::vector<std::string>& associated_uris,
-                                 SAS::TrailId trail);
+  virtual HTTPCode get_registration_data(const std::string& public_user_identity,
+                                         std::string& regstate,
+                                         std::map<std::string, Ifcs >& service_profiles,
+                                         std::vector<std::string>& associated_uris,
+                                         SAS::TrailId trail);
   rapidxml::xml_document<>* parse_xml(std::string raw, const std::string& url);
 
   static const std::string REG;
