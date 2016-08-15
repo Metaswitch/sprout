@@ -1798,27 +1798,24 @@ int main(int argc, char* argv[])
                                        opt.uri_scscf);
   }
 
-  if ((opt.enabled_scscf) || (opt.enabled_icscf))
+  // Create ENUM service.
+  if (!opt.enum_servers.empty())
   {
-    // Create ENUM service required for I/S-CSCF.
-    if (!opt.enum_servers.empty())
-    {
-      TRC_STATUS("Setting up the ENUM server(s)");
-      enum_service = new DNSEnumService(opt.enum_servers,
-                                        opt.enum_suffix,
-                                        new DNSResolverFactory(),
-                                        enum_comm_monitor);
-    }
-    else if (!opt.enum_file.empty())
-    {
-      TRC_STATUS("Reading from an ENUM file");
-      enum_service = new JSONEnumService(opt.enum_file);
-    }
-    else if (opt.default_tel_uri_translation)
-    {
-      TRC_STATUS("Setting up ENUM service to do default TEL->SIP URI translation");
-      enum_service = new DummyEnumService(opt.home_domain);
-    }
+    TRC_STATUS("Setting up the ENUM server(s)");
+    enum_service = new DNSEnumService(opt.enum_servers,
+                                      opt.enum_suffix,
+                                      new DNSResolverFactory(),
+                                      enum_comm_monitor);
+  }
+  else if (!opt.enum_file.empty())
+  {
+    TRC_STATUS("Reading from an ENUM file");
+    enum_service = new JSONEnumService(opt.enum_file);
+  }
+  else if (opt.default_tel_uri_translation)
+  {
+    TRC_STATUS("Setting up ENUM service to do default TEL->SIP URI translation");
+    enum_service = new DummyEnumService(opt.home_domain);
   }
 
   HttpStack* http_stack = HttpStack::get_instance();
@@ -2208,7 +2205,6 @@ int main(int argc, char* argv[])
     {
       destroy_authentication();
     }
-    delete chronos_connection;
   }
   if (opt.pcscf_enabled)
   {
@@ -2223,6 +2219,7 @@ int main(int argc, char* argv[])
   destroy_options();
   destroy_stack();
 
+  delete chronos_connection;
   delete hss_connection;
   delete quiescing_mgr;
   delete exception_handler;
