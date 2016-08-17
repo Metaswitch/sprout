@@ -181,7 +181,7 @@ const static struct pj_getopt_option long_opt[] =
   { "enum",                         required_argument, 0, 'E'},
   { "enum-suffix",                  required_argument, 0, 'x'},
   { "enum-file",                    required_argument, 0, 'f'},
-  { "default-tel-uri-translation",  required_argument, 0, OPT_DEFAULT_TEL_URI_TRANSLATION},
+  { "default-tel-uri-translation",  no_argument,       0, OPT_DEFAULT_TEL_URI_TRANSLATION},
   { "enforce-user-phone",           no_argument,       0, 'u'},
   { "enforce-global-only-lookups",  no_argument,       0, 'g'},
   { "reg-max-expires",              required_argument, 0, 'e'},
