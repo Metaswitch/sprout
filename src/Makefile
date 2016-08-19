@@ -24,6 +24,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          hssconnection.cpp \
                          websockets.cpp \
                          localstore.cpp \
+                         memcachedconnectionpool.cpp \
                          memcachedstore.cpp \
                          memcachedstoreview.cpp \
                          memcached_config.cpp \
