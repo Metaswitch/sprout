@@ -70,8 +70,6 @@ struct options
   int                                  webrtc_port;
   std::string                          upstream_proxy;
   int                                  upstream_proxy_port;
-  int                                  upstream_proxy_connections;
-  int                                  upstream_proxy_recycle;
   bool                                 ibcf;
   std::string                          external_icscf_uri;
   int                                  record_routing_model;

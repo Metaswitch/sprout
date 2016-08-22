@@ -265,13 +265,9 @@ static void usage(void)
        "     --additional-domains <names>\n"
        "                            Comma-separated list of additional home domain names\n"
        " -n, --alias <names>        Optional list of alias host names\n"
-       " -r, --routing-proxy <name>[,<port>[,<connections>[,<recycle time>]]]\n"
+       " -r, --routing-proxy <name>[,<port>]\n"
        "                            Operate as an access proxy using the specified node\n"
-       "                            as the upstream routing proxy.  Optionally specifies the port,\n"
-       "                            the number of parallel connections to create, and how\n"
-       "                            often to recycle these connections (by default a\n"
-       "                            single connection to the trusted port is used and never\n"
-       "                            recycled).\n"
+       "                            as the upstream routing proxy.  Optionally specifies the port.\n"
        " -I, --ibcf <IP addresses>  Operate as an IBCF accepting SIP flows from\n"
        "                            the pre-configured list of IP addresses\n"
        " -j, --external-icscf <I-CSCF URI>\n"
@@ -624,23 +620,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
         Utils::split_string(std::string(pj_optarg), ',', upstream_proxy_options, 0, false);
         options->upstream_proxy = upstream_proxy_options[0];
         options->upstream_proxy_port = 0;
-        options->upstream_proxy_connections = 1;
-        options->upstream_proxy_recycle = 0;
         if (upstream_proxy_options.size() > 1)
         {
           options->upstream_proxy_port = atoi(upstream_proxy_options[1].c_str());
-          if (upstream_proxy_options.size() > 2)
-          {
-            options->upstream_proxy_connections = atoi(upstream_proxy_options[2].c_str());
-            if (upstream_proxy_options.size() > 3)
-            {
-              options->upstream_proxy_recycle = atoi(upstream_proxy_options[3].c_str());
-            }
-          }
         }
         TRC_INFO("Upstream proxy is set to %s:%d", options->upstream_proxy.c_str(), options->upstream_proxy_port);
-        TRC_INFO("  connections = %d", options->upstream_proxy_connections);
-        TRC_INFO("  recycle time = %d seconds", options->upstream_proxy_recycle);
       }
       break;
 
@@ -1839,8 +1823,6 @@ int main(int argc, char* argv[])
                                  true,
                                  opt.upstream_proxy,
                                  opt.upstream_proxy_port,
-                                 opt.upstream_proxy_connections,
-                                 opt.upstream_proxy_recycle,
                                  opt.ibcf,
                                  opt.trusted_hosts,
                                  opt.pbxes,

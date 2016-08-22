@@ -288,8 +288,6 @@ public:
                                           !_edge_upstream_proxy.empty(),
                                           _edge_upstream_proxy.c_str(),
                                           stack_data.pcscf_trusted_port,
-                                          10,
-                                          86400,
                                           !_ibcf_trusted_hosts.empty(),
                                           _ibcf_trusted_hosts.c_str(),
                                           pbx_hosts.c_str(),

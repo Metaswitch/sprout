@@ -114,8 +114,6 @@ get_settings()
         # code is not multi-threadable.
         num_worker_threads=$(grep processor /proc/cpuinfo | wc -l)
         log_level=2
-        upstream_connections=50
-        upstream_recycle_connections=600
         [ -r /etc/clearwater/user_settings ] && . /etc/clearwater/user_settings
 
         # Work out which features are enabled.
@@ -157,7 +155,7 @@ get_daemon_args()
                      --alias=$public_ip
                      --pcscf=5060,5058
                      --webrtc-port=5062
-                     --routing-proxy=$upstream_hostname,$upstream_port,$upstream_connections,$upstream_recycle_connections
+                     --routing-proxy=$upstream_hostname,$upstream_port
                      $ralf_arg
                      --sas=$sas_server,$NAME@$public_hostname
                      --dns-server=$signaling_dns_server
