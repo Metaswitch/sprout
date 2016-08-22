@@ -62,5 +62,5 @@
 	path = modules/memento-as
 	url = git@github.com:Metaswitch/memento-as.git
 [submodule "clearwater-etcd-plugins"]
-	path = clearwater-etcd-plugins
+	path = modules/clearwater-etcd-plugins
 	url = git@github.com:Metaswitch/clearwater-etcd-plugins.git
