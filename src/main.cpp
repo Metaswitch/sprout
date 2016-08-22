@@ -1625,63 +1625,60 @@ int main(int argc, char* argv[])
                                                       ".1.2.826.0.1.1578918.9.3.31");
   }
 
-  if (opt.enabled_icscf || opt.enabled_scscf)
-  {
-    // Create Sprout's alarm objects.
-    alarm_manager = new AlarmManager();
+  // Create Sprout's alarm objects.
+  alarm_manager = new AlarmManager();
 
-    chronos_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+  chronos_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                            "sprout",
+                                                            AlarmDef::SPROUT_CHRONOS_COMM_ERROR,
+                                                            AlarmDef::MAJOR),
+                                                  "Sprout",
+                                                  "Chronos");
+
+  enum_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                         "sprout",
+                                                         AlarmDef::SPROUT_ENUM_COMM_ERROR,
+                                                         AlarmDef::MAJOR),
+                                               "Sprout",
+                                               "ENUM");
+
+  hss_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                        "sprout",
+                                                        AlarmDef::SPROUT_HOMESTEAD_COMM_ERROR,
+                                                        AlarmDef::CRITICAL),
+                                              "Sprout",
+                                              "Homestead");
+
+  memcached_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
                                                               "sprout",
-                                                              AlarmDef::SPROUT_CHRONOS_COMM_ERROR,
-                                                              AlarmDef::MAJOR),
+                                                              AlarmDef::SPROUT_MEMCACHED_COMM_ERROR,
+                                                              AlarmDef::CRITICAL),
                                                     "Sprout",
-                                                    "Chronos");
+                                                    "Memcached");
 
-    enum_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
-                                                           "sprout",
-                                                           AlarmDef::SPROUT_ENUM_COMM_ERROR,
-                                                           AlarmDef::MAJOR),
-                                                 "Sprout",
-                                                 "ENUM");
+  memcached_remote_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                                     "sprout",
+                                                                     AlarmDef::SPROUT_REMOTE_MEMCACHED_COMM_ERROR,
+                                                                     AlarmDef::CRITICAL),
+                                                           "Sprout",
+                                                           "remote Memcached");
 
-    hss_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
-                                                          "sprout",
-                                                          AlarmDef::SPROUT_HOMESTEAD_COMM_ERROR,
-                                                          AlarmDef::CRITICAL),
-                                                "Sprout",
-                                                "Homestead");
+  ralf_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                         "sprout",
+                                                         AlarmDef::SPROUT_RALF_COMM_ERROR,
+                                                         AlarmDef::MAJOR),
+                                               "Sprout",
+                                               "Ralf");
 
-    memcached_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
-                                                                "sprout",
-                                                                AlarmDef::SPROUT_MEMCACHED_COMM_ERROR,
-                                                                AlarmDef::CRITICAL),
-                                                      "Sprout",
-                                                      "Memcached");
+  vbucket_alarm = new Alarm(alarm_manager,
+                            "sprout",
+                            AlarmDef::SPROUT_VBUCKET_ERROR,
+                            AlarmDef::MAJOR);
 
-    memcached_remote_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
-                                                                       "sprout",
-                                                                       AlarmDef::SPROUT_REMOTE_MEMCACHED_COMM_ERROR,
-                                                                       AlarmDef::CRITICAL),
-                                                             "Sprout",
-                                                             "remote Memcached");
-
-    ralf_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
-                                                           "sprout",
-                                                           AlarmDef::SPROUT_RALF_COMM_ERROR,
-                                                           AlarmDef::MAJOR),
-                                                 "Sprout",
-                                                 "Ralf");
-
-    vbucket_alarm = new Alarm(alarm_manager,
-                              "sprout",
-                              AlarmDef::SPROUT_VBUCKET_ERROR,
-                              AlarmDef::MAJOR);
-
-    remote_vbucket_alarm = new Alarm(alarm_manager,
-                                     "sprout",
-                                     AlarmDef::SPROUT_REMOTE_VBUCKET_ERROR,
-                                     AlarmDef::MAJOR);
-  }
+  remote_vbucket_alarm = new Alarm(alarm_manager,
+                                   "sprout",
+                                   AlarmDef::SPROUT_REMOTE_VBUCKET_ERROR,
+                                   AlarmDef::MAJOR);
 
   // Start the load monitor
   load_monitor = new LoadMonitor(opt.target_latency_us,   // Initial target latency (us).
@@ -1801,27 +1798,24 @@ int main(int argc, char* argv[])
                                        opt.uri_scscf);
   }
 
-  if ((opt.enabled_scscf) || (opt.enabled_icscf))
+  // Create ENUM service.
+  if (!opt.enum_servers.empty())
   {
-    // Create ENUM service required for I/S-CSCF.
-    if (!opt.enum_servers.empty())
-    {
-      TRC_STATUS("Setting up the ENUM server(s)");
-      enum_service = new DNSEnumService(opt.enum_servers,
-                                        opt.enum_suffix,
-                                        new DNSResolverFactory(),
-                                        enum_comm_monitor);
-    }
-    else if (!opt.enum_file.empty())
-    {
-      TRC_STATUS("Reading from an ENUM file");
-      enum_service = new JSONEnumService(opt.enum_file);
-    }
-    else if (opt.default_tel_uri_translation)
-    {
-      TRC_STATUS("Setting up ENUM service to do default TEL->SIP URI translation");
-      enum_service = new DummyEnumService(opt.home_domain);
-    }
+    TRC_STATUS("Setting up the ENUM server(s)");
+    enum_service = new DNSEnumService(opt.enum_servers,
+                                      opt.enum_suffix,
+                                      new DNSResolverFactory(),
+                                      enum_comm_monitor);
+  }
+  else if (!opt.enum_file.empty())
+  {
+    TRC_STATUS("Reading from an ENUM file");
+    enum_service = new JSONEnumService(opt.enum_file);
+  }
+  else if (opt.default_tel_uri_translation)
+  {
+    TRC_STATUS("Setting up ENUM service to do default TEL->SIP URI translation");
+    enum_service = new DummyEnumService(opt.home_domain);
   }
 
   HttpStack* http_stack = HttpStack::get_instance();
@@ -1877,180 +1871,177 @@ int main(int argc, char* argv[])
     }
   }
 
-  if (opt.enabled_scscf)
+  // Create a connection to Chronos.
+  std::string port_str = std::to_string(opt.http_port);
+  std::string chronos_callback_host = "127.0.0.1:" + port_str;
+
+  // We want Chronos to call back to its local sprout instance so that we can
+  // handle Sprouts failing without missing timers.
+  if (is_ipv6(opt.http_address))
   {
-    // Create a connection to Chronos.
-    std::string port_str = std::to_string(opt.http_port);
-    std::string chronos_callback_host = "127.0.0.1:" + port_str;
+    chronos_callback_host = "[::1]:" + port_str;
+  }
 
-    // We want Chronos to call back to its local sprout instance so that we can
-    // handle Sprouts failing without missing timers.
-    if (is_ipv6(opt.http_address))
+  std::string chronos_service = "127.0.0.1:7253";
+  TRC_STATUS("Creating connection to Chronos %s using %s as the callback URI",
+             chronos_service.c_str(),
+             chronos_callback_host.c_str());
+  chronos_connection = new ChronosConnection(chronos_service,
+                                             chronos_callback_host,
+                                             http_resolver,
+                                             chronos_comm_monitor);
+
+  scscf_acr_factory = (ralf_processor != NULL) ?
+                    (ACRFactory*)new RalfACRFactory(ralf_processor, ACR::SCSCF) :
+                    new ACRFactory();
+
+  if (opt.store_servers != "")
+  {
+    // Use memcached store.
+    TRC_STATUS("Using memcached compatible store with ASCII protocol");
+
+    local_data_store = (Store*)new MemcachedStore(true,
+                                                  opt.store_servers,
+                                                  memcached_comm_monitor,
+                                                  vbucket_alarm);
+
+    if (!(((MemcachedStore*)local_data_store)->has_servers()))
     {
-      chronos_callback_host = "[::1]:" + port_str;
-    }
+      TRC_ERROR("Cluster settings file '%s' does not contain a valid set of servers",
+                opt.store_servers.c_str());
+      return 1;
+    };
 
-    std::string chronos_service = "127.0.0.1:7253";
-    TRC_STATUS("Creating connection to Chronos %s using %s as the callback URI",
-               chronos_service.c_str(),
-               chronos_callback_host.c_str());
-    chronos_connection = new ChronosConnection(chronos_service,
-                                               chronos_callback_host,
-                                               http_resolver,
-                                               chronos_comm_monitor);
-
-    scscf_acr_factory = (ralf_processor != NULL) ?
-                      (ACRFactory*)new RalfACRFactory(ralf_processor, ACR::SCSCF) :
-                      new ACRFactory();
-
-    if (opt.store_servers != "")
+    if (opt.remote_store_servers != "")
     {
-      // Use memcached store.
-      TRC_STATUS("Using memcached compatible store with ASCII protocol");
+      // Use remote memcached store too.
+      TRC_STATUS("Using remote memcached compatible store with ASCII protocol");
 
-      local_data_store = (Store*)new MemcachedStore(true,
-                                                    opt.store_servers,
-                                                    memcached_comm_monitor,
-                                                    vbucket_alarm);
+      remote_data_store = (Store*)new MemcachedStore(true,
+                                                     opt.remote_store_servers,
+                                                     memcached_remote_comm_monitor,
+                                                     remote_vbucket_alarm);
 
-      if (!(((MemcachedStore*)local_data_store)->has_servers()))
+      if (!(((MemcachedStore*)remote_data_store)->has_servers()))
       {
-        TRC_ERROR("Cluster settings file '%s' does not contain a valid set of servers",
-                  opt.store_servers.c_str());
-        return 1;
+        TRC_WARNING("Remote cluster settings file '%s' does not contain a valid set of servers",
+                    opt.remote_store_servers.c_str());
       };
-
-      if (opt.remote_store_servers != "")
-      {
-        // Use remote memcached store too.
-        TRC_STATUS("Using remote memcached compatible store with ASCII protocol");
-
-        remote_data_store = (Store*)new MemcachedStore(true,
-                                                       opt.remote_store_servers,
-                                                       memcached_remote_comm_monitor,
-                                                       remote_vbucket_alarm);
-
-        if (!(((MemcachedStore*)remote_data_store)->has_servers()))
-        {
-          TRC_WARNING("Remote cluster settings file '%s' does not contain a valid set of servers",
-                      opt.remote_store_servers.c_str());
-        };
-      }
     }
-    else
-    {
-      // Use local store.
-      TRC_STATUS("Using local store");
-      local_data_store = (Store*)new LocalStore();
-    }
+  }
+  else
+  {
+    // Use local store.
+    TRC_STATUS("Using local store");
+    local_data_store = (Store*)new LocalStore();
+  }
 
-    if (local_data_store == NULL)
-    {
-      CL_SPROUT_MEMCACHE_CONN_FAIL.log();
-      TRC_ERROR("Failed to connect to data store");
-      exit(0);
-    }
+  if (local_data_store == NULL)
+  {
+    CL_SPROUT_MEMCACHE_CONN_FAIL.log();
+    TRC_ERROR("Failed to connect to data store");
+    exit(0);
+  }
 
-    // Create local and optionally remote registration data stores.
-    //
-    // It is fine to reuse these variables for creating both stores, as
-    // ownership of the objects they point to is transferred to the store when
-    // it is constructed.
-    SubscriberDataManager::SerializerDeserializer* serializer;
-    std::vector<SubscriberDataManager::SerializerDeserializer*> deserializers;
+  // Create local and optionally remote registration data stores.
+  //
+  // It is fine to reuse these variables for creating both stores, as
+  // ownership of the objects they point to is transferred to the store when
+  // it is constructed.
+  SubscriberDataManager::SerializerDeserializer* serializer;
+  std::vector<SubscriberDataManager::SerializerDeserializer*> deserializers;
 
+  create_sdm_plugins(serializer,
+                     deserializers,
+                     opt.memcached_write_format);
+  local_sdm = new SubscriberDataManager(local_data_store,
+                                        serializer,
+                                        deserializers,
+                                        chronos_connection,
+                                        true);
+
+  if (remote_data_store != NULL)
+  {
     create_sdm_plugins(serializer,
                        deserializers,
                        opt.memcached_write_format);
-    local_sdm = new SubscriberDataManager(local_data_store,
-                                          serializer,
-                                          deserializers,
-                                          chronos_connection,
-                                          true);
+    remote_sdm = new SubscriberDataManager(remote_data_store,
+                                           serializer,
+                                           deserializers,
+                                           chronos_connection,
+                                           false);
+  }
 
-    if (remote_data_store != NULL)
-    {
-      create_sdm_plugins(serializer,
-                         deserializers,
-                         opt.memcached_write_format);
-      remote_sdm = new SubscriberDataManager(remote_data_store,
-                                             serializer,
-                                             deserializers,
-                                             chronos_connection,
-                                             false);
-    }
+  // Start the HTTP stack early as plugins might need to register handlers
+  // with it.
+  try
+  {
+    http_stack->initialize();
+    http_stack->configure(opt.http_address,
+                          opt.http_port,
+                          opt.http_threads,
+                          exception_handler,
+                          access_logger);
+  }
+  catch (HttpStack::Exception& e)
+  {
+    CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
+    closelog();
+    TRC_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
+    return 1;
+  }
 
-    // Start the HTTP stack early as plugins might need to register handlers
-    // with it.
-    try
-    {
-      http_stack->initialize();
-      http_stack->configure(opt.http_address,
-                            opt.http_port,
-                            opt.http_threads,
-                            exception_handler,
-                            access_logger);
-    }
-    catch (HttpStack::Exception& e)
-    {
-      CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
-      closelog();
-      TRC_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
-      return 1;
-    }
+  if (opt.auth_enabled)
+  {
+    // Create an AV store using the local store and initialise the authentication
+    // module.  We don't create a AV store using the remote data store as
+    // Authentication Vectors are only stored for a short period after the
+    // relevant challenge is sent.
+    TRC_STATUS("Initialise S-CSCF authentication module");
+    impi_store = new ImpiStore(local_data_store, opt.impi_store_mode);
+    status = init_authentication(opt.auth_realm,
+                                 impi_store,
+                                 hss_connection,
+                                 chronos_connection,
+                                 scscf_acr_factory,
+                                 opt.non_register_auth_mode,
+                                 analytics_logger,
+                                 &auth_stats_tbls,
+                                 opt.nonce_count_supported,
+                                 expiry_for_binding);
+  }
 
-    if (opt.auth_enabled)
-    {
-      // Create an AV store using the local store and initialise the authentication
-      // module.  We don't create a AV store using the remote data store as
-      // Authentication Vectors are only stored for a short period after the
-      // relevant challenge is sent.
-      TRC_STATUS("Initialise S-CSCF authentication module");
-      impi_store = new ImpiStore(local_data_store, opt.impi_store_mode);
-      status = init_authentication(opt.auth_realm,
-                                   impi_store,
-                                   hss_connection,
-                                   chronos_connection,
-                                   scscf_acr_factory,
-                                   opt.non_register_auth_mode,
-                                   analytics_logger,
-                                   &auth_stats_tbls,
-                                   opt.nonce_count_supported,
-                                   expiry_for_binding);
-    }
+  // Launch the registrar.
+  status = init_registrar(local_sdm,
+                          {remote_sdm},
+                          hss_connection,
+                          analytics_logger,
+                          scscf_acr_factory,
+                          opt.reg_max_expires,
+                          opt.force_third_party_register_body,
+                          &reg_stats_tbls,
+                          &third_party_reg_stats_tbls);
 
-    // Launch the registrar.
-    status = init_registrar(local_sdm,
-                            {remote_sdm},
-                            hss_connection,
-                            analytics_logger,
-                            scscf_acr_factory,
-                            opt.reg_max_expires,
-                            opt.force_third_party_register_body,
-                            &reg_stats_tbls,
-                            &third_party_reg_stats_tbls);
+  if (status != PJ_SUCCESS)
+  {
+    CL_SPROUT_INIT_SERVICE_ROUTE_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
+    TRC_ERROR("Failed to enable S-CSCF registrar");
+    return 1;
+  }
 
-    if (status != PJ_SUCCESS)
-    {
-      CL_SPROUT_INIT_SERVICE_ROUTE_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
-      TRC_ERROR("Failed to enable S-CSCF registrar");
-      return 1;
-    }
+  // Launch the subscription module.
+  status = init_subscription(local_sdm,
+                             {remote_sdm},
+                             hss_connection,
+                             scscf_acr_factory,
+                             analytics_logger,
+                             opt.sub_max_expires);
 
-    // Launch the subscription module.
-    status = init_subscription(local_sdm,
-                               {remote_sdm},
-                               hss_connection,
-                               scscf_acr_factory,
-                               analytics_logger,
-                               opt.sub_max_expires);
-
-    if (status != PJ_SUCCESS)
-    {
-      CL_SPROUT_REG_SUBSCRIBER_HAND_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
-      TRC_ERROR("Failed to enable subscription module");
-      return 1;
-    }
+  if (status != PJ_SUCCESS)
+  {
+    CL_SPROUT_REG_SUBSCRIBER_HAND_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
+    TRC_ERROR("Failed to enable subscription module");
+    return 1;
   }
 
   // Load the sproutlet plugins.
@@ -2214,7 +2205,6 @@ int main(int argc, char* argv[])
     {
       destroy_authentication();
     }
-    delete chronos_connection;
   }
   if (opt.pcscf_enabled)
   {
@@ -2229,6 +2219,7 @@ int main(int argc, char* argv[])
   destroy_options();
   destroy_stack();
 
+  delete chronos_connection;
   delete hss_connection;
   delete quiescing_mgr;
   delete exception_handler;
@@ -2250,19 +2241,16 @@ int main(int argc, char* argv[])
   delete analytics_logger;
   delete analytics_logger_logger;
 
-  if (opt.enabled_icscf || opt.enabled_scscf)
-  {
-    // Delete Sprout's alarm objects
-    delete chronos_comm_monitor;
-    delete enum_comm_monitor;
-    delete hss_comm_monitor;
-    delete memcached_comm_monitor;
-    delete memcached_remote_comm_monitor;
-    delete ralf_comm_monitor;
-    delete vbucket_alarm;
-    delete remote_vbucket_alarm;
-    delete alarm_manager;
-  }
+  // Delete Sprout's alarm objects
+  delete chronos_comm_monitor;
+  delete enum_comm_monitor;
+  delete hss_comm_monitor;
+  delete memcached_comm_monitor;
+  delete memcached_remote_comm_monitor;
+  delete ralf_comm_monitor;
+  delete vbucket_alarm;
+  delete remote_vbucket_alarm;
+  delete alarm_manager;
 
   delete latency_table;
   delete queue_size_table;
