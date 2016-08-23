@@ -254,6 +254,7 @@
   <nop hide="true">
     <action>
       <assignstr assign_to="uas_via" value="[last_Via:]" />
+      <assignstr assign_to="uas_rr" value="[last_Record-Route:]" />
     </action>
   </nop>
 
@@ -268,6 +269,7 @@
   <nop hide="true">
     <action>
       <assignstr assign_to="uas_via" value="[last_Via:]" />
+      <assignstr assign_to="uas_rr" value="[last_Record-Route:]" />
     </action>
   </nop>
 
@@ -277,7 +279,7 @@
     <![CDATA[
       SIP/2.0 100 Trying
       [$uas_via]
-      [last_Record-Route:]
+      [$uas_rr]
       Call-ID: [$my_dn]-[$call_repeat]///[call_id]
       From: <sip:[$peer_dn]@[service]>;tag=[pid]SIPpTag00[call_number]1234
       To: <sip:[$my_dn]@[service]>
@@ -291,7 +293,7 @@
     <![CDATA[
       SIP/2.0 180 Ringing
       [$uas_via]
-      [last_Record-Route:]
+      [$uas_rr]
       Call-ID: [$my_dn]-[$call_repeat]///[call_id]
       From: <sip:[$peer_dn]@[service]>;tag=[pid]SIPpTag00[call_number]1234
       To: <sip:[$my_dn]@[service]>;tag=[pid]SIPpTag00[call_number]4321
