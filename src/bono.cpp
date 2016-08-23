@@ -117,7 +117,7 @@ extern "C" {
 #include "constants.h"
 #include "enumservice.h"
 #include "bgcfservice.h"
-#include "connection_pool.h"
+#include "sipconnectionpool.h"
 #include "flowtable.h"
 #include "trustboundary.h"
 #include "sessioncase.h"
@@ -148,7 +148,7 @@ static ACRFactory* icscf_acr_factory;
 
 static bool edge_proxy;
 static pjsip_uri* upstream_proxy;
-static ConnectionPool* upstream_conn_pool = NULL;
+static SipConnectionPool* upstream_conn_pool = NULL;
 
 static SNMP::IPCountTable* sprout_ip_tbl = NULL;
 static SNMP::U32Scalar* flow_count = NULL;
@@ -3276,7 +3276,7 @@ pj_status_t init_stateful_proxy(SubscriberDataManager* reg_sdm,
     pool_target.port = upstream_proxy_port;
     sprout_ip_tbl = SNMP::IPCountTable::create("bono_connected_sprouts",
                                                ".1.2.826.0.1.1578918.9.2.3.1");
-    upstream_conn_pool = new ConnectionPool(&pool_target,
+    upstream_conn_pool = new SipConnectionPool(&pool_target,
         upstream_proxy_connections,
         upstream_proxy_recycle,
         stack_data.pool,
