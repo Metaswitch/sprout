@@ -117,7 +117,7 @@ extern "C" {
 #include "constants.h"
 #include "enumservice.h"
 #include "bgcfservice.h"
-#include "sipconnectionpool.h"
+#include "sip_connection_pool.h"
 #include "flowtable.h"
 #include "trustboundary.h"
 #include "sessioncase.h"

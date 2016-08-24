@@ -1,5 +1,5 @@
 /**
- * @file sipconnectionpool.cpp
+ * @file sip_connection_pool.cpp
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -48,7 +48,7 @@ extern "C" {
 #include "log.h"
 #include "utils.h"
 #include "pjutils.h"
-#include "sipconnectionpool.h"
+#include "sip_connection_pool.h"
 
 SIPConnectionPool::SIPConnectionPool(pjsip_host_port* target,
                                int num_connections,

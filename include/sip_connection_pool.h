@@ -1,5 +1,5 @@
 /**
- * @file sipconnectionpool.h Class for maintaining a SIP connection pool.
+ * @file sip_connection_pool.h Class for maintaining a SIP connection pool.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,8 +34,8 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#ifndef SIPCONNECTIONPOOL_H__
-#define SIPCONNECTIONPOOL_H__
+#ifndef SIP_CONNECTION_POOL_H__
+#define SIP_CONNECTION_POOL_H__
 
 extern "C" {
 #include <pjsip.h>

@@ -17,15 +17,15 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          hss_sip_mapping.cpp \
                          authentication.cpp \
                          options.cpp \
-                         sipconnectionpool.cpp \
+                         sip_connection_pool.cpp \
                          flowtable.cpp \
-                         httpconnectionpool.cpp \
+                         http_connection_pool.cpp \
                          httpconnection.cpp \
                          httpresolver.cpp \
                          hssconnection.cpp \
                          websockets.cpp \
                          localstore.cpp \
-                         memcachedconnectionpool.cpp \
+                         memcached_connection_pool.cpp \
                          memcachedstore.cpp \
                          memcachedstoreview.cpp \
                          memcached_config.cpp \
