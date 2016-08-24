@@ -99,6 +99,9 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
                                                                  "1.2.826.0.1.1578918.9.3.32");
   _invites_cancelled_after_1xx_tbl = SNMP::CounterTable::create("invites_cancelled_after_1xx",
                                                                 "1.2.826.0.1.1578918.9.3.33");
+  _ringing_time_tbl = SNMP::EventAccumulatorTable::create("scscf_ringing_time",
+                                                          "1.2.826.0.1.1578918.9.3.34");
+
 }
 
 
@@ -352,6 +355,10 @@ void SCSCFSproutlet::track_app_serv_comm_success(const std::string& uri,
   }
 }
 
+void SCSCFSproutlet::track_ringing_time(uint64_t ringing_us)
+{
+  _ringing_time_tbl->accumulate(ringing_us);
+}
 
 SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
                                      SCSCFSproutlet* scscf,
@@ -373,6 +380,7 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
   _record_routed(false),
   _req_type(req_type),
   _seen_1xx(false),
+  _tsx_start_time(0),
   _impi(),
   _auto_reg(false),
   _se_helper(stack_data.default_session_expires)
@@ -422,6 +430,9 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   TRC_INFO("S-CSCF received initial request");
 
   pjsip_status_code status_code = PJSIP_SC_OK;
+
+  // Store off the time we received this request, for statistics purposes.
+  _tsx_start_time = Utils::get_time();
 
   // Work out if we should be auto-registering the user based on this
   // request and if we are, also work out the IMPI to register them with.
@@ -665,6 +676,18 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
   if (rsp != NULL)
   {
+    // If this is a 180 Ringing response being sent to a caller (not to an app
+    // server or originating S-CSCF), calculate the time it's taken to get to
+    // the ringing point and update our statistics.
+    if (_session_case->is_originating() &&
+        _as_chain_link.complete() &&
+        _req_type == PJSIP_INVITE_METHOD &&
+        st_code == PJSIP_SC_RINGING)
+    {
+      uint64_t ringing_us = (Utils::get_time() - _tsx_start_time) * 1000;
+      _scscf->track_ringing_time(ringing_us);
+    }
+
     // Forward the response upstream.  The proxy layer will aggregate responses
     // if required.
     send_response(rsp);
