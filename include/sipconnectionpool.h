@@ -48,17 +48,17 @@ extern "C" {
 
 #include "snmp_ip_count_table.h"
 
-class SipConnectionPool
+class SIPConnectionPool
 {
 public:
-  SipConnectionPool(pjsip_host_port* target,
+  SIPConnectionPool(pjsip_host_port* target,
                  int num_connections,
                  int recycle_period,
                  pj_pool_t* pool,
                  pjsip_endpoint* endpt,
                  pjsip_tpfactory* tp_factory,
                  SNMP::IPCountTable* sprout_count_tbl);
-  ~SipConnectionPool();
+  ~SIPConnectionPool();
 
   void init();
 
