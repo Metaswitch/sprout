@@ -57,6 +57,9 @@ pj_status_t register_custom_headers();
     buf += (str).slen;                          \
   } while (0)
 
+// Function pointer from pjsip for overloading header print and clone methods.
+typedef int (*pjsip_hdr_print_fptr)(void *hdr, char *buf, pj_size_t len);
+
 /// Custom header structures.
 
 enum session_refresher_t
@@ -111,6 +114,7 @@ typedef struct pjsip_reject_contact_hdr {
 /// Utility functions (parse, create, init, clone, print_on)
 
 // Privacy
+pjsip_generic_array_hdr* pjsip_privacy_hdr_create( pj_pool_t *pool, const pj_str_t *hnames);
 pjsip_hdr* parse_hdr_privacy(pjsip_parse_ctx* ctx);
 
 // Assocciated URI
