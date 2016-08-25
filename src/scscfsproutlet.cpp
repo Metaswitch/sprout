@@ -432,7 +432,9 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   pjsip_status_code status_code = PJSIP_SC_OK;
 
   // Store off the time we received this request, for statistics purposes.
-  _tsx_start_time = Utils::get_time();
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC_COARSE, &ts);
+  _tsx_start_time = ((uint64_t)ts.tv_sec * 1000000) + (ts.tv_nsec / 1000);
 
   // Work out if we should be auto-registering the user based on this
   // request and if we are, also work out the IMPI to register them with.
@@ -684,7 +686,9 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
         _req_type == PJSIP_INVITE_METHOD &&
         st_code == PJSIP_SC_RINGING)
     {
-      uint64_t ringing_us = (Utils::get_time() - _tsx_start_time) * 1000;
+      struct timespec ts;
+      clock_gettime(CLOCK_MONOTONIC_COARSE, &ts);
+      uint64_t ringing_us = ((uint64_t)ts.tv_sec * 1000000) + (ts.tv_nsec / 1000) - _tsx_start_time;
       _scscf->track_ringing_time(ringing_us);
     }
 
