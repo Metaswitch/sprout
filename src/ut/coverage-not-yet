@@ -12,7 +12,7 @@ modules/rapidjson/include/rapidjson/internal/stack.h
 modules/rapidjson/include/rapidjson/writer.h
 
 src/bono.cpp
-src/connection_pool.cpp
+src/sip_connection_pool.cpp
 src/pjutils.cpp
 src/callservices.cpp
 src/stack.cpp

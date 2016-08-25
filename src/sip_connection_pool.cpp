@@ -1,5 +1,5 @@
 /**
- * @file connection_pool.cpp
+ * @file sip_connection_pool.cpp
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -48,9 +48,9 @@ extern "C" {
 #include "log.h"
 #include "utils.h"
 #include "pjutils.h"
-#include "connection_pool.h"
+#include "sip_connection_pool.h"
 
-ConnectionPool::ConnectionPool(pjsip_host_port* target,
+SIPConnectionPool::SIPConnectionPool(pjsip_host_port* target,
                                int num_connections,
                                int recycle_period,
                                pj_pool_t* pool,
@@ -77,7 +77,7 @@ ConnectionPool::ConnectionPool(pjsip_host_port* target,
 }
 
 
-ConnectionPool::~ConnectionPool()
+SIPConnectionPool::~SIPConnectionPool()
 {
   if (_recycler)
   {
@@ -93,7 +93,7 @@ ConnectionPool::~ConnectionPool()
 }
 
 
-void ConnectionPool::init()
+void SIPConnectionPool::init()
 {
   // Create an initial set of connections.
   for (int ii = 0; ii < _num_connections; ++ii)
@@ -118,7 +118,7 @@ void ConnectionPool::init()
 }
 
 
-pjsip_transport* ConnectionPool::get_connection()
+pjsip_transport* SIPConnectionPool::get_connection()
 {
   pjsip_transport* tp = NULL;
 
@@ -156,7 +156,7 @@ pjsip_transport* ConnectionPool::get_connection()
 }
 
 
-pj_status_t ConnectionPool::resolve_host(const pj_str_t* host,
+pj_status_t SIPConnectionPool::resolve_host(const pj_str_t* host,
                                          int port,
                                          pj_sockaddr* addr)
 {
@@ -201,7 +201,7 @@ pj_status_t ConnectionPool::resolve_host(const pj_str_t* host,
 }
 
 
-pj_status_t ConnectionPool::create_connection(int hash_slot)
+pj_status_t SIPConnectionPool::create_connection(int hash_slot)
 {
   // Resolve the target host to an IP address.
   pj_sockaddr remote_addr;
@@ -267,7 +267,7 @@ pj_status_t ConnectionPool::create_connection(int hash_slot)
 }
 
 
-void ConnectionPool::quiesce_connection(int hash_slot)
+void SIPConnectionPool::quiesce_connection(int hash_slot)
 {
   pthread_mutex_lock(&_tp_hash_lock);
   pjsip_transport* tp = _tp_hash[hash_slot].tp;
@@ -310,7 +310,7 @@ void ConnectionPool::quiesce_connection(int hash_slot)
 }
 
 
-void ConnectionPool::quiesce_connections()
+void SIPConnectionPool::quiesce_connections()
 {
   for (int ii = 0; ii < _num_connections; ii++)
   {
@@ -319,7 +319,7 @@ void ConnectionPool::quiesce_connections()
 }
 
 
-void ConnectionPool::transport_state_update(pjsip_transport* tp, pjsip_transport_state state)
+void SIPConnectionPool::transport_state_update(pjsip_transport* tp, pjsip_transport_state state)
 {
   // Transport state has changed.
   pthread_mutex_lock(&_tp_hash_lock);
@@ -413,7 +413,7 @@ void ConnectionPool::transport_state_update(pjsip_transport* tp, pjsip_transport
 }
 
 
-void ConnectionPool::recycle_connections()
+void SIPConnectionPool::recycle_connections()
 {
   // The recycler periodically recycles the connections so that any new nodes
   // in the upstream proxy cluster get used reasonably soon after they are
@@ -453,19 +453,19 @@ void ConnectionPool::recycle_connections()
 }
 
 
-void ConnectionPool::transport_state(pjsip_transport* tp, pjsip_transport_state state, const pjsip_transport_state_info* info)
+void SIPConnectionPool::transport_state(pjsip_transport* tp, pjsip_transport_state state, const pjsip_transport_state_info* info)
 {
-  ((ConnectionPool*)info->user_data)->transport_state_update(tp, state);
+  ((SIPConnectionPool*)info->user_data)->transport_state_update(tp, state);
 }
 
 
-int ConnectionPool::recycle_thread(void* p)
+int SIPConnectionPool::recycle_thread(void* p)
 {
-  ((ConnectionPool*)p)->recycle_connections();
+  ((SIPConnectionPool*)p)->recycle_connections();
   return 0;
 }
 
-void ConnectionPool::decrement_connection_count(pjsip_transport *trans)
+void SIPConnectionPool::decrement_connection_count(pjsip_transport *trans)
 {
   std::string host = PJUtils::pj_str_to_string(&trans->remote_name.host);
   if (_sprout_count_tbl->get(host)->decrement() == 0)
@@ -475,7 +475,7 @@ void ConnectionPool::decrement_connection_count(pjsip_transport *trans)
 }
 
 
-void ConnectionPool::increment_connection_count(pjsip_transport *trans)
+void SIPConnectionPool::increment_connection_count(pjsip_transport *trans)
 {
   std::string host = PJUtils::pj_str_to_string(&trans->remote_name.host);
   _sprout_count_tbl->get(host)->increment();
