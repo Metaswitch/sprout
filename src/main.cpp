@@ -59,7 +59,6 @@ extern "C" {
 #include <string>
 #include <boost/filesystem.hpp>
 
-#include "ipv6utils.h"
 #include "logger.h"
 #include "utils.h"
 #include "cfgoptions.h"
@@ -1877,7 +1876,10 @@ int main(int argc, char* argv[])
 
   // We want Chronos to call back to its local sprout instance so that we can
   // handle Sprouts failing without missing timers.
-  if (is_ipv6(opt.http_address))
+  Utils::IPAddressType address_type = Utils::parse_ip_address(opt.http_address);
+  if ((address_type == Utils::IPAddressType::IPV6_ADDRESS) ||
+      (address_type == Utils::IPAddressType::IPV6_ADDRESS_WITH_PORT) ||
+      (address_type == Utils::IPAddressType::IPV6_ADDRESS_BRACKETED))
   {
     chronos_callback_host = "[::1]:" + port_str;
   }
