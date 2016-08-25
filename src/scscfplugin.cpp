@@ -40,7 +40,6 @@
  */
 
 #include "cfgoptions.h"
-#include "ipv6utils.h"
 #include "sproutletplugin.h"
 #include "scscfsproutlet.h"
 #include "sprout_alarmdefinition.h"
@@ -111,7 +110,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     {
       std::string node_host(stack_data.local_host.ptr, stack_data.public_host.slen);
 
-      if (is_ipv6(node_host))
+      if (Utils::parse_ip_address(node_host) == Utils::IPV6_ADDRESS)
       {
         node_host = "[" + node_host + "]";
       }
