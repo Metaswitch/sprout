@@ -112,6 +112,7 @@ SCSCFSproutlet::~SCSCFSproutlet()
   delete _routed_by_preloaded_route_tbl;
   delete _invites_cancelled_before_1xx_tbl;
   delete _invites_cancelled_after_1xx_tbl;
+  delete _ringing_time_tbl;
 }
 
 bool SCSCFSproutlet::init()
