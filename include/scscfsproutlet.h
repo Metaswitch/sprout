@@ -172,6 +172,11 @@ private:
   void track_app_serv_comm_success(const std::string& uri,
                                    DefaultHandling default_handling);
 
+  /// Record the time an INVITE took to reach ringing state.
+  ///
+  /// @param ringing_us Time spent until a 180 Ringing, in microseconds.
+  void track_ringing_time(uint64_t ringing_us);
+
   /// Translate RequestURI using ENUM service if appropriate.
   void translate_request_uri(pjsip_msg* req, pj_pool_t* pool, SAS::TrailId trail);
 
@@ -223,6 +228,7 @@ private:
   SNMP::CounterTable* _routed_by_preloaded_route_tbl = NULL;
   SNMP::CounterTable* _invites_cancelled_before_1xx_tbl = NULL;
   SNMP::CounterTable* _invites_cancelled_after_1xx_tbl = NULL;
+  SNMP::EventAccumulatorTable* _ringing_time_tbl = NULL;
 
   AsCommunicationTracker* _sess_term_as_tracker;
   AsCommunicationTracker* _sess_cont_as_tracker;
@@ -409,6 +415,9 @@ private:
   /// correct stats can be updated.
   pjsip_method_e _req_type;
   bool _seen_1xx;
+
+  /// Track the time when we received this request for statistics purposes.
+  uint64_t _tsx_start_time;
 
   static const int MAX_FORKING = 10;
 
