@@ -20,6 +20,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          sip_connection_pool.cpp \
                          flowtable.cpp \
                          http_connection_pool.cpp \
+                         httpclient.cpp \
                          httpconnection.cpp \
                          httpresolver.cpp \
                          hssconnection.cpp \
