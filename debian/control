@@ -229,7 +229,6 @@ Description: Exposes SIP stress statistics over the clearwater statistics interf
 Package: clearwater-sip-perf
 Architecture: any
 Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-sipp
-Conflicts: sprout, sprout-node, bono, restund
 Suggests: clearwater-logging, clearwater-snmpd
 Description: Runs SIP performance tests against Clearwater
 
