@@ -193,9 +193,15 @@ TEST_F(AoRTimeoutTasksTest, MainlineTest)
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor));
       EXPECT_CALL(*store, set_aor_data(aor_id, irs_impus, aor, _, _, _, _)).WillOnce(Return(Store::OK));
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
+      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _))
+           .WillOnce(DoAll(SetArgReferee<3>(std::vector<std::string>(irs_impus)), //IMPUs in IRS
+                           Return(HTTP_OK)));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote_aor1));
       EXPECT_CALL(*remote_store1, set_aor_data(aor_id, irs_impus, remote_aor1, _, _, _, _)).WillOnce(Return(Store::OK));
       EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
+      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _))
+           .WillOnce(DoAll(SetArgReferee<3>(std::vector<std::string>(irs_impus)), //IMPUs in IRS
+                           Return(HTTP_OK)));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote_aor2));
       EXPECT_CALL(*remote_store2, set_aor_data(aor_id, irs_impus, remote_aor2, _, _, _, _)).WillOnce(Return(Store::OK));
   }
@@ -390,19 +396,19 @@ TEST_F(AoRTimeoutTasksTest, NoBindingsTest)
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair1));
       EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair1));
-      EXPECT_CALL(*store, set_aor_data(aor_id, irs_impus, aor_pair, _, _, _, _)).WillOnce(DoAll(SetArgReferee<3>(true), Return(Store::OK)));
+      EXPECT_CALL(*store, set_aor_data(aor_id, irs_impus, aor_pair, _, _, _, _)).WillOnce(DoAll(SetArgReferee<4>(true), Return(Store::OK)));
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _))
            .WillOnce(DoAll(SetArgReferee<3>(std::vector<std::string>(irs_impus)), //IMPUs in IRS
                            Return(HTTP_OK)));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair2));
-      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, irs_impus, remote1_aor_pair2, _, _, _, _)).WillOnce(DoAll(SetArgReferee<3>(true), Return(Store::OK)));
+      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, irs_impus, remote1_aor_pair2, _, _, _, _)).WillOnce(DoAll(SetArgReferee<4>(true), Return(Store::OK)));
       EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _))
            .WillOnce(DoAll(SetArgReferee<3>(std::vector<std::string>(irs_impus)), //IMPUs in IRS
                            Return(HTTP_OK)));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair2));
-      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, irs_impus, remote2_aor_pair2, _, _, _, _)).WillOnce(DoAll(SetArgReferee<3>(true), Return(Store::OK)));
+      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, irs_impus, remote2_aor_pair2, _, _, _, _)).WillOnce(DoAll(SetArgReferee<4>(true), Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(aor_id, "", HSSConnection::DEREG_TIMEOUT, 0));
   }
 
@@ -437,9 +443,15 @@ TEST_F(AoRTimeoutTasksTest, NullAoRTest)
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
       EXPECT_CALL(*store, set_aor_data(aor_id, _, _, _, _, _, _)).Times(0);
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
+      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _))
+           .WillOnce(DoAll(SetArgReferee<3>(std::vector<std::string>(irs_impus)), //IMPUs in IRS
+                           Return(HTTP_OK)));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair));
       EXPECT_CALL(*remote_store1, set_aor_data(aor_id, irs_impus, _, _, _, _, _)).Times(0);
       EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
+      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _))
+           .WillOnce(DoAll(SetArgReferee<3>(std::vector<std::string>(irs_impus)), //IMPUs in IRS
+                           Return(HTTP_OK)));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair));
       EXPECT_CALL(*remote_store2, set_aor_data(aor_id, irs_impus, _, _, _, _, _)).Times(0);
   }
