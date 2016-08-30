@@ -58,7 +58,7 @@ distclean: $(patsubst %, %_distclean, ${SUBMODULES}) sprout_distclean
 
 .PHONY: plugins-build
 plugins-build:
-	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} build \;
+	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} \;
 
 .PHONY: plugins-test
 plugins-test:
