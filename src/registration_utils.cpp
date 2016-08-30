@@ -526,6 +526,6 @@ void RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
        remote_sdm != remote_sdms.end();
        ++remote_sdm)
   {
-    (void) expire_bindings(*remote_sdm, aor, binding_id, trail);
+    (void) expire_bindings(*remote_sdm, aor, irs_impus, binding_id, trail);
   }
 };
