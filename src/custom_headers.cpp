@@ -56,7 +56,8 @@ extern "C" {
 static int pjsip_privacy_hdr_print(pjsip_generic_array_hdr *hdr,
                       char *buf, pj_size_t size)
 {
-  return pjsip_generic_array_hdr_delimited_print(hdr, buf, size, "; ", 2);
+  pj_str_t semicolon_delimiter = {"; ", 2};
+  return pjsip_delimited_array_hdr_print(hdr, buf, size, &semicolon_delimiter);
 }
 
 pjsip_generic_array_hdr* pjsip_privacy_hdr_create(pj_pool_t *pool,
@@ -73,7 +74,7 @@ pjsip_hdr* parse_hdr_privacy(pjsip_parse_ctx* ctx)
 {
   const pjsip_parser_const_t* pconst = pjsip_parser_const();
   pjsip_generic_array_hdr *privacy = pjsip_privacy_hdr_create(ctx->pool, &STR_PRIVACY);
-  pjsip_parse_generic_delimited_array_hdr(privacy, ctx->scanner,';',
+  pjsip_parse_delimited_array_hdr(privacy, ctx->scanner,';',
                               &(pconst->pjsip_NOT_SEMICOLON_OR_NEWLINE));
   return (pjsip_hdr*)privacy;
 }
