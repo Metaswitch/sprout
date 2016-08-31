@@ -44,21 +44,11 @@
 
 extern "C" {
 #include <pjsip.h>
+#include <pjsip/print_util.h>
 }
 
 // Main entry point
 pj_status_t register_custom_headers();
-
-// Utility macro from sip_parser.c
-#define copy_advance(buf,str)                   \
-  do {                                          \
-    if ((str).slen >= (endbuf-buf)) return -1;  \
-    pj_memcpy(buf, (str).ptr, (str).slen);      \
-    buf += (str).slen;                          \
-  } while (0)
-
-// Function pointer from pjsip for overloading header print and clone methods.
-typedef int (*pjsip_hdr_print_fptr)(void *hdr, char *buf, pj_size_t len);
 
 /// Custom header structures.
 

@@ -53,34 +53,25 @@ extern "C" {
 /// generic array header, however it splits on commas. We therefore override
 /// the default parser and print function in the generic array header with a
 /// custom constructor.
-
-static int pjsip_privacy_hdr_print( pjsip_generic_array_hdr *hdr,
+static int pjsip_privacy_hdr_print(pjsip_generic_array_hdr *hdr,
                       char *buf, pj_size_t size)
 {
-    return pjsip_generic_array_hdr_delimited_print(hdr, buf, size, "; ",2);
+  return pjsip_generic_array_hdr_delimited_print(hdr, buf, size, "; ", 2);
 }
 
-
-pjsip_generic_array_hdr* pjsip_privacy_hdr_init( pj_pool_t *pool,
-                                   void *mem,
-                                   const pj_str_t *hnames)
-{
-    pjsip_generic_array_hdr *hdr = pjsip_generic_array_hdr_init(pool, mem,hnames);
-    hdr->vptr->print_on = (pjsip_hdr_print_fptr) &pjsip_privacy_hdr_print;
-    return hdr;
-}
-
-pjsip_generic_array_hdr* pjsip_privacy_hdr_create( pj_pool_t *pool,
+pjsip_generic_array_hdr* pjsip_privacy_hdr_create(pj_pool_t *pool,
                                  const pj_str_t *hnames)
 {
-    void *mem = pj_pool_alloc(pool, sizeof(pjsip_generic_array_hdr));
-    return pjsip_privacy_hdr_init(pool, mem, hnames);
+  void *mem = pj_pool_alloc(pool, sizeof(pjsip_generic_array_hdr));
+  pjsip_generic_array_hdr *hdr = pjsip_generic_array_hdr_init(pool, mem,hnames);
+  hdr->vptr->print_on = (pjsip_hdr_print_fptr) &pjsip_privacy_hdr_print;
+  return hdr;
 }
 
 // LCOV_EXCL_START
 pjsip_hdr* parse_hdr_privacy(pjsip_parse_ctx* ctx)
 {
-  const pjsip_parser_const_t* pconst=pjsip_parser_const();
+  const pjsip_parser_const_t* pconst = pjsip_parser_const();
   pjsip_generic_array_hdr *privacy = pjsip_privacy_hdr_create(ctx->pool, &STR_PRIVACY);
   pjsip_parse_generic_delimited_array_hdr(privacy, ctx->scanner,';',
                               &(pconst->pjsip_NOT_SEMICOLON_OR_NEWLINE));
