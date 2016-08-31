@@ -45,6 +45,7 @@
 #include "mmtelsasevent.h"
 #include "mmtel.h"
 #include "constants.h"
+#include "custom_headers.h"
 
 using namespace rapidxml;
 
@@ -555,7 +556,7 @@ void MmtelTsx::build_privacy_header(pjsip_msg* req, pj_pool_t* pool, int privacy
     return;
   }
 
-  pjsip_generic_array_hdr *new_header = pjsip_generic_array_hdr_create(pool, &privacy_hdr_name);
+  pjsip_generic_array_hdr *new_header = pjsip_privacy_hdr_create(pool, &privacy_hdr_name);
 
   if (privacy_fields & PRIVACY_H_ID)
   {

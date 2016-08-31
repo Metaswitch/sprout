@@ -5741,7 +5741,7 @@ TEST_F(SCSCFTest, ExpiredChain)
   doAsOriginated(string(buf, len), true);
 }
 
-#if 0
+
 // Test a simple MMTEL flow.
 TEST_F(SCSCFTest, MmtelFlow)
 {
@@ -5834,8 +5834,8 @@ TEST_F(SCSCFTest, MmtelFlow)
   tpAS1.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
-  EXPECT_EQ("Privacy: id, header, user", get_headers(out, "Privacy"));
+              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;service=scscf>"));
+  EXPECT_EQ("Privacy: id; header; user", get_headers(out, "Privacy"));
 
   // ---------- AS1 turns it around (acting as proxy)
   const pj_str_t STR_ROUTE = pj_str("Route");
@@ -5862,12 +5862,12 @@ TEST_F(SCSCFTest, MmtelFlow)
   tpBono.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r1.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
-  EXPECT_EQ("Privacy: id, header, user", get_headers(out, "Privacy"));
+  EXPECT_EQ("Privacy: id; header; user", get_headers(out, "Privacy"));
 
   free_txdata();
 }
 
-
+#if 0
 /// Test MMTEL-then-external-AS flows (both orig and term).
 //
 // Flow:
