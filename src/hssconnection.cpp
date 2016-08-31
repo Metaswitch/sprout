@@ -369,6 +369,10 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
         associated_uris.push_back(uri);
         ifcs_map[uri] = ifc;
+        if (public_id == sp->first_node("PublicIdentity"))
+        {
+          ifcs_map[public_user_identity] = ifc;
+        }
 
         if (!found_aliases)
         {
