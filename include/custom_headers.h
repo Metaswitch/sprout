@@ -44,18 +44,11 @@
 
 extern "C" {
 #include <pjsip.h>
+#include <pjsip/print_util.h>
 }
 
 // Main entry point
 pj_status_t register_custom_headers();
-
-// Utility macro from sip_parser.c
-#define copy_advance(buf,str)                   \
-  do {                                          \
-    if ((str).slen >= (endbuf-buf)) return -1;  \
-    pj_memcpy(buf, (str).ptr, (str).slen);      \
-    buf += (str).slen;                          \
-  } while (0)
 
 /// Custom header structures.
 
@@ -111,6 +104,7 @@ typedef struct pjsip_reject_contact_hdr {
 /// Utility functions (parse, create, init, clone, print_on)
 
 // Privacy
+pjsip_generic_array_hdr* pjsip_privacy_hdr_create( pj_pool_t *pool, const pj_str_t *hnames);
 pjsip_hdr* parse_hdr_privacy(pjsip_parse_ctx* ctx);
 
 // Assocciated URI

@@ -17,13 +17,16 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          hss_sip_mapping.cpp \
                          authentication.cpp \
                          options.cpp \
-                         connection_pool.cpp \
+                         sip_connection_pool.cpp \
                          flowtable.cpp \
+                         http_connection_pool.cpp \
+                         httpclient.cpp \
                          httpconnection.cpp \
                          httpresolver.cpp \
                          hssconnection.cpp \
                          websockets.cpp \
                          localstore.cpp \
+                         memcached_connection_pool.cpp \
                          memcachedstore.cpp \
                          memcachedstoreview.cpp \
                          memcached_config.cpp \
@@ -63,7 +66,6 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          httpstack.cpp \
                          httpstack_utils.cpp \
                          handlers.cpp \
-                         ipv6utils.cpp \
                          contact_filtering.cpp \
                          sproutletproxy.cpp \
                          pluginloader.cpp \
@@ -75,7 +77,6 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          exception_handler.cpp \
                          snmp_agent.cpp \
                          snmp_continuous_accumulator_table.cpp \
-                         snmp_event_accumulator_table.cpp \
                          sip_string_to_request_type.cpp \
                          snmp_row.cpp \
                          snmp_ip_row.cpp \
@@ -93,6 +94,7 @@ sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_ip_count_table.cpp \
                   snmp_success_fail_count_table.cpp \
                   snmp_success_fail_count_by_request_type_table.cpp \
+                  snmp_event_accumulator_table.cpp \
                   pdlog.cpp \
                   main.cpp
 
