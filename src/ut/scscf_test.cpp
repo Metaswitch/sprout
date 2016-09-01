@@ -5741,7 +5741,6 @@ TEST_F(SCSCFTest, ExpiredChain)
   doAsOriginated(string(buf, len), true);
 }
 
-// #if 0
 // Test a simple MMTEL flow.
 TEST_F(SCSCFTest, MmtelFlow)
 {
@@ -6028,12 +6027,6 @@ TEST_F(SCSCFTest, MmtelThenExternal)
   {
     pj_list_erase(hdr);
   }
-  // @@@KSW Work around https://github.com/Metaswitch/sprout/issues/43
-  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_PRIVACY, NULL);
-  if (hdr)
-  {
-    pj_list_erase(hdr);
-  }
   inject_msg(out, &tpAS1);
   free_txdata();
 
@@ -6083,7 +6076,6 @@ TEST_F(SCSCFTest, MmtelThenExternal)
   tpBono.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r1.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
-  // @@@KSW Work around https://github.com/Metaswitch/sprout/issues/43: omit:
   EXPECT_EQ("Privacy: id, header, user", get_headers(out, "Privacy"));
 
   free_txdata();
@@ -6103,7 +6095,7 @@ TEST_F(SCSCFTest, MmtelThenExternal)
 //     * external AS1 (5.2.3.4:56787) is invoked
 // * call reaches registered contact for 6505551234.
 //
-TEST_F(SCSCFTest, MultipleMmtelFlow)  // @@@KSW not working: https://github.com/Metaswitch/sprout/issues/44
+TEST_F(SCSCFTest, MultipleMmtelFlow)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
@@ -6285,7 +6277,6 @@ TEST_F(SCSCFTest, MultipleMmtelFlow)  // @@@KSW not working: https://github.com/
 
   free_txdata();
 }
-// #endif
 
 
 // Test basic ISC (AS) OPTIONS final acceptance flow (AS sinks request).
