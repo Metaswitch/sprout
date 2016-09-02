@@ -1843,7 +1843,7 @@ TEST_F(SCSCFTest, TestWithoutEnum)
   Message msg;
   msg._to = "+15108580271";
   msg._requri = "sip:+15108580271@homedomain;user=phone";
-  
+
   // We only do ENUM on originating calls
   msg._route = "Route: <sip:homedomain;orig>";
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
@@ -5741,7 +5741,6 @@ TEST_F(SCSCFTest, ExpiredChain)
   doAsOriginated(string(buf, len), true);
 }
 
-
 // Test a simple MMTEL flow.
 TEST_F(SCSCFTest, MmtelFlow)
 {
@@ -5867,7 +5866,6 @@ TEST_F(SCSCFTest, MmtelFlow)
   free_txdata();
 }
 
-#if 0
 /// Test MMTEL-then-external-AS flows (both orig and term).
 //
 // Flow:
@@ -6017,19 +6015,13 @@ TEST_F(SCSCFTest, MmtelThenExternal)
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
               testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;orig;service=scscf>"));
-  EXPECT_EQ("Privacy: id, header, user", get_headers(out, "Privacy"));
+  EXPECT_EQ("Privacy: id; header; user", get_headers(out, "Privacy"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:6505551000@homedomain>;sescase=orig;regstate=unreg"));
 
   // ---------- AS1 turns it around (acting as proxy)
   const pj_str_t STR_ROUTE = pj_str("Route");
   pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
-  if (hdr)
-  {
-    pj_list_erase(hdr);
-  }
-  // @@@KSW Work around https://github.com/Metaswitch/sprout/issues/43
-  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_PRIVACY, NULL);
   if (hdr)
   {
     pj_list_erase(hdr);
@@ -6055,7 +6047,7 @@ TEST_F(SCSCFTest, MmtelThenExternal)
   tpAS2.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;service=scscf>"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=term;regstate=reg"));
 
@@ -6083,7 +6075,7 @@ TEST_F(SCSCFTest, MmtelThenExternal)
   tpBono.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r1.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
-  // @@@KSW Work around https://github.com/Metaswitch/sprout/issues/43: omit: EXPECT_EQ("Privacy: id, header, user", get_headers(out, "Privacy"));
+  EXPECT_EQ("Privacy: id; header; user", get_headers(out, "Privacy"));
 
   free_txdata();
 }
@@ -6102,7 +6094,7 @@ TEST_F(SCSCFTest, MmtelThenExternal)
 //     * external AS1 (5.2.3.4:56787) is invoked
 // * call reaches registered contact for 6505551234.
 //
-TEST_F(SCSCFTest, DISABLED_MultipleMmtelFlow)  // @@@KSW not working: https://github.com/Metaswitch/sprout/issues/44
+TEST_F(SCSCFTest, MultipleMmtelFlow)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
@@ -6252,8 +6244,8 @@ TEST_F(SCSCFTest, DISABLED_MultipleMmtelFlow)  // @@@KSW not working: https://gi
   tpAS1.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
-  EXPECT_EQ("Privacy: id, header, user", get_headers(out, "Privacy"));
+              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;service=scscf>"));
+  EXPECT_EQ("Privacy: id; header; user", get_headers(out, "Privacy"));
 
   // ---------- AS1 turns it around (acting as proxy)
   const pj_str_t STR_ROUTE = pj_str("Route");
@@ -6280,11 +6272,10 @@ TEST_F(SCSCFTest, DISABLED_MultipleMmtelFlow)  // @@@KSW not working: https://gi
   tpBono.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r1.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
-  EXPECT_EQ("Privacy: id, header, user", get_headers(out, "Privacy"));
+  EXPECT_EQ("Privacy: id; header; user", get_headers(out, "Privacy"));
 
   free_txdata();
 }
-#endif
 
 
 // Test basic ISC (AS) OPTIONS final acceptance flow (AS sinks request).
