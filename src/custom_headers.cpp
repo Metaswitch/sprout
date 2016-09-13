@@ -60,25 +60,30 @@ static int pjsip_privacy_hdr_print(pjsip_generic_array_hdr *hdr,
   return pjsip_delimited_array_hdr_print(hdr, buf, size, &semicolon_delimiter);
 }
 
+static pjsip_hdr_vptr privacy_hdr_vptr =
+{
+ (pjsip_hdr_clone_fptr) &pjsip_generic_array_hdr_clone,
+ (pjsip_hdr_clone_fptr) &pjsip_generic_array_hdr_shallow_clone,
+ (pjsip_hdr_print_fptr) &pjsip_privacy_hdr_print,
+};
+
 pjsip_generic_array_hdr* pjsip_privacy_hdr_create(pj_pool_t *pool,
                                  const pj_str_t *hnames)
 {
   void *mem = pj_pool_alloc(pool, sizeof(pjsip_generic_array_hdr));
-  pjsip_generic_array_hdr *hdr = pjsip_generic_array_hdr_init(pool, mem,hnames);
-  hdr->vptr->print_on = (pjsip_hdr_print_fptr) &pjsip_privacy_hdr_print;
+  pjsip_generic_array_hdr *hdr = pjsip_generic_array_hdr_init(pool, mem, hnames);
+  hdr->vptr = &privacy_hdr_vptr;
   return hdr;
 }
 
-// LCOV_EXCL_START
 pjsip_hdr* parse_hdr_privacy(pjsip_parse_ctx* ctx)
 {
   const pjsip_parser_const_t* pconst = pjsip_parser_const();
   pjsip_generic_array_hdr *privacy = pjsip_privacy_hdr_create(ctx->pool, &STR_PRIVACY);
-  pjsip_parse_delimited_array_hdr(privacy, ctx->scanner,';',
-                              &(pconst->pjsip_NOT_SEMICOLON_OR_NEWLINE));
+  pjsip_parse_delimited_array_hdr(privacy, ctx->scanner, ';',
+                                  &(pconst->pjsip_NOT_SEMICOLON_OR_NEWLINE));
   return (pjsip_hdr*)privacy;
 }
-// LCOV_EXCL_STOP
 
 typedef void* (*clone_fptr)(pj_pool_t *, const void*);
 typedef int   (*print_fptr)(void *hdr, char *buf, pj_size_t len);
