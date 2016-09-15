@@ -2171,6 +2171,14 @@ bool PJUtils::get_rn(pjsip_uri* uri, std::string& routing_value)
   return rn_set;
 }
 
+bool PJUtils::user_as_string_from_uri(pjsip_uri* uri,
+                                      std::string& routing_value)
+{
+  pj_str_t user = PJUtils::user_from_uri(uri);
+  routing_value = pj_str_to_string(&user);
+  return (routing_value.size() > 0);
+}
+
 /// Attempt ENUM lookup if appropriate.
 static std::string query_enum(pjsip_msg* req,
                               EnumService* enum_service,

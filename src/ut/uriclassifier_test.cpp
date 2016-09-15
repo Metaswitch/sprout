@@ -1,5 +1,5 @@
 /**
- * @file pjutils_test.cpp UT for PJUtils.
+ * @file uriclassifier_test.cpp UT for URIClassifier.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2015 Metaswitch Networks Ltd
@@ -46,7 +46,7 @@
 #include "pjsip.h"
 #include "pjutils.h"
 
-class URIClassiferTest : public BaseTest
+class URIClassifierTest : public BaseTest
 {
 public:
   static pj_caching_pool caching_pool;
@@ -62,7 +62,7 @@ public:
   };
 
 
-  URIClassiferTest() 
+  URIClassifierTest()
   {
     stack_data.home_domains.insert("homedomain");
     stack_data.default_home_domain = pj_str("homedomain");
@@ -70,7 +70,7 @@ public:
   }
 
 
-  virtual ~URIClassiferTest()
+  virtual ~URIClassifierTest()
   {
   }
 
@@ -81,17 +81,17 @@ public:
   }
 };
 
-pj_pool_t* URIClassiferTest::pool;
-pj_caching_pool URIClassiferTest::caching_pool;
-pjsip_endpoint* URIClassiferTest::endpt;
+pj_pool_t* URIClassifierTest::pool;
+pj_caching_pool URIClassifierTest::caching_pool;
+pjsip_endpoint* URIClassifierTest::endpt;
 
-TEST_F(URIClassiferTest, MailtoClassification)
+TEST_F(URIClassifierTest, MailtoClassification)
 {
   EXPECT_EQ(URIClass::UNKNOWN,
             classify_uri_helper("mailto:abc@example.com"));
 }
 
-TEST_F(URIClassiferTest, GlobalNumberClassification)
+TEST_F(URIClassifierTest, GlobalNumberClassification)
 {
   EXPECT_EQ(URIClass::GLOBAL_PHONE_NUMBER,
             classify_uri_helper("sip:+1234@example.com;user=phone"));
@@ -99,7 +99,7 @@ TEST_F(URIClassiferTest, GlobalNumberClassification)
             classify_uri_helper("tel:+1234"));
 }
 
-TEST_F(URIClassiferTest, LocalNumberClassification)
+TEST_F(URIClassifierTest, LocalNumberClassification)
 {
   URIClassifier::enforce_global = true;
   EXPECT_EQ(URIClass::LOCAL_PHONE_NUMBER,
@@ -108,7 +108,7 @@ TEST_F(URIClassiferTest, LocalNumberClassification)
             classify_uri_helper("tel:1234"));
 }
 
-TEST_F(URIClassiferTest, IgnoreLocalNumberClassification)
+TEST_F(URIClassifierTest, IgnoreLocalNumberClassification)
 {
   URIClassifier::enforce_global = false;
   EXPECT_EQ(URIClass::GLOBAL_PHONE_NUMBER,
@@ -117,7 +117,7 @@ TEST_F(URIClassiferTest, IgnoreLocalNumberClassification)
             classify_uri_helper("tel:1234"));
 }
 
-TEST_F(URIClassiferTest, IgnoreUserPhone)
+TEST_F(URIClassifierTest, IgnoreUserPhone)
 {
   URIClassifier::enforce_user_phone = false;
   EXPECT_EQ(URIClass::GLOBAL_PHONE_NUMBER,
@@ -127,7 +127,7 @@ TEST_F(URIClassiferTest, IgnoreUserPhone)
             classify_uri_helper("sip:+1234@homedomain", false));
 }
 
-TEST_F(URIClassiferTest, PreferSip)
+TEST_F(URIClassifierTest, PreferSip)
 {
   URIClassifier::enforce_user_phone = false;
   EXPECT_EQ(URIClass::GLOBAL_PHONE_NUMBER,
@@ -137,7 +137,7 @@ TEST_F(URIClassiferTest, PreferSip)
 }
 
 
-TEST_F(URIClassiferTest, SIPURIs)
+TEST_F(URIClassifierTest, SIPURIs)
 {
   EXPECT_EQ(URIClass::HOME_DOMAIN_SIP_URI,
             classify_uri_helper("sip:bob@homedomain"));
@@ -145,13 +145,13 @@ TEST_F(URIClassiferTest, SIPURIs)
             classify_uri_helper("sip:bob@otherdomain"));
 }
 
-TEST_F(URIClassiferTest, NPData)
+TEST_F(URIClassifierTest, NPData)
 {
   EXPECT_EQ(URIClass::NP_DATA,
             classify_uri_helper("sip:1234;rn=567@example.com;user=phone"));
   EXPECT_EQ(URIClass::NP_DATA,
             classify_uri_helper("tel:1234;rn=567"));
-  
+
   EXPECT_EQ(URIClass::FINAL_NP_DATA,
             classify_uri_helper("sip:1234;rn=567;npdi@example.com;user=phone"));
   EXPECT_EQ(URIClass::FINAL_NP_DATA,

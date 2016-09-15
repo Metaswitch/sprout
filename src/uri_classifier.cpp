@@ -54,7 +54,7 @@ bool URIClassifier::is_user_numeric(pj_str_t user)
         (uri[i] == ')') ||
         (uri[i] == '[') ||
         (uri[i] == ']') ||
-        ((uri[i] >= '0') && 
+        ((uri[i] >= '0') &&
          (uri[i] <= '9')))
     {
       continue;
@@ -112,6 +112,7 @@ URIClass URIClassifier::classify_uri(const pjsip_uri* uri, bool prefer_sip)
   // First, check to see if this URI has number portability data - this takes priority
   bool has_rn = false;
   bool has_npdi = false;
+  URIClass user_type = URIClassifier::classify_user_type(uri, prefer_sip);
 
   if (PJSIP_URI_SCHEME_IS_TEL(uri))
   {
@@ -138,7 +139,48 @@ URIClass URIClassifier::classify_uri(const pjsip_uri* uri, bool prefer_sip)
     }
   }
   // No number portability data
-  else if (PJSIP_URI_SCHEME_IS_TEL(uri))
+  else if (user_type != URIClass::UNKNOWN)
+  {
+    // we have a phone number
+    ret = user_type;
+  }
+  else if(PJSIP_URI_SCHEME_IS_SIP(uri))
+  {
+    pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)uri;
+    pj_str_t host = sip_uri->host;
+    bool home_domain = is_home_domain(host);
+    bool local_to_node = is_local_name(host);
+
+    TRC_DEBUG("home domain: %s, local_to_node: %s, enforce_user_phone: %s, prefer_sip: %s",
+              home_domain ? "true" : "false",
+              local_to_node ? "true" : "false",
+              enforce_user_phone ? "true" : "false",
+              prefer_sip ? "true" : "false");
+
+    if (home_domain)
+    {
+      ret = HOME_DOMAIN_SIP_URI;
+    }
+    else if (local_to_node)
+    {
+      ret = NODE_LOCAL_SIP_URI;
+    }
+    else
+    {
+      ret = OFFNET_SIP_URI;
+    }
+  }
+
+  TRC_DEBUG("Classified URI as %d", (int)ret);
+  return ret;
+}
+
+URIClass URIClassifier::classify_user_type(const pjsip_uri* uri,
+                                           bool prefer_sip)
+{
+  URIClass ret = URIClass::UNKNOWN;
+
+  if (PJSIP_URI_SCHEME_IS_TEL(uri))
   {
     // TEL URIs can only represent phone numbers - decide if it's a global (E.164) number or not
     pjsip_tel_uri* tel_uri = (pjsip_tel_uri*)uri;
@@ -156,13 +198,11 @@ URIClass URIClassifier::classify_uri(const pjsip_uri* uri, bool prefer_sip)
     pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)uri;
     pj_str_t host = sip_uri->host;
     bool home_domain = is_home_domain(host);
-    bool local_to_node = is_local_name(host);
     bool is_gruu = (pjsip_param_find(&((pjsip_sip_uri*)uri)->other_param, &STR_GR) != NULL);
     bool treat_number_as_phone = !enforce_user_phone && !prefer_sip;
 
-    TRC_DEBUG("home domain: %s, local_to_node: %s, is_gruu: %s, enforce_user_phone: %s, prefer_sip: %s, treat_number_as_phone: %s",
+    TRC_DEBUG("home domain: %s, is_gruu: %s, enforce_user_phone: %s, prefer_sip: %s, treat_number_as_phone: %s",
               home_domain ? "true" : "false",
-              local_to_node ? "true" : "false",
               is_gruu ? "true" : "false",
               enforce_user_phone ? "true" : "false",
               prefer_sip ? "true" : "false",
@@ -181,21 +221,7 @@ URIClass URIClassifier::classify_uri(const pjsip_uri* uri, bool prefer_sip)
         ret = enforce_global ? LOCAL_PHONE_NUMBER : GLOBAL_PHONE_NUMBER;
       }
     }
-    // Not a phone number - classify it based on domain
-    else if (home_domain)
-    {
-      ret = HOME_DOMAIN_SIP_URI;
-    }
-    else if (local_to_node)
-    {
-      ret = NODE_LOCAL_SIP_URI;
-    }
-    else
-    {
-      ret = OFFNET_SIP_URI;
-    }
   }
 
-  TRC_DEBUG("Classified URI as %d", (int)ret);
   return ret;
 }
