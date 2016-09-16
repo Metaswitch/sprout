@@ -396,7 +396,7 @@ void BasicProxy::reject_request(pjsip_rx_data* rdata, int status_code)
 {
   if (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD)
   {
-    TRC_ERROR("Rejecting %.*s request with %d status code",
+    TRC_DEBUG("Rejecting %.*s request with %d status code",
               rdata->msg_info.msg->line.req.method.name.slen,
               rdata->msg_info.msg->line.req.method.name.ptr,
               status_code);
