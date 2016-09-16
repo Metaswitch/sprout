@@ -61,6 +61,7 @@ extern "C" {
 #include "acr.h"
 #include "sproutlet.h"
 #include "snmp_success_fail_count_by_request_type_table.h"
+#include "snmp_success_fail_count_table.h"
 
 class ICSCFSproutletTsx;
 class ICSCFSproutletRegTsx;
@@ -136,13 +137,19 @@ private:
 
   /// String versions of cluster URIs
   std::string _bgcf_uri_str;
+
+  /// Stats tables
+  SNMP::SuccessFailCountTable* _session_establishment_tbl = NULL;
+  SNMP::SuccessFailCountTable* _session_establishment_network_tbl = NULL;
 };
 
 
 class ICSCFSproutletTsx : public SproutletTsx
 {
 public:
-  ICSCFSproutletTsx(SproutletTsxHelper* helper, ICSCFSproutlet* icscf);
+  ICSCFSproutletTsx(SproutletTsxHelper* helper,
+                    ICSCFSproutlet* icscf,
+                    pjsip_method_e req_type);
   ~ICSCFSproutletTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req) override;
@@ -175,6 +182,14 @@ private:
   ICSCFRouter* _router;
   bool _originating;
   bool _routed_to_bgcf;
+
+  /// Tracks request type and whether a session has been set up for the purposes
+  /// of reporting session_establishment stats.   Note that the defintion we
+  /// need of "set up" is slightly unusual here: we consider the session to be
+  /// set up as soon as we see either a 180 RINGING or a 2xx response.  This is
+  /// as defined in TS 32.409.
+  pjsip_method_e _req_type;
+  bool _session_set_up;
 };
 
 class ICSCFSproutletRegTsx : public SproutletTsx

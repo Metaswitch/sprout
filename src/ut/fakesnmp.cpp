@@ -100,6 +100,11 @@ SuccessFailCountByRequestTypeTable* SuccessFailCountByRequestTypeTable::create(s
   return new FakeSuccessFailCountByRequestTypeTable();
 };
 
+SuccessFailCountTable* SuccessFailCountTable::create(std::string name, std::string oid)
+{
+  return new FakeSuccessFailCountTable();
+};
+
 } // Namespace SNMP ends
 
 // Fake implementation of scalar registration function, so SNMP::U32Scalar doesn't call real SNMP
