@@ -354,7 +354,7 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
 
     if (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG)
     {
-      if(rdata->msg_info.msg->line.req.method.id == PJSIP_ACK_METHOD)
+      if (rdata->msg_info.msg->line.req.method.id == PJSIP_ACK_METHOD)
       {
         TRC_WARNING("Dropping malformed ACK request");
       }

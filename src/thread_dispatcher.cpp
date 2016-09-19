@@ -174,8 +174,8 @@ static int worker_thread(void* p)
         // Make a 500 response to the rdata with a retry-after header of
         // 10 mins unless the request was an ACK
 
-        if(!((rdata->msg_info.msg->type == PJSIP_REQUEST_MSG) &&
-           (rdata->msg_info.msg->line.req.method.id == PJSIP_ACK_METHOD)))
+        if ((rdata->msg_info.msg->type == PJSIP_REQUEST_MSG) &&
+           !(rdata->msg_info.msg->line.req.method.id == PJSIP_ACK_METHOD))
         {
           TRC_DEBUG("Returning 500 response following exception");
           pjsip_retry_after_hdr* retry_after =
