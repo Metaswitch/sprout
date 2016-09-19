@@ -594,6 +594,8 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 {
   TRC_INFO("S-CSCF received response");
 
+  TRC_WARNING("MGM: on_rx_response");
+
   if (_record_routed)
   {
     _se_helper.process_response(rsp, get_pool(rsp), trail());
@@ -615,6 +617,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
   }
 
   int st_code = rsp->line.status.code;
+  TRC_WARNING("MGM: st_code = %d", st_code);
 
   if (st_code == SIP_STATUS_FLOW_FAILED)
   {

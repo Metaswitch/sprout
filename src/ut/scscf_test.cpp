@@ -1181,8 +1181,6 @@ void SCSCFTest::doSuccessfulFlow(Message& msg,
     iter->match(out);
   }
 
-  ASSERT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl->_count));
-
   msg.set_route(out);
   msg._cseq++;
   free_txdata();
@@ -1267,6 +1265,10 @@ TEST_F(SCSCFTest, TestSimpleMainline)
   Message msg;
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
+
+  // This is a terminating call so should not result in a session setup time
+  // getting tracked.
+  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
 }
 
 // Send a request where the URI is for the same port as a Sproutlet,
@@ -1325,6 +1327,10 @@ TEST_F(SCSCFTest, TestSimpleTelURI)
   msg._todomain = "";
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*16505551234@ut.cw-ngv.com.*"), hdrs, false);
+
+  //Successful originating call.   We should have tracked a single session
+  //setup time.
+  EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
 }
 
 
@@ -4743,7 +4749,10 @@ void SCSCFTest::doAsOriginated(const std::string& msg, bool expect_orig)
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r1.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
 
-  free_txdata();
+  // Inject succesful responses to finish up the flow
+  inject_msg(respond_to_current_txdata(200));
+  inject_msg(respond_to_current_txdata(200));
+  inject_msg(respond_to_current_txdata(200));
 }
 
 
@@ -4763,6 +4772,10 @@ TEST_F(SCSCFTest, AsOriginatedOrig)
 
   SCOPED_TRACE("orig");
   doAsOriginated(msg, true);
+
+  // This is an originating call so we track a session setup time regardless of
+  // the fact that it is initiated by an app server.
+  EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
 }
 
 
@@ -7552,6 +7565,10 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
   msg.set_route(out);
   free_txdata();
+
+  //  There are two originating calls here, so we should have tracked two session
+  //  setup times.
+  EXPECT_EQ(2, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
 }
 
 TEST_F(SCSCFTest, TestAddSecondTelPAIHdr)
