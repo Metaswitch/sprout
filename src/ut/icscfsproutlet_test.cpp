@@ -3116,7 +3116,10 @@ TEST_F(ICSCFSproutletTest, RequestErrors)
   msg2._method = "ACK";
   inject_msg(msg2.get_request(), tp);
 
-  TestSessionEstablishmentStats(0, 1, 0, 1);
+  // This request won't even reach the I-CSCF sproutlet and so won't get
+  // counted in our stats.   This probably isn't ideal but we think it is
+  // acceptable to live with.
+  TestSessionEstablishmentStats(0, 0, 0, 0);
 
   delete tp;
 }

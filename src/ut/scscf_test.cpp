@@ -1181,6 +1181,8 @@ void SCSCFTest::doSuccessfulFlow(Message& msg,
     iter->match(out);
   }
 
+  ASSERT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl->_count));
+
   msg.set_route(out);
   msg._cseq++;
   free_txdata();

@@ -2195,7 +2195,7 @@ static std::string query_enum(pjsip_msg* req,
     SAS::Event event(trail, SASEvent::ENUM_NOT_ENABLED, 0);
     SAS::report_event(event);
   }
-  
+
   return new_uri;
 }
 
@@ -2392,3 +2392,48 @@ std::string PJUtils::get_next_routing_header(pjsip_msg* msg)
                                   route->name_addr.uri);
   }
 }
+
+// Gets the media types specified in the SDP on the message.   Currently only
+// looks for Audio and Video media types.
+//
+// @returns A set of type pjmedia_type
+std::set<pjmedia_type> PJUtils::get_media_types(pjsip_msg *msg)
+{
+  std::set<pjmedia_type> media_types;
+
+  // First, check if the message body is SDP - if not, we can't tell what the
+  // media types are (and assume they're 0).
+  if (msg->body &&
+      (!pj_stricmp2(&msg->body->content_type.type, "application")) &&
+      (!pj_stricmp2(&msg->body->content_type.subtype, "sdp")))
+  {
+    // Parse the SDP, using a temporary pool.
+    pj_pool_t* tmp_pool = pj_pool_create(&stack_data.cp.factory, "Mmtel", 1024, 512, NULL);
+    pjmedia_sdp_session *sdp_sess;
+    if (pjmedia_sdp_parse(tmp_pool, (char *)msg->body->data, msg->body->len, &sdp_sess) == PJ_SUCCESS)
+    {
+      // Spin through the media types, looking for those we're interested in.
+      for (unsigned int media_idx = 0; media_idx < sdp_sess->media_count; media_idx++)
+      {
+        TRC_DEBUG("Examining media type \"%.*s\"",
+                  sdp_sess->media[media_idx]->desc.media.slen,
+                  sdp_sess->media[media_idx]->desc.media.ptr);
+        if (pj_strcmp2(&sdp_sess->media[media_idx]->desc.media, "audio") == 0)
+        {
+          media_types.insert(PJMEDIA_TYPE_AUDIO);
+        }
+        else if (pj_strcmp2(&sdp_sess->media[media_idx]->desc.media, "video") == 0)
+        {
+          media_types.insert(PJMEDIA_TYPE_VIDEO);
+        }
+      }
+    }
+
+    // Tidy up.
+    pj_pool_release(tmp_pool);
+  }
+
+  return media_types;
+}
+
+
