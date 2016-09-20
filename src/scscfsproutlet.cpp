@@ -448,6 +448,7 @@ SCSCFSproutletTsx::~SCSCFSproutletTsx()
 void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 {
   TRC_INFO("S-CSCF received initial request");
+  TRC_WARNING("MGM: S-CSCF received initial request: %d", _req_type);
 
   pjsip_status_code status_code = PJSIP_SC_OK;
 
@@ -720,6 +721,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     // setup stats then check to see if it is now set up.  We consider it to be
     // setup when we receive either a 180 Ringing or 200 OK being sent to a
     // caller (not to an app-server or originating S-CSCF).
+    TRC_WARNING("MGM: _as_chain_link.complete() = %d", _as_chain_link.complete());
     if (_record_session_setup_time &&
         _as_chain_link.complete() &&
         (st_code == PJSIP_SC_RINGING || st_code == PJSIP_SC_OK))
