@@ -1269,6 +1269,7 @@ TEST_F(SCSCFTest, TestSimpleMainline)
   // This is a terminating call so should not result in a session setup time
   // getting tracked.
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
+  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 }
 
 // Send a request where the URI is for the same port as a Sproutlet,
@@ -1331,6 +1332,30 @@ TEST_F(SCSCFTest, TestSimpleTelURI)
   //Successful originating call.   We should have tracked a single session
   //setup time.
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
+  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
+}
+
+// Test that a successful originating video call results in the correct stats
+// being tracked.
+TEST_F(SCSCFTest, TestSimpleTelURIVideo)
+{
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  SCOPED_TRACE("");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+  Message msg;
+  msg._toscheme = "tel";
+  msg._to = "16505551234";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._todomain = "";
+  msg._body = "\r\nv=0\r\no=Andrew 2890844526 2890844526 IN IP4 10.120.42.3\r\nc=IN IP4 10.120.42.3\r\nt=0 0\r\nm=audio 49170 RTP/AVP 0 8 97\r\na=rtpmap:0 PCMU/8000\r\nm=video 51372 RTP/AVP 31 32\r\na=rtpmap:31 H261/90000\r\n";
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*16505551234@ut.cw-ngv.com.*"), hdrs, false);
+
+  //Successful originating call.   We should have tracked a single session
+  //setup time.
+  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
+  EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 }
 
 
@@ -2452,9 +2477,19 @@ TEST_F(SCSCFTest, ISCMultipleResponses)
   // more realistic test of AS communication tracking.
   send_response_back_through_dialog(respond_to_txdata(txdata, 180), 180, 2);
 
+  // The 180 counts as the session having been setup from a stats perspective.
+  // Check that the stats have been incremented accordingly.
+  EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
+  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
+
   // Also send a 200 OK to check that the AS only gets tracked as successful
   // once.
   send_response_back_through_dialog(respond_to_txdata(txdata, 200), 200, 2);
+
+  // Check that 200 OK hasn't resulted in any more session setup stats being
+  // accumulated.
+  EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
+  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 
   pjsip_tx_data_dec_ref(txdata); txdata = NULL;
 }
@@ -4776,6 +4811,7 @@ TEST_F(SCSCFTest, AsOriginatedOrig)
   // This is an originating call so we track a session setup time regardless of
   // the fact that it is initiated by an app server.
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
+  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 }
 
 
@@ -4959,6 +4995,8 @@ TEST_F(SCSCFTest, Cdiv)
   EXPECT_EQ("", get_headers(out, "Route"));
 
   free_txdata();
+  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
+  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 }
 
 
@@ -6505,6 +6543,9 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
   msg.set_route(out);
   free_txdata();
+
+  EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
+  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 }
 
 
@@ -6648,6 +6689,9 @@ TEST_F(SCSCFTest, OriginatingExternal)
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
   msg.set_route(out);
   free_txdata();
+
+  EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
+  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 }
 
 
@@ -6862,6 +6906,9 @@ TEST_F(SCSCFTest, OriginatingTerminatingAS)
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
   msg.set_route(out);
   free_txdata();
+
+  EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
+  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 }
 
 
@@ -7148,6 +7195,11 @@ TEST_F(SCSCFTest, OriginatingTerminatingASTimeout)
   msg._method = "ACK";
   msg._branch = "2222222222";
   inject_msg(msg.get_request(), &tpAS);
+
+  // Session didn't get set up successfully so no session setup time will be
+  // tracked.
+  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
+  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 }
 
 
@@ -7566,9 +7618,9 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   msg.set_route(out);
   free_txdata();
 
-  //  There are two originating calls here, so we should have tracked two session
-  //  setup times.
-  EXPECT_EQ(2, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
+  //  We should have tracked the session setup time for just the original session.
+  EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
+  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 }
 
 TEST_F(SCSCFTest, TestAddSecondTelPAIHdr)

@@ -414,14 +414,17 @@ private:
 
   /// Track various properties of the transaction / transaction state so that
   /// we can generate the correct stats:
-  /// - _req_type: the type of the request, e.g. INVITE, REGISTER etc.
-  /// - _seen_1xx: whether we've seen a 1xx response to this transaction.
-  /// - _record_session_setup_time: whether we should record session setup time
-  ///   for this transaction.   Set to false if this is a transaction that we
-  ///   shouldn't track, or once the session setup time has been tracked.
-  /// - _tsx_start_time -- the time stat the session started -- only valid if
-  ///   _record_session_setup_time is true.
-  /// - whether this is a video call.   Only valid for initial INVITEs.
+  /// - _req_type:   the type of the request, e.g. INVITE, REGISTER etc.
+  /// - _seen_1xx:   whether we've seen a 1xx response to this transaction.
+  /// - _record_session_setup_time:
+  ///                whether we should record session setup time for this
+  ///                transaction.   Set to false if this is a transaction that we
+  ///                shouldn't track, or if we have already tracked it.
+  /// - _tsx_start_time:
+  ///                the time that the session started -- only valid if
+  ///                _record_session_setup_time is true.
+  /// - _video_call: whether this is a video call -- only valid if
+  ///                _record_session_setup_time is true.
   pjsip_method_e _req_type;
   bool _seen_1xx;
   bool _record_session_setup_time;
