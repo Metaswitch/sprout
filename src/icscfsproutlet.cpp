@@ -810,42 +810,43 @@ void ICSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
   pjsip_status_code rsp_status = (pjsip_status_code)rsp->line.status.code;
 
   // Check if this is a terminating INVITE.  If it is then check whether we need
-  // to update our session establishment stats.
-  if (!_originating && (_req_type == PJSIP_INVITE_METHOD))
+  // to update our session establishment stats.  We consider the session set up
+  // as soon as we receive a final response OR a 180 Ringing (per TS 32.409).
+  if (!_originating &&
+      (_req_type == PJSIP_INVITE_METHOD) &&
+      !_session_set_up &&
+      ((rsp_status == PJSIP_SC_RINGING) ||
+       !PJSIP_IS_STATUS_IN_CLASS(rsp_status, 100)))
   {
-    if (!_session_set_up &&
-        ((rsp_status == PJSIP_SC_RINGING) ||
-         PJSIP_IS_STATUS_IN_CLASS(rsp_status, 200)))
+    // Session is now set up.
+    _session_set_up = true;
+    _icscf->_session_establishment_tbl->increment_attempts();
+    _icscf->_session_establishment_network_tbl->increment_attempts();
+
+    if ((rsp_status == PJSIP_SC_RINGING) ||
+         PJSIP_IS_STATUS_IN_CLASS(rsp_status, 200))
     {
       // Session has been set up successfully.
       TRC_DEBUG("Session successful");
-      _icscf->_session_establishment_tbl->increment_attempts();
       _icscf->_session_establishment_tbl->increment_successes();
-      _icscf->_session_establishment_network_tbl->increment_attempts();
       _icscf->_session_establishment_network_tbl->increment_successes();
     }
-    else if (!_session_set_up &&
-             ((rsp_status == PJSIP_SC_BUSY_HERE) ||
-              (rsp_status == PJSIP_SC_BUSY_EVERYWHERE) ||
-              (rsp_status == PJSIP_SC_NOT_FOUND) ||
-              (rsp_status == PJSIP_SC_ADDRESS_INCOMPLETE)))
+    else if ((rsp_status == PJSIP_SC_BUSY_HERE) ||
+             (rsp_status == PJSIP_SC_BUSY_EVERYWHERE) ||
+             (rsp_status == PJSIP_SC_NOT_FOUND) ||
+             (rsp_status == PJSIP_SC_ADDRESS_INCOMPLETE))
     {
       // Session failed, but should be counted as successful from a network
       // perspective.
       TRC_DEBUG("Session failed but network successful");
-      _icscf->_session_establishment_tbl->increment_attempts();
       _icscf->_session_establishment_tbl->increment_failures();
-      _icscf->_session_establishment_network_tbl->increment_attempts();
       _icscf->_session_establishment_network_tbl->increment_successes();
     }
-    else if (!_session_set_up &&
-             !PJSIP_IS_STATUS_IN_CLASS(rsp_status, 100))
+    else
     {
       // Session establishment failed.
       TRC_DEBUG("Session failed");
-      _icscf->_session_establishment_tbl->increment_attempts();
       _icscf->_session_establishment_tbl->increment_failures();
-      _icscf->_session_establishment_network_tbl->increment_attempts();
       _icscf->_session_establishment_network_tbl->increment_failures();
     }
   }
@@ -857,17 +858,20 @@ void ICSCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
 {
   // If this is cancelling a terminating INVITE then check whether we need to
   // update our session establishment stats.
-  if (!_originating && (_req_type == PJSIP_INVITE_METHOD))
+  if (!_originating &&
+      (_req_type == PJSIP_INVITE_METHOD) &&
+      (!_session_set_up))
   {
-    if (!_session_set_up)
-    {
-      // Session has failed to establish but for a reason that is not the fault
-      // of the network.
-      _icscf->_session_establishment_tbl->increment_attempts();
-      _icscf->_session_establishment_tbl->increment_failures();
-      _icscf->_session_establishment_network_tbl->increment_attempts();
-      _icscf->_session_establishment_network_tbl->increment_successes();
-    }
+    // Session has failed to establish but for a reason that is not the fault
+    // of the network.
+    _icscf->_session_establishment_tbl->increment_attempts();
+    _icscf->_session_establishment_tbl->increment_failures();
+    _icscf->_session_establishment_network_tbl->increment_attempts();
+    _icscf->_session_establishment_network_tbl->increment_successes();
+
+    // Set _session_set_up to true so that we don't count this session again
+    // when we receive the subsequent final response.
+    _session_set_up = true;
   }
 
   if ((status_code == PJSIP_SC_REQUEST_TERMINATED) &&

@@ -1641,15 +1641,28 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSServerName)
   string rr = get_headers(tdata->msg, "Record-Route");
   ASSERT_EQ("", rr);
 
-  // Send a 200 OK response.
-  inject_msg(respond_to_current_txdata(200));
+  pjsip_tx_data* txdata = pop_txdata();
+
+  // Send a 180 OK response.
+  inject_msg(respond_to_txdata(txdata, 180));
 
   // Check the response is forwarded back to the source.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   tp->expect_target(tdata);
-  RespMatcher r2(200);
+  RespMatcher r2(180);
   r2.matches(tdata->msg);
+  free_txdata();
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_txdata(txdata, 200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher r3(200);
+  r3.matches(tdata->msg);
   free_txdata();
 
   TestSessionEstablishmentStats(0, 0, 0, 0);
@@ -2130,15 +2143,33 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteHSSServerName)
   string rr = get_headers(tdata->msg, "Record-Route");
   ASSERT_EQ("", rr);
 
-  // Send a 200 OK response.
-  inject_msg(respond_to_current_txdata(200));
+
+
+  pjsip_tx_data* txdata = pop_txdata();
+
+  // Send a 180 OK response.
+  inject_msg(respond_to_txdata(txdata, 180));
 
   // Check the response is forwarded back to the source.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   tp->expect_target(tdata);
-  RespMatcher r2(200);
+  RespMatcher r2(180);
   r2.matches(tdata->msg);
+  free_txdata();
+
+  // Check that session establishment stats were correctly updated on the 180.
+  TestSessionEstablishmentStats(1, 0, 1, 0);
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_txdata(txdata, 200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher r3(200);
+  r3.matches(tdata->msg);
   free_txdata();
 
   TestSessionEstablishmentStats(1, 0, 1, 0);
@@ -2146,6 +2177,119 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteHSSServerName)
   _hss_connection->delete_result("/impu/sip%3A6505551234%40homedomain/location");
 
   delete tp;
+}
+
+TEST_F(ICSCFSproutletTest, RouteTermInviteCancel)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        ICSCF_PORT,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS response for the terminating location query.
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+
+  // Inject a terminating INVITE request with a P-Served-User header.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
+  msg1._route = "Route: <sip:homedomain>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // INVITE request should be forwarded to the server named in the HSS
+  // response, scscf1.homedomain.
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.1", 5058, tdata);
+  ReqMatcher r1("INVITE");
+  r1.matches(tdata->msg);
+
+  // Check that a Route header has been added routing the INVITE to the
+  // selected S-CSCF.  This must include the orig parameter.
+  string route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("Route: <sip:scscf1.homedomain:5058;transport=TCP;lr>", route);
+
+  // Check that no Record-Route headers have been added.
+  string rr = get_headers(tdata->msg, "Record-Route");
+  ASSERT_EQ("", rr);
+
+  // Store the INVITE to build a later response.
+  pjsip_tx_data* invite_tdata = pop_txdata();
+
+  // Build and send a CANCEL chasing the INVITE.
+  Message msg2;
+  msg2._method = "CANCEL";
+  msg2._via = tp->to_string(false);
+  msg2._unique = msg1._unique;    // Make sure branch and call-id are same as the INVITE
+  inject_msg(msg2.get_request(), tp);
+
+  // Expect the 200 OK response to the CANCEL, but no forwarded CANCEL as
+  // no provisional response has yet been received.
+  ASSERT_EQ(1, txdata_count());
+
+  // Check the 200 OK.
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(200).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+  ASSERT_EQ(0, txdata_count());
+
+  // Send a 100 Trying response to the INVITE, triggering the onward CANCEL.
+  inject_msg(respond_to_txdata(invite_tdata, 100));
+
+  // Check the CANCEL is forwarded.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.1", 5058, tdata);
+  ReqMatcher r2("CANCEL");
+  r2.matches(tdata->msg);
+
+  // Send a 200 OK response to the CANCEL.  This is swallowed by the proxy.
+  inject_msg(respond_to_current_txdata(200));
+  ASSERT_EQ(0, txdata_count());
+
+  // Now send a 487 response to the INVITE.
+  inject_msg(respond_to_txdata(invite_tdata, 487));
+
+  // Catch the ACK to the 487 response
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.1", 5058, tdata);
+  ReqMatcher r3("ACK");
+  r3.matches(tdata->msg);
+  free_txdata();
+
+  // Check the 487 response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(487).matches(tdata->msg);
+  free_txdata();
+
+  TestSessionEstablishmentStats(0, 1, 1, 0);
+
+  _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true");
+
+  delete tp;
+
 }
 
 

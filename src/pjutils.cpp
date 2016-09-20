@@ -2195,7 +2195,6 @@ static std::string query_enum(pjsip_msg* req,
     SAS::Event event(trail, SASEvent::ENUM_NOT_ENABLED, 0);
     SAS::report_event(event);
   }
-
   return new_uri;
 }
 

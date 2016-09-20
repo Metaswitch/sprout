@@ -711,10 +711,10 @@ void SCSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
 
   // If this is a transaction where we are supposed to be tracking session
   // setup stats then check to see if it is now set up.  We consider it to be
-  // setup when we receive either a 180 Ringing or 200 OK.
-  int st_code = rsp->line.status.code;
+  // setup when we receive either a 180 Ringing or 2xx (per TS 32.409).
+  pjsip_status_code st_code = (pjsip_status_code)rsp->line.status.code;
   if (_record_session_setup_time &&
-      (st_code == PJSIP_SC_RINGING || st_code == PJSIP_SC_OK))
+      (st_code == PJSIP_SC_RINGING || PJSIP_IS_STATUS_IN_CLASS(st_code, 200)))
   {
     _scscf->track_session_setup_time(_tsx_start_time, _video_call);
     _record_session_setup_time = false;
