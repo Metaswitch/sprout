@@ -1362,6 +1362,62 @@ TEST_F(AuthenticationTest, AKAAuthSuccess)
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
 }
 
+
+TEST_F(AuthenticationTest, AKAv2AuthSuccess)
+{
+  // Test a successful AKA authentication flow.
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  // The keys in this test case are not consistent, but that won't matter for
+  // the purposes of the test as Clearwater never itself runs the MILENAGE
+  // algorithms to generate or extract keys.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
+                              "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
+                              "\"response\":\"2f46a9d4aa4fae35\","
+                              "\"cryptkey\":\"f36f63b242d502ba520f9504bed2366b\","
+                              "\"integritykey\":\"42a43ceb1964f201564469fc2a27c305\"}}");
+
+  // Send in a REGISTER request with an authentication header with
+  // integrity-protected=no.  This triggers aka authentication.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._integ_prot = "no";
+  inject_msg(msg1.get());
+
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
+  std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  parse_www_authenticate(auth, auth_params);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("AKAv2-MD5", auth_params["algorithm"]);
+  free_txdata();
+
+  // Send a new REGISTER request with an authentication header including the
+  // response.
+  AuthenticationMessage msg2("REGISTER");
+  msg2._algorithm = "AKAv2-MD5";
+  msg2._response = "d1cae23f19f19ec19357749c4e16e811";
+  msg2._nonce = auth_params["nonce"];
+  msg2._opaque = auth_params["opaque"];
+  msg2._nc = "00000001";
+  msg2._cnonce = "897a977118d3092e88d574e833f7e3a3";
+  msg2._qop = "auth";
+  msg2._integ_prot = "yes";
+  inject_msg(msg2.get());
+
+  // Expect no response, as the authentication module has let the request through.
+  ASSERT_EQ(0, txdata_count());
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes);
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
+}
+
 TEST_F(AuthenticationTest, NoAlgorithmAKAAuthSuccess)
 {
   // Test a successful AKA authentication flow.
