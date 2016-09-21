@@ -64,20 +64,6 @@ extern "C" {
 #include "json_parse_utils.h"
 #include <openssl/hmac.h>
 
-std::string hex(const uint8_t* data, size_t len)
-{
-  static const char* const hex_lookup = "0123456789abcdef";
-  std::string result;
-  result.reserve(2 * len);
-  for (size_t ii = 0; ii < len; ++ii)
-  {
-    const uint8_t b = data[ii];
-    result.push_back(hex_lookup[b >> 4]);
-    result.push_back(hex_lookup[b & 0x0f]);
-  }
-  return result;
-}
-
 std::string unhex(std::string hexstr)
 {
   std::string ret = "";
@@ -518,7 +504,7 @@ void create_challenge(pjsip_digest_credential* credentials,
 
         // We hex-decode this when getting it out of memcached later (for
         // consistency with AKAv1) so hex-encode it now.
-        response = hex((uint8_t*)password.data(), password.size());
+        response = Utils::hex((uint8_t*)password.data(), password.size());
       }
       else
       {
