@@ -77,6 +77,7 @@ const pj_str_t STR_P_CALLED_PARTY_ID = pj_str((char*)"P-Called-Party-ID");
 const pj_str_t STR_DIGEST = pj_str((char*)"Digest");
 const pj_str_t STR_MD5 = pj_str((char*)"MD5");
 const pj_str_t STR_AKAV1_MD5 = pj_str((char*)"AKAv1-MD5");
+const pj_str_t STR_AKAV2_MD5 = pj_str((char*)"AKAv2-MD5");
 const pj_str_t STR_AUTH = pj_str((char*)"auth");
 const pj_str_t STR_AUTS = pj_str((char*)"auts");
 const pj_str_t STR_CK = pj_str((char*)"ck");
