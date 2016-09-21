@@ -432,6 +432,7 @@ ICSCFSproutletTsx::ICSCFSproutletTsx(SproutletTsxHelper* helper,
   _icscf(icscf),
   _acr(NULL),
   _router(NULL),
+  _originating(false),
   _routed_to_bgcf(false),
   _req_type(req_type),
   _session_set_up(false)
