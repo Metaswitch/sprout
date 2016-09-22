@@ -83,12 +83,18 @@ ICSCFSproutlet::ICSCFSproutlet(const std::string& icscf_name,
   _override_npdi(override_npdi),
   _bgcf_uri_str(bgcf_uri)
 {
+  _session_establishment_tbl = SNMP::SuccessFailCountTable::create("icscf_session_establishment",
+                                                                   "1.2.826.0.1.1578918.9.3.36");
+  _session_establishment_network_tbl = SNMP::SuccessFailCountTable::create("icscf_session_establishment_network",
+                                                                           "1.2.826.0.1.1578918.9.3.37");
 }
 
 
 /// Destructor.
 ICSCFSproutlet::~ICSCFSproutlet()
 {
+  delete _session_establishment_tbl;
+  delete _session_establishment_network_tbl;
 }
 
 bool ICSCFSproutlet::init()
@@ -121,7 +127,9 @@ SproutletTsx* ICSCFSproutlet::get_tsx(SproutletTsxHelper* helper,
   }
   else
   {
-    return (SproutletTsx*)new ICSCFSproutletTsx(helper, this);
+    return (SproutletTsx*)new ICSCFSproutletTsx(helper,
+                                                this,
+                                                req->line.req.method.id);
   }
 }
 
@@ -418,12 +426,16 @@ void ICSCFSproutletRegTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
 
 /// Individual Tsx constructor for non-REGISTER requests.
 ICSCFSproutletTsx::ICSCFSproutletTsx(SproutletTsxHelper* helper,
-                                     ICSCFSproutlet* icscf) :
+                                     ICSCFSproutlet* icscf,
+                                     pjsip_method_e req_type) :
   SproutletTsx(helper),
   _icscf(icscf),
   _acr(NULL),
   _router(NULL),
-  _routed_to_bgcf(false)
+  _originating(false),
+  _routed_to_bgcf(false),
+  _req_type(req_type),
+  _session_set_up(false)
 {
 }
 
@@ -795,11 +807,75 @@ void ICSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
     // information.
     _acr->tx_response(rsp);
   }
+
+  pjsip_status_code rsp_status = (pjsip_status_code)rsp->line.status.code;
+
+  // Check if this is a terminating INVITE.  If it is then check whether we need
+  // to update our session establishment stats.  We consider the session to be
+  // set up as soon as we receive a final response OR a 180 Ringing (per TS
+  // 32.409).
+  if (!_originating &&
+      (_req_type == PJSIP_INVITE_METHOD) &&
+      !_session_set_up &&
+      ((rsp_status == PJSIP_SC_RINGING) ||
+       !PJSIP_IS_STATUS_IN_CLASS(rsp_status, 100)))
+  {
+    // Session is now set up.
+    _session_set_up = true;
+    _icscf->_session_establishment_tbl->increment_attempts();
+    _icscf->_session_establishment_network_tbl->increment_attempts();
+
+    if ((rsp_status == PJSIP_SC_RINGING) ||
+         PJSIP_IS_STATUS_IN_CLASS(rsp_status, 200))
+    {
+      // Session has been set up successfully.
+      TRC_DEBUG("Session successful");
+      _icscf->_session_establishment_tbl->increment_successes();
+      _icscf->_session_establishment_network_tbl->increment_successes();
+    }
+    else if ((rsp_status == PJSIP_SC_BUSY_HERE) ||
+             (rsp_status == PJSIP_SC_BUSY_EVERYWHERE) ||
+             (rsp_status == PJSIP_SC_NOT_FOUND) ||
+             (rsp_status == PJSIP_SC_ADDRESS_INCOMPLETE))
+    {
+      // Session failed, but should be counted as successful from a network
+      // perspective.
+      TRC_DEBUG("Session failed but network successful");
+      _icscf->_session_establishment_tbl->increment_failures();
+      _icscf->_session_establishment_network_tbl->increment_successes();
+    }
+    else
+    {
+      // Session establishment failed.
+      TRC_DEBUG("Session failed");
+      _icscf->_session_establishment_tbl->increment_failures();
+      _icscf->_session_establishment_network_tbl->increment_failures();
+    }
+  }
+
 }
 
 
 void ICSCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
 {
+  // If this is cancelling a terminating INVITE then check whether we need to
+  // update our session establishment stats.
+  if (!_originating &&
+      (_req_type == PJSIP_INVITE_METHOD) &&
+      (!_session_set_up))
+  {
+    // Session has failed to establish but for a reason that is not the fault
+    // of the network.
+    _icscf->_session_establishment_tbl->increment_attempts();
+    _icscf->_session_establishment_tbl->increment_failures();
+    _icscf->_session_establishment_network_tbl->increment_attempts();
+    _icscf->_session_establishment_network_tbl->increment_successes();
+
+    // Set _session_set_up to true so that we don't count this session again
+    // when we receive the subsequent final response.
+    _session_set_up = true;
+  }
+
   if ((status_code == PJSIP_SC_REQUEST_TERMINATED) &&
       (cancel_req != NULL))
   {

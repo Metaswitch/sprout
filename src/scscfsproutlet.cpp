@@ -99,8 +99,10 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
                                                                  "1.2.826.0.1.1578918.9.3.32");
   _invites_cancelled_after_1xx_tbl = SNMP::CounterTable::create("invites_cancelled_after_1xx",
                                                                 "1.2.826.0.1.1578918.9.3.33");
-  _ringing_time_tbl = SNMP::EventAccumulatorTable::create("scscf_ringing_time",
-                                                          "1.2.826.0.1.1578918.9.3.34");
+  _audio_session_setup_time_tbl = SNMP::EventAccumulatorTable::create("scscf_audio_session_setup_time",
+                                                                      "1.2.826.0.1.1578918.9.3.34");
+  _video_session_setup_time_tbl = SNMP::EventAccumulatorTable::create("scscf_video_session_setup_time",
+                                                                      "1.2.826.0.1.1578918.9.3.35");
 
 }
 
@@ -112,7 +114,8 @@ SCSCFSproutlet::~SCSCFSproutlet()
   delete _routed_by_preloaded_route_tbl;
   delete _invites_cancelled_before_1xx_tbl;
   delete _invites_cancelled_after_1xx_tbl;
-  delete _ringing_time_tbl;
+  delete _audio_session_setup_time_tbl;
+  delete _video_session_setup_time_tbl;
 }
 
 bool SCSCFSproutlet::init()
@@ -356,9 +359,22 @@ void SCSCFSproutlet::track_app_serv_comm_success(const std::string& uri,
   }
 }
 
-void SCSCFSproutlet::track_ringing_time(uint64_t ringing_us)
+void SCSCFSproutlet::track_session_setup_time(uint64_t tsx_start_time_usec,
+                                              bool video_call)
 {
-  _ringing_time_tbl->accumulate(ringing_us);
+  // Calculate how long it has taken to setup the session.
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC_COARSE, &ts);
+  uint64_t ringing_usec = ((uint64_t)ts.tv_sec * 1000000) + (ts.tv_nsec / 1000) - tsx_start_time_usec;
+
+  if (video_call)
+  {
+    _video_session_setup_time_tbl->accumulate(ringing_usec);
+  }
+  else
+  {
+    _audio_session_setup_time_tbl->accumulate(ringing_usec);
+  }
 }
 
 SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
@@ -381,7 +397,9 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
   _record_routed(false),
   _req_type(req_type),
   _seen_1xx(false),
-  _tsx_start_time(0),
+  _record_session_setup_time(false),
+  _tsx_start_time_usec(0),
+  _video_call(false),
   _impi(),
   _auto_reg(false),
   _se_helper(stack_data.default_session_expires)
@@ -431,11 +449,6 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   TRC_INFO("S-CSCF received initial request");
 
   pjsip_status_code status_code = PJSIP_SC_OK;
-
-  // Store off the time we received this request, for statistics purposes.
-  struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC_COARSE, &ts);
-  _tsx_start_time = ((uint64_t)ts.tv_sec * 1000000) + (ts.tv_nsec / 1000);
 
   // Work out if we should be auto-registering the user based on this
   // request and if we are, also work out the IMPI to register them with.
@@ -679,20 +692,6 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
   if (rsp != NULL)
   {
-    // If this is a 180 Ringing response being sent to a caller (not to an app
-    // server or originating S-CSCF), calculate the time it's taken to get to
-    // the ringing point and update our statistics.
-    if (_session_case->is_originating() &&
-        _as_chain_link.complete() &&
-        _req_type == PJSIP_INVITE_METHOD &&
-        st_code == PJSIP_SC_RINGING)
-    {
-      struct timespec ts;
-      clock_gettime(CLOCK_MONOTONIC_COARSE, &ts);
-      uint64_t ringing_us = ((uint64_t)ts.tv_sec * 1000000) + (ts.tv_nsec / 1000) - _tsx_start_time;
-      _scscf->track_ringing_time(ringing_us);
-    }
-
     // Forward the response upstream.  The proxy layer will aggregate responses
     // if required.
     send_response(rsp);
@@ -708,6 +707,18 @@ void SCSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
     // Pass the transmitted response to the ACR to update the accounting
     // information.
     acr->tx_response(rsp);
+  }
+
+  // If this is a transaction where we are supposed to be tracking session
+  // setup stats then check to see if it is now set up.  We consider it to be
+  // setup when we receive either a 180 Ringing or 2xx (per TS 32.409).
+  pjsip_status_code st_code = (pjsip_status_code)rsp->line.status.code;
+  if (_record_session_setup_time &&
+      ((st_code == PJSIP_SC_RINGING) ||
+       PJSIP_IS_STATUS_IN_CLASS(st_code, 200)))
+  {
+    _scscf->track_session_setup_time(_tsx_start_time_usec, _video_call);
+    _record_session_setup_time = false;
   }
 }
 
@@ -1015,6 +1026,27 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
           TRC_DEBUG("Single Record-Route - initiation of originating handling");
           add_to_dialog(req, true, ACR::NODE_ROLE_ORIGINATING);
           acr->override_session_id(PJUtils::pj_str_to_string(&PJSIP_MSG_CID_HDR(req)->id));
+        }
+
+        // This is an initial originating request -- not a request coming back
+        // from an AS.  If it's an INVITE and is actually originating (rather
+        // than than an originating call that has been diverted) we need to
+        // track the session setup time for our stats.
+        if ((_req_type == PJSIP_INVITE_METHOD) && (_session_case == &SessionCase::Originating))
+        {
+          _record_session_setup_time = true;
+
+          // Store off the time we received this request.
+          struct timespec ts;
+          clock_gettime(CLOCK_MONOTONIC_COARSE, &ts);
+          _tsx_start_time_usec = ((uint64_t)ts.tv_sec * 1000000) + (ts.tv_nsec / 1000);
+
+          // Check whether this is a video call.
+          std::set<pjmedia_type> media_types = PJUtils::get_media_types(req);
+          if (media_types.find(PJMEDIA_TYPE_VIDEO) != media_types.end())
+          {
+            _video_call = true;
+          }
         }
       }
 

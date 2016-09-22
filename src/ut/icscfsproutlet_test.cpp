@@ -48,6 +48,7 @@
 #include "fakehssconnection.hpp"
 #include "test_interposer.hpp"
 #include "sproutletproxy.h"
+#include "fakesnmp.hpp"
 
 using namespace std;
 using testing::StrEq;
@@ -337,7 +338,7 @@ public:
 
 protected:
   // Common test setup for the RouteTermInviteLocalUserPhone tests
-  TransportFlow *RouteTermInviteLocalUserPhoneSetup()
+  TransportFlow *route_term_invite_local_user_phone_setup()
   {
     // Create a TCP connection to the I-CSCF listening port.
     TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
@@ -367,6 +368,18 @@ protected:
     return tp;
   }
 
+  void test_session_establishment_stats(int successes, int failures, int network_successes, int network_failures)
+  {
+    SNMP::FakeSuccessFailCountTable* session_table = ((SNMP::FakeSuccessFailCountTable*)_icscf_sproutlet->_session_establishment_tbl);
+    SNMP::FakeSuccessFailCountTable* session_network_table = ((SNMP::FakeSuccessFailCountTable*)_icscf_sproutlet->_session_establishment_network_tbl);
+
+    EXPECT_EQ(successes + failures, session_table->_attempts);
+    EXPECT_EQ(successes, session_table->_successes);
+    EXPECT_EQ(failures, session_table->_failures);
+    EXPECT_EQ(network_successes + network_failures, session_network_table->_attempts);
+    EXPECT_EQ(network_successes, session_network_table->_successes);
+    EXPECT_EQ(network_failures, session_network_table->_failures);
+  }
 };
 
 
@@ -1628,17 +1641,31 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSServerName)
   string rr = get_headers(tdata->msg, "Record-Route");
   ASSERT_EQ("", rr);
 
-  // Send a 200 OK response.
-  inject_msg(respond_to_current_txdata(200));
+  pjsip_tx_data* txdata = pop_txdata();
+
+  // Send a 180 OK response.
+  inject_msg(respond_to_txdata(txdata, 180));
 
   // Check the response is forwarded back to the source.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   tp->expect_target(tdata);
-  RespMatcher r2(200);
+  RespMatcher r2(180);
   r2.matches(tdata->msg);
-
   free_txdata();
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_txdata(txdata, 200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher r3(200);
+  r3.matches(tdata->msg);
+  free_txdata();
+
+  test_session_establishment_stats(0, 0, 0, 0);
 
   _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true");
 
@@ -1708,8 +1735,9 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSCaps)
   tp->expect_target(tdata);
   RespMatcher r2(200);
   r2.matches(tdata->msg);
-
   free_txdata();
+
+  test_session_establishment_stats(0, 0, 0, 0);
 
   _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true");
 
@@ -1760,8 +1788,9 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSCapsNoMatch)
   tp->expect_target(tdata);
   RespMatcher r1(600);
   r1.matches(tdata->msg);
-
   free_txdata();
+
+  test_session_establishment_stats(0, 0, 0, 0);
 
   _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true");
 
@@ -1856,8 +1885,9 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSRetry)
   tp->expect_target(tdata);
   RespMatcher r4(200);
   r4.matches(tdata->msg);
-
   free_txdata();
+
+  test_session_establishment_stats(0, 0, 0, 0);
 
   _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true");
   _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true&auth-type=CAPAB");
@@ -1936,6 +1966,8 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSFail)
   RespMatcher(404).matches(tdata->msg);
   tp->expect_target(tdata);
   free_txdata();
+
+  test_session_establishment_stats(0, 0, 0, 0);
 
   _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true");
 
@@ -2052,6 +2084,8 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteCancel)
   RespMatcher(487).matches(tdata->msg);
   free_txdata();
 
+  test_session_establishment_stats(0, 0, 0, 0);
+
   _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true");
 
   delete tp;
@@ -2073,8 +2107,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteHSSServerName)
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
 
-  // Inject a INVITE request with orig in the Route header and a P-Served-User
-  // header.
+  // Inject a terminating INVITE request with a P-Served-User header.
   Message msg1;
   msg1._method = "INVITE";
   msg1._via = tp->to_string(false);
@@ -2110,21 +2143,151 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteHSSServerName)
   string rr = get_headers(tdata->msg, "Record-Route");
   ASSERT_EQ("", rr);
 
-  // Send a 200 OK response.
-  inject_msg(respond_to_current_txdata(200));
+  pjsip_tx_data* txdata = pop_txdata();
+
+  // Send a 180 OK response.
+  inject_msg(respond_to_txdata(txdata, 180));
 
   // Check the response is forwarded back to the source.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   tp->expect_target(tdata);
-  RespMatcher r2(200);
+  RespMatcher r2(180);
   r2.matches(tdata->msg);
-
   free_txdata();
+
+  // Check that session establishment stats were correctly updated on the 180.
+  test_session_establishment_stats(1, 0, 1, 0);
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_txdata(txdata, 200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher r3(200);
+  r3.matches(tdata->msg);
+  free_txdata();
+
+  test_session_establishment_stats(1, 0, 1, 0);
 
   _hss_connection->delete_result("/impu/sip%3A6505551234%40homedomain/location");
 
   delete tp;
+}
+
+TEST_F(ICSCFSproutletTest, RouteTermInviteCancel)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        ICSCF_PORT,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS response for the terminating location query.
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+
+  // Inject a terminating INVITE request with a P-Served-User header.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
+  msg1._route = "Route: <sip:homedomain>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // INVITE request should be forwarded to the server named in the HSS
+  // response, scscf1.homedomain.
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.1", 5058, tdata);
+  ReqMatcher r1("INVITE");
+  r1.matches(tdata->msg);
+
+  // Check that a Route header has been added routing the INVITE to the
+  // selected S-CSCF.  This must include the orig parameter.
+  string route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("Route: <sip:scscf1.homedomain:5058;transport=TCP;lr>", route);
+
+  // Check that no Record-Route headers have been added.
+  string rr = get_headers(tdata->msg, "Record-Route");
+  ASSERT_EQ("", rr);
+
+  // Store the INVITE to build a later response.
+  pjsip_tx_data* invite_tdata = pop_txdata();
+
+  // Build and send a CANCEL chasing the INVITE.
+  Message msg2;
+  msg2._method = "CANCEL";
+  msg2._via = tp->to_string(false);
+  msg2._unique = msg1._unique;    // Make sure branch and call-id are same as the INVITE
+  inject_msg(msg2.get_request(), tp);
+
+  // Expect the 200 OK response to the CANCEL, but no forwarded CANCEL as
+  // no provisional response has yet been received.
+  ASSERT_EQ(1, txdata_count());
+
+  // Check the 200 OK.
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(200).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+  ASSERT_EQ(0, txdata_count());
+
+  // Send a 100 Trying response to the INVITE, triggering the onward CANCEL.
+  inject_msg(respond_to_txdata(invite_tdata, 100));
+
+  // Check the CANCEL is forwarded.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.1", 5058, tdata);
+  ReqMatcher r2("CANCEL");
+  r2.matches(tdata->msg);
+
+  // Send a 200 OK response to the CANCEL.  This is swallowed by the proxy.
+  inject_msg(respond_to_current_txdata(200));
+  ASSERT_EQ(0, txdata_count());
+
+  // Now send a 487 response to the INVITE.
+  inject_msg(respond_to_txdata(invite_tdata, 487));
+
+  // Catch the ACK to the 487 response
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.1", 5058, tdata);
+  ReqMatcher r3("ACK");
+  r3.matches(tdata->msg);
+  free_txdata();
+
+  // Check the 487 response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(487).matches(tdata->msg);
+  free_txdata();
+
+  test_session_establishment_stats(0, 1, 1, 0);
+
+  _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true");
+
+  delete tp;
+
 }
 
 
@@ -2190,8 +2353,9 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteHSSCaps)
   tp->expect_target(tdata);
   RespMatcher r2(200);
   r2.matches(tdata->msg);
-
   free_txdata();
+
+  test_session_establishment_stats(1, 0, 1, 0);
 
   _hss_connection->delete_result("/impu/sip%3A6505551234%40homedomain/location");
 
@@ -2234,6 +2398,8 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteNoUnregisteredServices)
   RespMatcher(480).matches(tdata->msg);
   tp->expect_target(tdata);
   free_txdata();
+
+  test_session_establishment_stats(0, 1, 0, 1);
 
   _hss_connection->delete_result("/impu/sip%3A6505551234%40homedomain/location");
 
@@ -2353,8 +2519,9 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteHSSRetry)
   tp->expect_target(tdata);
   RespMatcher r6(200);
   r6.matches(tdata->msg);
-
   free_txdata();
+
+  test_session_establishment_stats(1, 0, 1, 0);
 
   _hss_connection->delete_result("/impu/sip%3A6505551234%40homedomain/location");
   _hss_connection->delete_result("/impu/sip%3A6505551234%40homedomain/location?auth-type=CAPAB");
@@ -2426,8 +2593,9 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteTelURI)
   tp->expect_target(tdata);
   RespMatcher r2(200);
   r2.matches(tdata->msg);
-
   free_txdata();
+
+  test_session_establishment_stats(1, 0, 1, 0);
 
   _hss_connection->delete_result("/impu/sip%3A6505551234%40homedomain/location");
 
@@ -2498,8 +2666,9 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnum)
   tp->expect_target(tdata);
   RespMatcher r2(200);
   r2.matches(tdata->msg);
-
   free_txdata();
+
+  test_session_establishment_stats(1, 0, 1, 0);
 
   _hss_connection->delete_result("/impu/sip%3A6505551234%40homedomain/location");
 
@@ -2564,8 +2733,10 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnumBgcf)
   tp->expect_target(tdata);
   RespMatcher r2(200);
   r2.matches(tdata->msg);
-
   free_txdata();
+
+  test_session_establishment_stats(1, 0, 1, 0);
+
   delete tp;
 }
 
@@ -2615,8 +2786,10 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnumNP)
   tp->expect_target(tdata);
   RespMatcher r2(200);
   r2.matches(tdata->msg);
-
   free_txdata();
+
+  test_session_establishment_stats(1, 0, 1, 0);
+
   delete tp;
 }
 
@@ -2668,8 +2841,10 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnumExistingNP)
   tp->expect_target(tdata);
   RespMatcher r2(200);
   r2.matches(tdata->msg);
-
   free_txdata();
+
+  test_session_establishment_stats(1, 0, 1, 0);
+
   delete tp;
 }
 
@@ -2680,7 +2855,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteTransitFunction)
 {
   // Disable ENUM.
   _icscf_sproutlet->_enum_service = NULL;
- 
+
   pjsip_tx_data* tdata;
 
   // Create a TCP connection to the I-CSCF listening port.
@@ -2722,8 +2897,10 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteTransitFunction)
   tp->expect_target(tdata);
   RespMatcher r2(200);
   r2.matches(tdata->msg);
-
   free_txdata();
+
+  test_session_establishment_stats(1, 0, 1, 0);
+
   delete tp;
 }
 
@@ -2791,8 +2968,9 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteUserPhone)
   tp->expect_target(tdata);
   RespMatcher r2(200);
   r2.matches(tdata->msg);
-
   free_txdata();
+
+  test_session_establishment_stats(1, 0, 1, 0);
 
   _hss_connection->delete_result("/impu/sip%3A6505551234%40homedomain/location");
 
@@ -2811,7 +2989,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteLocalUserPhoneFailure)
   URIClassifier::enforce_global = true;
 
   // Setup common config and submit test INVITE
-  TransportFlow* tp = RouteTermInviteLocalUserPhoneSetup();
+  TransportFlow* tp = route_term_invite_local_user_phone_setup();
 
   // Expecting 100 Trying and final 404 responses.  I-CSCF shouldn't perform
   // a TelURI conversion and therefore shouldn't match on the HSS result
@@ -2830,6 +3008,8 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteLocalUserPhoneFailure)
   tp->expect_target(tdata);
   free_txdata();
 
+  test_session_establishment_stats(0, 1, 1, 0);
+
   _hss_connection->delete_result("/impu/tel%3A16505551234/location");
 
   delete tp;
@@ -2846,7 +3026,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteLocalUserPhoneSuccess)
   URIClassifier::enforce_global = false;
 
   // Setup common config and submit test INVITE
-  TransportFlow* tp = RouteTermInviteLocalUserPhoneSetup();
+  TransportFlow* tp = route_term_invite_local_user_phone_setup();
 
   // Expecting 100 Trying and forwarded INVITE
   ASSERT_EQ(2, txdata_count());
@@ -2882,8 +3062,9 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteLocalUserPhoneSuccess)
   tp->expect_target(tdata);
   RespMatcher r2(200);
   r2.matches(tdata->msg);
-
   free_txdata();
+
+  test_session_establishment_stats(1, 0, 1, 0);
 
   _hss_connection->delete_result("/impu/tel%3A16505551234/location");
 
@@ -2953,8 +3134,9 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteNumericSIPURI)
   tp->expect_target(tdata);
   RespMatcher r2(200);
   r2.matches(tdata->msg);
-
   free_txdata();
+
+  test_session_establishment_stats(1, 0, 1, 0);
 
   _hss_connection->delete_result("/impu/sip%3A6505551234%40homedomain/location");
 
@@ -3076,6 +3258,11 @@ TEST_F(ICSCFSproutletTest, RequestErrors)
   msg2._method = "ACK";
   inject_msg(msg2.get_request(), tp);
 
+  // This request won't even reach the I-CSCF sproutlet and so won't get
+  // counted in our stats.   This probably isn't ideal but we think it is
+  // acceptable to live with.
+  test_session_establishment_stats(0, 0, 0, 0);
+
   delete tp;
 }
 
@@ -3119,6 +3306,8 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteBadServerName)
   tp->expect_target(tdata);
   free_txdata();
 
+  test_session_establishment_stats(0, 0, 0, 0);
+
   // Now try again, but configure a tel URI.  This should fail in the same way
   // as it's not routable.
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
@@ -3143,6 +3332,8 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteBadServerName)
   tp->expect_target(tdata);
   free_txdata();
 
+  test_session_establishment_stats(0, 0, 0, 0);
+
   // Finally use a SIPS uri.
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
                               "{\"result-code\": 2001,"
@@ -3164,6 +3355,8 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteBadServerName)
   RespMatcher(480).matches(tdata->msg);
   tp->expect_target(tdata);
   free_txdata();
+
+  test_session_establishment_stats(0, 0, 0, 0);
 
   _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true");
 
@@ -3216,8 +3409,9 @@ TEST_F(ICSCFSproutletTest, INVITEWithTwoRouteHeaders)
   tp->expect_target(tdata);
   RespMatcher r2(200);
   r2.matches(tdata->msg);
-
   free_txdata();
+
+  test_session_establishment_stats(1, 0, 1, 0);
 
   delete tp;
 }
@@ -3231,7 +3425,6 @@ TEST_F(ICSCFSproutletTest, RouteOutOfDialogAck)
                                         "1.2.3.4",
                                         49152);
 
- 
   // Inject an ACK request to a local URI
   Message msg1;
   msg1._method = "ACK";
@@ -3240,10 +3433,10 @@ TEST_F(ICSCFSproutletTest, RouteOutOfDialogAck)
 
   // Expect it to just be dropped
   ASSERT_EQ(0, txdata_count());
-  free_txdata(); 
+  free_txdata();
 
   // Allow the transaction to time out so we don't leak PJSIP memory.
   cwtest_advance_time_ms(33000L);
   poll();
-  delete tp;   
+  delete tp;
 }
