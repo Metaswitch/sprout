@@ -266,6 +266,11 @@ get_daemon_args()
           DAEMON_ARGS="$DAEMON_ARGS --call-list-ttl=$call_list_ttl"
         fi
 
+        if [ -n "$memento" ] && [ -n "$cassandra_hostname" ]
+        then
+          DAEMON_ARGS="$DAEMON_ARGS --plugin-option=memento,cassandra,$cassandra_hostname"
+        fi
+
         # TODO improve this so we don't have to have the same parameters
         # repeated for each Sproutlet
         [ "$icscf" = "" ]                         || DAEMON_ARGS="$DAEMON_ARGS --icscf=$icscf"

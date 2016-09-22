@@ -86,6 +86,7 @@ MementoPlugin::~MementoPlugin()
 bool MementoPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
   bool plugin_loaded = true;
+  std::string cassandra = "localhost";
 
   if (opt.enabled_memento)
   {
@@ -125,8 +126,15 @@ bool MementoPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                              30,
                                              9160);
 
+      // If the memento cassandra hostname option is set, use that instead of "localhost".
+      if ((opt.plugin_options.count("memento")) &&
+          (opt.plugin_options.find("memento")->second.count("cassandra")))
+      {
+        cassandra = opt.plugin_options.find("memento")->second.find("cassandra")->second;
+      }
+
       _call_list_store = new CallListStore::Store();
-      _call_list_store->configure_connection("localhost", 9160, _cass_comm_monitor, _cass_resolver);
+      _call_list_store->configure_connection(cassandra, 9160, _cass_comm_monitor, _cass_resolver);
 
       _memento = new MementoAppServer(opt.prefix_memento,
                                       _call_list_store,
