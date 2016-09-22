@@ -131,7 +131,7 @@ Description: Debugging symbols for gemini, the Mobile Twinning Application Serve
 
 Package: memento-as
 Architecture: any
-Depends: sprout-base, clearwater-cassandra
+Depends: sprout-base
 Suggests: memento-as-dbg
 Description: memento-as, the Call List Application Server plug-in
 
