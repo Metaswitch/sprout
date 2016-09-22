@@ -107,8 +107,7 @@ bool MementoPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                                     "Memcached");
 
       // If the memento cassandra hostname option is set, use that instead of "localhost".
-      if ((opt.plugin_options.count("memento")) &&
-          (opt.plugin_options.find("memento")->second.count("cassandra")))
+      if (opt.plugin_options["memento"].count("cassandra"))
       {
         cassandra = opt.plugin_options.find("memento")->second.find("cassandra")->second;
       }
