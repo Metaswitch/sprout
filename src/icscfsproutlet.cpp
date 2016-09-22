@@ -811,8 +811,9 @@ void ICSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
   pjsip_status_code rsp_status = (pjsip_status_code)rsp->line.status.code;
 
   // Check if this is a terminating INVITE.  If it is then check whether we need
-  // to update our session establishment stats.  We consider the session set up
-  // as soon as we receive a final response OR a 180 Ringing (per TS 32.409).
+  // to update our session establishment stats.  We consider the session to be
+  // set up as soon as we receive a final response OR a 180 Ringing (per TS
+  // 32.409).
   if (!_originating &&
       (_req_type == PJSIP_INVITE_METHOD) &&
       !_session_set_up &&

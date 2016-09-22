@@ -175,7 +175,7 @@ private:
   /// Record the time an INVITE took to reach ringing state.
   ///
   /// @param ringing_us Time spent until a 180 Ringing, in microseconds.
-  void track_session_setup_time(uint64_t tsx_start_time, bool video_call);
+  void track_session_setup_time(uint64_t tsx_start_time_usec, bool video_call);
 
   /// Translate RequestURI using ENUM service if appropriate.
   void translate_request_uri(pjsip_msg* req, pj_pool_t* pool, SAS::TrailId trail);
@@ -418,9 +418,9 @@ private:
   /// - _seen_1xx:   whether we've seen a 1xx response to this transaction.
   /// - _record_session_setup_time:
   ///                whether we should record session setup time for this
-  ///                transaction.   Set to false if this is a transaction that we
+  ///                transaction.  Set to false if this is a transaction that we
   ///                shouldn't track, or if we have already tracked it.
-  /// - _tsx_start_time:
+  /// - _tsx_start_time_usec:
   ///                the time that the session started -- only valid if
   ///                _record_session_setup_time is true.
   /// - _video_call: whether this is a video call -- only valid if
@@ -428,7 +428,7 @@ private:
   pjsip_method_e _req_type;
   bool _seen_1xx;
   bool _record_session_setup_time;
-  uint64_t _tsx_start_time;
+  uint64_t _tsx_start_time_usec;
   bool _video_call;
 
   static const int MAX_FORKING = 10;

@@ -359,13 +359,13 @@ void SCSCFSproutlet::track_app_serv_comm_success(const std::string& uri,
   }
 }
 
-void SCSCFSproutlet::track_session_setup_time(uint64_t tsx_start_time,
+void SCSCFSproutlet::track_session_setup_time(uint64_t tsx_start_time_usec,
                                               bool video_call)
 {
   // Calculate how long it has taken to setup the session.
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC_COARSE, &ts);
-  uint64_t ringing_usec = ((uint64_t)ts.tv_sec * 1000000) + (ts.tv_nsec / 1000) - tsx_start_time;
+  uint64_t ringing_usec = ((uint64_t)ts.tv_sec * 1000000) + (ts.tv_nsec / 1000) - tsx_start_time_usec;
 
   if (video_call)
   {
@@ -398,7 +398,7 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
   _req_type(req_type),
   _seen_1xx(false),
   _record_session_setup_time(false),
-  _tsx_start_time(0),
+  _tsx_start_time_usec(0),
   _video_call(false),
   _impi(),
   _auto_reg(false),
@@ -714,9 +714,10 @@ void SCSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
   // setup when we receive either a 180 Ringing or 2xx (per TS 32.409).
   pjsip_status_code st_code = (pjsip_status_code)rsp->line.status.code;
   if (_record_session_setup_time &&
-      (st_code == PJSIP_SC_RINGING || PJSIP_IS_STATUS_IN_CLASS(st_code, 200)))
+      ((st_code == PJSIP_SC_RINGING) ||
+       PJSIP_IS_STATUS_IN_CLASS(st_code, 200)))
   {
-    _scscf->track_session_setup_time(_tsx_start_time, _video_call);
+    _scscf->track_session_setup_time(_tsx_start_time_usec, _video_call);
     _record_session_setup_time = false;
   }
 }
@@ -1028,17 +1029,17 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         }
 
         // This is an initial originating request -- not a request coming back
-        // from an AS.   If it's an INVITE and is actually originating (rather
+        // from an AS.  If it's an INVITE and is actually originating (rather
         // than than an originating call that has been diverted) we need to
         // track the session setup time for our stats.
-        if (_req_type == PJSIP_INVITE_METHOD && _session_case == &SessionCase::Originating)
+        if ((_req_type == PJSIP_INVITE_METHOD) && (_session_case == &SessionCase::Originating))
         {
           _record_session_setup_time = true;
 
           // Store off the time we received this request.
           struct timespec ts;
           clock_gettime(CLOCK_MONOTONIC_COARSE, &ts);
-          _tsx_start_time = ((uint64_t)ts.tv_sec * 1000000) + (ts.tv_nsec / 1000);
+          _tsx_start_time_usec = ((uint64_t)ts.tv_sec * 1000000) + (ts.tv_nsec / 1000);
 
           // Check whether this is a video call.
           std::set<pjmedia_type> media_types = PJUtils::get_media_types(req);

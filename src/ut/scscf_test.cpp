@@ -1329,8 +1329,8 @@ TEST_F(SCSCFTest, TestSimpleTelURI)
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*16505551234@ut.cw-ngv.com.*"), hdrs, false);
 
-  //Successful originating call.   We should have tracked a single session
-  //setup time.
+  // Successful originating call.  We should have tracked a single session
+  // setup time.
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 }
@@ -1352,8 +1352,8 @@ TEST_F(SCSCFTest, TestSimpleTelURIVideo)
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*16505551234@ut.cw-ngv.com.*"), hdrs, false);
 
-  //Successful originating call.   We should have tracked a single session
-  //setup time.
+  // Successful originating call.  We should have tracked a single session
+  // setup time.
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 }

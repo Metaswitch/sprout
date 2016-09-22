@@ -2392,7 +2392,7 @@ std::string PJUtils::get_next_routing_header(pjsip_msg* msg)
   }
 }
 
-// Gets the media types specified in the SDP on the message.   Currently only
+// Gets the media types specified in the SDP on the message.  Currently only
 // looks for Audio and Video media types.
 //
 // @returns A set of type pjmedia_type

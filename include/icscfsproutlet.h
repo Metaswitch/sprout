@@ -184,7 +184,7 @@ private:
   bool _routed_to_bgcf;
 
   /// Tracks request type and whether a session has been set up for the purposes
-  /// of reporting session_establishment stats.   Note that the defintion we
+  /// of reporting session_establishment stats.  Note that the defintion we
   /// need of "set up" is slightly unusual here: we consider the session to be
   /// set up as soon as we see either a 180 RINGING or a 2xx response.  This is
   /// as defined in TS 32.409.
