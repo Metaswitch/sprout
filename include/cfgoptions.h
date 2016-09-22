@@ -147,6 +147,7 @@ struct options
   ImpiStore::Mode                      impi_store_mode;
   bool                                 nonce_count_supported;
   std::string                          scscf_node_uri;
+  std::string                          chronos_hostname;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
