@@ -647,14 +647,24 @@ int PJUtils::max_expires(pjsip_msg* msg, int default_expires)
 
   pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
 
-  while (contact != NULL)
+  // If there are no contact headers (as will be the case if this is a "fetch
+  // bindings" query, rather than a real state-changing REGISTER), use the default
+  // expiry value.
+  if (contact == NULL)
   {
-    int expires = (contact->expires != -1) ? contact->expires : default_expires;
-    if (expires > max_expires)
+    max_expires = default_expires;
+  }
+  else
+  {
+    while (contact != NULL)
     {
-      max_expires = expires;
+      int expires = (contact->expires != -1) ? contact->expires : default_expires;
+      if (expires > max_expires)
+      {
+        max_expires = expires;
+      }
+      contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, contact->next);
     }
-    contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, contact->next);
   }
 
   return max_expires;

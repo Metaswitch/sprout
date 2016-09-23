@@ -210,6 +210,71 @@ bool get_private_id(pjsip_rx_data* rdata, std::string& id)
   return success;
 }
 
+/// Get bindings from store. If we can't find the AoR pair in the
+/// primary SDM, we will try and look up the AoR pair in the backup SDM (if supplied)
+SubscriberDataManager::AoRPair* get_bindings(
+                   SubscriberDataManager* primary_sdm,         ///<store to read from
+                   std::string aor,                            ///<address of record to read from
+                   SubscriberDataManager* backup_sdm,          ///<backup store to read from if no entry in store
+                   SAS::TrailId trail)
+{
+  SubscriberDataManager::AoRPair* aor_pair;
+  SubscriberDataManager::AoRPair* backup_aor = NULL;
+
+  // Find the current bindings for the AoR.
+  aor_pair = primary_sdm->get_aor_data(aor, trail);
+  TRC_DEBUG("Retrieved AoR data %p", aor_pair);
+
+  if ((aor_pair == NULL) ||
+      (aor_pair->get_current() == NULL))
+  {
+    // Failed to get data for the AoR because there is no connection
+    // to the store.
+    TRC_ERROR("Failed to get AoR binding for %s from store", aor.c_str());
+  }
+  else
+  {
+    // If we don't have any bindings, try the backup AoR and/or store.
+    // LCOV_EXCL_START - remote store tests temp excluded
+    if (aor_pair->get_current()->bindings().empty())
+    {
+      if ((backup_sdm != NULL) &&
+          (backup_sdm->has_servers()))
+      {
+        backup_aor = backup_sdm->get_aor_data(aor, trail);
+      }
+
+      if ((backup_aor != NULL) &&
+          (backup_aor->get_current() != NULL) &&
+          (!backup_aor->get_current()->bindings().empty()))
+      {
+        for (SubscriberDataManager::AoR::Bindings::const_iterator i = backup_aor->get_current()->bindings().begin();
+             i != backup_aor->get_current()->bindings().end();
+             ++i)
+        {
+          SubscriberDataManager::AoR::Binding* src = i->second;
+          SubscriberDataManager::AoR::Binding* dst = aor_pair->get_current()->get_binding(i->first);
+          *dst = *src;
+        }
+
+        for (SubscriberDataManager::AoR::Subscriptions::const_iterator i = backup_aor->get_current()->subscriptions().begin();
+             i != backup_aor->get_current()->subscriptions().end();
+             ++i)
+        {
+          SubscriberDataManager::AoR::Subscription* src = i->second;
+          SubscriberDataManager::AoR::Subscription* dst = aor_pair->get_current()->get_subscription(i->first);
+          *dst = *src;
+        }
+      }
+
+      delete backup_aor;
+    }
+    // LCOV_EXCL_STOP
+  }
+
+  return aor_pair;
+}
+
 /// Write to the registration store. If we can't find the AoR pair in the
 /// primary SDM, we will either use the backup_aor or we will try and look up
 /// the AoR pair in the backup SDMs. Therefore either the backup_aor should be
@@ -479,6 +544,344 @@ SubscriberDataManager::AoRPair* write_to_store(
   return aor_pair;
 }
 
+// Common routine to add headers to a REGISTER response.
+void build_register_response(SubscriberDataManager::AoRPair* aor_pair,
+                             std::string aor,
+                             std::string public_id,
+                             pjsip_tx_data* tdata,
+                             pjsip_msg *msg,
+                             std::vector<std::string> uris,
+                             std::deque<std::string> ccfs,
+                             std::deque<std::string> ecfs,
+                             int now,
+                             SAS::TrailId trail)
+{
+  // Add contact headers for all active bindings.
+  if (aor_pair != NULL)
+  {
+    for (SubscriberDataManager::AoR::Bindings::const_iterator i =
+            aor_pair->get_current()->bindings().begin();
+         i != aor_pair->get_current()->bindings().end();
+         ++i)
+    {
+      SubscriberDataManager::AoR::Binding* binding = i->second;
+      if (binding->_expires > now)
+      {
+        // The binding hasn't expired.  Parse the Contact URI from the store,
+        // making sure it is formatted as a name-address.
+        pjsip_uri* uri = PJUtils::uri_from_string(binding->_uri, tdata->pool, PJ_TRUE);
+        if (uri != NULL)
+        {
+          // Contact URI is well formed, so include this in the response.
+          pjsip_contact_hdr* contact = pjsip_contact_hdr_create(tdata->pool);
+          contact->star = 0;
+          contact->uri = uri;
+          contact->q1000 = binding->_priority;
+          contact->expires = binding->_expires - now;
+          pj_list_init(&contact->other_param);
+          for (std::map<std::string, std::string>::iterator j = binding->_params.begin();
+               j != binding->_params.end();
+               ++j)
+          {
+            pjsip_param *new_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
+            pj_strdup2(tdata->pool, &new_param->name, j->first.c_str());
+            pj_strdup2(tdata->pool, &new_param->value, j->second.c_str());
+            pj_list_insert_before(&contact->other_param, new_param);
+          }
+
+          // Add a GRUU if the UE supports GRUUs and the contact header contains
+          // a +sip.instance parameter.
+          if (PJUtils::msg_supports_extension(msg, "gruu"))
+          {
+            // The pub-gruu parameter on the Contact header is calculated
+            // from the instance-id, to avoid unnecessary storage in
+            // memcached.
+            std::string gruu = binding->pub_gruu_quoted_string(tdata->pool);
+            if (!gruu.empty())
+            {
+              pjsip_param *new_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
+              pj_strdup2(tdata->pool, &new_param->name, "pub-gruu");
+              pj_strdup2(tdata->pool, &new_param->value, gruu.c_str());
+              pj_list_insert_before(&contact->other_param, new_param);
+            }
+          }
+
+          pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)contact);
+        }
+        else
+        {
+          // Contact URI is malformed.  Log an error, but otherwise don't try and
+          // fix it.
+          // LCOV_EXCL_START hard to hit - needs bad data in the store
+          TRC_WARNING("Badly formed contact URI %s for address of record %s",
+                      binding->_uri.c_str(), aor.c_str());
+
+          SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
+          event.add_var_param(public_id);
+          std::string error_msg = "Badly formed contact URI - " + binding->_uri;
+          event.add_var_param(error_msg);
+          SAS::report_event(event);
+          // LCOV_EXCL_STOP
+        }
+      }
+    }
+  }
+
+  // Deal with path header related fields in the response.
+  pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
+                              pjsip_msg_find_hdr_by_name(msg, &STR_PATH, NULL);
+  if ((path_hdr != NULL) &&
+      (aor_pair != NULL) &&
+      (!aor_pair->get_current()->bindings().empty()))
+  {
+    // We have bindings with path headers so we must require outbound.
+    pjsip_require_hdr* require_hdr = pjsip_require_hdr_create(tdata->pool);
+    require_hdr->count = 1;
+    require_hdr->values[0] = STR_OUTBOUND;
+    pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)require_hdr);
+  }
+
+  // Echo back any Path headers as per RFC 3327, section 5.3.  We take these
+  // from the request as they may not exist in the bindings any more if the
+  // bindings have expired.
+  while (path_hdr)
+  {
+    pjsip_msg_add_hdr(tdata->msg,
+                      (pjsip_hdr*)pjsip_hdr_clone(tdata->pool, path_hdr));
+    path_hdr = (pjsip_routing_hdr*)
+                    pjsip_msg_find_hdr_by_name(msg, &STR_PATH, path_hdr->next);
+  }
+
+  // Add the Service-Route header.  It isn't safe to do this with the
+  // pre-built header from the global pool because the chaining data
+  // structures in the header may get overwritten, but it is safe to do a
+  // shallow clone.
+  pjsip_hdr* clone = (pjsip_hdr*)
+                          pjsip_hdr_shallow_clone(tdata->pool, service_route);
+  pjsip_msg_insert_first_hdr(tdata->msg, clone);
+
+  // Add P-Associated-URI headers for all of the associated URIs.
+  for (std::vector<std::string>::iterator it = uris.begin();
+       it != uris.end();
+       it++)
+  {
+    pjsip_routing_hdr* pau =
+                        identity_hdr_create(tdata->pool, STR_P_ASSOCIATED_URI);
+    pau->name_addr.uri = PJUtils::uri_from_string(*it, tdata->pool);
+    pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)pau);
+  }
+
+  // Add a PCFA header.
+  PJUtils::add_pcfa_header(tdata->msg, tdata->pool, ccfs, ecfs, true);
+
+  return;
+}
+
+// Process a "fetch bindings" REGISTER and send the response.  Don't increment stats for
+// this call as its not a real state-affecting register - just a query.
+void process_fetch_bindings(pjsip_rx_data* rdata, int now, SAS::TrailId trail)
+{
+  int st_code = PJSIP_SC_OK;
+  pj_status_t status;
+
+  // Get the URI from the To header and check it is a SIP or SIPS URI.
+  pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
+
+  if ((!PJSIP_URI_SCHEME_IS_SIP(uri)) && (!PJSIP_URI_SCHEME_IS_TEL(uri)))
+  {
+    // Reject a non-SIP/TEL URI with 404 Not Found (RFC3261 isn't clear
+    // whether 404 is the right status code - it says 404 should be used if
+    // the AoR isn't valid for the domain in the RequestURI).
+    TRC_ERROR("Rejecting register request using invalid URI scheme");
+
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED_INVALIDURISCHEME, 1);
+    SAS::report_event(event);
+
+    PJUtils::respond_stateless(stack_data.endpt,
+                               rdata,
+                               PJSIP_SC_NOT_FOUND,
+                               NULL,
+                               NULL,
+                               NULL);
+    return;
+  }
+
+  // Canonicalize the public ID from the URI in the To header.
+  std::string public_id = PJUtils::public_id_from_uri(uri);
+
+  TRC_DEBUG("Process REGISTER (fetch bindings) for public ID %s", public_id.c_str());
+  pjsip_msg *msg = rdata->msg_info.msg;
+
+  // Add SAS markers to the trail attached to the message so the trail
+  // becomes searchable.
+  TRC_DEBUG("Report SAS start marker - trail (%llx)", trail);
+  SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
+  SAS::report_marker(start_marker);
+
+  SAS::Event event(trail, SASEvent::REGISTER_FETCH_BINDINGS, 0);
+  event.add_var_param(public_id);
+  SAS::report_event(event);
+
+
+  // Query the HSS for the associated URIs.
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifc_map;
+  std::string regstate;
+  std::deque<std::string> ccfs;
+  std::deque<std::string> ecfs;
+  HTTPCode http_code = hss->get_registration_data(public_id,
+                                                  regstate,
+                                                  ifc_map,
+                                                  uris,
+                                                  ccfs,
+                                                  ecfs,
+                                                  trail);
+
+  if (http_code != HTTP_OK)
+  {
+    // We failed to get registration data for this subscriber at the HSS.
+    // This indicates that the HSS is unavailable, the public identity doesn't
+    // exist or the public identity doesn't belong to the private identity.
+
+    // The client shouldn't retry when the subscriber isn't present in the
+    // HSS; reject with a 403 in this case.
+    //
+    // The client should retry on timeout but no other Clearwater nodes should
+    // (as Sprout will already have retried on timeout). Reject with a 504
+    // (503 is used for overload).
+    st_code = PJSIP_SC_SERVER_TIMEOUT;
+
+    if (http_code == HTTP_NOT_FOUND)
+    {
+      st_code = PJSIP_SC_FORBIDDEN;
+    }
+
+    TRC_ERROR("Rejecting register request (fetch bindings) with invalid public/private identity");
+
+    PJUtils::respond_stateless(stack_data.endpt,
+                               rdata,
+                               st_code,
+                               NULL,
+                               NULL,
+                               NULL,
+                               NULL);
+    return;
+  }
+
+  std::string aor;
+  SubscriberDataManager::AoRPair* aor_pair;
+
+  if (regstate == HSSConnection::STATE_REGISTERED)
+  {
+    // Determine the AOR from the first entry in the uris array.
+    aor = uris.front();
+
+    // Get bindings from the local store, falling back to remote if not present
+    aor_pair = get_bindings(sdm, aor, remote_sdm, trail);
+
+    if ((aor_pair != NULL) && (aor_pair->get_current() != NULL))
+    {
+      // Log the bindings.
+      log_bindings(aor, aor_pair->get_current());
+    }
+    else
+    {
+      // Failed to connect to the local store.  Reject the register with a 500
+      // response.
+      // LCOV_EXCL_START - the can't fail to connect to the store we use for UT
+      st_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
+
+      SAS::Event event(trail, SASEvent::REGISTER_FAILED_REGSTORE, 0);
+      event.add_var_param(public_id);
+      SAS::report_event(event);
+
+      // LCOV_EXCL_STOP
+    }
+  }
+  else
+  {
+    // The subscriber is unregistered, so there's no point looking for bindings
+    // and, in any event, the get request above will not have returned the set
+    // of associated URIs that would allow us to find them anyway.  Dummy up
+    // the aor and aor_pair elements that will allow us to build a coherent
+    // response.
+    aor = public_id;
+    aor_pair = NULL;
+  }
+
+  // Build and send the reply.
+  pjsip_tx_data* tdata;
+  status = PJUtils::create_response(stack_data.endpt, rdata, st_code, NULL, &tdata);
+  if (status != PJ_SUCCESS)
+  {
+    // LCOV_EXCL_START - don't know how to get PJSIP to fail to create a response
+    std::string error_msg = "Error building REGISTER " + std::to_string(status) +
+                            " response " + PJUtils::pj_status_to_string(status);
+
+    TRC_ERROR(error_msg.c_str());
+
+    PJUtils::respond_stateless(stack_data.endpt,
+                               rdata,
+                               PJSIP_SC_INTERNAL_SERVER_ERROR,
+                               NULL,
+                               NULL,
+                               NULL,
+                               NULL);
+    delete aor_pair;
+    return;
+    // LCOV_EXCL_STOP
+  }
+
+  if (st_code != PJSIP_SC_OK)
+  {
+    // LCOV_EXCL_START - we only reject REGISTER if something goes wrong, and
+    // we aren't covering any of those paths so we can't hit this either
+    status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
+
+    delete aor_pair;
+    return;
+    // LCOV_EXCL_STOP
+  }
+
+  // Add supported and require headers for RFC5626.
+  pjsip_generic_string_hdr* gen_hdr;
+  gen_hdr = pjsip_generic_string_hdr_create(tdata->pool,
+                                            &STR_SUPPORTED,
+                                            &STR_OUTBOUND);
+  if (gen_hdr == NULL)
+  {
+    // LCOV_EXCL_START - can't see how this could ever happen
+    TRC_ERROR("Failed to add RFC 5626 headers");
+
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED_5636, 0);
+    event.add_var_param(public_id);
+    SAS::report_event(event);
+
+    tdata->msg->line.status.code = PJSIP_SC_INTERNAL_SERVER_ERROR;
+    pjsip_tx_data_invalidate_msg(tdata);
+
+    status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
+
+    delete aor_pair;
+    return;
+    // LCOV_EXCL_STOP
+  }
+  pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)gen_hdr);
+
+  // Add remaining register response headers (contact, path etc)
+  build_register_response(aor_pair, aor, public_id, tdata, msg, uris, ccfs, ecfs, now, trail);
+
+  // Send the response
+  pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
+
+  TRC_DEBUG("Report SAS end marker - trail (%llx)", trail);
+  SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
+  SAS::report_marker(end_marker);
+  delete aor_pair;
+
+  return;
+}
+
 void process_register_request(pjsip_rx_data* rdata)
 {
   pj_status_t status;
@@ -490,6 +893,18 @@ void process_register_request(pjsip_rx_data* rdata)
   int expiry = 0;
   bool is_initial_registration;
 
+  // Does this REGISTER have any Contact headers?  If not, this is a "fetch
+  // bindings" REGISTER (a request for the existing bindings, not an attempt to
+  // REGISTER), so handle in a separate routine.
+  pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
+                pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL);
+
+  if (contact_hdr == NULL)
+  {
+    process_fetch_bindings(rdata, now, trail);
+    return;
+  }
+
   // Loop through headers as early as possible so that we know the expiry time
   // and which registration statistics to update.
   // Loop through each contact header. If every registration is an emergency
@@ -499,8 +914,6 @@ void process_register_request(pjsip_rx_data* rdata)
   bool reject_with_501 = true;
   bool any_emergency_registrations = false;
   bool reject_with_400 = false;
-  pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
-                 pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL);
 
   while (contact_hdr != NULL)
   {
@@ -900,73 +1313,8 @@ void process_register_request(pjsip_rx_data* rdata)
   }
   pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)gen_hdr);
 
-  // Add contact headers for all active bindings.
-  for (SubscriberDataManager::AoR::Bindings::const_iterator i =
-          aor_pair->get_current()->bindings().begin();
-       i != aor_pair->get_current()->bindings().end();
-       ++i)
-  {
-    SubscriberDataManager::AoR::Binding* binding = i->second;
-    if (binding->_expires > now)
-    {
-      // The binding hasn't expired.  Parse the Contact URI from the store,
-      // making sure it is formatted as a name-address.
-      pjsip_uri* uri = PJUtils::uri_from_string(binding->_uri, tdata->pool, PJ_TRUE);
-      if (uri != NULL)
-      {
-        // Contact URI is well formed, so include this in the response.
-        pjsip_contact_hdr* contact = pjsip_contact_hdr_create(tdata->pool);
-        contact->star = 0;
-        contact->uri = uri;
-        contact->q1000 = binding->_priority;
-        contact->expires = binding->_expires - now;
-        pj_list_init(&contact->other_param);
-        for (std::map<std::string, std::string>::iterator j = binding->_params.begin();
-             j != binding->_params.end();
-             ++j)
-        {
-          pjsip_param *new_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
-          pj_strdup2(tdata->pool, &new_param->name, j->first.c_str());
-          pj_strdup2(tdata->pool, &new_param->value, j->second.c_str());
-          pj_list_insert_before(&contact->other_param, new_param);
-        }
-
-        // Add a GRUU if the UE supports GRUUs and the contact header contains
-        // a +sip.instance parameter.
-        if (PJUtils::msg_supports_extension(msg, "gruu"))
-        {
-          // The pub-gruu parameter on the Contact header is calculated
-          // from the instance-id, to avoid unnecessary storage in
-          // memcached.
-          std::string gruu = binding->pub_gruu_quoted_string(tdata->pool);
-          if (!gruu.empty())
-          {
-            pjsip_param *new_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
-            pj_strdup2(tdata->pool, &new_param->name, "pub-gruu");
-            pj_strdup2(tdata->pool, &new_param->value, gruu.c_str());
-            pj_list_insert_before(&contact->other_param, new_param);
-          }
-        }
-
-        pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)contact);
-      }
-      else
-      {
-        // Contact URI is malformed.  Log an error, but otherwise don't try and
-        // fix it.
-        // LCOV_EXCL_START hard to hit - needs bad data in the store
-        TRC_WARNING("Badly formed contact URI %s for address of record %s",
-                    binding->_uri.c_str(), aor.c_str());
-
-        SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
-        event.add_var_param(public_id);
-        std::string error_msg = "Badly formed contact URI - " + binding->_uri;
-        event.add_var_param(error_msg);
-        SAS::report_event(event);
-        // LCOV_EXCL_STOP
-      }
-    }
-  }
+  // Add remaining register response headers (contact, path etc)
+  build_register_response(aor_pair, aor, public_id, tdata, msg, uris, ccfs, ecfs, now, trail);
 
   SAS::Event reg_Accepted(trail, SASEvent::REGISTER_ACCEPTED, 0);
   SAS::report_event(reg_Accepted);
@@ -983,52 +1331,6 @@ void process_register_request(pjsip_rx_data* rdata)
   {
     reg_stats_tables->re_reg_tbl->increment_successes();
   }
-
-  // Deal with path header related fields in the response.
-  pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
-                              pjsip_msg_find_hdr_by_name(msg, &STR_PATH, NULL);
-  if ((path_hdr != NULL) &&
-      (!aor_pair->get_current()->bindings().empty()))
-  {
-    // We have bindings with path headers so we must require outbound.
-    pjsip_require_hdr* require_hdr = pjsip_require_hdr_create(tdata->pool);
-    require_hdr->count = 1;
-    require_hdr->values[0] = STR_OUTBOUND;
-    pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)require_hdr);
-  }
-
-  // Echo back any Path headers as per RFC 3327, section 5.3.  We take these
-  // from the request as they may not exist in the bindings any more if the
-  // bindings have expired.
-  while (path_hdr)
-  {
-    pjsip_msg_add_hdr(tdata->msg,
-                      (pjsip_hdr*)pjsip_hdr_clone(tdata->pool, path_hdr));
-    path_hdr = (pjsip_routing_hdr*)
-                    pjsip_msg_find_hdr_by_name(msg, &STR_PATH, path_hdr->next);
-  }
-
-  // Add the Service-Route header.  It isn't safe to do this with the
-  // pre-built header from the global pool because the chaining data
-  // structures in the header may get overwritten, but it is safe to do a
-  // shallow clone.
-  pjsip_hdr* clone = (pjsip_hdr*)
-                          pjsip_hdr_shallow_clone(tdata->pool, service_route);
-  pjsip_msg_insert_first_hdr(tdata->msg, clone);
-
-  // Add P-Associated-URI headers for all of the associated URIs.
-  for (std::vector<std::string>::iterator it = uris.begin();
-       it != uris.end();
-       it++)
-  {
-    pjsip_routing_hdr* pau =
-                        identity_hdr_create(tdata->pool, STR_P_ASSOCIATED_URI);
-    pau->name_addr.uri = PJUtils::uri_from_string(*it, tdata->pool);
-    pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)pau);
-  }
-
-  // Add a PCFA header.
-  PJUtils::add_pcfa_header(tdata->msg, tdata->pool, ccfs, ecfs, true);
 
   // Pass the response to the ACR.
   acr->tx_response(tdata->msg);
@@ -1069,7 +1371,6 @@ void process_register_request(pjsip_rx_data* rdata)
   SAS::report_marker(end_marker);
   delete aor_pair;
 }
-
 
 // Called when a third-party register request failed when the default handling
 // on the iFC was set to SESSION_TERMINATE.

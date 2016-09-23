@@ -106,6 +106,7 @@ public:
     _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "");
     _hss_connection->set_impu_result("tel:6505550231", "reg", HSSConnection::STATE_REGISTERED, "");
     _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "");
+    _hss_connection->set_impu_result("sip:6505550231@homedomain", "", HSSConnection::STATE_REGISTERED, "");
     _hss_connection->set_rc("/impu/sip%3A6505550231%40homedomain/reg-data", HTTP_OK);
     _chronos_connection->set_result("", HTTP_OK);
     _chronos_connection->set_result("post_identity", HTTP_OK);
@@ -246,46 +247,59 @@ public:
 string Message::get()
 {
   char buf[16384];
+  char contact[1024];
+  int n = 0;
 
-  int n = snprintf(buf, sizeof(buf),
-                   "%1$s sip:%3$s SIP/2.0\r\n"
-                   "%10$s"
-                   "Via: SIP/2.0/TCP 10.83.18.38:36530;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY5e9kSPI\r\n"
-                   "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n"
-                   "From: <%2$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
-                   "Supported: outbound, path%15$s\r\n"
-                   "To: <%2$s>\r\n"
-                   "Max-Forwards: 68\r\n"
-                   "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqsUOO4ohntC@10.114.61.213\r\n"
-                   "CSeq: %13$s %1$s\r\n"
-                   "User-Agent: Accession 2.0.0.0\r\n"
-                   "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
-                   "%11$s"
-                   "Contact: %8$s%7$s%9$s\r\n"
-                   "Route: <sip:%14$s;transport=tcp;lr>\r\n"
-                   "P-Access-Network-Info: DUMMY\r\n"
-                   "P-Visited-Network-ID: DUMMY\r\n"
-                   "P-Charging-Vector: icid-value=100\r\n"
-                   "%12$s"
-                   "%4$s"
-                   "Content-Length:  %5$d\r\n"
-                   "\r\n"
-                   "%6$s",
-                   /*  1 */ _method.c_str(),
-                   /*  2 */ (_scheme == "tel") ? string(_scheme).append(":").append(_user).c_str() : string(_scheme).append(":").append(_user).append("@").append(_domain).c_str(),
-                   /*  3 */ _domain.c_str(),
-                   /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
-                   /*  5 */ (int)_body.length(),
-                   /*  6 */ _body.c_str(),
-                   /*  7 */ _contact_params.c_str(),
-                   /*  8 */ (_contact == "*") ? "*" : string("<").append(_contact).append(">").c_str(),
-                   /*  9 */ _contact_instance.c_str(),
-                   /* 10 */ _path.empty() ? "" : string(_path).append("\r\n").c_str(),
-                   /* 11 */ _expires.empty() ? "" : string(_expires).append("\r\n").c_str(),
-                   /* 12 */ _auth.empty() ? "" : string(_auth).append("\r\n").c_str(),
-                   /* 13 */ _cseq.c_str(),
-                   /* 14 */ _route.c_str(),
-                   /* 15 */ _gruu_support ? ", gruu" : ""
+  // Contact header is optional
+  contact[0] = 0;
+  if (!_contact.empty())
+  {
+    n = snprintf(contact, sizeof(contact),
+                 "Contact: %1$s%2$s%3$s\r\n",
+                 /*  1 */ (_contact == "*") ? "*" : string("<").append(_contact).append(">").c_str(),
+                 /*  2 */ _contact_params.c_str(),
+                 /*  3 */ _contact_instance.c_str()
+                 );
+    EXPECT_LT(n, (int)sizeof(buf));
+  }
+
+  n = snprintf(buf, sizeof(buf),
+               "%1$s sip:%3$s SIP/2.0\r\n"
+               "%8$s"
+               "Via: SIP/2.0/TCP 10.83.18.38:36530;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY5e9kSPI\r\n"
+               "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n"
+               "From: <%2$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
+               "Supported: outbound, path%13$s\r\n"
+               "To: <%2$s>\r\n"
+               "Max-Forwards: 68\r\n"
+               "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqsUOO4ohntC@10.114.61.213\r\n"
+               "CSeq: %11$s %1$s\r\n"
+               "User-Agent: Accession 2.0.0.0\r\n"
+               "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
+               "%9$s"
+               "%7$s"
+               "Route: <sip:%12$s;transport=tcp;lr>\r\n"
+               "P-Access-Network-Info: DUMMY\r\n"
+               "P-Visited-Network-ID: DUMMY\r\n"
+               "P-Charging-Vector: icid-value=100\r\n"
+               "%10$s"
+               "%4$s"
+               "Content-Length:  %5$d\r\n"
+               "\r\n"
+               "%6$s",
+               /*  1 */ _method.c_str(),
+               /*  2 */ (_scheme == "tel") ? string(_scheme).append(":").append(_user).c_str() : string(_scheme).append(":").append(_user).append("@").append(_domain).c_str(),
+               /*  3 */ _domain.c_str(),
+               /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
+               /*  5 */ (int)_body.length(),
+               /*  6 */ _body.c_str(),
+               /*  7 */ contact,
+               /*  8 */ _path.empty() ? "" : string(_path).append("\r\n").c_str(),
+               /*  9 */ _expires.empty() ? "" : string(_expires).append("\r\n").c_str(),
+               /* 10 */ _auth.empty() ? "" : string(_auth).append("\r\n").c_str(),
+               /* 11 */ _cseq.c_str(),
+               /* 12 */ _route.c_str(),
+               /* 13 */ _gruu_support ? ", gruu" : ""
     );
 
   EXPECT_LT(n, (int)sizeof(buf));
@@ -655,6 +669,28 @@ TEST_F(RegistrarTest, MultipleRegistrations)
   EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
   EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
   free_txdata();
+
+  // A fetch bindings registration (no Contact headers).  Should just return current state.
+  string save_contact = msg._contact;
+  msg._contact = "";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_THAT(get_headers(out, "Contact"),
+              MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
+                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"\r\n"
+                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
+  EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
+  free_txdata();
+  msg._contact = save_contact;
 
   // Reregistering again with an updated cseq triggers an update of the binding.
   msg._cseq = "16568";
