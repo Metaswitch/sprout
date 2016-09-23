@@ -163,6 +163,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        session_expires_helper_test.cpp \
                        mock_subscriber_data_manager.cpp \
                        mock_chronos_connection.cpp \
+                       cassandra_connection_pool.cpp \
                        cassandra_store.cpp \
                        call_list_store.cpp \
                        mementosaslogger.cpp \
