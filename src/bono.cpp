@@ -740,8 +740,8 @@ static int proxy_verify_request(pjsip_rx_data *rdata)
 /// Rejects a request statelessly.
 static void reject_request(pjsip_rx_data* rdata, int status_code)
 {
-  // Log start and end markers. These are need for the failed request to appear
-  // in SAS.
+  // Log start and end markers. These are needed for the failed request to
+  // appear in SAS.
   SAS::Marker start_marker(get_trail(rdata), MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
   SAS::Marker end_marker(get_trail(rdata), MARKER_ID_END, 1u);
