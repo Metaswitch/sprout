@@ -22,7 +22,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          http_connection_pool.cpp \
                          httpclient.cpp \
                          httpconnection.cpp \
-                         httpresolver.cpp \
+                         a_record_resolver.cpp \
                          hssconnection.cpp \
                          websockets.cpp \
                          localstore.cpp \
