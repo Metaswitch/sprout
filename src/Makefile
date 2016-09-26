@@ -247,7 +247,7 @@ gemini-as.so_SOURCES := mobiletwinned.cpp sproutletappserver.cpp geminiasplugin.
 gemini-as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -I../modules/gemini/include
 gemini-as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
-memento-as.so_SOURCES := sproutletappserver.cpp mementoasplugin.cpp cassandra_store.cpp call_list_store.cpp mementosaslogger.cpp call_list_store_processor.cpp httpnotifier.cpp mementoappserver.cpp
+memento-as.so_SOURCES := sproutletappserver.cpp mementoasplugin.cpp cassandra_store.cpp cassandra_connection_pool.cpp call_list_store.cpp mementosaslogger.cpp call_list_store_processor.cpp httpnotifier.cpp mementoappserver.cpp
 memento-as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -I../modules/memento-as/include -I../modules/memento-as/modules/memento-common/include
 memento-as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS} -lthrift -lcassandra
 
