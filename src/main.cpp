@@ -1251,6 +1251,7 @@ Store* local_data_store = NULL;
 SubscriberDataManager* local_sdm = NULL;
 SubscriberDataManager* remote_sdm = NULL;
 RalfProcessor* ralf_processor = NULL;
+DnsCachedResolver* dns_resolver = NULL;
 HttpResolver* http_resolver = NULL;
 ACRFactory* scscf_acr_factory = NULL;
 EnumService* enum_service = NULL;
@@ -1267,7 +1268,6 @@ int main(int argc, char* argv[])
 
   Logger* analytics_logger_logger = NULL;
   AnalyticsLogger* analytics_logger = NULL;
-  DnsCachedResolver* dns_resolver = NULL;
   SIPResolver* sip_resolver = NULL;
   Store* remote_data_store = NULL;
   ImpiStore* impi_store = NULL;

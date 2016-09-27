@@ -158,6 +158,7 @@ extern Store* local_data_store;
 extern SubscriberDataManager* local_sdm;
 extern SubscriberDataManager* remote_sdm;
 extern RalfProcessor* ralf_processor;
+extern DnsCachedResolver* dns_resolver;
 extern HttpResolver* http_resolver;
 extern ACRFactory* scscf_acr_factory;
 extern EnumService* enum_service;
