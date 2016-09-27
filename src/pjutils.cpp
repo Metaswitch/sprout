@@ -2171,22 +2171,22 @@ bool PJUtils::get_rn(pjsip_uri* uri, std::string& routing_value)
   return rn_set;
 }
 
-pjsip_param* PJUtils::get_tel_uri_param(pjsip_uri* uri, pj_str_t STR_PARAM)
+pjsip_param* PJUtils::get_userpart_param(pjsip_uri* uri, pj_str_t param)
 {
-  pjsip_param* param_ptr = NULL;
+  pjsip_param* param_value = NULL;
 
   if (PJSIP_URI_SCHEME_IS_TEL(uri))
   {
     // If the URI is a tel URI, pull out the information from the other_params
-    param_ptr = pjsip_param_find(&((pjsip_tel_uri*)uri)->other_param, &STR_PARAM);
+    param_value = pjsip_param_find(&((pjsip_tel_uri*)uri)->other_param, &param);
   }
   else if (PJSIP_URI_SCHEME_IS_SIP(uri))
   {
     // If the URI is a SIP URI, pull out the information from the userinfo_params
-    param_ptr = pjsip_param_find(&((pjsip_sip_uri*)uri)->userinfo_param, &STR_PARAM);
+    param_value = pjsip_param_find(&((pjsip_sip_uri*)uri)->userinfo_param, &param);
   }
 
-  return param_ptr;
+  return param_value;
 }
 
 
