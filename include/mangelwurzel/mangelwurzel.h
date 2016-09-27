@@ -61,8 +61,9 @@ class Mangelwurzel : public Sproutlet
 public:
   /// Constructor.
   Mangelwurzel(std::string name,
-               int port) :
-    Sproutlet(name, port) {}
+               int port,
+               const std::string& uri) :
+    Sproutlet(name, port, uri) {}
 
   /// Destructor.
   ~Mangelwurzel() {}

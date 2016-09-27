@@ -100,6 +100,7 @@ struct options
   std::vector<std::string>             enum_servers;
   std::string                          enum_suffix;
   std::string                          enum_file;
+  bool                                 default_tel_uri_translation;
   bool                                 analytics_enabled;
   std::string                          analytics_directory;
   int                                  reg_max_expires;
@@ -147,6 +148,8 @@ struct options
   ImpiStore::Mode                      impi_store_mode;
   bool                                 nonce_count_supported;
   std::string                          scscf_node_uri;
+  bool                                 sas_signaling_if;
+  bool                                 disable_tcp_switch;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
@@ -157,6 +160,7 @@ extern Store* local_data_store;
 extern SubscriberDataManager* local_sdm;
 extern std::vector<SubscriberDataManager*> remote_sdms;
 extern RalfProcessor* ralf_processor;
+extern DnsCachedResolver* dns_resolver;
 extern HttpResolver* http_resolver;
 extern ACRFactory* scscf_acr_factory;
 extern EnumService* enum_service;

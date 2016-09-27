@@ -65,8 +65,8 @@ template <class T>
 class FakeSproutlet : public Sproutlet
 {
 public:
-  FakeSproutlet(const std::string& service_name, int port, const std::string& service_host) :
-    Sproutlet(service_name, port, service_host)
+  FakeSproutlet(const std::string& service_name, int port, const std::string& uri, const std::string& service_host) :
+    Sproutlet(service_name, port, uri, service_host)
   {
     _aliases.push_back("alias");
   }
@@ -617,16 +617,16 @@ public:
     add_host_mapping("node2.awaydomain", "10.10.28.2");
 
     // Create the Test Sproutlets.
-    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForwarder<false> >("fwd", 0, ""));
-    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForwarder<true> >("fwdrr", 0, ""));
-    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDownstreamRequest>("dsreq", 0, ""));
-    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForker<NUM_FORKS> >("forker", 0, ""));
-    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDelayRedirect<1> >("delayredirect", 0, ""));
-    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxBad >("bad", 0, ""));
-    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxB2BUA >("b2bua", 0, ""));
-    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDelayAfterRsp<1> >("delayafterrsp", 0, ""));
-    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDelayAfterFwd<1> >("delayafterfwd", 0, ""));
-    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDummySCSCF>("scscf", 44444, "scscf"));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForwarder<false> >("fwd", 0, "sip:fwd.homedomain;transport=tcp", ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForwarder<true> >("fwdrr", 0, "sip:fwdrr.proxy1.homedomain;transport=tcp", ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDownstreamRequest>("dsreq", 0, "sip:dsreq.homedomain;transport=tcp", ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForker<NUM_FORKS> >("forker", 0, "sip:forker.homedomain;transport=tcp", ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDelayRedirect<1> >("delayredirect", 0, "sip:delayredirect.homedomain;transport=tcp", ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxBad >("bad", 0, "sip:bad.homedomain;transport=tcp", ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxB2BUA >("b2bua", 0, "sip:b2bua.homedomain;transport=tcp", ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDelayAfterRsp<1> >("delayafterrsp", 0, "sip:delayafterrsp.homedomain;transport=tcp", ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDelayAfterFwd<1> >("delayafterfwd", 0, "sip:delayafterfwd.homedomain;transport=tcp", ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDummySCSCF>("scscf", 44444, "sip:scscf.homedomain:44444;transport=tcp", "scscf"));
 
     // Create a host alias.
     std::unordered_set<std::string> host_aliases;

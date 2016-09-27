@@ -610,8 +610,6 @@ TEST_F(CustomHeadersTest, AcceptContact)
   EXPECT_EQ(true, sclone->explicit_match);
   EXPECT_EQ(1u, pj_list_size(&sclone->feature_set));
 
-  pj_pool_release(main_pool);
-
   char buf[1024];
   memset(buf, 0, 1024);
   pjsip_hdr* generic_hdr = (pjsip_hdr*)sclone;
@@ -625,6 +623,31 @@ TEST_F(CustomHeadersTest, AcceptContact)
   EXPECT_EQ(written, 65);
   EXPECT_STREQ("Accept-Contact: *;+sip.instance=\"<i:am:a:robot>\";explicit;require", buf);
   pj_pool_release(clone_pool);
+
+  // Repeat parse check with a minimal Accept-Contact header
+  string str2("INVITE sip:6505554321@homedomain SIP/2.0\n"
+              "Via: SIP/2.0/TCP 10.0.0.1:5060;rport;branch=z9hG4bKPjPtVFjqo;alias\n"
+              "Max-Forwards: 63\n"
+              "From: <sip:6505551234@homedomain>;tag=1234\n"
+              "To: <sip:6505554321@homedomain>\n"
+              "Contact: <sip:6505551234@10.0.0.1:5060;transport=TCP;ob>\n"
+              "Call-ID: 1-13919@10.151.20.48\n"
+              "CSeq: 1 INVITE\n"
+              "Accept-Contact: *\n"
+              "Content-Length: 0\n\n");
+
+  rdata = build_rxdata(str2, _tp_default, main_pool);
+  parse_rxdata(rdata);
+  hdr =
+      (pjsip_accept_contact_hdr*)pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+                                                            &header_name,
+                                                            NULL);
+  EXPECT_NE(hdr, (pjsip_accept_contact_hdr*)NULL);
+  EXPECT_NE(true, hdr->required_match);
+  EXPECT_NE(true, hdr->explicit_match);
+  EXPECT_EQ(0u, pj_list_size(&hdr->feature_set));
+
+  pj_pool_release(main_pool);
 }
 
 TEST_F(CustomHeadersTest, RejectContact)

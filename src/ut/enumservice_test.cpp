@@ -67,6 +67,7 @@ class EnumServiceTest : public ::testing::Test
 };
 
 class JSONEnumServiceTest : public EnumServiceTest {};
+class DummyEnumServiceTest : public EnumServiceTest {};
 class DNSEnumServiceTest : public EnumServiceTest
 {
   DNSEnumServiceTest() : EnumServiceTest()
@@ -104,6 +105,14 @@ private:
   string _in; //^ input
   string _out; //^ expected output
 };
+
+
+TEST_F(DummyEnumServiceTest, SimpleTests)
+{
+  DummyEnumService enum_("ut.cw-ngv.com");
+
+  ET("+15108580277", "sip:+15108580277@ut.cw-ngv.com").test(enum_);
+}
 
 
 TEST_F(JSONEnumServiceTest, SimpleTests)

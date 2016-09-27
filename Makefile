@@ -14,6 +14,7 @@ DEB_COMPONENT := sprout
 DEB_MAJOR_VERSION := 1.0${DEB_VERSION_QUALIFIER}
 DEB_NAMES := sprout-libs sprout-libs-dbg
 DEB_NAMES += sprout sprout-dbg
+DEB_NAMES += sprout-node sprout-node-dbg
 DEB_NAMES += sprout-base sprout-base-dbg
 DEB_NAMES += sprout-scscf sprout-scscf-dbg
 DEB_NAMES += sprout-icscf sprout-icscf-dbg
@@ -24,6 +25,7 @@ DEB_NAMES += memento-as memento-as-dbg
 DEB_NAMES += call-diversion-as call-diversion-as-dbg
 DEB_NAMES += mangelwurzel-as mangelwurzel-as-dbg
 DEB_NAMES += bono bono-dbg restund
+DEB_NAMES += bono-node bono-node-dbg
 DEB_NAMES += clearwater-sipp clearwater-sipp-dbg
 DEB_NAMES += clearwater-sip-stress clearwater-sip-stress-stats clearwater-sip-perf
 
@@ -32,14 +34,19 @@ LIB_DIR := ${INSTALL_DIR}/lib
 
 SUBMODULES := pjsip c-ares curl libevhtp libmemcached libre restund openssl websocketpp sipp sas-client thrift cassandra
 
+include build-infra/cw-module-install.mk
+
 include $(patsubst %, ${MK_DIR}/%.mk, ${SUBMODULES})
 include ${MK_DIR}/sprout.mk
 
-build: ${SUBMODULES} sprout scripts/sipp-stats/clearwater-sipp-stats-1.0.0.gem plugins-build
+.PHONY: update_submodules
+update_submodules: ${SUBMODULES} sync_install
 
-test: ${SUBMODULES} sprout_test plugins-test
+build: update_submodules sprout scripts/sipp-stats/clearwater-sipp-stats-1.0.0.gem plugins-build
 
-full_test: ${SUBMODULES} sprout_full_test plugins-test
+test: update_submodules sprout_test plugins-test
+
+full_test: update_submodules sprout_full_test plugins-test
 
 testall: $(patsubst %, %_test, ${SUBMODULES}) full_test
 
@@ -53,7 +60,7 @@ distclean: $(patsubst %, %_distclean, ${SUBMODULES}) sprout_distclean
 
 .PHONY: plugins-build
 plugins-build:
-	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} build \;
+	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} \;
 
 .PHONY: plugins-test
 plugins-test:

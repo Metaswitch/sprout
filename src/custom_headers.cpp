@@ -46,19 +46,44 @@ extern "C" {
 #include "constants.h"
 #include "custom_headers.h"
 
-/// Custom parser for Privacy header.  This is registered with PJSIP below
+/// Custom parser for Privacy header. This is registered with PJSIP below
 /// in register_custom_headers().
 ///
-/// The Privacy header is a simple comma-separated list of values so we use
-/// the built-in PJSIP parser code.
-// LCOV_EXCL_START
+/// The privacy header is delimited by semicolons. We want to use pjsip's
+/// generic array header, however it splits on commas. We therefore override
+/// the default parser and print function in the generic array header with a
+/// custom constructor.
+static int pjsip_privacy_hdr_print(pjsip_generic_array_hdr *hdr,
+                      char *buf, pj_size_t size)
+{
+  pj_str_t semicolon_delimiter = {"; ", 2};
+  return pjsip_delimited_array_hdr_print(hdr, buf, size, &semicolon_delimiter);
+}
+
+static pjsip_hdr_vptr privacy_hdr_vptr =
+{
+ (pjsip_hdr_clone_fptr) &pjsip_generic_array_hdr_clone,
+ (pjsip_hdr_clone_fptr) &pjsip_generic_array_hdr_shallow_clone,
+ (pjsip_hdr_print_fptr) &pjsip_privacy_hdr_print,
+};
+
+pjsip_generic_array_hdr* pjsip_privacy_hdr_create(pj_pool_t *pool,
+                                 const pj_str_t *hnames)
+{
+  void *mem = pj_pool_alloc(pool, sizeof(pjsip_generic_array_hdr));
+  pjsip_generic_array_hdr *hdr = pjsip_generic_array_hdr_init(pool, mem, hnames);
+  hdr->vptr = &privacy_hdr_vptr;
+  return hdr;
+}
+
 pjsip_hdr* parse_hdr_privacy(pjsip_parse_ctx* ctx)
 {
-  pjsip_generic_array_hdr *privacy = pjsip_generic_array_hdr_create(ctx->pool, &STR_PRIVACY);
-  pjsip_parse_generic_array_hdr_imp(privacy, ctx->scanner);
+  const pjsip_parser_const_t* pconst = pjsip_parser_const();
+  pjsip_generic_array_hdr *privacy = pjsip_privacy_hdr_create(ctx->pool, &STR_PRIVACY);
+  pjsip_parse_delimited_array_hdr(privacy, ctx->scanner, ';',
+                                  &(pconst->pjsip_NOT_SEMICOLON_OR_NEWLINE));
   return (pjsip_hdr*)privacy;
 }
-// LCOV_EXCL_STOP
 
 typedef void* (*clone_fptr)(pj_pool_t *, const void*);
 typedef int   (*print_fptr)(void *hdr, char *buf, pj_size_t len);
@@ -1276,7 +1301,13 @@ pjsip_hdr* parse_hdr_accept_contact(pjsip_parse_ctx* ctx)
   pj_str_t header_value;
   pj_scan_get(scanner, &pc->pjsip_TOKEN_SPEC, &header_value);
 
-  for (;;)
+  // Skip any following whitespace (to the end of the line)
+  pj_scan_skip_whitespace(scanner);
+
+  // If we're EOF or looking at a newline, we're done.
+  while (!pj_scan_is_eof(scanner) &&
+         (*scanner->curptr != '\r') &&
+         (*scanner->curptr != '\n'))
   {
     // We might need to swallow the ';'.
     if (!pj_scan_is_eof(scanner) && *scanner->curptr == ';')
@@ -1302,14 +1333,8 @@ pjsip_hdr* parse_hdr_accept_contact(pjsip_parse_ctx* ctx)
       pj_list_insert_before(&hdr->feature_set, param);
     }
 
-    // If we're EOF or looking at a newline, we're done.
+    // Skip any following whitespace (to the end of the line)
     pj_scan_skip_whitespace(scanner);
-    if (pj_scan_is_eof(scanner) ||
-        (*scanner->curptr == '\r') ||
-        (*scanner->curptr == '\n'))
-    {
-      break;
-    }
   }
 
   // We're done parsing this header.

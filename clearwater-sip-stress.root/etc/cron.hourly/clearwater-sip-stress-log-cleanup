@@ -1,0 +1,7 @@
+#!/bin/bash
+ONE_GIG=1073741824
+WEEK_COUNT=168
+max_log_directory_size=$ONE_GIG
+. /etc/clearwater/config
+
+python2.7 /usr/share/clearwater/bin/log_cleanup.py /var/log/clearwater-sipp --prefix sip-stress --maxsize $max_log_directory_size --count $WEEK_COUNT

@@ -45,6 +45,7 @@
 #include "mmtelsasevent.h"
 #include "mmtel.h"
 #include "constants.h"
+#include "custom_headers.h"
 
 using namespace rapidxml;
 
@@ -555,7 +556,7 @@ void MmtelTsx::build_privacy_header(pjsip_msg* req, pj_pool_t* pool, int privacy
     return;
   }
 
-  pjsip_generic_array_hdr *new_header = pjsip_generic_array_hdr_create(pool, &privacy_hdr_name);
+  pjsip_generic_array_hdr *new_header = pjsip_privacy_hdr_create(pool, &privacy_hdr_name);
 
   if (privacy_fields & PRIVACY_H_ID)
   {
@@ -621,36 +622,23 @@ unsigned int MmtelTsx::get_media_type_conditions(pjsip_msg *msg)
 {
   unsigned int media_type_conditions = 0;
 
-  // First, check if the message body is SDP - if not, we can't tell what the
-  // media types are (and assume they're 0).
-  if (msg->body &&
-      (!pj_stricmp2(&msg->body->content_type.type, "application")) &&
-      (!pj_stricmp2(&msg->body->content_type.subtype, "sdp")))
-  {
-    // Parse the SDP, using a temporary pool.
-    pj_pool_t* tmp_pool = pj_pool_create(&stack_data.cp.factory, "Mmtel", 1024, 512, NULL);
-    pjmedia_sdp_session *sdp_sess;
-    if (pjmedia_sdp_parse(tmp_pool, (char *)msg->body->data, msg->body->len, &sdp_sess) == PJ_SUCCESS)
-    {
-      // Spin through the media types, looking for those we're interested in.
-      for (unsigned int media_idx = 0; media_idx < sdp_sess->media_count; media_idx++)
-      {
-        TRC_DEBUG("Examining media type \"%.*s\"",
-                  sdp_sess->media[media_idx]->desc.media.slen,
-                  sdp_sess->media[media_idx]->desc.media.ptr);
-        if (pj_strcmp2(&sdp_sess->media[media_idx]->desc.media, "audio") == 0)
-        {
-          media_type_conditions |= simservs::Rule::CONDITION_MEDIA_AUDIO;
-        }
-        else if (pj_strcmp2(&sdp_sess->media[media_idx]->desc.media, "video") == 0)
-        {
-          media_type_conditions |= simservs::Rule::CONDITION_MEDIA_VIDEO;
-        }
-      }
-    }
+  std::set<pjmedia_type> media_types = PJUtils::get_media_types(msg);
 
-    // Tidy up.
-    pj_pool_release(tmp_pool);
+  for(pjmedia_type media_type : media_types)
+  {
+    switch (media_type)
+    {
+      case PJMEDIA_TYPE_AUDIO:
+        media_type_conditions |= simservs::Rule::CONDITION_MEDIA_AUDIO;
+        break;
+
+      case PJMEDIA_TYPE_VIDEO:
+        media_type_conditions |= simservs::Rule::CONDITION_MEDIA_VIDEO;
+        break;
+
+      default:
+        break;
+    }
   }
 
   return media_type_conditions;
@@ -986,7 +974,7 @@ pjsip_status_code MmtelTsx::apply_cdiv_on_req(pjsip_msg* req,
 
   std::string target = check_call_diversion_rules(conditions);
 
-  if (!target.empty()) 
+  if (!target.empty())
   {
     {
       SAS::Event event(trail(), SASEvent::DIVERTING_CALL, 0);
@@ -997,7 +985,7 @@ pjsip_status_code MmtelTsx::apply_cdiv_on_req(pjsip_msg* req,
     // Update the request for the redirect.
     rc = PJUtils::redirect(req, target, get_pool(req), code);
 
-    if (rc == PJSIP_SC_OK) 
+    if (rc == PJSIP_SC_OK)
     {
       // Send a provisional response indicating the call is being forwarded.
       pjsip_msg* rsp = create_response(req, PJSIP_SC_CALL_BEING_FORWARDED);
@@ -1036,19 +1024,19 @@ bool MmtelTsx::apply_cdiv_on_rsp(pjsip_msg* rsp,
       // Check to see if CDIV rules trigger.
       target = check_call_diversion_rules(conditions);
     }
-  
-    if (!target.empty()) 
+
+    if (!target.empty())
     {
-      // We have a target for the redirect, so get a copy of the original 
+      // We have a target for the redirect, so get a copy of the original
       // request and update it for the redirect.
       {
         SAS::Event event(trail(), SASEvent::DIVERTING_CALL, 1);
         event.add_var_param(target);
         SAS::report_event(event);
       }
-  
+
       pjsip_msg* req = original_request();
-  
+
       if (PJUtils::redirect(req, target, get_pool(req), code) == PJSIP_SC_OK)
       {
         // Send a provisional response flagging that the call is being
@@ -1056,10 +1044,10 @@ bool MmtelTsx::apply_cdiv_on_rsp(pjsip_msg* rsp,
         TRC_DEBUG("Redirect request");
         rsp = create_response(req, PJSIP_SC_CALL_BEING_FORWARDED);
         send_response(rsp);
-  
+
         // Send the redirected request.
         send_request(req);
-  
+
         // The call has been diverted.  Cancel the no-reply timer.
         _diverted = true;
         if (_no_reply_timer != 0)

@@ -109,7 +109,7 @@ do_stop()
         done
 
         # Kill any remaining clearwater-sip-stress or sipp instances
-        pkill clearwater-sip-stress >/dev/null 2>&1
+        pkill $NAME >/dev/null 2>&1
         pkill sipp >/dev/null 2>&1
 
         return $RC

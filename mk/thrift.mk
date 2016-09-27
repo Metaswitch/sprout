@@ -11,7 +11,9 @@ ${THRIFT_CONFIGURE}:
 ${THRIFT_MAKEFILE}: ${THRIFT_CONFIGURE}
 	cd ${THRIFT_DIR} && ${THRIFT_CONFIGURE}  --prefix=${INSTALL_DIR} --without-csharp --without-java --without-erlang --without-python --without-perl --without-php --without-ruby --without-haskell --without-go --without-d
 
-thrift: ${THRIFT_MAKEFILE}
+thrift: ${INSTALL_DIR}/bin/thrift
+
+${INSTALL_DIR}/bin/thrift: ${THRIFT_MAKEFILE}
 	${MAKE} -C ${THRIFT_DIR}
 	${MAKE} -C ${THRIFT_DIR} install
 

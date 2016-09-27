@@ -205,6 +205,7 @@ public:
     // Create the BGCF Sproutlet.
     _bgcf_sproutlet = new BGCFSproutlet("bgcf",
                                         5054,
+                                        "sip:bgcf.homedomain:5058;transport=tcp",
                                         _bgcf_service,
                                         _enum_service,
                                         _acr_factory,
@@ -424,4 +425,21 @@ TEST_F(BGCFTest, TestInvalidBGCFRouteNameAddrMix)
   add_host_mapping("domainnotasipurianglebracketmix", "10.9.8.7");
   list<HeaderMatcher> hdrs;
   doFailureFlow(msg, 500);
+}
+
+// If the BGCF receives a request with pre-loaded Route headers, it should
+// remove them before applying its own routes.
+TEST_F(BGCFTest, OverrideRoutes)
+{
+  SCOPED_TRACE("");
+  BGCFMessage msg;
+  msg._to = "12345";
+  msg._todomain = "domainvalid";
+  msg._route = "Route: <sip:bgcf.homedomain>\nRoute: <sip:1.2.3.4;lr>";
+  add_host_mapping("domainvalid", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+
+  // Check that the preloaded 1.2.3.4 route has now gone.
+  hdrs.push_back(HeaderMatcher("Route", "Route: <sip:10.0.0.1:5060;transport=TCP;lr>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex("sip:12345@domainvalid"), hdrs);
 }

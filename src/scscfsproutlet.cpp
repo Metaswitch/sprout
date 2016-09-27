@@ -60,6 +60,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
                                const std::string& icscf_uri,
                                const std::string& bgcf_uri,
                                int port,
+                               const std::string& uri,
                                SubscriberDataManager* sdm,
                                std::vector<SubscriberDataManager*> remote_sdms,
                                HSSConnection* hss,
@@ -72,7 +73,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
                                int session_terminated_timeout_ms,
                                AsCommunicationTracker* sess_term_as_tracker,
                                AsCommunicationTracker* sess_cont_as_tracker) :
-  Sproutlet(scscf_name, port, "", incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl),
+  Sproutlet(scscf_name, port, uri, "", incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl),
   _scscf_cluster_uri(NULL),
   _scscf_node_uri(NULL),
   _icscf_uri(NULL),
@@ -98,6 +99,11 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
                                                                  "1.2.826.0.1.1578918.9.3.32");
   _invites_cancelled_after_1xx_tbl = SNMP::CounterTable::create("invites_cancelled_after_1xx",
                                                                 "1.2.826.0.1.1578918.9.3.33");
+  _audio_session_setup_time_tbl = SNMP::EventAccumulatorTable::create("scscf_audio_session_setup_time",
+                                                                      "1.2.826.0.1.1578918.9.3.34");
+  _video_session_setup_time_tbl = SNMP::EventAccumulatorTable::create("scscf_video_session_setup_time",
+                                                                      "1.2.826.0.1.1578918.9.3.35");
+
 }
 
 
@@ -108,6 +114,8 @@ SCSCFSproutlet::~SCSCFSproutlet()
   delete _routed_by_preloaded_route_tbl;
   delete _invites_cancelled_before_1xx_tbl;
   delete _invites_cancelled_after_1xx_tbl;
+  delete _audio_session_setup_time_tbl;
+  delete _video_session_setup_time_tbl;
 }
 
 bool SCSCFSproutlet::init()
@@ -351,6 +359,23 @@ void SCSCFSproutlet::track_app_serv_comm_success(const std::string& uri,
   }
 }
 
+void SCSCFSproutlet::track_session_setup_time(uint64_t tsx_start_time_usec,
+                                              bool video_call)
+{
+  // Calculate how long it has taken to setup the session.
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC_COARSE, &ts);
+  uint64_t ringing_usec = ((uint64_t)ts.tv_sec * 1000000) + (ts.tv_nsec / 1000) - tsx_start_time_usec;
+
+  if (video_call)
+  {
+    _video_session_setup_time_tbl->accumulate(ringing_usec);
+  }
+  else
+  {
+    _audio_session_setup_time_tbl->accumulate(ringing_usec);
+  }
+}
 
 SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
                                      SCSCFSproutlet* scscf,
@@ -372,6 +397,9 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
   _record_routed(false),
   _req_type(req_type),
   _seen_1xx(false),
+  _record_session_setup_time(false),
+  _tsx_start_time_usec(0),
+  _video_call(false),
   _impi(),
   _auto_reg(false),
   _se_helper(stack_data.default_session_expires)
@@ -498,9 +526,12 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     else
     {
       // No AS chain set, so don't apply services to the request.
-      // Default action is to route the request directly to the BGCF.
-      TRC_INFO("Route request to BGCF without applying services");
-      route_to_bgcf(req);
+      // Default action will be to try to route following remaining Route
+      // headers or to the RequestURI.
+      TRC_INFO("Route request without applying services");
+      SAS::Event no_as_route(trail(), SASEvent::NO_AS_CHAIN_ROUTE, 0);
+      SAS::report_event(no_as_route);
+      send_request(req);
     }
   }
 }
@@ -676,6 +707,18 @@ void SCSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
     // Pass the transmitted response to the ACR to update the accounting
     // information.
     acr->tx_response(rsp);
+  }
+
+  // If this is a transaction where we are supposed to be tracking session
+  // setup stats then check to see if it is now set up.  We consider it to be
+  // setup when we receive either a 180 Ringing or 2xx (per TS 32.409).
+  pjsip_status_code st_code = (pjsip_status_code)rsp->line.status.code;
+  if (_record_session_setup_time &&
+      ((st_code == PJSIP_SC_RINGING) ||
+       PJSIP_IS_STATUS_IN_CLASS(st_code, 200)))
+  {
+    _scscf->track_session_setup_time(_tsx_start_time_usec, _video_call);
+    _record_session_setup_time = false;
   }
 }
 
@@ -984,6 +1027,27 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
           add_to_dialog(req, true, ACR::NODE_ROLE_ORIGINATING);
           acr->override_session_id(PJUtils::pj_str_to_string(&PJSIP_MSG_CID_HDR(req)->id));
         }
+
+        // This is an initial originating request -- not a request coming back
+        // from an AS.  If it's an INVITE and is actually originating (rather
+        // than than an originating call that has been diverted) we need to
+        // track the session setup time for our stats.
+        if ((_req_type == PJSIP_INVITE_METHOD) && (_session_case == &SessionCase::Originating))
+        {
+          _record_session_setup_time = true;
+
+          // Store off the time we received this request.
+          struct timespec ts;
+          clock_gettime(CLOCK_MONOTONIC_COARSE, &ts);
+          _tsx_start_time_usec = ((uint64_t)ts.tv_sec * 1000000) + (ts.tv_nsec / 1000);
+
+          // Check whether this is a video call.
+          std::set<pjmedia_type> media_types = PJUtils::get_media_types(req);
+          if (media_types.find(PJMEDIA_TYPE_VIDEO) != media_types.end())
+          {
+            _video_call = true;
+          }
+        }
       }
 
       TRC_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
@@ -1151,37 +1215,48 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
       add_to_dialog(req, false, ACR::NODE_ROLE_ORIGINATING);
     }
 
-    // Attempt to translate the RequestURI using ENUM or an alternative
-    // database.
-    _scscf->translate_request_uri(req, get_pool(req), trail());
-
-    URIClass uri_class = URIClassifier::classify_uri(req->line.req.uri);
-    std::string new_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req->line.req.uri);
-    TRC_INFO("New URI string is %s", new_uri_str.c_str());
-
-    if ((uri_class == LOCAL_PHONE_NUMBER) ||
-        (uri_class == GLOBAL_PHONE_NUMBER) ||
-        (uri_class == NP_DATA) ||
-        (uri_class == FINAL_NP_DATA))
+    if (_scscf->_enum_service)
     {
-      TRC_DEBUG("Routing to BGCF");
-      SAS::Event event(trail(), SASEvent::PHONE_ROUTING_TO_BGCF, 0);
-      event.add_var_param(new_uri_str);
-      SAS::report_event(event);
-      route_to_bgcf(req);
-    }
-    else if (uri_class == OFFNET_SIP_URI)
-    {
-      // Destination is off-net, so route to the BGCF.
-      TRC_DEBUG("Routing to BGCF");
-      SAS::Event event(trail(), SASEvent::OFFNET_ROUTING_TO_BGCF, 0);
-      event.add_var_param(new_uri_str);
-      SAS::report_event(event);
-      route_to_bgcf(req);
+      // Attempt to translate the RequestURI using ENUM or an alternative
+      // database.
+      _scscf->translate_request_uri(req, get_pool(req), trail());
+
+      URIClass uri_class = URIClassifier::classify_uri(req->line.req.uri);
+      std::string new_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req->line.req.uri);
+      TRC_INFO("New URI string is %s", new_uri_str.c_str());
+
+      if ((uri_class == LOCAL_PHONE_NUMBER) ||
+          (uri_class == GLOBAL_PHONE_NUMBER) ||
+          (uri_class == NP_DATA) ||
+          (uri_class == FINAL_NP_DATA))
+      {
+        TRC_DEBUG("Routing to BGCF");
+        SAS::Event event(trail(), SASEvent::PHONE_ROUTING_TO_BGCF, 0);
+        event.add_var_param(new_uri_str);
+        SAS::report_event(event);
+        route_to_bgcf(req);
+      }
+      else if (uri_class == OFFNET_SIP_URI)
+      {
+        // Destination is off-net, so route to the BGCF.
+        TRC_DEBUG("Routing to BGCF");
+        SAS::Event event(trail(), SASEvent::OFFNET_ROUTING_TO_BGCF, 0);
+        event.add_var_param(new_uri_str);
+        SAS::report_event(event);
+        route_to_bgcf(req);
+      }
+      else
+      {
+        // Destination is on-net so route to the I-CSCF.
+        route_to_icscf(req);
+      }
     }
     else
     {
-      // Destination is on-net so route to the I-CSCF.
+      // ENUM is not configured so we have no way to tell if this request is
+      // on-net or off-net. Route it to the I-CSCF, which should be able to
+      // look it up in the HSS.
+      TRC_DEBUG("No ENUM lookup available - routing to I-CSCF");
       route_to_icscf(req);
     }
   }

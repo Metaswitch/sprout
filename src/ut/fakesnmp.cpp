@@ -81,6 +81,8 @@ AuthenticationStatsTables FAKE_AUTHENTICATION_STATS_TABLES =
 };
 
 // Alternative implementations is some functions, so we aren't calling real SNMP code in UT
+EventAccumulatorTable* EventAccumulatorTable::create(std::string name, std::string oid) { return new FakeEventAccumulatorTable(); };
+
 CounterTable* CounterTable::create(std::string name, std::string oid) { return new FakeCounterTable(); };
 
 IPCountTable* IPCountTable::create(std::string name, std::string oid) { return new FakeIPCountTable(); };
@@ -96,6 +98,11 @@ ColumnData IPCountRow::get_columns()
 SuccessFailCountByRequestTypeTable* SuccessFailCountByRequestTypeTable::create(std::string name, std::string oid)
 {
   return new FakeSuccessFailCountByRequestTypeTable();
+};
+
+SuccessFailCountTable* SuccessFailCountTable::create(std::string name, std::string oid)
+{
+  return new FakeSuccessFailCountTable();
 };
 
 } // Namespace SNMP ends

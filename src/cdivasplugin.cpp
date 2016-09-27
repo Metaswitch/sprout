@@ -43,6 +43,7 @@
 #include "sproutletplugin.h"
 #include "sproutletappserver.h"
 #include "mmtel.h"
+#include "log.h"
 
 class CDivASPlugin : public SproutletPlugin
 {
@@ -81,13 +82,19 @@ bool CDivASPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 
   if (opt.enabled_cdiv)
   {
+    TRC_STATUS("CDIV plugin enabled");
+
     SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions = SNMP::SuccessFailCountByRequestTypeTable::create("cdiv_as_incoming_sip_transactions",
                                                                                                                            "1.2.826.0.1.1578918.9.7.2");
     SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions = SNMP::SuccessFailCountByRequestTypeTable::create("cdiv_as_outgoing_sip_transactions",
                                                                                                                          "1.2.826.0.1.1578918.9.7.3");
     // Load the CDiv AppServer
     _cdiv = new CallDiversionAS(opt.prefix_cdiv);
-    _cdiv_sproutlet = new SproutletAppServerShim(_cdiv, opt.port_cdiv, incoming_sip_transactions, outgoing_sip_transactions);
+    _cdiv_sproutlet = new SproutletAppServerShim(_cdiv,
+                                                 opt.port_cdiv,
+                                                 opt.uri_cdiv,
+                                                 incoming_sip_transactions,
+                                                 outgoing_sip_transactions);
     sproutlets.push_back(_cdiv_sproutlet);
   }
 

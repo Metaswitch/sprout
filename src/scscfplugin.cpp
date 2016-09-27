@@ -40,11 +40,11 @@
  */
 
 #include "cfgoptions.h"
-#include "ipv6utils.h"
 #include "sproutletplugin.h"
 #include "scscfsproutlet.h"
 #include "sprout_alarmdefinition.h"
 #include "sprout_pd_definitions.h"
+#include "log.h"
 
 class SCSCFPlugin : public SproutletPlugin
 {
@@ -97,6 +97,8 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 
   if (opt.enabled_scscf)
   {
+    TRC_STATUS("S-CSCF plugin enabled");
+
     // Determine the S-CSCF node URI and then S-SCSCF, BGCF and I-CSCF cluster URIs.
     std::string scscf_node_uri;
 
@@ -108,7 +110,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     {
       std::string node_host(stack_data.local_host.ptr, stack_data.public_host.slen);
 
-      if (is_ipv6(node_host))
+      if (Utils::parse_ip_address(node_host) == Utils::IPV6_ADDRESS)
       {
         node_host = "[" + node_host + "]";
       }
@@ -152,6 +154,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           icscf_uri,
                                           opt.uri_bgcf,
                                           opt.port_scscf,
+                                          opt.uri_scscf,
                                           local_sdm,
                                           remote_sdms,
                                           hss_connection,

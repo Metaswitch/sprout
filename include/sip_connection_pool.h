@@ -1,5 +1,5 @@
 /**
- * @file connection_pool.h Class for maintaining a SIP connection pool.
+ * @file sip_connection_pool.h Class for maintaining a SIP connection pool.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,8 +34,8 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#ifndef CONNECTION_POOL_H__
-#define CONNECTION_POOL_H__
+#ifndef SIP_CONNECTION_POOL_H__
+#define SIP_CONNECTION_POOL_H__
 
 extern "C" {
 #include <pjsip.h>
@@ -48,17 +48,17 @@ extern "C" {
 
 #include "snmp_ip_count_table.h"
 
-class ConnectionPool
+class SIPConnectionPool
 {
 public:
-  ConnectionPool(pjsip_host_port* target,
+  SIPConnectionPool(pjsip_host_port* target,
                  int num_connections,
                  int recycle_period,
                  pj_pool_t* pool,
                  pjsip_endpoint* endpt,
                  pjsip_tpfactory* tp_factory,
                  SNMP::IPCountTable* sprout_count_tbl);
-  ~ConnectionPool();
+  ~SIPConnectionPool();
 
   void init();
 

@@ -2171,6 +2171,25 @@ bool PJUtils::get_rn(pjsip_uri* uri, std::string& routing_value)
   return rn_set;
 }
 
+pjsip_param* PJUtils::get_userpart_param(pjsip_uri* uri, pj_str_t param)
+{
+  pjsip_param* param_value = NULL;
+
+  if (PJSIP_URI_SCHEME_IS_TEL(uri))
+  {
+    // If the URI is a tel URI, pull out the information from the other_params
+    param_value = pjsip_param_find(&((pjsip_tel_uri*)uri)->other_param, &param);
+  }
+  else if (PJSIP_URI_SCHEME_IS_SIP(uri))
+  {
+    // If the URI is a SIP URI, pull out the information from the userinfo_params
+    param_value = pjsip_param_find(&((pjsip_sip_uri*)uri)->userinfo_param, &param);
+  }
+
+  return param_value;
+}
+
+
 /// Attempt ENUM lookup if appropriate.
 static std::string query_enum(pjsip_msg* req,
                               EnumService* enum_service,
@@ -2182,50 +2201,19 @@ static std::string query_enum(pjsip_msg* req,
 
   if (enum_service != NULL)
   {
-    // ENUM is enabled.
-    TRC_DEBUG("ENUM is enabled");
-
-
-    // Check whether we have a global number or whether we allow
-    // ENUM lookups for local numbers
-
-    {
-      // Perform an ENUM lookup if we have a tel URI, or if we have
-      // a SIP URI which is being treated as a phone number.
-      pj_str_t pj_user = PJUtils::user_from_uri(uri);
-      user = PJUtils::pj_str_to_string(&pj_user);
-      TRC_DEBUG("Performing ENUM lookup for user %s", user.c_str());
-      new_uri = enum_service->lookup_uri_from_user(user, trail);
-    }
+    // Perform an ENUM lookup if we have a tel URI, or if we have
+    // a SIP URI which is being treated as a phone number.
+    pj_str_t pj_user = PJUtils::user_from_uri(uri);
+    user = PJUtils::pj_str_to_string(&pj_user);
+    TRC_DEBUG("Performing ENUM translation for user %s", user.c_str());
+    new_uri = enum_service->lookup_uri_from_user(user, trail);
   }
   else
   {
-    // If we have no ENUM server configured, we act as if all ENUM lookups
-    // return a successful response and perform the following mappings:
-    //  - tel:<number> to sip:<number>@<homedomain>
-    //  - sip:<number>@<homedomain> to itself
-    //
-    // We do this in order to avoid needing to setup an ENUM server on test
-    // systems just to allow local calls to work.
-    TRC_DEBUG("No ENUM server configured, perform default translation");
+    TRC_DEBUG("No ENUM server configured, and fake ENUM disabled - do nothing");
     SAS::Event event(trail, SASEvent::ENUM_NOT_ENABLED, 0);
     SAS::report_event(event);
-
-    if (PJSIP_URI_SCHEME_IS_TEL(uri))
-    {
-      new_uri = "sip:";
-      new_uri += PJUtils::pj_str_to_string(&((pjsip_tel_uri*)uri)->number);
-      new_uri += "@";
-      new_uri += PJUtils::pj_str_to_string(&stack_data.default_home_domain);
-      TRC_DEBUG("Translate tel URI to SIP URI %s", new_uri.c_str());
-    }
-    else
-    {
-      new_uri = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, uri);
-      TRC_DEBUG("Translate SIP URI %s to itself", new_uri.c_str());
-    }
   }
-
   return new_uri;
 }
 
@@ -2422,3 +2410,48 @@ std::string PJUtils::get_next_routing_header(pjsip_msg* msg)
                                   route->name_addr.uri);
   }
 }
+
+// Gets the media types specified in the SDP on the message.  Currently only
+// looks for Audio and Video media types.
+//
+// @returns A set of type pjmedia_type
+std::set<pjmedia_type> PJUtils::get_media_types(pjsip_msg *msg)
+{
+  std::set<pjmedia_type> media_types;
+
+  // First, check if the message body is SDP - if not, we can't tell what the
+  // media types are (and assume they're 0).
+  if (msg->body &&
+      (!pj_stricmp2(&msg->body->content_type.type, "application")) &&
+      (!pj_stricmp2(&msg->body->content_type.subtype, "sdp")))
+  {
+    // Parse the SDP, using a temporary pool.
+    pj_pool_t* tmp_pool = pj_pool_create(&stack_data.cp.factory, "Mmtel", 1024, 512, NULL);
+    pjmedia_sdp_session *sdp_sess;
+    if (pjmedia_sdp_parse(tmp_pool, (char *)msg->body->data, msg->body->len, &sdp_sess) == PJ_SUCCESS)
+    {
+      // Spin through the media types, looking for those we're interested in.
+      for (unsigned int media_idx = 0; media_idx < sdp_sess->media_count; media_idx++)
+      {
+        TRC_DEBUG("Examining media type \"%.*s\"",
+                  sdp_sess->media[media_idx]->desc.media.slen,
+                  sdp_sess->media[media_idx]->desc.media.ptr);
+        if (pj_strcmp2(&sdp_sess->media[media_idx]->desc.media, "audio") == 0)
+        {
+          media_types.insert(PJMEDIA_TYPE_AUDIO);
+        }
+        else if (pj_strcmp2(&sdp_sess->media[media_idx]->desc.media, "video") == 0)
+        {
+          media_types.insert(PJMEDIA_TYPE_VIDEO);
+        }
+      }
+    }
+
+    // Tidy up.
+    pj_pool_release(tmp_pool);
+  }
+
+  return media_types;
+}
+
+

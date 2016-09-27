@@ -80,6 +80,9 @@ log_directory=/var/log/$NAME
 #
 setup_environment()
 {
+        # Net-snmp will attempt to load all MIBs listed in the MIBS
+        # environment variable. We don't install them by default. Clear
+        # the environment variable to stop net-snmp complaining.
         export MIBS=""
         export LD_LIBRARY_PATH=/usr/share/clearwater/sprout/lib
         ulimit -Hn 1000000

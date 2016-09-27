@@ -44,6 +44,7 @@
 #include "sproutletplugin.h"
 #include "bgcfservice.h"
 #include "bgcfsproutlet.h"
+#include "log.h"
 
 class BGCFPlugin : public SproutletPlugin
 {
@@ -97,6 +98,8 @@ bool BGCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                                                                     "1.2.826.0.1.1578918.9.3.23");
   if (opt.enabled_bgcf)
   {
+    TRC_STATUS("BGCF plugin enabled");
+
     // Create BGCF service required for the BGCF Sproutlet.
     _bgcf_service = new BgcfService();
 
@@ -108,6 +111,7 @@ bool BGCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     // Create the Sproutlet.
     _bgcf_sproutlet = new BGCFSproutlet(opt.prefix_bgcf,
                                         opt.port_bgcf,
+                                        opt.uri_bgcf,
                                         _bgcf_service,
                                         enum_service,
                                         _acr_factory,

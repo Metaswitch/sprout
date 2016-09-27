@@ -46,6 +46,7 @@ extern "C" {
 #include <pjsip.h>
 #include <pjlib-util.h>
 #include <pjlib.h>
+#include <pjmedia.h>
 #include <stdint.h>
 }
 
@@ -272,6 +273,7 @@ std::string remove_visual_separators(const pj_str_t& number);
 
 bool get_npdi(pjsip_uri* uri);
 bool get_rn(pjsip_uri* uri, std::string& routing_value);
+pjsip_param* get_userpart_param(pjsip_uri* uri, pj_str_t param);
 
 void translate_request_uri(pjsip_msg* req,
                            pj_pool_t* pool,
@@ -296,6 +298,10 @@ bool should_update_np_data(URIClass old_uri_class,
 // an empty string (if the header isn't a valid URI), so callers
 // should validate the result.
 std::string get_next_routing_header(pjsip_msg* msg);
+
+// Gets the media types specified in the SDP on the message.  Currently only
+// looks for Audio and Video media types.
+std::set<pjmedia_type> get_media_types(pjsip_msg *msg);
 
 } // namespace PJUtils
 

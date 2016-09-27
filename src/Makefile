@@ -17,13 +17,16 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          hss_sip_mapping.cpp \
                          authentication.cpp \
                          options.cpp \
-                         connection_pool.cpp \
+                         sip_connection_pool.cpp \
                          flowtable.cpp \
+                         http_connection_pool.cpp \
+                         httpclient.cpp \
                          httpconnection.cpp \
-                         httpresolver.cpp \
+                         a_record_resolver.cpp \
                          hssconnection.cpp \
                          websockets.cpp \
                          localstore.cpp \
+                         memcached_connection_pool.cpp \
                          memcachedstore.cpp \
                          memcachedstoreview.cpp \
                          memcached_config.cpp \
@@ -63,7 +66,6 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          httpstack.cpp \
                          httpstack_utils.cpp \
                          handlers.cpp \
-                         ipv6utils.cpp \
                          contact_filtering.cpp \
                          sproutletproxy.cpp \
                          pluginloader.cpp \
@@ -75,7 +77,6 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          exception_handler.cpp \
                          snmp_agent.cpp \
                          snmp_continuous_accumulator_table.cpp \
-                         snmp_event_accumulator_table.cpp \
                          sip_string_to_request_type.cpp \
                          snmp_row.cpp \
                          snmp_ip_row.cpp \
@@ -93,6 +94,7 @@ sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_ip_count_table.cpp \
                   snmp_success_fail_count_table.cpp \
                   snmp_success_fail_count_by_request_type_table.cpp \
+                  snmp_event_accumulator_table.cpp \
                   pdlog.cpp \
                   main.cpp
 
@@ -161,6 +163,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        session_expires_helper_test.cpp \
                        mock_subscriber_data_manager.cpp \
                        mock_chronos_connection.cpp \
+                       cassandra_connection_pool.cpp \
                        cassandra_store.cpp \
                        call_list_store.cpp \
                        mementosaslogger.cpp \
@@ -218,16 +221,18 @@ SPROUT_COMMON_LDFLAGS := -rdynamic \
                          -lz \
                          -lpthread \
                          -lboost_filesystem \
-                         -lthrift \
-                         -lcassandra \
                          `net-snmp-config --netsnmp-agent-libs`
 
 # Explicitly link some pjsip modules. Some plugins require symbols in them
 # (which sprout-base doesn't), and the plugins are dynamically linked at run
 # time, so GCC won't link in the symbols they need unless we explicitly tell
 # it to.
-sprout_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} -Wl,--whole-archive -lpjmedia-x86_64-unknown-linux-gnu -Wl,--no-whole-archive `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --libs libpjproject`
-sprout_test_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} -lboost_date_time `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --libs libpjproject`
+sprout_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} \-Wl,--whole-archive -lpjmedia-x86_64-unknown-linux-gnu -Wl,--no-whole-archive `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --libs libpjproject`
+sprout_test_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} \
+                       -lthrift \
+                       -lcassandra \
+                       -lboost_date_time \
+                       `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --libs libpjproject`
 
 # Build rules for sproutlet plugins
 PLUGIN_COMMON_CPPFLAGS := -fPIC \
@@ -242,7 +247,7 @@ gemini-as.so_SOURCES := mobiletwinned.cpp sproutletappserver.cpp geminiasplugin.
 gemini-as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -I../modules/gemini/include
 gemini-as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
-memento-as.so_SOURCES := sproutletappserver.cpp mementoasplugin.cpp cassandra_store.cpp call_list_store.cpp mementosaslogger.cpp call_list_store_processor.cpp httpnotifier.cpp mementoappserver.cpp
+memento-as.so_SOURCES := sproutletappserver.cpp mementoasplugin.cpp cassandra_store.cpp cassandra_connection_pool.cpp call_list_store.cpp mementosaslogger.cpp call_list_store_processor.cpp httpnotifier.cpp mementoappserver.cpp
 memento-as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -I../modules/memento-as/include -I../modules/memento-as/modules/memento-common/include
 memento-as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS} -lthrift -lcassandra
 
