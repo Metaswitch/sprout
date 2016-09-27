@@ -22,6 +22,19 @@ Depends: sprout-libs (= ${binary:Version})
 Recommends: gdb,
 Description: Debugging symbols for sprout-libs
 
+Package: sprout-node
+Architecture: any
+Depends: sprout (= ${binary:Version}), clearwater-memcached, chronos, astaire
+Description: sprout-node, the SIP Router node
+
+Package: sprout-node-dbg
+Architecture: any
+Section: debug
+Priority: extra
+Depends: sprout-node (= ${binary:Version})
+Recommends: sprout-dbg, chronos-dbg
+Description: Debugging symbols for sprout-node, the SIP Router node
+
 Package: sprout
 Architecture: any
 Depends: sprout-base, sprout-scscf, sprout-icscf, sprout-bgcf, sprout-mmtel-as
@@ -38,7 +51,7 @@ Description: Debugging symbols for sprout, the SIP Router
 
 Package: sprout-base
 Architecture: any
-Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-log-cleanup, sprout-libs, clearwater-memcached, libboost-regex1.54.0, libboost-system1.54.0, libboost-thread1.54.0, libzmq3, libevent-pthreads-2.0-5, chronos, clearwater-socket-factory, libboost-filesystem1.54.0, astaire, libsnmp30 (>= 5.7.2~dfsg-clearwater4), clearwater-monit
+Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-log-cleanup, sprout-libs, libboost-regex1.54.0, libboost-system1.54.0, libboost-thread1.54.0, libzmq3, libevent-pthreads-2.0-5, clearwater-socket-factory, libboost-filesystem1.54.0, libsnmp30 (>= 5.7.2~dfsg-clearwater4), clearwater-monit
 Suggests: sprout-dbg, clearwater-logging
 Replaces: sprout
 Description: sprout-base, the SIP Router basic executable
@@ -48,7 +61,7 @@ Architecture: any
 Section: debug
 Priority: extra
 Depends: sprout-base (= ${binary:Version})
-Recommends: gdb, sprout-libs-dbg, chronos-dbg
+Recommends: gdb, sprout-libs-dbg
 Description: Debugging symbols for sprout, the SIP Router
 
 Package: sprout-scscf
@@ -118,7 +131,7 @@ Description: Debugging symbols for gemini, the Mobile Twinning Application Serve
 
 Package: memento-as
 Architecture: any
-Depends: sprout-base, clearwater-cassandra
+Depends: sprout-base
 Suggests: memento-as-dbg
 Description: memento-as, the Call List Application Server plug-in
 
@@ -154,6 +167,19 @@ Section: debug
 Priority: extra
 Depends: mangelwurzel-as (= ${binary:Version})
 Description: Debugging symbols for mangelwurzel, the B2BUA and SCC-AS emulator
+
+Package: bono-node
+Architecture: any
+Depends: bono (= ${binary:Version})
+Description: bono-node, the SIP edge proxy node
+
+Package: bono-node-dbg
+Architecture: any
+Section: debug
+Priority: extra
+Depends: bono-node (= ${binary:Version})
+Recommends: bono-dbg
+Description: Debugging symbols for bono-node, the SIP edge proxy node
 
 Package: bono
 Architecture: any
@@ -191,7 +217,7 @@ Description: Debugging symbols for the Clearwater build of SIPp, used for runnin
 Package: clearwater-sip-stress
 Architecture: any
 Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-sipp
-Conflicts: sprout, bono, restund
+Conflicts: sprout, sprout-node, bono, restund
 Suggests: clearwater-logging, clearwater-snmpd, clearwater-sip-stress-stats
 Description: Runs SIP stress against Clearwater
 
