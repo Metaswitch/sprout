@@ -156,6 +156,7 @@ enum OptionTypes
   OPT_SAS_USE_SIGNALING_IF,
   OPT_DISABLE_TCP_SWITCH,
   OPT_DEFAULT_TEL_URI_TRANSLATION,
+  OPT_CHRONOS_HOSTNAME,
 };
 
 
@@ -239,6 +240,7 @@ const static struct pj_getopt_option long_opt[] =
   { "scscf-node-uri",               required_argument, 0, OPT_SCSCF_NODE_URI},
   { "sas-use-signaling-interface",  no_argument,       0, OPT_SAS_USE_SIGNALING_IF},
   { "disable-tcp-switch",           no_argument,       0, OPT_DISABLE_TCP_SWITCH},
+  { "chronos-hostname",             required_argument, 0, OPT_CHRONOS_HOSTNAME},
   { NULL,                           0,                 0, 0}
 };
 
@@ -436,6 +438,9 @@ static void usage(void)
        "                            Whether to disable TCP-to-UDP uplift when messages are greater than.\n"
        "                            1300 bytes.\n"
        "     --pidfile=<filename>   Write pidfile\n"
+       "     --chronos-hostname <hostname>\n"
+       "                            Specify the hostname of a remote Chronos cluster. If unset the default\n"
+       "                            is to use localhost, using localhost as the callback URL.\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
        " -F, --log-file <directory>\n"
@@ -1150,6 +1155,9 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case OPT_SPROUT_HOSTNAME:
       options->sprout_hostname = std::string(pj_optarg);
       break;
+
+    case OPT_CHRONOS_HOSTNAME:
+      options->chronos_hostname = std::string(pj_optarg);
 
     case OPT_LISTEN_PORT:
       options->listen_port = atoi(pj_optarg);
@@ -1951,19 +1959,29 @@ int main(int argc, char* argv[])
 
   // Create a connection to Chronos.
   std::string port_str = std::to_string(opt.http_port);
+
+  std::string chronos_service;
   std::string chronos_callback_host = "127.0.0.1:" + port_str;
 
-  // We want Chronos to call back to its local sprout instance so that we can
-  // handle Sprouts failing without missing timers.
-  Utils::IPAddressType address_type = Utils::parse_ip_address(opt.http_address);
-  if ((address_type == Utils::IPAddressType::IPV6_ADDRESS) ||
-      (address_type == Utils::IPAddressType::IPV6_ADDRESS_WITH_PORT) ||
-      (address_type == Utils::IPAddressType::IPV6_ADDRESS_BRACKETED))
+  if (opt.chronos_hostname == "")
   {
-    chronos_callback_host = "[::1]:" + port_str;
+    chronos_service = "127.0.0.1:7253";
+
+    Utils::IPAddressType address_type = Utils::parse_ip_address(opt.http_address);
+
+    if ((address_type == Utils::IPAddressType::IPV6_ADDRESS) ||
+        (address_type == Utils::IPAddressType::IPV6_ADDRESS_WITH_PORT) ||
+        (address_type == Utils::IPAddressType::IPV6_ADDRESS_BRACKETED))
+    {
+      chronos_callback_host = "[::1]:" + port_str;
+    }
+  }
+  else
+  {
+    chronos_service = opt.chronos_hostname + ":7253";
+    chronos_callback_host = opt.sprout_hostname + ":" + port_str;
   }
 
-  std::string chronos_service = "127.0.0.1:7253";
   TRC_STATUS("Creating connection to Chronos %s using %s as the callback URI",
              chronos_service.c_str(),
              chronos_callback_host.c_str());
