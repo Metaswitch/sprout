@@ -127,27 +127,7 @@ static bool sdm_access_common(SubscriberDataManager::AoRPair** aor_pair,
 
     if (found_binding)
     {
-      for (SubscriberDataManager::AoR::Bindings::const_iterator i =
-           backup_aor_pair->get_current()->bindings().begin();
-           i != backup_aor_pair->get_current()->bindings().end();
-           ++i)
-      {
-        SubscriberDataManager::AoR::Binding* src = i->second;
-        SubscriberDataManager::AoR::Binding* dst =
-          (*aor_pair)->get_current()->get_binding(i->first);
-        *dst = *src;
-      }
-
-      for (SubscriberDataManager::AoR::Subscriptions::const_iterator i =
-           backup_aor_pair->get_current()->subscriptions().begin();
-           i != backup_aor_pair->get_current()->subscriptions().end();
-           ++i)
-      {
-        SubscriberDataManager::AoR::Subscription* src = i->second;
-        SubscriberDataManager::AoR::Subscription* dst =
-          (*aor_pair)->get_current()->get_subscription(i->first);
-        *dst = *src;
-      }
+      (*aor_pair)->get_current()->copy_aor(backup_aor_pair->get_current());
     }
 
     if (backup_aor_pair_alloced)

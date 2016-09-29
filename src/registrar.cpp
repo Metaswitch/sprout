@@ -215,7 +215,7 @@ bool get_private_id(pjsip_rx_data* rdata, std::string& id)
 SubscriberDataManager::AoRPair* get_bindings(
                    SubscriberDataManager* primary_sdm,         ///<store to read from
                    std::string aor,                            ///<address of record to read from
-                   SubscriberDataManager* backup_sdm,          ///<backup store to read from if no entry in store
+                   std::vector<SubscriberDataManager*> backup_sdms,
                    SAS::TrailId trail)
 {
   SubscriberDataManager::AoRPair* aor_pair;
@@ -235,41 +235,45 @@ SubscriberDataManager::AoRPair* get_bindings(
   else
   {
     // If we don't have any bindings, try the backup AoR and/or store.
-    // LCOV_EXCL_START - remote store tests temp excluded
     if (aor_pair->get_current()->bindings().empty())
     {
-      if ((backup_sdm != NULL) &&
-          (backup_sdm->has_servers()))
-      {
-        backup_aor = backup_sdm->get_aor_data(aor, trail);
-      }
+      std::vector<SubscriberDataManager*>::iterator it = backup_sdms.begin();
+      SubscriberDataManager::AoRPair* local_backup_aor = NULL;
 
-      if ((backup_aor != NULL) &&
-          (backup_aor->get_current() != NULL) &&
-          (!backup_aor->get_current()->bindings().empty()))
+      bool found_binding = false;
+
+      while ((it != backup_sdms.end()) && (!found_binding))
       {
-        for (SubscriberDataManager::AoR::Bindings::const_iterator i = backup_aor->get_current()->bindings().begin();
-             i != backup_aor->get_current()->bindings().end();
-             ++i)
+        if ((*it)->has_servers())
         {
-          SubscriberDataManager::AoR::Binding* src = i->second;
-          SubscriberDataManager::AoR::Binding* dst = aor_pair->get_current()->get_binding(i->first);
-          *dst = *src;
+          local_backup_aor = (*it)->get_aor_data(aor, trail);
+
+          if ((local_backup_aor != NULL) &&
+              (local_backup_aor->current_contains_bindings()))
+          {
+            found_binding = true;
+            backup_aor = local_backup_aor;
+          }
         }
 
-        for (SubscriberDataManager::AoR::Subscriptions::const_iterator i = backup_aor->get_current()->subscriptions().begin();
-             i != backup_aor->get_current()->subscriptions().end();
-             ++i)
+        if (!found_binding)
         {
-          SubscriberDataManager::AoR::Subscription* src = i->second;
-          SubscriberDataManager::AoR::Subscription* dst = aor_pair->get_current()->get_subscription(i->first);
-          *dst = *src;
+          ++it;
+
+          if (local_backup_aor != NULL)
+          {
+            delete local_backup_aor;
+            local_backup_aor = NULL;
+          }
         }
       }
 
+      if (found_binding)
+      {
+        aor_pair->get_current()->copy_aor(backup_aor->get_current());
+      }
       delete backup_aor;
     }
-    // LCOV_EXCL_STOP
   }
 
   return aor_pair;
@@ -328,7 +332,6 @@ SubscriberDataManager::AoRPair* write_to_store(
     }
 
     // If we don't have any bindings, try the backup AoR and/or stores.
-    // LCOV_EXCL_START - remote store tests temp excluded
     if (aor_pair->get_current()->bindings().empty())
     {
       bool found_binding = false;
@@ -376,26 +379,9 @@ SubscriberDataManager::AoRPair* write_to_store(
 
       if (found_binding)
       {
-        for (SubscriberDataManager::AoR::Bindings::const_iterator i = backup_aor->get_current()->bindings().begin();
-             i != backup_aor->get_current()->bindings().end();
-             ++i)
-        {
-          SubscriberDataManager::AoR::Binding* src = i->second;
-          SubscriberDataManager::AoR::Binding* dst = aor_pair->get_current()->get_binding(i->first);
-          *dst = *src;
-        }
-
-        for (SubscriberDataManager::AoR::Subscriptions::const_iterator i = backup_aor->get_current()->subscriptions().begin();
-             i != backup_aor->get_current()->subscriptions().end();
-             ++i)
-        {
-          SubscriberDataManager::AoR::Subscription* src = i->second;
-          SubscriberDataManager::AoR::Subscription* dst = aor_pair->get_current()->get_subscription(i->first);
-          *dst = *src;
-        }
+        aor_pair->get_current()->copy_aor(backup_aor->get_current());
       }
     }
-    // LCOV_EXCL_STOP
 
     is_initial_registration = is_initial_registration && aor_pair->get_current()->bindings().empty();
 
@@ -565,6 +551,7 @@ void build_register_response(SubscriberDataManager::AoRPair* aor_pair,
          ++i)
     {
       SubscriberDataManager::AoR::Binding* binding = i->second;
+      TRC_DEBUG("Binding %s is for %s", i->first.c_str(), binding->_address_of_record->c_str());
       if (binding->_expires > now)
       {
         // The binding hasn't expired.  Parse the Contact URI from the store,
@@ -596,6 +583,7 @@ void build_register_response(SubscriberDataManager::AoRPair* aor_pair,
             // The pub-gruu parameter on the Contact header is calculated
             // from the instance-id, to avoid unnecessary storage in
             // memcached.
+            TRC_DEBUG("Binding %s is still for %s", i->first.c_str(), binding->_address_of_record->c_str());
             std::string gruu = binding->pub_gruu_quoted_string(tdata->pool);
             if (!gruu.empty())
             {
@@ -777,7 +765,7 @@ void process_fetch_bindings(pjsip_rx_data* rdata, int now, SAS::TrailId trail)
     aor = uris.front();
 
     // Get bindings from the local store, falling back to remote if not present
-    aor_pair = get_bindings(sdm, aor, remote_sdm, trail);
+    aor_pair = get_bindings(sdm, aor, remote_sdms, trail);
 
     if ((aor_pair != NULL) && (aor_pair->get_current() != NULL))
     {

@@ -551,7 +551,6 @@ void SubscriberDataManager::AoR::common_constructor(const AoR& other)
   _uri = other._uri;
 }
 
-
 /// Clear all the bindings and subscriptions from this object.
 void SubscriberDataManager::AoR::clear(bool clear_emergency_bindings)
 {
@@ -652,6 +651,20 @@ void SubscriberDataManager::AoR::remove_subscription(const std::string& to_tag)
     delete i->second;
     _subscriptions.erase(i);
   }
+}
+
+/// Test-only function to remove all the bindings from an AOR object
+void SubscriberDataManager::AoR::test_clear_bindings()
+{
+  for (Bindings::const_iterator i = _bindings.begin();
+       i != _bindings.end();
+       ++i)
+  {
+    delete i->second;
+  }
+
+  // Clear the bindings map.
+  _bindings.clear();
 }
 
 // Generates the public GRUU for this binding from the address of record and
@@ -765,6 +778,28 @@ int SubscriberDataManager::AoR::get_next_expires()
   }
   // Otherwise we return the value found.
   return _next_expires;
+}
+
+// Copy all bindings and subscriptions to this AoR
+void SubscriberDataManager::AoR::copy_aor(SubscriberDataManager::AoR* source_aor)
+{
+  for (Bindings::const_iterator i = source_aor->bindings().begin();
+       i != source_aor->bindings().end();
+       ++i)
+  {
+    Binding* src = i->second;
+    Binding* dst = get_binding(i->first);
+    Binding::copy_binding(dst, src);
+  }
+
+  for (Subscriptions::const_iterator i = source_aor->subscriptions().begin();
+       i != source_aor->subscriptions().end();
+       ++i)
+  {
+    Subscription* src = i->second;
+    Subscription* dst = get_subscription(i->first);
+    *dst = *src;
+  }
 }
 
 //
