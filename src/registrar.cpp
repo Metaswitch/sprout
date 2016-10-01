@@ -492,6 +492,7 @@ private:
   bool is_deregistration = false;
   int st_code = PJSIP_SC_OK;
   int expiry = 0;
+  ACR* acr = NULL;
 };
 
 Registration::Registration()
@@ -523,6 +524,13 @@ Registration::~Registration()
   else
   {
     t->increment_failures();
+  }
+
+  // Send the ACR and delete it.
+  if (acr)
+  {
+    acr->send();
+    delete acr;
   }
 }
 
@@ -595,9 +603,9 @@ void Registration::process(pjsip_rx_data* rdata)
 
   // Allocate an ACR for this transaction and pass the request to it.  Node
   // role is always considered originating for REGISTER requests.
-  ACR* acr = acr_factory->get_acr(get_trail(rdata),
-                                  ACR::CALLING_PARTY,
-                                  ACR::NODE_ROLE_ORIGINATING);
+  acr = acr_factory->get_acr(get_trail(rdata),
+                             ACR::CALLING_PARTY,
+                             ACR::NODE_ROLE_ORIGINATING);
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   // Canonicalize the public ID from the URI in the To header.
@@ -676,9 +684,6 @@ void Registration::process(pjsip_rx_data* rdata)
     event.add_var_param(private_id);
     SAS::report_event(event);
 
-    acr->send();
-    delete acr;
-
     return;
   }
 
@@ -700,9 +705,6 @@ void Registration::process(pjsip_rx_data* rdata)
                                NULL,
                                NULL,
                                acr);
-    acr->send();
-    delete acr;
-
     return;
   }
 
@@ -722,9 +724,6 @@ void Registration::process(pjsip_rx_data* rdata)
                                NULL,
                                NULL,
                                acr);
-    acr->send();
-    delete acr;
-
     return;
   }
 
@@ -809,8 +808,6 @@ void Registration::process(pjsip_rx_data* rdata)
                                NULL,
                                NULL,
                                acr);
-    acr->send();
-    delete acr;
     delete aor_pair;
 
     return;
@@ -830,8 +827,6 @@ void Registration::process(pjsip_rx_data* rdata)
     event.add_var_param(error_msg);
     SAS::report_event(event);
 
-    acr->send();
-    delete acr;
     delete aor_pair;
 
     return;
@@ -859,8 +854,6 @@ void Registration::process(pjsip_rx_data* rdata)
 
     status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
 
-    acr->send();
-    delete acr;
     delete aor_pair;
 
     return;
@@ -993,9 +986,6 @@ void Registration::process(pjsip_rx_data* rdata)
   pjsip_tx_data_add_ref(tdata);
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
 
-  // Send the ACR and delete it.
-  acr->send();
-  delete acr;
 
   // TODO in sto397: we should do third-party registration once per
   // service profile (i.e. once per iFC, using an arbitrary public
