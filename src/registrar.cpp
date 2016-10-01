@@ -488,6 +488,8 @@ public:
   void process(pjsip_rx_data* rdata);
 
 private:
+  void reply(int status);
+  pjsip_rx_data* _rdata;
   bool is_initial_registration = true;
   bool is_deregistration = false;
   int st_code = PJSIP_SC_OK;
@@ -534,10 +536,22 @@ Registration::~Registration()
   }
 }
 
+void Registration::reply(int status)
+{
+  st_code = status;
+  PJUtils::respond_stateless(stack_data.endpt,
+                             _rdata,
+                             st_code,
+                             NULL,
+                             NULL,
+                             NULL);
+}
+
 void Registration::process(pjsip_rx_data* rdata)
 {
   pj_status_t status;
   SAS::TrailId trail = get_trail(rdata);
+  _rdata = rdata;
 
   // Get the system time in seconds for calculating absolute expiry times.
   int now = time(NULL);
@@ -591,13 +605,7 @@ void Registration::process(pjsip_rx_data* rdata)
     SAS::Event event(trail, SASEvent::REGISTER_FAILED_INVALIDURISCHEME, 0);
     SAS::report_event(event);
 
-    st_code = PJSIP_SC_NOT_FOUND;
-    PJUtils::respond_stateless(stack_data.endpt,
-                               rdata,
-                               st_code,
-                               NULL,
-                               NULL,
-                               NULL);
+    reply(PJSIP_SC_NOT_FOUND);
     return;
   }
 
@@ -697,14 +705,7 @@ void Registration::process(pjsip_rx_data* rdata)
     event.add_var_param(public_id);
     SAS::report_event(event);
 
-    st_code = PJSIP_SC_BAD_REQUEST;
-    PJUtils::respond_stateless(stack_data.endpt,
-                               rdata,
-                               st_code,
-                               NULL,
-                               NULL,
-                               NULL,
-                               acr);
+    reply(PJSIP_SC_BAD_REQUEST);
     return;
   }
 
@@ -716,14 +717,7 @@ void Registration::process(pjsip_rx_data* rdata)
     event.add_var_param(public_id);
     SAS::report_event(event);
 
-    st_code = PJSIP_SC_NOT_IMPLEMENTED;
-    PJUtils::respond_stateless(stack_data.endpt,
-                               rdata,
-                               st_code,
-                               NULL,
-                               NULL,
-                               NULL,
-                               acr);
+    reply(PJSIP_SC_NOT_IMPLEMENTED);
     return;
   }
 
@@ -800,14 +794,7 @@ void Registration::process(pjsip_rx_data* rdata)
     event.add_var_param(error_msg);
     SAS::report_event(event);
 
-    st_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
-    PJUtils::respond_stateless(stack_data.endpt,
-                               rdata,
-                               st_code,
-                               NULL,
-                               NULL,
-                               NULL,
-                               acr);
+    reply(PJSIP_SC_INTERNAL_SERVER_ERROR);
     delete aor_pair;
 
     return;
