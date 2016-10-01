@@ -103,9 +103,7 @@ public:
 
   void SetUp()
   {
-    _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "");
-    _hss_connection->set_impu_result("tel:6505550231", "reg", HSSConnection::STATE_REGISTERED, "");
-    _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "");
+    _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
     _hss_connection->set_rc("/impu/sip%3A6505550231%40homedomain/reg-data", HTTP_OK);
     _chronos_connection->set_result("", HTTP_OK);
     _chronos_connection->set_result("post_identity", HTTP_OK);
@@ -759,7 +757,8 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
                               "      <Extension><IncludeRegisterRequest/><IncludeRegisterResponse/></Extension>\n"
                               "  </ApplicationServer>\n"
                               "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                              "</ServiceProfile></IMSSubscription>",                          
+    "?private_id=6505550231%40homedomain");
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -831,7 +830,8 @@ TEST_F(RegistrarTest, AppServersWithMultipartBodyWithTelURI)
                               "      <Extension><IncludeRegisterRequest/><IncludeRegisterResponse/></Extension>\n"
                               "  </ApplicationServer>\n"
                               "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                              "</ServiceProfile></IMSSubscription>",
+    "?private_id=6505550231%40homedomain");
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -902,7 +902,8 @@ TEST_F(RegistrarTest, AppServersWithOneBody)
                               "      <Extension><IncludeRegisterRequest/></Extension>\n"
                               "    </ApplicationServer>\n"
                               "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                              "</ServiceProfile></IMSSubscription>",
+    "?private_id=6505550231%40homedomain");
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -968,7 +969,8 @@ TEST_F(RegistrarTest, AppServersWithNoBody)
                               "      <DefaultHandling>0</DefaultHandling>\n"
                               "    </ApplicationServer>\n"
                               "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                              "</ServiceProfile></IMSSubscription>",
+    "?private_id=6505550231%40homedomain");
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -1031,7 +1033,8 @@ TEST_F(RegistrarTest, AppServersPassthrough)
                               "      <DefaultHandling>0</DefaultHandling>\n"
                               "    </ApplicationServer>\n"
                               "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                              "</ServiceProfile></IMSSubscription>",
+    "?private_id=6505550231%40homedomain");
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -1162,7 +1165,8 @@ TEST_F(RegistrarTest, AppServersInitialRegistration)
                                 "    <DefaultHandling>0</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+                                "</ServiceProfile></IMSSubscription>",
+    "?private_id=6505550231%40homedomain");
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -1240,7 +1244,7 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, xml);
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, xml, "?private_id=6505550231%40homedomain");
   _hss_connection->set_impu_result("sip:6505550231@homedomain", "dereg-admin", HSSConnection::STATE_NOT_REGISTERED, xml);
 
   // We add two identical IP addresses so that we hit the retry behaviour,
@@ -1334,8 +1338,8 @@ TEST_F(RegistrarTest, AppServersDeRegistrationFailure)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, xml);
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "dereg-admin", HSSConnection::STATE_NOT_REGISTERED, xml);
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, xml, "?private_id=6505550231%40homedomain");
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "dereg-admin", HSSConnection::STATE_NOT_REGISTERED, xml, "?private_id=6505550231%40homedomain");
 
   // We add two identical IP addresses so that we hit the retry behaviour,
   // but we don't have to worry about which IP address is selected first.
@@ -1417,7 +1421,8 @@ TEST_F(RegistrarTest, AppServersReRegistrationFailure)
                                 "    <DefaultHandling>1</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+                                "</ServiceProfile></IMSSubscription>",
+    "?private_id=6505550231%40homedomain");
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -1494,7 +1499,8 @@ TEST_F(RegistrarTest, AppServersReRegistration)
                                 "    <DefaultHandling>0</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+                                "</ServiceProfile></IMSSubscription>",
+    "?private_id=6505550231%40homedomain");
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -1590,7 +1596,7 @@ TEST_F(RegistrarTest, AssociatedUriFails)
 {
   Message msg;
   msg._user = "6505550232";
-  _hss_connection->set_rc("/impu/sip%3A6505550232%40homedomain/reg-data",
+  _hss_connection->set_rc("/impu/sip%3A6505550232%40homedomain/reg-data?private_id=6505550232%40homedomain",
                           500);
 
   inject_msg(msg.get());
@@ -1609,7 +1615,7 @@ TEST_F(RegistrarTest, AssociatedUrisTimeOut)
 {
   Message msg;
   msg._user = "6505550232";
-  _hss_connection->set_rc("/impu/sip%3A6505550232%40homedomain/reg-data",
+  _hss_connection->set_rc("/impu/sip%3A6505550232%40homedomain/reg-data?private_id=6505550232%40homedomain",
                           503);
 
   inject_msg(msg.get());
@@ -1630,7 +1636,7 @@ TEST_F(RegistrarTest, AssociatedUrisUnexpectedFailure)
   msg._user = "6505550232";
 
   // We don't expected to get Not Implemented back from Homstead
-  _hss_connection->set_rc("/impu/sip%3A6505550232%40homedomain/reg-data",
+  _hss_connection->set_rc("/impu/sip%3A6505550232%40homedomain/reg-data?private_id=6505550232%40homedomain",
                           501);
 
   inject_msg(msg.get());
@@ -1656,7 +1662,8 @@ TEST_F(RegistrarTest, MultipleAssociatedUris)
                               "  <PublicIdentity><Identity>sip:6505550234@homedomain</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
                               "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                              "</ServiceProfile></IMSSubscription>", 
+    "?private_id=6505550233%40homedomain");
 
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
@@ -1684,7 +1691,8 @@ TEST_F(RegistrarTest, MultipleAssociatedUrisWithTelURI)
                               "  <PublicIdentity><Identity>tel:6505550234</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
                               "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                              "</ServiceProfile></IMSSubscription>",
+    "?private_id=6505550233%40homedomain");
 
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
@@ -1712,7 +1720,8 @@ TEST_F(RegistrarTest, NonPrimaryAssociatedUri)
                               "  <PublicIdentity><Identity>sip:6505550234@homedomain</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
                               "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                              "</ServiceProfile></IMSSubscription>",
+    "?private_id=6505550234%40homedomain");
 
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
@@ -1758,7 +1767,8 @@ TEST_F(RegistrarTest, AppServersWithNoExtension)
                               "      <DefaultHandling>0</DefaultHandling>\n"
                               "    </ApplicationServer>\n"
                               "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                              "</ServiceProfile></IMSSubscription>",
+    "?private_id=6505550231%40homedomain");
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
