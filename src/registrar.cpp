@@ -488,6 +488,10 @@ public:
   void process(pjsip_rx_data* rdata);
 
 private:
+  bool is_initial_registration = true;
+  bool is_deregistration = false;
+  int st_code = PJSIP_SC_OK;
+  int expiry = 0;
 };
 
 Registration::Registration()
@@ -496,18 +500,39 @@ Registration::Registration()
 
 Registration::~Registration()
 {
+  SNMP::SuccessFailCountTable* t;
+  if (expiry == 0 || is_deregistration)
+  {
+    t = reg_stats_tables->de_reg_tbl;
+  }
+  else if (is_initial_registration)
+  {
+    t = reg_stats_tables->init_reg_tbl;
+  }
+  else
+  {
+    t = reg_stats_tables->re_reg_tbl;
+  }
+
+  t->increment_attempts();
+
+  if (st_code == PJSIP_SC_OK)
+  {
+    t->increment_successes();
+  }
+  else
+  {
+    t->increment_failures();
+  }
 }
 
 void Registration::process(pjsip_rx_data* rdata)
 {
   pj_status_t status;
-  int st_code = PJSIP_SC_OK;
   SAS::TrailId trail = get_trail(rdata);
 
   // Get the system time in seconds for calculating absolute expiry times.
   int now = time(NULL);
-  int expiry = 0;
-  bool is_initial_registration;
 
   // Loop through headers as early as possible so that we know the expiry time
   // and which registration statistics to update.
@@ -531,6 +556,7 @@ void Registration::process(pjsip_rx_data* rdata)
       // Wildcard contact, which can only be used if the expiry is 0
       TRC_ERROR("Attempted to deregister all bindings, but expiry value wasn't 0");
       reject_with_400 = true;
+      is_deregistration = true;
       break;
     }
 
@@ -557,24 +583,13 @@ void Registration::process(pjsip_rx_data* rdata)
     SAS::Event event(trail, SASEvent::REGISTER_FAILED_INVALIDURISCHEME, 0);
     SAS::report_event(event);
 
+    st_code = PJSIP_SC_NOT_FOUND;
     PJUtils::respond_stateless(stack_data.endpt,
                                rdata,
-                               PJSIP_SC_NOT_FOUND,
+                               st_code,
                                NULL,
                                NULL,
                                NULL);
-    if (expiry == 0)
-    {
-      reg_stats_tables->de_reg_tbl->increment_attempts();
-      reg_stats_tables->de_reg_tbl->increment_failures();
-    }
-    else
-    // Invalid URI means this cannot be a re-register request, so if not
-    // a de-register request, then treat as an initial register request.
-    {
-      reg_stats_tables->init_reg_tbl->increment_attempts();
-      reg_stats_tables->init_reg_tbl->increment_failures();
-    }
     return;
   }
 
@@ -655,6 +670,7 @@ void Registration::process(pjsip_rx_data* rdata)
                               acr,
                               "REGISTER"))
   {
+    st_code = PJSIP_SC_NOT_FOUND;
     SAS::Event event(trail, SASEvent::REGISTER_FAILED_INVALIDPUBPRIV, 0);
     event.add_var_param(public_id);
     event.add_var_param(private_id);
@@ -663,18 +679,6 @@ void Registration::process(pjsip_rx_data* rdata)
     acr->send();
     delete acr;
 
-    if (expiry == 0)
-    {
-      reg_stats_tables->de_reg_tbl->increment_attempts();
-      reg_stats_tables->de_reg_tbl->increment_failures();
-    }
-    else
-    // Invalid public/private identity means this cannot be a re-register request,
-    // so if not a de-register request, then treat as an initial register request.
-    {
-      reg_stats_tables->init_reg_tbl->increment_attempts();
-      reg_stats_tables->init_reg_tbl->increment_failures();
-    }
     return;
   }
 
@@ -688,18 +692,16 @@ void Registration::process(pjsip_rx_data* rdata)
     event.add_var_param(public_id);
     SAS::report_event(event);
 
+    st_code = PJSIP_SC_BAD_REQUEST;
     PJUtils::respond_stateless(stack_data.endpt,
                                rdata,
-                               PJSIP_SC_BAD_REQUEST,
+                               st_code,
                                NULL,
                                NULL,
                                NULL,
                                acr);
     acr->send();
     delete acr;
-
-    reg_stats_tables->de_reg_tbl->increment_attempts();
-    reg_stats_tables->de_reg_tbl->increment_failures();
 
     return;
   }
@@ -712,18 +714,16 @@ void Registration::process(pjsip_rx_data* rdata)
     event.add_var_param(public_id);
     SAS::report_event(event);
 
+    st_code = PJSIP_SC_NOT_IMPLEMENTED;
     PJUtils::respond_stateless(stack_data.endpt,
                                rdata,
-                               PJSIP_SC_NOT_IMPLEMENTED,
+                               st_code,
                                NULL,
                                NULL,
                                NULL,
                                acr);
     acr->send();
     delete acr;
-
-    reg_stats_tables->de_reg_tbl->increment_attempts();
-    reg_stats_tables->de_reg_tbl->increment_failures();
 
     return;
   }
@@ -785,19 +785,6 @@ void Registration::process(pjsip_rx_data* rdata)
     // LCOV_EXCL_STOP
   }
 
-  if (expiry == 0)
-  {
-    reg_stats_tables->de_reg_tbl->increment_attempts();
-  }
-  else if (is_initial_registration)
-  {
-    reg_stats_tables->init_reg_tbl->increment_attempts();
-  }
-  else
-  {
-    reg_stats_tables->re_reg_tbl->increment_attempts();
-  }
-
   // Build and send the reply.
   pjsip_tx_data* tdata;
   status = PJUtils::create_response(stack_data.endpt, rdata, st_code, NULL, &tdata);
@@ -814,9 +801,10 @@ void Registration::process(pjsip_rx_data* rdata)
     event.add_var_param(error_msg);
     SAS::report_event(event);
 
+    st_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
     PJUtils::respond_stateless(stack_data.endpt,
                                rdata,
-                               PJSIP_SC_INTERNAL_SERVER_ERROR,
+                               st_code,
                                NULL,
                                NULL,
                                NULL,
@@ -824,19 +812,6 @@ void Registration::process(pjsip_rx_data* rdata)
     acr->send();
     delete acr;
     delete aor_pair;
-
-    if (is_initial_registration)
-    {
-      reg_stats_tables->init_reg_tbl->increment_failures();
-    }
-    else if (expiry == 0)
-    {
-      reg_stats_tables->de_reg_tbl->increment_failures();
-    }
-    else
-    {
-      reg_stats_tables->re_reg_tbl->increment_failures();
-    }
 
     return;
     // LCOV_EXCL_STOP
@@ -858,19 +833,6 @@ void Registration::process(pjsip_rx_data* rdata)
     acr->send();
     delete acr;
     delete aor_pair;
-
-    if (is_initial_registration)
-    {
-      reg_stats_tables->init_reg_tbl->increment_failures();
-    }
-    else if (expiry == 0)
-    {
-      reg_stats_tables->de_reg_tbl->increment_failures();
-    }
-    else
-    {
-      reg_stats_tables->re_reg_tbl->increment_failures();
-    }
 
     return;
     // LCOV_EXCL_STOP
@@ -900,19 +862,6 @@ void Registration::process(pjsip_rx_data* rdata)
     acr->send();
     delete acr;
     delete aor_pair;
-
-    if (is_initial_registration)
-    {
-      reg_stats_tables->init_reg_tbl->increment_failures();
-    }
-    else if (expiry == 0)
-    {
-      reg_stats_tables->de_reg_tbl->increment_failures();
-    }
-    else
-    {
-      reg_stats_tables->re_reg_tbl->increment_failures();
-    }
 
     return;
     // LCOV_EXCL_STOP
@@ -989,19 +938,6 @@ void Registration::process(pjsip_rx_data* rdata)
 
   SAS::Event reg_Accepted(trail, SASEvent::REGISTER_ACCEPTED, 0);
   SAS::report_event(reg_Accepted);
-
-  if (expiry == 0)
-  {
-    reg_stats_tables->de_reg_tbl->increment_successes();
-  }
-  else if (is_initial_registration)
-  {
-    reg_stats_tables->init_reg_tbl->increment_successes();
-  }
-  else
-  {
-    reg_stats_tables->re_reg_tbl->increment_successes();
-  }
 
   // Deal with path header related fields in the response.
   pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
