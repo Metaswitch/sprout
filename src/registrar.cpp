@@ -479,7 +479,26 @@ SubscriberDataManager::AoRPair* write_to_store(
   return aor_pair;
 }
 
-void process_register_request(pjsip_rx_data* rdata)
+class Registration
+{
+public:
+  Registration();
+  ~Registration();
+
+  void process(pjsip_rx_data* rdata);
+
+private:
+};
+
+Registration::Registration()
+{
+}
+
+Registration::~Registration()
+{
+}
+
+void Registration::process(pjsip_rx_data* rdata)
 {
   pj_status_t status;
   int st_code = PJSIP_SC_OK;
@@ -1099,7 +1118,8 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
       (PJUtils::check_route_headers(rdata)))
   {
     // REGISTER request targeted at the home domain or specifically at this node.
-    process_register_request(rdata);
+    Registration  r;
+    r.process(rdata);
     return PJ_TRUE;
   }
 
