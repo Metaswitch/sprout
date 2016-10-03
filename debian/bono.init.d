@@ -100,6 +100,7 @@ get_settings()
         # Set up defaults and then pull in the settings for this node.
         sas_server=0.0.0.0
         signaling_dns_server=127.0.0.1
+        alias_list=""
         . /etc/clearwater/config
 
         # Set the upstream hostname to the sprout hostname only if it hasn't
