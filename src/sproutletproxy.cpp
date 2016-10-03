@@ -1556,6 +1556,11 @@ pjsip_sip_uri* SproutletWrapper::get_reflexive_uri(pj_pool_t* pool) const
 
 void SproutletWrapper::rx_request(pjsip_tx_data* req)
 {
+  // SAS log the start of processing by this sproutlet
+  SAS::Event event(trail(), SASEvent::SPROUTLET_BEGIN_REQ, 0);
+  event.add_var_param(_service_name);
+  SAS::report_event(event);
+
   // Log the request at VERBOSE level before we send it out to aid in
   // tracking its path through the sproutlets.
   if (Log::enabled(Log::VERBOSE_LEVEL))
@@ -1594,6 +1599,11 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
     _sproutlet_tsx->on_rx_in_dialog_request(clone);
   }
 
+  // SAS log the end of processing by this sproutlet
+  SAS::Event event2(trail(), SASEvent::SPROUTLET_END_REQ, 0);
+  event2.add_var_param(_service_name);
+  SAS::report_event(event2);
+
   // We consider an ACK transaction to be complete immediately after the
   // sproutlet's actions have been processed, regardless of whether the
   // sproutlet forwarded the ACK (some sproutlets are unable to in certain
@@ -1604,6 +1614,12 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
 
 void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
 {
+  // SAS log the start of processing by this sproutlet
+  SAS::Event event(trail(), SASEvent::SPROUTLET_BEGIN_RSP, 1);
+  event.add_var_param(_service_name);
+  event.add_static_param(fork_id);
+  SAS::report_event(event);
+
   // Log the response at VERBOSE level before we send it out to aid in
   // tracking its path through the sproutlets.
   if (Log::enabled(Log::VERBOSE_LEVEL))
@@ -1649,6 +1665,13 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
     }
   }
   _sproutlet_tsx->on_rx_response(rsp->msg, fork_id);
+
+  // SAS log the end of processing by this sproutlet
+  SAS::Event event2(trail(), SASEvent::SPROUTLET_END_RSP, 1);
+  event2.add_var_param(_service_name);
+  event2.add_static_param(fork_id);
+  SAS::report_event(event2);
+
   process_actions(false);
 }
 
@@ -1940,6 +1963,7 @@ void SproutletWrapper::tx_request(pjsip_tx_data* req, int fork_id)
 
   // Forward the request downstream.
   deregister_tdata(req);
+
   _proxy_tsx->tx_request(this, fork_id, req);
 }
 
@@ -1970,6 +1994,7 @@ void SproutletWrapper::tx_response(pjsip_tx_data* rsp)
 
   // Forward the response upstream.
   deregister_tdata(rsp);
+
   _proxy_tsx->tx_response(this, rsp);
 }
 
