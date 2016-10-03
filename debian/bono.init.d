@@ -154,7 +154,7 @@ get_daemon_args()
 
         DAEMON_ARGS="--domain=$home_domain
                      --localhost=$local_ip,$public_hostname
-                     --alias=$public_ip
+                     --alias=ibcf.$home_domain
                      --pcscf=5060,5058
                      --webrtc-port=5062
                      --routing-proxy=$upstream_hostname,$upstream_port,$upstream_connections,$upstream_recycle_connections
