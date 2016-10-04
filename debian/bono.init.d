@@ -120,6 +120,7 @@ get_settings()
         [ -r /etc/clearwater/user_settings ] && . /etc/clearwater/user_settings
 
         # Work out which features are enabled.
+        IBCF_ENABLED=Y
         if [ -d /etc/clearwater/features.d ]
         then
           for file in $(find /etc/clearwater/features.d -type f)
@@ -137,11 +138,10 @@ get_daemon_args()
         # Get the settings
         get_settings
 
-        if [ $ibcf_enabled = Y ]
+        if [ $IBCF_ENABLED = Y ]
         then
           [ -z "$trusted_peers" ] || ibcf_arg="--ibcf=$trusted_peers"
-          [ -n "$ibcf_domain" ] || ibcf_domain="ibcf.$home_domain"
-          $bono_alias_list = "$bono_alias_list,$ibcf_domain"
+          [ -z "$ibcf_domain" ] || $bono_alias_list = "$bono_alias_list,$ibcf_domain"
         fi
 
         [ -z "$ralf_hostname" ] || ralf_arg="--ralf=$ralf_hostname"
