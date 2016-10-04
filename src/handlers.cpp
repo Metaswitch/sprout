@@ -719,3 +719,101 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
 
   return success ? HTTP_OK : HTTP_SERVER_ERROR;
 }
+
+//
+// APIS for retrieving cached data.
+//
+
+const char* JSON_BINDINGS = "bindings";
+const char* JSON_SUBSCRIPTIONS = "subscriptions";
+
+void GetCachedDataTask::run()
+{
+  // This interface is read only so reject any non-GETs.
+  if (_req.method() != htp_method_GET)
+  {
+    send_http_reply(HTTP_BADMETHOD);
+    delete this;
+    return;
+  }
+
+  // Extract the IMPU that has been requested.
+  const std::string prefix = "/impu/";
+  std::string full_path = _req.full_path();
+  size_t end_of_impu = full_path.find('/', prefix.length());
+  std::string impu = full_path.substr(prefix.length(), end_of_impu - prefix.length());
+  TRC_DEBUG("Extracted impu %s", impu.c_str());
+
+  SubscriberDataManager::AoRPair* aor_pair = nullptr;
+  if (!sdm_access_common(&aor_pair,
+                         impu,
+                         _cfg->_sdm,
+                         _cfg->_remote_sdms,
+                         nullptr,
+                         trail()))
+  {
+    send_http_reply(HTTP_SERVER_ERROR);
+    delete this;
+    return;
+  }
+
+  std::string content = serialize_data(aor_pair->get_current());
+  _req.add_content(content);
+  send_http_reply(HTTP_OK);
+
+  delete aor_pair; aor_pair = NULL;
+  delete this;
+  return;
+}
+
+std::string GetBindingsTask::serialize_data(SubscriberDataManager::AoR* aor)
+{
+  rapidjson::StringBuffer sb;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+
+  writer.StartObject();
+  {
+    writer.String(JSON_BINDINGS);
+    writer.StartObject();
+    {
+      for (SubscriberDataManager::AoR::Bindings::const_iterator it =
+             aor->bindings().begin();
+           it != aor->bindings().end();
+           ++it)
+      {
+        writer.String(it->first.c_str());
+        it->second->to_json(writer);
+      }
+    }
+    writer.EndObject();
+  }
+  writer.EndObject();
+
+  return sb.GetString();
+}
+
+std::string GetSubscriptionsTask::serialize_data(SubscriberDataManager::AoR* aor)
+{
+  rapidjson::StringBuffer sb;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+
+  writer.StartObject();
+  {
+    writer.String(JSON_SUBSCRIPTIONS);
+    writer.StartObject();
+    {
+      for (SubscriberDataManager::AoR::Subscriptions::const_iterator it =
+             aor->subscriptions().begin();
+           it != aor->subscriptions().end();
+           ++it)
+      {
+        writer.String(it->first.c_str());
+        it->second->to_json(writer);
+      }
+    }
+    writer.EndObject();
+  }
+  writer.EndObject();
+
+  return sb.GetString();
+}

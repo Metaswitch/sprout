@@ -176,4 +176,46 @@ protected:
 
 };
 
+class GetCachedDataTask : public HttpStackUtils::Task
+{
+public:
+  struct Config
+  {
+    Config(SubscriberDataManager* sdm,
+           std::vector<SubscriberDataManager*> remote_sdms) :
+      _sdm(sdm),
+      _remote_sdms(remote_sdms)
+    {}
+
+    SubscriberDataManager* _sdm;
+    std::vector<SubscriberDataManager*> _remote_sdms;
+  };
+
+  GetCachedDataTask(HttpStack::Request& req, const Config* cfg, SAS::TrailId trail) :
+    HttpStackUtils::Task(req, trail), _cfg(cfg)
+  {};
+
+  void run();
+
+protected:
+  virtual std::string serialize_data(SubscriberDataManager::AoR* aor) = 0;
+  const Config* _cfg;
+};
+
+class GetBindingsTask : public GetCachedDataTask
+{
+public:
+  using GetCachedDataTask::GetCachedDataTask;
+protected:
+  std::string serialize_data(SubscriberDataManager::AoR* aor);
+};
+
+class GetSubscriptionsTask : public GetCachedDataTask
+{
+public:
+  using GetCachedDataTask::GetCachedDataTask;
+protected:
+  std::string serialize_data(SubscriberDataManager::AoR* aor);
+};
+
 #endif
