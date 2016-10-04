@@ -2021,18 +2021,6 @@ int main(int argc, char* argv[])
         remote_data_stores.push_back(remote_data_store);
       }
     }
-    else
-    {
-      // Use local store.
-      TRC_STATUS("Using local store");
-      local_data_store = (Store*)new LocalStore();
-    }
-
-    if (local_data_store == NULL)
-    {
-      TRC_ERROR("Failed to connect to local data store");
-      exit(0);
-    }
   }
   else
   {
