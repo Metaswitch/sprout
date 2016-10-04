@@ -141,7 +141,7 @@ get_daemon_args()
         if [ $IBCF_ENABLED = Y ]
         then
           [ -z "$trusted_peers" ] || ibcf_arg="--ibcf=$trusted_peers"
-          [ -z "$ibcf_domain" ] || $bono_alias_list = "$bono_alias_list,$ibcf_domain"
+          [ -z "$ibcf_domain" ] || bono_alias_list="$bono_alias_list,$ibcf_domain"
         fi
 
         [ -z "$ralf_hostname" ] || ralf_arg="--ralf=$ralf_hostname"
