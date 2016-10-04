@@ -53,6 +53,7 @@ extern "C" {
 #include "chronosconnection.h"
 #include "sas.h"
 
+#include "rapidjson/writer.h"
 
 class SubscriberDataManager
 {
@@ -116,6 +117,11 @@ public:
       pjsip_sip_uri* pub_gruu(pj_pool_t* pool) const;
       std::string pub_gruu_str(pj_pool_t* pool) const;
       std::string pub_gruu_quoted_string(pj_pool_t* pool) const;
+
+      /// Serialize the binding as a JSON object.
+      ///
+      /// @param writer - a rapidjson writer to write to.
+      void to_json(rapidjson::Writer<rapidjson::StringBuffer>& writer) const;
     };
 
     /// @class SubscriberDataManager::AoR::Subscription
@@ -153,6 +159,11 @@ public:
 
       /// The timer ID provided by Chronos.
       std::string _timer_id;
+
+      /// Serialize the subscription as a JSON object.
+      ///
+      /// @param writer - a rapidjson writer to write to.
+      void to_json(rapidjson::Writer<rapidjson::StringBuffer>& writer) const;
    };
 
     /// Default Constructor.
