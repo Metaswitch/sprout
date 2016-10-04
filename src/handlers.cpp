@@ -737,13 +737,18 @@ void GetCachedDataTask::run()
     return;
   }
 
-  // Extract the IMPU that has been requested.
+  // Extract the IMPU that has been requested. The URL is of the form
+  //
+  //   /impu/<public ID>/<element>
+  //
+  // When <element> is either "bindings" or "subscriptions"
   const std::string prefix = "/impu/";
   std::string full_path = _req.full_path();
   size_t end_of_impu = full_path.find('/', prefix.length());
   std::string impu = full_path.substr(prefix.length(), end_of_impu - prefix.length());
   TRC_DEBUG("Extracted impu %s", impu.c_str());
 
+  // Lookup the IMPU in the store.
   SubscriberDataManager::AoRPair* aor_pair = nullptr;
   if (!sdm_access_common(&aor_pair,
                          impu,
@@ -757,6 +762,17 @@ void GetCachedDataTask::run()
     return;
   }
 
+  // If there are no bindings we don't have any data for the requested
+  // subscriber so return a 404.
+  if (aor_pair->get_current()->bindings().empty())
+  {
+    send_http_reply(HTTP_NOT_FOUND);
+    delete this;
+    return;
+  }
+
+  // Now we've got everything we need. Serialize the data that has been
+  // requested and return a 200 OK.
   std::string content = serialize_data(aor_pair->get_current());
   _req.add_content(content);
   send_http_reply(HTTP_OK);
