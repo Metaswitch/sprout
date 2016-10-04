@@ -2162,6 +2162,7 @@ int main(int argc, char* argv[])
                                                    sip_resolver,
                                                    impi_store);
   GetCachedDataTask::Config get_cached_data_config(local_sdm, {remote_sdm});
+  DeleteImpuTask::Config delete_impu_config(local_sdm, {remote_sdm}, hss_connection);
 
   // The AoRTimeoutTask and AuthTimeoutTask both handle
   // chronos requests, so use the ChronosHandler.
@@ -2171,6 +2172,7 @@ int main(int argc, char* argv[])
   HttpStackUtils::PingHandler ping_handler;
   HttpStackUtils::SpawningHandler<GetBindingsTask, GetCachedDataTask::Config> get_bindings_handler(&get_cached_data_config);
   HttpStackUtils::SpawningHandler<GetSubscriptionsTask, GetCachedDataTask::Config> get_subscriptions_handler(&get_cached_data_config);
+  HttpStackUtils::SpawningHandler<DeleteImpuTask, DeleteImpuTask::Config> delete_impu_handler(&delete_impu_config);
 
   if (opt.enabled_scscf)
   {
@@ -2201,6 +2203,8 @@ int main(int argc, char* argv[])
                                         &get_bindings_handler);
       http_stack_mgmt->register_handler("^/impu/[^/]+/subscriptions$",
                                         &get_subscriptions_handler);
+      http_stack_mgmt->register_handler("^/impu/[^/]+$",
+                                        &delete_impu_handler);
       http_stack_mgmt->start(&reg_httpthread_with_pjsip);
     }
     catch (HttpStack::Exception& e)

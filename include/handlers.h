@@ -218,4 +218,31 @@ protected:
   std::string serialize_data(SubscriberDataManager::AoR* aor);
 };
 
+class DeleteImpuTask : public HttpStackUtils::Task
+{
+public:
+  struct Config
+  {
+    Config(SubscriberDataManager* sdm,
+           std::vector<SubscriberDataManager*> remote_sdms,
+           HSSConnection* hss) :
+      _sdm(sdm), _remote_sdms(remote_sdms), _hss(hss)
+    {}
+
+    SubscriberDataManager* _sdm;
+    std::vector<SubscriberDataManager*> _remote_sdms;
+    HSSConnection* _hss;
+  };
+
+  DeleteImpuTask(HttpStack::Request& req, const Config* cfg, SAS::TrailId trail) :
+    HttpStackUtils::Task(req, trail), _cfg(cfg)
+  {};
+  virtual ~DeleteImpuTask() {}
+
+  void run();
+
+private:
+  const Config* _cfg;
+};
+
 #endif
