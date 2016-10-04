@@ -903,6 +903,7 @@ void DeleteImpuTask::run()
     TRC_DEBUG("Failed to expire bindings");
     sc = HTTP_SERVER_ERROR;
   }
+  send_http_reply(sc);
 
   delete this;
   return;
