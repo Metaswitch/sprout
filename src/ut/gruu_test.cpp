@@ -91,7 +91,7 @@ pjsip_endpoint* GRUUTest::endpt;
 TEST_F(GRUUTest, Simple)
 {
   std::string aor = "sip:user@domain.com";
-  SubscriberDataManager::AoR::Binding binding(&aor);
+  SubscriberDataManager::AoR::Binding binding(aor);
   create_binding(binding, "hello");
   ASSERT_EQ("sip:user@domain.com;gr=hello",
             PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, (pjsip_uri*)binding.pub_gruu(pool)));
@@ -100,7 +100,7 @@ TEST_F(GRUUTest, Simple)
 TEST_F(GRUUTest, Proper)
 {
   std::string aor = "sip:user@domain.com";
-  SubscriberDataManager::AoR::Binding binding(&aor);
+  SubscriberDataManager::AoR::Binding binding(aor);
   create_binding(binding, "\"<urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6>\"");
   ASSERT_EQ("sip:user@domain.com;gr=urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
             PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, (pjsip_uri*)binding.pub_gruu(pool)));
@@ -109,7 +109,7 @@ TEST_F(GRUUTest, Proper)
 TEST_F(GRUUTest, NeedsEscaping)
 {
   std::string aor = "sip:user@domain.com";
-  SubscriberDataManager::AoR::Binding binding(&aor);
+  SubscriberDataManager::AoR::Binding binding(aor);
   create_binding(binding, "hel;lo");
   ASSERT_EQ("sip:user@domain.com;gr=hel%3blo",
             PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, (pjsip_uri*)binding.pub_gruu(pool)));
@@ -118,7 +118,7 @@ TEST_F(GRUUTest, NeedsEscaping)
 TEST_F(GRUUTest, NoInstanceID)
 {
   std::string aor = "sip:user@domain.com";
-  SubscriberDataManager::AoR::Binding binding(&aor);
+  SubscriberDataManager::AoR::Binding binding(aor);
   create_binding(binding, "");
   ASSERT_EQ(NULL, binding.pub_gruu(pool));
 }
@@ -126,7 +126,7 @@ TEST_F(GRUUTest, NoInstanceID)
 TEST_F(GRUUTest, NeedsEscapingQuoted)
 {
   std::string aor = "sip:user@domain.com";
-  SubscriberDataManager::AoR::Binding binding(&aor);
+  SubscriberDataManager::AoR::Binding binding(aor);
   create_binding(binding, "hel;lo");
   ASSERT_EQ("\"sip:user@domain.com;gr=hel%3blo\"", binding.pub_gruu_quoted_string(pool));
 }
@@ -134,7 +134,7 @@ TEST_F(GRUUTest, NeedsEscapingQuoted)
 TEST_F(GRUUTest, NoInstanceIDQuoted)
 {
   std::string aor = "sip:user@domain.com";
-  SubscriberDataManager::AoR::Binding binding(&aor);
+  SubscriberDataManager::AoR::Binding binding(aor);
   create_binding(binding, "");
   ASSERT_EQ("", binding.pub_gruu_quoted_string(pool));
 }

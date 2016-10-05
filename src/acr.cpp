@@ -288,6 +288,18 @@ void RalfACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
       _expires = -1;
     }
 
+    // Determine the number of contact headers
+    pjsip_contact_hdr* contact_hdr =
+            (pjsip_contact_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, NULL);
+    _num_contacts = 0;
+
+    while (contact_hdr != NULL)
+    {
+      _num_contacts++;
+      contact_hdr = (pjsip_contact_hdr*)
+                     pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, contact_hdr->next);
+    }
+
     // Store the call ID but only if the session ID has not already been set.
     if (_user_session_id.empty())
     {
@@ -1146,8 +1158,15 @@ std::string RalfACR::get_message(pj_time_val timestamp)
     int cause_code = 0;
     if (_status_code == PJSIP_SC_OK)
     {
-      if ((_method == "SUBSCRIBE") &&
-          (_expires == 0))
+      if ((_method == "REGISTER")  &&
+          (_num_contacts == 0))
+      {
+        // REGISTERs without contacts don't affect the registration state of
+        // the subscriber, so use a cause code of 0
+        cause_code = 0;
+      }
+      else if ((_method == "SUBSCRIBE") &&
+               (_expires == 0))
       {
         // End of SUBSCRIBE dialog.
         cause_code = -2;

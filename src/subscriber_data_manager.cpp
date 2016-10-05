@@ -600,7 +600,7 @@ SubscriberDataManager::AoR::Binding*
   else
   {
     // No existing binding with this id, so create a new one.
-    b = new Binding(&_uri);
+    b = new Binding(_uri);
     b->_expires = 0;
     _bindings.insert(std::make_pair(binding_id, b));
   }
@@ -653,8 +653,8 @@ void SubscriberDataManager::AoR::remove_subscription(const std::string& to_tag)
   }
 }
 
-/// Test-only function to remove all the bindings from an AOR object
-void SubscriberDataManager::AoR::test_clear_bindings()
+/// Remove all the bindings from an AOR object
+void SubscriberDataManager::AoR::clear_bindings()
 {
   for (Bindings::const_iterator i = _bindings.begin();
        i != _bindings.end();
@@ -671,7 +671,7 @@ void SubscriberDataManager::AoR::test_clear_bindings()
 // instance-id. Returns NULL if this binding has no valid GRUU.
 pjsip_sip_uri* SubscriberDataManager::AoR::Binding::pub_gruu(pj_pool_t* pool) const
 {
-  pjsip_sip_uri* uri = (pjsip_sip_uri*)PJUtils::uri_from_string(*_address_of_record, pool);
+  pjsip_sip_uri* uri = (pjsip_sip_uri*)PJUtils::uri_from_string(_address_of_record, pool);
 
   if ((_params.find("+sip.instance") == _params.cend()) ||
       (uri == NULL) ||
@@ -781,7 +781,7 @@ int SubscriberDataManager::AoR::get_next_expires()
 }
 
 // Copy all bindings and subscriptions to this AoR
-void SubscriberDataManager::AoR::copy_aor(SubscriberDataManager::AoR* source_aor)
+void SubscriberDataManager::AoR::copy_subscriptions_and_bindings(SubscriberDataManager::AoR* source_aor)
 {
   for (Bindings::const_iterator i = source_aor->bindings().begin();
        i != source_aor->bindings().end();
@@ -789,7 +789,7 @@ void SubscriberDataManager::AoR::copy_aor(SubscriberDataManager::AoR* source_aor
   {
     Binding* src = i->second;
     Binding* dst = get_binding(i->first);
-    Binding::copy_binding(dst, src);
+    *dst = *src;
   }
 
   for (Subscriptions::const_iterator i = source_aor->subscriptions().begin();

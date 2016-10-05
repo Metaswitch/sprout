@@ -435,6 +435,8 @@ private:
 
   int _expires;
 
+  int _num_contacts;
+
   NodeRole _node_role;
 
   Node _node_functionality;

@@ -55,6 +55,111 @@ using ::testing::MatchesRegex;
 using ::testing::_;
 using ::testing::Return;
 
+class Message
+{
+public:
+  string _method;
+  string _user;
+  string _domain;
+  string _content_type;
+  string _body;
+  string _contact;
+  string _contact_instance;
+  string _contact_params;
+  string _expires;
+  string _path;
+  string _auth;
+  string _cseq;
+  string _scheme;
+  string _route;
+  bool _gruu_support;
+
+  Message() :
+    _method("REGISTER"),
+    _user("6505550231"),
+    _domain("homedomain"),
+    _contact("sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob"),
+    _contact_instance(";+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\""),
+    _contact_params(";expires=3600;+sip.ice;reg-id=1"),
+    _expires(""),
+    _path("Path: <sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob>"),
+    _auth(""),
+    _cseq("16567"),
+    _scheme("sip"),
+    _route("homedomain"),
+    _gruu_support(true)
+  {
+  }
+
+  string get();
+};
+
+string Message::get()
+{
+  char buf[16384];
+  char contact[1024];
+  int n = 0;
+
+  // Contact header is optional
+  contact[0] = 0;
+  if (!_contact.empty())
+  {
+    n = snprintf(contact, sizeof(contact),
+                 "Contact: %1$s%2$s%3$s\r\n",
+                 /*  1 */ (_contact == "*") ? "*" : string("<").append(_contact).append(">").c_str(),
+                 /*  2 */ _contact_params.c_str(),
+                 /*  3 */ _contact_instance.c_str()
+                 );
+    EXPECT_LT(n, (int)sizeof(buf));
+  }
+
+  n = snprintf(buf, sizeof(buf),
+               "%1$s sip:%3$s SIP/2.0\r\n"
+               "%8$s"
+               "Via: SIP/2.0/TCP 10.83.18.38:36530;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY5e9kSPI\r\n"
+               "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n"
+               "From: <%2$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
+               "Supported: outbound, path%13$s\r\n"
+               "To: <%2$s>\r\n"
+               "Max-Forwards: 68\r\n"
+               "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqsUOO4ohntC@10.114.61.213\r\n"
+               "CSeq: %11$s %1$s\r\n"
+               "User-Agent: Accession 2.0.0.0\r\n"
+               "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
+               "%9$s"
+               "%7$s"
+               "Route: <sip:%12$s;transport=tcp;lr>\r\n"
+               "P-Access-Network-Info: DUMMY\r\n"
+               "P-Visited-Network-ID: DUMMY\r\n"
+               "P-Charging-Vector: icid-value=100\r\n"
+               "%10$s"
+               "%4$s"
+               "Content-Length:  %5$d\r\n"
+               "\r\n"
+               "%6$s",
+               /*  1 */ _method.c_str(),
+               /*  2 */ (_scheme == "tel") ? string(_scheme).append(":").append(_user).c_str() : string(_scheme).append(":").append(_user).append("@").append(_domain).c_str(),
+               /*  3 */ _domain.c_str(),
+               /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
+               /*  5 */ (int)_body.length(),
+               /*  6 */ _body.c_str(),
+               /*  7 */ contact,
+               /*  8 */ _path.empty() ? "" : string(_path).append("\r\n").c_str(),
+               /*  9 */ _expires.empty() ? "" : string(_expires).append("\r\n").c_str(),
+               /* 10 */ _auth.empty() ? "" : string(_auth).append("\r\n").c_str(),
+               /* 11 */ _cseq.c_str(),
+               /* 12 */ _route.c_str(),
+               /* 13 */ _gruu_support ? ", gruu" : ""
+    );
+
+  EXPECT_LT(n, (int)sizeof(buf));
+
+  string ret(buf, n);
+
+  TRC_DEBUG("REGISTER message\n%s", ret.c_str());
+  return ret;
+}
+
 /// Fixture for RegistrarTest.
 class RegistrarTest : public SipTest
 {
@@ -192,6 +297,187 @@ protected:
   static ACRFactory* _acr_factory;
   static FakeHSSConnection* _hss_connection;
   static FakeChronosConnection* _chronos_connection;
+
+private:
+
+  /// Common test of multiple REGISTERs followed by "fetch bindings" query
+  /// REGISTERS and deregistrations
+  void MultipleRegistrationTest()
+  {
+    // First registration OK.
+    Message msg;
+    inject_msg(msg.get());
+    ASSERT_EQ(1, txdata_count());
+    pjsip_msg* out = current_txdata()->msg;
+    EXPECT_EQ(200, out->line.status.code);
+    EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+    EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
+    free_txdata();
+
+    // Second registration also OK.  Bindings are ordered by binding ID.
+    Message msg0;
+    msg = msg0;
+    msg._contact = "sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob";
+    msg._contact_instance = ";+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"";
+    msg._path = "Path: <sip:XxxxxxxXXXXXXAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-119.compute-1.amazonaws.com:5060;lr;ob>";
+    inject_msg(msg.get());
+    ASSERT_EQ(1, txdata_count());
+    out = current_txdata()->msg;
+    EXPECT_EQ(200, out->line.status.code);
+    EXPECT_EQ("OK", str_pj(out->line.status.reason));
+    EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+    // Expires timer for first contact may have ticked down, so give it some leeway.
+    EXPECT_THAT(get_headers(out, "Contact"),
+                MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
+                             "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\""));
+    EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+    EXPECT_EQ(msg._path, get_headers(out, "Path"));
+    EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+    EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+    // Creating a new binding for an existing URI is counted as a re-registration,
+    // not an initial registration.
+    EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
+    EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
+    free_txdata();
+
+    // Reregistration of first binding is OK but doesn't add a new one.
+    msg = msg0;
+    inject_msg(msg.get());
+    ASSERT_EQ(1, txdata_count());
+    out = current_txdata()->msg;
+    EXPECT_EQ(200, out->line.status.code);
+    EXPECT_EQ("OK", str_pj(out->line.status.reason));
+    EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+    EXPECT_THAT(get_headers(out, "Contact"),
+                MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
+                             "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\""));
+    EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+    EXPECT_EQ(msg._path, get_headers(out, "Path"));
+    EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+    EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+    EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
+    EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
+    free_txdata();
+
+    // Registering the first binding again but without the binding ID counts as a separate binding (named by the contact itself).  Bindings are ordered by binding ID.
+    msg = msg0;
+    msg._contact_instance = "";
+    inject_msg(msg.get());
+    ASSERT_EQ(1, txdata_count());
+    out = current_txdata()->msg;
+    EXPECT_EQ(200, out->line.status.code);
+    EXPECT_EQ("OK", str_pj(out->line.status.reason));
+    EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+    EXPECT_THAT(get_headers(out, "Contact"),
+                MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
+                             "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"\r\n"
+                             "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
+
+    EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+    EXPECT_EQ(msg._path, get_headers(out, "Path"));
+    EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+    EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+    EXPECT_EQ(3,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
+    EXPECT_EQ(3,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
+    free_txdata();
+
+    // Reregistering that yields no change.
+    inject_msg(msg.get());
+    ASSERT_EQ(1, txdata_count());
+    out = current_txdata()->msg;
+    EXPECT_EQ(200, out->line.status.code);
+    EXPECT_EQ("OK", str_pj(out->line.status.reason));
+    EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+    EXPECT_THAT(get_headers(out, "Contact"),
+                MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
+                             "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"\r\n"
+                             "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
+    EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+    EXPECT_EQ(msg._path, get_headers(out, "Path"));
+    EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+    EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+    EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
+    EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
+    free_txdata();
+
+    // A fetch bindings registration (no Contact headers).  Should just return current state.
+    string save_contact = msg._contact;
+    msg._contact = "";
+    inject_msg(msg.get());
+    ASSERT_EQ(1, txdata_count());
+    out = current_txdata()->msg;
+    EXPECT_EQ(200, out->line.status.code);
+    EXPECT_EQ("OK", str_pj(out->line.status.reason));
+    EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+    EXPECT_THAT(get_headers(out, "Contact"),
+                MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
+                             "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"\r\n"
+                             "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
+    EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+    EXPECT_EQ(msg._path, get_headers(out, "Path"));
+    EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+    EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+    EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
+    EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
+    free_txdata();
+    msg._contact = save_contact;
+
+    // Reregistering again with an updated cseq triggers an update of the binding.
+    msg._cseq = "16568";
+    inject_msg(msg.get());
+    ASSERT_EQ(1, txdata_count());
+    out = current_txdata()->msg;
+    EXPECT_EQ(200, out->line.status.code);
+    EXPECT_EQ("OK", str_pj(out->line.status.reason));
+    EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+    EXPECT_THAT(get_headers(out, "Contact"),
+                MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
+                             "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"\r\n"
+                             "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
+    EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+    EXPECT_EQ(msg._path, get_headers(out, "Path"));
+    EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+    EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+    EXPECT_EQ(5,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
+    EXPECT_EQ(5,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
+    free_txdata();
+
+    // Registration of star but with a non zero expiry means the request is rejected with a 400.
+    msg = msg0;
+    msg._contact = "*";
+    msg._contact_instance = "";
+    msg._contact_params = "";
+    inject_msg(msg.get());
+    ASSERT_EQ(1, txdata_count());
+    out = current_txdata()->msg;
+    EXPECT_EQ(400, out->line.status.code);
+    EXPECT_EQ("Bad Request", str_pj(out->line.status.reason));
+    EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
+    EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_failures);
+    free_txdata();
+
+    // Registration of star with expiry = 0 clears all bindings.
+    msg = msg0;
+    msg._expires = "Expires: 0";
+    msg._contact = "*";
+    msg._contact_instance = "";
+    msg._contact_params = "";
+    inject_msg(msg.get());
+    ASSERT_EQ(1, txdata_count());
+    out = current_txdata()->msg;
+    EXPECT_EQ(200, out->line.status.code);
+    EXPECT_EQ("OK", str_pj(out->line.status.reason));
+    EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+    EXPECT_EQ("", get_headers(out, "Contact"));
+    EXPECT_EQ("", get_headers(out, "Require")); // even though we have path, we have no bindings
+    EXPECT_EQ(msg._path, get_headers(out, "Path"));
+    EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+    EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+    EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
+    EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_successes);
+
+    free_txdata();
+  }
 };
 
 /// SDM that doesn't return any bindings
@@ -215,7 +501,7 @@ public:
 
     if ((aor_pair != NULL) && aor_pair->current_contains_bindings())
     {
-      aor_pair->get_current()->test_clear_bindings();
+      aor_pair->get_current()->clear_bindings();
     }
     return aor_pair;
   }
@@ -298,112 +584,6 @@ ACRFactory* RegistrarTest::_acr_factory;
 FakeHSSConnection* RegistrarTest::_hss_connection;
 FakeChronosConnection* RegistrarTest::_chronos_connection;
 
-class Message
-{
-public:
-  string _method;
-  string _user;
-  string _domain;
-  string _content_type;
-  string _body;
-  string _contact;
-  string _contact_instance;
-  string _contact_params;
-  string _expires;
-  string _path;
-  string _auth;
-  string _cseq;
-  string _scheme;
-  string _route;
-  bool _gruu_support;
-
-  Message() :
-    _method("REGISTER"),
-    _user("6505550231"),
-    _domain("homedomain"),
-    _contact("sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob"),
-    _contact_instance(";+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\""),
-    _contact_params(";expires=3600;+sip.ice;reg-id=1"),
-    _expires(""),
-    _path("Path: <sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob>"),
-    _auth(""),
-    _cseq("16567"),
-    _scheme("sip"),
-    _route("homedomain"),
-    _gruu_support(true)
-  {
-  }
-
-  string get();
-};
-
-string Message::get()
-{
-  char buf[16384];
-  char contact[1024];
-  int n = 0;
-
-  // Contact header is optional
-  contact[0] = 0;
-  if (!_contact.empty())
-  {
-    n = snprintf(contact, sizeof(contact),
-                 "Contact: %1$s%2$s%3$s\r\n",
-                 /*  1 */ (_contact == "*") ? "*" : string("<").append(_contact).append(">").c_str(),
-                 /*  2 */ _contact_params.c_str(),
-                 /*  3 */ _contact_instance.c_str()
-                 );
-    EXPECT_LT(n, (int)sizeof(buf));
-  }
-
-  n = snprintf(buf, sizeof(buf),
-               "%1$s sip:%3$s SIP/2.0\r\n"
-               "%8$s"
-               "Via: SIP/2.0/TCP 10.83.18.38:36530;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY5e9kSPI\r\n"
-               "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n"
-               "From: <%2$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
-               "Supported: outbound, path%13$s\r\n"
-               "To: <%2$s>\r\n"
-               "Max-Forwards: 68\r\n"
-               "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqsUOO4ohntC@10.114.61.213\r\n"
-               "CSeq: %11$s %1$s\r\n"
-               "User-Agent: Accession 2.0.0.0\r\n"
-               "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
-               "%9$s"
-               "%7$s"
-               "Route: <sip:%12$s;transport=tcp;lr>\r\n"
-               "P-Access-Network-Info: DUMMY\r\n"
-               "P-Visited-Network-ID: DUMMY\r\n"
-               "P-Charging-Vector: icid-value=100\r\n"
-               "%10$s"
-               "%4$s"
-               "Content-Length:  %5$d\r\n"
-               "\r\n"
-               "%6$s",
-               /*  1 */ _method.c_str(),
-               /*  2 */ (_scheme == "tel") ? string(_scheme).append(":").append(_user).c_str() : string(_scheme).append(":").append(_user).append("@").append(_domain).c_str(),
-               /*  3 */ _domain.c_str(),
-               /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
-               /*  5 */ (int)_body.length(),
-               /*  6 */ _body.c_str(),
-               /*  7 */ contact,
-               /*  8 */ _path.empty() ? "" : string(_path).append("\r\n").c_str(),
-               /*  9 */ _expires.empty() ? "" : string(_expires).append("\r\n").c_str(),
-               /* 10 */ _auth.empty() ? "" : string(_auth).append("\r\n").c_str(),
-               /* 11 */ _cseq.c_str(),
-               /* 12 */ _route.c_str(),
-               /* 13 */ _gruu_support ? ", gruu" : ""
-    );
-
-  EXPECT_LT(n, (int)sizeof(buf));
-
-  string ret(buf, n);
-
-  TRC_DEBUG("REGISTER message\n%s", ret.c_str());
-  return ret;
-}
-
-
 TEST_F(RegistrarTest, NotRegister)
 {
   Message msg;
@@ -440,21 +620,6 @@ TEST_F(RegistrarTest, BadScheme)
   EXPECT_EQ("Not Found", str_pj(out->line.status.reason));
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_failures);
-}
-
-TEST_F(RegistrarTest, BadSchemeFetchBindings)
-{
-  Message msg;
-  msg._scheme = "sips";
-  msg._contact = "";
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  pjsip_msg* out = current_txdata()->msg;
-  out = pop_txdata()->msg;
-  EXPECT_EQ(404, out->line.status.code);
-  EXPECT_EQ("Not Found", str_pj(out->line.status.reason));
-  EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
-  EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_failures);
 }
 
 TEST_F(RegistrarTest, DeRegBadScheme)
@@ -702,181 +867,8 @@ TEST_F(RegistrarTest, GRUUNotSupported)
 
 TEST_F(RegistrarTest, MultipleRegistrations)
 {
-  // First registration OK.
-  Message msg;
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  pjsip_msg* out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
-  free_txdata();
-
-  // Second registration also OK.  Bindings are ordered by binding ID.
-  Message msg0;
-  msg = msg0;
-  msg._contact = "sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob";
-  msg._contact_instance = ";+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"";
-  msg._path = "Path: <sip:XxxxxxxXXXXXXAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-119.compute-1.amazonaws.com:5060;lr;ob>";
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  // Expires timer for first contact may have ticked down, so give it some leeway.
-  EXPECT_THAT(get_headers(out, "Contact"),
-              MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
-                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\""));
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  // Creating a new binding for an existing URI is counted as a re-registration,
-  // not an initial registration.
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
-  free_txdata();
-
-  // Reregistration of first binding is OK but doesn't add a new one.
-  msg = msg0;
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_THAT(get_headers(out, "Contact"),
-              MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
-                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\""));
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
-  EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
-  free_txdata();
-
-  // Registering the first binding again but without the binding ID counts as a separate binding (named by the contact itself).  Bindings are ordered by binding ID.
-  msg = msg0;
-  msg._contact_instance = "";
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_THAT(get_headers(out, "Contact"),
-              MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
-                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"\r\n"
-                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
-
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(3,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
-  EXPECT_EQ(3,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
-  free_txdata();
-
-  // Reregistering that yields no change.
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_THAT(get_headers(out, "Contact"),
-              MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
-                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"\r\n"
-                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
-  EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
-  free_txdata();
-
-  // A fetch bindings registration (no Contact headers).  Should just return current state.
-  string save_contact = msg._contact;
-  msg._contact = "";
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_THAT(get_headers(out, "Contact"),
-              MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
-                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"\r\n"
-                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
-  EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
-  free_txdata();
-  msg._contact = save_contact;
-
-  // Reregistering again with an updated cseq triggers an update of the binding.
-  msg._cseq = "16568";
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_THAT(get_headers(out, "Contact"),
-              MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
-                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"\r\n"
-                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(5,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
-  EXPECT_EQ(5,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
-  free_txdata();
-
-  // Registration of star but with a non zero expiry means the request is rejected with a 400.
-  msg = msg0;
-  msg._contact = "*";
-  msg._contact_instance = "";
-  msg._contact_params = "";
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  out = current_txdata()->msg;
-  EXPECT_EQ(400, out->line.status.code);
-  EXPECT_EQ("Bad Request", str_pj(out->line.status.reason));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_failures);
-  free_txdata();
-
-  // Registration of star with expiry = 0 clears all bindings.
-  msg = msg0;
-  msg._expires = "Expires: 0";
-  msg._contact = "*";
-  msg._contact_instance = "";
-  msg._contact_params = "";
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("", get_headers(out, "Contact"));
-  EXPECT_EQ("", get_headers(out, "Require")); // even though we have path, we have no bindings
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_successes);
-
-  free_txdata();
+  MultipleRegistrationTest();
 }
-
 
 // Check that a sensible result (no bindings) is returned on a "fetch bindings"
 // REGISTER if the subscriber isn't actually registered
@@ -894,7 +886,7 @@ TEST_F(RegistrarTest, FetchBindingsUnregistered)
   EXPECT_EQ("", get_headers(out, "Contact"));
   EXPECT_EQ("", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
   EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
@@ -1753,20 +1745,6 @@ TEST_F(RegistrarTest, AssociatedUrisNotFound)
   EXPECT_EQ("Forbidden", str_pj(out->line.status.reason));
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_failures);
-}
-
-TEST_F(RegistrarTest, AssociatedUrisNotFoundFetchBindings)
-{
-  Message msg;
-  msg._user = "6505550232";
-  msg._contact = "";
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  pjsip_msg* out = current_txdata()->msg;
-  EXPECT_EQ(403, out->line.status.code);
-  EXPECT_EQ("Forbidden", str_pj(out->line.status.reason));
-  EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
-  EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_failures);
 }
 
 /// Homestead fails associated URI request
@@ -2737,198 +2715,10 @@ TEST_F(RegistrarTestMockStore, SubscriberDataManagerGetsFail)
   free_txdata();
 }
 
-TEST_F(RegistrarTestMockStore, SubscriberDataManagerGetsFailFetchBindings)
-{
-  EXPECT_CALL(*_local_data_store, get_data(_, _, _, _, _))
-    .WillOnce(Return(Store::ERROR));
-
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "", HSSConnection::STATE_REGISTERED, "");
-
-  Message msg;
-  msg._contact = "";
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  pjsip_msg* out = current_txdata()->msg;
-  EXPECT_EQ(500, out->line.status.code);
-  free_txdata();
-}
-
 // Test multiple registrations with a local and first remote SDM that are not
 // returning bindings (so that the bindings are returned by the second remote
 // SDM)
 TEST_F(RegistrarTestRemoteSDM, MultipleRegistrations)
 {
-  // First registration OK.
-  Message msg;
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  pjsip_msg* out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
-  free_txdata();
-
-  // Second registration also OK.  Bindings are ordered by binding ID.
-  Message msg0;
-  msg = msg0;
-  msg._contact = "sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob";
-  msg._contact_instance = ";+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"";
-  msg._path = "Path: <sip:XxxxxxxXXXXXXAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-119.compute-1.amazonaws.com:5060;lr;ob>";
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  // Expires timer for first contact may have ticked down, so give it some leeway.
-  EXPECT_THAT(get_headers(out, "Contact"),
-              MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
-                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\""));
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  // Creating a new binding for an existing URI is counted as a re-registration,
-  // not an initial registration.
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
-  free_txdata();
-
-  // Reregistration of first binding is OK but doesn't add a new one.
-  msg = msg0;
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_THAT(get_headers(out, "Contact"),
-              MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
-                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\""));
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
-  EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
-  free_txdata();
-
-  // Registering the first binding again but without the binding ID counts as a separate binding (named by the contact itself).  Bindings are ordered by binding ID.
-  msg = msg0;
-  msg._contact_instance = "";
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_THAT(get_headers(out, "Contact"),
-              MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
-                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"\r\n"
-                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
-
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(3,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
-  EXPECT_EQ(3,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
-  free_txdata();
-
-  // Reregistering that yields no change.
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_THAT(get_headers(out, "Contact"),
-              MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
-                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"\r\n"
-                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
-  EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
-  free_txdata();
-
-  // A fetch bindings registration (no Contact headers).  Should just return current state.
-  string save_contact = msg._contact;
-  msg._contact = "";
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_THAT(get_headers(out, "Contact"),
-              MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
-                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"\r\n"
-                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
-  EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
-  free_txdata();
-  msg._contact = save_contact;
-
-  // Reregistering again with an updated cseq triggers an update of the binding.
-  msg._cseq = "16568";
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_THAT(get_headers(out, "Contact"),
-              MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-a55444444440\"\r\n"
-                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"\r\n"
-                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(5,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
-  EXPECT_EQ(5,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
-  free_txdata();
-
-  // Registration of star but with a non zero expiry means the request is rejected with a 400.
-  msg = msg0;
-  msg._contact = "*";
-  msg._contact_instance = "";
-  msg._contact_params = "";
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  out = current_txdata()->msg;
-  EXPECT_EQ(400, out->line.status.code);
-  EXPECT_EQ("Bad Request", str_pj(out->line.status.reason));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_failures);
-  free_txdata();
-
-  // Registration of star with expiry = 0 clears all bindings.
-  msg = msg0;
-  msg._expires = "Expires: 0";
-  msg._contact = "*";
-  msg._contact_instance = "";
-  msg._contact_params = "";
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("", get_headers(out, "Contact"));
-  EXPECT_EQ("", get_headers(out, "Require")); // even though we have path, we have no bindings
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_successes);
-
-  free_txdata();
+  MultipleRegistrationTest();
 }

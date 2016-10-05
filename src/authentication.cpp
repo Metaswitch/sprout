@@ -672,18 +672,18 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
 
     if (contact_hdr != NULL)
     {
-      bool emergency_reg = true;
+      bool all_bindings_emergency = true;
 
 
-      while ((contact_hdr != NULL) && (emergency_reg))
+      while ((contact_hdr != NULL) && (all_bindings_emergency))
       {
-        emergency_reg = PJUtils::is_emergency_registration(contact_hdr);
+        all_bindings_emergency = PJUtils::is_emergency_registration(contact_hdr);
         contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(rdata->msg_info.msg,
                                                               PJSIP_H_CONTACT,
                                                               contact_hdr->next);
       }
 
-      if (emergency_reg)
+      if (all_bindings_emergency)
       {
         SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_EMERGENCY_REGISTER, 0);
         SAS::report_event(event);
