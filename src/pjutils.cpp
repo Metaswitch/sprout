@@ -2110,6 +2110,28 @@ pjsip_uri* PJUtils::translate_sip_uri_to_tel_uri(const pjsip_sip_uri* sip_uri,
     tel_uri->ext_param.ptr = ext->value.ptr;
   }
 
+  // Copy across any routing number and NPDI parameters to the new URI
+  pjsip_param* rn = pjsip_param_find(&sip_uri->userinfo_param, &STR_RN);
+  bool npdi = (pjsip_param_find(&sip_uri->userinfo_param, &STR_NPDI) != NULL);
+
+  if (rn != NULL)
+  {
+    // Add the `rn` parameter.
+    pjsip_param* tel_rn_param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+    pj_strdup(pool, &tel_rn_param->name, &STR_RN);
+    pj_strdup(pool, &tel_rn_param->value, &rn->value);
+    pj_list_insert_after(&tel_uri->other_param, tel_rn_param);
+  }
+
+  if (npdi)
+  {
+    // Add the 'npdi' parameter
+    pjsip_param* tel_npdi_param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+    pj_strdup(pool, &tel_npdi_param->name, &STR_NPDI);
+    tel_npdi_param->value.slen = 0;
+    pj_list_insert_after(&tel_uri->other_param, tel_npdi_param);
+  }
+
   return (pjsip_uri*)tel_uri;
 }
 
@@ -2224,7 +2246,7 @@ void PJUtils::translate_request_uri(pjsip_msg* req,
                                     SAS::TrailId trail)
 {
   pjsip_uri* uri = req->line.req.uri;
-  URIClass uri_class = URIClassifier::classify_uri(uri, false);
+  URIClass uri_class = URIClassifier::classify_uri(uri, false, true);
 
   if ((uri_class == GLOBAL_PHONE_NUMBER) ||
       (uri_class == NP_DATA) ||
@@ -2255,7 +2277,7 @@ void PJUtils::translate_request_uri(pjsip_msg* req,
       }
 
       // The URI was successfully translated, so see what it is.
-      URIClass new_uri_class = URIClassifier::classify_uri(new_uri, false);
+      URIClass new_uri_class = URIClassifier::classify_uri(new_uri, false, true);
       std::string rn;
 
       if ((new_uri_class == HOME_DOMAIN_SIP_URI) ||
@@ -2299,7 +2321,7 @@ void PJUtils::update_request_uri_np_data(pjsip_msg* req,
                                     SAS::TrailId trail)
 {
   pjsip_uri* uri = req->line.req.uri;
-  URIClass uri_class = URIClassifier::classify_uri(uri);
+  URIClass uri_class = URIClassifier::classify_uri(uri, true, true);
 
   if ((uri_class == GLOBAL_PHONE_NUMBER) ||
       (uri_class == NP_DATA) ||
@@ -2330,7 +2352,7 @@ void PJUtils::update_request_uri_np_data(pjsip_msg* req,
       }
 
       // The URI was successfully translated, so see what it is.
-      URIClass new_uri_class = URIClassifier::classify_uri(new_uri, false);
+      URIClass new_uri_class = URIClassifier::classify_uri(new_uri, false, true);
 
       if ((new_uri_class == NP_DATA) || (new_uri_class == FINAL_NP_DATA))
       {

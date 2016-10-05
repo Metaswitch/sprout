@@ -3088,9 +3088,12 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteNumericSIPURI)
 
   // Inject an INVITE request to a sip URI representing a telephone number with a
   // P-Served-User header.
+  //
+  // Add NP data to the SIP URI - it should be ignored for the purposes of SIP -> Tel URI
+  // conversion
   Message msg1;
   msg1._method = "INVITE";
-  msg1._requri = "sip:+16505551234@homedomain";
+  msg1._requri = "sip:+16505551234;rn=567@homedomain";
   msg1._to = "+16505551234";
   msg1._via = tp->to_string(false);
   msg1._extra = "Contact: sip:6505551000@" +
