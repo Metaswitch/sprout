@@ -69,7 +69,8 @@ HSSConnection::HSSConnection(const std::string& server,
                              SNMP::EventAccumulatorTable* homestead_uar_latency_tbl,
                              SNMP::EventAccumulatorTable* homestead_lir_latency_tbl,
                              CommunicationMonitor* comm_monitor,
-                             std::string scscf_uri) :
+                             std::string scscf_uri,
+                             bool fallback_if_no_matching_ifc) :
   _http(new HttpConnection(server,
                            false,
                            resolver,
@@ -82,7 +83,8 @@ HSSConnection::HSSConnection(const std::string& server,
   _sar_latency_tbl(homestead_sar_latency_tbl),
   _uar_latency_tbl(homestead_uar_latency_tbl),
   _lir_latency_tbl(homestead_lir_latency_tbl),
-  _scscf_uri(scscf_uri)
+  _scscf_uri(scscf_uri),
+  _fallback_if_no_matching_ifc(fallback_if_no_matching_ifc)
 {
 }
 
@@ -278,6 +280,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
                           std::vector<std::string>& aliases,
                           std::deque<std::string>& ccfs,
                           std::deque<std::string>& ecfs,
+                          bool fallback_if_no_matching_ifc,
                           bool allowNoIMS)
 {
   if (!root.get())
@@ -369,7 +372,17 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
         associated_uris.push_back(uri);
         ifcs_map[uri] = ifc;
-        if (public_id == sp->first_node("PublicIdentity"))
+        
+        // We might get a set of IFCs where there's no Identity node that
+        // matches our URI - the main example is with wildcard identities,
+        // where we don't do wildcard matching yet. In this case, our behaviour
+        // is determined by fallback_if_no_matching_ifc:
+        //
+        // - if it's true, we'll use the first IFC given regardless of the
+        //   identity it specifies
+        // - if it's false, we just won't invoke any application servers
+        if (fallback_if_no_matching_ifc &&
+            (public_id == sp->first_node("PublicIdentity")))
         {
           ifcs_map[public_user_identity] = ifc;
         }
@@ -630,6 +643,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                               aliases,
                               ccfs,
                               ecfs,
+                              _fallback_if_no_matching_ifc,
                               false) ? HTTP_OK : HTTP_SERVER_ERROR;
 }
 
@@ -708,6 +722,7 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
                               unused_aliases,
                               ccfs,
                               ecfs,
+                              _fallback_if_no_matching_ifc,
                               true) ? HTTP_OK : HTTP_SERVER_ERROR;
 }
 

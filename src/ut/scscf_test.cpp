@@ -1423,6 +1423,7 @@ TEST_F(SCSCFTest, TestTelURIWildcard)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
+  _hss_connection->allow_fallback_ifcs();
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);

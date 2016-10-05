@@ -60,6 +60,10 @@ FakeHSSConnection::~FakeHSSConnection()
   flush_all();
 }
 
+void FakeHSSConnection::allow_fallback_ifcs()
+{
+  _fallback_if_no_matching_ifc = true;
+}
 
 void FakeHSSConnection::flush_all()
 {
