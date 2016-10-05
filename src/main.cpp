@@ -247,7 +247,9 @@ const static int QUIESCE_SIGNAL = SIGQUIT;
 const static int UNQUIESCE_SIGNAL = SIGUSR1;
 // Minimum value allowed by rfc4028, section 4
 const static int MIN_SESSION_EXPIRES = 90;
+
 static const std::string SPROUT_HTTP_MGMT_SOCKET_PATH = "/tmp/sprout-http-mgmt-socket";
+static const int NUM_HTTP_MGMT_THREADS = 5;
 
 static void usage(void)
 {
@@ -2010,7 +2012,7 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  HttpStack* http_stack_mgmt = new HttpStack(opt.http_threads,
+  HttpStack* http_stack_mgmt = new HttpStack(NUM_HTTP_MGMT_THREADS,
                                              exception_handler,
                                              access_logger);
   try
