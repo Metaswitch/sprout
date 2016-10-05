@@ -100,6 +100,7 @@ get_settings()
         # Set up defaults and then pull in the settings for this node.
         sas_server=0.0.0.0
         signaling_dns_server=127.0.0.1
+        bono_alias_list=""
         . /etc/clearwater/config
 
         # Set the upstream hostname to the sprout hostname only if it hasn't
@@ -140,6 +141,7 @@ get_daemon_args()
         if [ $IBCF_ENABLED = Y ]
         then
           [ -z "$trusted_peers" ] || ibcf_arg="--ibcf=$trusted_peers"
+          [ -z "$ibcf_domain" ] || bono_alias_list="$bono_alias_list,$ibcf_domain"
         fi
 
         [ -z "$ralf_hostname" ] || ralf_arg="--ralf=$ralf_hostname"
@@ -154,7 +156,7 @@ get_daemon_args()
 
         DAEMON_ARGS="--domain=$home_domain
                      --localhost=$local_ip,$public_hostname
-                     --alias=$public_ip
+                     --alias=$public_ip,$public_hostname,$bono_alias_list
                      --pcscf=5060,5058
                      --webrtc-port=5062
                      --routing-proxy=$upstream_hostname,$upstream_port,$upstream_connections,$upstream_recycle_connections
