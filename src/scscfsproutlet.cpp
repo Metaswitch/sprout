@@ -1221,7 +1221,7 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
       // database.
       _scscf->translate_request_uri(req, get_pool(req), trail());
 
-      URIClass uri_class = URIClassifier::classify_uri(req->line.req.uri);
+      URIClass uri_class = URIClassifier::classify_uri(req->line.req.uri, true, true);
       std::string new_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req->line.req.uri);
       TRC_INFO("New URI string is %s", new_uri_str.c_str());
 

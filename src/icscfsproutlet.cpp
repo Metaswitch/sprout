@@ -614,7 +614,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
           pjsip_uri* original_req_uri = req->line.req.uri;
           _icscf->translate_request_uri(req, get_pool(req), trail());
           uri = req->line.req.uri;
-          URIClass uri_class = URIClassifier::classify_uri(uri, false);
+          URIClass uri_class = URIClassifier::classify_uri(uri, false, true);
 
           std::string rn;
 

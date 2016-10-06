@@ -2110,6 +2110,17 @@ pjsip_uri* PJUtils::translate_sip_uri_to_tel_uri(const pjsip_sip_uri* sip_uri,
     tel_uri->ext_param.ptr = ext->value.ptr;
   }
 
+  // Copy across any SIP user parameters to the new Tel URI
+  for (pjsip_param* p = sip_uri->userinfo_param.next;
+       (p != NULL) && (p != &sip_uri->userinfo_param);
+       p = p->next)
+  {
+    pjsip_param* tel_param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+    pj_strdup(pool, &tel_param->name, &p->name);
+    pj_strdup(pool, &tel_param->value, &p->value);
+    pj_list_insert_after(&tel_uri->other_param, tel_param);
+  }
+
   return (pjsip_uri*)tel_uri;
 }
 
@@ -2224,7 +2235,7 @@ void PJUtils::translate_request_uri(pjsip_msg* req,
                                     SAS::TrailId trail)
 {
   pjsip_uri* uri = req->line.req.uri;
-  URIClass uri_class = URIClassifier::classify_uri(uri, false);
+  URIClass uri_class = URIClassifier::classify_uri(uri, false, true);
 
   if ((uri_class == GLOBAL_PHONE_NUMBER) ||
       (uri_class == NP_DATA) ||
@@ -2255,7 +2266,7 @@ void PJUtils::translate_request_uri(pjsip_msg* req,
       }
 
       // The URI was successfully translated, so see what it is.
-      URIClass new_uri_class = URIClassifier::classify_uri(new_uri, false);
+      URIClass new_uri_class = URIClassifier::classify_uri(new_uri, false, true);
       std::string rn;
 
       if ((new_uri_class == HOME_DOMAIN_SIP_URI) ||
@@ -2299,7 +2310,7 @@ void PJUtils::update_request_uri_np_data(pjsip_msg* req,
                                     SAS::TrailId trail)
 {
   pjsip_uri* uri = req->line.req.uri;
-  URIClass uri_class = URIClassifier::classify_uri(uri);
+  URIClass uri_class = URIClassifier::classify_uri(uri, true, true);
 
   if ((uri_class == GLOBAL_PHONE_NUMBER) ||
       (uri_class == NP_DATA) ||
@@ -2330,7 +2341,7 @@ void PJUtils::update_request_uri_np_data(pjsip_msg* req,
       }
 
       // The URI was successfully translated, so see what it is.
-      URIClass new_uri_class = URIClassifier::classify_uri(new_uri, false);
+      URIClass new_uri_class = URIClassifier::classify_uri(new_uri, false, true);
 
       if ((new_uri_class == NP_DATA) || (new_uri_class == FINAL_NP_DATA))
       {
