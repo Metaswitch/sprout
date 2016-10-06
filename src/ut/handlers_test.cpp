@@ -49,6 +49,7 @@
 #include "mock_subscriber_data_manager.h"
 #include "mock_impi_store.h"
 #include "mock_hss_connection.h"
+#include "rapidjson/document.h"
 
 using namespace std;
 using ::testing::_;
@@ -75,23 +76,20 @@ const std::string HSS_NOT_REG_STATE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?
                                         "<RegistrationState>NOT_REGISTERED</RegistrationState>"
                                       "</ClearwaterRegData>";
 
-class AoRTimeoutTasksTest : public SipTest
+class TestWithMockSdms : public SipTest
 {
   MockSubscriberDataManager* store;
   MockSubscriberDataManager* remote_store1;
   MockSubscriberDataManager* remote_store2;
   MockHttpStack* stack;
   MockHSSConnection* mock_hss;
-  MockHttpStack::Request* req;
-  AoRTimeoutTask::Config* config;
-  AoRTimeoutTask* handler;
 
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase(false);
   }
 
-  void SetUp()
+  virtual void SetUp()
   {
     store = new MockSubscriberDataManager();
     remote_store1 = new MockSubscriberDataManager();
@@ -100,10 +98,8 @@ class AoRTimeoutTasksTest : public SipTest
     stack = new MockHttpStack();
   }
 
-  void TearDown()
+  virtual void TearDown()
   {
-    delete config;
-    delete req;
     delete stack;
     delete remote_store1; remote_store1 = NULL;
     delete remote_store2; remote_store2 = NULL;
@@ -111,30 +107,24 @@ class AoRTimeoutTasksTest : public SipTest
     delete mock_hss;
   }
 
-  void build_timeout_request(std::string body, htp_method method)
-  {
-    req = new MockHttpStack::Request(stack, "/", "timers", "", body, method);
-    config = new AoRTimeoutTask::Config(store, {remote_store1, remote_store2}, mock_hss);
-    handler = new AoRTimeoutTask(*req, config, 0);
-  }
-
   SubscriberDataManager::AoRPair* build_aor(std::string aor_id)
   {
     SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
     int now = time(NULL);
-    SubscriberDataManager::AoR::Binding* b = NULL;
-    build_binding(aor, b, now);
-    SubscriberDataManager::AoR::Subscription* s = NULL;
-    build_subscription(aor, s, now);
+    build_binding(aor, now);
+    build_subscription(aor, now);
     SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
     SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
 
     return aor_pair;
   }
 
-  SubscriberDataManager::AoR::Binding* build_binding(SubscriberDataManager::AoR* aor, SubscriberDataManager::AoR::Binding* b, int now)
+  SubscriberDataManager::AoR::Binding*
+    build_binding(SubscriberDataManager::AoR* aor,
+                  int now,
+                  const std::string& id = "<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1")
   {
-    b = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+    SubscriberDataManager::AoR::Binding* b = aor->get_binding(std::string(id));
     b->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
     b->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
     b->_cseq = 17038;
@@ -149,9 +139,9 @@ class AoRTimeoutTasksTest : public SipTest
     return b;
   }
 
-  SubscriberDataManager::AoR::Subscription* build_subscription(SubscriberDataManager::AoR* aor, SubscriberDataManager::AoR::Subscription* s, int now)
+  SubscriberDataManager::AoR::Subscription* build_subscription(SubscriberDataManager::AoR* aor, int now)
   {
-    s = aor->get_subscription("1234");
+    SubscriberDataManager::AoR::Subscription* s = aor->get_subscription("1234");
     s->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
     s->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
     s->_from_tag = std::string("4321");
@@ -162,6 +152,29 @@ class AoRTimeoutTasksTest : public SipTest
     s->_expires = now + 300;
     return s;
   }
+};
+
+class AoRTimeoutTasksTest : public TestWithMockSdms
+{
+public:
+  void TearDown()
+  {
+    delete config;
+    delete req;
+
+    TestWithMockSdms::TearDown();
+  }
+
+  void build_timeout_request(std::string body, htp_method method)
+  {
+    req = new MockHttpStack::Request(stack, "/", "timers", "", body, method);
+    config = new AoRTimeoutTask::Config(store, {remote_store1, remote_store2}, mock_hss);
+    handler = new AoRTimeoutTask(*req, config, 0);
+  }
+
+  MockHttpStack::Request* req;
+  AoRTimeoutTask::Config* config;
+  AoRTimeoutTask* handler;
 };
 
 // Test main flow, without a remote store.
@@ -1060,4 +1073,166 @@ TEST_F(AuthTimeoutTest, BadJSON)
   int status = handler->handle_response(body);
 
   ASSERT_EQ(status, 400);
+}
+
+//
+// Test reading sprout's bindings.
+//
+
+class GetBindingsTest : public TestWithMockSdms
+{
+};
+
+// Test getting an IMPU that does not have any bindings.
+TEST_F(GetBindingsTest, NoBindings)
+{
+  // Build request
+  MockHttpStack::Request req(stack, "/impu/sip%3A6505550231%40homedomain/bindings", "");
+  GetBindingsTask::Config config(store, {remote_store1});
+  GetBindingsTask* task = new GetBindingsTask(req, &config, 0);
+
+  // Set up subscriber_data_manager expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  SubscriberDataManager::AoRPair* aor =
+    new SubscriberDataManager::AoRPair(new SubscriberDataManager::AoR(aor_id),
+                                       new SubscriberDataManager::AoR(aor_id));
+  SubscriberDataManager::AoRPair* remote_aor =
+    new SubscriberDataManager::AoRPair(new SubscriberDataManager::AoR(aor_id),
+                                       new SubscriberDataManager::AoR(aor_id));
+
+  {
+    InSequence s;
+      // Neither store has any bindings so the backup store is checked.
+      EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor));
+      EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
+      EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote_aor));
+
+      // The handler returns a 404.
+      EXPECT_CALL(*stack, send_reply(_, 404, _));
+  }
+
+  task->run();
+}
+
+// Test getting an IMPU with one binding.
+TEST_F(GetBindingsTest, OneBinding)
+{
+  // Build request
+  MockHttpStack::Request req(stack, "/impu/sip%3A6505550231%40homedomain/bindings", "");
+  GetBindingsTask::Config config(store, {remote_store1});
+  GetBindingsTask* task = new GetBindingsTask(req, &config, 0);
+
+  // Set up subscriber_data_manager expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  SubscriberDataManager::AoRPair* aor = build_aor(aor_id);
+  std::string id = aor->get_current()->bindings().begin()->first;
+  std::string contact = aor->get_current()->bindings().begin()->second->_uri;
+
+  {
+    InSequence s;
+      EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor));
+      EXPECT_CALL(*stack, send_reply(_, 200, _));
+  }
+
+  task->run();
+
+  // Check that the JSON document is correct.
+  rapidjson::Document document;
+  document.Parse(req.content().c_str());
+
+  // The document should be of the form {"bindings":{...}}
+  EXPECT_TRUE(document.IsObject());
+  EXPECT_TRUE(document.HasMember("bindings"));
+  EXPECT_TRUE(document["bindings"].IsObject());
+
+  // Check there is only one  binding.
+  EXPECT_EQ(1, document["bindings"].MemberCount());
+  const rapidjson::Value& binding_id = document["bindings"].MemberBegin()->name;
+  const rapidjson::Value& binding = document["bindings"].MemberBegin()->value;
+
+  // Check the fields in the binding. Don't check every value. It makes the
+  // test unnecessarily verbose.
+  EXPECT_TRUE(binding.HasMember("uri"));
+  EXPECT_TRUE(binding.HasMember("cid"));
+  EXPECT_TRUE(binding.HasMember("cseq"));
+  EXPECT_TRUE(binding.HasMember("expires"));
+  EXPECT_TRUE(binding.HasMember("priority"));
+  EXPECT_TRUE(binding.HasMember("params"));
+  EXPECT_TRUE(binding.HasMember("paths"));
+  EXPECT_TRUE(binding.HasMember("private_id"));
+  EXPECT_TRUE(binding.HasMember("emergency_reg"));
+
+  // Do check the binding ID and URI as a representative test.
+  EXPECT_EQ(id, binding_id.GetString());
+  EXPECT_EQ(contact, binding["uri"].GetString());
+}
+
+// Test getting an IMPU with one binding.
+TEST_F(GetBindingsTest, TwoBindings)
+{
+  int now = time(NULL);
+
+  // Build request
+  MockHttpStack::Request req(stack, "/impu/sip%3A6505550231%40homedomain/bindings", "");
+  GetBindingsTask::Config config(store, {remote_store1});
+  GetBindingsTask* task = new GetBindingsTask(req, &config, 0);
+
+  // Set up subscriber_data_manager expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
+  build_binding(aor, now, "123");
+  build_binding(aor, now, "456");
+  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
+  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+
+  {
+    InSequence s;
+      EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
+      EXPECT_CALL(*stack, send_reply(_, 200, _));
+  }
+
+  task->run();
+
+  // Check that the JSON document has two bindings.
+  rapidjson::Document document;
+  document.Parse(req.content().c_str());
+  EXPECT_EQ(2, document["bindings"].MemberCount());
+  EXPECT_TRUE(document["bindings"].HasMember("123"));
+  EXPECT_TRUE(document["bindings"].HasMember("456"));
+}
+
+// Test getting an IMPU when the local store is down.
+TEST_F(GetBindingsTest, LocalStoreDown)
+{
+  // Build request
+  MockHttpStack::Request req(stack, "/impu/sip%3A6505550231%40homedomain/bindings", "");
+  GetBindingsTask::Config config(store, {remote_store1});
+  GetBindingsTask* task = new GetBindingsTask(req, &config, 0);
+
+  // Set up subscriber_data_manager expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  {
+    InSequence s;
+      EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(nullptr));
+      EXPECT_CALL(*stack, send_reply(_, 500, _));
+  }
+
+  task->run();
+}
+
+// Test getting an IMPU with one binding.
+TEST_F(GetBindingsTest, BadMethod)
+{
+  // Build request
+  MockHttpStack::Request req(stack,
+                             "/impu/sip%3A6505550231%40homedomain/bindings",
+                             "",
+                             "",
+                             "",
+                             htp_method_PUT);
+  GetBindingsTask::Config config(store, {remote_store1});
+  GetBindingsTask* task = new GetBindingsTask(req, &config, 0);
+
+  EXPECT_CALL(*stack, send_reply(_, 405, _));
+  task->run();
 }
