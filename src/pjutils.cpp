@@ -2110,26 +2110,15 @@ pjsip_uri* PJUtils::translate_sip_uri_to_tel_uri(const pjsip_sip_uri* sip_uri,
     tel_uri->ext_param.ptr = ext->value.ptr;
   }
 
-  // Copy across any routing number and NPDI parameters to the new URI
-  pjsip_param* rn = pjsip_param_find(&sip_uri->userinfo_param, &STR_RN);
-  bool npdi = (pjsip_param_find(&sip_uri->userinfo_param, &STR_NPDI) != NULL);
-
-  if (rn != NULL)
+  // Copy across any SIP user parameters to the new Tel URI
+  for (pjsip_param* p = sip_uri->userinfo_param.next;
+       (p != NULL) && (p != &sip_uri->userinfo_param);
+       p = p->next)
   {
-    // Add the `rn` parameter.
-    pjsip_param* tel_rn_param = PJ_POOL_ALLOC_T(pool, pjsip_param);
-    pj_strdup(pool, &tel_rn_param->name, &STR_RN);
-    pj_strdup(pool, &tel_rn_param->value, &rn->value);
-    pj_list_insert_after(&tel_uri->other_param, tel_rn_param);
-  }
-
-  if (npdi)
-  {
-    // Add the 'npdi' parameter
-    pjsip_param* tel_npdi_param = PJ_POOL_ALLOC_T(pool, pjsip_param);
-    pj_strdup(pool, &tel_npdi_param->name, &STR_NPDI);
-    tel_npdi_param->value.slen = 0;
-    pj_list_insert_after(&tel_uri->other_param, tel_npdi_param);
+    pjsip_param* tel_param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+    pj_strdup(pool, &tel_param->name, &p->name);
+    pj_strdup(pool, &tel_param->value, &p->value);
+    pj_list_insert_after(&tel_uri->other_param, tel_param);
   }
 
   return (pjsip_uri*)tel_uri;

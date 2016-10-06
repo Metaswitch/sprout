@@ -3093,7 +3093,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteNumericSIPURI)
   // conversion
   Message msg1;
   msg1._method = "INVITE";
-  msg1._requri = "sip:+16505551234;rn=567@homedomain";
+  msg1._requri = "sip:+16505551234;npdi;rn=567@homedomain";
   msg1._to = "+16505551234";
   msg1._via = tp->to_string(false);
   msg1._extra = "Contact: sip:6505551000@" +
@@ -3118,6 +3118,9 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteNumericSIPURI)
   expect_target("TCP", "10.10.10.1", 5058, tdata);
   ReqMatcher r1("INVITE");
   r1.matches(tdata->msg);
+
+  // Verify that the user parameters were carried through the SIP to Tel URI conversion successfully
+  ASSERT_EQ("tel:+16505551234;npdi;rn=567", str_uri(tdata->msg->line.req.uri));
 
   // Check that a Route header has been added routing the INVITE to the
   // selected S-CSCF.  This must include the orig parameter.
