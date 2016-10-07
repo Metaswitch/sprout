@@ -107,12 +107,16 @@ class TestWithMockSdms : public SipTest
     delete mock_hss;
   }
 
-  SubscriberDataManager::AoRPair* build_aor(std::string aor_id)
+  SubscriberDataManager::AoRPair* build_aor(std::string aor_id,
+                                            bool include_subscription = true)
   {
     SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
     int now = time(NULL);
     build_binding(aor, now);
-    build_subscription(aor, now);
+    if (include_subscription)
+    {
+      build_subscription(aor, now);
+    }
     SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
     SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
 
@@ -1400,5 +1404,198 @@ TEST_F(GetSubscriptionsTest, BadMethod)
   GetSubscriptionsTask* task = new GetSubscriptionsTask(req, &config, 0);
 
   EXPECT_CALL(*stack, send_reply(_, 405, _));
+  task->run();
+}
+
+//
+// Tests for deleting sprout's cached data.
+//
+
+class DeleteImpuTaskTest : public TestWithMockSdms
+{
+  MockHttpStack::Request* req;
+  DeleteImpuTask::Config* cfg;
+  DeleteImpuTask* task;
+
+  static void SetUpTestCase()
+  {
+    TestWithMockSdms::SetUpTestCase();
+  }
+
+  void SetUp()
+  {
+    TestWithMockSdms::SetUp();
+    stack_data.scscf_uri = pj_str("sip:all.the.sprouts:5058;transport=TCP");
+  }
+
+  void TearDown()
+  {
+    delete req;
+    delete cfg;
+    TestWithMockSdms::TearDown();
+  }
+
+  // Build the deregistration request
+  void build_task(const std::string& impu,
+                  htp_method method = htp_method_DELETE,
+                  bool configure_remote_store = false)
+  {
+    req = new MockHttpStack::Request(stack,
+                                     "/impu/" + impu,
+                                     "",
+                                     "",
+                                     "",
+                                     method);
+    std::vector<SubscriberDataManager*> remote_stores;
+    if (configure_remote_store)
+    {
+      remote_stores.push_back(remote_store1);
+    }
+
+    cfg = new DeleteImpuTask::Config(store, remote_stores, mock_hss);
+    task = new DeleteImpuTask(*req, cfg, 0);
+  }
+};
+
+TEST_F(DeleteImpuTaskTest, Mainline)
+{
+  std::string impu = "sip:6505550231@homedomain";
+  std::string impu_escaped =  "sip%3A6505550231%40homedomain";
+
+  SubscriberDataManager::AoRPair* aor = build_aor(impu, false);
+  build_task(impu_escaped);
+
+  {
+    InSequence s;
+      // Neither store has any bindings so the backup store is checked.
+      EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings are expired.
+                        Return(Store::OK)));
+      EXPECT_CALL(*mock_hss, update_registration_state(impu, _, "dereg-admin", _, _, _))
+        .WillOnce(Return(200));
+      EXPECT_CALL(*stack, send_reply(_, 200, _));
+  }
+
+  task->run();
+}
+
+TEST_F(DeleteImpuTaskTest, StoreFailure)
+{
+  std::string impu = "sip:6505550231@homedomain";
+  std::string impu_escaped =  "sip%3A6505550231%40homedomain";
+
+  SubscriberDataManager::AoRPair* aor = build_aor(impu, true);
+  build_task(impu_escaped);
+
+  {
+    InSequence s;
+      // Neither store has any bindings so the backup store is checked.
+      EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<3>(false), // Fail to expire bindings.
+                        Return(Store::ERROR)));
+      EXPECT_CALL(*stack, send_reply(_, 500, _));
+  }
+
+  task->run();
+}
+
+TEST_F(DeleteImpuTaskTest, HomesteadFailsWith404)
+{
+  std::string impu = "sip:6505550231@homedomain";
+  std::string impu_escaped =  "sip%3A6505550231%40homedomain";
+
+  SubscriberDataManager::AoRPair* aor = build_aor(impu, true);
+  build_task(impu_escaped);
+
+  {
+    InSequence s;
+      // Neither store has any bindings so the backup store is checked.
+      EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
+                        Return(Store::OK)));
+      EXPECT_CALL(*mock_hss, update_registration_state(impu, _,_, _, _, _))
+        .WillOnce(Return(404));
+      EXPECT_CALL(*stack, send_reply(_, 404, _));
+  }
+
+  task->run();
+}
+
+TEST_F(DeleteImpuTaskTest, HomesteadFailsWith5xx)
+{
+  std::string impu = "sip:6505550231@homedomain";
+  std::string impu_escaped =  "sip%3A6505550231%40homedomain";
+
+  SubscriberDataManager::AoRPair* aor = build_aor(impu, true);
+  build_task(impu_escaped);
+
+  {
+    InSequence s;
+      // Neither store has any bindings so the backup store is checked.
+      EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
+                        Return(Store::OK)));
+      EXPECT_CALL(*mock_hss, update_registration_state(impu, _,_, _, _, _))
+        .WillOnce(Return(500));
+      EXPECT_CALL(*stack, send_reply(_, 502, _));
+  }
+
+  task->run();
+}
+
+TEST_F(DeleteImpuTaskTest, HomesteadFailsWith4xx)
+{
+  std::string impu = "sip:6505550231@homedomain";
+  std::string impu_escaped =  "sip%3A6505550231%40homedomain";
+
+  SubscriberDataManager::AoRPair* aor = build_aor(impu, true);
+  build_task(impu_escaped);
+
+  {
+    InSequence s;
+      // Neither store has any bindings so the backup store is checked.
+      EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
+                        Return(Store::OK)));
+      EXPECT_CALL(*mock_hss, update_registration_state(impu, _,_, _, _, _))
+        .WillOnce(Return(400));
+      EXPECT_CALL(*stack, send_reply(_, 400, _));
+  }
+
+  task->run();
+}
+
+TEST_F(DeleteImpuTaskTest, WritingToRemoteStores)
+{
+  std::string impu = "sip:6505550231@homedomain";
+  std::string impu_escaped =  "sip%3A6505550231%40homedomain";
+
+  SubscriberDataManager::AoRPair* aor = build_aor(impu);
+  SubscriberDataManager::AoRPair* remote_aor = build_aor(impu);
+  build_task(impu_escaped, htp_method_DELETE, true);
+
+  {
+    InSequence s;
+      // Neither store has any bindings so the backup store is checked.
+      EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
+                        Return(Store::OK)));
+      EXPECT_CALL(*mock_hss, update_registration_state(impu, _,_, _, _, _))
+        .WillOnce(Return(200));
+
+      EXPECT_CALL(*remote_store1, get_aor_data(impu, _)).WillOnce(Return(remote_aor));
+      EXPECT_CALL(*remote_store1, set_aor_data(impu, _, _, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
+                        Return(Store::OK)));
+
+      EXPECT_CALL(*stack, send_reply(_, 200, _));
+  }
+
   task->run();
 }
