@@ -1604,3 +1604,14 @@ TEST_F(DeleteImpuTaskTest, WritingToRemoteStores)
 
   task->run();
 }
+
+TEST_F(DeleteImpuTaskTest, BadMethod)
+{
+  std::string impu = "sip:6505550231@homedomain";
+  std::string impu_escaped =  "sip%3A6505550231%40homedomain";
+
+  build_task(impu_escaped, htp_method_PUT);
+  EXPECT_CALL(*stack, send_reply(_, 405, _));
+
+  task->run();
+}
