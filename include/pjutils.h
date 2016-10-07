@@ -141,7 +141,9 @@ pj_bool_t msg_supports_extension(pjsip_msg* msg, const char* extension);
 
 pj_bool_t is_first_hop(pjsip_msg* msg);
 
-int max_expires(pjsip_msg* msg, int default_expires);
+pj_bool_t get_max_expires(pjsip_msg* msg, int default_expires, int* max_expires);
+
+pj_bool_t is_deregistration(pjsip_msg* msg);
 
 pjsip_tx_data* clone_msg(pjsip_endpoint* endpt,
                          pjsip_rx_data* rdata);
@@ -150,15 +152,15 @@ pjsip_tx_data* clone_msg(pjsip_endpoint* endpt,
                          pjsip_tx_data* tdata);
 
 pj_status_t create_response(pjsip_endpoint *endpt,
-      		            const pjsip_rx_data *rdata,
-      		            int st_code,
-      		            const pj_str_t* st_text,
-      		            pjsip_tx_data **p_tdata);
+                      const pjsip_rx_data *rdata,
+                      int st_code,
+                      const pj_str_t* st_text,
+                      pjsip_tx_data **p_tdata);
 
 pj_status_t create_response(pjsip_endpoint *endpt,
                             const pjsip_tx_data *tdata,
                             int st_code,
-      		            const pj_str_t* st_text,
+                      const pj_str_t* st_text,
                             pjsip_tx_data **p_tdata);
 
 pj_status_t create_request_fwd(pjsip_endpoint *endpt,

@@ -281,7 +281,12 @@ void RalfACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
       // Check for expires values in Contact headers.  Set the default to
       // -1, so if there are no contact headers, or no expires values in the
       // contact headers we won't include an Expires AVP.
-      _expires = PJUtils::max_expires(req, -1);
+      if (!PJUtils::get_max_expires(req, -1, &_expires))
+      {
+        // Max expires isn't meaningful for this request (it has no Contact
+        // headers), so use the default of -1.
+        _expires = -1;
+      }
     }
     else
     {

@@ -630,46 +630,61 @@ pj_bool_t PJUtils::is_first_hop(pjsip_msg* msg)
   return first_hop;
 }
 
-
 /// Gets the maximum expires value from all contacts in a REGISTER message
 /// (request or response).
-int PJUtils::max_expires(pjsip_msg* msg, int default_expires)
+///
+/// Returns TRUE if the maximum expires value is meaningful (i.e. if the
+/// REGISTER includes Contact headers) and FALSE otherwise.  Set max_expires
+/// to the default value in the latter case to ensure that callers that fail
+/// to check the returncode are at least using a sensible default.
+pj_bool_t PJUtils::get_max_expires(pjsip_msg* msg, int default_expires, int* max_expires)
 {
-  int max_expires = 0;
-
-  // Check for an expires header (this will specify the default expiry for
-  // any contacts that don't specify their own expiry).
-  pjsip_expires_hdr* expires_hdr = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
-  if (expires_hdr != NULL)
-  {
-    default_expires = expires_hdr->ivalue;
-  }
-
+  pj_bool_t valid;
   pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
 
   // If there are no contact headers (as will be the case if this is a "fetch
-  // bindings" query, rather than a real state-changing REGISTER), use the default
-  // expiry value.
+  // bindings" query, rather than a real state-changing REGISTER), return FALSE,
+  // as maximum expiry isn't meaningful for such a request.
   if (contact == NULL)
   {
-    max_expires = default_expires;
+    valid = PJ_FALSE;
+    *max_expires = default_expires;
   }
   else
   {
+    valid = PJ_TRUE;
+    *max_expires = 0;
+
+    // Check for an expires header (this will specify the default expiry for
+    // any contacts that don't specify their own expiry).
+    pjsip_expires_hdr* expires_hdr = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
+    if (expires_hdr != NULL)
+    {
+      default_expires = expires_hdr->ivalue;
+    }
+
     while (contact != NULL)
     {
       int expires = (contact->expires != -1) ? contact->expires : default_expires;
-      if (expires > max_expires)
+      if (expires > *max_expires)
       {
-        max_expires = expires;
+        *max_expires = expires;
       }
       contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, contact->next);
     }
   }
 
-  return max_expires;
+  return valid;
 }
 
+/// Determines whether this REGISTER is a deregistration.
+pj_bool_t PJUtils::is_deregistration(pjsip_msg* msg)
+{
+  // REGISTER will be a deregistration if get_max_expires is 0 (and is meaningful -
+  // REGISTERs with no Contact headers are never deregistrations).
+  int max_expires;
+  return (get_max_expires(msg, 1, &max_expires) && (max_expires == 0));
+}
 
 pjsip_tx_data* PJUtils::clone_msg(pjsip_endpoint* endpt,
                                   pjsip_rx_data* rdata)
