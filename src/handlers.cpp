@@ -767,6 +767,7 @@ void GetCachedDataTask::run()
   if (aor_pair->get_current()->bindings().empty())
   {
     send_http_reply(HTTP_NOT_FOUND);
+    delete aor_pair; aor_pair = NULL;
     delete this;
     return;
   }
