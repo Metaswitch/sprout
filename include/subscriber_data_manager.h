@@ -54,6 +54,7 @@ extern "C" {
 #include "sas.h"
 
 #include "rapidjson/writer.h"
+#include "rapidjson/document.h"
 
 class SubscriberDataManager
 {
@@ -122,6 +123,14 @@ public:
       ///
       /// @param writer - a rapidjson writer to write to.
       void to_json(rapidjson::Writer<rapidjson::StringBuffer>& writer) const;
+
+      // Deserialize a binding from a JSON object.
+      //
+      // @param b_obj - The binding as a JSON object.
+      //
+      // @return      - Nothing. If this function fails (because the JSON is not
+      //                semantically valid) this method throws JsonFormError.
+      void from_json(const rapidjson::Value& b_obj);
     };
 
     /// @class SubscriberDataManager::AoR::Subscription
@@ -164,6 +173,14 @@ public:
       ///
       /// @param writer - a rapidjson writer to write to.
       void to_json(rapidjson::Writer<rapidjson::StringBuffer>& writer) const;
+
+      // Deserialize a subscription from a JSON object.
+      //
+      // @param s_obj - The subscription as a JSON object.
+      //
+      // @return      - Nothing. If this function fails (because the JSON is not
+      //                semantically valid) this method throws JsonFormError.
+      void from_json(const rapidjson::Value& s_obj);
    };
 
     /// Default Constructor.

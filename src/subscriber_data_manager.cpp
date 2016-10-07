@@ -792,6 +792,48 @@ void SubscriberDataManager::AoR::Binding::
   writer.EndObject();
 }
 
+void SubscriberDataManager::AoR::Binding::from_json(const rapidjson::Value& b_obj)
+{
+
+  JSON_GET_STRING_MEMBER(b_obj, JSON_URI, _uri);
+  JSON_GET_STRING_MEMBER(b_obj, JSON_CID, _cid);
+  JSON_GET_INT_MEMBER(b_obj, JSON_CSEQ, _cseq);
+  JSON_GET_INT_MEMBER(b_obj, JSON_EXPIRES, _expires);
+  JSON_GET_INT_MEMBER(b_obj, JSON_PRIORITY, _priority);
+
+  JSON_ASSERT_CONTAINS(b_obj, JSON_PARAMS);
+  JSON_ASSERT_OBJECT(b_obj[JSON_PARAMS]);
+  const rapidjson::Value& params_obj = b_obj[JSON_PARAMS];
+
+  for (rapidjson::Value::ConstMemberIterator params_it = params_obj.MemberBegin();
+       params_it != params_obj.MemberEnd();
+       ++params_it)
+  {
+    JSON_ASSERT_STRING(params_it->value);
+    _params[params_it->name.GetString()] = params_it->value.GetString();
+  }
+
+  JSON_ASSERT_CONTAINS(b_obj, JSON_PATHS);
+  JSON_ASSERT_ARRAY(b_obj[JSON_PATHS]);
+  const rapidjson::Value& paths_arr = b_obj[JSON_PATHS];
+
+  for (rapidjson::Value::ConstValueIterator paths_it = paths_arr.Begin();
+       paths_it != paths_arr.End();
+       ++paths_it)
+  {
+    JSON_ASSERT_STRING(*paths_it);
+    _path_headers.push_back(paths_it->GetString());
+  }
+
+  _timer_id =
+    ((b_obj.HasMember(JSON_TIMER_ID)) && ((b_obj[JSON_TIMER_ID]).IsString()) ?
+     (b_obj[JSON_TIMER_ID].GetString()) :
+     "");
+  //      JSON_GET_STRING_MEMBER(b_obj, JSON_TIMER_ID, _timer_id);
+  JSON_GET_STRING_MEMBER(b_obj, JSON_PRIVATE_ID, _private_id);
+  JSON_GET_BOOL_MEMBER(b_obj, JSON_EMERGENCY_REG, _emergency_registration);
+}
+
 void SubscriberDataManager::AoR::Subscription::
   to_json(rapidjson::Writer<rapidjson::StringBuffer>& writer) const
 {
@@ -821,6 +863,34 @@ void SubscriberDataManager::AoR::Subscription::
 
   }
   writer.EndObject();
+}
+
+void SubscriberDataManager::AoR::Subscription::from_json(const rapidjson::Value& s_obj)
+{
+  JSON_GET_STRING_MEMBER(s_obj, JSON_REQ_URI, _req_uri);
+  JSON_GET_STRING_MEMBER(s_obj, JSON_FROM_URI, _from_uri);
+  JSON_GET_STRING_MEMBER(s_obj, JSON_FROM_TAG, _from_tag);
+  JSON_GET_STRING_MEMBER(s_obj, JSON_TO_URI, _to_uri);
+  JSON_GET_STRING_MEMBER(s_obj, JSON_TO_TAG, _to_tag);
+  JSON_GET_STRING_MEMBER(s_obj, JSON_CID, _cid);
+
+  JSON_ASSERT_CONTAINS(s_obj, JSON_ROUTES);
+  JSON_ASSERT_ARRAY(s_obj[JSON_ROUTES]);
+  const rapidjson::Value& routes_arr = s_obj[JSON_ROUTES];
+
+  for (rapidjson::Value::ConstValueIterator routes_it = routes_arr.Begin();
+       routes_it != routes_arr.End();
+       ++routes_it)
+  {
+    JSON_ASSERT_STRING(*routes_it);
+    _route_uris.push_back(routes_it->GetString());
+  }
+
+  JSON_GET_INT_MEMBER(s_obj, JSON_EXPIRES, _expires);
+  _timer_id =
+    ((s_obj.HasMember(JSON_TIMER_ID)) && ((s_obj[JSON_TIMER_ID]).IsString()) ?
+     (s_obj[JSON_TIMER_ID].GetString()) :
+     "");
 }
 
 // Utility function to return the expiry time of the binding or subscription due
@@ -1110,43 +1180,7 @@ SubscriberDataManager::AoR* SubscriberDataManager::JsonSerializerDeserializer::
       JSON_ASSERT_OBJECT(bindings_it->value);
       const rapidjson::Value& b_obj = bindings_it->value;
 
-      JSON_GET_STRING_MEMBER(b_obj, JSON_URI, b->_uri);
-      JSON_GET_STRING_MEMBER(b_obj, JSON_CID, b->_cid);
-      JSON_GET_INT_MEMBER(b_obj, JSON_CSEQ, b->_cseq);
-      JSON_GET_INT_MEMBER(b_obj, JSON_EXPIRES, b->_expires);
-      JSON_GET_INT_MEMBER(b_obj, JSON_PRIORITY, b->_priority);
-
-      JSON_ASSERT_CONTAINS(b_obj, JSON_PARAMS);
-      JSON_ASSERT_OBJECT(b_obj[JSON_PARAMS]);
-      const rapidjson::Value& params_obj = b_obj[JSON_PARAMS];
-
-      for (rapidjson::Value::ConstMemberIterator params_it = params_obj.MemberBegin();
-           params_it != params_obj.MemberEnd();
-           ++params_it)
-      {
-        JSON_ASSERT_STRING(params_it->value);
-        b->_params[params_it->name.GetString()] = params_it->value.GetString();
-      }
-
-      JSON_ASSERT_CONTAINS(b_obj, JSON_PATHS);
-      JSON_ASSERT_ARRAY(b_obj[JSON_PATHS]);
-      const rapidjson::Value& paths_arr = b_obj[JSON_PATHS];
-
-      for (rapidjson::Value::ConstValueIterator paths_it = paths_arr.Begin();
-           paths_it != paths_arr.End();
-           ++paths_it)
-      {
-        JSON_ASSERT_STRING(*paths_it);
-        b->_path_headers.push_back(paths_it->GetString());
-      }
-
-       b->_timer_id =
-         ((b_obj.HasMember(JSON_TIMER_ID)) && ((b_obj[JSON_TIMER_ID]).IsString()) ?
-                                               (b_obj[JSON_TIMER_ID].GetString()) :
-                                                "");
-//      JSON_GET_STRING_MEMBER(b_obj, JSON_TIMER_ID, b->_timer_id);
-      JSON_GET_STRING_MEMBER(b_obj, JSON_PRIVATE_ID, b->_private_id);
-      JSON_GET_BOOL_MEMBER(b_obj, JSON_EMERGENCY_REG, b->_emergency_registration);
+      b->from_json(b_obj);
     }
 
     JSON_ASSERT_CONTAINS(doc, JSON_SUBSCRIPTIONS);
@@ -1163,30 +1197,7 @@ SubscriberDataManager::AoR* SubscriberDataManager::JsonSerializerDeserializer::
       JSON_ASSERT_OBJECT(subscriptions_it->value);
       const rapidjson::Value& s_obj = subscriptions_it->value;
 
-      JSON_GET_STRING_MEMBER(s_obj, JSON_REQ_URI, s->_req_uri);
-      JSON_GET_STRING_MEMBER(s_obj, JSON_FROM_URI, s->_from_uri);
-      JSON_GET_STRING_MEMBER(s_obj, JSON_FROM_TAG, s->_from_tag);
-      JSON_GET_STRING_MEMBER(s_obj, JSON_TO_URI, s->_to_uri);
-      JSON_GET_STRING_MEMBER(s_obj, JSON_TO_TAG, s->_to_tag);
-      JSON_GET_STRING_MEMBER(s_obj, JSON_CID, s->_cid);
-
-      JSON_ASSERT_CONTAINS(s_obj, JSON_ROUTES);
-      JSON_ASSERT_ARRAY(s_obj[JSON_ROUTES]);
-      const rapidjson::Value& routes_arr = s_obj[JSON_ROUTES];
-
-      for (rapidjson::Value::ConstValueIterator routes_it = routes_arr.Begin();
-           routes_it != routes_arr.End();
-           ++routes_it)
-      {
-        JSON_ASSERT_STRING(*routes_it);
-        s->_route_uris.push_back(routes_it->GetString());
-      }
-
-      JSON_GET_INT_MEMBER(s_obj, JSON_EXPIRES, s->_expires);
-      s->_timer_id =
-         ((s_obj.HasMember(JSON_TIMER_ID)) && ((s_obj[JSON_TIMER_ID]).IsString()) ?
-                                               (s_obj[JSON_TIMER_ID].GetString()) :
-                                                "");
+      s->from_json(s_obj);
     }
 
     JSON_GET_INT_MEMBER(doc, JSON_NOTIFY_CSEQ, aor->_notify_cseq);
