@@ -139,9 +139,12 @@ class TestWithMockSdms : public SipTest
     return b;
   }
 
-  SubscriberDataManager::AoR::Subscription* build_subscription(SubscriberDataManager::AoR* aor, int now)
+  SubscriberDataManager::AoR::Subscription*
+    build_subscription(SubscriberDataManager::AoR* aor,
+                       int now,
+                       const std::string& id = "1234")
   {
-    SubscriberDataManager::AoR::Subscription* s = aor->get_subscription("1234");
+    SubscriberDataManager::AoR::Subscription* s = aor->get_subscription(id);
     s->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
     s->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
     s->_from_tag = std::string("4321");
@@ -1232,6 +1235,169 @@ TEST_F(GetBindingsTest, BadMethod)
                              htp_method_PUT);
   GetBindingsTask::Config config(store, {remote_store1});
   GetBindingsTask* task = new GetBindingsTask(req, &config, 0);
+
+  EXPECT_CALL(*stack, send_reply(_, 405, _));
+  task->run();
+}
+
+//
+// Test fetching sprout's subscriptions.
+//
+
+class GetSubscriptionsTest : public TestWithMockSdms
+{
+};
+
+// Test getting an IMPU that does not have any bindings.
+TEST_F(GetSubscriptionsTest, NoSubscriptions)
+{
+  // Build request
+  MockHttpStack::Request req(stack, "/impu/sip%3A6505550231%40homedomain/subscriptions", "");
+  GetSubscriptionsTask::Config config(store, {remote_store1});
+  GetSubscriptionsTask* task = new GetSubscriptionsTask(req, &config, 0);
+
+  // Set up subscriber_data_manager expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  SubscriberDataManager::AoRPair* aor =
+    new SubscriberDataManager::AoRPair(new SubscriberDataManager::AoR(aor_id),
+                                       new SubscriberDataManager::AoR(aor_id));
+  SubscriberDataManager::AoRPair* remote_aor =
+    new SubscriberDataManager::AoRPair(new SubscriberDataManager::AoR(aor_id),
+                                       new SubscriberDataManager::AoR(aor_id));
+
+  {
+    InSequence s;
+      // Neither store has any bindings so the backup store is checked.
+      EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor));
+      EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
+      EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote_aor));
+
+      // The handler returns a 404.
+      EXPECT_CALL(*stack, send_reply(_, 404, _));
+  }
+
+  task->run();
+}
+
+// Test getting an IMPU with one binding.
+TEST_F(GetSubscriptionsTest, OneSubscription)
+{
+  // Build request
+  MockHttpStack::Request req(stack, "/impu/sip%3A6505550231%40homedomain/subscriptions", "");
+  GetSubscriptionsTask::Config config(store, {remote_store1});
+  GetSubscriptionsTask* task = new GetSubscriptionsTask(req, &config, 0);
+
+  // Set up subscriber_data_manager expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  SubscriberDataManager::AoRPair* aor = build_aor(aor_id);
+  std::string id = aor->get_current()->subscriptions().begin()->first;
+  std::string uri = aor->get_current()->subscriptions().begin()->second->_req_uri;
+
+  {
+    InSequence s;
+      EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor));
+      EXPECT_CALL(*stack, send_reply(_, 200, _));
+  }
+
+  task->run();
+
+  // Check that the JSON document is correct.
+  rapidjson::Document document;
+  document.Parse(req.content().c_str());
+
+  // The document should be of the form {"subscriptions":{...}}
+  EXPECT_TRUE(document.IsObject());
+  EXPECT_TRUE(document.HasMember("subscriptions"));
+  EXPECT_TRUE(document["subscriptions"].IsObject());
+
+  // Check there is only one subscription.
+  EXPECT_EQ(1, document["subscriptions"].MemberCount());
+  const rapidjson::Value& subscription_id = document["subscriptions"].MemberBegin()->name;
+  const rapidjson::Value& subscription = document["subscriptions"].MemberBegin()->value;
+
+  // Check the fields in the subscription. Don't check every value. It makes the
+  // test unnecessarily verbose.
+  EXPECT_TRUE(subscription.HasMember("req_uri"));
+  EXPECT_TRUE(subscription.HasMember("from_uri"));
+  EXPECT_TRUE(subscription.HasMember("from_tag"));
+  EXPECT_TRUE(subscription.HasMember("to_uri"));
+  EXPECT_TRUE(subscription.HasMember("to_tag"));
+  EXPECT_TRUE(subscription.HasMember("cid"));
+  EXPECT_TRUE(subscription.HasMember("routes"));
+  EXPECT_TRUE(subscription.HasMember("expires"));
+  EXPECT_TRUE(subscription.HasMember("timer_id"));
+
+  // Do check the subscription ID and URI as a representative test.
+  EXPECT_EQ(id, subscription_id.GetString());
+  EXPECT_EQ(uri, subscription["req_uri"].GetString());
+}
+
+// Test getting an IMPU with two subscriptions.
+TEST_F(GetSubscriptionsTest, TwoSubscriptions)
+{
+  int now = time(NULL);
+
+  // Build request
+  MockHttpStack::Request req(stack, "/impu/sip%3A6505550231%40homedomain/subscriptions", "");
+  GetSubscriptionsTask::Config config(store, {remote_store1});
+  GetSubscriptionsTask* task = new GetSubscriptionsTask(req, &config, 0);
+
+  // Set up subscriber_data_manager expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
+  build_binding(aor, now, "123");
+  build_subscription(aor, now, "456");
+  build_subscription(aor, now, "789");
+  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
+  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+
+  {
+    InSequence s;
+      EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
+      EXPECT_CALL(*stack, send_reply(_, 200, _));
+  }
+
+  task->run();
+
+  // Check that the JSON document has two bindings.
+  rapidjson::Document document;
+  document.Parse(req.content().c_str());
+  EXPECT_EQ(2, document["subscriptions"].MemberCount());
+  EXPECT_TRUE(document["subscriptions"].HasMember("456"));
+  EXPECT_TRUE(document["subscriptions"].HasMember("789"));
+}
+
+// Test getting an IMPU when the local store is down.
+TEST_F(GetSubscriptionsTest, LocalStoreDown)
+{
+  // Build request
+  MockHttpStack::Request req(stack, "/impu/sip%3A6505550231%40homedomain/subscriptions", "");
+  GetSubscriptionsTask::Config config(store, {remote_store1});
+  GetSubscriptionsTask* task = new GetSubscriptionsTask(req, &config, 0);
+
+  // Set up subscriber_data_manager expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  {
+    InSequence s;
+      EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(nullptr));
+      EXPECT_CALL(*stack, send_reply(_, 500, _));
+  }
+
+  task->run();
+}
+
+// Test getting an IMPU with one binding.
+TEST_F(GetSubscriptionsTest, BadMethod)
+{
+  // Build request
+  MockHttpStack::Request req(stack,
+                             "/impu/sip%3A6505550231%40homedomain/subscriptions",
+                             "",
+                             "",
+                             "",
+                             htp_method_PUT);
+  GetSubscriptionsTask::Config config(store, {remote_store1});
+  GetSubscriptionsTask* task = new GetSubscriptionsTask(req, &config, 0);
 
   EXPECT_CALL(*stack, send_reply(_, 405, _));
   task->run();
