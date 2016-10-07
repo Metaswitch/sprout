@@ -141,9 +141,9 @@ pj_bool_t msg_supports_extension(pjsip_msg* msg, const char* extension);
 
 pj_bool_t is_first_hop(pjsip_msg* msg);
 
-pj_bool_t get_max_expires(pjsip_msg* msg, int default_expires, int* max_expires);
+bool get_max_expires(pjsip_msg* msg, int default_expires, int& max_expires);
 
-pj_bool_t is_deregistration(pjsip_msg* msg);
+bool is_deregistration(pjsip_msg* msg);
 
 pjsip_tx_data* clone_msg(pjsip_endpoint* endpt,
                          pjsip_rx_data* rdata);

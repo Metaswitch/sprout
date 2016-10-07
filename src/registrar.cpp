@@ -441,7 +441,12 @@ SubscriberDataManager::AoRPair* write_to_store(
     }
     else
     {
+      // No bindings changed (because we had no contact headers).  However, we
+      // may need to deregister the subscriber (because we will have registered
+      // the sub in the calling routine), so set all_bindings_expired based on
+      // whether we found any bindings to report.
       set_rc = Store::OK;
+      all_bindings_expired = aor_pair->get_current()->bindings().empty();
     }
 
     if (set_rc != Store::OK)

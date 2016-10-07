@@ -1682,7 +1682,7 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
         // registrar is misbehaving, but we defensively assume a short expiry
         // time as this is more secure.
         int max_expires;
-        PJUtils::get_max_expires(rdata->msg_info.msg, 300, &max_expires);
+        PJUtils::get_max_expires(rdata->msg_info.msg, 300, max_expires);
         TRC_DEBUG("Maximum contact expiry is %d", max_expires);
 
         // Find the Service-Route header so we can record this with each
