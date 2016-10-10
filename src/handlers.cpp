@@ -762,8 +762,8 @@ void GetCachedDataTask::run()
     return;
   }
 
-  // If there are no bindings we don't have any data for the requested
-  // subscriber so return a 404.
+  // If there are no bindings we can't have any data data for the requested
+  // subscriber (including subscriptions) so return a 404.
   if (aor_pair->get_current()->bindings().empty())
   {
     send_http_reply(HTTP_NOT_FOUND);
@@ -874,7 +874,7 @@ void DeleteImpuTask::run()
   {
     // All bindings expired successfully, so the status code is determined by
     // the response from homestead.
-    if ((hss_sc <= 200) && (hss_sc < 300))
+    if ((hss_sc >= 200) && (hss_sc < 300))
     {
       // 2xx -> 200.
       sc = HTTP_OK;
@@ -884,7 +884,7 @@ void DeleteImpuTask::run()
       // 404 -> 404.
       sc = HTTP_NOT_FOUND;
     }
-    else if ((hss_sc <= 400) && (hss_sc < 500))
+    else if ((hss_sc >= 400) && (hss_sc < 500))
     {
       // Any other 4xx -> 400
       sc = HTTP_BAD_REQUEST;

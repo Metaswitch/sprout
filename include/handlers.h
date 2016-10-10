@@ -176,6 +176,13 @@ protected:
 
 };
 
+
+/// Abstract class that contains most of the logic for retrieving stored
+/// bindings and subscriptions.
+///
+/// This class handles checking the request, extracting the requested IMPU and
+/// retrieving data from the store. It calls into the subclass to build a
+/// response, which it then sends.
 class GetCachedDataTask : public HttpStackUtils::Task
 {
 public:
@@ -202,6 +209,7 @@ protected:
   const Config* _cfg;
 };
 
+/// Concrete subclass for retrieving bindings.
 class GetBindingsTask : public GetCachedDataTask
 {
 public:
@@ -210,6 +218,7 @@ protected:
   std::string serialize_data(SubscriberDataManager::AoR* aor);
 };
 
+/// Concrete subclass for retrieving subscriptions.
 class GetSubscriptionsTask : public GetCachedDataTask
 {
 public:
@@ -218,6 +227,13 @@ protected:
   std::string serialize_data(SubscriberDataManager::AoR* aor);
 };
 
+/// Task for performing an administrative deregistration at the S-CSCF. This
+///
+/// -  Deletes subscriber data from the store (including all bindings and
+///    subscriptions).
+/// -  Sends a deregistration request to homestead.
+/// -  Sends NOTIFYs for any subscriptions to the reg state package for the AoR.
+/// -  Sends 3rd party deregister requests to Application Servers if required.
 class DeleteImpuTask : public HttpStackUtils::Task
 {
 public:

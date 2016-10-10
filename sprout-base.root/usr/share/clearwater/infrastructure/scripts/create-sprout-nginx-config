@@ -55,7 +55,7 @@ upstream http_sprout {
         server unix:/tmp/sprout-http-mgmt-socket;
 
         # The minimum number of idle connections to keep alive to the upstream.
-        keepalive 16;
+        keepalive 2;
 }
 
 server {
