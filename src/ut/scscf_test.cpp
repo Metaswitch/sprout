@@ -262,7 +262,6 @@ public:
     _local_data_store = new LocalStore();
     _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
-    _hss_connection = new FakeHSSConnection();
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
     _xdm_connection = new FakeXDMConnection();
     _sess_term_comm_tracker = new NiceMock<MockAsCommunicationTracker>();
@@ -288,7 +287,6 @@ public:
     delete _chronos_connection; _chronos_connection = NULL;
     delete _local_data_store; _local_data_store = NULL;
     delete _analytics; _analytics = NULL;
-    delete _hss_connection; _hss_connection = NULL;
     delete _enum_service; _enum_service = NULL;
     delete _bgcf_service; _bgcf_service = NULL;
     delete _xdm_connection; _xdm_connection = NULL;
@@ -301,10 +299,8 @@ public:
   {
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
     _local_data_store->flush_all();  // start from a clean slate on each test
-    if (_hss_connection)
-    {
-      _hss_connection->flush_all();
-    }
+    
+    _hss_connection = new FakeHSSConnection();
 
 
     // Create the S-CSCF Sproutlet.
@@ -403,6 +399,7 @@ public:
     URIClassifier::enforce_global = false;
     ((SNMP::FakeCounterTable*)_scscf_sproutlet->_routed_by_preloaded_route_tbl)->reset_count();
 
+    delete _hss_connection; _hss_connection = NULL;
     delete _proxy; _proxy = NULL;
     delete _mmtel_sproutlet; _mmtel_sproutlet = NULL;
     delete _mmtel; _mmtel = NULL;
@@ -2687,7 +2684,7 @@ TEST_F(SCSCFTest, ISCRetargetWithoutCdiv)
 }
 
 
-TEST_F(SCSCFTest, DISABLED_URINotIncludedInUserData)
+TEST_F(SCSCFTest, URINotIncludedInUserData)
 {
   register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("tel:8886505551234", "call", "UNREGISTERED",
