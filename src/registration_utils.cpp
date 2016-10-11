@@ -465,21 +465,25 @@ static bool expire_bindings(SubscriberDataManager *sdm,
   return all_bindings_expired;
 }
 
-void RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
+bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
                                         std::vector<SubscriberDataManager*> remote_sdms,
                                         HSSConnection* hss,
                                         const std::string& aor,
                                         const std::string& binding_id,
                                         const std::string& dereg_type,
-                                        SAS::TrailId trail)
+                                        SAS::TrailId trail,
+                                        HTTPCode* hss_status_code)
 {
   TRC_INFO("Remove binding(s) %s from IMPU %s", binding_id.c_str(), aor.c_str());
+  bool all_bindings_expired = false;
 
   if (expire_bindings(sdm, aor, binding_id, trail))
   {
     // All bindings have been expired, so do deregistration processing for the
     // IMPU.
     TRC_INFO("All bindings for %s expired, so deregister at HSS and ASs", aor.c_str());
+    all_bindings_expired = true;
+
     std::vector<std::string> uris;
     std::map<std::string, Ifcs> ifc_map;
     HTTPCode http_code = hss->update_registration_state(aor,
@@ -496,6 +500,11 @@ void RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
       deregister_with_application_servers(ifc_map[aor], sdm, aor, trail);
       notify_application_servers();
     }
+
+    if (hss_status_code)
+    {
+      *hss_status_code = http_code;
+    }
   }
 
   // Now go through the remote SDMs and remove bindings there too.  We don't
@@ -509,4 +518,6 @@ void RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
   {
     (void) expire_bindings(*remote_sdm, aor, binding_id, trail);
   }
+
+  return all_bindings_expired;
 };

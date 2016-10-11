@@ -67,6 +67,27 @@ extern "C" {
 #include "json_parse_utils.h"
 #include "rapidjson/error/en.h"
 
+// JSON serialization constants.
+static const char* const JSON_BINDINGS = "bindings";
+static const char* const JSON_URI = "uri";
+static const char* const JSON_CID = "cid";
+static const char* const JSON_CSEQ = "cseq";
+static const char* const JSON_EXPIRES = "expires";
+static const char* const JSON_PRIORITY = "priority";
+static const char* const JSON_PARAMS = "params";
+static const char* const JSON_PATHS = "paths";
+static const char* const JSON_TIMER_ID = "timer_id";
+static const char* const JSON_PRIVATE_ID = "private_id";
+static const char* const JSON_EMERGENCY_REG = "emergency_reg";
+static const char* const JSON_SUBSCRIPTIONS = "subscriptions";
+static const char* const JSON_REQ_URI = "req_uri";
+static const char* const JSON_FROM_URI = "from_uri";
+static const char* const JSON_FROM_TAG = "from_tag";
+static const char* const JSON_TO_URI = "to_uri";
+static const char* const JSON_TO_TAG = "to_tag";
+static const char* const JSON_ROUTES = "routes";
+static const char* const JSON_NOTIFY_CSEQ = "notify_cseq";
+
 /// SubscriberDataManager Methods
 
 SubscriberDataManager::SubscriberDataManager(Store* data_store,
@@ -729,6 +750,149 @@ std::string SubscriberDataManager::AoR::Binding::pub_gruu_quoted_string(pj_pool_
   return ret;
 }
 
+void SubscriberDataManager::AoR::Binding::
+  to_json(rapidjson::Writer<rapidjson::StringBuffer>& writer) const
+{
+  writer.StartObject();
+  {
+    writer.String(JSON_URI); writer.String(_uri.c_str());
+    writer.String(JSON_CID); writer.String(_cid.c_str());
+    writer.String(JSON_CSEQ); writer.Int(_cseq);
+    writer.String(JSON_EXPIRES); writer.Int(_expires);
+    writer.String(JSON_PRIORITY); writer.Int(_priority);
+
+    writer.String(JSON_PARAMS);
+    writer.StartObject();
+    {
+      for (std::map<std::string, std::string>::const_iterator p = _params.begin();
+           p != _params.end();
+           ++p)
+      {
+        writer.String(p->first.c_str()); writer.String(p->second.c_str());
+      }
+    }
+    writer.EndObject();
+
+    writer.String(JSON_PATHS);
+    writer.StartArray();
+    {
+      for (std::list<std::string>::const_iterator p = _path_headers.begin();
+           p != _path_headers.end();
+           ++p)
+      {
+        writer.String(p->c_str());
+      }
+    }
+    writer.EndArray();
+
+    writer.String(JSON_TIMER_ID); writer.String("Deprecated");
+    writer.String(JSON_PRIVATE_ID); writer.String(_private_id.c_str());
+    writer.String(JSON_EMERGENCY_REG); writer.Bool(_emergency_registration);
+  }
+  writer.EndObject();
+}
+
+void SubscriberDataManager::AoR::Binding::from_json(const rapidjson::Value& b_obj)
+{
+
+  JSON_GET_STRING_MEMBER(b_obj, JSON_URI, _uri);
+  JSON_GET_STRING_MEMBER(b_obj, JSON_CID, _cid);
+  JSON_GET_INT_MEMBER(b_obj, JSON_CSEQ, _cseq);
+  JSON_GET_INT_MEMBER(b_obj, JSON_EXPIRES, _expires);
+  JSON_GET_INT_MEMBER(b_obj, JSON_PRIORITY, _priority);
+
+  JSON_ASSERT_CONTAINS(b_obj, JSON_PARAMS);
+  JSON_ASSERT_OBJECT(b_obj[JSON_PARAMS]);
+  const rapidjson::Value& params_obj = b_obj[JSON_PARAMS];
+
+  for (rapidjson::Value::ConstMemberIterator params_it = params_obj.MemberBegin();
+       params_it != params_obj.MemberEnd();
+       ++params_it)
+  {
+    JSON_ASSERT_STRING(params_it->value);
+    _params[params_it->name.GetString()] = params_it->value.GetString();
+  }
+
+  JSON_ASSERT_CONTAINS(b_obj, JSON_PATHS);
+  JSON_ASSERT_ARRAY(b_obj[JSON_PATHS]);
+  const rapidjson::Value& paths_arr = b_obj[JSON_PATHS];
+
+  for (rapidjson::Value::ConstValueIterator paths_it = paths_arr.Begin();
+       paths_it != paths_arr.End();
+       ++paths_it)
+  {
+    JSON_ASSERT_STRING(*paths_it);
+    _path_headers.push_back(paths_it->GetString());
+  }
+
+  _timer_id =
+    ((b_obj.HasMember(JSON_TIMER_ID)) && ((b_obj[JSON_TIMER_ID]).IsString()) ?
+     (b_obj[JSON_TIMER_ID].GetString()) :
+     "");
+  //      JSON_GET_STRING_MEMBER(b_obj, JSON_TIMER_ID, _timer_id);
+  JSON_GET_STRING_MEMBER(b_obj, JSON_PRIVATE_ID, _private_id);
+  JSON_GET_BOOL_MEMBER(b_obj, JSON_EMERGENCY_REG, _emergency_registration);
+}
+
+void SubscriberDataManager::AoR::Subscription::
+  to_json(rapidjson::Writer<rapidjson::StringBuffer>& writer) const
+{
+  writer.StartObject();
+  {
+    writer.String(JSON_REQ_URI); writer.String(_req_uri.c_str());
+    writer.String(JSON_FROM_URI); writer.String(_from_uri.c_str());
+    writer.String(JSON_FROM_TAG); writer.String(_from_tag.c_str());
+    writer.String(JSON_TO_URI); writer.String(_to_uri.c_str());
+    writer.String(JSON_TO_TAG); writer.String(_to_tag.c_str());
+    writer.String(JSON_CID); writer.String(_cid.c_str());
+
+    writer.String(JSON_ROUTES);
+    writer.StartArray();
+    {
+      for (std::list<std::string>::const_iterator r = _route_uris.begin();
+           r != _route_uris.end();
+           ++r)
+      {
+        writer.String(r->c_str());
+      }
+    }
+    writer.EndArray();
+
+    writer.String(JSON_EXPIRES); writer.Int(_expires);
+    writer.String(JSON_TIMER_ID); writer.String("Deprecated");
+
+  }
+  writer.EndObject();
+}
+
+void SubscriberDataManager::AoR::Subscription::from_json(const rapidjson::Value& s_obj)
+{
+  JSON_GET_STRING_MEMBER(s_obj, JSON_REQ_URI, _req_uri);
+  JSON_GET_STRING_MEMBER(s_obj, JSON_FROM_URI, _from_uri);
+  JSON_GET_STRING_MEMBER(s_obj, JSON_FROM_TAG, _from_tag);
+  JSON_GET_STRING_MEMBER(s_obj, JSON_TO_URI, _to_uri);
+  JSON_GET_STRING_MEMBER(s_obj, JSON_TO_TAG, _to_tag);
+  JSON_GET_STRING_MEMBER(s_obj, JSON_CID, _cid);
+
+  JSON_ASSERT_CONTAINS(s_obj, JSON_ROUTES);
+  JSON_ASSERT_ARRAY(s_obj[JSON_ROUTES]);
+  const rapidjson::Value& routes_arr = s_obj[JSON_ROUTES];
+
+  for (rapidjson::Value::ConstValueIterator routes_it = routes_arr.Begin();
+       routes_it != routes_arr.End();
+       ++routes_it)
+  {
+    JSON_ASSERT_STRING(*routes_it);
+    _route_uris.push_back(routes_it->GetString());
+  }
+
+  JSON_GET_INT_MEMBER(s_obj, JSON_EXPIRES, _expires);
+  _timer_id =
+    ((s_obj.HasMember(JSON_TIMER_ID)) && ((s_obj[JSON_TIMER_ID]).IsString()) ?
+     (s_obj[JSON_TIMER_ID].GetString()) :
+     "");
+}
+
 // Utility function to return the expiry time of the binding or subscription due
 // to expire next. If the function finds no expiry times in the bindings or
 // subscriptions it returns 0. This function should never be called on an empty AoR,
@@ -982,27 +1146,6 @@ std::string SubscriberDataManager::BinarySerializerDeserializer::name()
 // (De)serializer for the JSON SubscriberDataManager format.
 //
 
-static const char* const JSON_BINDINGS = "bindings";
-static const char* const JSON_URI = "uri";
-static const char* const JSON_CID = "cid";
-static const char* const JSON_CSEQ = "cseq";
-static const char* const JSON_EXPIRES = "expires";
-static const char* const JSON_PRIORITY = "priority";
-static const char* const JSON_PARAMS = "params";
-static const char* const JSON_PATHS = "paths";
-static const char* const JSON_TIMER_ID = "timer_id";
-static const char* const JSON_PRIVATE_ID = "private_id";
-static const char* const JSON_EMERGENCY_REG = "emergency_reg";
-static const char* const JSON_SUBSCRIPTIONS = "subscriptions";
-static const char* const JSON_REQ_URI = "req_uri";
-static const char* const JSON_FROM_URI = "from_uri";
-static const char* const JSON_FROM_TAG = "from_tag";
-static const char* const JSON_TO_URI = "to_uri";
-static const char* const JSON_TO_TAG = "to_tag";
-static const char* const JSON_ROUTES = "routes";
-static const char* const JSON_NOTIFY_CSEQ = "notify_cseq";
-
-
 SubscriberDataManager::AoR* SubscriberDataManager::JsonSerializerDeserializer::
   deserialize_aor(const std::string& aor_id, const std::string& s)
 {
@@ -1037,43 +1180,7 @@ SubscriberDataManager::AoR* SubscriberDataManager::JsonSerializerDeserializer::
       JSON_ASSERT_OBJECT(bindings_it->value);
       const rapidjson::Value& b_obj = bindings_it->value;
 
-      JSON_GET_STRING_MEMBER(b_obj, JSON_URI, b->_uri);
-      JSON_GET_STRING_MEMBER(b_obj, JSON_CID, b->_cid);
-      JSON_GET_INT_MEMBER(b_obj, JSON_CSEQ, b->_cseq);
-      JSON_GET_INT_MEMBER(b_obj, JSON_EXPIRES, b->_expires);
-      JSON_GET_INT_MEMBER(b_obj, JSON_PRIORITY, b->_priority);
-
-      JSON_ASSERT_CONTAINS(b_obj, JSON_PARAMS);
-      JSON_ASSERT_OBJECT(b_obj[JSON_PARAMS]);
-      const rapidjson::Value& params_obj = b_obj[JSON_PARAMS];
-
-      for (rapidjson::Value::ConstMemberIterator params_it = params_obj.MemberBegin();
-           params_it != params_obj.MemberEnd();
-           ++params_it)
-      {
-        JSON_ASSERT_STRING(params_it->value);
-        b->_params[params_it->name.GetString()] = params_it->value.GetString();
-      }
-
-      JSON_ASSERT_CONTAINS(b_obj, JSON_PATHS);
-      JSON_ASSERT_ARRAY(b_obj[JSON_PATHS]);
-      const rapidjson::Value& paths_arr = b_obj[JSON_PATHS];
-
-      for (rapidjson::Value::ConstValueIterator paths_it = paths_arr.Begin();
-           paths_it != paths_arr.End();
-           ++paths_it)
-      {
-        JSON_ASSERT_STRING(*paths_it);
-        b->_path_headers.push_back(paths_it->GetString());
-      }
-
-       b->_timer_id =
-         ((b_obj.HasMember(JSON_TIMER_ID)) && ((b_obj[JSON_TIMER_ID]).IsString()) ?
-                                               (b_obj[JSON_TIMER_ID].GetString()) :
-                                                "");
-//      JSON_GET_STRING_MEMBER(b_obj, JSON_TIMER_ID, b->_timer_id);
-      JSON_GET_STRING_MEMBER(b_obj, JSON_PRIVATE_ID, b->_private_id);
-      JSON_GET_BOOL_MEMBER(b_obj, JSON_EMERGENCY_REG, b->_emergency_registration);
+      b->from_json(b_obj);
     }
 
     JSON_ASSERT_CONTAINS(doc, JSON_SUBSCRIPTIONS);
@@ -1090,30 +1197,7 @@ SubscriberDataManager::AoR* SubscriberDataManager::JsonSerializerDeserializer::
       JSON_ASSERT_OBJECT(subscriptions_it->value);
       const rapidjson::Value& s_obj = subscriptions_it->value;
 
-      JSON_GET_STRING_MEMBER(s_obj, JSON_REQ_URI, s->_req_uri);
-      JSON_GET_STRING_MEMBER(s_obj, JSON_FROM_URI, s->_from_uri);
-      JSON_GET_STRING_MEMBER(s_obj, JSON_FROM_TAG, s->_from_tag);
-      JSON_GET_STRING_MEMBER(s_obj, JSON_TO_URI, s->_to_uri);
-      JSON_GET_STRING_MEMBER(s_obj, JSON_TO_TAG, s->_to_tag);
-      JSON_GET_STRING_MEMBER(s_obj, JSON_CID, s->_cid);
-
-      JSON_ASSERT_CONTAINS(s_obj, JSON_ROUTES);
-      JSON_ASSERT_ARRAY(s_obj[JSON_ROUTES]);
-      const rapidjson::Value& routes_arr = s_obj[JSON_ROUTES];
-
-      for (rapidjson::Value::ConstValueIterator routes_it = routes_arr.Begin();
-           routes_it != routes_arr.End();
-           ++routes_it)
-      {
-        JSON_ASSERT_STRING(*routes_it);
-        s->_route_uris.push_back(routes_it->GetString());
-      }
-
-      JSON_GET_INT_MEMBER(s_obj, JSON_EXPIRES, s->_expires);
-      s->_timer_id =
-         ((s_obj.HasMember(JSON_TIMER_ID)) && ((s_obj[JSON_TIMER_ID]).IsString()) ?
-                                               (s_obj[JSON_TIMER_ID].GetString()) :
-                                                "");
+      s->from_json(s_obj);
     }
 
     JSON_GET_INT_MEMBER(doc, JSON_NOTIFY_CSEQ, aor->_notify_cseq);
@@ -1151,45 +1235,7 @@ std::string SubscriberDataManager::JsonSerializerDeserializer::serialize_aor(AoR
            ++it)
       {
         writer.String(it->first.c_str());
-
-        writer.StartObject();
-        {
-          AoR::Binding* b = it->second;
-          writer.String(JSON_URI); writer.String(b->_uri.c_str());
-          writer.String(JSON_CID); writer.String(b->_cid.c_str());
-          writer.String(JSON_CSEQ); writer.Int(b->_cseq);
-          writer.String(JSON_EXPIRES); writer.Int(b->_expires);
-          writer.String(JSON_PRIORITY); writer.Int(b->_priority);
-
-          writer.String(JSON_PARAMS);
-          writer.StartObject();
-          {
-            for (std::map<std::string, std::string>::const_iterator p = b->_params.begin();
-                 p != b->_params.end();
-                 ++p)
-            {
-              writer.String(p->first.c_str()); writer.String(p->second.c_str());
-            }
-          }
-          writer.EndObject();
-
-          writer.String(JSON_PATHS);
-          writer.StartArray();
-          {
-            for (std::list<std::string>::const_iterator p = b->_path_headers.begin();
-                 p != b->_path_headers.end();
-                 ++p)
-            {
-              writer.String(p->c_str());
-            }
-          }
-          writer.EndArray();
-
-          writer.String(JSON_TIMER_ID); writer.String("Deprecated");
-          writer.String(JSON_PRIVATE_ID); writer.String(b->_private_id.c_str());
-          writer.String(JSON_EMERGENCY_REG); writer.Bool(b->_emergency_registration);
-        }
-        writer.EndObject();
+        it->second->to_json(writer);
       }
     }
     writer.EndObject();
@@ -1205,33 +1251,7 @@ std::string SubscriberDataManager::JsonSerializerDeserializer::serialize_aor(AoR
            ++it)
       {
         writer.String(it->first.c_str());
-        writer.StartObject();
-        {
-          AoR::Subscription* s = it->second;
-          writer.String(JSON_REQ_URI); writer.String(s->_req_uri.c_str());
-          writer.String(JSON_FROM_URI); writer.String(s->_from_uri.c_str());
-          writer.String(JSON_FROM_TAG); writer.String(s->_from_tag.c_str());
-          writer.String(JSON_TO_URI); writer.String(s->_to_uri.c_str());
-          writer.String(JSON_TO_TAG); writer.String(s->_to_tag.c_str());
-          writer.String(JSON_CID); writer.String(s->_cid.c_str());
-
-          writer.String(JSON_ROUTES);
-          writer.StartArray();
-          {
-            for (std::list<std::string>::const_iterator r = s->_route_uris.begin();
-                 r != s->_route_uris.end();
-                 ++r)
-            {
-              writer.String(r->c_str());
-            }
-          }
-          writer.EndArray();
-
-          writer.String(JSON_EXPIRES); writer.Int(s->_expires);
-          writer.String(JSON_TIMER_ID); writer.String("Deprecated");
-
-        }
-        writer.EndObject();
+        it->second->to_json(writer);
       }
     }
     writer.EndObject();
