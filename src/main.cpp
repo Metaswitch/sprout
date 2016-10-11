@@ -1999,33 +1999,36 @@ int main(int argc, char* argv[])
   HttpStack* http_stack_sig = new HttpStack(opt.http_threads,
                                             exception_handler,
                                             access_logger);
-  try
-  {
-    http_stack_sig->initialize();
-    http_stack_sig->bind_tcp_socket(opt.http_address, opt.http_port);
-  }
-  catch (HttpStack::Exception& e)
-  {
-    CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
-    closelog();
-    TRC_ERROR("Caught signaling HttpStack::Exception - %s - %d\n", e._func, e._rc);
-    return 1;
-  }
-
   HttpStack* http_stack_mgmt = new HttpStack(NUM_HTTP_MGMT_THREADS,
                                              exception_handler,
                                              access_logger);
-  try
+  if (opt.enabled_scscf)
   {
-    http_stack_mgmt->initialize();
-    http_stack_mgmt->bind_unix_socket(SPROUT_HTTP_MGMT_SOCKET_PATH);
-  }
-  catch (HttpStack::Exception& e)
-  {
-    CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
-    closelog();
-    TRC_ERROR("Caught management HttpStack::Exception - %s - %d\n", e._func, e._rc);
-    return 1;
+    try
+    {
+      http_stack_sig->initialize();
+      http_stack_sig->bind_tcp_socket(opt.http_address, opt.http_port);
+    }
+    catch (HttpStack::Exception& e)
+    {
+      CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
+      closelog();
+      TRC_ERROR("Caught signaling HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      return 1;
+    }
+
+    try
+    {
+      http_stack_mgmt->initialize();
+      http_stack_mgmt->bind_unix_socket(SPROUT_HTTP_MGMT_SOCKET_PATH);
+    }
+    catch (HttpStack::Exception& e)
+    {
+      CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
+      closelog();
+      TRC_ERROR("Caught management HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      return 1;
+    }
   }
 
   if (opt.auth_enabled)
