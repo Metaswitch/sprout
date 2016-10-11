@@ -711,25 +711,32 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
     // Authentication isn't required for emergency registrations. An emergency
     // registration is one where each Contact header contains 'sos' as the SIP
     // URI parameter.
-    bool emergency_reg = true;
-
+    //
+    // Note that a REGISTER with NO contact headers does not count as an
+    // emergency registration.
     pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
       pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL);
 
-    while ((contact_hdr != NULL) && (emergency_reg))
+    if (contact_hdr != NULL)
     {
-      emergency_reg = PJUtils::is_emergency_registration(contact_hdr);
-      contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(rdata->msg_info.msg,
-                                                            PJSIP_H_CONTACT,
-                                                            contact_hdr->next);
-    }
+      bool all_bindings_emergency = true;
 
-    if (emergency_reg)
-    {
-      SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_EMERGENCY_REGISTER, 0);
-      SAS::report_event(event);
 
-      return PJ_FALSE;
+      while ((contact_hdr != NULL) && (all_bindings_emergency))
+      {
+        all_bindings_emergency = PJUtils::is_emergency_registration(contact_hdr);
+        contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(rdata->msg_info.msg,
+                                                              PJSIP_H_CONTACT,
+                                                              contact_hdr->next);
+      }
+
+      if (all_bindings_emergency)
+      {
+        SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_EMERGENCY_REGISTER, 0);
+        SAS::report_event(event);
+
+        return PJ_FALSE;
+      }
     }
 
     // Check to see if the request has already been integrity protected?

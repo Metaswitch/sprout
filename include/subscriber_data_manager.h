@@ -71,11 +71,10 @@ public:
     class Binding
     {
     public:
-      Binding(std::string* address_of_record): _address_of_record(address_of_record) {};
+      Binding(std::string address_of_record): _address_of_record(address_of_record) {};
 
-      /// The address of record, e.g. "sip:name@example.com". Defined
-      /// as a pointer rather than a reference to allow assignment to work.
-      std::string* _address_of_record;
+      /// The address of record, e.g. "sip:name@example.com".
+      std::string _address_of_record;
 
       /// The registered contact URI, e.g.,
       /// "sip:2125551212@192.168.0.1:55491;transport=TCP;rinstance=fad34fbcdea6a931"
@@ -216,6 +215,9 @@ public:
     /// corresponding subscription does nothing.
     void remove_subscription(const std::string& to_tag);
 
+    // Remove the bindings from an AOR object
+    void clear_bindings();
+
     /// Binding ID -> Binding.  First is sometimes the contact URI, but not always.
     /// Second is a pointer to an object owned by this object.
     typedef std::map<std::string, Binding*> Bindings;
@@ -237,6 +239,11 @@ public:
 
     // Return the expiry time of the binding or subscription due to expire next.
     int get_next_expires();
+
+    /// Copy all bindings and subscriptions to this AoR
+    ///
+    /// @param source_aor           Source AoR for the copy
+    void copy_subscriptions_and_bindings(SubscriberDataManager::AoR* source_aor);
 
     /// CSeq value for event notifications for this AoR.  This is initialised
     /// to one when the AoR record is first set up and incremented every time

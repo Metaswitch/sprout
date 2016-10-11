@@ -572,7 +572,6 @@ void SubscriberDataManager::AoR::common_constructor(const AoR& other)
   _uri = other._uri;
 }
 
-
 /// Clear all the bindings and subscriptions from this object.
 void SubscriberDataManager::AoR::clear(bool clear_emergency_bindings)
 {
@@ -622,7 +621,7 @@ SubscriberDataManager::AoR::Binding*
   else
   {
     // No existing binding with this id, so create a new one.
-    b = new Binding(&_uri);
+    b = new Binding(_uri);
     b->_expires = 0;
     _bindings.insert(std::make_pair(binding_id, b));
   }
@@ -675,11 +674,25 @@ void SubscriberDataManager::AoR::remove_subscription(const std::string& to_tag)
   }
 }
 
+/// Remove all the bindings from an AOR object
+void SubscriberDataManager::AoR::clear_bindings()
+{
+  for (Bindings::const_iterator i = _bindings.begin();
+       i != _bindings.end();
+       ++i)
+  {
+    delete i->second;
+  }
+
+  // Clear the bindings map.
+  _bindings.clear();
+}
+
 // Generates the public GRUU for this binding from the address of record and
 // instance-id. Returns NULL if this binding has no valid GRUU.
 pjsip_sip_uri* SubscriberDataManager::AoR::Binding::pub_gruu(pj_pool_t* pool) const
 {
-  pjsip_sip_uri* uri = (pjsip_sip_uri*)PJUtils::uri_from_string(*_address_of_record, pool);
+  pjsip_sip_uri* uri = (pjsip_sip_uri*)PJUtils::uri_from_string(_address_of_record, pool);
 
   if ((_params.find("+sip.instance") == _params.cend()) ||
       (uri == NULL) ||
@@ -929,6 +942,28 @@ int SubscriberDataManager::AoR::get_next_expires()
   }
   // Otherwise we return the value found.
   return _next_expires;
+}
+
+// Copy all bindings and subscriptions to this AoR
+void SubscriberDataManager::AoR::copy_subscriptions_and_bindings(SubscriberDataManager::AoR* source_aor)
+{
+  for (Bindings::const_iterator i = source_aor->bindings().begin();
+       i != source_aor->bindings().end();
+       ++i)
+  {
+    Binding* src = i->second;
+    Binding* dst = get_binding(i->first);
+    *dst = *src;
+  }
+
+  for (Subscriptions::const_iterator i = source_aor->subscriptions().begin();
+       i != source_aor->subscriptions().end();
+       ++i)
+  {
+    Subscription* src = i->second;
+    Subscription* dst = get_subscription(i->first);
+    *dst = *src;
+  }
 }
 
 //
