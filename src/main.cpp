@@ -2002,7 +2002,6 @@ int main(int argc, char* argv[])
   try
   {
     http_stack_sig->initialize();
-    http_stack_sig->bind_tcp_socket(opt.http_address, opt.http_port);
   }
   catch (HttpStack::Exception& e)
   {
@@ -2018,7 +2017,6 @@ int main(int argc, char* argv[])
   try
   {
     http_stack_mgmt->initialize();
-    http_stack_mgmt->bind_unix_socket(SPROUT_HTTP_MGMT_SOCKET_PATH);
   }
   catch (HttpStack::Exception& e)
   {
@@ -2189,6 +2187,7 @@ int main(int argc, char* argv[])
       http_stack_sig->register_handler("^/registrations?*$",
                                        &deregistration_handler);
       http_stack_sig->start(&reg_httpthread_with_pjsip);
+      http_stack_sig->bind_tcp_socket(opt.http_address, opt.http_port);
     }
     catch (HttpStack::Exception& e)
     {
@@ -2208,6 +2207,7 @@ int main(int argc, char* argv[])
       http_stack_mgmt->register_handler("^/impu/[^/]+$",
                                         &delete_impu_handler);
       http_stack_mgmt->start(&reg_httpthread_with_pjsip);
+      http_stack_mgmt->bind_unix_socket(SPROUT_HTTP_MGMT_SOCKET_PATH);
     }
     catch (HttpStack::Exception& e)
     {
