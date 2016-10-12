@@ -1397,6 +1397,24 @@ TEST_F(SCSCFTest, TestTerminatingTelURI)
   doSuccessfulFlow(msg, testing::MatchesRegex("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob"), hdrs, false);
 }
 
+// Test that allowing fallback IFCs (for when we don't have a matching bit of
+// XML) doesn't break mainline flows when we do.
+TEST_F(SCSCFTest, TestSimpleMainlineFallbackIFCs)
+{
+  SCOPED_TRACE("");
+  _hss_connection->allow_fallback_ifcs();
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  Message msg;
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
+
+  // This is a terminating call so should not result in a session setup time
+  // getting tracked.
+  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
+  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
+}
+
+
 
 TEST_F(SCSCFTest, TestTelURIWildcard)
 {
