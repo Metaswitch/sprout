@@ -152,6 +152,7 @@ enum OptionTypes
   OPT_DISABLE_TCP_SWITCH,
   OPT_DEFAULT_TEL_URI_TRANSLATION,
   OPT_CHRONOS_HOSTNAME,
+  OPT_ALLOW_FALLBACK_IFCS,
 };
 
 
@@ -234,6 +235,7 @@ const static struct pj_getopt_option long_opt[] =
   { "sas-use-signaling-interface",  no_argument,       0, OPT_SAS_USE_SIGNALING_IF},
   { "disable-tcp-switch",           no_argument,       0, OPT_DISABLE_TCP_SWITCH},
   { "chronos-hostname",             required_argument, 0, OPT_CHRONOS_HOSTNAME},
+  { "allow-fallback-ifcs",          no_argument,       0, OPT_ALLOW_FALLBACK_IFCS},
   { NULL,                           0,                 0, 0}
 };
 
@@ -432,6 +434,8 @@ static void usage(void)
        "     --chronos-hostname <hostname>\n"
        "                            Specify the hostname of a remote Chronos cluster. If unset the default\n"
        "                            is to use localhost, using localhost as the callback URL.\n"
+       "     --allow-fallback-ifcs  If no Identity elements match for Initial Filter Criteria, use the\n"
+       "                            first IFC returned as a fallback.\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
        " -F, --log-file <directory>\n"
@@ -1105,6 +1109,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       options->disable_tcp_switch = true;
       break;
 
+    case OPT_ALLOW_FALLBACK_IFCS:
+      TRC_STATUS("IFC fallback enabled");
+      options->allow_fallback_ifcs = true;
+      break;
+
     case 'N':
       {
         std::vector<std::string> fields;
@@ -1367,6 +1376,7 @@ int main(int argc, char* argv[])
   opt.scscf_node_uri = "";
   opt.sas_signaling_if = false;
   opt.disable_tcp_switch = false;
+  opt.allow_fallback_ifcs = false;
 
   // Initialise ENT logging before making "Started" log
   PDLogStatic::init(argv[0]);
@@ -1805,7 +1815,8 @@ int main(int argc, char* argv[])
                                        homestead_uar_latency_table,
                                        homestead_lir_latency_table,
                                        hss_comm_monitor,
-                                       opt.uri_scscf);
+                                       opt.uri_scscf,
+                                       opt.allow_fallback_ifcs);
   }
 
   // Create ENUM service.
