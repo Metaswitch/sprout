@@ -32,7 +32,7 @@
     </action>
   </nop>
 
-  <pause distribution="uniform" min="0" max="600000" />
+  <pause distribution="uniform" min="0" max="3600000" />
 
   <send>
     <![CDATA[
@@ -140,13 +140,13 @@
     ]]>
   </send>
 
-  <recv response="200" chance="0.161" next="2">
+  <recv response="200" chance="0.394" next="2">
     <action>
       <add assign_to="reg_repeat" value="1" />
     </action>
   </recv>
 
-  <pause milliseconds="290000" />
+  <pause milliseconds="1790000" />
 
   <label id="1"/>
 
@@ -200,13 +200,13 @@
     ]]>
   </send>
 
-  <recv response="200" rtd="register" chance="0.161" next="2">
+  <recv response="200" rtd="register" chance="0.394" next="2">
     <action>
       <add assign_to="reg_repeat" value="1" />
     </action>
   </recv>
 
-  <pause milliseconds="290000" next="1" />
+  <pause milliseconds="1790000" next="1" />
 
   <label id="2" />
 
@@ -506,7 +506,7 @@
   <recv response="200" rtd="call-setup">
   </recv>
 
-  <pause milliseconds="24000" />
+  <pause milliseconds="85000" />
 
   <send start_rtd="call-teardown">
     <![CDATA[
