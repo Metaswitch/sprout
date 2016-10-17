@@ -2260,8 +2260,8 @@ int main(int argc, char* argv[])
                                                    hss_connection,
                                                    sip_resolver,
                                                    impi_store);
-  GetCachedDataTask::Config get_cached_data_config(local_sdm, {remote_sdm});
-  DeleteImpuTask::Config delete_impu_config(local_sdm, {remote_sdm}, hss_connection);
+  GetCachedDataTask::Config get_cached_data_config(local_sdm, remote_sdms);
+  DeleteImpuTask::Config delete_impu_config(local_sdm, remote_sdms, hss_connection);
 
   // The AoRTimeoutTask and AuthTimeoutTask both handle
   // chronos requests, so use the ChronosHandler.
