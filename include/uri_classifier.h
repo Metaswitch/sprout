@@ -55,7 +55,7 @@ enum URIClass
 
 namespace URIClassifier
 {
-  URIClass classify_uri(const pjsip_uri* uri, bool prefer_sip = true);
+  URIClass classify_uri(const pjsip_uri* uri, bool prefer_sip = true, bool check_np = false);
 
   bool is_user_numeric(pj_str_t user);
 

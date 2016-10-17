@@ -630,36 +630,61 @@ pj_bool_t PJUtils::is_first_hop(pjsip_msg* msg)
   return first_hop;
 }
 
-
 /// Gets the maximum expires value from all contacts in a REGISTER message
 /// (request or response).
-int PJUtils::max_expires(pjsip_msg* msg, int default_expires)
+///
+/// Returns TRUE if the maximum expires value is meaningful (i.e. if the
+/// REGISTER includes Contact headers) and FALSE otherwise.  Set max_expires
+/// to the default value in the latter case to ensure that callers that fail
+/// to check the returncode are at least using a sensible default.
+bool PJUtils::get_max_expires(pjsip_msg* msg, int default_expires, int& max_expires)
 {
-  int max_expires = 0;
-
-  // Check for an expires header (this will specify the default expiry for
-  // any contacts that don't specify their own expiry).
-  pjsip_expires_hdr* expires_hdr = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
-  if (expires_hdr != NULL)
-  {
-    default_expires = expires_hdr->ivalue;
-  }
-
+  bool valid;
   pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
 
-  while (contact != NULL)
+  // If there are no contact headers (as will be the case if this is a "fetch
+  // bindings" query, rather than a real state-changing REGISTER), return FALSE,
+  // as maximum expiry isn't meaningful for such a request.
+  if (contact == NULL)
   {
-    int expires = (contact->expires != -1) ? contact->expires : default_expires;
-    if (expires > max_expires)
+    valid = false;
+    max_expires = default_expires;
+  }
+  else
+  {
+    valid = true;
+    max_expires = 0;
+
+    // Check for an expires header (this will specify the default expiry for
+    // any contacts that don't specify their own expiry).
+    pjsip_expires_hdr* expires_hdr = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
+    if (expires_hdr != NULL)
     {
-      max_expires = expires;
+      default_expires = expires_hdr->ivalue;
     }
-    contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, contact->next);
+
+    while (contact != NULL)
+    {
+      int expires = (contact->expires != -1) ? contact->expires : default_expires;
+      if (expires > max_expires)
+      {
+        max_expires = expires;
+      }
+      contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, contact->next);
+    }
   }
 
-  return max_expires;
+  return valid;
 }
 
+/// Determines whether this REGISTER is a deregistration.
+bool PJUtils::is_deregistration(pjsip_msg* msg)
+{
+  // REGISTER will be a deregistration if get_max_expires is 0 (and is meaningful -
+  // REGISTERs with no Contact headers are never deregistrations).
+  int max_expires;
+  return (get_max_expires(msg, 1, max_expires) && (max_expires == 0));
+}
 
 pjsip_tx_data* PJUtils::clone_msg(pjsip_endpoint* endpt,
                                   pjsip_rx_data* rdata)
@@ -2110,6 +2135,17 @@ pjsip_uri* PJUtils::translate_sip_uri_to_tel_uri(const pjsip_sip_uri* sip_uri,
     tel_uri->ext_param.ptr = ext->value.ptr;
   }
 
+  // Copy across any SIP user parameters to the new Tel URI
+  for (pjsip_param* p = sip_uri->userinfo_param.next;
+       (p != NULL) && (p != &sip_uri->userinfo_param);
+       p = p->next)
+  {
+    pjsip_param* tel_param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+    pj_strdup(pool, &tel_param->name, &p->name);
+    pj_strdup(pool, &tel_param->value, &p->value);
+    pj_list_insert_after(&tel_uri->other_param, tel_param);
+  }
+
   return (pjsip_uri*)tel_uri;
 }
 
@@ -2224,7 +2260,7 @@ void PJUtils::translate_request_uri(pjsip_msg* req,
                                     SAS::TrailId trail)
 {
   pjsip_uri* uri = req->line.req.uri;
-  URIClass uri_class = URIClassifier::classify_uri(uri, false);
+  URIClass uri_class = URIClassifier::classify_uri(uri, false, true);
 
   if ((uri_class == GLOBAL_PHONE_NUMBER) ||
       (uri_class == NP_DATA) ||
@@ -2255,7 +2291,7 @@ void PJUtils::translate_request_uri(pjsip_msg* req,
       }
 
       // The URI was successfully translated, so see what it is.
-      URIClass new_uri_class = URIClassifier::classify_uri(new_uri, false);
+      URIClass new_uri_class = URIClassifier::classify_uri(new_uri, false, true);
       std::string rn;
 
       if ((new_uri_class == HOME_DOMAIN_SIP_URI) ||
@@ -2299,7 +2335,7 @@ void PJUtils::update_request_uri_np_data(pjsip_msg* req,
                                     SAS::TrailId trail)
 {
   pjsip_uri* uri = req->line.req.uri;
-  URIClass uri_class = URIClassifier::classify_uri(uri);
+  URIClass uri_class = URIClassifier::classify_uri(uri, true, true);
 
   if ((uri_class == GLOBAL_PHONE_NUMBER) ||
       (uri_class == NP_DATA) ||
@@ -2330,7 +2366,7 @@ void PJUtils::update_request_uri_np_data(pjsip_msg* req,
       }
 
       // The URI was successfully translated, so see what it is.
-      URIClass new_uri_class = URIClassifier::classify_uri(new_uri, false);
+      URIClass new_uri_class = URIClassifier::classify_uri(new_uri, false, true);
 
       if ((new_uri_class == NP_DATA) || (new_uri_class == FINAL_NP_DATA))
       {

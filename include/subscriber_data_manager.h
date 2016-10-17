@@ -53,6 +53,8 @@ extern "C" {
 #include "chronosconnection.h"
 #include "sas.h"
 
+#include "rapidjson/writer.h"
+#include "rapidjson/document.h"
 
 class SubscriberDataManager
 {
@@ -69,11 +71,10 @@ public:
     class Binding
     {
     public:
-      Binding(std::string* address_of_record): _address_of_record(address_of_record) {};
+      Binding(std::string address_of_record): _address_of_record(address_of_record) {};
 
-      /// The address of record, e.g. "sip:name@example.com". Defined
-      /// as a pointer rather than a reference to allow assignment to work.
-      std::string* _address_of_record;
+      /// The address of record, e.g. "sip:name@example.com".
+      std::string _address_of_record;
 
       /// The registered contact URI, e.g.,
       /// "sip:2125551212@192.168.0.1:55491;transport=TCP;rinstance=fad34fbcdea6a931"
@@ -116,6 +117,19 @@ public:
       pjsip_sip_uri* pub_gruu(pj_pool_t* pool) const;
       std::string pub_gruu_str(pj_pool_t* pool) const;
       std::string pub_gruu_quoted_string(pj_pool_t* pool) const;
+
+      /// Serialize the binding as a JSON object.
+      ///
+      /// @param writer - a rapidjson writer to write to.
+      void to_json(rapidjson::Writer<rapidjson::StringBuffer>& writer) const;
+
+      // Deserialize a binding from a JSON object.
+      //
+      // @param b_obj - The binding as a JSON object.
+      //
+      // @return      - Nothing. If this function fails (because the JSON is not
+      //                semantically valid) this method throws JsonFormError.
+      void from_json(const rapidjson::Value& b_obj);
     };
 
     /// @class SubscriberDataManager::AoR::Subscription
@@ -153,6 +167,19 @@ public:
 
       /// The timer ID provided by Chronos.
       std::string _timer_id;
+
+      /// Serialize the subscription as a JSON object.
+      ///
+      /// @param writer - a rapidjson writer to write to.
+      void to_json(rapidjson::Writer<rapidjson::StringBuffer>& writer) const;
+
+      // Deserialize a subscription from a JSON object.
+      //
+      // @param s_obj - The subscription as a JSON object.
+      //
+      // @return      - Nothing. If this function fails (because the JSON is not
+      //                semantically valid) this method throws JsonFormError.
+      void from_json(const rapidjson::Value& s_obj);
    };
 
     /// Default Constructor.
@@ -188,6 +215,9 @@ public:
     /// corresponding subscription does nothing.
     void remove_subscription(const std::string& to_tag);
 
+    // Remove the bindings from an AOR object
+    void clear_bindings();
+
     /// Binding ID -> Binding.  First is sometimes the contact URI, but not always.
     /// Second is a pointer to an object owned by this object.
     typedef std::map<std::string, Binding*> Bindings;
@@ -209,6 +239,11 @@ public:
 
     // Return the expiry time of the binding or subscription due to expire next.
     int get_next_expires();
+
+    /// Copy all bindings and subscriptions to this AoR
+    ///
+    /// @param source_aor           Source AoR for the copy
+    void copy_subscriptions_and_bindings(SubscriberDataManager::AoR* source_aor);
 
     /// CSeq value for event notifications for this AoR.  This is initialised
     /// to one when the AoR record is first set up and incremented every time

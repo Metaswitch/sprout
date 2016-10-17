@@ -632,7 +632,7 @@ class ContactFilteringBindingToTargetTest : public ContactFilteringCreateBinding
 TEST_F(ContactFilteringBindingToTargetTest, SimpleConversion)
 {
   std::string aor = "sip:user@domain.com";
-  SubscriberDataManager::AoR::Binding binding(&aor);
+  SubscriberDataManager::AoR::Binding binding(aor);
   create_binding(binding);
   std::string binding_id = "<sip:user@10.1.2.3>";
   Target target;
@@ -656,7 +656,7 @@ TEST_F(ContactFilteringBindingToTargetTest, SimpleConversion)
 TEST_F(ContactFilteringBindingToTargetTest, InvalidURI)
 {
   std::string aor = "sip:user@domain.com";
-  SubscriberDataManager::AoR::Binding binding(&aor);
+  SubscriberDataManager::AoR::Binding binding(aor);
   create_binding(binding);
   std::string binding_id = "<sip:user@10.1.2.3>";
   binding._uri = "banana";
@@ -671,7 +671,7 @@ TEST_F(ContactFilteringBindingToTargetTest, InvalidURI)
 TEST_F(ContactFilteringBindingToTargetTest, InvalidPath)
 {
   std::string aor = "sip:user@domain.com";
-  SubscriberDataManager::AoR::Binding binding(&aor);
+  SubscriberDataManager::AoR::Binding binding(aor);
   create_binding(binding);
   std::string binding_id = "<sip:user@10.1.2.3>";
   binding._path_headers.push_back("banana");

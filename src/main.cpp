@@ -157,6 +157,7 @@ enum OptionTypes
   OPT_DISABLE_TCP_SWITCH,
   OPT_DEFAULT_TEL_URI_TRANSLATION,
   OPT_CHRONOS_HOSTNAME,
+  OPT_ALLOW_FALLBACK_IFCS,
 };
 
 
@@ -241,6 +242,7 @@ const static struct pj_getopt_option long_opt[] =
   { "sas-use-signaling-interface",  no_argument,       0, OPT_SAS_USE_SIGNALING_IF},
   { "disable-tcp-switch",           no_argument,       0, OPT_DISABLE_TCP_SWITCH},
   { "chronos-hostname",             required_argument, 0, OPT_CHRONOS_HOSTNAME},
+  { "allow-fallback-ifcs",          no_argument,       0, OPT_ALLOW_FALLBACK_IFCS},
   { NULL,                           0,                 0, 0}
 };
 
@@ -254,6 +256,9 @@ const static int QUIESCE_SIGNAL = SIGQUIT;
 const static int UNQUIESCE_SIGNAL = SIGUSR1;
 // Minimum value allowed by rfc4028, section 4
 const static int MIN_SESSION_EXPIRES = 90;
+
+static const std::string SPROUT_HTTP_MGMT_SOCKET_PATH = "/tmp/sprout-http-mgmt-socket";
+static const int NUM_HTTP_MGMT_THREADS = 5;
 
 static void usage(void)
 {
@@ -441,6 +446,8 @@ static void usage(void)
        "     --chronos-hostname <hostname>\n"
        "                            Specify the hostname of a remote Chronos cluster. If unset the default\n"
        "                            is to use localhost, using localhost as the callback URL.\n"
+       "     --allow-fallback-ifcs  If no Identity elements match for Initial Filter Criteria, use the\n"
+       "                            first IFC returned as a fallback.\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
        " -F, --log-file <directory>\n"
@@ -1133,6 +1140,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       options->disable_tcp_switch = true;
       break;
 
+    case OPT_ALLOW_FALLBACK_IFCS:
+      TRC_STATUS("IFC fallback enabled");
+      options->allow_fallback_ifcs = true;
+      break;
+
     case 'N':
       {
         std::vector<std::string> fields;
@@ -1396,6 +1408,7 @@ int main(int argc, char* argv[])
   opt.scscf_node_uri = "";
   opt.sas_signaling_if = false;
   opt.disable_tcp_switch = false;
+  opt.allow_fallback_ifcs = false;
 
   // Initialise ENT logging before making "Started" log
   PDLogStatic::init(argv[0]);
@@ -1881,7 +1894,8 @@ int main(int argc, char* argv[])
                                        homestead_uar_latency_table,
                                        homestead_lir_latency_table,
                                        hss_comm_monitor,
-                                       opt.uri_scscf);
+                                       opt.uri_scscf,
+                                       opt.allow_fallback_ifcs);
   }
 
   // Create ENUM service.
@@ -1904,7 +1918,6 @@ int main(int argc, char* argv[])
     enum_service = new DummyEnumService(opt.home_domain);
   }
 
-  HttpStack* http_stack = HttpStack::get_instance();
   if (opt.pcscf_enabled)
   {
     // Create an ACR factory for the P-CSCF.
@@ -2070,20 +2083,33 @@ int main(int argc, char* argv[])
 
   // Start the HTTP stack early as plugins might need to register handlers
   // with it.
+  HttpStack* http_stack_sig = new HttpStack(opt.http_threads,
+                                            exception_handler,
+                                            access_logger);
   try
   {
-    http_stack->initialize();
-    http_stack->configure(opt.http_address,
-                          opt.http_port,
-                          opt.http_threads,
-                          exception_handler,
-                          access_logger);
+    http_stack_sig->initialize();
   }
   catch (HttpStack::Exception& e)
   {
     CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
     closelog();
-    TRC_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
+    TRC_ERROR("Caught signaling HttpStack::Exception - %s - %d\n", e._func, e._rc);
+    return 1;
+  }
+
+  HttpStack* http_stack_mgmt = new HttpStack(NUM_HTTP_MGMT_THREADS,
+                                             exception_handler,
+                                             access_logger);
+  try
+  {
+    http_stack_mgmt->initialize();
+  }
+  catch (HttpStack::Exception& e)
+  {
+    CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
+    closelog();
+    TRC_ERROR("Caught management HttpStack::Exception - %s - %d\n", e._func, e._rc);
     return 1;
   }
 
@@ -2234,6 +2260,8 @@ int main(int argc, char* argv[])
                                                    hss_connection,
                                                    sip_resolver,
                                                    impi_store);
+  GetCachedDataTask::Config get_cached_data_config(local_sdm, {remote_sdm});
+  DeleteImpuTask::Config delete_impu_config(local_sdm, {remote_sdm}, hss_connection);
 
   // The AoRTimeoutTask and AuthTimeoutTask both handle
   // chronos requests, so use the ChronosHandler.
@@ -2241,25 +2269,49 @@ int main(int argc, char* argv[])
   ChronosHandler<AuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
   HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
   HttpStackUtils::PingHandler ping_handler;
+  HttpStackUtils::SpawningHandler<GetBindingsTask, GetCachedDataTask::Config> get_bindings_handler(&get_cached_data_config);
+  HttpStackUtils::SpawningHandler<GetSubscriptionsTask, GetCachedDataTask::Config> get_subscriptions_handler(&get_cached_data_config);
+  HttpStackUtils::SpawningHandler<DeleteImpuTask, DeleteImpuTask::Config> delete_impu_handler(&delete_impu_config);
 
   if (opt.enabled_scscf)
   {
     try
     {
-      http_stack->register_handler("^/ping$",
-                                   &ping_handler);
-      http_stack->register_handler("^/timers$",
-                                   &aor_timeout_handler);
-      http_stack->register_handler("^/authentication-timeout$",
-                                   &auth_timeout_handler);
-      http_stack->register_handler("^/registrations?*$",
-                                   &deregistration_handler);
-      http_stack->start(&reg_httpthread_with_pjsip);
+      http_stack_sig->register_handler("^/ping$",
+                                       &ping_handler);
+      http_stack_sig->register_handler("^/timers$",
+                                       &aor_timeout_handler);
+      http_stack_sig->register_handler("^/authentication-timeout$",
+                                       &auth_timeout_handler);
+      http_stack_sig->register_handler("^/registrations?*$",
+                                       &deregistration_handler);
+      http_stack_sig->start(&reg_httpthread_with_pjsip);
+      http_stack_sig->bind_tcp_socket(opt.http_address, opt.http_port);
     }
     catch (HttpStack::Exception& e)
     {
       CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
-      TRC_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      TRC_ERROR("Caught signaling HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      return 1;
+    }
+
+    try
+    {
+      http_stack_mgmt->register_handler("^/ping$",
+                                        &ping_handler);
+      http_stack_mgmt->register_handler("^/impu/[^/]+/bindings$",
+                                        &get_bindings_handler);
+      http_stack_mgmt->register_handler("^/impu/[^/]+/subscriptions$",
+                                        &get_subscriptions_handler);
+      http_stack_mgmt->register_handler("^/impu/[^/]+$",
+                                        &delete_impu_handler);
+      http_stack_mgmt->start(&reg_httpthread_with_pjsip);
+      http_stack_mgmt->bind_unix_socket(SPROUT_HTTP_MGMT_SOCKET_PATH);
+    }
+    catch (HttpStack::Exception& e)
+    {
+      CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
+      TRC_ERROR("Caught management HttpStack::Exception - %s - %d\n", e._func, e._rc);
       return 1;
     }
   }
@@ -2273,13 +2325,24 @@ int main(int argc, char* argv[])
   {
     try
     {
-      http_stack->stop();
-      http_stack->wait_stopped();
+      http_stack_sig->stop();
+      http_stack_sig->wait_stopped();
     }
     catch (HttpStack::Exception& e)
     {
       CL_SPROUT_HTTP_INTERFACE_STOP_FAIL.log(e._func, e._rc);
-      TRC_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      TRC_ERROR("Caught signaling HttpStack::Exception - %s - %d\n", e._func, e._rc);
+    }
+
+    try
+    {
+      http_stack_mgmt->stop();
+      http_stack_mgmt->wait_stopped();
+    }
+    catch (HttpStack::Exception& e)
+    {
+      CL_SPROUT_HTTP_INTERFACE_STOP_FAIL.log(e._func, e._rc);
+      TRC_ERROR("Caught management HttpStack::Exception - %s - %d\n", e._func, e._rc);
     }
   }
 
@@ -2327,6 +2390,8 @@ int main(int argc, char* argv[])
   destroy_options();
   destroy_stack();
 
+  delete http_stack_sig; http_stack_sig = NULL;
+  delete http_stack_mgmt; http_stack_mgmt = NULL;
   delete chronos_connection;
   delete hss_connection;
   delete quiescing_mgr;

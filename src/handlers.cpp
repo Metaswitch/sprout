@@ -127,27 +127,7 @@ static bool sdm_access_common(SubscriberDataManager::AoRPair** aor_pair,
 
     if (found_binding)
     {
-      for (SubscriberDataManager::AoR::Bindings::const_iterator i =
-           backup_aor_pair->get_current()->bindings().begin();
-           i != backup_aor_pair->get_current()->bindings().end();
-           ++i)
-      {
-        SubscriberDataManager::AoR::Binding* src = i->second;
-        SubscriberDataManager::AoR::Binding* dst =
-          (*aor_pair)->get_current()->get_binding(i->first);
-        *dst = *src;
-      }
-
-      for (SubscriberDataManager::AoR::Subscriptions::const_iterator i =
-           backup_aor_pair->get_current()->subscriptions().begin();
-           i != backup_aor_pair->get_current()->subscriptions().end();
-           ++i)
-      {
-        SubscriberDataManager::AoR::Subscription* src = i->second;
-        SubscriberDataManager::AoR::Subscription* dst =
-          (*aor_pair)->get_current()->get_subscription(i->first);
-        *dst = *src;
-      }
+      (*aor_pair)->get_current()->copy_subscriptions_and_bindings(backup_aor_pair->get_current());
     }
 
     if (backup_aor_pair_alloced)
@@ -718,4 +698,194 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
   delete impi;
 
   return success ? HTTP_OK : HTTP_SERVER_ERROR;
+}
+
+//
+// APIS for retrieving cached data.
+//
+
+const char* JSON_BINDINGS = "bindings";
+const char* JSON_SUBSCRIPTIONS = "subscriptions";
+
+void GetCachedDataTask::run()
+{
+  // This interface is read only so reject any non-GETs.
+  if (_req.method() != htp_method_GET)
+  {
+    send_http_reply(HTTP_BADMETHOD);
+    delete this;
+    return;
+  }
+
+  // Extract the IMPU that has been requested. The URL is of the form
+  //
+  //   /impu/<public ID>/<element>
+  //
+  // When <element> is either "bindings" or "subscriptions"
+  const std::string prefix = "/impu/";
+  std::string full_path = _req.full_path();
+  size_t end_of_impu = full_path.find('/', prefix.length());
+  std::string impu = full_path.substr(prefix.length(), end_of_impu - prefix.length());
+  TRC_DEBUG("Extracted impu %s", impu.c_str());
+
+  // Lookup the IMPU in the store.
+  SubscriberDataManager::AoRPair* aor_pair = nullptr;
+  if (!sdm_access_common(&aor_pair,
+                         impu,
+                         _cfg->_sdm,
+                         _cfg->_remote_sdms,
+                         nullptr,
+                         trail()))
+  {
+    send_http_reply(HTTP_SERVER_ERROR);
+    delete this;
+    return;
+  }
+
+  // If there are no bindings we can't have any data data for the requested
+  // subscriber (including subscriptions) so return a 404.
+  if (aor_pair->get_current()->bindings().empty())
+  {
+    send_http_reply(HTTP_NOT_FOUND);
+    delete aor_pair; aor_pair = NULL;
+    delete this;
+    return;
+  }
+
+  // Now we've got everything we need. Serialize the data that has been
+  // requested and return a 200 OK.
+  std::string content = serialize_data(aor_pair->get_current());
+  _req.add_content(content);
+  send_http_reply(HTTP_OK);
+
+  delete aor_pair; aor_pair = NULL;
+  delete this;
+  return;
+}
+
+std::string GetBindingsTask::serialize_data(SubscriberDataManager::AoR* aor)
+{
+  rapidjson::StringBuffer sb;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+
+  writer.StartObject();
+  {
+    writer.String(JSON_BINDINGS);
+    writer.StartObject();
+    {
+      for (SubscriberDataManager::AoR::Bindings::const_iterator it =
+             aor->bindings().begin();
+           it != aor->bindings().end();
+           ++it)
+      {
+        writer.String(it->first.c_str());
+        it->second->to_json(writer);
+      }
+    }
+    writer.EndObject();
+  }
+  writer.EndObject();
+
+  return sb.GetString();
+}
+
+std::string GetSubscriptionsTask::serialize_data(SubscriberDataManager::AoR* aor)
+{
+  rapidjson::StringBuffer sb;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+
+  writer.StartObject();
+  {
+    writer.String(JSON_SUBSCRIPTIONS);
+    writer.StartObject();
+    {
+      for (SubscriberDataManager::AoR::Subscriptions::const_iterator it =
+             aor->subscriptions().begin();
+           it != aor->subscriptions().end();
+           ++it)
+      {
+        writer.String(it->first.c_str());
+        it->second->to_json(writer);
+      }
+    }
+    writer.EndObject();
+  }
+  writer.EndObject();
+
+  return sb.GetString();
+}
+
+void DeleteImpuTask::run()
+{
+  TRC_DEBUG("Request to delete an IMPU");
+
+  // This interface only supports DELETEs
+  if (_req.method() != htp_method_DELETE)
+  {
+    send_http_reply(HTTP_BADMETHOD);
+    delete this;
+    return;
+  }
+
+  // Extract the IMPU that has been requested. The URL is of the form
+  //
+  //   /impu/<public ID>
+  const std::string prefix = "/impu/";
+  std::string impu = _req.full_path().substr(prefix.length());
+  TRC_DEBUG("Extracted impu %s", impu.c_str());
+
+  HTTPCode hss_sc;
+  int sc;
+
+  // Expire all the bindings. This will handle deregistering with the HSS and
+  // sending NOTIFYs and 3rd party REGISTERs.
+  bool all_bindings_expired =
+    RegistrationUtils::remove_bindings(_cfg->_sdm,
+                                       _cfg->_remote_sdms,
+                                       _cfg->_hss,
+                                       impu,
+                                       "*",
+                                       HSSConnection::DEREG_ADMIN,
+                                       trail(),
+                                       &hss_sc);
+
+  // Work out what status code to return.
+  if (all_bindings_expired)
+  {
+    // All bindings expired successfully, so the status code is determined by
+    // the response from homestead.
+    if ((hss_sc >= 200) && (hss_sc < 300))
+    {
+      // 2xx -> 200.
+      sc = HTTP_OK;
+    }
+    else if (hss_sc == HTTP_NOT_FOUND)
+    {
+      // 404 -> 404.
+      sc = HTTP_NOT_FOUND;
+    }
+    else if ((hss_sc >= 400) && (hss_sc < 500))
+    {
+      // Any other 4xx -> 400
+      sc = HTTP_BAD_REQUEST;
+    }
+    else
+    {
+      // Everything else is mapped to 502 Bad Gateway. This covers 5xx responses
+      // (which indicate homestead went wrong) or 3xx responses (which homestead
+      // should not return).
+      sc = HTTP_BAD_GATEWAY;
+    }
+
+    TRC_DEBUG("All bindings expired. Homestead returned %d (-> %d)", hss_sc, sc);
+  }
+  else
+  {
+    TRC_DEBUG("Failed to expire bindings");
+    sc = HTTP_SERVER_ERROR;
+  }
+  send_http_reply(sc);
+
+  delete this;
+  return;
 }

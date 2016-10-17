@@ -250,7 +250,7 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
   // values in the request.  (Use a default of 1 because if there is no
   // expires header or expires values in the contact headers this will
   // be a registration not a deregistration.)
-  auth_type = (PJUtils::max_expires(req, 1) > 0) ? "REG" : "DEREG";
+  auth_type = PJUtils::is_deregistration(req) ? "DEREG" : "REG";
 
   // Remove any Route headers present on the request as we're re-routing the
   // message.
@@ -614,7 +614,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
           pjsip_uri* original_req_uri = req->line.req.uri;
           _icscf->translate_request_uri(req, get_pool(req), trail());
           uri = req->line.req.uri;
-          URIClass uri_class = URIClassifier::classify_uri(uri, false);
+          URIClass uri_class = URIClassifier::classify_uri(uri, false, true);
 
           std::string rn;
 
