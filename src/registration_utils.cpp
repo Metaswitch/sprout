@@ -466,15 +466,17 @@ static bool expire_bindings(SubscriberDataManager *sdm,
   return all_bindings_expired;
 }
 
-void RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
+bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
                                         std::vector<SubscriberDataManager*> remote_sdms,
                                         HSSConnection* hss,
                                         const std::string& aor,
                                         const std::string& binding_id,
                                         const std::string& dereg_type,
-                                        SAS::TrailId trail)
+                                        SAS::TrailId trail,
+                                        HTTPCode* hss_status_code)
 {
   TRC_INFO("Remove binding(s) %s from IMPU %s", binding_id.c_str(), aor.c_str());
+  bool all_bindings_expired = false;
 
   // Determine the set of IMPUs in the Implicit Registration Set
   std::vector<std::string> irs_impus;
@@ -501,12 +503,16 @@ void RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
     // All bindings have been expired, so do deregistration processing for the
     // IMPU.
     TRC_INFO("All bindings for %s expired, so deregister at HSS and ASs", aor.c_str());
-    http_code = hss->update_registration_state(aor,
-                                               "",
-                                               dereg_type,
-                                               ifc_map,
-                                               irs_impus,
-                                               trail);
+    all_bindings_expired = true;
+
+    std::vector<std::string> uris;
+    std::map<std::string, Ifcs> ifc_map;
+    HTTPCode http_code = hss->update_registration_state(aor,
+                                                        "",
+                                                        dereg_type,
+                                                        ifc_map,
+                                                        irs_impus,
+                                                        trail);
 
     if (http_code == HTTP_OK)
     {
@@ -514,6 +520,11 @@ void RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
       // should be passed on the REGISTER message, so we don't need the binding ID.
       deregister_with_application_servers(ifc_map[aor], sdm, aor, trail);
       notify_application_servers();
+    }
+
+    if (hss_status_code)
+    {
+      *hss_status_code = http_code;
     }
   }
 
@@ -528,4 +539,6 @@ void RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
   {
     (void) expire_bindings(*remote_sdm, aor, irs_impus, binding_id, trail);
   }
+
+  return all_bindings_expired;
 };

@@ -61,6 +61,7 @@ public:
   void set_rc(const std::string& url, long rc);
   void delete_rc(const std::string& url);
   bool url_was_requested(const std::string& url, const std::string& body);
+  void allow_fallback_ifcs();
 
 private:
   long get_json_object(const std::string& path, rapidjson::Document*& object, SAS::TrailId trail);

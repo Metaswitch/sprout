@@ -82,10 +82,10 @@ public:
                             "1.2.3.4",
                             49152);
 
-    
+
     // Load monitor with one token in the bucket at startup.
     _lm = new LoadMonitor(0, 1, 0, 0);
-    
+
     _requests_counter = &SNMP::FAKE_COUNTER_TABLE;
     _overload_counter = &SNMP::FAKE_COUNTER_TABLE;
 
@@ -358,7 +358,7 @@ TEST_F(CommonProcessingTest, RequestAllowed)
 {
   // Tests that, when there is a token in the load monitor's bucket, a
   // request is not rejected.
-    
+
   // Inject a request.
   Message msg1;
   inject_msg(msg1.get_request(), _tp);
@@ -398,7 +398,7 @@ TEST_F(CommonProcessingTest, AckRequestAlwaysAllowed)
 
   // Consume the only token in the bucket.
   _lm->admit_request(0);
-    
+
   // Inject an ACK request.
   Message msg1;
   msg1._method = "ACK";
@@ -426,6 +426,25 @@ TEST_F(CommonProcessingTest, BadRequestRejected)
   r1.matches(tdata->msg);
 
   free_txdata();
+}
+
+TEST_F(CommonProcessingTest, BadAckRequestDropped)
+{
+  // Tests that a malformed ACK request is dropped, and moreover that this
+  // is handled by Sprout code before causing PJSIP errors.
+  CapturingTestLogger log;
+
+  // Inject an ACK request with an invalid Contact.
+  Message msg1;
+  msg1._method = "ACK";
+  msg1._extra = "Contact: ;;";
+  inject_msg(msg1.get_request(), _tp);
+
+  // Expect it to just vanish.
+  ASSERT_EQ(0, txdata_count());
+
+  // And expect no errors from PJSIP
+  EXPECT_FALSE(log.contains("pjsip: Assert failed"));
 }
 
 TEST_F(CommonProcessingTest, BadResponseDropped)

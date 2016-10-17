@@ -59,7 +59,6 @@ extern "C" {
 #include <string>
 #include <boost/filesystem.hpp>
 
-#include "ipv6utils.h"
 #include "logger.h"
 #include "utils.h"
 #include "cfgoptions.h"
@@ -152,6 +151,8 @@ enum OptionTypes
   OPT_SAS_USE_SIGNALING_IF,
   OPT_DISABLE_TCP_SWITCH,
   OPT_DEFAULT_TEL_URI_TRANSLATION,
+  OPT_CHRONOS_HOSTNAME,
+  OPT_ALLOW_FALLBACK_IFCS,
 };
 
 
@@ -181,7 +182,7 @@ const static struct pj_getopt_option long_opt[] =
   { "enum",                         required_argument, 0, 'E'},
   { "enum-suffix",                  required_argument, 0, 'x'},
   { "enum-file",                    required_argument, 0, 'f'},
-  { "default-tel-uri-translation",  required_argument, 0, OPT_DEFAULT_TEL_URI_TRANSLATION},
+  { "default-tel-uri-translation",  no_argument,       0, OPT_DEFAULT_TEL_URI_TRANSLATION},
   { "enforce-user-phone",           no_argument,       0, 'u'},
   { "enforce-global-only-lookups",  no_argument,       0, 'g'},
   { "reg-max-expires",              required_argument, 0, 'e'},
@@ -233,6 +234,8 @@ const static struct pj_getopt_option long_opt[] =
   { "scscf-node-uri",               required_argument, 0, OPT_SCSCF_NODE_URI},
   { "sas-use-signaling-interface",  no_argument,       0, OPT_SAS_USE_SIGNALING_IF},
   { "disable-tcp-switch",           no_argument,       0, OPT_DISABLE_TCP_SWITCH},
+  { "chronos-hostname",             required_argument, 0, OPT_CHRONOS_HOSTNAME},
+  { "allow-fallback-ifcs",          no_argument,       0, OPT_ALLOW_FALLBACK_IFCS},
   { NULL,                           0,                 0, 0}
 };
 
@@ -246,6 +249,9 @@ const static int QUIESCE_SIGNAL = SIGQUIT;
 const static int UNQUIESCE_SIGNAL = SIGUSR1;
 // Minimum value allowed by rfc4028, section 4
 const static int MIN_SESSION_EXPIRES = 90;
+
+static const std::string SPROUT_HTTP_MGMT_SOCKET_PATH = "/tmp/sprout-http-mgmt-socket";
+static const int NUM_HTTP_MGMT_THREADS = 5;
 
 static void usage(void)
 {
@@ -425,6 +431,11 @@ static void usage(void)
        "                            Whether to disable TCP-to-UDP uplift when messages are greater than.\n"
        "                            1300 bytes.\n"
        "     --pidfile=<filename>   Write pidfile\n"
+       "     --chronos-hostname <hostname>\n"
+       "                            Specify the hostname of a remote Chronos cluster. If unset the default\n"
+       "                            is to use localhost, using localhost as the callback URL.\n"
+       "     --allow-fallback-ifcs  If no Identity elements match for Initial Filter Criteria, use the\n"
+       "                            first IFC returned as a fallback.\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
        " -F, --log-file <directory>\n"
@@ -1098,6 +1109,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       options->disable_tcp_switch = true;
       break;
 
+    case OPT_ALLOW_FALLBACK_IFCS:
+      TRC_STATUS("IFC fallback enabled");
+      options->allow_fallback_ifcs = true;
+      break;
+
     case 'N':
       {
         std::vector<std::string> fields;
@@ -1120,6 +1136,9 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case OPT_SPROUT_HOSTNAME:
       options->sprout_hostname = std::string(pj_optarg);
       break;
+
+    case OPT_CHRONOS_HOSTNAME:
+      options->chronos_hostname = std::string(pj_optarg);
 
     case OPT_LISTEN_PORT:
       options->listen_port = atoi(pj_optarg);
@@ -1252,6 +1271,7 @@ Store* local_data_store = NULL;
 SubscriberDataManager* local_sdm = NULL;
 SubscriberDataManager* remote_sdm = NULL;
 RalfProcessor* ralf_processor = NULL;
+DnsCachedResolver* dns_resolver = NULL;
 HttpResolver* http_resolver = NULL;
 ACRFactory* scscf_acr_factory = NULL;
 EnumService* enum_service = NULL;
@@ -1268,7 +1288,6 @@ int main(int argc, char* argv[])
 
   Logger* analytics_logger_logger = NULL;
   AnalyticsLogger* analytics_logger = NULL;
-  DnsCachedResolver* dns_resolver = NULL;
   SIPResolver* sip_resolver = NULL;
   Store* remote_data_store = NULL;
   ImpiStore* impi_store = NULL;
@@ -1357,6 +1376,7 @@ int main(int argc, char* argv[])
   opt.scscf_node_uri = "";
   opt.sas_signaling_if = false;
   opt.disable_tcp_switch = false;
+  opt.allow_fallback_ifcs = false;
 
   // Initialise ENT logging before making "Started" log
   PDLogStatic::init(argv[0]);
@@ -1625,63 +1645,60 @@ int main(int argc, char* argv[])
                                                       ".1.2.826.0.1.1578918.9.3.31");
   }
 
-  if (opt.enabled_icscf || opt.enabled_scscf)
-  {
-    // Create Sprout's alarm objects.
-    alarm_manager = new AlarmManager();
+  // Create Sprout's alarm objects.
+  alarm_manager = new AlarmManager();
 
-    chronos_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+  chronos_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                            "sprout",
+                                                            AlarmDef::SPROUT_CHRONOS_COMM_ERROR,
+                                                            AlarmDef::MAJOR),
+                                                  "Sprout",
+                                                  "Chronos");
+
+  enum_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                         "sprout",
+                                                         AlarmDef::SPROUT_ENUM_COMM_ERROR,
+                                                         AlarmDef::MAJOR),
+                                               "Sprout",
+                                               "ENUM");
+
+  hss_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                        "sprout",
+                                                        AlarmDef::SPROUT_HOMESTEAD_COMM_ERROR,
+                                                        AlarmDef::CRITICAL),
+                                              "Sprout",
+                                              "Homestead");
+
+  memcached_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
                                                               "sprout",
-                                                              AlarmDef::SPROUT_CHRONOS_COMM_ERROR,
-                                                              AlarmDef::MAJOR),
+                                                              AlarmDef::SPROUT_MEMCACHED_COMM_ERROR,
+                                                              AlarmDef::CRITICAL),
                                                     "Sprout",
-                                                    "Chronos");
+                                                    "Memcached");
 
-    enum_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
-                                                           "sprout",
-                                                           AlarmDef::SPROUT_ENUM_COMM_ERROR,
-                                                           AlarmDef::MAJOR),
-                                                 "Sprout",
-                                                 "ENUM");
+  memcached_remote_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                                     "sprout",
+                                                                     AlarmDef::SPROUT_REMOTE_MEMCACHED_COMM_ERROR,
+                                                                     AlarmDef::CRITICAL),
+                                                           "Sprout",
+                                                           "remote Memcached");
 
-    hss_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
-                                                          "sprout",
-                                                          AlarmDef::SPROUT_HOMESTEAD_COMM_ERROR,
-                                                          AlarmDef::CRITICAL),
-                                                "Sprout",
-                                                "Homestead");
+  ralf_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                         "sprout",
+                                                         AlarmDef::SPROUT_RALF_COMM_ERROR,
+                                                         AlarmDef::MAJOR),
+                                               "Sprout",
+                                               "Ralf");
 
-    memcached_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
-                                                                "sprout",
-                                                                AlarmDef::SPROUT_MEMCACHED_COMM_ERROR,
-                                                                AlarmDef::CRITICAL),
-                                                      "Sprout",
-                                                      "Memcached");
+  vbucket_alarm = new Alarm(alarm_manager,
+                            "sprout",
+                            AlarmDef::SPROUT_VBUCKET_ERROR,
+                            AlarmDef::MAJOR);
 
-    memcached_remote_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
-                                                                       "sprout",
-                                                                       AlarmDef::SPROUT_REMOTE_MEMCACHED_COMM_ERROR,
-                                                                       AlarmDef::CRITICAL),
-                                                             "Sprout",
-                                                             "remote Memcached");
-
-    ralf_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
-                                                           "sprout",
-                                                           AlarmDef::SPROUT_RALF_COMM_ERROR,
-                                                           AlarmDef::MAJOR),
-                                                 "Sprout",
-                                                 "Ralf");
-
-    vbucket_alarm = new Alarm(alarm_manager,
-                              "sprout",
-                              AlarmDef::SPROUT_VBUCKET_ERROR,
-                              AlarmDef::MAJOR);
-
-    remote_vbucket_alarm = new Alarm(alarm_manager,
-                                     "sprout",
-                                     AlarmDef::SPROUT_REMOTE_VBUCKET_ERROR,
-                                     AlarmDef::MAJOR);
-  }
+  remote_vbucket_alarm = new Alarm(alarm_manager,
+                                   "sprout",
+                                   AlarmDef::SPROUT_REMOTE_VBUCKET_ERROR,
+                                   AlarmDef::MAJOR);
 
   // Start the load monitor
   load_monitor = new LoadMonitor(opt.target_latency_us,   // Initial target latency (us).
@@ -1798,33 +1815,30 @@ int main(int argc, char* argv[])
                                        homestead_uar_latency_table,
                                        homestead_lir_latency_table,
                                        hss_comm_monitor,
-                                       opt.uri_scscf);
+                                       opt.uri_scscf,
+                                       opt.allow_fallback_ifcs);
   }
 
-  if ((opt.enabled_scscf) || (opt.enabled_icscf))
+  // Create ENUM service.
+  if (!opt.enum_servers.empty())
   {
-    // Create ENUM service required for I/S-CSCF.
-    if (!opt.enum_servers.empty())
-    {
-      TRC_STATUS("Setting up the ENUM server(s)");
-      enum_service = new DNSEnumService(opt.enum_servers,
-                                        opt.enum_suffix,
-                                        new DNSResolverFactory(),
-                                        enum_comm_monitor);
-    }
-    else if (!opt.enum_file.empty())
-    {
-      TRC_STATUS("Reading from an ENUM file");
-      enum_service = new JSONEnumService(opt.enum_file);
-    }
-    else if (opt.default_tel_uri_translation)
-    {
-      TRC_STATUS("Setting up ENUM service to do default TEL->SIP URI translation");
-      enum_service = new DummyEnumService(opt.home_domain);
-    }
+    TRC_STATUS("Setting up the ENUM server(s)");
+    enum_service = new DNSEnumService(opt.enum_servers,
+                                      opt.enum_suffix,
+                                      new DNSResolverFactory(),
+                                      enum_comm_monitor);
+  }
+  else if (!opt.enum_file.empty())
+  {
+    TRC_STATUS("Reading from an ENUM file");
+    enum_service = new JSONEnumService(opt.enum_file);
+  }
+  else if (opt.default_tel_uri_translation)
+  {
+    TRC_STATUS("Setting up ENUM service to do default TEL->SIP URI translation");
+    enum_service = new DummyEnumService(opt.home_domain);
   }
 
-  HttpStack* http_stack = HttpStack::get_instance();
   if (opt.pcscf_enabled)
   {
     // Create an ACR factory for the P-CSCF.
@@ -1877,180 +1891,203 @@ int main(int argc, char* argv[])
     }
   }
 
-  if (opt.enabled_scscf)
-  {
-    // Create a connection to Chronos.
-    std::string port_str = std::to_string(opt.http_port);
-    std::string chronos_callback_host = "127.0.0.1:" + port_str;
+  // Create a connection to Chronos.
+  std::string port_str = std::to_string(opt.http_port);
 
-    // We want Chronos to call back to its local sprout instance so that we can
-    // handle Sprouts failing without missing timers.
-    if (is_ipv6(opt.http_address))
+  std::string chronos_service;
+  std::string chronos_callback_host = "127.0.0.1:" + port_str;
+
+  if (opt.chronos_hostname == "")
+  {
+    chronos_service = "127.0.0.1:7253";
+
+    Utils::IPAddressType address_type = Utils::parse_ip_address(opt.http_address);
+
+    if ((address_type == Utils::IPAddressType::IPV6_ADDRESS) ||
+        (address_type == Utils::IPAddressType::IPV6_ADDRESS_WITH_PORT) ||
+        (address_type == Utils::IPAddressType::IPV6_ADDRESS_BRACKETED))
     {
       chronos_callback_host = "[::1]:" + port_str;
     }
+  }
+  else
+  {
+    chronos_service = opt.chronos_hostname + ":7253";
+    chronos_callback_host = opt.sprout_hostname + ":" + port_str;
+  }
 
-    std::string chronos_service = "127.0.0.1:7253";
-    TRC_STATUS("Creating connection to Chronos %s using %s as the callback URI",
-               chronos_service.c_str(),
-               chronos_callback_host.c_str());
-    chronos_connection = new ChronosConnection(chronos_service,
-                                               chronos_callback_host,
-                                               http_resolver,
-                                               chronos_comm_monitor);
+  TRC_STATUS("Creating connection to Chronos %s using %s as the callback URI",
+             chronos_service.c_str(),
+             chronos_callback_host.c_str());
+  chronos_connection = new ChronosConnection(chronos_service,
+                                             chronos_callback_host,
+                                             http_resolver,
+                                             chronos_comm_monitor);
 
-    scscf_acr_factory = (ralf_processor != NULL) ?
-                      (ACRFactory*)new RalfACRFactory(ralf_processor, ACR::SCSCF) :
-                      new ACRFactory();
+  scscf_acr_factory = (ralf_processor != NULL) ?
+                    (ACRFactory*)new RalfACRFactory(ralf_processor, ACR::SCSCF) :
+                    new ACRFactory();
 
-    if (opt.store_servers != "")
+  if (opt.store_servers != "")
+  {
+    // Use memcached store.
+    TRC_STATUS("Using memcached compatible store with ASCII protocol");
+
+    local_data_store = (Store*)new MemcachedStore(true,
+                                                  opt.store_servers,
+                                                  memcached_comm_monitor,
+                                                  vbucket_alarm);
+
+    if (!(((MemcachedStore*)local_data_store)->has_servers()))
     {
-      // Use memcached store.
-      TRC_STATUS("Using memcached compatible store with ASCII protocol");
+      TRC_ERROR("Cluster settings file '%s' does not contain a valid set of servers",
+                opt.store_servers.c_str());
+      return 1;
+    };
 
-      local_data_store = (Store*)new MemcachedStore(true,
-                                                    opt.store_servers,
-                                                    memcached_comm_monitor,
-                                                    vbucket_alarm);
+    if (opt.remote_store_servers != "")
+    {
+      // Use remote memcached store too.
+      TRC_STATUS("Using remote memcached compatible store with ASCII protocol");
 
-      if (!(((MemcachedStore*)local_data_store)->has_servers()))
+      remote_data_store = (Store*)new MemcachedStore(true,
+                                                     opt.remote_store_servers,
+                                                     memcached_remote_comm_monitor,
+                                                     remote_vbucket_alarm);
+
+      if (!(((MemcachedStore*)remote_data_store)->has_servers()))
       {
-        TRC_ERROR("Cluster settings file '%s' does not contain a valid set of servers",
-                  opt.store_servers.c_str());
-        return 1;
+        TRC_WARNING("Remote cluster settings file '%s' does not contain a valid set of servers",
+                    opt.remote_store_servers.c_str());
       };
-
-      if (opt.remote_store_servers != "")
-      {
-        // Use remote memcached store too.
-        TRC_STATUS("Using remote memcached compatible store with ASCII protocol");
-
-        remote_data_store = (Store*)new MemcachedStore(true,
-                                                       opt.remote_store_servers,
-                                                       memcached_remote_comm_monitor,
-                                                       remote_vbucket_alarm);
-
-        if (!(((MemcachedStore*)remote_data_store)->has_servers()))
-        {
-          TRC_WARNING("Remote cluster settings file '%s' does not contain a valid set of servers",
-                      opt.remote_store_servers.c_str());
-        };
-      }
     }
-    else
-    {
-      // Use local store.
-      TRC_STATUS("Using local store");
-      local_data_store = (Store*)new LocalStore();
-    }
+  }
+  else
+  {
+    // Use local store.
+    TRC_STATUS("Using local store");
+    local_data_store = (Store*)new LocalStore();
+  }
 
-    if (local_data_store == NULL)
-    {
-      CL_SPROUT_MEMCACHE_CONN_FAIL.log();
-      TRC_ERROR("Failed to connect to data store");
-      exit(0);
-    }
+  if (local_data_store == NULL)
+  {
+    CL_SPROUT_MEMCACHE_CONN_FAIL.log();
+    TRC_ERROR("Failed to connect to data store");
+    exit(0);
+  }
 
-    // Create local and optionally remote registration data stores.
-    //
-    // It is fine to reuse these variables for creating both stores, as
-    // ownership of the objects they point to is transferred to the store when
-    // it is constructed.
-    SubscriberDataManager::SerializerDeserializer* serializer;
-    std::vector<SubscriberDataManager::SerializerDeserializer*> deserializers;
+  // Create local and optionally remote registration data stores.
+  //
+  // It is fine to reuse these variables for creating both stores, as
+  // ownership of the objects they point to is transferred to the store when
+  // it is constructed.
+  SubscriberDataManager::SerializerDeserializer* serializer;
+  std::vector<SubscriberDataManager::SerializerDeserializer*> deserializers;
 
+  create_sdm_plugins(serializer,
+                     deserializers,
+                     opt.memcached_write_format);
+  local_sdm = new SubscriberDataManager(local_data_store,
+                                        serializer,
+                                        deserializers,
+                                        chronos_connection,
+                                        true);
+
+  if (remote_data_store != NULL)
+  {
     create_sdm_plugins(serializer,
                        deserializers,
                        opt.memcached_write_format);
-    local_sdm = new SubscriberDataManager(local_data_store,
-                                          serializer,
-                                          deserializers,
-                                          chronos_connection,
-                                          true);
+    remote_sdm = new SubscriberDataManager(remote_data_store,
+                                           serializer,
+                                           deserializers,
+                                           chronos_connection,
+                                           false);
+  }
 
-    if (remote_data_store != NULL)
-    {
-      create_sdm_plugins(serializer,
-                         deserializers,
-                         opt.memcached_write_format);
-      remote_sdm = new SubscriberDataManager(remote_data_store,
-                                             serializer,
-                                             deserializers,
-                                             chronos_connection,
-                                             false);
-    }
+  // Start the HTTP stack early as plugins might need to register handlers
+  // with it.
+  HttpStack* http_stack_sig = new HttpStack(opt.http_threads,
+                                            exception_handler,
+                                            access_logger);
+  try
+  {
+    http_stack_sig->initialize();
+  }
+  catch (HttpStack::Exception& e)
+  {
+    CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
+    closelog();
+    TRC_ERROR("Caught signaling HttpStack::Exception - %s - %d\n", e._func, e._rc);
+    return 1;
+  }
 
-    // Start the HTTP stack early as plugins might need to register handlers
-    // with it.
-    try
-    {
-      http_stack->initialize();
-      http_stack->configure(opt.http_address,
-                            opt.http_port,
-                            opt.http_threads,
-                            exception_handler,
-                            access_logger);
-    }
-    catch (HttpStack::Exception& e)
-    {
-      CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
-      closelog();
-      TRC_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
-      return 1;
-    }
+  HttpStack* http_stack_mgmt = new HttpStack(NUM_HTTP_MGMT_THREADS,
+                                             exception_handler,
+                                             access_logger);
+  try
+  {
+    http_stack_mgmt->initialize();
+  }
+  catch (HttpStack::Exception& e)
+  {
+    CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
+    closelog();
+    TRC_ERROR("Caught management HttpStack::Exception - %s - %d\n", e._func, e._rc);
+    return 1;
+  }
 
-    if (opt.auth_enabled)
-    {
-      // Create an AV store using the local store and initialise the authentication
-      // module.  We don't create a AV store using the remote data store as
-      // Authentication Vectors are only stored for a short period after the
-      // relevant challenge is sent.
-      TRC_STATUS("Initialise S-CSCF authentication module");
-      impi_store = new ImpiStore(local_data_store, opt.impi_store_mode);
-      status = init_authentication(opt.auth_realm,
-                                   impi_store,
-                                   hss_connection,
-                                   chronos_connection,
-                                   scscf_acr_factory,
-                                   opt.non_register_auth_mode,
-                                   analytics_logger,
-                                   &auth_stats_tbls,
-                                   opt.nonce_count_supported,
-                                   expiry_for_binding);
-    }
+  if (opt.auth_enabled)
+  {
+    // Create an AV store using the local store and initialise the authentication
+    // module.  We don't create a AV store using the remote data store as
+    // Authentication Vectors are only stored for a short period after the
+    // relevant challenge is sent.
+    TRC_STATUS("Initialise S-CSCF authentication module");
+    impi_store = new ImpiStore(local_data_store, opt.impi_store_mode);
+    status = init_authentication(opt.auth_realm,
+                                 impi_store,
+                                 hss_connection,
+                                 chronos_connection,
+                                 scscf_acr_factory,
+                                 opt.non_register_auth_mode,
+                                 analytics_logger,
+                                 &auth_stats_tbls,
+                                 opt.nonce_count_supported,
+                                 expiry_for_binding);
+  }
 
-    // Launch the registrar.
-    status = init_registrar(local_sdm,
-                            {remote_sdm},
-                            hss_connection,
-                            analytics_logger,
-                            scscf_acr_factory,
-                            opt.reg_max_expires,
-                            opt.force_third_party_register_body,
-                            &reg_stats_tbls,
-                            &third_party_reg_stats_tbls);
+  // Launch the registrar.
+  status = init_registrar(local_sdm,
+                          {remote_sdm},
+                          hss_connection,
+                          analytics_logger,
+                          scscf_acr_factory,
+                          opt.reg_max_expires,
+                          opt.force_third_party_register_body,
+                          &reg_stats_tbls,
+                          &third_party_reg_stats_tbls);
 
-    if (status != PJ_SUCCESS)
-    {
-      CL_SPROUT_INIT_SERVICE_ROUTE_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
-      TRC_ERROR("Failed to enable S-CSCF registrar");
-      return 1;
-    }
+  if (status != PJ_SUCCESS)
+  {
+    CL_SPROUT_INIT_SERVICE_ROUTE_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
+    TRC_ERROR("Failed to enable S-CSCF registrar");
+    return 1;
+  }
 
-    // Launch the subscription module.
-    status = init_subscription(local_sdm,
-                               {remote_sdm},
-                               hss_connection,
-                               scscf_acr_factory,
-                               analytics_logger,
-                               opt.sub_max_expires);
+  // Launch the subscription module.
+  status = init_subscription(local_sdm,
+                             {remote_sdm},
+                             hss_connection,
+                             scscf_acr_factory,
+                             analytics_logger,
+                             opt.sub_max_expires);
 
-    if (status != PJ_SUCCESS)
-    {
-      CL_SPROUT_REG_SUBSCRIBER_HAND_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
-      TRC_ERROR("Failed to enable subscription module");
-      return 1;
-    }
+  if (status != PJ_SUCCESS)
+  {
+    CL_SPROUT_REG_SUBSCRIBER_HAND_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
+    TRC_ERROR("Failed to enable subscription module");
+    return 1;
   }
 
   // Load the sproutlet plugins.
@@ -2135,6 +2172,8 @@ int main(int argc, char* argv[])
                                                    hss_connection,
                                                    sip_resolver,
                                                    impi_store);
+  GetCachedDataTask::Config get_cached_data_config(local_sdm, {remote_sdm});
+  DeleteImpuTask::Config delete_impu_config(local_sdm, {remote_sdm}, hss_connection);
 
   // The AoRTimeoutTask and AuthTimeoutTask both handle
   // chronos requests, so use the ChronosHandler.
@@ -2142,25 +2181,49 @@ int main(int argc, char* argv[])
   ChronosHandler<AuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
   HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
   HttpStackUtils::PingHandler ping_handler;
+  HttpStackUtils::SpawningHandler<GetBindingsTask, GetCachedDataTask::Config> get_bindings_handler(&get_cached_data_config);
+  HttpStackUtils::SpawningHandler<GetSubscriptionsTask, GetCachedDataTask::Config> get_subscriptions_handler(&get_cached_data_config);
+  HttpStackUtils::SpawningHandler<DeleteImpuTask, DeleteImpuTask::Config> delete_impu_handler(&delete_impu_config);
 
   if (opt.enabled_scscf)
   {
     try
     {
-      http_stack->register_handler("^/ping$",
-                                   &ping_handler);
-      http_stack->register_handler("^/timers$",
-                                   &aor_timeout_handler);
-      http_stack->register_handler("^/authentication-timeout$",
-                                   &auth_timeout_handler);
-      http_stack->register_handler("^/registrations?*$",
-                                   &deregistration_handler);
-      http_stack->start(&reg_httpthread_with_pjsip);
+      http_stack_sig->register_handler("^/ping$",
+                                       &ping_handler);
+      http_stack_sig->register_handler("^/timers$",
+                                       &aor_timeout_handler);
+      http_stack_sig->register_handler("^/authentication-timeout$",
+                                       &auth_timeout_handler);
+      http_stack_sig->register_handler("^/registrations?*$",
+                                       &deregistration_handler);
+      http_stack_sig->start(&reg_httpthread_with_pjsip);
+      http_stack_sig->bind_tcp_socket(opt.http_address, opt.http_port);
     }
     catch (HttpStack::Exception& e)
     {
       CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
-      TRC_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      TRC_ERROR("Caught signaling HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      return 1;
+    }
+
+    try
+    {
+      http_stack_mgmt->register_handler("^/ping$",
+                                        &ping_handler);
+      http_stack_mgmt->register_handler("^/impu/[^/]+/bindings$",
+                                        &get_bindings_handler);
+      http_stack_mgmt->register_handler("^/impu/[^/]+/subscriptions$",
+                                        &get_subscriptions_handler);
+      http_stack_mgmt->register_handler("^/impu/[^/]+$",
+                                        &delete_impu_handler);
+      http_stack_mgmt->start(&reg_httpthread_with_pjsip);
+      http_stack_mgmt->bind_unix_socket(SPROUT_HTTP_MGMT_SOCKET_PATH);
+    }
+    catch (HttpStack::Exception& e)
+    {
+      CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
+      TRC_ERROR("Caught management HttpStack::Exception - %s - %d\n", e._func, e._rc);
       return 1;
     }
   }
@@ -2174,13 +2237,24 @@ int main(int argc, char* argv[])
   {
     try
     {
-      http_stack->stop();
-      http_stack->wait_stopped();
+      http_stack_sig->stop();
+      http_stack_sig->wait_stopped();
     }
     catch (HttpStack::Exception& e)
     {
       CL_SPROUT_HTTP_INTERFACE_STOP_FAIL.log(e._func, e._rc);
-      TRC_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      TRC_ERROR("Caught signaling HttpStack::Exception - %s - %d\n", e._func, e._rc);
+    }
+
+    try
+    {
+      http_stack_mgmt->stop();
+      http_stack_mgmt->wait_stopped();
+    }
+    catch (HttpStack::Exception& e)
+    {
+      CL_SPROUT_HTTP_INTERFACE_STOP_FAIL.log(e._func, e._rc);
+      TRC_ERROR("Caught management HttpStack::Exception - %s - %d\n", e._func, e._rc);
     }
   }
 
@@ -2214,7 +2288,6 @@ int main(int argc, char* argv[])
     {
       destroy_authentication();
     }
-    delete chronos_connection;
   }
   if (opt.pcscf_enabled)
   {
@@ -2229,6 +2302,9 @@ int main(int argc, char* argv[])
   destroy_options();
   destroy_stack();
 
+  delete http_stack_sig; http_stack_sig = NULL;
+  delete http_stack_mgmt; http_stack_mgmt = NULL;
+  delete chronos_connection;
   delete hss_connection;
   delete quiescing_mgr;
   delete exception_handler;
@@ -2250,19 +2326,16 @@ int main(int argc, char* argv[])
   delete analytics_logger;
   delete analytics_logger_logger;
 
-  if (opt.enabled_icscf || opt.enabled_scscf)
-  {
-    // Delete Sprout's alarm objects
-    delete chronos_comm_monitor;
-    delete enum_comm_monitor;
-    delete hss_comm_monitor;
-    delete memcached_comm_monitor;
-    delete memcached_remote_comm_monitor;
-    delete ralf_comm_monitor;
-    delete vbucket_alarm;
-    delete remote_vbucket_alarm;
-    delete alarm_manager;
-  }
+  // Delete Sprout's alarm objects
+  delete chronos_comm_monitor;
+  delete enum_comm_monitor;
+  delete hss_comm_monitor;
+  delete memcached_comm_monitor;
+  delete memcached_remote_comm_monitor;
+  delete ralf_comm_monitor;
+  delete vbucket_alarm;
+  delete remote_vbucket_alarm;
+  delete alarm_manager;
 
   delete latency_table;
   delete queue_size_table;

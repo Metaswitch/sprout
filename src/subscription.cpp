@@ -232,15 +232,7 @@ SubscriberDataManager::AoRPair* write_subscriptions_to_store(
 
       if (found_subscription)
       {
-        for (SubscriberDataManager::AoR::Subscriptions::const_iterator i =
-             backup_aor->get_current()->subscriptions().begin();
-             i != backup_aor->get_current()->subscriptions().end();
-             ++i)
-        {
-          SubscriberDataManager::AoR::Subscription* src = i->second;
-          SubscriberDataManager::AoR::Subscription* dst = aor_pair->get_current()->get_subscription(i->first);
-          *dst = *src;
-        }
+        aor_pair->get_current()->copy_subscriptions_and_bindings(backup_aor->get_current());
       }
     }
 

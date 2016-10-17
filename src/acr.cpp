@@ -281,11 +281,28 @@ void RalfACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
       // Check for expires values in Contact headers.  Set the default to
       // -1, so if there are no contact headers, or no expires values in the
       // contact headers we won't include an Expires AVP.
-      _expires = PJUtils::max_expires(req, -1);
+      if (!PJUtils::get_max_expires(req, -1, _expires))
+      {
+        // Max expires isn't meaningful for this request (it has no Contact
+        // headers), so use the default of -1.
+        _expires = -1;
+      }
     }
     else
     {
       _expires = -1;
+    }
+
+    // Determine the number of contact headers
+    pjsip_contact_hdr* contact_hdr =
+            (pjsip_contact_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, NULL);
+    _num_contacts = 0;
+
+    while (contact_hdr != NULL)
+    {
+      _num_contacts++;
+      contact_hdr = (pjsip_contact_hdr*)
+                     pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, contact_hdr->next);
     }
 
     // Store the call ID but only if the session ID has not already been set.
@@ -1146,8 +1163,15 @@ std::string RalfACR::get_message(pj_time_val timestamp)
     int cause_code = 0;
     if (_status_code == PJSIP_SC_OK)
     {
-      if ((_method == "SUBSCRIBE") &&
-          (_expires == 0))
+      if ((_method == "REGISTER")  &&
+          (_num_contacts == 0))
+      {
+        // REGISTERs without contacts don't affect the registration state of
+        // the subscriber, so use a cause code of 0
+        cause_code = 0;
+      }
+      else if ((_method == "SUBSCRIBE") &&
+               (_expires == 0))
       {
         // End of SUBSCRIBE dialog.
         cause_code = -2;

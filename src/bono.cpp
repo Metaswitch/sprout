@@ -117,7 +117,7 @@ extern "C" {
 #include "constants.h"
 #include "enumservice.h"
 #include "bgcfservice.h"
-#include "connection_pool.h"
+#include "sip_connection_pool.h"
 #include "flowtable.h"
 #include "trustboundary.h"
 #include "sessioncase.h"
@@ -148,7 +148,7 @@ static ACRFactory* icscf_acr_factory;
 
 static bool edge_proxy;
 static pjsip_uri* upstream_proxy;
-static ConnectionPool* upstream_conn_pool = NULL;
+static SIPConnectionPool* upstream_conn_pool = NULL;
 
 static SNMP::IPCountTable* sprout_ip_tbl = NULL;
 static SNMP::U32Scalar* flow_count = NULL;
@@ -740,6 +740,13 @@ static int proxy_verify_request(pjsip_rx_data *rdata)
 /// Rejects a request statelessly.
 static void reject_request(pjsip_rx_data* rdata, int status_code)
 {
+  // Log start and end markers. These are needed for the failed request to
+  // appear in SAS.
+  SAS::Marker start_marker(get_trail(rdata), MARKER_ID_START, 1u);
+  SAS::report_marker(start_marker);
+  SAS::Marker end_marker(get_trail(rdata), MARKER_ID_END, 1u);
+  SAS::report_marker(end_marker);
+
   pj_status_t status;
 
   ACR* acr = cscf_acr_factory->get_acr(get_trail(rdata),
@@ -1674,7 +1681,8 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
         // in 5 minutes (300s).  This should never happens as it means the
         // registrar is misbehaving, but we defensively assume a short expiry
         // time as this is more secure.
-        int max_expires = PJUtils::max_expires(rdata->msg_info.msg, 300);
+        int max_expires;
+        PJUtils::get_max_expires(rdata->msg_info.msg, 300, max_expires);
         TRC_DEBUG("Maximum contact expiry is %d", max_expires);
 
         // Find the Service-Route header so we can record this with each
@@ -3276,7 +3284,7 @@ pj_status_t init_stateful_proxy(SubscriberDataManager* reg_sdm,
     pool_target.port = upstream_proxy_port;
     sprout_ip_tbl = SNMP::IPCountTable::create("bono_connected_sprouts",
                                                ".1.2.826.0.1.1578918.9.2.3.1");
-    upstream_conn_pool = new ConnectionPool(&pool_target,
+    upstream_conn_pool = new SIPConnectionPool(&pool_target,
         upstream_proxy_connections,
         upstream_proxy_recycle,
         stack_data.pool,

@@ -172,6 +172,11 @@ private:
   void track_app_serv_comm_success(const std::string& uri,
                                    DefaultHandling default_handling);
 
+  /// Record the time an INVITE took to reach ringing state.
+  ///
+  /// @param ringing_us Time spent until a 180 Ringing, in microseconds.
+  void track_session_setup_time(uint64_t tsx_start_time_usec, bool video_call);
+
   /// Translate RequestURI using ENUM service if appropriate.
   void translate_request_uri(pjsip_msg* req, pj_pool_t* pool, SAS::TrailId trail);
 
@@ -223,6 +228,8 @@ private:
   SNMP::CounterTable* _routed_by_preloaded_route_tbl = NULL;
   SNMP::CounterTable* _invites_cancelled_before_1xx_tbl = NULL;
   SNMP::CounterTable* _invites_cancelled_after_1xx_tbl = NULL;
+  SNMP::EventAccumulatorTable* _video_session_setup_time_tbl = NULL;
+  SNMP::EventAccumulatorTable* _audio_session_setup_time_tbl = NULL;
 
   AsCommunicationTracker* _sess_term_as_tracker;
   AsCommunicationTracker* _sess_cont_as_tracker;
@@ -405,10 +412,24 @@ private:
   /// us accidentally record routing twice.
   bool _record_routed;
 
-  /// Track request type and whether a 1xx response has been seen so that the
-  /// correct stats can be updated.
+  /// Track various properties of the transaction / transaction state so that
+  /// we can generate the correct stats:
+  /// - _req_type:   the type of the request, e.g. INVITE, REGISTER etc.
+  /// - _seen_1xx:   whether we've seen a 1xx response to this transaction.
+  /// - _record_session_setup_time:
+  ///                whether we should record session setup time for this
+  ///                transaction.  Set to false if this is a transaction that we
+  ///                shouldn't track, or if we have already tracked it.
+  /// - _tsx_start_time_usec:
+  ///                the time that the session started -- only valid if
+  ///                _record_session_setup_time is true.
+  /// - _video_call: whether this is a video call -- only valid if
+  ///                _record_session_setup_time is true.
   pjsip_method_e _req_type;
   bool _seen_1xx;
+  bool _record_session_setup_time;
+  uint64_t _tsx_start_time_usec;
+  bool _video_call;
 
   static const int MAX_FORKING = 10;
 

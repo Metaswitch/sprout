@@ -148,6 +148,8 @@ struct options
   std::string                          scscf_node_uri;
   bool                                 sas_signaling_if;
   bool                                 disable_tcp_switch;
+  std::string                          chronos_hostname;
+  bool                                 allow_fallback_ifcs;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
@@ -158,6 +160,7 @@ extern Store* local_data_store;
 extern SubscriberDataManager* local_sdm;
 extern SubscriberDataManager* remote_sdm;
 extern RalfProcessor* ralf_processor;
+extern DnsCachedResolver* dns_resolver;
 extern HttpResolver* http_resolver;
 extern ACRFactory* scscf_acr_factory;
 extern EnumService* enum_service;

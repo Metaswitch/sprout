@@ -172,15 +172,21 @@ static int worker_thread(void* p)
         }
 
         // Make a 500 response to the rdata with a retry-after header of
-        // 10 mins
-        pjsip_retry_after_hdr* retry_after =
+        // 10 mins if it's a request other than an ACK
+
+        if ((rdata->msg_info.msg->type == PJSIP_REQUEST_MSG) &&
+           (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD))
+        {
+          TRC_DEBUG("Returning 500 response following exception");
+          pjsip_retry_after_hdr* retry_after =
                          pjsip_retry_after_hdr_create(rdata->tp_info.pool, 600);
-        PJUtils::respond_stateless(stack_data.endpt,
+          PJUtils::respond_stateless(stack_data.endpt,
                                    rdata,
                                    PJSIP_SC_INTERNAL_SERVER_ERROR,
                                    NULL,
                                    (pjsip_hdr*)retry_after,
                                    NULL);
+        }
 
         if (num_worker_threads == 1)
         {
