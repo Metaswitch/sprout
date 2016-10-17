@@ -766,7 +766,7 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
         // sent to this S-CSCF, as this triggers the HSS to accept an S-CSCF
         // change (by generating the correct MAR).
         if (PJUtils::get_next_routing_header(rdata->msg_info.msg) ==
-            PJUtils::pj_str_to_string(&stack_data.scscf_uri))
+            PJUtils::pj_str_to_string(&stack_data.scscf_uri_str))
         {
           TRC_INFO("SIP Digest authenticated request integrity protected by edge proxy");
 
@@ -790,7 +790,7 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
         // sent to this S-CSCF, as this triggers the HSS to accept an S-CSCF
         // change (by generating the correct MAR).
         if (PJUtils::get_next_routing_header(rdata->msg_info.msg) ==
-            PJUtils::pj_str_to_string(&stack_data.scscf_uri))
+            PJUtils::pj_str_to_string(&stack_data.scscf_uri_str))
         {
           TRC_INFO("AKA authenticated request integrity protected by edge proxy");
 

@@ -474,6 +474,7 @@ class DeregistrationTaskTest : public SipTest
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
+    SipTest::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
   }
 
   void SetUp()
@@ -482,7 +483,6 @@ class DeregistrationTaskTest : public SipTest
     _httpstack = new MockHttpStack();
     _subscriber_data_manager = new MockSubscriberDataManager();
     _hss = new FakeHSSConnection();
-    stack_data.scscf_uri = pj_str("sip:all.the.sprouts:5058;transport=TCP");
   }
 
   void TearDown()
@@ -1405,12 +1405,12 @@ class DeleteImpuTaskTest : public TestWithMockSdms
   static void SetUpTestCase()
   {
     TestWithMockSdms::SetUpTestCase();
+    TestWithMockSdms::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
   }
 
   void SetUp()
   {
     TestWithMockSdms::SetUp();
-    stack_data.scscf_uri = pj_str("sip:all.the.sprouts:5058;transport=TCP");
   }
 
   void TearDown()

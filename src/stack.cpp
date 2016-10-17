@@ -632,7 +632,7 @@ pj_status_t init_stack(const std::string& system_name,
   stack_data.local_host = (local_host != "") ? pj_str(local_host_cstr) : *pj_gethostname();
   stack_data.public_host = (public_host != "") ? pj_str(public_host_cstr) : stack_data.local_host;
   stack_data.default_home_domain = (home_domain != "") ? pj_str(home_domain_cstr) : stack_data.local_host;
-  stack_data.scscf_uri = pj_str(scscf_uri_cstr);
+  stack_data.scscf_uri_str = pj_str(scscf_uri_cstr);
   stack_data.cdf_domain = pj_str(cdf_domain_cstr);
 
   // Build a set of home domains
@@ -723,6 +723,9 @@ pj_status_t init_stack(const std::string& system_name,
   // Initialize the PJUtils module.
   PJUtils::init();
 
+  stack_data.scscf_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(scscf_uri,
+                                                                  stack_data.pool);
+
   // Create listening transports for the ports whichtrusted and untrusted ports.
   stack_data.pcscf_trusted_tcp_factory = NULL;
   if (stack_data.pcscf_trusted_port != 0)
@@ -779,16 +782,14 @@ pj_status_t init_stack(const std::string& system_name,
     stack_data.name.push_back(stack_data.public_host);
   }
 
-  if ((scscf_port != 0) &&
-      (!scscf_uri.empty()))
+  // S-CSCF enabled with a specified URI, so add host name from the URI to hostnames.
+  if ((scscf_port != 0) && (stack_data.scscf_uri != NULL))
   {
-    // S-CSCF enabled with a specified URI, so add host name from the URI to hostnames.
-    pjsip_sip_uri* uri = (pjsip_sip_uri*)PJUtils::uri_from_string(scscf_uri,
-                                                                  stack_data.pool);
-    if (uri != NULL)
-    {
-      stack_data.name.push_back(uri->host);
-    }
+    stack_data.name.push_back(stack_data.scscf_uri->host);
+  }
+  else
+  {
+    stack_data.scscf_uri = NULL;
   }
 
   if (pj_gethostip(pj_AF_INET(), &pri_addr) == PJ_SUCCESS)

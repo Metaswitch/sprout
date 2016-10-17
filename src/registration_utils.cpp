@@ -148,15 +148,15 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
     SAS::report_event(event);
 
     status = pjsip_endpt_create_request(stack_data.endpt,
-                                        &method,               // Method
-                                        &stack_data.scscf_uri, // Target
-                                        &served_user_uri,      // From
-                                        &served_user_uri,      // To
-                                        &served_user_uri,      // Contact
-                                        NULL,                  // Auto-generate Call-ID
-                                        1,                     // CSeq
-                                        NULL,                  // No body
-                                        &tdata);               // OUT
+                                        &method,                   // Method
+                                        &stack_data.scscf_uri_str, // Target
+                                        &served_user_uri,          // From
+                                        &served_user_uri,          // To
+                                        &served_user_uri,          // Contact
+                                        NULL,                      // Auto-generate Call-ID
+                                        1,                         // CSeq
+                                        NULL,                      // No body
+                                        &tdata);                   // OUT
 
     if (status == PJ_SUCCESS)
     {
@@ -287,15 +287,15 @@ void send_register_to_as(pjsip_rx_data *received_register,
   pj_cstr(&as_uri, as.server_name.c_str());
 
   status = pjsip_endpt_create_request(stack_data.endpt,
-                                      &method,               // Method
-                                      &as_uri,               // Target
-                                      &stack_data.scscf_uri, // From
-                                      &user_uri,             // To
-                                      &stack_data.scscf_uri, // Contact
-                                      NULL,                  // Auto-generate Call-ID
-                                      1,                     // CSeq
-                                      NULL,                  // No body
-                                      &tdata);               // OUT
+                                      &method,                   // Method
+                                      &as_uri,                   // Target
+                                      &stack_data.scscf_uri_str, // From
+                                      &user_uri,                 // To
+                                      &stack_data.scscf_uri_str, // Contact
+                                      NULL,                      // Auto-generate Call-ID
+                                      1,                         // CSeq
+                                      NULL,                      // No body
+                                      &tdata);                   // OUT
 
   if (status != PJ_SUCCESS)
   {
