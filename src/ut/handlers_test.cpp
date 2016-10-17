@@ -84,11 +84,6 @@ class TestWithMockSdms : public SipTest
   MockHttpStack* stack;
   MockHSSConnection* mock_hss;
 
-  static void SetUpTestCase()
-  {
-    SipTest::SetUpTestCase(false);
-  }
-
   virtual void SetUp()
   {
     store = new MockSubscriberDataManager();
@@ -425,11 +420,6 @@ class AoRTimeoutTasksMockStoreTest : public SipTest
 
   AoRTimeoutTask* handler;
 
-  static void SetUpTestCase()
-  {
-    SipTest::SetUpTestCase(false);
-  }
-
   void SetUp()
   {
     chronos_connection = new FakeChronosConnection();
@@ -483,7 +473,7 @@ class DeregistrationTaskTest : public SipTest
 
   static void SetUpTestCase()
   {
-    SipTest::SetUpTestCase(false);
+    SipTest::SetUpTestCase();
   }
 
   void SetUp()
@@ -956,11 +946,6 @@ class AuthTimeoutTest : public SipTest
   AuthTimeoutTask::Config* chronos_config;
 
   AuthTimeoutTask* handler;
-
-  static void SetUpTestCase()
-  {
-    SipTest::SetUpTestCase(false);
-  }
 
   void SetUp()
   {

@@ -74,9 +74,8 @@ public:
   SipTest(pjsip_module* module = NULL);
   virtual ~SipTest();
 
-  /// Call this to set up the test case. If you want to add your own
-  /// host mappings, you must pass clear_host_mapping = false.
-  static void SetUpTestCase(bool clear_host_mapping = true);
+  /// Call this to set up the test case.
+  static void SetUpTestCase();
 
   static void TearDownTestCase();
 

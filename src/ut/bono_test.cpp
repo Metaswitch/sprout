@@ -258,7 +258,7 @@ public:
                             const string& icscf_uri_str = "",
                             bool emerg_reg_enabled = false)
   {
-    SipTest::SetUpTestCase(false);
+    SipTest::SetUpTestCase();
 
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();

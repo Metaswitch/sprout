@@ -110,7 +110,7 @@ SipTest* SipTest::_current_instance;
 pj_str_t scscf_domain = pj_str("scscf.proxy1.homedomain");
 
 /// Automatically run once, before the first test.
-void SipTest::SetUpTestCase(bool clear_host_mapping)
+void SipTest::SetUpTestCase()
 {
   // Add the required records to the cache.
   add_host_mapping("sprout.homedomain", "127.0.0.1");
