@@ -2429,29 +2429,182 @@ bool PJUtils::should_update_np_data(URIClass old_uri_class,
   }
 }
 
-std::string PJUtils::get_next_routing_header(pjsip_msg* msg)
+std::string PJUtils::get_next_routing_header(const pjsip_msg* msg)
+{
+  pjsip_uri_context_e context;
+  pjsip_uri* uri = PJUtils::get_next_routing_uri(msg, &context);
+
+  return PJUtils::uri_to_string(context, uri);
+}
+
+pjsip_uri* PJUtils::get_next_routing_uri(const pjsip_msg* msg, pjsip_uri_context_e* context)
 {
   pjsip_route_hdr* route = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg,
                                                                 PJSIP_H_ROUTE,
                                                                 NULL);
+  pjsip_uri* result;
 
   if (route == NULL)
   {
-    return PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI,
-                                  msg->line.req.uri);
+    if (context)
+    {
+      *context = PJSIP_URI_IN_REQ_URI;
+    }
+
+    result = msg->line.req.uri;
   }
   else
   {
-    return PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                  route->name_addr.uri);
+    if (context)
+    {
+      *context = PJSIP_URI_IN_ROUTING_HDR;
+    }
+
+    result = route->name_addr.uri;
   }
+
+  return result;
+}
+
+// Check whether two tel uris are guaranteed to match the same
+// address.
+//
+// Explicitly we don't care about other parameters.
+bool tel_uri_matches(const pjsip_tel_uri* a, const pjsip_tel_uri* b)
+{
+  bool result;
+
+  if (pj_strcmp(&a->number, &b->number) != 0)
+  {
+    result = false;
+  }
+  else if (pj_strcmp(&a->context, &b->context) != 0)
+  {
+    result = false;
+  }
+  else if (pj_strcmp(&a->ext_param, &b->ext_param) != 0)
+  {
+    result = false;
+  }
+  else if (pj_strcmp(&a->isub_param, &b->isub_param) != 0)
+  {
+    result = false;
+  }
+  else
+  {
+    result = true;
+  }
+
+  return result;
+}
+
+// Check whether two SIP uris are guaranteed to match the same
+// address.
+//
+// Explicitly we don't care about loose routing, ttl, header parameters
+// or other parameters such as orig.
+bool sip_uri_matches(const pjsip_sip_uri* a, const pjsip_sip_uri* b)
+{
+  bool result;
+
+  if (pj_strcmp(&a->user, &b->user) != 0)
+  {
+    result = false;
+  }
+  else if (pj_strcmp(&a->passwd, &b->passwd) != 0)
+  {
+    result = false;
+  }
+  else if (pj_strcmp(&a->host, &b->host) != 0)
+  {
+    result = false;
+  }
+  else if (a->port != b->port)
+  {
+    result = false;
+  }
+  else if (pj_strcmp(&a->user_param, &b->user_param) != 0)
+  {
+    result = false;
+  }
+  else if (pj_strcmp(&a->method_param, &b->method_param) != 0)
+  {
+    result = false;
+  }
+  else if (pj_strcmp(&a->transport_param, &b->transport_param) != 0)
+  {
+    result = false;
+  }
+  else if (pj_strcmp(&a->maddr_param, &b->maddr_param) != 0)
+  {
+    result = false;
+  }
+  else
+  {
+    result = true;
+  }
+
+  return result;
+}
+
+bool PJUtils::uri_matches(const pjsip_uri* a, const pjsip_uri* b)
+{
+  bool result;
+
+  if (a == b)
+  {
+    result = true;
+  }
+  else if (a->vptr != b->vptr)
+  {
+    result = false;
+  }
+  else if (PJSIP_URI_SCHEME_IS_SIP(a))
+  {
+    if (PJSIP_URI_SCHEME_IS_SIP(b))
+    {
+      result = sip_uri_matches((pjsip_sip_uri*) a, (pjsip_sip_uri*) b);
+    }
+    else
+    {
+      result = false;
+    }
+  }
+  else if (PJSIP_URI_SCHEME_IS_SIPS(a))
+  {
+    if (PJSIP_URI_SCHEME_IS_SIPS(b))
+    {
+      result = sip_uri_matches((pjsip_sip_uri*) a, (pjsip_sip_uri*) b);
+    }
+    else
+    {
+      result = false;
+    }
+  }
+  else if (PJSIP_URI_SCHEME_IS_TEL(a))
+  {
+    if (PJSIP_URI_SCHEME_IS_TEL(b))
+    {
+      result = tel_uri_matches((pjsip_tel_uri*) a, (pjsip_tel_uri*) b);
+    }
+    else
+    {
+      result = false;
+    }
+  }
+  else
+  {
+    result = false;
+  }
+
+  return result;
 }
 
 // Gets the media types specified in the SDP on the message.  Currently only
 // looks for Audio and Video media types.
 //
 // @returns A set of type pjmedia_type
-std::set<pjmedia_type> PJUtils::get_media_types(pjsip_msg *msg)
+std::set<pjmedia_type> PJUtils::get_media_types(const pjsip_msg *msg)
 {
   std::set<pjmedia_type> media_types;
 
@@ -2489,5 +2642,3 @@ std::set<pjmedia_type> PJUtils::get_media_types(pjsip_msg *msg)
 
   return media_types;
 }
-
-

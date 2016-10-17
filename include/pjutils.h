@@ -299,11 +299,19 @@ bool should_update_np_data(URIClass old_uri_class,
 // request URI if there's no route headers). This can return
 // an empty string (if the header isn't a valid URI), so callers
 // should validate the result.
-std::string get_next_routing_header(pjsip_msg* msg);
+std::string get_next_routing_header(const pjsip_msg* msg);
 
 // Gets the media types specified in the SDP on the message.  Currently only
 // looks for Audio and Video media types.
-std::set<pjmedia_type> get_media_types(pjsip_msg *msg);
+std::set<pjmedia_type> get_media_types(const pjsip_msg *msg);
+
+// Get the next routing URI - this is the top routing header (or the
+// request URI if there's no route headers), and it's context.
+pjsip_uri* get_next_routing_uri(const pjsip_msg* msg,
+                                pjsip_uri_context_e* context);
+
+// Do the two URIs match the same target?
+bool uri_matches(const pjsip_uri* a, const pjsip_uri* b);
 
 } // namespace PJUtils
 
