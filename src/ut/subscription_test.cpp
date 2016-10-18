@@ -116,7 +116,9 @@ public:
     b1->_emergency_registration = false;
 
     // Add the AoR record to the store.
-    _sdm->set_aor_data(std::string("sip:6505550231@homedomain"), aor_pair, 0);
+    std::vector<std::string> irs_impus;
+    irs_impus.push_back("sip:6505550231@homedomain");
+    _sdm->set_aor_data(irs_impus[0], irs_impus, aor_pair, 0);
     delete aor_pair; aor_pair = NULL;
 
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
@@ -343,7 +345,9 @@ TEST_F(SubscriptionTest, SimpleMainlineWithTelURI)
   b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
-  _sdm->set_aor_data(std::string("tel:6505550231"), aor_pair, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("tel:6505550231");
+  _sdm->set_aor_data(irs_impus[0], irs_impus, aor_pair, 0);
   delete aor_pair; aor_pair = NULL;
 
   check_subscriptions("tel:6505550231", 0u);
@@ -351,9 +355,6 @@ TEST_F(SubscriptionTest, SimpleMainlineWithTelURI)
   SubscribeMessage msg;
   msg._scheme = "tel";
   inject_msg(msg.get());
-
-  std::vector<std::string> irs_impus;
-  irs_impus.push_back("tel:6505550231");
 
   std::string to_tag = check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
   check_subscriptions("tel:6505550231", 1u);
@@ -615,7 +616,9 @@ TEST_F(SubscriptionTest, NonPrimaryAssociatedUri)
   b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
-  _sdm->set_aor_data(std::string("sip:6505550233@homedomain"), aor_pair, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("sip:6505550233@homedomain");
+  _sdm->set_aor_data(irs_impus[0], irs_impus, aor_pair, 0);
   delete aor_pair; aor_pair = NULL;
 
   SubscribeMessage msg;
@@ -633,7 +636,7 @@ TEST_F(SubscriptionTest, NonPrimaryAssociatedUri)
   inject_msg(msg.get());
 
   // We expect one registration element per IMPU in the Implicit Registration Set
-  std::vector<std::string> irs_impus;
+  irs_impus.clear();
   irs_impus.push_back("sip:6505550233@homedomain");
   irs_impus.push_back("sip:6505550234@homedomain");
 
@@ -673,7 +676,9 @@ TEST_F(SubscriptionTest, NoNotificationsForEmergencyRegistrations)
   b2->_emergency_registration = false;
 
   // Add the AoR record to the store.
-  _sdm->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("sip:6505550231@homedomain");
+  _sdm->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   delete aor_data1; aor_data1 = NULL;
 
   check_subscriptions("sip:6505550231@homedomain", 0u);

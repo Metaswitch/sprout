@@ -300,8 +300,15 @@ void DeregistrationTask::run()
 void AoRTimeoutTask::handle_response()
 {
   bool all_bindings_expired = false;
+
+  // Determine the set of IMPUs in the Implicit Registration Set
+  std::vector<std::string> irs_impus;
+  std::map<std::string, Ifcs> ifc_map;
+  get_reg_data(_cfg->_hss, _aor_id, irs_impus, ifc_map, trail());
+
   SubscriberDataManager::AoRPair* aor_pair = set_aor_data(_cfg->_sdm,
                                                           _aor_id,
+                                                          irs_impus,
                                                           NULL,
                                                           _cfg->_remote_sdms,
                                                           all_bindings_expired);
@@ -319,11 +326,12 @@ void AoRTimeoutTask::handle_response()
       {
         bool ignored;
         SubscriberDataManager::AoRPair* remote_aor_pair =
-                                                         set_aor_data(*sdm,
-                                                                      _aor_id,
-                                                                      aor_pair,
-                                                                      {},
-                                                                      ignored);
+                                                        set_aor_data(*sdm,
+                                                                     _aor_id,
+                                                                     irs_impus,
+                                                                     aor_pair,
+                                                                     {},
+                                                                     ignored);
         delete remote_aor_pair;
       }
     }
@@ -357,22 +365,16 @@ void AoRTimeoutTask::handle_response()
   report_sip_all_register_marker(trail(), _aor_id);
 }
 
-
-
 SubscriberDataManager::AoRPair* AoRTimeoutTask::set_aor_data(
                           SubscriberDataManager* current_sdm,
                           std::string aor_id,
+                          std::vector<std::string> irs_impus,
                           SubscriberDataManager::AoRPair* previous_aor_pair,
                           std::vector<SubscriberDataManager*> remote_sdms,
                           bool& all_bindings_expired)
 {
   SubscriberDataManager::AoRPair* aor_pair = NULL;
   Store::Status set_rc;
-
-  // Determine the set of IMPUs in the Implicit Registration Set
-  std::vector<std::string> irs_impus;
-  std::map<std::string, Ifcs> ifc_map;
-  get_reg_data(_cfg->_hss, aor_id, irs_impus, ifc_map, trail());
 
   do
   {

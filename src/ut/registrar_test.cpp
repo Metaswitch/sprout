@@ -2407,7 +2407,9 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   int now = time(NULL);
   s1->_expires = now + 300;
 
-  pj_status_t rc = _sdm->set_aor_data(aor, aor_pair, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back(aor);
+  pj_status_t rc = _sdm->set_aor_data(aor, irs_impus, aor_pair, 0);
   EXPECT_TRUE(rc);
   delete aor_pair; aor_pair = NULL;
 
@@ -2491,7 +2493,9 @@ TEST_F(RegistrarTest, NoNotifyToUnregisteredUser)
   int now = time(NULL);
   s1->_expires = now + 300;
 
-  pj_status_t rc = _sdm->set_aor_data(aor, aor_pair, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back(aor);
+  pj_status_t rc = _sdm->set_aor_data(aor, irs_impus, aor_pair, 0);
   EXPECT_TRUE(rc);
   delete aor_pair; aor_pair = NULL;
 
@@ -2546,7 +2550,9 @@ TEST_F(RegistrarTest, MultipleRegistrationsWithSubscription)
   int now = time(NULL);
   s1->_expires = now + 300;
 
-  pj_status_t rc = _sdm->set_aor_data(aor, aor_pair, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back(aor);
+  pj_status_t rc = _sdm->set_aor_data(aor, irs_impus, aor_pair, 0);
   EXPECT_TRUE(rc);
   delete aor_pair; aor_pair = NULL;
   ASSERT_EQ(1, txdata_count());
