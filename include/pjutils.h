@@ -309,10 +309,6 @@ std::set<pjmedia_type> get_media_types(const pjsip_msg *msg);
 // request URI if there's no route headers), and it's context.
 pjsip_uri* get_next_routing_uri(const pjsip_msg* msg,
                                 pjsip_uri_context_e* context);
-
-// Do the two URIs match the same target?
-bool uri_matches(const pjsip_uri* a, const pjsip_uri* b);
-
 } // namespace PJUtils
 
 #endif

@@ -775,7 +775,9 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
                   PJUtils::uri_to_string(context, next_routing_uri).c_str(),
                   stack_data.scscf_uri_str.slen, stack_data.scscf_uri_str.ptr);
 
-        if (PJUtils::uri_matches(next_routing_uri, (pjsip_uri*) stack_data.scscf_uri))
+        if (pjsip_uri_cmp(context,
+                          next_routing_uri,
+                          (pjsip_uri*) stack_data.scscf_uri) == PJ_SUCCESS)
         {
           TRC_INFO("SIP Digest authenticated request integrity protected by edge proxy");
 
@@ -798,8 +800,13 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
         // We should still challenge though if we find that the request wasn't
         // sent to this S-CSCF, as this triggers the HSS to accept an S-CSCF
         // change (by generating the correct MAR).
-        if (PJUtils::uri_matches(PJUtils::get_next_routing_uri(rdata->msg_info.msg, NULL),
-                                 (pjsip_uri*) stack_data.scscf_uri))
+
+        pjsip_uri_context_e context;
+        pjsip_uri* next_routing_uri = PJUtils::get_next_routing_uri(rdata->msg_info.msg, &context);
+
+        if (pjsip_uri_cmp(context,
+                          next_routing_uri,
+                          (pjsip_uri*) stack_data.scscf_uri) == PJ_SUCCESS)
         {
           TRC_INFO("AKA authenticated request integrity protected by edge proxy");
 
