@@ -1552,8 +1552,8 @@ TEST_F(DeleteImpuTaskTest, Mainline)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, EmptyAoR(), _, _, _, _))
-        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings are expired.
+      EXPECT_CALL(*store, set_aor_data(impu, _, EmptyAoR(), _, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings are expired.
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(impu, _, "dereg-admin", _, _, _))
         .WillOnce(Return(200));
@@ -1575,8 +1575,8 @@ TEST_F(DeleteImpuTaskTest, StoreFailure)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _, _))
-        .WillOnce(DoAll(SetArgReferee<3>(false), // Fail to expire bindings.
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<4>(false), // Fail to expire bindings.
                         Return(Store::ERROR)));
       EXPECT_CALL(*stack, send_reply(_, 500, _));
   }
@@ -1596,8 +1596,8 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith404)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _, _))
-        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(impu, _,_, _, _, _))
         .WillOnce(Return(404));
@@ -1619,8 +1619,8 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith5xx)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _, _))
-        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(impu, _,_, _, _, _))
         .WillOnce(Return(500));
@@ -1642,8 +1642,8 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith4xx)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _, _))
-        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(impu, _,_, _, _, _))
         .WillOnce(Return(400));
@@ -1666,15 +1666,15 @@ TEST_F(DeleteImpuTaskTest, WritingToRemoteStores)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, EmptyAoR(), _, _, _, _))
-        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
+      EXPECT_CALL(*store, set_aor_data(impu, _, EmptyAoR(), _, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(impu, _,_, _, _, _))
         .WillOnce(Return(200));
 
       EXPECT_CALL(*remote_store1, get_aor_data(impu, _)).WillOnce(Return(remote_aor));
-      EXPECT_CALL(*remote_store1, set_aor_data(impu, EmptyAoR(), _, _, _, _))
-        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
+      EXPECT_CALL(*remote_store1, set_aor_data(impu, _, EmptyAoR(), _, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
                         Return(Store::OK)));
 
       EXPECT_CALL(*stack, send_reply(_, 200, _));
