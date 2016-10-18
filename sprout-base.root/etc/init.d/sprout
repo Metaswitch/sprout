@@ -174,6 +174,8 @@ get_daemon_args()
         [ -z "$min_token_rate" ] || min_token_rate_arg="--min-token-rate=$min_token_rate"
         [ -z "$exception_max_ttl" ] || exception_max_ttl_arg="--exception-max-ttl=$exception_max_ttl"
         [ -z "$max_session_expires" ] || max_session_expires_arg="--max-session-expires=$max_session_expires"
+        [ -z "$local_site_name" ] || local_site_name_arg="--local-site-name=$local_site_name"
+        [ -z "$sprout_impi_store" ] || impi_store_arg="--impi-store=$sprout_impi_store"
         [ -z "$chronos_hostname" ] || chronos_hostname_arg="--chronos-hostname=$chronos_hostname"
         [ -z "$allow_fallback_ifcs" ] || allow_fallback_ifcs_arg="--allow-fallback-ifcs"
 
