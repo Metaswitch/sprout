@@ -2037,57 +2037,60 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  if (opt.auth_enabled)
+  if (opt.enabled_scscf)
   {
-    // Create an AV store using the local store and initialise the authentication
-    // module.  We don't create a AV store using the remote data store as
-    // Authentication Vectors are only stored for a short period after the
-    // relevant challenge is sent.
-    TRC_STATUS("Initialise S-CSCF authentication module");
-    impi_store = new ImpiStore(local_data_store, opt.impi_store_mode);
-    status = init_authentication(opt.auth_realm,
-                                 impi_store,
-                                 hss_connection,
-                                 chronos_connection,
-                                 scscf_acr_factory,
-                                 opt.non_register_auth_mode,
-                                 analytics_logger,
-                                 &auth_stats_tbls,
-                                 opt.nonce_count_supported,
-                                 expiry_for_binding);
-  }
+    if (opt.auth_enabled)
+    {
+      // Create an AV store using the local store and initialise the authentication
+      // module.  We don't create a AV store using the remote data store as
+      // Authentication Vectors are only stored for a short period after the
+      // relevant challenge is sent.
+      TRC_STATUS("Initialise S-CSCF authentication module");
+      impi_store = new ImpiStore(local_data_store, opt.impi_store_mode);
+      status = init_authentication(opt.auth_realm,
+                                   impi_store,
+                                   hss_connection,
+                                   chronos_connection,
+                                   scscf_acr_factory,
+                                   opt.non_register_auth_mode,
+                                   analytics_logger,
+                                   &auth_stats_tbls,
+                                   opt.nonce_count_supported,
+                                   expiry_for_binding);
+    }
 
-  // Launch the registrar.
-  status = init_registrar(local_sdm,
-                          {remote_sdm},
-                          hss_connection,
-                          analytics_logger,
-                          scscf_acr_factory,
-                          opt.reg_max_expires,
-                          opt.force_third_party_register_body,
-                          &reg_stats_tbls,
-                          &third_party_reg_stats_tbls);
+    // Launch the registrar.
+    status = init_registrar(local_sdm,
+                            {remote_sdm},
+                            hss_connection,
+                            analytics_logger,
+                            scscf_acr_factory,
+                            opt.reg_max_expires,
+                            opt.force_third_party_register_body,
+                            &reg_stats_tbls,
+                            &third_party_reg_stats_tbls);
 
-  if (status != PJ_SUCCESS)
-  {
-    CL_SPROUT_INIT_SERVICE_ROUTE_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
-    TRC_ERROR("Failed to enable S-CSCF registrar");
-    return 1;
-  }
+    if (status != PJ_SUCCESS)
+    {
+      CL_SPROUT_INIT_SERVICE_ROUTE_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
+      TRC_ERROR("Failed to enable S-CSCF registrar");
+      return 1;
+    }
 
-  // Launch the subscription module.
-  status = init_subscription(local_sdm,
-                             {remote_sdm},
-                             hss_connection,
-                             scscf_acr_factory,
-                             analytics_logger,
-                             opt.sub_max_expires);
+    // Launch the subscription module.
+    status = init_subscription(local_sdm,
+                               {remote_sdm},
+                               hss_connection,
+                               scscf_acr_factory,
+                               analytics_logger,
+                               opt.sub_max_expires);
 
-  if (status != PJ_SUCCESS)
-  {
-    CL_SPROUT_REG_SUBSCRIBER_HAND_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
-    TRC_ERROR("Failed to enable subscription module");
-    return 1;
+    if (status != PJ_SUCCESS)
+    {
+      CL_SPROUT_REG_SUBSCRIBER_HAND_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
+      TRC_ERROR("Failed to enable subscription module");
+      return 1;
+    }
   }
 
   // Load the sproutlet plugins.

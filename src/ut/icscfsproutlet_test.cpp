@@ -63,10 +63,9 @@ int ICSCF_PORT = 5052;
 class ICSCFSproutletTestBase : public SipTest
 {
 public:
-  /// Set up test case.  Caller must clear host_mapping.
   static void SetUpTestCase()
   {
-    SipTest::SetUpTestCase(false);
+    SipTest::SetUpTestCase();
 
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();

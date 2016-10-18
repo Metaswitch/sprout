@@ -110,13 +110,15 @@ SipTest* SipTest::_current_instance;
 pj_str_t scscf_domain = pj_str("scscf.proxy1.homedomain");
 
 /// Automatically run once, before the first test.
-void SipTest::SetUpTestCase(bool clear_host_mapping)
+void SipTest::SetUpTestCase()
 {
   // Add the required records to the cache.
   add_host_mapping("sprout.homedomain", "127.0.0.1");
   add_host_mapping("homedomain", "10.6.6.1");
   add_host_mapping("bono1.homedomain", "10.6.6.200");
 
+  stack_data.scscf_uri_str = {NULL, 0};
+  stack_data.scscf_uri = NULL;
   stack_data.pcscf_untrusted_port = 5060;
   stack_data.pcscf_trusted_port = 5058; // NB - pcscf trusted port must be the
   stack_data.scscf_port = 5058;         // same as the scscf port for the UTs
@@ -126,7 +128,6 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
   stack_data.default_home_domain = pj_str("homedomain");
   URIClassifier::home_domains.push_back(&stack_data.default_home_domain);
   URIClassifier::home_domains.push_back(&scscf_domain);
-  stack_data.scscf_uri = pj_str("sip:scscf.sprout.homedomain:5058;transport=TCP");
   stack_data.cdf_domain = pj_str("cdfdomain");
   stack_data.name = {stack_data.local_host, stack_data.public_host, pj_str("sprout.homedomain")};
   stack_data.record_route_on_initiation_of_originating = true;
@@ -157,6 +158,22 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
                                   5060);
 
   pjsip_endpt_register_module(stack_data.endpt, &mod_siptest);
+
+  // Now we have a pool with PJSIP, we can parse the S-CSCF URI.
+  SipTest::SetScscfUri("sip:scscf.sprout.homedomain:5058;transport=TCP");
+}
+
+void SipTest::SetScscfUri(const std::string& scscf_uri)
+{
+  if (stack_data.scscf_uri_str.ptr)
+  {
+    free(stack_data.scscf_uri_str.ptr);
+  }
+
+  stack_data.scscf_uri_str = pj_str(strdup(scscf_uri.c_str()));
+
+  stack_data.scscf_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(scscf_uri.c_str(),
+                                                                  stack_data.pool);
 }
 
 /// Automatically run once, after the last test.
@@ -175,6 +192,11 @@ void SipTest::TearDownTestCase()
   TransportFlow::reset();
 
   delete stack_data.sipresolver;
+
+  if (stack_data.scscf_uri_str.ptr)
+  {
+    free(stack_data.scscf_uri_str.ptr);
+  }
 }
 
 

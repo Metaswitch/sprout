@@ -62,6 +62,7 @@ public:
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
+    SipTest::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
     add_host_mapping("sprout.example.com", "10.8.8.1");
 
     _chronos_connection = new FakeChronosConnection();
@@ -75,7 +76,6 @@ public:
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_subscription(_sdm, remote_sdms, _hss_connection, _acr_factory, _analytics, 300);
     ASSERT_EQ(PJ_SUCCESS, ret);
-    stack_data.scscf_uri = pj_str("sip:all.the.sprout.nodes:5058;transport=TCP");
 
     _hss_connection->set_impu_result("sip:6505550231@homedomain", "", HSSConnection::STATE_REGISTERED, "");
     _hss_connection->set_impu_result("tel:6505550231", "", HSSConnection::STATE_REGISTERED, "");
@@ -809,6 +809,7 @@ public:
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
+    SipTest::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
     add_host_mapping("sprout.example.com", "10.8.8.1");
   }
 
@@ -822,7 +823,6 @@ public:
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_subscription(_sdm, {}, _hss_connection, _acr_factory, _analytics, 300);
     ASSERT_EQ(PJ_SUCCESS, ret);
-    stack_data.scscf_uri = pj_str("sip:all.the.sprout.nodes:5058;transport=TCP");
 
     _hss_connection->set_impu_result("sip:6505550231@homedomain", "", HSSConnection::STATE_REGISTERED, "");
     _hss_connection->set_impu_result("tel:6505550231", "", HSSConnection::STATE_REGISTERED, "");

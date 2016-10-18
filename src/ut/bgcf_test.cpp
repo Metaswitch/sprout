@@ -190,7 +190,7 @@ public:
   /// Set up test case.  Caller must clear host_mapping.
   static void SetUpTestCase()
   {
-    SipTest::SetUpTestCase(false);
+    SipTest::SetUpTestCase();
 
     // BGCF selector built with test_bgcf_sproutlet_bgcf.json. This has a
     // wildcard domain, so the BGCF tests will always route to something

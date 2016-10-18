@@ -256,7 +256,7 @@ public:
   /// Set up test case.  Caller must clear host_mapping.
   static void SetUpTestCase()
   {
-    SipTest::SetUpTestCase(false);
+    SipTest::SetUpTestCase();
 
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();

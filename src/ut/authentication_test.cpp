@@ -578,20 +578,27 @@ TEST_F(AuthenticationTest, IntegrityProtected)
 
   AuthenticationMessage msg2("REGISTER");
   msg2._auth_hdr = true;
-  msg2._integ_prot = "tls-yes";
-  ret = inject_msg_direct(msg2.get());
-  EXPECT_EQ(PJ_FALSE, ret);
-  msg2._response = "12341234123412341234123412341234";
+  msg2._integ_prot = "yes";
+  msg2._route = "sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig";
   ret = inject_msg_direct(msg2.get());
   EXPECT_EQ(PJ_FALSE, ret);
 
   AuthenticationMessage msg3("REGISTER");
   msg3._auth_hdr = true;
-  msg3._integ_prot = "ip-assoc-yes";
+  msg3._integ_prot = "tls-yes";
   ret = inject_msg_direct(msg3.get());
   EXPECT_EQ(PJ_FALSE, ret);
   msg3._response = "12341234123412341234123412341234";
   ret = inject_msg_direct(msg3.get());
+  EXPECT_EQ(PJ_FALSE, ret);
+
+  AuthenticationMessage msg4("REGISTER");
+  msg4._auth_hdr = true;
+  msg4._integ_prot = "ip-assoc-yes";
+  ret = inject_msg_direct(msg4.get());
+  EXPECT_EQ(PJ_FALSE, ret);
+  msg4._response = "12341234123412341234123412341234";
+  ret = inject_msg_direct(msg4.get());
   EXPECT_EQ(PJ_FALSE, ret);
 
   EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);

@@ -1170,11 +1170,13 @@ pj_status_t init_registrar(SubscriberDataManager* reg_sdm,
 
   // Construct a Service-Route header pointing at the S-CSCF ready to be added
   // to REGISTER 200 OK response.
-  pjsip_sip_uri* service_route_uri = (pjsip_sip_uri*)
-                        pjsip_parse_uri(stack_data.pool,
-                                        stack_data.scscf_uri.ptr,
-                                        stack_data.scscf_uri.slen,
-                                        0);
+  pjsip_sip_uri* service_route_uri = NULL;
+
+  if (stack_data.scscf_uri != NULL)
+  {
+    service_route_uri = (pjsip_sip_uri*) pjsip_uri_clone(stack_data.pool, stack_data.scscf_uri);
+  }
+
   if (service_route_uri != NULL)
   {
     service_route_uri->lr_param = 1;
@@ -1196,8 +1198,8 @@ pj_status_t init_registrar(SubscriberDataManager* reg_sdm,
   else
   {
     // LCOV_EXCL_START - Start up failures not tested in UT
-    TRC_ERROR("Unable to set up Service-Route header for the registrar from %s",
-              stack_data.scscf_uri);
+    TRC_ERROR("Unable to set up Service-Route header for the registrar from %.*s",
+              stack_data.scscf_uri_str.slen, stack_data.scscf_uri_str.ptr);
     status = PJ_EINVAL;
     // LCOV_EXCL_STOP
   }
