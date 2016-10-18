@@ -307,6 +307,7 @@ std::set<pjmedia_type> get_media_types(const pjsip_msg *msg);
 
 // Get the next routing URI - this is the top routing header (or the
 // request URI if there's no route headers), and it's context.
+// The URI returned is only valid while the passed in PJSIP message is valid
 pjsip_uri* get_next_routing_uri(const pjsip_msg* msg,
                                 pjsip_uri_context_e* context);
 } // namespace PJUtils

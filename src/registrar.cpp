@@ -1170,7 +1170,12 @@ pj_status_t init_registrar(SubscriberDataManager* reg_sdm,
 
   // Construct a Service-Route header pointing at the S-CSCF ready to be added
   // to REGISTER 200 OK response.
-  pjsip_sip_uri* service_route_uri = stack_data.scscf_uri;
+  pjsip_sip_uri* service_route_uri = NULL;
+
+  if (stack_data.scscf_uri != NULL)
+  {
+    service_route_uri = (pjsip_sip_uri*) pjsip_uri_clone(stack_data.pool, stack_data.scscf_uri);
+  }
 
   if (service_route_uri != NULL)
   {

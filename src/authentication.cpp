@@ -771,10 +771,6 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
         pjsip_uri_context_e context;
         pjsip_uri* next_routing_uri = PJUtils::get_next_routing_uri(rdata->msg_info.msg, &context);
 
-        TRC_DEBUG("Routing headers check for S-CSCF chain: %s == %.*s ?",
-                  PJUtils::uri_to_string(context, next_routing_uri).c_str(),
-                  stack_data.scscf_uri_str.slen, stack_data.scscf_uri_str.ptr);
-
         if (pjsip_uri_cmp(context,
                           next_routing_uri,
                           (pjsip_uri*) stack_data.scscf_uri) == PJ_SUCCESS)
@@ -785,6 +781,13 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
           SAS::report_event(event);
 
           return PJ_FALSE;
+        }
+        else
+        {
+          TRC_DEBUG("Needs authentication despite integrity protection as next routing URI (%s) "
+                    " does not match this S-CSCF (%.*s)",
+                    stack_data.scscf_uri_str.slen, stack_data.scscf_uri_str.ptr,
+                    PJUtils::uri_to_string(context, next_routing_uri).c_str());
         }
       }
       else if ((integrity != NULL) &&

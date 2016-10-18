@@ -787,10 +787,6 @@ pj_status_t init_stack(const std::string& system_name,
   {
     stack_data.name.push_back(stack_data.scscf_uri->host);
   }
-  else
-  {
-    stack_data.scscf_uri = NULL;
-  }
 
   if (pj_gethostip(pj_AF_INET(), &pri_addr) == PJ_SUCCESS)
   {
