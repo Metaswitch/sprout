@@ -177,6 +177,7 @@ get_daemon_args()
         [ -z "$local_site_name" ] || local_site_name_arg="--local-site-name=$local_site_name"
         [ -z "$sprout_impi_store" ] || impi_store_arg="--impi-store=$sprout_impi_store"
         [ -z "$chronos_hostname" ] || chronos_hostname_arg="--chronos-hostname=$chronos_hostname"
+        [ -z "$sprout_chronos_callback_uri" ] || sprout_chronos_callback_uri_arg="--sprout-chronos-callback-uri=$sprout_chronos_callback_uri"
         [ -z "$allow_fallback_ifcs" ] || allow_fallback_ifcs_arg="--allow-fallback-ifcs"
 
         DAEMON_ARGS="
@@ -190,6 +191,7 @@ get_daemon_args()
                      --sprout-hostname=$sprout_hostname
                      --scscf-node-uri=$scscf_node_uri
                      $chronos_hostname_arg
+                     $sprout_chronos_callback_uri_arg
                      $xdms_hostname_arg
                      $ralf_arg
                      $enum_server_arg
