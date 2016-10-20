@@ -1286,7 +1286,6 @@ int main(int argc, char* argv[])
   pj_status_t status;
   struct options opt;
 
-  Logger* analytics_logger_logger = NULL;
   AnalyticsLogger* analytics_logger = NULL;
   SIPResolver* sip_resolver = NULL;
   Store* remote_data_store = NULL;
@@ -1441,9 +1440,7 @@ int main(int argc, char* argv[])
 
   if (opt.analytics_enabled)
   {
-    analytics_logger_logger = new Logger(opt.analytics_directory, std::string("log"));
-    analytics_logger_logger->set_flags(Logger::ADD_TIMESTAMPS|Logger::FLUSH_ON_WRITE);
-    analytics_logger = new AnalyticsLogger(analytics_logger_logger);
+    analytics_logger = new AnalyticsLogger();
   }
 
   std::vector<std::string> sproutlet_uris;
@@ -2323,7 +2320,6 @@ int main(int argc, char* argv[])
   delete dns_resolver;
 
   delete analytics_logger;
-  delete analytics_logger_logger;
 
   // Delete Sprout's alarm objects
   delete chronos_comm_monitor;

@@ -42,12 +42,10 @@
 
 #include <sstream>
 
-#include "logger.h"
-
 class AnalyticsLogger
 {
 public:
-  AnalyticsLogger(Logger* logger);
+  AnalyticsLogger();
   ~AnalyticsLogger();
 
   void registration(const std::string& aor,
@@ -77,8 +75,6 @@ public:
 
 private:
   static const int BUFFER_SIZE = 1000;
-
-  Logger* _logger;
 };
 
 #endif

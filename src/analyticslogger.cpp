@@ -37,6 +37,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <syslog.h>
 
 // Common STL includes.
 #include <cassert>
@@ -51,7 +52,7 @@
 #include "analyticslogger.h"
 
 
-AnalyticsLogger::AnalyticsLogger(Logger* logger): _logger(logger)
+AnalyticsLogger::AnalyticsLogger()
 {
 }
 
@@ -68,12 +69,12 @@ void AnalyticsLogger::registration(const std::string& aor,
 {
   char buf[BUFFER_SIZE];
   snprintf(buf, sizeof(buf),
-           "Registration: USER_URI=%s BINDING_ID=%s CONTACT_URI=%s EXPIRES=%d\n",
+           "<analytics> Registration: USER_URI=%s BINDING_ID=%s CONTACT_URI=%s EXPIRES=%d\n",
            aor.c_str(),
            binding_id.c_str(),
            contact.c_str(),
            expires);
-  _logger->write(buf);
+  syslog(LOG_INFO, "%s", buf);
 }
 
 void AnalyticsLogger::subscription(const std::string& aor,
@@ -83,12 +84,12 @@ void AnalyticsLogger::subscription(const std::string& aor,
 {
   char buf[BUFFER_SIZE];
   snprintf(buf, sizeof(buf),
-           "Subscription: USER_URI=%s SUBSCRIPTION_ID=%s CONTACT_URI=%s EXPIRES=%d\n",
+           "<analytics> Subscription: USER_URI=%s SUBSCRIPTION_ID=%s CONTACT_URI=%s EXPIRES=%d\n",
            aor.c_str(),
            subscription_id.c_str(),
            contact.c_str(),
            expires);
-  _logger->write(buf);
+  syslog(LOG_INFO, "%s", buf);
 }
 
 void AnalyticsLogger::auth_failure(const std::string& auth,
@@ -96,10 +97,10 @@ void AnalyticsLogger::auth_failure(const std::string& auth,
 {
   char buf[BUFFER_SIZE];
   snprintf(buf, sizeof(buf),
-           "Auth-Failure: Private Identity=%s Public Identity=%s\n",
+           "<analytics> Auth-Failure: Private Identity=%s Public Identity=%s\n",
            auth.c_str(),
            to.c_str());
-  _logger->write(buf);
+  syslog(LOG_INFO, "%s", buf);
 }
 
 
@@ -109,11 +110,11 @@ void AnalyticsLogger::call_connected(const std::string& from,
 {
   char buf[BUFFER_SIZE];
   snprintf(buf, sizeof(buf),
-           "Call-Connected: FROM=%s TO=%s CALL_ID=%s\n",
+           "<analytics> Call-Connected: FROM=%s TO=%s CALL_ID=%s\n",
            from.c_str(),
            to.c_str(),
            call_id.c_str());
-  _logger->write(buf);
+  syslog(LOG_INFO, "%s", buf);
 }
 
 
@@ -124,12 +125,12 @@ void AnalyticsLogger::call_not_connected(const std::string& from,
 {
   char buf[BUFFER_SIZE];
   snprintf(buf, sizeof(buf),
-           "Call-Not-Connected: FROM=%s TO=%s CALL_ID=%s REASON=%d\n",
+           "<analytics> Call-Not-Connected: FROM=%s TO=%s CALL_ID=%s REASON=%d\n",
            from.c_str(),
            to.c_str(),
            call_id.c_str(),
            reason);
-  _logger->write(buf);
+  syslog(LOG_INFO, "%s", buf);
 }
 
 
@@ -138,9 +139,9 @@ void AnalyticsLogger::call_disconnected(const std::string& call_id,
 {
   char buf[BUFFER_SIZE];
   snprintf(buf, sizeof(buf),
-           "Call-Disconnected: CALL_ID=%s REASON=%d\n",
+           "<analytics> Call-Disconnected: CALL_ID=%s REASON=%d\n",
            call_id.c_str(),
            reason);
-  _logger->write(buf);
+  syslog(LOG_INFO, "%s", buf);
 }
 
