@@ -422,6 +422,7 @@ void notify_application_servers()
 
 static bool expire_bindings(SubscriberDataManager *sdm,
                             const std::string& aor,
+                            std::vector<std::string> irs_impus,
                             const std::string& binding_id,
                             SAS::TrailId trail)
 {
@@ -452,7 +453,7 @@ static bool expire_bindings(SubscriberDataManager *sdm,
                                                            // single binding (flow failed).
     }
 
-    set_rc = sdm->set_aor_data(aor, aor_pair, trail, all_bindings_expired);
+    set_rc = sdm->set_aor_data(aor, irs_impus, aor_pair, trail, all_bindings_expired);
     delete aor_pair; aor_pair = NULL;
 
     // We can only say for sure that the bindings were expired if we were able
@@ -477,7 +478,27 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
   TRC_INFO("Remove binding(s) %s from IMPU %s", binding_id.c_str(), aor.c_str());
   bool all_bindings_expired = false;
 
-  if (expire_bindings(sdm, aor, binding_id, trail))
+  // Determine the set of IMPUs in the Implicit Registration Set
+  std::vector<std::string> irs_impus;
+  std::string state;
+  std::map<std::string, Ifcs> ifc_map;
+  HTTPCode http_code = hss->get_registration_data(aor,
+                                                  state,
+                                                  ifc_map,
+                                                  irs_impus,
+                                                  trail);
+
+  if ((http_code != HTTP_OK) || irs_impus.empty())
+  {
+    // We were unable to determine the set of IMPUs for this AoR.  Push the AoR
+    // we have into the IRS list so that we have at least one IMPU we can issue
+    // NOTIFYs for.
+    TRC_WARNING("Unable to get Implicit Registration Set for %s: %d", aor.c_str(), http_code);
+    irs_impus.clear();
+    irs_impus.push_back(aor);
+  }
+
+  if (expire_bindings(sdm, aor, irs_impus, binding_id, trail))
   {
     // All bindings have been expired, so do deregistration processing for the
     // IMPU.
@@ -490,7 +511,7 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
                                                         "",
                                                         dereg_type,
                                                         ifc_map,
-                                                        uris,
+                                                        irs_impus,
                                                         trail);
 
     if (http_code == HTTP_OK)
@@ -516,7 +537,7 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
        remote_sdm != remote_sdms.end();
        ++remote_sdm)
   {
-    (void) expire_bindings(*remote_sdm, aor, binding_id, trail);
+    (void) expire_bindings(*remote_sdm, aor, irs_impus, binding_id, trail);
   }
 
   return all_bindings_expired;
