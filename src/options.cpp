@@ -71,6 +71,10 @@ pjsip_module mod_options =
 
 pj_bool_t on_rx_request(pjsip_rx_data* rdata)
 {
+  // SAS log the start of processing by this module
+  SAS::Event event(get_trail(rdata), SASEvent::BEGIN_OPTIONS_MODULE, 0);
+  SAS::report_event(event);
+
   URIClass uri_class = URIClassifier::classify_uri(rdata->msg_info.msg->line.req.uri);
   if (rdata->msg_info.msg->line.req.method.id == PJSIP_OPTIONS_METHOD)
   {
