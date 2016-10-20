@@ -1,0 +1,12 @@
+/var/log/sprout/analytics.log {
+  su sprout sprout
+  daily
+  rotate 36500
+  dateext
+  dateformat .%Y-%m-%d-%s
+  extension .log
+  missingok
+  postrotate
+    reload rsyslog >/dev/null 2>&1 || true
+  endscript
+}
