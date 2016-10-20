@@ -143,7 +143,7 @@ static bool sdm_access_common(SubscriberDataManager::AoRPair** aor_pair,
 static bool get_reg_data(HSSConnection* hss,
                          std::string aor_id,
                          std::vector<std::string>& irs_impus,
-                         std::map<std::string, Ifcs> ifc_map,
+                         std::map<std::string, Ifcs>& ifc_map,
                          SAS::TrailId trail)
 {
   std::string state;
