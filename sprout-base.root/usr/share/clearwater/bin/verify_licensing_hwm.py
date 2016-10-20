@@ -8,16 +8,16 @@ import os
 from collections import defaultdict
 import argparse
 import csv
-import time
 import datetime
 import logging
 
 TEMP_DIR = 'tmp'
 OUTPUT_FILE_SUBSCRIBERS = 'registered_subscribers.csv'
 OUTPUT_FILE_BINDINGS = 'registered_bindings.csv'
+LOG_FILENAME = 'verify_licensing_hwm.log'
+
 def bucket_dir(bucket):
     return os.path.join(TEMP_DIR, "bucket" + str(bucket))
-LOG_FILENAME = 'verify_licensing_hwm.log'
 
 # We can't be certain that logs appear in log files on the syslog server in
 # strict chronological order.  To determine whether a log file might contain
@@ -28,10 +28,11 @@ TIME_MARGIN_MS = 10 * 60 * 1000
 
 EPOCH_DT = datetime.datetime.utcfromtimestamp(0)
 
+
 def split_into_buckets(fname, bucket_dir_fn, buckets):
     """
     Take a file containing Sprout registration logs and split in into a set of
-    N files, by assigning each log to a bucket based on it's IMPU.   The output
+    N files, by assigning each log to a bucket based on it's IMPU.  The output
     files all have the same name but are placed in bucket scope subdirectories.
 
     Arguments:
@@ -56,11 +57,12 @@ def split_into_buckets(fname, bucket_dir_fn, buckets):
                 bucket = abs(hash(line_info["impu"])) % buckets
                 file_handles[bucket].write(line)
             except:
-                # We couldn't process this line.   Just skip it.
+                # We couldn't process this line.  Just skip it.
                 pass
 
     for bucket in file_handles:
         file_handles[bucket].close()
+
 
 def process_bucket(bucket_dir, subscriber_writer, binding_writer,
                    time_of_interest_ms):
@@ -100,8 +102,8 @@ def process_bucket(bucket_dir, subscriber_writer, binding_writer,
                 try:
                     log_time_ms = string_to_ms(line_info["timestamp_str"])
                 except:
-                    # Can't decode the timestamp in this log.   Skip it.
-                    logging.warning("Cannot decode timestamp in log %s from " \
+                    # Can't decode the timestamp in this log.  Skip it.
+                    logging.warning("Cannot decode timestamp in log %s from "
                                     "file %s" % (line, fname))
                     continue
 
@@ -130,8 +132,8 @@ def process_bucket(bucket_dir, subscriber_writer, binding_writer,
 
                 # If this is a register that expires before the time we are
                 # interested in then it's effectively a de-register...
-                if ((log_expires_ms > 0) and
-                    ((log_time_ms + log_expires_ms) < time_of_interest_ms)):
+                if ((log_expires_ms > 0) and ((log_time_ms + log_expires_ms) <
+                                              time_of_interest_ms)):
                     log_expires_ms = 0
 
                 impu_record[log_binding] = {"updated_ms": log_time_ms,
@@ -162,7 +164,8 @@ def process_bucket(bucket_dir, subscriber_writer, binding_writer,
             registered_subs = registered_subs + 1
             subscriber_writer.writerow({'IMPU': impu})
 
-    return {"subs":registered_subs, "binds":registered_bindings}
+    return {"subs": registered_subs, "binds": registered_bindings}
+
 
 def file_is_relevant(fname, time_of_interest_ms, max_expiry_time_ms):
     """
@@ -213,7 +216,7 @@ def file_is_relevant(fname, time_of_interest_ms, max_expiry_time_ms):
             # interest.  See comment on TIME_MARGIN_MS.
             if ((last_line_ms + max_expiry_time_ms + TIME_MARGIN_MS) <
                     time_of_interest_ms):
-                logging.info("Skipping file %s (events too early: " \
+                logging.info("Skipping file %s (events too early: "
                              "last timestamp = %d)" % (fname, last_line_ms))
                 return False
         except:
@@ -225,6 +228,7 @@ def file_is_relevant(fname, time_of_interest_ms, max_expiry_time_ms):
         # interest.
         return True
 
+
 def decode_line(line):
     """
     Decode a Registration log.
@@ -232,7 +236,9 @@ def decode_line(line):
     Arguments:
       line -- a string containing the log to be decoded.
     """
-    regex = "(?P<timestamp_str>.*) Registration: USER_URI=(?P<impu>.*) BINDING_ID=(?P<binding>[^ ]*).*EXPIRES=(?P<expires>\d+)"
+    regex = "(?P<timestamp_str>.*) Registration: USER_URI=(?P<impu>.*) " \
+        "BINDING_ID=(?P<binding>[^ ]*) CONTACT_URI.* EXPIRES=(?P<expires>\d+)"
+
     match_result = re.match(regex, line)
     if match_result is None:
         logging.error("Cannot parse line: %s" % line)
@@ -243,39 +249,39 @@ def decode_line(line):
             "binding": match_result.group("binding"),
             "expires_ms": int(match_result.group("expires")) * 1000}
 
+
 def string_to_ms(timestamp_str):
     """
-    Convert a timestamp string to ms since the epoch.   Assumes that the
+    Convert a timestamp string to ms since the epoch.  Assumes that the
     timestamp string is UTC and is in RFC3339 format.
 
     Arguments:
       timestamp_str -- The timestamp to convert (UTC timestamp in RFC3339
                        format)
     """
-    timestamp_dt = datetime.datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M:%S.%f+00:00')
+    timestamp_dt = datetime.datetime.strptime(timestamp_str,
+                                              '%Y-%m-%dT%H:%M:%S.%f+00:00')
     timestamp_ms = int((timestamp_dt - EPOCH_DT).total_seconds() * 1000.0)
     return timestamp_ms
 
-def main():
-    # ToDo: remote this after we finish testing
-    start_time = time.time()
 
+def main():
     parser = argparse.ArgumentParser(
-        description='Verify the number of ' \
-            'subscribers and bindings that were registered at a given time ' \
-            'by parsing registration syslogs from Sprout nodes. ' \
-            'The script outputs counts of registered subscibers and bindings ' \
-            'and also writes lists of registered IMPUs and binding IDs to ' \
+        description='Verify the number of '
+            'subscribers and bindings that were registered at a given time '
+            'by parsing registration syslogs from Sprout nodes. '
+            'The script outputs counts of registered subscibers and bindings '
+            'and also writes lists of registered IMPUs and binding IDs to '
             + OUTPUT_FILE_SUBSCRIBERS + ' and ' + OUTPUT_FILE_BINDINGS +
-            ' respectively.  This script must be run on a syslog server that ' \
-            'has copies of Registration logs from all Sprout nodes in the ' \
+            ' respectively.  This script must be run on a syslog server that '
+            'has copies of Registration logs from all Sprout nodes in the '
             'deployment over the time period in question.')
     parser.add_argument('timestamp_s',
         type=int,
-        help='the time at which the number of registrations should be ' \
-             'determined.   Specicified in seconds since the epoch.')
+        help='the time at which the number of registrations should be '
+             'determined.  Specicified in seconds since the epoch.')
     parser.add_argument('logfiles_directory',
-        help='the directory in which the sprout registration logs are ' \
+        help='the directory in which the sprout registration logs are '
              'located.')
     parser.add_argument('--max_expiry',
         metavar='N (minutes)',
@@ -283,20 +289,20 @@ def main():
         action='store',
         default=60,
         type=int,
-        help='the maximum registration expiry time permitted in the ' \
-             'deployment (in minutes).  This does not need to be precise but ' \
-             'setting this value too high will ' \
-             'reduce script performance.   Setting this value too low will ' \
-             'cause the script to return inaccurate results.  Default: 60m')
+        help='the maximum registration expiry time permitted in the '
+             'deployment (in minutes).  This does not need to be precise but '
+             'setting this value too high will reduce script performance.  '
+             'Setting this value too low will cause the script to return '
+             'inaccurate results.  Default: 60m')
     parser.add_argument('--subs',
         metavar='N',
         dest='num_subs',
         action='store',
         default=1000000,
         type=int,
-        help='the approximate number of subscribers in the deployment. ' \
-             'Default 1000000.   This value is only used to optimize ' \
-             'performance, but setting it too low may cause the script to ' \
+        help='the approximate number of subscribers in the deployment. '
+             'Default 1000000.  This value is only used to optimize '
+             'performance, but setting it too low may cause the script to '
              'fail due to lack of resources.')
     parser.add_argument('--debug',
         dest='debug',
@@ -318,11 +324,11 @@ def main():
     timestamp_ms = args.timestamp_s * 1000
 
     # On a large system (e.g. 1m+ subscribers) we can't rely on being able to
-    # build up a single table of all bindings in RAM.   (1m registered
+    # build up a single table of all bindings in RAM.  (1m registered
     # subsribers would use O(1GB) of RAM).  To avoid this and to ensure that we
     # can scale to an arbitrary number of subscribers we first re-write the logs
     # into a set of "log buckets" with logs assigned to a bucket by hashing the
-    # subscriber's IMPU.   This means that all logs relating to a single
+    # subscriber's IMPU.  This means that all logs relating to a single
     # subscriber get assigned to the same bucket (meaning that the bucket can be
     # processed in isolation) whilst reducing the number of subscribers in each
     # bucket by a factor of the number of buckets.
@@ -331,7 +337,7 @@ def main():
     buckets = max(1, int(args.num_subs / 100000))
 
     # Check that the temporary directory we are going to use for our interim log
-    # files does not already exist.   If it does, prompt the user to delete it
+    # files does not already exist.  If it does, prompt the user to delete it
     # and re-run, otherwise create it.
     # WIBNI: Would be better to prompt the user and ask for confirmation that it
     # is OK for us to overwrite the existing directory.
@@ -345,10 +351,16 @@ def main():
     for bucket in range(buckets):
         os.makedirs(bucket_dir(bucket))
 
-    # ToDo: confirm file names and fixup filter appropriately.
     # Loop over all of the input log files and split them into buckets.
     print "Pre-processing log files:"
-    raw_file_list = glob.glob(os.path.join(args.logfiles_directory,'log*'))
+
+    log_filter = os.path.join(args.logfiles_directory, 'registrations*')
+    raw_file_list = glob.glob(log_filter)
+
+    if (len(raw_file_list) == 0):
+        print 'Error: No log files found matching %s' % log_filter
+        sys.exit()
+
     for fname in raw_file_list:
         if (file_is_relevant(fname, timestamp_ms, max_expiry_time_ms)):
             print "  Processing log file %s..." % fname
@@ -363,8 +375,8 @@ def main():
         with open(OUTPUT_FILE_BINDINGS, "w") as registered_bindings_fh:
             sub_fieldnames = ['IMPU']
             registered_subscriber_writer = csv.DictWriter(
-                                               registered_subscribers_fh,
-                                               fieldnames=sub_fieldnames)
+                registered_subscribers_fh,
+                fieldnames=sub_fieldnames)
             registered_subscriber_writer.writeheader()
 
             binding_fieldnames = ['IMPU',
@@ -378,7 +390,7 @@ def main():
 
             # Now run through the buckets of logs we've created one by one and
             # build up counts and lists of registered subscribers and bindings.
-            print "Processing %d buckets of logs" % buckets
+            print "Processing %d buckets of logs:" % buckets
             for bucket in range(buckets):
                 print "  -- processing bucket %d..." % bucket
                 counts = process_bucket(bucket_dir(bucket),
@@ -392,11 +404,6 @@ def main():
     print "Registered subscribers = %d" % total_registered_subs
     print "Registered bindings = %d" % total_registered_bindings
 
-    #ToDo: remove this after we finish testing.
-    end_time=time.time()
-    print "Time taken = %d" % (end_time-start_time)
 
 if __name__ == "__main__":
     main()
-
-
