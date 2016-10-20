@@ -157,6 +157,7 @@ enum OptionTypes
   OPT_DISABLE_TCP_SWITCH,
   OPT_DEFAULT_TEL_URI_TRANSLATION,
   OPT_CHRONOS_HOSTNAME,
+  OPT_CHRONOS_SPROUT_CALLBACK_URI,
   OPT_ALLOW_FALLBACK_IFCS,
 };
 
@@ -242,6 +243,7 @@ const static struct pj_getopt_option long_opt[] =
   { "sas-use-signaling-interface",  no_argument,       0, OPT_SAS_USE_SIGNALING_IF},
   { "disable-tcp-switch",           no_argument,       0, OPT_DISABLE_TCP_SWITCH},
   { "chronos-hostname",             required_argument, 0, OPT_CHRONOS_HOSTNAME},
+  { "chronos-sprout-callback-uri",  required_argument, 0, OPT_CHRONOS_SPROUT_CALLBACK_URI},
   { "allow-fallback-ifcs",          no_argument,       0, OPT_ALLOW_FALLBACK_IFCS},
   { NULL,                           0,                 0, 0}
 };
@@ -1171,6 +1173,9 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case OPT_CHRONOS_HOSTNAME:
       options->chronos_hostname = std::string(pj_optarg);
 
+    case OPT_CHRONOS_SPROUT_CALLBACK_URI:
+      options->chronos_sprout_callback_uri = std::string(pj_optarg);
+
     case OPT_LISTEN_PORT:
       options->listen_port = atoi(pj_optarg);
       break;
@@ -1991,8 +1996,15 @@ int main(int argc, char* argv[])
   }
   else
   {
+    std::string chronos_callback_uri = opt.chronos_sprout_callback_uri;
+
+    if (chronos_callback_uri == "")
+    {
+      chronos_callback_uri = opt.sprout_hostname;
+    }
+
     chronos_service = opt.chronos_hostname + ":7253";
-    chronos_callback_host = opt.sprout_hostname + ":" + port_str;
+    chronos_callback_host = chronos_callback_uri + ":" + port_str;
   }
 
   TRC_STATUS("Creating connection to Chronos %s using %s as the callback URI",

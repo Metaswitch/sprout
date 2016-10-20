@@ -151,6 +151,7 @@ struct options
   bool                                 sas_signaling_if;
   bool                                 disable_tcp_switch;
   std::string                          chronos_hostname;
+  std::string                          chronos_sprout_callback_uri;
   bool                                 allow_fallback_ifcs;
 };
 
