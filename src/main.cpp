@@ -1378,11 +1378,6 @@ int main(int argc, char* argv[])
   opt.disable_tcp_switch = false;
   opt.allow_fallback_ifcs = false;
 
-  // Initialise ENT logging before making "Started" log
-  PDLogStatic::init(argv[0]);
-
-  CL_SPROUT_STARTED.log();
-
   status = init_logging_options(argc, argv, &opt);
 
   if (status != PJ_SUCCESS)
@@ -1402,6 +1397,10 @@ int main(int argc, char* argv[])
                           opt.log_directory,
                           opt.log_level,
                           opt.log_to_file);
+
+  // We should now have a connection to syslog so we can write the started ENT
+  // log.
+  CL_SPROUT_STARTED.log();
 
   if ((opt.log_to_file) && (opt.log_directory != ""))
   {
