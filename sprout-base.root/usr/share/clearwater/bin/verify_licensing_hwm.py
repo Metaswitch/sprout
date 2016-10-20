@@ -16,14 +16,19 @@ OUTPUT_FILE_SUBSCRIBERS = 'registered_subscribers.csv'
 OUTPUT_FILE_BINDINGS = 'registered_bindings.csv'
 LOG_FILENAME = 'verify_licensing_hwm.log'
 
+# Function that returns the directory to write bucketed logs to given a bucket
+# number.
 def bucket_dir(bucket):
     return os.path.join(TEMP_DIR, "bucket" + str(bucket))
+
+LOG_REGEX = "(?P<timestamp_str>.*) Registration: USER_URI=(?P<impu>.*) " \
+    "BINDING_ID=(?P<binding>[^ ]*) CONTACT_URI.* EXPIRES=(?P<expires>\d+)"
 
 # We can't be certain that logs appear in log files on the syslog server in
 # strict chronological order.  To determine whether a log file might contain
 # logs that are relevant to the time we are interested in, we look at the
 # timestamps of the first and last logs in the file, and parse the file if they
-# are witin TIME_MARGIN_MS of being applicable.
+# are witin TIME_MARGIN_MS (10 minutes) of being applicable.
 TIME_MARGIN_MS = 10 * 60 * 1000
 
 EPOCH_DT = datetime.datetime.utcfromtimestamp(0)
@@ -57,7 +62,9 @@ def split_into_buckets(fname, bucket_dir_fn, buckets):
                 bucket = abs(hash(line_info["impu"])) % buckets
                 file_handles[bucket].write(line)
             except:
-                # We couldn't process this line.  Just skip it.
+                # We couldn't process this line.  Just skip it.   We don't need
+                # to log as the error will already have been logged by the
+                # decode function.
                 pass
 
     for bucket in file_handles:
@@ -86,9 +93,10 @@ def process_bucket(bucket_dir, subscriber_writer, binding_writer,
     # Build up information about registered bindings in a dictionary of
     # dictionaries, indexed first by IMPU and then by binding ID.
     #
-    # At the end of processing this data structure will contain a record for
-    # each binging that we've seen at least once containing:
-    # - the time that we last saw a register for this binding
+    # At the end of processing this data structure will contain a record (in
+    # fact a third level of dictionary) for each binding that we've seen at
+    # least once containing:
+    # - the time that we last saw a register/(de)register for this binding
     # - an expiry time which is 0 if the binding WAS NOT still registered at
     # the time we are interested in, and > 0 if the binding WAS registered at
     # that time.
@@ -103,15 +111,16 @@ def process_bucket(bucket_dir, subscriber_writer, binding_writer,
                     log_time_ms = string_to_ms(line_info["timestamp_str"])
                 except:
                     # Can't decode the timestamp in this log.  Skip it.
-                    logging.warning("Cannot decode timestamp in log %s from "
-                                    "file %s" % (line, fname))
+                    logging.error("Cannot decode timestamp in log %s from "
+                                  "file %s" % (line, fname))
                     continue
 
                 log_impu = line_info["impu"]
                 log_binding = line_info["binding"]
                 log_expires_ms = int(line_info["expires_ms"])
 
-                # Did this log happen before the point we're interested in?
+                # If this log happened after the time we're interested in then
+                # ignore it.
                 if (log_time_ms > time_of_interest_ms):
                     continue
 
@@ -120,18 +129,20 @@ def process_bucket(bucket_dir, subscriber_writer, binding_writer,
                 impu_record = binding_data[log_impu]
 
                 # If there is already a record for this binding that has been
-                # updated more recently than this log then ignore this log
+                # updated more recently than this log then ignore this log.
                 if ((log_binding in impu_record) and
                         (impu_record[log_binding]["updated_ms"] > log_time_ms)):
                     continue
 
                 # We now know that this log happened before the time of
                 # interest, but more recently than any information we already
-                # had for the binding.  It therefore supercedes anything that
+                # have for the binding.  It therefore supercedes anything that
                 # was already stored.
 
                 # If this is a register that expires before the time we are
-                # interested in then it's effectively a de-register...
+                # interested in then treat it like a de-register.   (We don't
+                # want to just ignore it as it might cancel out an earlier
+                # register with a longer expiry time).
                 if ((log_expires_ms > 0) and ((log_time_ms + log_expires_ms) <
                                               time_of_interest_ms)):
                     log_expires_ms = 0
@@ -216,8 +227,7 @@ def file_is_relevant(fname, time_of_interest_ms, max_expiry_time_ms):
             # interest.  See comment on TIME_MARGIN_MS.
             if ((last_line_ms + max_expiry_time_ms + TIME_MARGIN_MS) <
                     time_of_interest_ms):
-                logging.info("Skipping file %s (events too early: "
-                             "last timestamp = %d)" % (fname, last_line_ms))
+                logging.info("Skipping file %s (events too early)" % fname)
                 return False
         except:
             # Veer on the side of caution -- we failed to parse the last line,
@@ -236,10 +246,8 @@ def decode_line(line):
     Arguments:
       line -- a string containing the log to be decoded.
     """
-    regex = "(?P<timestamp_str>.*) Registration: USER_URI=(?P<impu>.*) " \
-        "BINDING_ID=(?P<binding>[^ ]*) CONTACT_URI.* EXPIRES=(?P<expires>\d+)"
 
-    match_result = re.match(regex, line)
+    match_result = re.match(LOG_REGEX, line)
     if match_result is None:
         logging.error("Cannot parse line: %s" % line)
         raise Exception()
@@ -268,21 +276,25 @@ def string_to_ms(timestamp_str):
 def main():
     parser = argparse.ArgumentParser(
         description='Verify the number of '
-            'subscribers and bindings that were registered at a given time '
-            'by parsing registration syslogs from Sprout nodes. '
+            'subscribers (IMPUs) and bindings that were registered at a given '
+            'time by parsing registration syslogs from Sprout nodes. '
             'The script outputs counts of registered subscibers and bindings '
             'and also writes lists of registered IMPUs and binding IDs to '
             + OUTPUT_FILE_SUBSCRIBERS + ' and ' + OUTPUT_FILE_BINDINGS +
             ' respectively.  This script must be run on a syslog server that '
             'has copies of Registration logs from all Sprout nodes in the '
             'deployment over the time period in question.')
+
     parser.add_argument('timestamp_s',
         type=int,
         help='the time at which the number of registrations should be '
              'determined.  Specicified in seconds since the epoch.')
+
     parser.add_argument('logfiles_directory',
         help='the directory in which the sprout registration logs are '
-             'located.')
+             'located.  Log file names are expected to all begin with the '
+             'prefix "registrations"')
+
     parser.add_argument('--max_expiry',
         metavar='N (minutes)',
         dest='max_expiry_time_m',
@@ -291,19 +303,21 @@ def main():
         type=int,
         help='the maximum registration expiry time permitted in the '
              'deployment (in minutes).  This does not need to be precise but '
-             'setting this value too high will reduce script performance.  '
-             'Setting this value too low will cause the script to return '
+             'setting this value too high will reduce script performance '
+             'whilst setting it too low will cause the script to return '
              'inaccurate results.  Default: 60m')
+
     parser.add_argument('--subs',
         metavar='N',
         dest='num_subs',
         action='store',
-        default=1000000,
+        default=5000000,
         type=int,
         help='the approximate number of subscribers in the deployment. '
-             'Default 1000000.  This value is only used to optimize '
+             'Defaults to 5000000.  This value is only used to optimize '
              'performance, but setting it too low may cause the script to '
              'fail due to lack of resources.')
+
     parser.add_argument('--debug',
         dest='debug',
         action='store_true',
@@ -311,6 +325,10 @@ def main():
 
     args = parser.parse_args()
 
+    max_expiry_time_ms = args.max_expiry_time_m * 60 * 1000
+    timestamp_ms = args.timestamp_s * 1000
+
+    # Set up logging.
     if (args.debug):
         log_level = logging.DEBUG
     else:
@@ -319,9 +337,6 @@ def main():
     logging.basicConfig(filename=LOG_FILENAME,
                         level=log_level,
                         format="%(asctime)s - %(levelname)s - %(message)s")
-
-    max_expiry_time_ms = args.max_expiry_time_m * 60 * 1000
-    timestamp_ms = args.timestamp_s * 1000
 
     # On a large system (e.g. 1m+ subscribers) we can't rely on being able to
     # build up a single table of all bindings in RAM.  (1m registered
@@ -333,12 +348,13 @@ def main():
     # processed in isolation) whilst reducing the number of subscribers in each
     # bucket by a factor of the number of buckets.
     # Calculate the number of buckets by dividing the expected number of
-    # subscribers by 10.  By default we assume 1 million subs / 10 buckets.
+    # subscribers by 10.  By default we assume 5 million subs (50 buckets).
     buckets = max(1, int(args.num_subs / 100000))
 
     # Check that the temporary directory we are going to use for our interim log
     # files does not already exist.  If it does, prompt the user to delete it
     # and re-run, otherwise create it.
+    #
     # WIBNI: Would be better to prompt the user and ask for confirmation that it
     # is OK for us to overwrite the existing directory.
     if os.path.exists(TEMP_DIR):
@@ -351,15 +367,15 @@ def main():
     for bucket in range(buckets):
         os.makedirs(bucket_dir(bucket))
 
-    # Loop over all of the input log files and split them into buckets.
-    print "Pre-processing log files:"
-
     log_filter = os.path.join(args.logfiles_directory, 'registrations*')
     raw_file_list = glob.glob(log_filter)
 
     if (len(raw_file_list) == 0):
         print 'Error: No log files found matching %s' % log_filter
         sys.exit()
+
+    # Loop over all of the input log files and split them into buckets.
+    print "Pre-processing log files:"
 
     for fname in raw_file_list:
         if (file_is_relevant(fname, timestamp_ms, max_expiry_time_ms)):
@@ -369,10 +385,11 @@ def main():
     total_registered_subs = 0
     total_registered_bindings = 0
 
-    # Open files for the lists of registered subscribers and the list of
+    # Open files for the list of registered subscribers and the list of
     # registered bindings and create CSV writers for them.
     with open(OUTPUT_FILE_SUBSCRIBERS, "w") as registered_subscribers_fh:
         with open(OUTPUT_FILE_BINDINGS, "w") as registered_bindings_fh:
+
             sub_fieldnames = ['IMPU']
             registered_subscriber_writer = csv.DictWriter(
                 registered_subscribers_fh,
@@ -401,8 +418,14 @@ def main():
                 total_registered_bindings = (total_registered_bindings +
                                              counts["binds"])
 
+    print "\n------- Results --------\n"
     print "Registered subscribers = %d" % total_registered_subs
     print "Registered bindings = %d" % total_registered_bindings
+    print "\nThe full list of registered subscribers / IMPUs is available in " \
+          "%s" % OUTPUT_FILE_SUBSCRIBERS
+    print "The full list of registered bindings is available in " \
+          "%s" % OUTPUT_FILE_BINDINGS
+    print "\n------------------------\n"
 
 
 if __name__ == "__main__":
