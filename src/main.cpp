@@ -157,7 +157,7 @@ enum OptionTypes
   OPT_DISABLE_TCP_SWITCH,
   OPT_DEFAULT_TEL_URI_TRANSLATION,
   OPT_CHRONOS_HOSTNAME,
-  OPT_CHRONOS_SPROUT_CALLBACK_URI,
+  OPT_SPROUT_CHRONOS_CALLBACK_URI,
   OPT_ALLOW_FALLBACK_IFCS,
 };
 
@@ -243,7 +243,7 @@ const static struct pj_getopt_option long_opt[] =
   { "sas-use-signaling-interface",  no_argument,       0, OPT_SAS_USE_SIGNALING_IF},
   { "disable-tcp-switch",           no_argument,       0, OPT_DISABLE_TCP_SWITCH},
   { "chronos-hostname",             required_argument, 0, OPT_CHRONOS_HOSTNAME},
-  { "chronos-sprout-callback-uri",  required_argument, 0, OPT_CHRONOS_SPROUT_CALLBACK_URI},
+  { "sprout-chronos-callback-uri",  required_argument, 0, OPT_SPROUT_CHRONOS_CALLBACK_URI},
   { "allow-fallback-ifcs",          no_argument,       0, OPT_ALLOW_FALLBACK_IFCS},
   { NULL,                           0,                 0, 0}
 };
@@ -448,6 +448,10 @@ static void usage(void)
        "     --chronos-hostname <hostname>\n"
        "                            Specify the hostname of a remote Chronos cluster. If unset the default\n"
        "                            is to use localhost, using localhost as the callback URL.\n"
+       "     --sprout-chronos-callback-uri <hostname>\n"
+       "                            Specify the sprout hostname used for Chronos callbacks. If unset \n"
+       "                            the default is to use the sprout-hostname.\n"
+       "                            Ignored if chronos-hostname is not set.\n"
        "     --allow-fallback-ifcs  If no Identity elements match for Initial Filter Criteria, use the\n"
        "                            first IFC returned as a fallback.\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
@@ -1173,8 +1177,8 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case OPT_CHRONOS_HOSTNAME:
       options->chronos_hostname = std::string(pj_optarg);
 
-    case OPT_CHRONOS_SPROUT_CALLBACK_URI:
-      options->chronos_sprout_callback_uri = std::string(pj_optarg);
+    case OPT_SPROUT_CHRONOS_CALLBACK_URI:
+      options->sprout_chronos_callback_uri = std::string(pj_optarg);
 
     case OPT_LISTEN_PORT:
       options->listen_port = atoi(pj_optarg);
@@ -1996,7 +2000,7 @@ int main(int argc, char* argv[])
   }
   else
   {
-    std::string chronos_callback_uri = opt.chronos_sprout_callback_uri;
+    std::string chronos_callback_uri = opt.sprout_chronos_callback_uri;
 
     if (chronos_callback_uri == "")
     {
