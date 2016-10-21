@@ -307,7 +307,7 @@ def string_to_ms(timestamp_str):
     """
     try:
         timestamp_dt = datetime.datetime.strptime(timestamp_str,
-                                                  '%Y-%m-%dT%H:%M:%S.%f+00.00')
+                                                  '%Y-%m-%dT%H:%M:%S.%f+00:00')
         timestamp_ms = int((timestamp_dt - EPOCH_DT).total_seconds() * 1000.0)
         return timestamp_ms
     except ValueError:
@@ -331,10 +331,14 @@ def main():
         help='the time at which the number of registrations should be '
              'determined.  Specicified in seconds since the epoch.')
 
-    parser.add_argument('logfiles_directory',
+    parser.add_argument('--log_directory',
+        metavar='name',
+        dest='log_directory',
+        action='store',
+        default='/var/log/sprout_audit/',
         help='the directory in which the sprout registration logs are '
-             'located.  Log file names are expected to all begin with the '
-             'prefix "registrations"')
+             'located.  Defaults to /var/log/sprout_audit/.  Log file names '
+             'are expected to all begin with the prefix "registrations".')
 
     parser.add_argument('--max_expiry',
         metavar='N (minutes)',
@@ -392,6 +396,8 @@ def main():
     # subscribers by 10.  By default we assume 5 million subs (50 buckets).
     buckets = max(1, int(args.num_subs / 100000))
 
+    print ""
+
     # Create a temporary directory we can use
     with TemporaryDirectory() as temp_dir:
 
@@ -399,7 +405,7 @@ def main():
         for bucket in range(buckets):
             os.makedirs(bucket_dir(bucket, temp_dir))
 
-        log_filter = os.path.join(args.logfiles_directory, 'registrations*')
+        log_filter = os.path.join(args.log_directory, 'registrations*')
         raw_file_list = glob.glob(log_filter)
 
         if (len(raw_file_list) == 0):
@@ -407,7 +413,7 @@ def main():
             sys.exit(2)
 
         # Loop over all of the input log files and split them into buckets.
-        print "\nPre-processing log files:"
+        print "Pre-processing log files..."
 
         for fname in raw_file_list:
             if (file_is_relevant(fname, timestamp_ms, max_expiry_time_ms)):
