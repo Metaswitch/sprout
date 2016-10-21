@@ -73,7 +73,7 @@ def split_into_buckets(fname, bucket_dir_fn, buckets):
 
     file_handles = {}
     for bucket in range(buckets):
-        bucket_path = os.path.join(bucket_dir_fn(bucket), fname)
+        bucket_path = os.path.join(bucket_dir_fn(bucket), os.path.basename(fname))
         file_handles[bucket] = open(bucket_path, 'wa')
 
     with open(fname, 'r') as fh:
@@ -244,6 +244,10 @@ def file_is_relevant(fname, time_of_interest_ms, max_expiry_time_ms):
             # the file that are of interest...
             logging.error("Failed to parse first line of file %s" % fname)
 
+        except StopIteration:
+            # File is empty
+            return False
+
         # Check the last line of the file.
         try:
             fh.seek(-MAX_LOG_LENGTH, 2)
@@ -303,7 +307,7 @@ def string_to_ms(timestamp_str):
     """
     try:
         timestamp_dt = datetime.datetime.strptime(timestamp_str,
-                                                  '%Y-%m-%dT%H:%M:%S.%f+00:00')
+                                                  '%Y-%m-%dT%H:%M:%S.%f+00.00')
         timestamp_ms = int((timestamp_dt - EPOCH_DT).total_seconds() * 1000.0)
         return timestamp_ms
     except ValueError:
