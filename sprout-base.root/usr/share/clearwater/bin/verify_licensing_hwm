@@ -145,8 +145,8 @@ def process_bucket(bucket_dir,
                     log_time_ms = string_to_ms(line_info["timestamp_str"])
                 except:
                     # Can't decode the timestamp in this log.  Skip it.
-                    logging.exception("Cannot decode timestamp in log %s from "
-                                      "file %s" % (line, fname))
+                    logging.error("Cannot decode timestamp in log %s from "
+                                  "file %s" % (line, fname))
                     continue
 
                 log_impu = line_info["impu"]
@@ -242,7 +242,7 @@ def file_is_relevant(fname, time_of_interest_ms, max_expiry_time_ms):
         except (LogParseException, TimestampConversionException):
             # Failed to parse the first line.  There may still be other logs in
             # the file that are of interest...
-            logging.exception("Failed to parse first line of file %s" % fname)
+            logging.error("Failed to parse first line of file %s" % fname)
 
         # Check the last line of the file.
         try:
@@ -266,7 +266,7 @@ def file_is_relevant(fname, time_of_interest_ms, max_expiry_time_ms):
         except (LogParseException, TimestampConversionException):
             # Veer on the side of caution -- we failed to parse the last line,
             # but there may be events in this file that are of interest still.
-            logging.exception("Failed to parse last line of file %s" % fname)
+            logging.error("Failed to parse last line of file %s" % fname)
 
         # Looks like at least some of the events in this file might be of
         # interest.
