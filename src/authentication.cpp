@@ -921,7 +921,8 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       {
         auth_stats_table = auth_stats_tables->sip_digest_auth_tbl;
       }
-      else if (!pj_strcmp2(&credentials->algorithm, "AKAv1-MD5"))
+      else if ((!pj_strcmp2(&credentials->algorithm, "AKAv1-MD5")) ||
+               (!pj_strcmp2(&credentials->algorithm, "AKAv2-MD5")))
       {
         auth_stats_table = auth_stats_tables->ims_aka_auth_tbl;
       }
