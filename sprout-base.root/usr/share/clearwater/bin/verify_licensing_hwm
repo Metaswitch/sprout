@@ -10,16 +10,19 @@ import argparse
 import csv
 import datetime
 import logging
+import shutil
+import functools
+import tempfile
 
-TEMP_DIR = 'tmp'
 OUTPUT_FILE_SUBSCRIBERS = 'registered_subscribers.csv'
 OUTPUT_FILE_BINDINGS = 'registered_bindings.csv'
 LOG_FILENAME = 'verify_licensing_hwm.log'
+MAX_LOG_LENGTH = 500
 
 # Function that returns the directory to write bucketed logs to given a bucket
 # number.
-def bucket_dir(bucket):
-    return os.path.join(TEMP_DIR, "bucket" + str(bucket))
+def bucket_dir(bucket, parent_directory):
+    return os.path.join(parent_directory, "bucket" + str(bucket))
 
 LOG_REGEX = "(?P<timestamp_str>.*) Registration: USER_URI=(?P<impu>.*) " \
     "BINDING_ID=(?P<binding>[^ ]*) CONTACT_URI.* EXPIRES=(?P<expires>\d+)"
@@ -32,6 +35,24 @@ LOG_REGEX = "(?P<timestamp_str>.*) Registration: USER_URI=(?P<impu>.*) " \
 TIME_MARGIN_MS = 10 * 60 * 1000
 
 EPOCH_DT = datetime.datetime.utcfromtimestamp(0)
+
+
+class LogParseException(Exception):
+    pass
+
+class TimestampConversionException(Exception):
+    pass
+
+
+class TemporaryDirectory(object):
+    """Context manager for tempfile.mkdtemp() so it's usable with "with"
+    statement."""
+    def __enter__(self):
+        self.name = tempfile.mkdtemp()
+        return self.name
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        shutil.rmtree(self.name)
 
 
 def split_into_buckets(fname, bucket_dir_fn, buckets):
@@ -52,8 +73,8 @@ def split_into_buckets(fname, bucket_dir_fn, buckets):
 
     file_handles = {}
     for bucket in range(buckets):
-        file_handles[bucket] = open(os.path.join(bucket_dir_fn(bucket), fname),
-                                    'wa')
+        bucket_path = os.path.join(bucket_dir_fn(bucket), fname)
+        file_handles[bucket] = open(bucket_path, 'wa')
 
     with open(fname, 'r') as fh:
         for line in fh:
@@ -61,7 +82,7 @@ def split_into_buckets(fname, bucket_dir_fn, buckets):
                 line_info = decode_line(line)
                 bucket = abs(hash(line_info["impu"])) % buckets
                 file_handles[bucket].write(line)
-            except:
+            except LogParseException:
                 # We couldn't process this line.  Just skip it.   We don't need
                 # to log as the error will already have been logged by the
                 # decode function.
@@ -71,12 +92,23 @@ def split_into_buckets(fname, bucket_dir_fn, buckets):
         file_handles[bucket].close()
 
 
-def process_bucket(bucket_dir, subscriber_writer, binding_writer,
+def process_bucket(bucket_dir,
+                   subscriber_writer,
+                   binding_writer,
                    time_of_interest_ms):
     """
     Takes a set of log files containing all registration logs relating to a
-    subset of IMPUs and determines which IMPUs (subscribers) / bindings were
+    subset of IMPUs and determines which subscribers / bindings were
     registered at a given time of interest.
+
+    Although we refer in various places to "subscribers" (as this is what
+    operators are interested in), what we are actually tracking here is
+    - unique registered primary IMPUs (so if Alice and Bob are "subscribers" in
+      an implicit registration set then they will only count as a single
+      registered subscriber)
+    - unique registered bindings.
+    It is also worth noting that e.g. non-registering PBXs do not get counted
+    towards either registered subscribers or bindings.
 
     Arguments:
       bucket_dir        -- the directory containing the log files to process
@@ -105,14 +137,16 @@ def process_bucket(bucket_dir, subscriber_writer, binding_writer,
         logging.debug("Processing bucket file %s" % fname)
         with open(fname, 'r') as fh:
             for line in fh:
+                # This should always succeed -- if we couldn't parse the line we
+                # would have dropped it when bucketing the logs.
                 line_info = decode_line(line)
 
                 try:
                     log_time_ms = string_to_ms(line_info["timestamp_str"])
                 except:
                     # Can't decode the timestamp in this log.  Skip it.
-                    logging.error("Cannot decode timestamp in log %s from "
-                                  "file %s" % (line, fname))
+                    logging.exception("Cannot decode timestamp in log %s from "
+                                      "file %s" % (line, fname))
                     continue
 
                 log_impu = line_info["impu"]
@@ -162,8 +196,8 @@ def process_bucket(bucket_dir, subscriber_writer, binding_writer,
         registered_impu_bindings = 0
         for binding, binding_record in impu_record.iteritems():
             if binding_record["expires_ms"] > 0:
-                registered_impu_bindings = registered_impu_bindings + 1
-                registered_bindings = registered_bindings + 1
+                registered_impu_bindings += 1
+                registered_bindings += 1
                 binding_writer.writerow({
                     'IMPU': impu,
                     'Binding ID': binding,
@@ -172,7 +206,7 @@ def process_bucket(bucket_dir, subscriber_writer, binding_writer,
         # If there was at least one registered binding then the IMPU was
         # registered.
         if registered_impu_bindings > 0:
-            registered_subs = registered_subs + 1
+            registered_subs += 1
             subscriber_writer.writerow({'IMPU': impu})
 
     return {"subs": registered_subs, "binds": registered_bindings}
@@ -202,17 +236,17 @@ def file_is_relevant(fname, time_of_interest_ms, max_expiry_time_ms):
             # Check whether the events in this file are too late to be of
             # interest.  See comment on TIME_MARGIN_MS.
             if ((first_line_ms - TIME_MARGIN_MS) > time_of_interest_ms):
-                logging.info("Skipping file %s (events too late)" % fname)
+                logging.debug("Skipping file %s (events too late)" % fname)
                 return False
 
-        except:
+        except (LogParseException, TimestampConversionException):
             # Failed to parse the first line.  There may still be other logs in
             # the file that are of interest...
-            logging.error("Failed to parse first line of file %s" % fname)
+            logging.exception("Failed to parse first line of file %s" % fname)
 
         # Check the last line of the file.
         try:
-            fh.seek(-500, 2)
+            fh.seek(-MAX_LOG_LENGTH, 2)
         except:
             # File is less than 500 bytes long -- reset the file poistion to the
             # beginning and we'll just read all of it.
@@ -229,10 +263,10 @@ def file_is_relevant(fname, time_of_interest_ms, max_expiry_time_ms):
                     time_of_interest_ms):
                 logging.info("Skipping file %s (events too early)" % fname)
                 return False
-        except:
+        except (LogParseException, TimestampConversionException):
             # Veer on the side of caution -- we failed to parse the last line,
             # but there may be events in this file that are of interest still.
-            logging.error("Failed to parse last line of file %s" % fname)
+            logging.exception("Failed to parse last line of file %s" % fname)
 
         # Looks like at least some of the events in this file might be of
         # interest.
@@ -250,7 +284,7 @@ def decode_line(line):
     match_result = re.match(LOG_REGEX, line)
     if match_result is None:
         logging.error("Cannot parse line: %s" % line)
-        raise Exception()
+        raise LogParseException()
 
     return {"timestamp_str": match_result.group("timestamp_str"),
             "impu": match_result.group("impu"),
@@ -267,10 +301,13 @@ def string_to_ms(timestamp_str):
       timestamp_str -- The timestamp to convert (UTC timestamp in RFC3339
                        format)
     """
-    timestamp_dt = datetime.datetime.strptime(timestamp_str,
-                                              '%Y-%m-%dT%H:%M:%S.%f+00:00')
-    timestamp_ms = int((timestamp_dt - EPOCH_DT).total_seconds() * 1000.0)
-    return timestamp_ms
+    try:
+        timestamp_dt = datetime.datetime.strptime(timestamp_str,
+                                                  '%Y-%m-%dT%H:%M:%S.%f+00:00')
+        timestamp_ms = int((timestamp_dt - EPOCH_DT).total_seconds() * 1000.0)
+        return timestamp_ms
+    except ValueError:
+        raise TimestampConversionException
 
 
 def main():
@@ -351,74 +388,70 @@ def main():
     # subscribers by 10.  By default we assume 5 million subs (50 buckets).
     buckets = max(1, int(args.num_subs / 100000))
 
-    # Check that the temporary directory we are going to use for our interim log
-    # files does not already exist.  If it does, prompt the user to delete it
-    # and re-run, otherwise create it.
-    #
-    # WIBNI: Would be better to prompt the user and ask for confirmation that it
-    # is OK for us to overwrite the existing directory.
-    if os.path.exists(TEMP_DIR):
-        print "Temporary directory " + TEMP_DIR + " already exists -- please " \
-              "delete before running this script."
-        sys.exit()
-    os.makedirs(TEMP_DIR)
+    # Create a temporary directory we can use
+    with TemporaryDirectory() as temp_dir:
 
-    # Make subdirectories for each of the buckets we're going to use.
-    for bucket in range(buckets):
-        os.makedirs(bucket_dir(bucket))
+        # Make subdirectories for each of the buckets we're going to use.
+        for bucket in range(buckets):
+            os.makedirs(bucket_dir(bucket, temp_dir))
 
-    log_filter = os.path.join(args.logfiles_directory, 'registrations*')
-    raw_file_list = glob.glob(log_filter)
+        log_filter = os.path.join(args.logfiles_directory, 'registrations*')
+        raw_file_list = glob.glob(log_filter)
 
-    if (len(raw_file_list) == 0):
-        print 'Error: No log files found matching %s' % log_filter
-        sys.exit()
+        if (len(raw_file_list) == 0):
+            print 'Error: No log files found matching %s' % log_filter
+            sys.exit(2)
 
-    # Loop over all of the input log files and split them into buckets.
-    print "Pre-processing log files:"
+        # Loop over all of the input log files and split them into buckets.
+        print "\nPre-processing log files:"
 
-    for fname in raw_file_list:
-        if (file_is_relevant(fname, timestamp_ms, max_expiry_time_ms)):
-            print "  Processing log file %s..." % fname
-            split_into_buckets(fname, bucket_dir, buckets)
+        for fname in raw_file_list:
+            if (file_is_relevant(fname, timestamp_ms, max_expiry_time_ms)):
+                print "  Processing log file %s..." % fname
+                split_into_buckets(fname,
+                                   functools.partial(bucket_dir,
+                                                     parent_directory=temp_dir),
+                                   buckets)
 
-    total_registered_subs = 0
-    total_registered_bindings = 0
+        total_registered_subs = 0
+        total_registered_bindings = 0
 
-    # Open files for the list of registered subscribers and the list of
-    # registered bindings and create CSV writers for them.
-    with open(OUTPUT_FILE_SUBSCRIBERS, "w") as registered_subscribers_fh:
-        with open(OUTPUT_FILE_BINDINGS, "w") as registered_bindings_fh:
+        # Open files for the list of registered subscribers and the list of
+        # registered bindings and create CSV writers for them.
+        with open(OUTPUT_FILE_SUBSCRIBERS, "w") as registered_subscribers_fh:
+            with open(OUTPUT_FILE_BINDINGS, "w") as registered_bindings_fh:
 
-            sub_fieldnames = ['IMPU']
-            registered_subscriber_writer = csv.DictWriter(
-                registered_subscribers_fh,
-                fieldnames=sub_fieldnames)
-            registered_subscriber_writer.writeheader()
+                sub_fieldnames = ['IMPU']
+                registered_subscriber_writer = csv.DictWriter(
+                    registered_subscribers_fh,
+                    fieldnames=sub_fieldnames)
+                registered_subscriber_writer.writeheader()
 
-            binding_fieldnames = ['IMPU',
-                                  'Binding ID',
-                                  'Last update',
-                                  'Expires']
-            registered_binding_writer = csv.DictWriter(
-                                            registered_bindings_fh,
-                                            fieldnames=binding_fieldnames)
-            registered_binding_writer.writeheader()
+                binding_fieldnames = ['IMPU',
+                                      'Binding ID',
+                                      'Last update',
+                                      'Expires']
+                registered_binding_writer = csv.DictWriter(
+                                                registered_bindings_fh,
+                                                fieldnames=binding_fieldnames)
+                registered_binding_writer.writeheader()
 
-            # Now run through the buckets of logs we've created one by one and
-            # build up counts and lists of registered subscribers and bindings.
-            print "Processing %d buckets of logs:" % buckets
-            for bucket in range(buckets):
-                print "  -- processing bucket %d..." % bucket
-                counts = process_bucket(bucket_dir(bucket),
-                                        registered_subscriber_writer,
-                                        registered_binding_writer,
-                                        timestamp_ms)
-                total_registered_subs = total_registered_subs + counts["subs"]
-                total_registered_bindings = (total_registered_bindings +
-                                             counts["binds"])
+                # Now run through the buckets of logs we've created one by one and
+                # build up counts and lists of registered subscribers and bindings.
+                print "\nCalculating active registrations:"
+                for bucket in range(buckets):
+                    sys.stdout.write("\r  ... %d%% complete" %
+                                     ((100 * (bucket + 1)) / buckets))
+                    sys.stdout.flush()
+                    counts = process_bucket(bucket_dir(bucket, temp_dir),
+                                            registered_subscriber_writer,
+                                            registered_binding_writer,
+                                            timestamp_ms)
+                    total_registered_subs = total_registered_subs + counts["subs"]
+                    total_registered_bindings = (total_registered_bindings +
+                                                 counts["binds"])
 
-    print "\n------- Results --------\n"
+    print "\n\n------- Results --------\n"
     print "Registered subscribers = %d" % total_registered_subs
     print "Registered bindings = %d" % total_registered_bindings
     print "\nThe full list of registered subscribers / IMPUs is available in " \
