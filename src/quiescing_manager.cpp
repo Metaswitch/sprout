@@ -161,8 +161,8 @@ void QuiescingManager::process_input(int input)
   TRC_DEBUG("The Quiescing Manager received input %s (%d) "
             "when in state %s (%d)",
             INPUT_NAMES[input], input,
-            STATE_NAMES[_state], _state);  
-  
+            STATE_NAMES[_state], _state);
+
   switch (_state)
   {
     case STATE_ACTIVE:
@@ -355,5 +355,16 @@ void QuiescingManager::unquiesce_untrusted_interface()
     // Reopen untrusted listening port.
     _conns_handler->open_untrusted_port();
   }
+}
+
+bool QuiescingManager::is_quiescing()
+{
+  if ((_state == STATE_QUIESCING_FLOWS) ||
+      (_state == STATE_QUIESCING_CONNS))
+  {
+    return true;
+  }
+
+  return false;
 }
 

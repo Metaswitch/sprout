@@ -2237,8 +2237,7 @@ int main(int argc, char* argv[])
   // If we received a TERM while we were quiescing, log that as an error.  We
   // should only receive a TERM when quiescing if something has gone wrong and
   // we have taken longer than 5 minutes to quiesce.
-  if ((quiescing_mgr->_state == QuiescingManager::STATE_QUIESCING_FLOWS) ||
-      (quiescing_mgr->_state == QuiescingManager::STATE_QUIESCING_CONNS))
+  if (quiescing_mgr->is_quiescing())
   {
     TRC_ERROR("Sprout received a TERM signal when quiescing");
   }
