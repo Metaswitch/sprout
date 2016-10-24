@@ -917,12 +917,12 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     }
     else
     {
-      if (!pj_strcmp2(&credentials->algorithm, "MD5"))
+      if (!pj_strcmp(&credentials->algorithm, &STR_MD5))
       {
         auth_stats_table = auth_stats_tables->sip_digest_auth_tbl;
       }
-      else if ((!pj_strcmp2(&credentials->algorithm, "AKAv1-MD5")) ||
-               (!pj_strcmp2(&credentials->algorithm, "AKAv2-MD5")))
+      else if ((!pj_strcmp(&credentials->algorithm, &STR_AKAV1_MD5)) ||
+               (!pj_strcmp(&credentials->algorithm, &STR_AKAV2_MD5)))
       {
         auth_stats_table = auth_stats_tables->ims_aka_auth_tbl;
       }
