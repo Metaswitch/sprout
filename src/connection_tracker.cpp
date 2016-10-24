@@ -60,7 +60,7 @@ ConnectionTracker::ConnectionTracker(
 
 ConnectionTracker::~ConnectionTracker()
 {
-  for (std::map<pjsip_transport *, pjsip_tp_state_listener_key *>::iterator 
+  for (std::map<pjsip_transport *, pjsip_tp_state_listener_key *>::iterator
                                              it = _connection_listeners.begin();
        it != _connection_listeners.end();
        ++it)
@@ -180,6 +180,8 @@ void ConnectionTracker::quiesce()
   assert(!_quiescing);
   _quiescing = PJ_TRUE;
 
+  TRC_DEBUG("Quiescing %d transactions", pjsip_tsx_layer_get_tsx_count());
+
   if (_connection_listeners.empty())
   {
     // There are no active connections, so quiescing is already complete.
@@ -191,7 +193,7 @@ void ConnectionTracker::quiesce()
     // Call shutdown on each connection. PJSIP's reference counting means a
     // connection will be closed once all transactions that use it have
     // completed.
-    for (std::map<pjsip_transport *, pjsip_tp_state_listener_key *>::iterator 
+    for (std::map<pjsip_transport *, pjsip_tp_state_listener_key *>::iterator
                                              it = _connection_listeners.begin();
          it != _connection_listeners.end();
          ++it)

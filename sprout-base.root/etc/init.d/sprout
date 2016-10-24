@@ -421,7 +421,7 @@ do_start_quiesce() {
 do_quiesce() {
         # The timeout after forever is irrelevant - start-stop-daemon requires one but it doesn't
         # actually affect processing.
-        start-stop-daemon --stop --retry QUIT/forever/10 --quiet --pidfile $PIDFILE --name $EXECNAME
+        start-stop-daemon --stop --retry QUIT/300/KILL/5 --quiet --pidfile $PIDFILE --name $EXECNAME
         return 0
 }
 
