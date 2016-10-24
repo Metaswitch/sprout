@@ -85,10 +85,10 @@ public:
   SynchronizedFSM();
   virtual ~SynchronizedFSM();
 
-protected:
   /// The state of the FSM.
   int _state;
 
+protected:
   /// Send a new input to the state machine.
   void send_input(int input);
 
@@ -201,9 +201,6 @@ public:
     _completion_handler = handler;
   }
 
-private:
-  void process_input(int input);
-
   // The quiescing manager's states and inputs.
   enum {
     STATE_ACTIVE,
@@ -211,6 +208,9 @@ private:
     STATE_QUIESCING_CONNS,
     STATE_QUIESCED,
   };
+
+private:
+  void process_input(int input);
 
   enum {
     INPUT_QUIESCE,
