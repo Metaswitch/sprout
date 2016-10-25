@@ -214,8 +214,12 @@ namespace SASEvent
 
   const int BEGIN_SPROUTLET_REQ = SPROUT_BASE + 0x0120;
   const int BEGIN_SPROUTLET_RSP = SPROUT_BASE + 0x0121;
+
+  // The "stateful proxy" logs are made by bono (the only remaining user of the
+  // stateful proxy code)
   const int BEGIN_STATEFUL_PROXY_REQ = SPROUT_BASE + 0x0122;
   const int BEGIN_STATEFUL_PROXY_RSP = SPROUT_BASE + 0x0123;
+
   const int BEGIN_AUTHENTICATION_MODULE = SPROUT_BASE + 0x0124;
   const int BEGIN_OPTIONS_MODULE = SPROUT_BASE + 0x0125;
   const int BEGIN_REGISTRAR_MODULE = SPROUT_BASE + 0x0126;
