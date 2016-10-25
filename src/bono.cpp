@@ -277,6 +277,10 @@ static pj_bool_t proxy_on_rx_request(pjsip_rx_data *rdata)
 {
   TRC_DEBUG("Proxy RX request");
 
+  // SAS log the start of processing by this module
+  SAS::Event event(get_trail(rdata), SASEvent::BEGIN_STATEFUL_PROXY_REQ, 0);
+  SAS::report_event(event);
+
   if (rdata->msg_info.msg->line.req.method.id != PJSIP_CANCEL_METHOD)
   {
     // Request is a normal transaction request.
@@ -303,6 +307,10 @@ static pj_bool_t proxy_on_rx_response(pjsip_rx_data *rdata)
   pjsip_response_addr res_addr;
   pjsip_via_hdr *hvia;
   pj_status_t status;
+
+  // SAS log the start of processing by this module
+  SAS::Event event(get_trail(rdata), SASEvent::BEGIN_STATEFUL_PROXY_RSP, 0);
+  SAS::report_event(event);
 
   // Only forward responses to INVITES
   if (rdata->msg_info.cseq->method.id == PJSIP_INVITE_METHOD)

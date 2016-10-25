@@ -1134,6 +1134,10 @@ void third_party_register_failed(const std::string& public_id,
 
 pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 {
+  // SAS log the start of processing by this module
+  SAS::Event event(get_trail(rdata), SASEvent::BEGIN_REGISTRAR_MODULE, 0);
+  SAS::report_event(event);
+
   URIClass uri_class = URIClassifier::classify_uri(rdata->msg_info.msg->line.req.uri);
   if ((rdata->tp_info.transport->local_name.port == stack_data.scscf_port) &&
       (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD) &&

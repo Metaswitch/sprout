@@ -882,6 +882,10 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
   SAS::TrailId trail = get_trail(rdata);
 
+  // SAS log the start of processing by this module
+  SAS::Event event(trail, SASEvent::BEGIN_AUTHENTICATION_MODULE, 0);
+  SAS::report_event(event);
+
   if (!needs_authentication(rdata, trail))
   {
     TRC_DEBUG("Request does not need authentication");

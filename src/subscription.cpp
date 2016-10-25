@@ -750,6 +750,10 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
 {
   SAS::TrailId trail = get_trail(rdata);
 
+  // SAS log the start of processing by this module
+  SAS::Event event(trail, SASEvent::BEGIN_SUBSCRIPTION_MODULE, 0);
+  SAS::report_event(event);
+
   if (rdata->tp_info.transport->local_name.port != stack_data.scscf_port)
   {
     // Not an S-CSCF, so don't handle SUBSCRIBEs.
