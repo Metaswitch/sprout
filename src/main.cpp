@@ -100,9 +100,11 @@ extern "C" {
 #include "exception_handler.h"
 #include "scscfsproutlet.h"
 #include "snmp_continuous_accumulator_table.h"
+#include "snmp_continuous_accumulator_by_scope_table.h"
 #include "snmp_event_accumulator_table.h"
 #include "snmp_event_accumulator_by_scope_table.h"
 #include "snmp_scalar.h"
+#include "snmp_scalar_by_scope_table.h"
 #include "snmp_counter_table.h"
 #include "snmp_counter_by_scope_table.h"
 #include "snmp_success_fail_count_table.h"
@@ -1568,11 +1570,11 @@ int main(int argc, char* argv[])
   SNMP::EventAccumulatorTable* homestead_uar_latency_table = NULL;
   SNMP::EventAccumulatorTable* homestead_lir_latency_table = NULL;
 
-  SNMP::ContinuousAccumulatorTable* token_rate_table = NULL;
-  SNMP::U32Scalar* smoothed_latency_scalar = NULL;
-  SNMP::U32Scalar* target_latency_scalar = NULL;
-  SNMP::U32Scalar* penalties_scalar = NULL;
-  SNMP::U32Scalar* token_rate_scalar = NULL;
+  SNMP::ContinuousAccumulatorByScopeTable* token_rate_table = NULL;
+  SNMP::ScalarByScopeTable* smoothed_latency_scalar = NULL;
+  SNMP::ScalarByScopeTable* target_latency_scalar = NULL;
+  SNMP::ScalarByScopeTable* penalties_scalar = NULL;
+  SNMP::ScalarByScopeTable* token_rate_scalar = NULL;
 
   SNMP::RegistrationStatsTables reg_stats_tbls;
   SNMP::RegistrationStatsTables third_party_reg_stats_tbls;
@@ -1635,16 +1637,16 @@ int main(int argc, char* argv[])
     auth_stats_tbls.non_register_auth_tbl = SNMP::SuccessFailCountTable::create("non_register_auth_success_fail_count",
                                                                                 ".1.2.826.0.1.1578918.9.3.17");
 
-    token_rate_table = SNMP::ContinuousAccumulatorTable::create("sprout_token_rate",
-                                                      ".1.2.826.0.1.1578918.9.3.27");
-    smoothed_latency_scalar = new SNMP::U32Scalar("sprout_smoothed_latency",
-                                                      ".1.2.826.0.1.1578918.9.3.28");
-    target_latency_scalar = new SNMP::U32Scalar("sprout_target_latency",
-                                                      ".1.2.826.0.1.1578918.9.3.29");
-    penalties_scalar = new SNMP::U32Scalar("sprout_penalties",
-                                                      ".1.2.826.0.1.1578918.9.3.30");
-    token_rate_scalar = new SNMP::U32Scalar("sprout_current_token_rate",
-                                                      ".1.2.826.0.1.1578918.9.3.31");
+    token_rate_table = SNMP::ContinuousAccumulatorByScopeTable::create("sprout_token_rate",
+                                                                       ".1.2.826.0.1.1578918.9.3.27");
+    smoothed_latency_scalar = SNMP::ScalarByScopeTable::create("sprout_smoothed_latency",
+                                                                ".1.2.826.0.1.1578918.9.3.28");
+    target_latency_scalar = SNMP::ScalarByScopeTable::create("sprout_target_latency",
+                                                             ".1.2.826.0.1.1578918.9.3.29");
+    penalties_scalar = SNMP::ScalarByScopeTable::create("sprout_penalties",
+                                                        ".1.2.826.0.1.1578918.9.3.30");
+    token_rate_scalar = SNMP::ScalarByScopeTable::create("sprout_current_token_rate",
+                                                         ".1.2.826.0.1.1578918.9.3.31");
   }
 
   // Create Sprout's alarm objects.
