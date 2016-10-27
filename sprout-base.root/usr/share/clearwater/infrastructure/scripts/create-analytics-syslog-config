@@ -40,22 +40,25 @@ syslog_conf_file=/etc/rsyslog.d/30-sproutanalytics.conf
 temp_file=$(mktemp sproutanalytics.syslog.XXXXXXXX)
 
 . /etc/clearwater/config
+
 if [ -n "$remote_audit_logging_server" ]; then
-  remote_syslog_audit_server_str=":msg, startswith, \"<analytics> Registration:\" @@${remote_audit_logging_server}"
+  # If a remote syslog server is configured for auditing registrations, we need
+  # an rsyslog config line for directing the correct syslogs to this server. We
+  # use a regex to forward messages that start with the correct tag and are
+  # registrations.
+  remote_syslog_audit_server_str=":msg, regex, \"<analytics>.*Registration:.*\" @@${remote_audit_logging_server}"
 fi
 
 cat > $temp_file << EOF
 \$FileCreateMode 0666
 \$umask 0000
 
-# Define a template that includes the time that Sprout reported the log in UTC
-# with milliseconds, and strip the "<analytics>" tag off the front of it.
-\$template analytics-format,"%timereported:::date-utc;date-rfc3339% %msg:11:$%\r\n"
+# Define a template that strips the "<analytics>" tag off the front of it.
+\$template analytics-format,"%msg:14:$%\r\n"
 
-:msg, startswith, "<analytics>" /var/log/sprout/analytics.log;analytics-format
-:msg, startswith, "<analytics>" stop
-
+:msg, contains, "<analytics>" /var/log/sprout/analytics.log;analytics-format
 $remote_syslog_audit_server_str
+:msg, contains, "<analytics>" stop
 
 \$FileCreateMode 0644
 EOF

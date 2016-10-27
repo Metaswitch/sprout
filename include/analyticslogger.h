@@ -48,6 +48,8 @@ public:
   AnalyticsLogger();
   ~AnalyticsLogger();
 
+  void log_with_tag_and_timestamp(char* log);
+
   void registration(const std::string& aor,
                     const std::string& binding_id,
                     const std::string& contact,

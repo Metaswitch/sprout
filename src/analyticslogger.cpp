@@ -38,6 +38,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <syslog.h>
+#include <time.h>
 
 // Common STL includes.
 #include <cassert>
@@ -48,19 +49,36 @@
 #include <queue>
 #include <string>
 
-
 #include "analyticslogger.h"
-
 
 AnalyticsLogger::AnalyticsLogger()
 {
 }
 
-
 AnalyticsLogger::~AnalyticsLogger()
 {
 }
 
+void AnalyticsLogger::log_with_tag_and_timestamp(char* log)
+{
+  // Add the current UTC time, in RFC3339 format.
+  struct timespec timespec;
+  struct tm dt;
+  clock_gettime(CLOCK_REALTIME, &timespec);
+  gmtime_r(&timespec.tv_sec, &dt);
+  char timestamp[100];
+  sprintf(timestamp,
+          "%4.4d-%2.2d-%2.2dT%2.2d:%2.2d:%2.2d.%3.3d+00:00",
+          (dt.tm_year + 1900),
+          (dt.tm_mon + 1),
+          dt.tm_mday,
+          dt.tm_hour,
+          dt.tm_min,
+          dt.tm_sec,
+          (int)(timespec.tv_nsec / 1000000));
+
+  syslog(LOG_INFO, "<analytics> %s %s", log, timestamp);
+}
 
 void AnalyticsLogger::registration(const std::string& aor,
                                    const std::string& binding_id,
@@ -68,13 +86,14 @@ void AnalyticsLogger::registration(const std::string& aor,
                                    int expires)
 {
   char buf[BUFFER_SIZE];
+
   snprintf(buf, sizeof(buf),
-           "<analytics> Registration: USER_URI=%s BINDING_ID=%s CONTACT_URI=%s EXPIRES=%d\n",
+           "Registration: USER_URI=%s BINDING_ID=%s CONTACT_URI=%s EXPIRES=%d\n",
            aor.c_str(),
            binding_id.c_str(),
            contact.c_str(),
            expires);
-  syslog(LOG_INFO, "%s", buf);
+  log_with_tag_and_timestamp(buf);
 }
 
 void AnalyticsLogger::subscription(const std::string& aor,
@@ -89,7 +108,7 @@ void AnalyticsLogger::subscription(const std::string& aor,
            subscription_id.c_str(),
            contact.c_str(),
            expires);
-  syslog(LOG_INFO, "%s", buf);
+  log_with_tag_and_timestamp(buf);
 }
 
 void AnalyticsLogger::auth_failure(const std::string& auth,
@@ -100,7 +119,7 @@ void AnalyticsLogger::auth_failure(const std::string& auth,
            "<analytics> Auth-Failure: Private Identity=%s Public Identity=%s\n",
            auth.c_str(),
            to.c_str());
-  syslog(LOG_INFO, "%s", buf);
+  log_with_tag_and_timestamp(buf);
 }
 
 
@@ -114,7 +133,7 @@ void AnalyticsLogger::call_connected(const std::string& from,
            from.c_str(),
            to.c_str(),
            call_id.c_str());
-  syslog(LOG_INFO, "%s", buf);
+  log_with_tag_and_timestamp(buf);
 }
 
 
@@ -130,7 +149,7 @@ void AnalyticsLogger::call_not_connected(const std::string& from,
            to.c_str(),
            call_id.c_str(),
            reason);
-  syslog(LOG_INFO, "%s", buf);
+  log_with_tag_and_timestamp(buf);
 }
 
 
@@ -142,6 +161,6 @@ void AnalyticsLogger::call_disconnected(const std::string& call_id,
            "<analytics> Call-Disconnected: CALL_ID=%s REASON=%d\n",
            call_id.c_str(),
            reason);
-  syslog(LOG_INFO, "%s", buf);
+  log_with_tag_and_timestamp(buf);
 }
 
