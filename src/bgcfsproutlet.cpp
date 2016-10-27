@@ -160,10 +160,22 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   else if ((uri_class == LOCAL_PHONE_NUMBER) ||
            (uri_class == GLOBAL_PHONE_NUMBER))
   {
-    // Find the downstream routes based on the domain - this only matches
-    // any wild card routing set up
-    routing_value = "";
-    bgcf_routes = _bgcf->get_route_from_domain(routing_value, trail());
+    // Try to route based on the phone number first
+    pj_str_t pj_user = PJUtils::user_from_uri(req_uri);
+    routing_value = PJUtils::pj_str_to_string(&pj_user);
+    bgcf_routes = _bgcf->get_route_from_number(routing_value, trail());
+
+    // If there are no matching routes, just route based on the domain - this
+    // only matches any wild card routing set up
+    if (bgcf_routes.empty())
+    {
+      routing_value = "";
+      bgcf_routes = _bgcf->get_route_from_domain(routing_value, trail());
+    }
+    else
+    {
+      routing_with_number = true;
+    }
   }
   else
   {
