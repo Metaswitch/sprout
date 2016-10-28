@@ -256,12 +256,12 @@ public:
   /// Set up test case.  Caller must clear host_mapping.
   static void SetUpTestCase()
   {
-    SipTest::SetUpTestCase(false);
+    SipTest::SetUpTestCase();
 
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
     _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
-    _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
+    _analytics = new AnalyticsLogger();
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
     _xdm_connection = new FakeXDMConnection();
     _sess_term_comm_tracker = new NiceMock<MockAsCommunicationTracker>();

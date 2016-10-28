@@ -2429,29 +2429,48 @@ bool PJUtils::should_update_np_data(URIClass old_uri_class,
   }
 }
 
-std::string PJUtils::get_next_routing_header(pjsip_msg* msg)
+std::string PJUtils::get_next_routing_header(const pjsip_msg* msg)
+{
+  pjsip_uri_context_e context;
+  pjsip_uri* uri = PJUtils::get_next_routing_uri(msg, &context);
+
+  return PJUtils::uri_to_string(context, uri);
+}
+
+pjsip_uri* PJUtils::get_next_routing_uri(const pjsip_msg* msg, pjsip_uri_context_e* context)
 {
   pjsip_route_hdr* route = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg,
                                                                 PJSIP_H_ROUTE,
                                                                 NULL);
+  pjsip_uri* result;
 
   if (route == NULL)
   {
-    return PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI,
-                                  msg->line.req.uri);
+    if (context)
+    {
+      *context = PJSIP_URI_IN_REQ_URI;
+    }
+
+    result = msg->line.req.uri;
   }
   else
   {
-    return PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                  route->name_addr.uri);
+    if (context)
+    {
+      *context = PJSIP_URI_IN_ROUTING_HDR;
+    }
+
+    result = route->name_addr.uri;
   }
+
+  return result;
 }
 
 // Gets the media types specified in the SDP on the message.  Currently only
 // looks for Audio and Video media types.
 //
 // @returns A set of type pjmedia_type
-std::set<pjmedia_type> PJUtils::get_media_types(pjsip_msg *msg)
+std::set<pjmedia_type> PJUtils::get_media_types(const pjsip_msg *msg)
 {
   std::set<pjmedia_type> media_types;
 
@@ -2489,5 +2508,3 @@ std::set<pjmedia_type> PJUtils::get_media_types(pjsip_msg *msg)
 
   return media_types;
 }
-
-

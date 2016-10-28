@@ -161,12 +161,14 @@ SubscriberDataManager::AoRPair* SubscriberDataManager::get_aor_data(
 ///                     should not retry.
 ///
 /// @param aor_id     The SIP Address of Record for the registration
+/// @param irs_impus  The IMPUs in the Implicit Registration Set for the AoR
 /// @param aor_pair   The registration data record.
 /// @param trail      The SAS trail
 bool SubscriberDataManager::unused_bool = false;
 
 Store::Status SubscriberDataManager::set_aor_data(
                                      const std::string& aor_id,
+                                     std::vector<std::string> irs_impus,
                                      AoRPair* aor_pair,
                                      SAS::TrailId trail,
                                      bool& all_bindings_expired,
@@ -249,7 +251,7 @@ Store::Status SubscriberDataManager::set_aor_data(
     }
 
     // Send any NOTIFYs needed
-    _notify_sender->send_notifys(aor_id, aor_pair, now, trail);
+    _notify_sender->send_notifys(aor_id, irs_impus, aor_pair, now, trail);
   }
 
   return Store::Status::OK;
@@ -1433,20 +1435,22 @@ SubscriberDataManager::NotifySender::~NotifySender()
 
 void SubscriberDataManager::NotifySender::send_notifys(
                                const std::string& aor_id,
+                               std::vector<std::string> irs_impus,
                                SubscriberDataManager::AoRPair* aor_pair,
                                int now,
                                SAS::TrailId trail)
 {
   // Iterate over the subscriptions in the original AoR, and send NOTIFYs for
   // any subscriptions that aren't in the current AoR
-  send_notifys_for_expired_subscriptions(aor_id, aor_pair, now, trail);
+  send_notifys_for_expired_subscriptions(aor_id, irs_impus, aor_pair, now, trail);
 
   // Iterate over the subscriptions in the current AoR and send NOTIFYs
-  send_notifys_for_current_subscriptions(aor_id, aor_pair, now, trail);
+  send_notifys_for_current_subscriptions(aor_id, irs_impus, aor_pair, now, trail);
 }
 
 void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions(
                                const std::string& aor_id,
+                               std::vector<std::string> irs_impus,
                                SubscriberDataManager::AoRPair* aor_pair,
                                int now,
                                SAS::TrailId trail)
@@ -1554,6 +1558,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
                                           &tdata_notify,
                                           s,
                                           aor_id,
+                                          irs_impus,
                                           aor_pair->get_orig(),
                                           binding_notify,
                                           reg_state,
@@ -1589,6 +1594,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
 
 void SubscriberDataManager::NotifySender::send_notifys_for_current_subscriptions(
                                const std::string& aor_id,
+                               std::vector<std::string> irs_impus,
                                SubscriberDataManager::AoRPair* aor_pair,
                                int now,
                                SAS::TrailId trail)
@@ -1684,6 +1690,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_current_subscriptions
                                           &tdata_notify,
                                           aor_current->second,
                                           aor_id,
+                                          irs_impus,
                                           aor_pair->get_orig(),
                                           binding_notify,
                                           NotifyUtils::RegistrationState::ACTIVE,

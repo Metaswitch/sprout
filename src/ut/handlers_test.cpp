@@ -84,11 +84,6 @@ class TestWithMockSdms : public SipTest
   MockHttpStack* stack;
   MockHSSConnection* mock_hss;
 
-  static void SetUpTestCase()
-  {
-    SipTest::SetUpTestCase(false);
-  }
-
   virtual void SetUp()
   {
     store = new MockSubscriberDataManager();
@@ -197,17 +192,27 @@ TEST_F(AoRTimeoutTasksTest, MainlineTest)
   SubscriberDataManager::AoRPair* remote_aor1 = build_aor(aor_id);
   SubscriberDataManager::AoRPair* remote_aor2 = build_aor(aor_id);
 
+  // Set up IRS IMPU list to be returned by the mocked get_registration_data call.
+  // Add a bunch of random IMPUs to this list - they should all be passed to set_aor_data.
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("tel:6505550232");
+  irs_impus.push_back(aor_id);
+  irs_impus.push_back("sip:another_user@another_domain.com");
+
   {
     InSequence s;
       EXPECT_CALL(*stack, send_reply(_, 200, _));
+      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _))
+           .WillOnce(DoAll(SetArgReferee<3>(std::vector<std::string>(irs_impus)), //IMPUs in IRS
+                           Return(HTTP_OK)));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(aor_id, aor, _, _, _, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*store, set_aor_data(aor_id, irs_impus, aor, _, _, _, _)).WillOnce(Return(Store::OK));
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote_aor1));
-      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, remote_aor1, _, _, _, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, irs_impus, remote_aor1, _, _, _, _)).WillOnce(Return(Store::OK));
       EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote_aor2));
-      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, remote_aor2, _, _, _, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, irs_impus, remote_aor2, _, _, _, _)).WillOnce(Return(Store::OK));
   }
 
   handler->run();
@@ -272,18 +277,25 @@ TEST_F(AoRTimeoutTasksTest, RemoteAoRNoBindingsTest)
   SubscriberDataManager::AoR* remote2_aor2 = new SubscriberDataManager::AoR(*remote2_aor1);
   SubscriberDataManager::AoRPair* remote2_aor_pair = new SubscriberDataManager::AoRPair(remote2_aor1, remote2_aor2);
 
+  // Set up IRS IMPU list to be returned by the mocked get_registration_data calls
+  // We'll return an empty list from the mocked get_registration_data.  We should still
+  // see our AoR in the irs_impus list passed to set_aor_data.
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back(aor_id);
+
   {
     InSequence s;
       EXPECT_CALL(*stack, send_reply(_, 200, _));
+      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _)).WillOnce(Return(HTTP_OK));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(aor_id, aor, _, _, _, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*store, set_aor_data(aor_id, irs_impus, aor, _, _, _, _)).WillOnce(Return(Store::OK));
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair));
-      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, remote1_aor_pair, _, _, _, _))
+      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, irs_impus, remote1_aor_pair, _, _, _, _))
                    .WillOnce(Return(Store::OK));
       EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair));
-      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, remote2_aor_pair, _, _, _, _))
+      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, irs_impus, remote2_aor_pair, _, _, _, _))
                    .WillOnce(Return(Store::OK));
   }
 
@@ -311,19 +323,26 @@ TEST_F(AoRTimeoutTasksTest, LocalAoRNoBindingsTest)
   SubscriberDataManager::AoRPair* remote1_aor2 = build_aor(aor_id);
   SubscriberDataManager::AoRPair* remote2_aor = build_aor(aor_id);
 
+  // Set up IRS IMPU list to be returned by the mocked get_registration_data call
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back(aor_id);
+
   {
     InSequence s;
       EXPECT_CALL(*stack, send_reply(_, 200, _));
+      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _))
+           .WillOnce(DoAll(SetArgReferee<3>(std::vector<std::string>(irs_impus)), //IMPUs in IRS
+                           Return(HTTP_OK)));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor1));
-      EXPECT_CALL(*store, set_aor_data(aor_id, aor_pair, _, _, _, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*store, set_aor_data(aor_id, irs_impus, aor_pair, _, _, _, _)).WillOnce(Return(Store::OK));
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor2));
-      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, remote1_aor2, _, _, _, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, irs_impus, remote1_aor2, _, _, _, _)).WillOnce(Return(Store::OK));
       EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor));
-      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, remote2_aor, _, _, _, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, irs_impus, remote2_aor, _, _, _, _)).WillOnce(Return(Store::OK));
   }
 
   handler->run();
@@ -359,21 +378,28 @@ TEST_F(AoRTimeoutTasksTest, NoBindingsTest)
   SubscriberDataManager::AoR* remote2_aor4 = new SubscriberDataManager::AoR(*remote2_aor3);
   SubscriberDataManager::AoRPair* remote2_aor_pair2 = new SubscriberDataManager::AoRPair(remote2_aor3, remote2_aor4);
 
+  // Set up IRS IMPU list to be returned by the mocked get_registration_data call
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back(aor_id);
+
   {
     InSequence s;
       EXPECT_CALL(*stack, send_reply(_, 200, _));
+      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _))
+           .WillOnce(DoAll(SetArgReferee<3>(std::vector<std::string>(irs_impus)), //IMPUs in IRS
+                           Return(HTTP_OK)));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair1));
       EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair1));
-      EXPECT_CALL(*store, set_aor_data(aor_id, aor_pair, _, _, _, _)).WillOnce(DoAll(SetArgReferee<3>(true), Return(Store::OK)));
+      EXPECT_CALL(*store, set_aor_data(aor_id, irs_impus, aor_pair, _, _, _, _)).WillOnce(DoAll(SetArgReferee<4>(true), Return(Store::OK)));
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair2));
-      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, remote1_aor_pair2, _, _, _, _)).WillOnce(DoAll(SetArgReferee<3>(true), Return(Store::OK)));
+      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, irs_impus, remote1_aor_pair2, _, _, _, _)).WillOnce(DoAll(SetArgReferee<4>(true), Return(Store::OK)));
       EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair2));
-      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, remote2_aor_pair2, _, _, _, _)).WillOnce(DoAll(SetArgReferee<3>(true), Return(Store::OK)));
+      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, irs_impus, remote2_aor_pair2, _, _, _, _)).WillOnce(DoAll(SetArgReferee<4>(true), Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(aor_id, "", HSSConnection::DEREG_TIMEOUT, 0));
   }
 
@@ -395,17 +421,24 @@ TEST_F(AoRTimeoutTasksTest, NullAoRTest)
   SubscriberDataManager::AoRPair* remote1_aor_pair = new SubscriberDataManager::AoRPair(aor, aor);
   SubscriberDataManager::AoRPair* remote2_aor_pair = new SubscriberDataManager::AoRPair(aor, aor);
 
+  // Set up IRS IMPU list to be returned by the mocked get_registration_data call
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back(aor_id);
+
   {
     InSequence s;
       EXPECT_CALL(*stack, send_reply(_, 200, _));
+      EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _))
+           .WillOnce(DoAll(SetArgReferee<3>(std::vector<std::string>(irs_impus)), //IMPUs in IRS
+                           Return(HTTP_OK)));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
-      EXPECT_CALL(*store, set_aor_data(aor_id, _, _, _, _, _)).Times(0);
+      EXPECT_CALL(*store, set_aor_data(aor_id, _, _, _, _, _, _)).Times(0);
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair));
-      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, _, _, _, _, _)).Times(0);
+      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, irs_impus, _, _, _, _, _)).Times(0);
       EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair));
-      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, _, _, _, _, _)).Times(0);
+      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, irs_impus, _, _, _, _, _)).Times(0);
   }
 
   handler->run();
@@ -424,11 +457,6 @@ class AoRTimeoutTasksMockStoreTest : public SipTest
   AoRTimeoutTask::Config* chronos_config;
 
   AoRTimeoutTask* handler;
-
-  static void SetUpTestCase()
-  {
-    SipTest::SetUpTestCase(false);
-  }
 
   void SetUp()
   {
@@ -459,8 +487,13 @@ TEST_F(AoRTimeoutTasksMockStoreTest, SubscriberDataManagerWritesFail)
   SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR("sip:6505550231@homedomain");
   SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
   SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+
+  // Set up IRS IMPU list to be returned by the mocked get_registration_data call
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("sip:6505550231@homedomain");
+
   EXPECT_CALL(*store, get_aor_data(_, _)).WillOnce(Return(aor_pair));
-  EXPECT_CALL(*store, set_aor_data(_, _, _, _, _, _)).WillOnce(Return(Store::ERROR));
+  EXPECT_CALL(*store, set_aor_data(_, irs_impus, _, _, _, _, _)).WillOnce(Return(Store::ERROR));
 
   // Parse and handle the request
   std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"notavalidID\"}";
@@ -483,7 +516,8 @@ class DeregistrationTaskTest : public SipTest
 
   static void SetUpTestCase()
   {
-    SipTest::SetUpTestCase(false);
+    SipTest::SetUpTestCase();
+    SipTest::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
   }
 
   void SetUp()
@@ -492,7 +526,6 @@ class DeregistrationTaskTest : public SipTest
     _httpstack = new MockHttpStack();
     _subscriber_data_manager = new MockSubscriberDataManager();
     _hss = new FakeHSSConnection();
-    stack_data.scscf_uri = pj_str("sip:all.the.sprouts:5058;transport=TCP");
   }
 
   void TearDown()
@@ -535,7 +568,7 @@ class DeregistrationTaskTest : public SipTest
       if (aors[ii] != NULL)
       {
         // Write the information to the local store
-        EXPECT_CALL(*_subscriber_data_manager, set_aor_data(aor_ids[ii], _, _, _, _, _)).WillOnce(Return(Store::OK));
+        EXPECT_CALL(*_subscriber_data_manager, set_aor_data(aor_ids[ii], _, _, _, _, _, _)).WillOnce(Return(Store::OK));
       }
     }
   }
@@ -544,6 +577,28 @@ class DeregistrationTaskTest : public SipTest
 // Mainline case
 TEST_F(DeregistrationTaskTest, MainlineTest)
 {
+  // Set HSS result
+  _hss->set_impu_result("sip:6505550231@homedomain", "", HSSConnection::STATE_REGISTERED,
+                              "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                              "  <InitialFilterCriteria>\n"
+                              "    <Priority>1</Priority>\n"
+                              "    <TriggerPoint>\n"
+                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                              "      <SPT>\n"
+                              "        <ConditionNegated>0</ConditionNegated>\n"
+                              "        <Group>0</Group>\n"
+                              "        <Method>REGISTER</Method>\n"
+                              "        <Extension></Extension>\n"
+                              "      </SPT>\n"
+                              "    </TriggerPoint>\n"
+                              "    <ApplicationServer>\n"
+                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                              "      <DefaultHandling>1</DefaultHandling>\n"
+                              "    </ApplicationServer>\n"
+                              "  </InitialFilterCriteria>\n"
+                              "</ServiceProfile></IMSSubscription>");
+
   // Build the request
   std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231\"}]}";
   build_dereg_request(body);
@@ -570,6 +625,7 @@ TEST_F(DeregistrationTaskTest, MainlineTest)
   SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
   std::vector<std::string> aor_ids = {aor_id};
   std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair};
+
   expect_sdm_updates(aor_ids, aors);
 
   // The IMPI is also deleted.
@@ -580,6 +636,8 @@ TEST_F(DeregistrationTaskTest, MainlineTest)
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
   _task->run();
+
+  _hss->flush_all();
 }
 
 // Test where there are multiple pairs of AoRs and Private IDs and single AoRs
@@ -608,6 +666,7 @@ TEST_F(DeregistrationTaskTest, AoRPrivateIdPairsTest)
   SubscriberDataManager::AoRPair* aor_pair_4 = new SubscriberDataManager::AoRPair(aor_4, aor_44);
   std::vector<std::string> aor_ids = {aor_id_1, aor_id_2, aor_id_3, aor_id_4};
   std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair_1, aor_pair_2, aor_pair_3, aor_pair_4};
+
   expect_sdm_updates(aor_ids, aors);
 
   // Run the task
@@ -627,6 +686,7 @@ TEST_F(DeregistrationTaskTest, SubscriberDataManagerFailureTest)
   SubscriberDataManager::AoRPair* aor_pair = NULL;
   std::vector<std::string> aor_ids = {aor_id};
   std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair};
+
   expect_sdm_updates(aor_ids, aors);
 
   // Run the task
@@ -651,6 +711,7 @@ TEST_F(DeregistrationTaskTest, InvalidIMPUTest)
   SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
   std::vector<std::string> aor_ids = {aor_id};
   std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair};
+
   expect_sdm_updates(aor_ids, aors);
 
   // Run the task
@@ -714,9 +775,8 @@ TEST_F(DeregistrationTaskTest, SubscriberDataManagerWritesFail)
   SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR("sip:6505550231@homedomain");
   SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
   SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
-
   EXPECT_CALL(*_subscriber_data_manager, get_aor_data(_,  _)).WillOnce(Return(aor_pair));
-  EXPECT_CALL(*_subscriber_data_manager, set_aor_data(_, _, _, _, _, _)).WillOnce(Return(Store::ERROR));
+  EXPECT_CALL(*_subscriber_data_manager, set_aor_data(_, _, _, _, _, _, _)).WillOnce(Return(Store::ERROR));
 
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 500, _));
@@ -742,6 +802,7 @@ TEST_F(DeregistrationTaskTest, ImpiNotClearedWhenBindingNotDeregistered)
   SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
   std::vector<std::string> aor_ids = {aor_id};
   std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair};
+
   expect_sdm_updates(aor_ids, aors);
 
   // Nothing is deleted from the IMPI store.
@@ -771,6 +832,7 @@ TEST_F(DeregistrationTaskTest, ImpiClearedWhenBindingUnconditionallyDeregistered
   SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
   std::vector<std::string> aor_ids = {aor_id};
   std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair};
+
   expect_sdm_updates(aor_ids, aors);
 
   // The corresponding IMPI is also deleted.
@@ -785,6 +847,29 @@ TEST_F(DeregistrationTaskTest, ImpiClearedWhenBindingUnconditionallyDeregistered
 
 TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
 {
+  // Set HSS result
+  _hss->set_impu_result("sip:6505550231@homedomain", "", HSSConnection::STATE_REGISTERED,
+                              "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                              "  <InitialFilterCriteria>\n"
+                              "    <Priority>1</Priority>\n"
+                              "    <TriggerPoint>\n"
+                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                              "      <SPT>\n"
+                              "        <ConditionNegated>0</ConditionNegated>\n"
+                              "        <Group>0</Group>\n"
+                              "        <Method>REGISTER</Method>\n"
+                              "        <Extension></Extension>\n"
+                              "      </SPT>\n"
+                              "    </TriggerPoint>\n"
+                              "    <ApplicationServer>\n"
+                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                              "      <DefaultHandling>1</DefaultHandling>\n"
+                              "    </ApplicationServer>\n"
+                              "  </InitialFilterCriteria>\n"
+                              "</ServiceProfile></IMSSubscription>");
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+
   // Build the request
   std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505550231@homedomain\"}, {\"primary-impu\": \"sip:6505550232@homedomain\"}]}";
   build_dereg_request(body);
@@ -838,6 +923,19 @@ TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
   _task->run();
+
+  // Expect a 3rd-party deregister to be sent to the AS in the iFCs
+  ASSERT_EQ(1, txdata_count());
+  // REGISTER passed on to AS
+  pjsip_msg* out = current_txdata()->msg;
+  ReqMatcher r1("REGISTER");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS.expect_target(current_txdata(), false);
+  inject_msg(respond_to_current_txdata(200));
+  free_txdata();
+
+  _hss->flush_all();
 }
 
 TEST_F(DeregistrationTaskTest, CannotFindImpiToDelete)
@@ -956,11 +1054,6 @@ class AuthTimeoutTest : public SipTest
   AuthTimeoutTask::Config* chronos_config;
 
   AuthTimeoutTask* handler;
-
-  static void SetUpTestCase()
-  {
-    SipTest::SetUpTestCase(false);
-  }
 
   void SetUp()
   {
@@ -1420,12 +1513,12 @@ class DeleteImpuTaskTest : public TestWithMockSdms
   static void SetUpTestCase()
   {
     TestWithMockSdms::SetUpTestCase();
+    TestWithMockSdms::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
   }
 
   void SetUp()
   {
     TestWithMockSdms::SetUp();
-    stack_data.scscf_uri = pj_str("sip:all.the.sprouts:5058;transport=TCP");
   }
 
   void TearDown()
@@ -1474,8 +1567,8 @@ TEST_F(DeleteImpuTaskTest, Mainline)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, EmptyAoR(), _, _, _, _))
-        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings are expired.
+      EXPECT_CALL(*store, set_aor_data(impu, _, EmptyAoR(), _, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings are expired.
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(impu, _, "dereg-admin", _, _, _))
         .WillOnce(Return(200));
@@ -1497,8 +1590,8 @@ TEST_F(DeleteImpuTaskTest, StoreFailure)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _, _))
-        .WillOnce(DoAll(SetArgReferee<3>(false), // Fail to expire bindings.
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<4>(false), // Fail to expire bindings.
                         Return(Store::ERROR)));
       EXPECT_CALL(*stack, send_reply(_, 500, _));
   }
@@ -1518,8 +1611,8 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith404)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _, _))
-        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(impu, _,_, _, _, _))
         .WillOnce(Return(404));
@@ -1541,8 +1634,8 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith5xx)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _, _))
-        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(impu, _,_, _, _, _))
         .WillOnce(Return(500));
@@ -1564,8 +1657,8 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith4xx)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _, _))
-        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(impu, _,_, _, _, _))
         .WillOnce(Return(400));
@@ -1588,15 +1681,15 @@ TEST_F(DeleteImpuTaskTest, WritingToRemoteStores)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, EmptyAoR(), _, _, _, _))
-        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
+      EXPECT_CALL(*store, set_aor_data(impu, _, EmptyAoR(), _, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(impu, _,_, _, _, _))
         .WillOnce(Return(200));
 
       EXPECT_CALL(*remote_store1, get_aor_data(impu, _)).WillOnce(Return(remote_aor));
-      EXPECT_CALL(*remote_store1, set_aor_data(impu, EmptyAoR(), _, _, _, _))
-        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
+      EXPECT_CALL(*remote_store1, set_aor_data(impu, _, EmptyAoR(), _, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
                         Return(Store::OK)));
 
       EXPECT_CALL(*stack, send_reply(_, 200, _));

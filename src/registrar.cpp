@@ -217,6 +217,7 @@ bool get_private_id(pjsip_rx_data* rdata, std::string& id)
 SubscriberDataManager::AoRPair* write_to_store(
                    SubscriberDataManager* primary_sdm,         ///<store to write to
                    std::string aor,                            ///<address of record to write to
+                   std::vector<std::string> irs_impus,         ///<IMPUs in Implicit Registration Set
                    pjsip_rx_data* rdata,                       ///<received message to read headers from
                    int now,                                    ///<time now
                    int& expiry,                                ///<[out] longest expiry time
@@ -435,6 +436,7 @@ SubscriberDataManager::AoRPair* write_to_store(
     if (changed_bindings > 0)
     {
       set_rc = primary_sdm->set_aor_data(aor,
+                                         irs_impus,
                                          aor_pair,
                                          trail,
                                          all_bindings_expired);
@@ -737,6 +739,7 @@ void process_register_request(pjsip_rx_data* rdata)
   SubscriberDataManager::AoRPair* aor_pair =
                                   write_to_store(sdm,
                                                 aor,
+                                                uris,
                                                 rdata,
                                                 now,
                                                 expiry,
@@ -764,6 +767,7 @@ void process_register_request(pjsip_rx_data* rdata)
         SubscriberDataManager::AoRPair* remote_aor_pair =
           write_to_store(*it,
                          aor,
+                         uris,
                          rdata,
                          now,
                          tmp_expiry,
@@ -1130,6 +1134,10 @@ void third_party_register_failed(const std::string& public_id,
 
 pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 {
+  // SAS log the start of processing by this module
+  SAS::Event event(get_trail(rdata), SASEvent::BEGIN_REGISTRAR_MODULE, 0);
+  SAS::report_event(event);
+
   URIClass uri_class = URIClassifier::classify_uri(rdata->msg_info.msg->line.req.uri);
   if ((rdata->tp_info.transport->local_name.port == stack_data.scscf_port) &&
       (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD) &&
@@ -1170,11 +1178,13 @@ pj_status_t init_registrar(SubscriberDataManager* reg_sdm,
 
   // Construct a Service-Route header pointing at the S-CSCF ready to be added
   // to REGISTER 200 OK response.
-  pjsip_sip_uri* service_route_uri = (pjsip_sip_uri*)
-                        pjsip_parse_uri(stack_data.pool,
-                                        stack_data.scscf_uri.ptr,
-                                        stack_data.scscf_uri.slen,
-                                        0);
+  pjsip_sip_uri* service_route_uri = NULL;
+
+  if (stack_data.scscf_uri != NULL)
+  {
+    service_route_uri = (pjsip_sip_uri*) pjsip_uri_clone(stack_data.pool, stack_data.scscf_uri);
+  }
+
   if (service_route_uri != NULL)
   {
     service_route_uri->lr_param = 1;
@@ -1196,8 +1206,8 @@ pj_status_t init_registrar(SubscriberDataManager* reg_sdm,
   else
   {
     // LCOV_EXCL_START - Start up failures not tested in UT
-    TRC_ERROR("Unable to set up Service-Route header for the registrar from %s",
-              stack_data.scscf_uri);
+    TRC_ERROR("Unable to set up Service-Route header for the registrar from %.*s",
+              stack_data.scscf_uri_str.slen, stack_data.scscf_uri_str.ptr);
     status = PJ_EINVAL;
     // LCOV_EXCL_STOP
   }

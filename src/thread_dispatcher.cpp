@@ -221,6 +221,10 @@ static int worker_thread(void* p)
 
 static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
 {
+  // SAS log the start of processing by this module
+  SAS::Event event(get_trail(rdata), SASEvent::BEGIN_THREAD_DISPATCHER, 0);
+  SAS::report_event(event);
+
   // Check that the worker threads are not all deadlocked.
   if (rx_msg_q.is_deadlocked())
   {

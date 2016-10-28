@@ -145,7 +145,7 @@ const pj_str_t SIP_REASON_ADDR_INCOMPLETE = pj_str((char*)"Address Incomplete");
 
 /// Constants for generating notify bodies.
 
-//MINE
+// MIME
 const pj_str_t STR_MIME_TYPE = pj_str((char*)"application");
 const pj_str_t STR_MIME_SUBTYPE = pj_str((char*)"reginfo+xml");
 

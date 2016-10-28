@@ -168,8 +168,7 @@ public:
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
-
-    stack_data.scscf_uri = pj_str("sip:all.the.sprout.nodes:5058;transport=TCP");
+    SipTest::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
 
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
@@ -177,7 +176,7 @@ public:
     _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
     _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, false);
     _remote_sdms = {_remote_sdm};
-    _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
+    _analytics = new AnalyticsLogger();
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_registrar(_sdm,
@@ -518,8 +517,7 @@ public:
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
-
-    stack_data.scscf_uri = pj_str("sip:all.the.sprout.nodes:5058;transport=TCP");
+    SipTest::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
 
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
@@ -529,7 +527,7 @@ public:
     _remote_sdm_no_bindings = new SDMNoBindings((Store*)_remote_data_store_no_bindings, _chronos_connection, false);
     _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, false);
     _remote_sdms = {_remote_sdm_no_bindings, _remote_sdm};
-    _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
+    _analytics = new AnalyticsLogger();
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_registrar(_sdm,
@@ -2407,7 +2405,9 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   int now = time(NULL);
   s1->_expires = now + 300;
 
-  pj_status_t rc = _sdm->set_aor_data(aor, aor_pair, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back(aor);
+  pj_status_t rc = _sdm->set_aor_data(aor, irs_impus, aor_pair, 0);
   EXPECT_TRUE(rc);
   delete aor_pair; aor_pair = NULL;
 
@@ -2491,7 +2491,9 @@ TEST_F(RegistrarTest, NoNotifyToUnregisteredUser)
   int now = time(NULL);
   s1->_expires = now + 300;
 
-  pj_status_t rc = _sdm->set_aor_data(aor, aor_pair, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back(aor);
+  pj_status_t rc = _sdm->set_aor_data(aor, irs_impus, aor_pair, 0);
   EXPECT_TRUE(rc);
   delete aor_pair; aor_pair = NULL;
 
@@ -2546,7 +2548,9 @@ TEST_F(RegistrarTest, MultipleRegistrationsWithSubscription)
   int now = time(NULL);
   s1->_expires = now + 300;
 
-  pj_status_t rc = _sdm->set_aor_data(aor, aor_pair, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back(aor);
+  pj_status_t rc = _sdm->set_aor_data(aor, irs_impus, aor_pair, 0);
   EXPECT_TRUE(rc);
   delete aor_pair; aor_pair = NULL;
   ASSERT_EQ(1, txdata_count());
@@ -2589,7 +2593,7 @@ public:
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
-    stack_data.scscf_uri = pj_str("sip:all.the.sprout.nodes:5058;transport=TCP");
+    SipTest::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
   }
 
   void SetUp()
@@ -2597,7 +2601,7 @@ public:
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new MockStore();
     _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
-    _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
+    _analytics = new AnalyticsLogger();
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_registrar(_sdm,
