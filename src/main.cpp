@@ -100,9 +100,13 @@ extern "C" {
 #include "exception_handler.h"
 #include "scscfsproutlet.h"
 #include "snmp_continuous_accumulator_table.h"
+#include "snmp_continuous_accumulator_by_scope_table.h"
 #include "snmp_event_accumulator_table.h"
+#include "snmp_event_accumulator_by_scope_table.h"
 #include "snmp_scalar.h"
+#include "snmp_scalar_by_scope_table.h"
 #include "snmp_counter_table.h"
+#include "snmp_counter_by_scope_table.h"
 #include "snmp_success_fail_count_table.h"
 #include "snmp_agent.h"
 #include "ralf_processor.h"
@@ -1550,10 +1554,10 @@ int main(int argc, char* argv[])
     snmp_setup("sprout");
   }
 
-  SNMP::EventAccumulatorTable* latency_table;
-  SNMP::EventAccumulatorTable* queue_size_table;
-  SNMP::CounterTable* requests_counter;
-  SNMP::CounterTable* overload_counter;
+  SNMP::EventAccumulatorByScopeTable* latency_table;
+  SNMP::EventAccumulatorByScopeTable* queue_size_table;
+  SNMP::CounterByScopeTable* requests_counter;
+  SNMP::CounterByScopeTable* overload_counter;
 
   SNMP::IPCountTable* homestead_cxn_count = NULL;
 
@@ -1563,11 +1567,11 @@ int main(int argc, char* argv[])
   SNMP::EventAccumulatorTable* homestead_uar_latency_table = NULL;
   SNMP::EventAccumulatorTable* homestead_lir_latency_table = NULL;
 
-  SNMP::ContinuousAccumulatorTable* token_rate_table = NULL;
-  SNMP::U32Scalar* smoothed_latency_scalar = NULL;
-  SNMP::U32Scalar* target_latency_scalar = NULL;
-  SNMP::U32Scalar* penalties_scalar = NULL;
-  SNMP::U32Scalar* token_rate_scalar = NULL;
+  SNMP::ContinuousAccumulatorByScopeTable* token_rate_table = NULL;
+  SNMP::ScalarByScopeTable* smoothed_latency_scalar = NULL;
+  SNMP::ScalarByScopeTable* target_latency_scalar = NULL;
+  SNMP::ScalarByScopeTable* penalties_scalar = NULL;
+  SNMP::ScalarByScopeTable* token_rate_scalar = NULL;
 
   SNMP::RegistrationStatsTables reg_stats_tbls;
   SNMP::RegistrationStatsTables third_party_reg_stats_tbls;
@@ -1575,25 +1579,25 @@ int main(int argc, char* argv[])
 
   if (opt.pcscf_enabled)
   {
-    latency_table = SNMP::EventAccumulatorTable::create("bono_latency",
-                                                   ".1.2.826.0.1.1578918.9.2.2");
-    queue_size_table = SNMP::EventAccumulatorTable::create("bono_queue_size",
-                                                      ".1.2.826.0.1.1578918.9.2.6");
-    requests_counter = SNMP::CounterTable::create("bono_incoming_requests",
-                                                  ".1.2.826.0.1.1578918.9.2.4");
-    overload_counter = SNMP::CounterTable::create("bono_rejected_overload",
-                                                  ".1.2.826.0.1.1578918.9.2.5");
+    latency_table = SNMP::EventAccumulatorByScopeTable::create("bono_latency",
+                                                               ".1.2.826.0.1.1578918.9.2.2");
+    queue_size_table = SNMP::EventAccumulatorByScopeTable::create("bono_queue_size",
+                                                                  ".1.2.826.0.1.1578918.9.2.6");
+    requests_counter = SNMP::CounterByScopeTable::create("bono_incoming_requests",
+                                                         ".1.2.826.0.1.1578918.9.2.4");
+    overload_counter = SNMP::CounterByScopeTable::create("bono_rejected_overload",
+                                                         ".1.2.826.0.1.1578918.9.2.5");
   }
   else
   {
-    latency_table = SNMP::EventAccumulatorTable::create("sprout_latency",
-                                                   ".1.2.826.0.1.1578918.9.3.1");
-    queue_size_table = SNMP::EventAccumulatorTable::create("sprout_queue_size",
-                                                      ".1.2.826.0.1.1578918.9.3.8");
-    requests_counter = SNMP::CounterTable::create("sprout_incoming_requests",
-                                                  ".1.2.826.0.1.1578918.9.3.6");
-    overload_counter = SNMP::CounterTable::create("sprout_rejected_overload",
-                                                  ".1.2.826.0.1.1578918.9.3.7");
+    latency_table = SNMP::EventAccumulatorByScopeTable::create("sprout_latency",
+                                                               ".1.2.826.0.1.1578918.9.3.1");
+    queue_size_table = SNMP::EventAccumulatorByScopeTable::create("sprout_queue_size",
+                                                                  ".1.2.826.0.1.1578918.9.3.8");
+    requests_counter = SNMP::CounterByScopeTable::create("sprout_incoming_requests",
+                                                         ".1.2.826.0.1.1578918.9.3.6");
+    overload_counter = SNMP::CounterByScopeTable::create("sprout_rejected_overload",
+                                                         ".1.2.826.0.1.1578918.9.3.7");
 
     homestead_cxn_count = SNMP::IPCountTable::create("sprout_homestead_cxn_count",
                                                      ".1.2.826.0.1.1578918.9.3.3.1");
@@ -1630,16 +1634,16 @@ int main(int argc, char* argv[])
     auth_stats_tbls.non_register_auth_tbl = SNMP::SuccessFailCountTable::create("non_register_auth_success_fail_count",
                                                                                 ".1.2.826.0.1.1578918.9.3.17");
 
-    token_rate_table = SNMP::ContinuousAccumulatorTable::create("sprout_token_rate",
-                                                      ".1.2.826.0.1.1578918.9.3.27");
-    smoothed_latency_scalar = new SNMP::U32Scalar("sprout_smoothed_latency",
-                                                      ".1.2.826.0.1.1578918.9.3.28");
-    target_latency_scalar = new SNMP::U32Scalar("sprout_target_latency",
-                                                      ".1.2.826.0.1.1578918.9.3.29");
-    penalties_scalar = new SNMP::U32Scalar("sprout_penalties",
-                                                      ".1.2.826.0.1.1578918.9.3.30");
-    token_rate_scalar = new SNMP::U32Scalar("sprout_current_token_rate",
-                                                      ".1.2.826.0.1.1578918.9.3.31");
+    token_rate_table = SNMP::ContinuousAccumulatorByScopeTable::create("sprout_token_rate",
+                                                                       ".1.2.826.0.1.1578918.9.3.27");
+    smoothed_latency_scalar = SNMP::ScalarByScopeTable::create("sprout_smoothed_latency",
+                                                                ".1.2.826.0.1.1578918.9.3.28");
+    target_latency_scalar = SNMP::ScalarByScopeTable::create("sprout_target_latency",
+                                                             ".1.2.826.0.1.1578918.9.3.29");
+    penalties_scalar = SNMP::ScalarByScopeTable::create("sprout_penalties",
+                                                        ".1.2.826.0.1.1578918.9.3.30");
+    token_rate_scalar = SNMP::ScalarByScopeTable::create("sprout_current_token_rate",
+                                                         ".1.2.826.0.1.1578918.9.3.31");
   }
 
   // Create Sprout's alarm objects.

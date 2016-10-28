@@ -75,6 +75,7 @@ extern "C" {
 #include "sprout_pd_definitions.h"
 #include "exception_handler.h"
 #include "snmp_event_accumulator_table.h"
+#include "snmp_event_accumulator_by_scope_table.h"
 
 static std::vector<pj_thread_t*> worker_threads;
 
@@ -93,9 +94,9 @@ eventq<struct rx_msg_qe> rx_msg_q;
 static const int MSG_Q_DEADLOCK_TIME = 4000;
 
 static int num_worker_threads = 1;
-static SNMP::EventAccumulatorTable* latency_table = NULL;
+static SNMP::EventAccumulatorByScopeTable* latency_table = NULL;
 static LoadMonitor* load_monitor = NULL;
-static SNMP::EventAccumulatorTable* queue_size_table = NULL;
+static SNMP::EventAccumulatorByScopeTable* queue_size_table = NULL;
 static ExceptionHandler* exception_handler = NULL;
 
 static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata);
@@ -272,8 +273,8 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
 }
 
 pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
-                                   SNMP::EventAccumulatorTable* latency_table_arg,
-                                   SNMP::EventAccumulatorTable* queue_size_table_arg,
+                                   SNMP::EventAccumulatorByScopeTable* latency_table_arg,
+                                   SNMP::EventAccumulatorByScopeTable* queue_size_table_arg,
                                    LoadMonitor* load_monitor_arg,
                                    ExceptionHandler* exception_handler_arg)
 {
