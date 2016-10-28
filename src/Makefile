@@ -95,7 +95,6 @@ sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_success_fail_count_table.cpp \
                   snmp_success_fail_count_by_request_type_table.cpp \
                   snmp_event_accumulator_table.cpp \
-                  pdlog.cpp \
                   main.cpp
 
 sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
