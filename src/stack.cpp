@@ -152,13 +152,13 @@ static pj_bool_t quiescing = PJ_FALSE;
 
 extern void set_quiescing_true()
 {
-  TRC_DEBUG("Setting quiescing = PJ_TRUE");
+  TRC_STATUS("Setting quiescing = PJ_TRUE");
   quiescing = PJ_TRUE;
 }
 
 extern void set_quiescing_false()
 {
-  TRC_DEBUG("Setting quiescing = PJ_FALSE");
+  TRC_STATUS("Setting quiescing = PJ_FALSE");
   quiescing = PJ_FALSE;
 }
 
@@ -170,7 +170,7 @@ static int pjsip_thread_func(void *p)
 
   PJ_UNUSED_ARG(p);
 
-  TRC_DEBUG("PJSIP thread started");
+  TRC_STATUS("PJSIP thread started");
 
   pj_bool_t curr_quiescing = PJ_FALSE;
   pj_bool_t new_quiescing = quiescing;
@@ -183,7 +183,7 @@ static int pjsip_thread_func(void *p)
     new_quiescing = quiescing;
     if (curr_quiescing != new_quiescing)
     {
-      TRC_DEBUG("Quiescing state changed");
+      TRC_STATUS("Quiescing state changed");
       curr_quiescing = new_quiescing;
 
       if (new_quiescing)
@@ -198,7 +198,7 @@ static int pjsip_thread_func(void *p)
 
   }
 
-  TRC_DEBUG("PJSIP thread ended");
+  TRC_STATUS("PJSIP thread ended");
 
   return 0;
 }

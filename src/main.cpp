@@ -1212,6 +1212,7 @@ class QuiesceCompleteHandler : public QuiesceCompletionInterface
 public:
   void quiesce_complete()
   {
+    TRC_STATUS("Quiesce complete");
     sem_post(&term_sem);
   }
 };
