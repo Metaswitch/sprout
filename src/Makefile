@@ -99,7 +99,6 @@ sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_event_accumulator_table.cpp \
                   snmp_event_accumulator_by_scope_table.cpp \
                   snmp_scalar_by_scope_table.cpp \
-                  pdlog.cpp \
                   main.cpp
 
 sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
