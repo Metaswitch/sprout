@@ -9,6 +9,8 @@
   dateformat .%Y-%m-%d-%s
   extension .log
   missingok
+  # Allow rsyslog to create the new file.
+  nocreate
   # After rotating, rsyslog still has the rotated file open; reload it so that
   # it starts writing to the new file.
   postrotate
