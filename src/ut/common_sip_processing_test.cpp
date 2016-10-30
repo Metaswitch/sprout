@@ -86,8 +86,8 @@ public:
     // Load monitor with one token in the bucket at startup.
     _lm = new LoadMonitor(0, 1, 0, 0);
 
-    _requests_counter = &SNMP::FAKE_COUNTER_TABLE;
-    _overload_counter = &SNMP::FAKE_COUNTER_TABLE;
+    _requests_counter = &SNMP::FAKE_COUNTER_BY_SCOPE_TABLE;
+    _overload_counter = &SNMP::FAKE_COUNTER_BY_SCOPE_TABLE;
 
     _health_checker = new HealthChecker();
 
@@ -277,8 +277,8 @@ public:
 protected:
   TransportFlow* _tp;
   LoadMonitor* _lm;
-  SNMP::CounterTable* _requests_counter;
-  SNMP::CounterTable* _overload_counter;
+  SNMP::CounterByScopeTable* _requests_counter;
+  SNMP::CounterByScopeTable* _overload_counter;
   HealthChecker* _health_checker;
 };
 
