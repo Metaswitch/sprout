@@ -630,7 +630,7 @@ private:
                             int now,
                             bool force_expire);
   
-  // Log any created or removed bindings to AnalyticsLoggger
+  // Log any created or removed bindings to AnalyticsLogger
   //
   // @param aor_id    The AoR ID to log
   // @param aor_pair  The AoR pair to compare when looking for binding changes
