@@ -103,7 +103,7 @@ void AnalyticsLogger::subscription(const std::string& aor,
 {
   char buf[BUFFER_SIZE];
   snprintf(buf, sizeof(buf),
-           "<analytics> Subscription: USER_URI=%s SUBSCRIPTION_ID=%s CONTACT_URI=%s EXPIRES=%d\n",
+           "Subscription: USER_URI=%s SUBSCRIPTION_ID=%s CONTACT_URI=%s EXPIRES=%d\n",
            aor.c_str(),
            subscription_id.c_str(),
            contact.c_str(),
@@ -116,7 +116,7 @@ void AnalyticsLogger::auth_failure(const std::string& auth,
 {
   char buf[BUFFER_SIZE];
   snprintf(buf, sizeof(buf),
-           "<analytics> Auth-Failure: Private Identity=%s Public Identity=%s\n",
+           "Auth-Failure: Private Identity=%s Public Identity=%s\n",
            auth.c_str(),
            to.c_str());
   log_with_tag_and_timestamp(buf);
@@ -129,7 +129,7 @@ void AnalyticsLogger::call_connected(const std::string& from,
 {
   char buf[BUFFER_SIZE];
   snprintf(buf, sizeof(buf),
-           "<analytics> Call-Connected: FROM=%s TO=%s CALL_ID=%s\n",
+           "Call-Connected: FROM=%s TO=%s CALL_ID=%s\n",
            from.c_str(),
            to.c_str(),
            call_id.c_str());
@@ -144,7 +144,7 @@ void AnalyticsLogger::call_not_connected(const std::string& from,
 {
   char buf[BUFFER_SIZE];
   snprintf(buf, sizeof(buf),
-           "<analytics> Call-Not-Connected: FROM=%s TO=%s CALL_ID=%s REASON=%d\n",
+           "Call-Not-Connected: FROM=%s TO=%s CALL_ID=%s REASON=%d\n",
            from.c_str(),
            to.c_str(),
            call_id.c_str(),
@@ -158,7 +158,7 @@ void AnalyticsLogger::call_disconnected(const std::string& call_id,
 {
   char buf[BUFFER_SIZE];
   snprintf(buf, sizeof(buf),
-           "<analytics> Call-Disconnected: CALL_ID=%s REASON=%d\n",
+           "Call-Disconnected: CALL_ID=%s REASON=%d\n",
            call_id.c_str(),
            reason);
   log_with_tag_and_timestamp(buf);
