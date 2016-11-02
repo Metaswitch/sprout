@@ -89,6 +89,20 @@ static const char* const JSON_ROUTES = "routes";
 static const char* const JSON_NOTIFY_CSEQ = "notify_cseq";
 
 /// SubscriberDataManager Methods
+//PJD Add AnalyticsLogger to constructors
+SubscriberDataManager::SubscriberDataManager(Store* data_store,
+                                             SerializerDeserializer*& serializer,
+                                             std::vector<SerializerDeserializer*>& deserializers,
+                                             ChronosConnection* chronos_connection,
+                                             AnalyticsLogger* analytics_logger,
+                                             bool is_primary) :
+  _primary_sdm(is_primary)
+{
+  _connector = new Connector(data_store, serializer, deserializers);
+  _chronos_timer_request_sender = new ChronosTimerRequestSender(chronos_connection);
+  _notify_sender = new NotifySender();
+  _analytics = analytics_logger;
+}
 
 SubscriberDataManager::SubscriberDataManager(Store* data_store,
                                              SerializerDeserializer*& serializer,
@@ -172,9 +186,15 @@ Store::Status SubscriberDataManager::set_aor_data(
                                      AoRPair* aor_pair,
                                      SAS::TrailId trail,
                                      bool& all_bindings_expired,
+                                     //PJD bool* all_bindings_expired,
                                      pjsip_rx_data* extra_message_rdata,
                                      pjsip_tx_data* extra_message_tdata)
 {
+  //PJD
+    //Alex: unused_bool could be replaced by changing reference to pointer, then
+    //do a check here: is all_bindings_expired NULL? If so, the caller doesn't 
+    //care about it or  need a return value. If non-null, caller wants to know,
+    //are all those bindings expired dude?
   // The ordering of this function is quite important.
   //
   // 1. Expire any old bindings/subscriptions.
@@ -250,11 +270,95 @@ Store::Status SubscriberDataManager::set_aor_data(
                                  NULL);
     }
 
+    // Tell AnalyticsLogger about changed bindings
+    if (_primary_sdm && _analytics != NULL)
+    {
+      log_registration_changes(aor_id, aor_pair);
+      log_subscription_changes(aor_id, aor_pair);
+    }
+    if (_analytics == NULL)
+    { //PJD Remove
+      TRC_DEBUG("No AnalyticsLogger for SubscriberDataManager to log registration changes");
+    }
+
     // Send any NOTIFYs needed
     _notify_sender->send_notifys(aor_id, irs_impus, aor_pair, now, trail);
   }
 
   return Store::Status::OK;
+}
+
+//PJD This lifts from send_notifys_for_current_subscriptions. Does it also need stuff
+//from send_notifys_for_expired_subscriptions?
+void SubscriberDataManager::log_registration_changes(const std::string& aor_id,
+                                                     SubscriberDataManager::AoRPair* aor_pair)
+{
+  // Iterate over the bindings in the original AoR. If they're not present
+  // the current AoR, mark them as expired
+  for (SubscriberDataManager::AoR::Bindings::const_iterator aor_orig_b =
+         aor_pair->get_orig()->bindings().begin();
+       aor_orig_b != aor_pair->get_orig()->bindings().end();
+       ++aor_orig_b)
+  {
+    // if (!aor_orig_b->second->_emergency_registration) //PJD: keep?
+    // {
+      if (aor_pair->get_current()->bindings().find(aor_orig_b->first) ==
+          aor_pair->get_current()->bindings().end())
+      {
+        TRC_DEBUG("Binding %s has been removed", aor_orig_b->first.c_str());
+        _analytics->registration(aor_id,
+                                 aor_orig_b->first.c_str(),
+                                 aor_orig_b->second->_uri,
+                                 0);
+      }
+    // }
+  }
+
+  // Iterate over the bindings in the current AoR.
+  for (SubscriberDataManager::AoR::Bindings::const_iterator aor_current_b =
+          aor_pair->get_current()->bindings().begin();
+        aor_current_b != aor_pair->get_current()->bindings().end();
+        ++aor_current_b)
+  {
+    // if (!aor_current_b->second->_emergency_registration) //PJD: keep?
+    // {
+      // If the binding is only in the current AoR, mark it as created
+      SubscriberDataManager::AoR::Bindings::const_iterator aor_orig_b_match =
+        aor_pair->get_orig()->bindings().find(aor_current_b->first);
+
+      if (aor_orig_b_match == aor_pair->get_orig()->bindings().end())
+      {
+        TRC_DEBUG("Binding %s has been created", aor_current_b->first.c_str());
+        _analytics->registration(aor_id,
+                                 aor_current_b->first.c_str(),
+                                 aor_current_b->second->_uri,
+                                 aor_current_b->second->_expires);
+      }
+      else
+      {
+        // The binding is in both AoRs. Check if the expiry time has changed at all
+        if (aor_orig_b_match->second->_expires < aor_current_b->second->_expires)
+        {
+          TRC_DEBUG("Binding %s has been refreshed", aor_current_b->first.c_str());
+        }
+        else if (aor_orig_b_match->second->_expires > aor_current_b->second->_expires)
+        {
+          TRC_DEBUG("Binding %s has been shortened", aor_current_b->first.c_str());
+        }
+        else
+        {
+          TRC_DEBUG("Binding %s is unchanged", aor_current_b->first.c_str());
+        }
+      }
+    // }
+  }
+}
+
+void SubscriberDataManager::log_subscription_changes(const std::string& aor_id,
+                                                     SubscriberDataManager::AoRPair* aor_pair)
+{
+  //PJD
+  // Stub. Not yet implemented.
 }
 
 int SubscriberDataManager::expire_aor_members(AoRPair* aor_pair,
@@ -1599,13 +1703,15 @@ void SubscriberDataManager::NotifySender::send_notifys_for_current_subscriptions
                                int now,
                                SAS::TrailId trail)
 {
+  //PJD Is this n^2 when it could be n? Why do inner (binding) loops need to be
+  //nested inside the sub loop? Can't they come first?
   // Iterate over the subscriptions in the current AoR.
-  for (SubscriberDataManager::AoR::Subscriptions::const_iterator aor_current =
+  for (SubscriberDataManager::AoR::Subscriptions::const_iterator aor_current_sub =
          aor_pair->get_current()->subscriptions().begin();
-       aor_current != aor_pair->get_current()->subscriptions().end();
-       ++aor_current)
+       aor_current_sub != aor_pair->get_current()->subscriptions().end();
+       ++aor_current_sub)
   {
-    TRC_DEBUG("The subscription (%s) is still active", aor_current->first.c_str());
+    TRC_DEBUG("The subscription (%s) is still active", aor_current_sub->first.c_str());
     std::vector<NotifyUtils::BindingNotifyInformation*> binding_notify;
 
     // Iterate over the bindings in the original AoR. If they're not present
@@ -1617,10 +1723,10 @@ void SubscriberDataManager::NotifySender::send_notifys_for_current_subscriptions
     {
       if (!aor_orig_b->second->_emergency_registration)
       {
-        SubscriberDataManager::AoR::Bindings::const_iterator aor_current =
+        SubscriberDataManager::AoR::Bindings::const_iterator aor_current_b_match =
           aor_pair->get_current()->bindings().find(aor_orig_b->first);
 
-        if (aor_current == aor_pair->get_current()->bindings().end())
+        if (aor_current_b_match == aor_pair->get_current()->bindings().end())
         {
           TRC_DEBUG("Binding %s has been removed", aor_orig_b->first.c_str());
           NotifyUtils::BindingNotifyInformation* bni =
@@ -1642,10 +1748,10 @@ void SubscriberDataManager::NotifySender::send_notifys_for_current_subscriptions
       if (!aor_current_b->second->_emergency_registration)
       {
         // If the binding is only in the current AoR, mark it as created
-        SubscriberDataManager::AoR::Bindings::const_iterator aor_orig_b =
+        SubscriberDataManager::AoR::Bindings::const_iterator aor_orig_b_match =
           aor_pair->get_orig()->bindings().find(aor_current_b->first);
 
-        if (aor_orig_b == aor_pair->get_orig()->bindings().end())
+        if (aor_orig_b_match == aor_pair->get_orig()->bindings().end())
         {
           TRC_DEBUG("Binding %s has been created", aor_current_b->first.c_str());
           NotifyUtils::BindingNotifyInformation* bni =
@@ -1659,12 +1765,12 @@ void SubscriberDataManager::NotifySender::send_notifys_for_current_subscriptions
           // The binding is in both AoRs. Check if the expiry time has changed at all
           NotifyUtils::ContactEvent event;
 
-          if (aor_orig_b->second->_expires < aor_current_b->second->_expires)
+          if (aor_orig_b_match->second->_expires < aor_current_b->second->_expires)
           {
             TRC_DEBUG("Binding %s has been refreshed", aor_current_b->first.c_str());
             event = NotifyUtils::ContactEvent::REFRESHED;
           }
-          else if (aor_orig_b->second->_expires > aor_current_b->second->_expires)
+          else if (aor_orig_b_match->second->_expires > aor_current_b->second->_expires)
           {
             TRC_DEBUG("Binding %s has been shortened", aor_current_b->first.c_str());
             event = NotifyUtils::ContactEvent::SHORTENED;
@@ -1688,7 +1794,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_current_subscriptions
     pjsip_tx_data* tdata_notify = NULL;
     pj_status_t status = NotifyUtils::create_subscription_notify(
                                           &tdata_notify,
-                                          aor_current->second,
+                                          aor_current_sub->second,
                                           aor_id,
                                           irs_impus,
                                           aor_pair->get_orig(),

@@ -52,7 +52,7 @@ extern "C" {
 #include "store.h"
 #include "chronosconnection.h"
 #include "sas.h"
-
+#include "analyticslogger.h"
 #include "rapidjson/writer.h"
 #include "rapidjson/document.h"
 
@@ -524,6 +524,15 @@ public:
   static const std::vector<std::string> TAGS_REG;
   static const std::vector<std::string> TAGS_SUB;
 
+  //PJD Add docs.
+  //PJD Move everything that used the main constructor over to this constructor?
+  SubscriberDataManager(Store* data_store,
+                        SerializerDeserializer*& serializer,
+                        std::vector<SerializerDeserializer*>& deserializers,
+                        ChronosConnection* chronos_connection,
+                        AnalyticsLogger* analytics_logger,
+                        bool is_primary);
+
   /// SubscriberDataManager constructor that allows the user to specify which serializer and
   /// deserializers to use.
   ///
@@ -592,35 +601,49 @@ public:
                                      AoRPair* aor_pair,
                                      SAS::TrailId trail,
                                      bool& all_bindings_expired = unused_bool,
+                                     //PJD bool* all_bindings_expired = NULL,
                                      pjsip_rx_data* extra_message_rdata = NULL,
                                      pjsip_tx_data* extra_message_tdata = NULL);
 
 private:
   // Expire any out of date bindings in the current AoR
   //
-  // @param aor_pair  The AoRPair to expir
+  // @param aor_pair  The AoRPair to expire
   // @param now       The current time
   int expire_aor_members(AoRPair* aor_pair,
                          int now);
 
   // Expire any old bindings, and return the maximum expiry
   //
-  // @param aor_pair  The AoRPair to expir
+  // @param aor_pair  The AoRPair to expire
   // @param now       The current time
   int expire_bindings(AoR* aor_data,
                       int now);
 
   // Expire any old subscriptions.
   //
-  // @param aor_pair      The AoRPair to expir
+  // @param aor_pair      The AoRPair to expire
   // @param now           The current time
   // @param force_expires Whether all subscriptions should be expired
   //                      no matter the current time
   void expire_subscriptions(AoRPair* aor_pair,
                             int now,
                             bool force_expire);
+  
+  // Log any created or removed bindings to AnalyticsLoggger
+  //
+  // @param aor_id    The AoR ID to log
+  // @param aor_pair  The AoR pair to compare when looking for binding changes
+  void log_registration_changes(const std::string& aor_id,
+                                SubscriberDataManager::AoRPair* aor_pair);
+  
+  //PJD
+  // Not yet implemented.
+  void log_subscription_changes(const std::string& aor_id,
+                                SubscriberDataManager::AoRPair* aor_pair);
 
   static bool unused_bool;
+  AnalyticsLogger* _analytics;
   Connector* _connector;
   ChronosTimerRequestSender* _chronos_timer_request_sender;
   NotifySender* _notify_sender;
