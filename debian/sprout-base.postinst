@@ -79,7 +79,7 @@ setup_logging() {
 
         # We use syslog to write analytics logs to the logs directory.
         chown $NAME:syslog $log_directory
-        chmod 775 $og_directory
+        chmod 775 $log_directory
     fi
 }
 
