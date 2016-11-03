@@ -524,15 +524,6 @@ public:
   static const std::vector<std::string> TAGS_REG;
   static const std::vector<std::string> TAGS_SUB;
 
-  //PJD Add docs.
-  //PJD Move everything that used the main constructor over to this constructor?
-  SubscriberDataManager(Store* data_store,
-                        SerializerDeserializer*& serializer,
-                        std::vector<SerializerDeserializer*>& deserializers,
-                        ChronosConnection* chronos_connection,
-                        AnalyticsLogger* analytics_logger,
-                        bool is_primary);
-
   /// SubscriberDataManager constructor that allows the user to specify which serializer and
   /// deserializers to use.
   ///
@@ -547,12 +538,14 @@ public:
   ///                             the entries in the vector.
   /// @param chronos_connection - Chronos connection used to set timers for
   ///                             expiring registrations and subscriptions.
+  /// @param analytics_logger   - AnalyticsLogger for reporting registration events.
   /// @param is_primary         - Whether the underlying data store is the local
-  ///                             store or remote
+  ///                             store or remote.
   SubscriberDataManager(Store* data_store,
                         SerializerDeserializer*& serializer,
                         std::vector<SerializerDeserializer*>& deserializers,
                         ChronosConnection* chronos_connection,
+                        AnalyticsLogger* analytics_logger,
                         bool is_primary);
 
   /// Alternative SubscriberDataManager constructor that creates a SubscriberDataManager using just the
@@ -601,7 +594,6 @@ public:
                                      AoRPair* aor_pair,
                                      SAS::TrailId trail,
                                      bool& all_bindings_expired = unused_bool,
-                                     //PJD bool* all_bindings_expired = NULL,
                                      pjsip_rx_data* extra_message_rdata = NULL,
                                      pjsip_tx_data* extra_message_tdata = NULL);
 
@@ -635,11 +627,6 @@ private:
   // @param aor_id    The AoR ID to log
   // @param aor_pair  The AoR pair to compare when looking for binding changes
   void log_registration_changes(const std::string& aor_id,
-                                SubscriberDataManager::AoRPair* aor_pair);
-  
-  //PJD
-  // Not yet implemented.
-  void log_subscription_changes(const std::string& aor_id,
                                 SubscriberDataManager::AoRPair* aor_pair);
 
   static bool unused_bool;

@@ -103,18 +103,6 @@ SubscriberDataManager::SubscriberDataManager(Store* data_store,
   _analytics = analytics_logger;
 }
 
-SubscriberDataManager::SubscriberDataManager(Store* data_store,
-                                             SerializerDeserializer*& serializer,
-                                             std::vector<SerializerDeserializer*>& deserializers,
-                                             ChronosConnection* chronos_connection,
-                                             bool is_primary) :
-  _primary_sdm(is_primary)
-{
-  _connector = new Connector(data_store, serializer, deserializers);
-  _chronos_timer_request_sender = new ChronosTimerRequestSender(chronos_connection);
-  _notify_sender = new NotifySender();
-}
-
 
 SubscriberDataManager::SubscriberDataManager(Store* data_store,
                                              ChronosConnection* chronos_connection,
@@ -267,7 +255,6 @@ Store::Status SubscriberDataManager::set_aor_data(
     if (_primary_sdm && _analytics != NULL)
     {
       log_registration_changes(aor_id, aor_pair);
-      log_subscription_changes(aor_id, aor_pair);
     }
 
     // Send any NOTIFYs needed
@@ -322,7 +309,7 @@ void SubscriberDataManager::log_registration_changes(const std::string& aor_id,
       // The binding is in both AoRs. Check if the expiry time has changed at all
       if (aor_orig_b_match->second->_expires < aor_current_b->second->_expires)
       {
-        TRC_DEBUG("Binding %s has been refreshed", aor_current_b->first.c_str());
+        // Binding has been refreshed
         _analytics->registration(aor_id,
                                aor_current_b->first.c_str(),
                                aor_current_b->second->_uri,
@@ -330,7 +317,7 @@ void SubscriberDataManager::log_registration_changes(const std::string& aor_id,
       }
       else if (aor_orig_b_match->second->_expires > aor_current_b->second->_expires)
       {
-        TRC_DEBUG("Binding %s has been shortened", aor_current_b->first.c_str());
+        // Binding has been shortened
         _analytics->registration(aor_id,
                                aor_current_b->first.c_str(),
                                aor_current_b->second->_uri,
@@ -338,13 +325,6 @@ void SubscriberDataManager::log_registration_changes(const std::string& aor_id,
       }
     }
   }
-}
-
-void SubscriberDataManager::log_subscription_changes(const std::string& aor_id,
-                                                     SubscriberDataManager::AoRPair* aor_pair)
-{
-  //PJD
-  // Stub. Not yet implemented.
 }
 
 int SubscriberDataManager::expire_aor_members(AoRPair* aor_pair,
