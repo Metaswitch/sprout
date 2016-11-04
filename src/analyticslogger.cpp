@@ -77,7 +77,7 @@ void AnalyticsLogger::log_with_tag_and_timestamp(char* log)
           dt.tm_sec,
           (int)(timespec.tv_nsec / 1000000));
 
-  syslog(LOG_INFO, "<analytics> %s %s", log, timestamp);
+  syslog(LOG_INFO, "<analytics> %s %s", timestamp, log);
 }
 
 void AnalyticsLogger::registration(const std::string& aor,
@@ -88,7 +88,7 @@ void AnalyticsLogger::registration(const std::string& aor,
   char buf[BUFFER_SIZE];
 
   snprintf(buf, sizeof(buf),
-           "Registration: USER_URI=%s BINDING_ID=%s CONTACT_URI=%s EXPIRES=%d\n",
+           "Registration: USER_URI=%s BINDING_ID=%s CONTACT_URI=%s EXPIRES=%d",
            aor.c_str(),
            binding_id.c_str(),
            contact.c_str(),
@@ -103,7 +103,7 @@ void AnalyticsLogger::subscription(const std::string& aor,
 {
   char buf[BUFFER_SIZE];
   snprintf(buf, sizeof(buf),
-           "<analytics> Subscription: USER_URI=%s SUBSCRIPTION_ID=%s CONTACT_URI=%s EXPIRES=%d\n",
+           "Subscription: USER_URI=%s SUBSCRIPTION_ID=%s CONTACT_URI=%s EXPIRES=%d",
            aor.c_str(),
            subscription_id.c_str(),
            contact.c_str(),
@@ -116,7 +116,7 @@ void AnalyticsLogger::auth_failure(const std::string& auth,
 {
   char buf[BUFFER_SIZE];
   snprintf(buf, sizeof(buf),
-           "<analytics> Auth-Failure: Private Identity=%s Public Identity=%s\n",
+           "Auth-Failure: Private Identity=%s Public Identity=%s",
            auth.c_str(),
            to.c_str());
   log_with_tag_and_timestamp(buf);
@@ -129,7 +129,7 @@ void AnalyticsLogger::call_connected(const std::string& from,
 {
   char buf[BUFFER_SIZE];
   snprintf(buf, sizeof(buf),
-           "<analytics> Call-Connected: FROM=%s TO=%s CALL_ID=%s\n",
+           "Call-Connected: FROM=%s TO=%s CALL_ID=%s",
            from.c_str(),
            to.c_str(),
            call_id.c_str());
@@ -144,7 +144,7 @@ void AnalyticsLogger::call_not_connected(const std::string& from,
 {
   char buf[BUFFER_SIZE];
   snprintf(buf, sizeof(buf),
-           "<analytics> Call-Not-Connected: FROM=%s TO=%s CALL_ID=%s REASON=%d\n",
+           "Call-Not-Connected: FROM=%s TO=%s CALL_ID=%s REASON=%d",
            from.c_str(),
            to.c_str(),
            call_id.c_str(),
@@ -158,7 +158,7 @@ void AnalyticsLogger::call_disconnected(const std::string& call_id,
 {
   char buf[BUFFER_SIZE];
   snprintf(buf, sizeof(buf),
-           "<analytics> Call-Disconnected: CALL_ID=%s REASON=%d\n",
+           "Call-Disconnected: CALL_ID=%s REASON=%d",
            call_id.c_str(),
            reason);
   log_with_tag_and_timestamp(buf);
