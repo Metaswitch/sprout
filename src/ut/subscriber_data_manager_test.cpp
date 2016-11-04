@@ -51,6 +51,7 @@
 #include "fakechronosconnection.hpp"
 #include "mock_chronos_connection.h"
 #include "mock_store.h"
+#include "analyticslogger.h"
 
 using ::testing::_;
 using ::testing::DoAll;
@@ -99,6 +100,7 @@ class BasicSubscriberDataManagerTest : public SipTest
                                        serializer,
                                        deserializers,
                                        _chronos_connection,
+                                       new AnalyticsLogger(),
                                        true);
   }
 
@@ -540,6 +542,7 @@ class MultiFormatSubscriberDataManagerTest : public ::testing::Test
                                                 serializer,
                                                 deserializers,
                                                 _chronos_connection,
+                                                new AnalyticsLogger(),
                                                 true);
     }
     {
@@ -554,6 +557,7 @@ class MultiFormatSubscriberDataManagerTest : public ::testing::Test
                                                serializer,
                                                deserializers,
                                                _chronos_connection,
+                                               new AnalyticsLogger(),
                                                true);
     }
   }
@@ -642,6 +646,7 @@ class SubscriberDataManagerCorruptDataTest : public ::testing::Test
                                          serializer,
                                          deserializers,
                                          _chronos_connection,
+                                         new AnalyticsLogger(),
                                          true);
     }
   }
@@ -732,6 +737,7 @@ class SubscriberDataManagerChronosRequestsTest : public SipTest
                                        serializer,
                                        deserializers,
                                        _chronos_connection,
+                                       new AnalyticsLogger(),
                                        true);
   }
 

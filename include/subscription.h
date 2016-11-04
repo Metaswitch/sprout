@@ -44,7 +44,7 @@ extern "C" {
 
 #include "subscriber_data_manager.h"
 #include "hssconnection.h"
-#include "analyticslogger.h"
+#include "analyticslogger.h" //PJD remove
 #include "acr.h"
 
 extern pjsip_module mod_subscription;

@@ -35,8 +35,8 @@
  */
 
 
-#ifndef REGSTORE_H__
-#define REGSTORE_H__
+#ifndef SUBSCRIBER_DATA_MANAGER_H__
+#define SUBSCRIBER_DATA_MANAGER_H__
 
 extern "C" {
 #include <pj/pool.h>
@@ -55,6 +55,11 @@ extern "C" {
 #include "analyticslogger.h"
 #include "rapidjson/writer.h"
 #include "rapidjson/document.h"
+
+// We need to declare the parts of NotifyUtils needed below to avoid a 
+// circular dependency between this and notify_utils.h
+namespace NotifyUtils { struct BindingNotifyInformation; };
+typedef std::vector<NotifyUtils::BindingNotifyInformation*> ClassifiedBindings;
 
 class SubscriberDataManager
 {
@@ -622,12 +627,24 @@ private:
                             int now,
                             bool force_expire);
   
-  // Log any created or removed bindings to AnalyticsLogger
+  // Iterate over all original and current bindings in an AoR pair and
+  // classify them as removed ("EXPIRED"), created ("CREATED"), refreshed ("REFRESHED"),
+  // shortened ("SHORTENED") or unchanged ("REGISTERED").
   //
-  // @param aor_id    The AoR ID to log
-  // @param aor_pair  The AoR pair to compare when looking for binding changes
-  void log_registration_changes(const std::string& aor_id,
-                                SubscriberDataManager::AoRPair* aor_pair);
+  // @param aor_id                The AoR ID
+  // @param aor_pair              The AoR pair to compare and classify bindings for
+  // @param classified_bindings   Output vector of classified bindings
+  void classify_bindings(const std::string& aor_id,
+                         SubscriberDataManager::AoRPair* aor_pair,
+                         ClassifiedBindings& classified_bindings);
+  
+  // Iterate over a list of classified bindings, and emit registration logs for those
+  // that are EXPIRED or SHORTENED.
+  void log_removed_shortened_bindings(ClassifiedBindings& classified_bindings);
+
+  // Iterate over a list of classified bindings, and emit registration logs for those
+  // that are CREATED or REFRESHED.
+  void log_new_extended_bindings(ClassifiedBindings& classified_bindings);
 
   static bool unused_bool;
   AnalyticsLogger* _analytics;
