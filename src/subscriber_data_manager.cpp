@@ -263,6 +263,12 @@ Store::Status SubscriberDataManager::set_aor_data(
   {
     // We were unable to write to the store - return to the caller and
     // send no further messages
+    for (ClassifiedBindings::iterator it = classified_bindings.begin();
+         it != classified_bindings.end();
+         ++it)
+    {
+      delete *it;
+    }
     return rc;
   }
 
@@ -295,6 +301,13 @@ Store::Status SubscriberDataManager::set_aor_data(
     //////////////////////
  
     _notify_sender->send_notifys(aor_id, irs_impus, aor_pair, now, trail);
+
+    for (ClassifiedBindings::iterator it = classified_bindings.begin();
+         it != classified_bindings.end();
+         ++it)
+    {
+      delete *it;
+    }
   }
 
   return Store::Status::OK;
