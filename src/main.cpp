@@ -2026,7 +2026,8 @@ int main(int argc, char* argv[])
 
   HttpStack* http_stack_mgmt = new HttpStack(NUM_HTTP_MGMT_THREADS,
                                              exception_handler,
-                                             access_logger);
+                                             access_logger,
+                                             load_monitor);
   try
   {
     http_stack_mgmt->initialize();
