@@ -2010,7 +2010,8 @@ int main(int argc, char* argv[])
   // with it.
   HttpStack* http_stack_sig = new HttpStack(opt.http_threads,
                                             exception_handler,
-                                            access_logger);
+                                            access_logger,
+                                            load_monitor);
   try
   {
     http_stack_sig->initialize();
