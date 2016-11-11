@@ -117,6 +117,7 @@ SubscriberDataManager::SubscriberDataManager(Store* data_store,
   _connector = new Connector(data_store, serializer, deserializers);
   _chronos_timer_request_sender = new ChronosTimerRequestSender(chronos_connection);
   _notify_sender = new NotifySender();
+  _analytics = NULL;
 }
 
 
@@ -225,23 +226,23 @@ Store::Status SubscriberDataManager::set_aor_data(
   TRC_DEBUG("Set AoR data for %s, CAS=%ld, expiry = %d",
             aor_id.c_str(), aor_pair->get_current()->_cas, max_expires);
 
-  ///////////////////////////////////////
-  // 2. Log removed or shortened bindings
-  ///////////////////////////////////////
   ClassifiedBindings classified_bindings;
-  classify_bindings(aor_id, aor_pair, classified_bindings);
-
-  if (_primary_sdm && _analytics != NULL)
+  
+  if(_primary_sdm)
   {
-    log_removed_shortened_bindings(classified_bindings);
-  }
+    ///////////////////////////////////////
+    // 2. Log removed or shortened bindings
+    ///////////////////////////////////////
+    classify_bindings(aor_id, aor_pair, classified_bindings);
+
+    if (_analytics != NULL)
+    {
+      log_removed_shortened_bindings(classified_bindings);
+    }
    
-  /////////////////////////////////////
-  // 3. Send any Chronos timer requests
-  /////////////////////////////////////
-
-  if (_primary_sdm)
-  {
+    /////////////////////////////////////
+    // 3. Send any Chronos timer requests
+    /////////////////////////////////////
     _chronos_timer_request_sender->send_timers(aor_id, aor_pair, now, trail);
   }
 
@@ -301,13 +302,13 @@ Store::Status SubscriberDataManager::set_aor_data(
     //////////////////////
  
     _notify_sender->send_notifys(aor_id, irs_impus, aor_pair, now, trail);
+  }
 
-    for (ClassifiedBindings::iterator it = classified_bindings.begin();
-         it != classified_bindings.end();
-         ++it)
-    {
-      delete *it;
-    }
+  for (ClassifiedBindings::iterator it = classified_bindings.begin();
+        it != classified_bindings.end();
+        ++it)
+  {
+    delete *it;
   }
 
   return Store::Status::OK;
