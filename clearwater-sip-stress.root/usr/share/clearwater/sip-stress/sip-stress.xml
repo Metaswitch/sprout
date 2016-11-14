@@ -29,24 +29,25 @@
       <!-- field3 is peer_auth, but we can't store it in a variable -->
       <assign assign_to="reg_repeat" value="0"/>
       <assign assign_to="call_repeat" value="0"/>
-      <assign assign_to="call_delay" value="26000"/>
       <assign assign_to="call_answer" value="6000"/>
-      <!-- Change these values to tweak the traffic profile:
-             - reg_pause: How long you want to wait between registers - for
-                          registers every 5 minutes set this to 300000
+      <!-- Change these values to tweak the traffic profile. There have to be
+           more registers than calls in the profile:
+             - reg_pause   : How long you want to wait between registers - for
+                             registers every 5 minutes set this to 300000
              - call_length : How long a call should be
+             - call_delay  : What time period to spread out when calls start.
+                             This is the reg_pause time minus the call_length
+                             and call_answer time.
            You'll also potentially want to change some other values - these
-           are commented inline. -->
+           are commented inline by CHANGES. -->
       <assign assign_to="reg_pause" value="300000"/>
+      <assign assign_to="call_delay" value="204000"/>
       <assign assign_to="call_length" value="90000"/>
-      <assign assign_to="call_pause" variable="reg_pause"/>
-      <subtract assign_to="call_pause" variable="call_delay" />
-      <subtract assign_to="call_pause" variable="call_answer" />
-      <subtract assign_to="call_pause" variable="call_length" />
+      <assign assign_to="call_answer" value="6000"/>
     </action>
   </nop>
 
-  <!-- This controls how long it is until all calls have been attempted. Set
+  <!-- CHANGES. This controls how long it is until all calls have been attempted. Set
        this to twice the reg_pause value -->
   <pause distribution="uniform" min="0" max="600000" />
 
@@ -231,7 +232,8 @@
   <nop hide="true">
     <action>
       <add assign_to="call_repeat" value="1" />
-      <sample assign_to="pre_call_delay" distribution="uniform" min="0" max="26000" />
+      <!-- CHANGES. Set this to the same as the call_delay value set above -->
+      <sample assign_to="pre_call_delay" distribution="uniform" min="0" max="204000" />
       <assign assign_to="post_call_delay" variable="call_delay" />
       <subtract assign_to="post_call_delay" variable="pre_call_delay" />
     </action>
@@ -566,9 +568,7 @@
   <recv response="200" rtd="call-teardown">
   </recv>
 
-  <pause variable="post_call_delay" />
-
-  <pause variable="call_pause" next="1" />
+  <pause variable="post_call_delay" next="1"/>
 
   <!-- definition of the response time repartition table (unit is ms)   -->
   <ResponseTimeRepartition value="500, 1000, 2000, 3000, 4000, 7000, 10000"/>
