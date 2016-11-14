@@ -29,7 +29,6 @@
       <!-- field3 is peer_auth, but we can't store it in a variable -->
       <assign assign_to="reg_repeat" value="0"/>
       <assign assign_to="call_repeat" value="0"/>
-      <assign assign_to="call_answer" value="6000"/>
       <!-- Change these values to tweak the traffic profile. There have to be
            more registers than calls in the profile:
              - reg_pause   : How long you want to wait between registers - for
@@ -217,7 +216,7 @@
     ]]>
   </send>
 
-  <!-- This controls how likely an INVITE is going to be sent. Set the chance
+  <!-- CHANGES. This controls how likely an INVITE is going to be sent. Set the chance
        value to the proportion of INVITEs/REGISTERs -->
   <recv response="200" rtd="register" chance="0.167" next="2">
     <action>
