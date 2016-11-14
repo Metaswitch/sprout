@@ -168,14 +168,6 @@
                                                                                \
   if (!opt.set_uri_##NAME_LOWER)                                               \
   {                                                                            \
-    if (Utils::parse_ip_address(opt.sprout_hostname) !=                        \
-        Utils::IPAddressType::INVALID)                                         \
-    {                                                                          \
-      TRC_ERROR("Can't use default sproutlet URI when the sprout hostname is " \
-                "an IP address");                                              \
-      return 1;                                                                \
-    }                                                                          \
-                                                                               \
     opt.uri_##NAME_LOWER = "sip:" +                                            \
                            opt.prefix_##NAME_LOWER +                           \
                            "." +                                               \
