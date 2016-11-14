@@ -1139,7 +1139,16 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case OPT_SPROUT_HOSTNAME:
       options->sprout_hostname = std::string(pj_optarg);
-      break;
+
+      if (Utils::parse_ip_address(options->sprout_hostname) !=
+          Utils::IPAddressType::INVALID)
+      {
+        TRC_ERROR("The sprout hostname (%s) can't be an IP address",
+                  options->sprout_hostname.c_str());
+        return -1;
+      }
+
+     break;
 
     case OPT_CHRONOS_HOSTNAME:
       options->chronos_hostname = std::string(pj_optarg);
