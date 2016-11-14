@@ -60,7 +60,7 @@ ConnectionTracker::ConnectionTracker(
 
 ConnectionTracker::~ConnectionTracker()
 {
-  for (std::map<pjsip_transport *, pjsip_tp_state_listener_key *>::iterator 
+  for (std::map<pjsip_transport *, pjsip_tp_state_listener_key *>::iterator
                                              it = _connection_listeners.begin();
        it != _connection_listeners.end();
        ++it)
@@ -167,7 +167,7 @@ void ConnectionTracker::quiesce()
 {
   pj_bool_t quiesce_complete = PJ_FALSE;
 
-  TRC_DEBUG("Start quiescing connections");
+  TRC_STATUS("Start quiescing connections");
 
   pthread_mutex_lock(&_lock);
   // We expect to only be called on the PJSIP transport thread, and our data
@@ -180,10 +180,12 @@ void ConnectionTracker::quiesce()
   assert(!_quiescing);
   _quiescing = PJ_TRUE;
 
+  TRC_STATUS("Quiescing %d transactions", pjsip_tsx_layer_get_tsx_count());
+
   if (_connection_listeners.empty())
   {
     // There are no active connections, so quiescing is already complete.
-    TRC_DEBUG("Connection quiescing complete");
+    TRC_STATUS("Connection quiescing complete");
     quiesce_complete = PJ_TRUE;
   }
   else
@@ -191,12 +193,12 @@ void ConnectionTracker::quiesce()
     // Call shutdown on each connection. PJSIP's reference counting means a
     // connection will be closed once all transactions that use it have
     // completed.
-    for (std::map<pjsip_transport *, pjsip_tp_state_listener_key *>::iterator 
+    for (std::map<pjsip_transport *, pjsip_tp_state_listener_key *>::iterator
                                              it = _connection_listeners.begin();
          it != _connection_listeners.end();
          ++it)
     {
-      TRC_DEBUG("Shutdown connection %p", it->first);
+      TRC_STATUS("Shutdown connection %p", it->first);
       pjsip_transport_shutdown(it->first);
     }
   }

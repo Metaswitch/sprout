@@ -192,18 +192,18 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
             // Find expiry value from SIP message if it is present to determine
             // whether we have a de-registration.  Set an arbitrary default value of
             // an hour.
-            int expiry = PJUtils::max_expires(msg, 3600);
+            pj_bool_t dereg = PJUtils::is_deregistration(msg);
 
             switch (reg_type)
             {
             case INITIAL_REGISTRATION:
-              ret = (is_initial_registration && (expiry > 0));
+              ret = (is_initial_registration && !dereg);
               break;
             case REREGISTRATION:
-              ret = (!is_initial_registration && (expiry > 0));
+              ret = (!is_initial_registration && !dereg);
               break;
             case DEREGISTRATION:
-              ret = (expiry == 0);
+              ret = dereg;
               break;
             default:
               // LCOV_EXCL_START Unreachable

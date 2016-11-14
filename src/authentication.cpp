@@ -61,7 +61,21 @@ extern "C" {
 #include "impistore.h"
 #include "snmp_success_fail_count_table.h"
 #include "base64.h"
+#include "json_parse_utils.h"
+#include <openssl/hmac.h>
 
+std::string unhex(std::string hexstr)
+{
+  std::string ret = "";
+
+  for (size_t ii = 0; ii < hexstr.length(); ii += 2)
+  {
+    ret.push_back((char)(pj_hex_digit_to_val(hexstr[ii]) * 16 +
+                         pj_hex_digit_to_val(hexstr[ii+1])));
+  }
+
+  return ret;
+}
 
 //
 // mod_authentication authenticates SIP requests.  It must be inserted into the
@@ -297,11 +311,7 @@ pj_status_t user_lookup(pj_pool_t *pool,
       std::string xres = "";
       if (auts_param == NULL)
       {
-        for (size_t ii = 0; ii < aka_challenge->response.length(); ii += 2)
-        {
-          xres.push_back((char)(pj_hex_digit_to_val(aka_challenge->response[ii]) * 16 +
-                                pj_hex_digit_to_val(aka_challenge->response[ii+1])));
-        }
+        xres = unhex(aka_challenge->response);
       }
 
       cred_info->data_type = PJSIP_CRED_DATA_PLAIN_PASSWD;
@@ -366,6 +376,13 @@ void create_challenge(pjsip_digest_credential* credentials,
       // Authentication scheme is AKA.
       auth_type = "aka";
     }
+
+    // Also check for algorithm=AKAv2-MD5, which is how we've seen AKAv2
+    // support requested
+    if (pj_stricmp(&credentials->algorithm, &STR_AKAV2_MD5) == 0)
+    {
+      auth_type = "aka2";
+    }
   }
 
   // Get the Authentication Vector from the HSS.
@@ -416,15 +433,23 @@ void create_challenge(pjsip_digest_credential* credentials,
 
       rapidjson::Value& aka = (*av)["aka"];
 
+      std::string cryptkey = "";
+      std::string integritykey = "";
+      std::string xres = "";
+
+      // AKA version defaults to 1, for back-compatibility with pre-AKAv2
+      // Homestead versions.
+      int akaversion = 1;
+      
+      JSON_SAFE_GET_STRING_MEMBER(aka, "challenge", nonce);
+      JSON_SAFE_GET_STRING_MEMBER(aka, "cryptkey", cryptkey);
+      JSON_SAFE_GET_STRING_MEMBER(aka, "integritykey", integritykey);
+      JSON_SAFE_GET_STRING_MEMBER(aka, "response", xres);
+      JSON_SAFE_GET_INT_MEMBER(aka, "version", akaversion);
+
       // Use default realm for AKA as not specified in the AV.
       pj_strdup(tdata->pool, &hdr->challenge.digest.realm, &aka_realm);
-      hdr->challenge.digest.algorithm = STR_AKAV1_MD5;
-
-      if ((aka.HasMember("challenge")) &&
-          (aka["challenge"].IsString()))
-      {
-        nonce = aka["challenge"].GetString();
-      }
+      hdr->challenge.digest.algorithm = ((akaversion == 2) ? STR_AKAV2_MD5 : STR_AKAV1_MD5);
 
       pj_strdup2(tdata->pool, &hdr->challenge.digest.nonce, nonce.c_str());
       pj_create_random_string(buf, sizeof(buf));
@@ -435,12 +460,6 @@ void create_challenge(pjsip_digest_credential* credentials,
       // Add the cryptography key parameter.
       pjsip_param* ck_param = (pjsip_param*)pj_pool_alloc(tdata->pool, sizeof(pjsip_param));
       ck_param->name = STR_CK;
-      std::string cryptkey = "";
-      if ((aka.HasMember("cryptkey")) &&
-          (aka["cryptkey"].IsString()))
-      {
-        cryptkey = aka["cryptkey"].GetString();
-      }
       std::string ck = "\"" + cryptkey + "\"";
       pj_strdup2(tdata->pool, &ck_param->value, ck.c_str());
       pj_list_insert_before(&hdr->challenge.digest.other_param, ck_param);
@@ -448,23 +467,51 @@ void create_challenge(pjsip_digest_credential* credentials,
       // Add the integrity key parameter.
       pjsip_param* ik_param = (pjsip_param*)pj_pool_alloc(tdata->pool, sizeof(pjsip_param));
       ik_param->name = STR_IK;
-      std::string integritykey = "";
-      if ((aka.HasMember("integritykey")) &&
-          (aka["integritykey"].IsString()))
-      {
-        integritykey = aka["integritykey"].GetString();
-      }
       std::string ik = "\"" + integritykey + "\"";
       pj_strdup2(tdata->pool, &ik_param->value, ik.c_str());
       pj_list_insert_before(&hdr->challenge.digest.other_param, ik_param);
 
-      // Get the response.  We must not provide this on the SIP message, but
-      // we will put it in the store.
-      std::string response = "";
-      if ((aka.HasMember("response")) &&
-          (aka["response"].IsString()))
+      // Calculate the response.  We must not provide this on the SIP message,
+      // but we will put it in the store.
+      std::string response;
+
+      if (akaversion == 2)
       {
-        response = aka["response"].GetString();
+        // In AKAv2, the password for the SIP Digest calculation should be the
+        // base64 encoding of:
+        //
+        //  HMAC_MD5(XRES||IK||CK, "http-digest-akav2-password")
+        //
+        // We need to:
+        //
+        // - concatenate the XRES, IK and CK
+        // - convert that from the ASCII hex string Homestead sends us to the
+        //   binary representation
+        // - call the OpenSSL HMAC function to hash the string
+        //   "http-digest-akav2-password", using that binary concatenation as
+        //   the key
+        // - base64-encode that
+        std::string joined = unhex(xres + integritykey + cryptkey);
+        std::string formality = "http-digest-akav2-password";
+        unsigned char* digest = HMAC(EVP_md5(),
+                                     (unsigned char*)joined.data(),
+                                     joined.size(),
+                                     (unsigned char*)(formality.data()),
+                                     formality.size(),
+                                     NULL,
+                                     NULL);
+        std::string password = base64_encode(std::string(reinterpret_cast<char*>(digest)));
+
+        // We hex-decode this when getting it out of memcached later (for
+        // consistency with AKAv1) so hex-encode it now.
+        response = Utils::hex((uint8_t*)password.data(), password.size());
+      }
+      else
+      {
+        // In AKAv1, the XRES is used directly as the password in the SIP
+        // Digest calculation. We want it hex-encoded for storing in memcached,
+        // but it's already been hex-encoded by Homestead, so nothing to do.
+        response = xres;
       }
 
       // Now build the AuthChallenge so that we can store it in the ImpiStore.
@@ -664,25 +711,32 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
     // Authentication isn't required for emergency registrations. An emergency
     // registration is one where each Contact header contains 'sos' as the SIP
     // URI parameter.
-    bool emergency_reg = true;
-
+    //
+    // Note that a REGISTER with NO contact headers does not count as an
+    // emergency registration.
     pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
       pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL);
 
-    while ((contact_hdr != NULL) && (emergency_reg))
+    if (contact_hdr != NULL)
     {
-      emergency_reg = PJUtils::is_emergency_registration(contact_hdr);
-      contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(rdata->msg_info.msg,
-                                                            PJSIP_H_CONTACT,
-                                                            contact_hdr->next);
-    }
+      bool all_bindings_emergency = true;
 
-    if (emergency_reg)
-    {
-      SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_EMERGENCY_REGISTER, 0);
-      SAS::report_event(event);
 
-      return PJ_FALSE;
+      while ((contact_hdr != NULL) && (all_bindings_emergency))
+      {
+        all_bindings_emergency = PJUtils::is_emergency_registration(contact_hdr);
+        contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(rdata->msg_info.msg,
+                                                              PJSIP_H_CONTACT,
+                                                              contact_hdr->next);
+      }
+
+      if (all_bindings_emergency)
+      {
+        SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_EMERGENCY_REGISTER, 0);
+        SAS::report_event(event);
+
+        return PJ_FALSE;
+      }
     }
 
     // Check to see if the request has already been integrity protected?
@@ -702,6 +756,9 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
           ((pj_stricmp(&integrity->value, &STR_TLS_YES) == 0) ||
            (pj_stricmp(&integrity->value, &STR_IP_ASSOC_YES) == 0)))
       {
+        TRC_DEBUG("Integrity protected with %.*s",
+                  integrity->value.slen, integrity->value.ptr);
+
         // The integrity protected indicator is included and set to tls-yes or
         // ip-assoc-yes.  This indicates the client has already been authenticated
         // so we will accept this REGISTER even if there is a challenge response.
@@ -711,8 +768,12 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
         // We should still challenge though if we find that the request wasn't
         // sent to this S-CSCF, as this triggers the HSS to accept an S-CSCF
         // change (by generating the correct MAR).
-        if (PJUtils::get_next_routing_header(rdata->msg_info.msg) ==
-            PJUtils::pj_str_to_string(&stack_data.scscf_uri))
+        pjsip_uri_context_e context;
+        pjsip_uri* next_routing_uri = PJUtils::get_next_routing_uri(rdata->msg_info.msg, &context);
+
+        if (pjsip_uri_cmp(context,
+                          next_routing_uri,
+                          (pjsip_uri*) stack_data.scscf_uri) == PJ_SUCCESS)
         {
           TRC_INFO("SIP Digest authenticated request integrity protected by edge proxy");
 
@@ -720,6 +781,13 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
           SAS::report_event(event);
 
           return PJ_FALSE;
+        }
+        else
+        {
+          TRC_DEBUG("Needs authentication despite integrity protection as next routing URI (%s) "
+                    " does not match this S-CSCF (%.*s)",
+                    stack_data.scscf_uri_str.slen, stack_data.scscf_uri_str.ptr,
+                    PJUtils::uri_to_string(context, next_routing_uri).c_str());
         }
       }
       else if ((integrity != NULL) &&
@@ -735,8 +803,13 @@ static pj_bool_t needs_authentication(pjsip_rx_data* rdata, SAS::TrailId trail)
         // We should still challenge though if we find that the request wasn't
         // sent to this S-CSCF, as this triggers the HSS to accept an S-CSCF
         // change (by generating the correct MAR).
-        if (PJUtils::get_next_routing_header(rdata->msg_info.msg) ==
-            PJUtils::pj_str_to_string(&stack_data.scscf_uri))
+
+        pjsip_uri_context_e context;
+        pjsip_uri* next_routing_uri = PJUtils::get_next_routing_uri(rdata->msg_info.msg, &context);
+
+        if (pjsip_uri_cmp(context,
+                          next_routing_uri,
+                          (pjsip_uri*) stack_data.scscf_uri) == PJ_SUCCESS)
         {
           TRC_INFO("AKA authenticated request integrity protected by edge proxy");
 
@@ -809,6 +882,10 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
   SAS::TrailId trail = get_trail(rdata);
 
+  // SAS log the start of processing by this module
+  SAS::Event event(trail, SASEvent::BEGIN_AUTHENTICATION_MODULE, 0);
+  SAS::report_event(event);
+
   if (!needs_authentication(rdata, trail))
   {
     TRC_DEBUG("Request does not need authentication");
@@ -844,11 +921,12 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     }
     else
     {
-      if (!pj_strcmp2(&credentials->algorithm, "MD5"))
+      if (!pj_strcmp(&credentials->algorithm, &STR_MD5))
       {
         auth_stats_table = auth_stats_tables->sip_digest_auth_tbl;
       }
-      else if (!pj_strcmp2(&credentials->algorithm, "AKAv1-MD5"))
+      else if ((!pj_strcmp(&credentials->algorithm, &STR_AKAV1_MD5)) ||
+               (!pj_strcmp(&credentials->algorithm, &STR_AKAV2_MD5)))
       {
         auth_stats_table = auth_stats_tables->ims_aka_auth_tbl;
       }

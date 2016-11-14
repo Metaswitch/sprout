@@ -62,7 +62,7 @@ public:
   };
 
 
-  URIClassiferTest() 
+  URIClassiferTest()
   {
     stack_data.home_domains.insert("homedomain");
     stack_data.default_home_domain = pj_str("homedomain");
@@ -74,10 +74,10 @@ public:
   {
   }
 
-  URIClass classify_uri_helper(std::string uri_str, bool prefer_sip = true)
+  URIClass classify_uri_helper(std::string uri_str, bool prefer_sip = true, bool check_np = false)
   {
     pjsip_uri* uri = PJUtils::uri_from_string(uri_str, pool);
-    return URIClassifier::classify_uri(uri, prefer_sip);
+    return URIClassifier::classify_uri(uri, prefer_sip, check_np);
   }
 };
 
@@ -147,13 +147,27 @@ TEST_F(URIClassiferTest, SIPURIs)
 
 TEST_F(URIClassiferTest, NPData)
 {
+  URIClassifier::enforce_global = true;
+  // Do an explicit NP check against various NP URIs
   EXPECT_EQ(URIClass::NP_DATA,
+            classify_uri_helper("sip:1234;rn=567@example.com;user=phone", true, true));
+  EXPECT_EQ(URIClass::NP_DATA,
+            classify_uri_helper("tel:1234;rn=567", true, true));
+
+  EXPECT_EQ(URIClass::FINAL_NP_DATA,
+            classify_uri_helper("sip:1234;rn=567;npdi@example.com;user=phone", true, true));
+  EXPECT_EQ(URIClass::FINAL_NP_DATA,
+            classify_uri_helper("tel:1234;rn=567;npdi", true, true));
+
+  // Verify that they are recognised as local phone numbers if no NP check
+  EXPECT_EQ(URIClass::LOCAL_PHONE_NUMBER,
             classify_uri_helper("sip:1234;rn=567@example.com;user=phone"));
-  EXPECT_EQ(URIClass::NP_DATA,
+  EXPECT_EQ(URIClass::LOCAL_PHONE_NUMBER,
             classify_uri_helper("tel:1234;rn=567"));
-  
-  EXPECT_EQ(URIClass::FINAL_NP_DATA,
+
+  EXPECT_EQ(URIClass::LOCAL_PHONE_NUMBER,
             classify_uri_helper("sip:1234;rn=567;npdi@example.com;user=phone"));
-  EXPECT_EQ(URIClass::FINAL_NP_DATA,
+  EXPECT_EQ(URIClass::LOCAL_PHONE_NUMBER,
             classify_uri_helper("tel:1234;rn=567;npdi"));
+
 }

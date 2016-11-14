@@ -48,7 +48,8 @@ public:
 
   MOCK_METHOD2(get_aor_data, AoRPair*(const std::string& aor_id,
                                       SAS::TrailId trail));
-  MOCK_METHOD6(set_aor_data, Store::Status(const std::string& aor_id,
+  MOCK_METHOD7(set_aor_data, Store::Status(const std::string& aor_id,
+                                           std::vector<std::string> irs_impus,
                                            AoRPair* data,
                                            SAS::TrailId trail,
                                            bool& all_bindings_expired,

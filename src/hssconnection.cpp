@@ -69,7 +69,8 @@ HSSConnection::HSSConnection(const std::string& server,
                              SNMP::EventAccumulatorTable* homestead_uar_latency_tbl,
                              SNMP::EventAccumulatorTable* homestead_lir_latency_tbl,
                              CommunicationMonitor* comm_monitor,
-                             std::string scscf_uri) :
+                             std::string scscf_uri,
+                             bool fallback_if_no_matching_ifc) :
   _http(new HttpConnection(server,
                            false,
                            resolver,
@@ -82,7 +83,8 @@ HSSConnection::HSSConnection(const std::string& server,
   _sar_latency_tbl(homestead_sar_latency_tbl),
   _uar_latency_tbl(homestead_uar_latency_tbl),
   _lir_latency_tbl(homestead_lir_latency_tbl),
-  _scscf_uri(scscf_uri)
+  _scscf_uri(scscf_uri),
+  _fallback_if_no_matching_ifc(fallback_if_no_matching_ifc)
 {
 }
 
@@ -278,6 +280,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
                           std::vector<std::string>& aliases,
                           std::deque<std::string>& ccfs,
                           std::deque<std::string>& ecfs,
+                          bool fallback_if_no_matching_ifc,
                           bool allowNoIMS)
 {
   if (!root.get())
@@ -335,6 +338,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
   bool current_sp_contains_public_id = false;
   bool found_aliases = false;
   rapidxml::xml_node<>* sp = NULL;
+  Ifcs fallback_ifc;
 
   if (!imss->first_node("ServiceProfile"))
   {
@@ -369,6 +373,14 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
         associated_uris.push_back(uri);
         ifcs_map[uri] = ifc;
+        
+        // The first set of IFCs are what we might want to fall back to if
+        // the public ID we're looking for isn't found, so we store them off if
+        // the PublicIdentity node we're handling is the first one.
+        if (public_id == sp->first_node("PublicIdentity"))
+        {
+          fallback_ifc = ifc;
+        }
 
         if (!found_aliases)
         {
@@ -401,6 +413,21 @@ bool decode_homestead_xml(const std::string public_user_identity,
     }
   }
 
+  // We might get a set of IFCs where there's no Identity node that
+  // matches our URI - the main example is with wildcard identities,
+  // where we don't do wildcard matching yet. In this case, our behaviour
+  // is determined by fallback_if_no_matching_ifc:
+  //
+  // - if it's true, we'll use the first IFC given regardless of the
+  //   identity it specifies
+  // - if it's false, we just won't invoke any application servers
+  if (fallback_if_no_matching_ifc &&
+      (ifcs_map.count(public_user_identity) == 0))
+  {
+    ifcs_map[public_user_identity] = fallback_ifc;
+    associated_uris.push_back(public_user_identity);
+  }
+ 
   rapidxml::xml_node<>* charging_addrs_node = cw->first_node("ChargingAddresses");
 
   if (charging_addrs_node)
@@ -626,6 +653,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                               aliases,
                               ccfs,
                               ecfs,
+                              _fallback_if_no_matching_ifc,
                               false) ? HTTP_OK : HTTP_SERVER_ERROR;
 }
 
@@ -704,6 +732,7 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
                               unused_aliases,
                               ccfs,
                               ecfs,
+                              _fallback_if_no_matching_ifc,
                               true) ? HTTP_OK : HTTP_SERVER_ERROR;
 }
 

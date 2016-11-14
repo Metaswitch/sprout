@@ -1,6 +1,6 @@
 /**
  * @file common_sip_processing.h
- * 
+ *
  * Processing that needs to be done
  * early on every SIP message.
  *
@@ -52,12 +52,13 @@ extern "C" {
 
 #include "load_monitor.h"
 #include "snmp_counter_table.h"
+#include "snmp_counter_by_scope_table.h"
 #include "health_checker.h"
 
 pj_status_t
 init_common_sip_processing(LoadMonitor* load_monitor_arg,
-                           SNMP::CounterTable* requests_counter_arg,
-                           SNMP::CounterTable* overload_counter_arg,
+                           SNMP::CounterByScopeTable* requests_counter_arg,
+                           SNMP::CounterByScopeTable* overload_counter_arg,
                            HealthChecker* health_checker_arg);
 
 void unregister_common_processing_module(void);

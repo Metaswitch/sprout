@@ -148,6 +148,8 @@ struct options
   std::string                          scscf_node_uri;
   bool                                 sas_signaling_if;
   bool                                 disable_tcp_switch;
+  std::string                          chronos_hostname;
+  bool                                 allow_fallback_ifcs;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
