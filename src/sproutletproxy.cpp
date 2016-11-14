@@ -1556,6 +1556,11 @@ pjsip_sip_uri* SproutletWrapper::get_reflexive_uri(pj_pool_t* pool) const
 
 void SproutletWrapper::rx_request(pjsip_tx_data* req)
 {
+  // SAS log the start of processing by this sproutlet
+  SAS::Event event(trail(), SASEvent::BEGIN_SPROUTLET_REQ, 0);
+  event.add_var_param(_service_name);
+  SAS::report_event(event);
+
   // Log the request at VERBOSE level before we send it out to aid in
   // tracking its path through the sproutlets.
   if (Log::enabled(Log::VERBOSE_LEVEL))
@@ -1604,6 +1609,12 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
 
 void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
 {
+  // SAS log the start of processing by this sproutlet
+  SAS::Event event(trail(), SASEvent::BEGIN_SPROUTLET_RSP, 0);
+  event.add_var_param(_service_name);
+  event.add_static_param(fork_id);
+  SAS::report_event(event);
+
   // Log the response at VERBOSE level before we send it out to aid in
   // tracking its path through the sproutlets.
   if (Log::enabled(Log::VERBOSE_LEVEL))
@@ -1649,6 +1660,7 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
     }
   }
   _sproutlet_tsx->on_rx_response(rsp->msg, fork_id);
+
   process_actions(false);
 }
 

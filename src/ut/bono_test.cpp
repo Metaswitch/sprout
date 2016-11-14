@@ -258,12 +258,12 @@ public:
                             const string& icscf_uri_str = "",
                             bool emerg_reg_enabled = false)
   {
-    SipTest::SetUpTestCase(false);
+    SipTest::SetUpTestCase();
 
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
     _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
-    _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
+    _analytics = new AnalyticsLogger();
     _hss_connection = new FakeHSSConnection();
     if (ifcs)
     {

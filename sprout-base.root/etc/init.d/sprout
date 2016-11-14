@@ -189,6 +189,8 @@ get_daemon_args()
         [ -z "$min_token_rate" ] || min_token_rate_arg="--min-token-rate=$min_token_rate"
         [ -z "$exception_max_ttl" ] || exception_max_ttl_arg="--exception-max-ttl=$exception_max_ttl"
         [ -z "$max_session_expires" ] || max_session_expires_arg="--max-session-expires=$max_session_expires"
+        [ -z "$chronos_hostname" ] || chronos_hostname_arg="--chronos-hostname=$chronos_hostname"
+        [ -z "$allow_fallback_ifcs" ] || allow_fallback_ifcs_arg="--allow-fallback-ifcs"
 
         DAEMON_ARGS="
                      --domain=$home_domain
@@ -199,6 +201,7 @@ get_daemon_args()
                      --hss=$hs_hostname
                      --sprout-hostname=$sprout_hostname
                      --scscf-node-uri=$scscf_node_uri
+                     $chronos_hostname_arg
                      $xdms_hostname_arg
                      $ralf_arg
                      $enum_server_arg
@@ -225,6 +228,7 @@ get_daemon_args()
                      $override_npdi_arg
                      $exception_max_ttl_arg
                      $force_3pr_body_arg
+                     $allow_fallback_ifcs_arg
                      --http-address=$local_ip
                      --http-port=9888
                      --analytics=$log_directory
@@ -260,6 +264,11 @@ get_daemon_args()
         if [ -n "$call_list_ttl" ]
         then
           DAEMON_ARGS="$DAEMON_ARGS --call-list-ttl=$call_list_ttl"
+        fi
+
+        if [ -n "$memento" ] && [ -n "$cassandra_hostname" ]
+        then
+          DAEMON_ARGS="$DAEMON_ARGS --plugin-option=memento,cassandra,$cassandra_hostname"
         fi
 
         # TODO improve this so we don't have to have the same parameters
@@ -363,7 +372,7 @@ do_run()
 
         setup_environment
         get_daemon_args
-        /usr/share/clearwater/bin/run-in-signaling-namespace start-stop-daemon --start --quiet --exec $DAEMON --chuid $NAME --chdir $HOME -- $DAEMON_ARGS \
+        /usr/share/clearwater/bin/run-in-signaling-namespace start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME -- $DAEMON_ARGS --pidfile=$PIDFILE \
                 || return 2
 }
 

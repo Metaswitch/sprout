@@ -46,9 +46,7 @@
 // The fields for each PDLog instance contains:
 //   Identity - Identifies the log id to be used in the syslog id field.
 //   Severity - One of Emergency, Alert, Critical, Error, Warning, Notice,
-//              and Info.  Directly corresponds to the syslog severity types.
-//              Only PDLOG_ERROR or PDLOG_NOTICE are used.
-//              See syslog_facade.h for definitions.
+//              and Info.  Only LOG_ERROR or LOG_NOTICE are used.
 //   Message  - Formatted description of the condition.
 //   Cause    - The cause of the condition.
 //   Effect   - The effect the condition.
@@ -57,7 +55,7 @@
 static const PDLog2<const char*, const char*> CL_SPROUT_INVALID_PORT_SPROUTLET
 (
   PDLogBase::CL_SPROUT_ID + 1,
-  PDLOG_ERR,
+  LOG_ERR,
   "The %s port specified in /etc/clearwater/ must be in a range from"
   "1 to 65535 but has a value of %s.",
   "The <sproutlet>=<port> port value is outside the permitted range.",
@@ -68,7 +66,7 @@ static const PDLog2<const char*, const char*> CL_SPROUT_INVALID_PORT_SPROUTLET
 static const PDLog CL_SPROUT_INVALID_SAS_OPTION
 (
   PDLogBase::CL_SPROUT_ID + 3,
-  PDLOG_INFO,
+  LOG_INFO,
   "The sas_server option in /etc/clearwater/config is invalid "
   "or not configured.",
   "The interface to the SAS is not specified.",
@@ -79,7 +77,7 @@ static const PDLog CL_SPROUT_INVALID_SAS_OPTION
 static const PDLog1<const char*> CL_SPROUT_CRASH
 (
   PDLogBase::CL_SPROUT_ID + 4,
-  PDLOG_ERR,
+  LOG_ERR,
   "Fatal - The application has exited or crashed with signal %s.",
   "The application has encountered a fatal software error or has "
   "been terminated.",
@@ -91,7 +89,7 @@ static const PDLog1<const char*> CL_SPROUT_CRASH
 static const PDLog CL_SPROUT_STARTED
 (
   PDLogBase::CL_SPROUT_ID + 5,
-  PDLOG_ERR,
+  LOG_ERR,
   "Application started.",
   "The application is starting.",
   "Normal.",
@@ -101,7 +99,7 @@ static const PDLog CL_SPROUT_STARTED
 static const PDLog CL_SPROUT_NO_SI_CSCF
 (
   PDLogBase::CL_SPROUT_ID + 6,
-  PDLOG_NOTICE,
+  LOG_NOTICE,
   "Neither P-CSCF, S-CSCF nor I-CSCF functionality is enabled on this node.",
   "Neither a P-CSCF, a S-CSCF nor an I-CSCF was configured in "
   "/etc/clearwater/config.",
@@ -115,7 +113,7 @@ static const PDLog CL_SPROUT_NO_SI_CSCF
 static const PDLog CL_SPROUT_SI_CSCF_NO_HOMESTEAD
 (
   PDLogBase::CL_SPROUT_ID + 7,
-  PDLOG_ERR,
+  LOG_ERR,
   "Fatal - S/I-CSCF enabled with no Homestead server specified in "
   "/etc/clearwater/config.",
   "The S-CSCF and/or the I-CSCF options (scscf=<port>, icscf=<port>) "
@@ -129,7 +127,7 @@ static const PDLog CL_SPROUT_SI_CSCF_NO_HOMESTEAD
 static const PDLog CL_SPROUT_AUTH_NO_HOMESTEAD
 (
   PDLogBase::CL_SPROUT_ID + 8,
-  PDLOG_ERR,
+  LOG_ERR,
   "Fatal - Authentication enabled, but no Homestead server specified in "
   "/etc/clearwater/config.",
   "The hs_hostname was not set in the /etc/clearwater/config file.",
@@ -141,7 +139,7 @@ static const PDLog CL_SPROUT_AUTH_NO_HOMESTEAD
 static const PDLog CL_SPROUT_XDM_NO_HOMESTEAD
 (
   PDLogBase::CL_SPROUT_ID + 9,
-  PDLOG_ERR,
+  LOG_ERR,
   "Fatal - Homer XDM service is configured but no Homestead server specified "
   "in /etc/clearwater/config.",
   "The hs_hostname was not set in the /etc/clearwater/config file.",
@@ -153,7 +151,7 @@ static const PDLog CL_SPROUT_XDM_NO_HOMESTEAD
 static const PDLog1<const char*> CL_SPROUT_SIP_INIT_INTERFACE_FAIL
 (
   PDLogBase::CL_SPROUT_ID + 12,
-  PDLOG_ERR,
+  LOG_ERR,
   "Fatal - Error initializing SIP interfaces with error %s.",
   "The SIP interfaces could not be started.",
   "The application will exit and restart until the problem is fixed.",
@@ -165,7 +163,7 @@ static const PDLog1<const char*> CL_SPROUT_SIP_INIT_INTERFACE_FAIL
 static const PDLog CL_SPROUT_NO_RALF_CONFIGURED
 (
   PDLogBase::CL_SPROUT_ID + 13,
-  PDLOG_ERR,
+  LOG_ERR,
   "The application did not start a connection to Ralf because "
   "Ralf is not enabled.",
   "Ralf was not configured in the /etc/clearwater/config file.",
@@ -176,7 +174,7 @@ static const PDLog CL_SPROUT_NO_RALF_CONFIGURED
 static const PDLog CL_SPROUT_MEMCACHE_CONN_FAIL
 (
   PDLogBase::CL_SPROUT_ID + 14,
-  PDLOG_ERR,
+  LOG_ERR,
   "Fatal - Failed to connect to the memcached data store.",
   "The connection to the local store could not be created.",
   "The application will exit and restart until the problem is fixed.",
@@ -188,7 +186,7 @@ static const PDLog CL_SPROUT_MEMCACHE_CONN_FAIL
 static const PDLog1<const char*> CL_SPROUT_INIT_SERVICE_ROUTE_FAIL
 (
   PDLogBase::CL_SPROUT_ID + 15,
-  PDLOG_ERR,
+  LOG_ERR,
   "Fatal - Failed to enable the S-CSCF registrar with error %s.",
   "The S-CSCF registar could not be initialized.",
   "The application will exit and restart until the problem is fixed.",
@@ -198,7 +196,7 @@ static const PDLog1<const char*> CL_SPROUT_INIT_SERVICE_ROUTE_FAIL
 static const PDLog1<const char*> CL_SPROUT_REG_SUBSCRIBER_HAND_FAIL
 (
   PDLogBase::CL_SPROUT_ID + 16,
-  PDLOG_ERR,
+  LOG_ERR,
   "Fatal - Failed to register the SUBSCRIBE handlers with the SIP stack %s.",
   "The application subscription module could not be loaded.",
   "The application will exit and restart until the problem is fixed.",
@@ -208,7 +206,7 @@ static const PDLog1<const char*> CL_SPROUT_REG_SUBSCRIBER_HAND_FAIL
 static const PDLog1<const char*> CL_SPROUT_SIP_STACK_INIT_FAIL
 (
   PDLogBase::CL_SPROUT_ID + 19,
-  PDLOG_ERR,
+  LOG_ERR,
   "Fatal - The SIP stack failed to initialize with error, %s.",
   "The SIP interfaces could not be started.",
   "The application will exit and restart until the problem is fixed.",
@@ -219,7 +217,7 @@ static const PDLog1<const char*> CL_SPROUT_SIP_STACK_INIT_FAIL
 static const PDLog2<const char*, int> CL_SPROUT_HTTP_INTERFACE_FAIL
 (
   PDLogBase::CL_SPROUT_ID + 20,
-  PDLOG_ERR,
+  LOG_ERR,
   "An HTTP interface failed to initialize or start in %s with error %d.",
   "An HTTP interface has failed initialization.",
   "The application will exit and restart until the problem is fixed.",
@@ -229,7 +227,7 @@ static const PDLog2<const char*, int> CL_SPROUT_HTTP_INTERFACE_FAIL
 static const PDLog CL_SPROUT_ENDED
 (
   PDLogBase::CL_SPROUT_ID + 21,
-  PDLOG_ERR,
+  LOG_ERR,
   "The application is ending -- Shutting down.",
   "The application has been terminated by monit or has exited.",
   "Application services are no longer available.",
@@ -242,7 +240,7 @@ static const PDLog CL_SPROUT_ENDED
 static const PDLog2<const char*, int> CL_SPROUT_HTTP_INTERFACE_STOP_FAIL
 (
   PDLogBase::CL_SPROUT_ID + 22,
-  PDLOG_ERR,
+  LOG_ERR,
   "The HTTP interfaces encountered an error when stopping the HTTP stack in "
   "%s with error %d.",
   "When the application was exiting it encountered an error when shutting "
@@ -254,7 +252,7 @@ static const PDLog2<const char*, int> CL_SPROUT_HTTP_INTERFACE_STOP_FAIL
 static const PDLog2<const char*, const char*> CL_SPROUT_SIP_SEND_REQUEST_ERR
 (
   PDLogBase::CL_SPROUT_ID + 23,
-  PDLOG_ERR,
+  LOG_ERR,
   "Failed to send SIP request to %s with error %s.",
   "An attempt to send a SIP request failed.",
   "This may cause a call to fail.",
@@ -264,7 +262,7 @@ static const PDLog2<const char*, const char*> CL_SPROUT_SIP_SEND_REQUEST_ERR
 static const PDLog CL_SPROUT_SIP_DEADLOCK
 (
   PDLogBase::CL_SPROUT_ID + 24,
-  PDLOG_ERR,
+  LOG_ERR,
   "Fatal - The application detected a fatal software deadlock "
   "affecting SIP communication.",
   "An internal application software error has been detected.",
@@ -275,7 +273,7 @@ static const PDLog CL_SPROUT_SIP_DEADLOCK
 static const PDLog2<int, const char*> CL_SPROUT_SIP_UDP_INTERFACE_START_FAIL
 (
   PDLogBase::CL_SPROUT_ID + 25,
-  PDLOG_ERR,
+  LOG_ERR,
   "Failed to start a SIP UDP interface for port %d with error %s.",
   "The application could not start a UDP interface.",
   "This may affect call processing.",
@@ -286,7 +284,7 @@ static const PDLog2<int, const char*> CL_SPROUT_SIP_UDP_INTERFACE_START_FAIL
 static const PDLog2<int, const char*> CL_SPROUT_SIP_TCP_START_FAIL
 (
   PDLogBase::CL_SPROUT_ID + 26,
-  PDLOG_ERR,
+  LOG_ERR,
   "Failed to start a SIP TCP transport for port %d with error %s.",
   "Failed to start a SIP TCP connection.",
   "This may affect call processing.",
@@ -297,7 +295,7 @@ static const PDLog2<int, const char*> CL_SPROUT_SIP_TCP_START_FAIL
 static const PDLog2<int, const char*> CL_SPROUT_SIP_TCP_SERVICE_START_FAIL
 (
   PDLogBase::CL_SPROUT_ID + 27,
-  PDLOG_ERR,
+  LOG_ERR,
   "Failed to start a SIP TCP service for port %d with error %s.",
   "The application could not start a TCP service.",
   "This may affect call processing.",
@@ -309,7 +307,7 @@ static const PDLog2<int, const char*> CL_SPROUT_SIP_TCP_SERVICE_START_FAIL
 static const PDLog1<int> CL_SPROUT_SPROUTLET_END
 (
   PDLogBase::CL_SPROUT_ID + 30,
-  PDLOG_ERR,
+  LOG_ERR,
   "All Sproutlets using port %d have ended.",
   "The Sproutlet services are no longer available.",
   "The application will exit and restart until the problem is fixed.",
@@ -320,7 +318,7 @@ static const PDLog1<int> CL_SPROUT_SPROUTLET_END
 static const PDLog1<int> CL_SPROUT_SPROUTLET_AVAIL
 (
   PDLogBase::CL_SPROUT_ID + 34,
-  PDLOG_NOTICE,
+  LOG_NOTICE,
   "The Sproutlet services on port %d are now available.",
   "The Sproutlet services are now available.",
   "Normal.",
@@ -330,7 +328,7 @@ static const PDLog1<int> CL_SPROUT_SPROUTLET_AVAIL
 static const PDLog1<int> CL_SPROUT_SPROUTLET_INIT_FAIL2
 (
   PDLogBase::CL_SPROUT_ID + 35,
-  PDLOG_ERR,
+  LOG_ERR,
   "The Sproutlet services on port %d failed to initialize.",
   "The Sproutlet services are no longer available.",
   "The application will exit and restart until the problem is fixed.",
@@ -340,7 +338,7 @@ static const PDLog1<int> CL_SPROUT_SPROUTLET_INIT_FAIL2
 static const PDLog CL_SPROUT_PLUGIN_FAILURE
 (
   PDLogBase::CL_SPROUT_ID + 38,
-  PDLOG_ERR,
+  LOG_ERR,
   "One or more plugins failed to load.",
   "The service is no longer available.",
   "The application will exit and restart until the problem is fixed.",
@@ -350,7 +348,7 @@ static const PDLog CL_SPROUT_PLUGIN_FAILURE
 static const PDLog1<const char*> CL_SPROUT_ENUM_FILE_MISSING
 (
   PDLogBase::CL_SPROUT_ID + 39,
-  PDLOG_ERR,
+  LOG_ERR,
   "The ENUM file is not present.",
   "Sprout is configured to use file-based ENUM, but the configuration file does not exist.",
   "Sprout will not be able to translate telephone numbers into routable URIs.",
@@ -360,7 +358,7 @@ static const PDLog1<const char*> CL_SPROUT_ENUM_FILE_MISSING
 static const PDLog1<const char*> CL_SPROUT_ENUM_FILE_EMPTY
 (
   PDLogBase::CL_SPROUT_ID + 40,
-  PDLOG_ERR,
+  LOG_ERR,
   "The ENUM file is empty.",
   "Sprout is configured to use file-based ENUM, but the configuration file is empty.",
   "Sprout will not be able to translate telephone numbers into routable URIs.",
@@ -370,7 +368,7 @@ static const PDLog1<const char*> CL_SPROUT_ENUM_FILE_EMPTY
 static const PDLog1<const char*> CL_SPROUT_ENUM_FILE_INVALID
 (
   PDLogBase::CL_SPROUT_ID + 41,
-  PDLOG_ERR,
+  LOG_ERR,
   "The ENUM file is invalid.",
   "Sprout is configured to use file-based ENUM, but the configuration file does not exist.",
   "Sprout will not be able to translate telephone numbers into routable URIs.",
@@ -380,7 +378,7 @@ static const PDLog1<const char*> CL_SPROUT_ENUM_FILE_INVALID
 static const PDLog CL_SPROUT_SCSCF_FILE_MISSING
 (
   PDLogBase::CL_SPROUT_ID + 42,
-  PDLOG_ERR,
+  LOG_ERR,
   "The file listing S-CSCFs is not present.",
   "Sprout is configured as an I-CSCF, but the /etc/clearwater/s-cscf.json file (defining which S-CSCFs to use) does not exist.",
   "The Sprout I-CSCF will use the default S-CSCF URI only.",
@@ -390,7 +388,7 @@ static const PDLog CL_SPROUT_SCSCF_FILE_MISSING
 static const PDLog CL_SPROUT_SCSCF_FILE_EMPTY
 (
   PDLogBase::CL_SPROUT_ID + 43,
-  PDLOG_ERR,
+  LOG_ERR,
   "The file listing S-CSCFs is empty.",
   "Sprout is configured as an I-CSCF, but the /etc/clearwater/s-cscf.json file (defining which S-CSCFs to use) is empty.",
   "The Sprout I-CSCF will use the default S-CSCF URI only.",
@@ -400,7 +398,7 @@ static const PDLog CL_SPROUT_SCSCF_FILE_EMPTY
 static const PDLog CL_SPROUT_SCSCF_FILE_INVALID
 (
   PDLogBase::CL_SPROUT_ID + 44,
-  PDLOG_ERR,
+  LOG_ERR,
   "The file listing S-CSCFs is invalid.",
   "Sprout is configured as an I-CSCF, but the /etc/clearwater/s-cscf.json file (defining which S-CSCFs to use) is invalid due to invalid JSON or missing elements.",
   "The Sprout I-CSCF will use the default S-CSCF URI only.",
@@ -410,7 +408,7 @@ static const PDLog CL_SPROUT_SCSCF_FILE_INVALID
 static const PDLog CL_SPROUT_BGCF_FILE_MISSING
 (
   PDLogBase::CL_SPROUT_ID + 45,
-  PDLOG_NOTICE,
+  LOG_NOTICE,
   "The file listing BGCF routes is not present.",
   "The /etc/clearwater/bgcf.json file, defining which BGCF routes to use, does not exist.",
   "Sprout will not be able to route any calls outside the local deployment.",
@@ -420,7 +418,7 @@ static const PDLog CL_SPROUT_BGCF_FILE_MISSING
 static const PDLog CL_SPROUT_BGCF_FILE_EMPTY
 (
   PDLogBase::CL_SPROUT_ID + 46,
-  PDLOG_ERR,
+  LOG_ERR,
   "The file listing BGCF routes is empty.",
   "The /etc/clearwater/bgcf.json file, defining which BGCF routes to use, is empty.",
   "Sprout will not be able to route any calls outside the local deployment.",
@@ -430,7 +428,7 @@ static const PDLog CL_SPROUT_BGCF_FILE_EMPTY
 static const PDLog CL_SPROUT_BGCF_FILE_INVALID
 (
   PDLogBase::CL_SPROUT_ID + 47,
-  PDLOG_ERR,
+  LOG_ERR,
   "The file listing BGCF routes is not present or empty.",
   "The /etc/clearwater/bgcf.json file, defining which BGCF routes to use, is not valid (due to invalid JSON or missing elements).",
   "Sprout will not be able to route some or all calls outside the local deployment.",
@@ -440,7 +438,7 @@ static const PDLog CL_SPROUT_BGCF_FILE_INVALID
 static const PDLog2<const char *, const char*> CL_SPROUT_SESS_TERM_AS_COMM_FAILURE
 (
   PDLogBase::CL_SPROUT_ID + 48,
-  PDLOG_ERR,
+  LOG_ERR,
   "Sprout is currently unable to successfully communicate with an Application Server that uses session terminated default handling. The server's URI is: %s. Failure reason: %s",
   "Communication is failing to an Application Server",
   "Probable major loss of service. The precise impact will vary depending on the role of this Application Server.",
@@ -450,7 +448,7 @@ static const PDLog2<const char *, const char*> CL_SPROUT_SESS_TERM_AS_COMM_FAILU
 static const PDLog1<const char *> CL_SPROUT_SESS_TERM_AS_COMM_SUCCESS
 (
   PDLogBase::CL_SPROUT_ID + 49,
-  PDLOG_NOTICE,
+  LOG_NOTICE,
   "Sprout is able to successfully communicate with an Application Server that uses session terminated default handling. ",
   "Communication has been restored to an Application Server",
   "Full service has been restored.",
@@ -460,7 +458,7 @@ static const PDLog1<const char *> CL_SPROUT_SESS_TERM_AS_COMM_SUCCESS
 static const PDLog2<const char *, const char*> CL_SPROUT_SESS_CONT_AS_COMM_FAILURE
 (
   PDLogBase::CL_SPROUT_ID + 50,
-  PDLOG_ERR,
+  LOG_ERR,
   "Sprout is currently unable to successfully communicate with an Application Server that uses session continued default handling. The server's URI is %s. Failure reason: %s",
   "Communication is failing to <URI>",
   "Probable minor degradation of service, or loss of a supplemental service. The precise impact will vary depending on the role of the Application Server in the deployment.",
@@ -470,7 +468,7 @@ static const PDLog2<const char *, const char*> CL_SPROUT_SESS_CONT_AS_COMM_FAILU
 static const PDLog1<const char *> CL_SPROUT_SESS_CONT_AS_COMM_SUCCESS
 (
   PDLogBase::CL_SPROUT_ID + 51,
-  PDLOG_NOTICE,
+  LOG_NOTICE,
   "Sprout is able to successfully communicate with an Application Server that uses session continued default handling.",
   "Communication has been restored to an Application Server",
   "Full service has been restored.",

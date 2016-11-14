@@ -101,6 +101,7 @@ pj_xml_node* create_contact_node(pj_pool_t *pool,
 pj_xml_node* notify_create_reg_state_xml(
                          pj_pool_t *pool,
                          std::string& aor,
+                         std::vector<std::string> irs_impus,
                          SubscriberDataManager::AoR::Subscription* subscription,
                          std::vector<NotifyUtils::BindingNotifyInformation*> bnis,
                          NotifyUtils::RegistrationState reg_state)
@@ -128,97 +129,110 @@ pj_xml_node* notify_create_reg_state_xml(
   attr = pj_xml_attr_new(pool, &STR_STATE, state_str);
   pj_xml_add_attr(doc, attr);
 
-  // Create the registration node
+  // Create the registration nodes.  We need one per IMPU in the Implicit
+  // Registration Set, with the same binding/contact information in each.
+  //
+  // Note that TS24.229 is ambiguous on how bindings for different IMPUs in an
+  // IRS should be reported (see 5.4.2.1.2 4) e) IV) ).  For now, Clearwater
+  // assumes that the same binding/contact data needs to be reported for each
+  // IMPU.
   pj_str_t reg_aor;
   pj_str_t reg_id;
   pj_str_t reg_state_str;
 
-  std::string unescaped_aor = aor;
-  pj_strdup2(pool, &reg_aor, Utils::xml_escape(unescaped_aor).c_str());
-  std::string unescaped_reg_id = subscription->_to_tag;
-  pj_strdup2(pool, &reg_id, Utils::xml_escape(unescaped_reg_id).c_str());
-  reg_state_str = (reg_state == NotifyUtils::RegistrationState::ACTIVE)
-                                                  ? STR_ACTIVE : STR_TERMINATED;
-  reg_node = create_reg_node(pool, &reg_aor, &reg_id, &reg_state_str);
-
-  // Create the contact nodes
-  // For each binding, add a contact node to the registration node
-  for (std::vector<NotifyUtils::BindingNotifyInformation*>::const_iterator bni =
-         bnis.begin();
-       bni != bnis.end();
-       ++bni)
+  // Iterate over the IRS, inserting a registration element for each one
+  for (std::vector<std::string>::const_iterator impu = irs_impus.begin();
+       impu != irs_impus.end();
+       ++impu)
   {
-    // for each attribute, correctly populate
-    pj_str_t c_id;
-    pj_str_t c_state;
-    pj_str_t c_event;
+    // Escape the IMPU as an aor
+    std::string unescaped_aor = *impu;
+    pj_strdup2(pool, &reg_aor, Utils::xml_escape(unescaped_aor).c_str());
+    std::string unescaped_reg_id = subscription->_to_tag;
+    pj_strdup2(pool, &reg_id, Utils::xml_escape(unescaped_reg_id).c_str());
+    reg_state_str = (reg_state == NotifyUtils::RegistrationState::ACTIVE)
+                                                    ? STR_ACTIVE : STR_TERMINATED;
+    reg_node = create_reg_node(pool, &reg_aor, &reg_id, &reg_state_str);
 
-    std::string unescaped_c_id = (*bni)->_id;
-    pj_strdup2(pool, &c_id, Utils::xml_escape(unescaped_c_id).c_str());
-
-    switch ((*bni)->_contact_event)
+    // Create the contact nodes
+    // For each binding, add a contact node to the registration node
+    for (std::vector<NotifyUtils::BindingNotifyInformation*>::const_iterator bni =
+           bnis.begin();
+         bni != bnis.end();
+         ++bni)
     {
-      case NotifyUtils::ContactEvent::REGISTERED:
-        c_event = STR_REGISTERED;
-        c_state = STR_ACTIVE;
-        break;
-      case NotifyUtils::ContactEvent::CREATED:
-        c_event = STR_CREATED;
-        c_state = STR_ACTIVE;
-        break;
-      case NotifyUtils::ContactEvent::REFRESHED:
-        c_event = STR_REFRESHED;
-        c_state = STR_ACTIVE;
-        break;
-      case NotifyUtils::ContactEvent::SHORTENED:
-        c_event = STR_SHORTENED;
-        c_state = STR_ACTIVE;
-        break;
-      case NotifyUtils::ContactEvent::EXPIRED:
-        c_event = STR_EXPIRED;
-        c_state = STR_TERMINATED;
-        break;
+      // for each attribute, correctly populate
+      pj_str_t c_id;
+      pj_str_t c_state;
+      pj_str_t c_event;
+
+      std::string unescaped_c_id = (*bni)->_id;
+      pj_strdup2(pool, &c_id, Utils::xml_escape(unescaped_c_id).c_str());
+
+      switch ((*bni)->_contact_event)
+      {
+        case NotifyUtils::ContactEvent::REGISTERED:
+          c_event = STR_REGISTERED;
+          c_state = STR_ACTIVE;
+          break;
+        case NotifyUtils::ContactEvent::CREATED:
+          c_event = STR_CREATED;
+          c_state = STR_ACTIVE;
+          break;
+        case NotifyUtils::ContactEvent::REFRESHED:
+          c_event = STR_REFRESHED;
+          c_state = STR_ACTIVE;
+          break;
+        case NotifyUtils::ContactEvent::SHORTENED:
+          c_event = STR_SHORTENED;
+          c_state = STR_ACTIVE;
+          break;
+        case NotifyUtils::ContactEvent::EXPIRED:
+          c_event = STR_EXPIRED;
+          c_state = STR_TERMINATED;
+          break;
+      }
+
+      contact_node = create_contact_node(pool,
+                                         &c_id,
+                                         &c_state,
+                                         &c_event);
+
+      // Create and add URI element
+      pj_str_t c_uri;
+
+      if ((*bni)->_b->_uri.size() > 0)
+      {
+        std::string unescaped_c_uri = (*bni)->_b->_uri;
+        pj_strdup2(pool, &c_uri, Utils::xml_escape(unescaped_c_uri).c_str());
+      }
+
+      uri_node = pj_xml_node_new(pool, &STR_URI);
+      pj_strdup(pool, &uri_node->content, &c_uri);
+      pj_xml_add_node(contact_node, uri_node);
+
+      pj_str_t gruu;
+      pj_strdup2(pool,
+                 &gruu,
+                 Utils::xml_escape((*bni)->_b->pub_gruu_str(pool)).c_str());
+
+      if (gruu.slen != 0)
+      {
+        TRC_DEBUG("Create pub-gruu node");
+
+        pj_xml_node* gruu_node = pj_xml_node_new(pool, &STR_XML_PUB_GRUU);
+        attr = pj_xml_attr_new(pool, &STR_URI, &gruu);
+        pj_xml_add_attr(gruu_node, attr);
+        pj_xml_add_node(contact_node, gruu_node);
+      }
+
+      // Add the contact node to the registration node
+      pj_xml_add_node(reg_node, contact_node);
     }
 
-    contact_node = create_contact_node(pool,
-                                       &c_id,
-                                       &c_state,
-                                       &c_event);
+    pj_xml_add_node(doc, reg_node);
 
-    // Create and add URI element
-    pj_str_t c_uri;
-
-    if ((*bni)->_b->_uri.size() > 0)
-    {
-      std::string unescaped_c_uri = (*bni)->_b->_uri;
-      pj_strdup2(pool, &c_uri, Utils::xml_escape(unescaped_c_uri).c_str());
-    }
-
-    uri_node = pj_xml_node_new(pool, &STR_URI);
-    pj_strdup(pool, &uri_node->content, &c_uri);
-    pj_xml_add_node(contact_node, uri_node);
-
-    pj_str_t gruu;
-    pj_strdup2(pool,
-               &gruu,
-               Utils::xml_escape((*bni)->_b->pub_gruu_str(pool)).c_str());
-
-    if (gruu.slen != 0)
-    {
-      TRC_DEBUG("Create pub-gruu node");
-
-      pj_xml_node* gruu_node = pj_xml_node_new(pool, &STR_XML_PUB_GRUU);
-      attr = pj_xml_attr_new(pool, &STR_URI, &gruu);
-      pj_xml_add_attr(gruu_node, attr);
-      pj_xml_add_node(contact_node, gruu_node);
-    }
-
-    // Add the contact node to the registration node
-    pj_xml_add_node(reg_node, contact_node);
   }
-
-  pj_xml_add_node(doc, reg_node);
-
   return doc;
 }
 
@@ -234,6 +248,7 @@ static int xml_print_body( struct pjsip_msg_body *msg_body,
 pj_status_t notify_create_body(pjsip_msg_body* body,
                                pj_pool_t *pool,
                                std::string& aor,
+                               std::vector<std::string> irs_impus,
                                SubscriberDataManager::AoR::Subscription* subscription,
                                std::vector<NotifyUtils::BindingNotifyInformation*> bnis,
                                NotifyUtils::RegistrationState reg_state)
@@ -243,6 +258,7 @@ pj_status_t notify_create_body(pjsip_msg_body* body,
   pj_xml_node *doc;
   doc = notify_create_reg_state_xml(pool,
                                     aor,
+                                    irs_impus,
                                     subscription,
                                     bnis,
                                     reg_state);
@@ -287,7 +303,7 @@ pj_status_t create_request_from_subscription(
                                                   &uri,
                                                   &from,
                                                   &to,
-                                                  &stack_data.scscf_uri,
+                                                  &stack_data.scscf_uri_str,
                                                   &cid,
                                                   cseq,
                                                   body,
@@ -301,6 +317,7 @@ pj_status_t NotifyUtils::create_subscription_notify(
                                     pjsip_tx_data** tdata_notify,
                                     SubscriberDataManager::AoR::Subscription* s,
                                     std::string aor,
+                                    std::vector<std::string> irs_impus,
                                     SubscriberDataManager::AoR* aor_data,
                                     std::vector<NotifyUtils::BindingNotifyInformation*> bnis,
                                     NotifyUtils::RegistrationState reg_state,
@@ -319,6 +336,7 @@ pj_status_t NotifyUtils::create_subscription_notify(
   pj_status_t status = NotifyUtils::create_notify(tdata_notify,
                                                   s,
                                                   aor,
+                                                  irs_impus,
                                                   aor_data->_notify_cseq,
                                                   bnis,
                                                   reg_state,
@@ -331,6 +349,7 @@ pj_status_t NotifyUtils::create_notify(
                                     pjsip_tx_data** tdata_notify,
                                     SubscriberDataManager::AoR::Subscription* subscription,
                                     std::string aor,
+                                    std::vector<std::string> irs_impus,
                                     int cseq,
                                     std::vector<NotifyUtils::BindingNotifyInformation*> bnis,
                                     NotifyUtils::RegistrationState reg_state,
@@ -412,6 +431,7 @@ pj_status_t NotifyUtils::create_notify(
     status = notify_create_body(body2,
                                (*tdata_notify)->pool,
                                 aor,
+                                irs_impus,
                                 subscription,
                                 bnis,
                                 reg_state);

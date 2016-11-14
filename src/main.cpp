@@ -100,9 +100,13 @@ extern "C" {
 #include "exception_handler.h"
 #include "scscfsproutlet.h"
 #include "snmp_continuous_accumulator_table.h"
+#include "snmp_continuous_accumulator_by_scope_table.h"
 #include "snmp_event_accumulator_table.h"
+#include "snmp_event_accumulator_by_scope_table.h"
 #include "snmp_scalar.h"
+#include "snmp_scalar_by_scope_table.h"
 #include "snmp_counter_table.h"
+#include "snmp_counter_by_scope_table.h"
 #include "snmp_success_fail_count_table.h"
 #include "snmp_agent.h"
 #include "ralf_processor.h"
@@ -151,6 +155,8 @@ enum OptionTypes
   OPT_SAS_USE_SIGNALING_IF,
   OPT_DISABLE_TCP_SWITCH,
   OPT_DEFAULT_TEL_URI_TRANSLATION,
+  OPT_CHRONOS_HOSTNAME,
+  OPT_ALLOW_FALLBACK_IFCS,
 };
 
 
@@ -232,6 +238,8 @@ const static struct pj_getopt_option long_opt[] =
   { "scscf-node-uri",               required_argument, 0, OPT_SCSCF_NODE_URI},
   { "sas-use-signaling-interface",  no_argument,       0, OPT_SAS_USE_SIGNALING_IF},
   { "disable-tcp-switch",           no_argument,       0, OPT_DISABLE_TCP_SWITCH},
+  { "chronos-hostname",             required_argument, 0, OPT_CHRONOS_HOSTNAME},
+  { "allow-fallback-ifcs",          no_argument,       0, OPT_ALLOW_FALLBACK_IFCS},
   { NULL,                           0,                 0, 0}
 };
 
@@ -245,6 +253,9 @@ const static int QUIESCE_SIGNAL = SIGQUIT;
 const static int UNQUIESCE_SIGNAL = SIGUSR1;
 // Minimum value allowed by rfc4028, section 4
 const static int MIN_SESSION_EXPIRES = 90;
+
+static const std::string SPROUT_HTTP_MGMT_SOCKET_PATH = "/tmp/sprout-http-mgmt-socket";
+static const int NUM_HTTP_MGMT_THREADS = 5;
 
 static void usage(void)
 {
@@ -424,6 +435,11 @@ static void usage(void)
        "                            Whether to disable TCP-to-UDP uplift when messages are greater than.\n"
        "                            1300 bytes.\n"
        "     --pidfile=<filename>   Write pidfile\n"
+       "     --chronos-hostname <hostname>\n"
+       "                            Specify the hostname of a remote Chronos cluster. If unset the default\n"
+       "                            is to use localhost, using localhost as the callback URL.\n"
+       "     --allow-fallback-ifcs  If no Identity elements match for Initial Filter Criteria, use the\n"
+       "                            first IFC returned as a fallback.\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
        " -F, --log-file <directory>\n"
@@ -1097,6 +1113,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       options->disable_tcp_switch = true;
       break;
 
+    case OPT_ALLOW_FALLBACK_IFCS:
+      TRC_STATUS("IFC fallback enabled");
+      options->allow_fallback_ifcs = true;
+      break;
+
     case 'N':
       {
         std::vector<std::string> fields;
@@ -1119,6 +1140,9 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case OPT_SPROUT_HOSTNAME:
       options->sprout_hostname = std::string(pj_optarg);
       break;
+
+    case OPT_CHRONOS_HOSTNAME:
+      options->chronos_hostname = std::string(pj_optarg);
 
     case OPT_LISTEN_PORT:
       options->listen_port = atoi(pj_optarg);
@@ -1192,6 +1216,7 @@ class QuiesceCompleteHandler : public QuiesceCompletionInterface
 public:
   void quiesce_complete()
   {
+    TRC_STATUS("Quiesce complete");
     sem_post(&term_sem);
   }
 };
@@ -1251,6 +1276,7 @@ Store* local_data_store = NULL;
 SubscriberDataManager* local_sdm = NULL;
 SubscriberDataManager* remote_sdm = NULL;
 RalfProcessor* ralf_processor = NULL;
+DnsCachedResolver* dns_resolver = NULL;
 HttpResolver* http_resolver = NULL;
 ACRFactory* scscf_acr_factory = NULL;
 EnumService* enum_service = NULL;
@@ -1265,9 +1291,7 @@ int main(int argc, char* argv[])
   pj_status_t status;
   struct options opt;
 
-  Logger* analytics_logger_logger = NULL;
   AnalyticsLogger* analytics_logger = NULL;
-  DnsCachedResolver* dns_resolver = NULL;
   SIPResolver* sip_resolver = NULL;
   Store* remote_data_store = NULL;
   ImpiStore* impi_store = NULL;
@@ -1356,11 +1380,7 @@ int main(int argc, char* argv[])
   opt.scscf_node_uri = "";
   opt.sas_signaling_if = false;
   opt.disable_tcp_switch = false;
-
-  // Initialise ENT logging before making "Started" log
-  PDLogStatic::init(argv[0]);
-
-  CL_SPROUT_STARTED.log();
+  opt.allow_fallback_ifcs = false;
 
   status = init_logging_options(argc, argv, &opt);
 
@@ -1381,6 +1401,10 @@ int main(int argc, char* argv[])
                           opt.log_directory,
                           opt.log_level,
                           opt.log_to_file);
+
+  // We should now have a connection to syslog so we can write the started ENT
+  // log.
+  CL_SPROUT_STARTED.log();
 
   if ((opt.log_to_file) && (opt.log_directory != ""))
   {
@@ -1421,9 +1445,7 @@ int main(int argc, char* argv[])
 
   if (opt.analytics_enabled)
   {
-    analytics_logger_logger = new Logger(opt.analytics_directory, std::string("log"));
-    analytics_logger_logger->set_flags(Logger::ADD_TIMESTAMPS|Logger::FLUSH_ON_WRITE);
-    analytics_logger = new AnalyticsLogger(analytics_logger_logger);
+    analytics_logger = new AnalyticsLogger();
   }
 
   std::vector<std::string> sproutlet_uris;
@@ -1532,10 +1554,10 @@ int main(int argc, char* argv[])
     snmp_setup("sprout");
   }
 
-  SNMP::EventAccumulatorTable* latency_table;
-  SNMP::EventAccumulatorTable* queue_size_table;
-  SNMP::CounterTable* requests_counter;
-  SNMP::CounterTable* overload_counter;
+  SNMP::EventAccumulatorByScopeTable* latency_table;
+  SNMP::EventAccumulatorByScopeTable* queue_size_table;
+  SNMP::CounterByScopeTable* requests_counter;
+  SNMP::CounterByScopeTable* overload_counter;
 
   SNMP::IPCountTable* homestead_cxn_count = NULL;
 
@@ -1545,11 +1567,11 @@ int main(int argc, char* argv[])
   SNMP::EventAccumulatorTable* homestead_uar_latency_table = NULL;
   SNMP::EventAccumulatorTable* homestead_lir_latency_table = NULL;
 
-  SNMP::ContinuousAccumulatorTable* token_rate_table = NULL;
-  SNMP::U32Scalar* smoothed_latency_scalar = NULL;
-  SNMP::U32Scalar* target_latency_scalar = NULL;
-  SNMP::U32Scalar* penalties_scalar = NULL;
-  SNMP::U32Scalar* token_rate_scalar = NULL;
+  SNMP::ContinuousAccumulatorByScopeTable* token_rate_table = NULL;
+  SNMP::ScalarByScopeTable* smoothed_latency_scalar = NULL;
+  SNMP::ScalarByScopeTable* target_latency_scalar = NULL;
+  SNMP::ScalarByScopeTable* penalties_scalar = NULL;
+  SNMP::ScalarByScopeTable* token_rate_scalar = NULL;
 
   SNMP::RegistrationStatsTables reg_stats_tbls;
   SNMP::RegistrationStatsTables third_party_reg_stats_tbls;
@@ -1557,25 +1579,25 @@ int main(int argc, char* argv[])
 
   if (opt.pcscf_enabled)
   {
-    latency_table = SNMP::EventAccumulatorTable::create("bono_latency",
-                                                   ".1.2.826.0.1.1578918.9.2.2");
-    queue_size_table = SNMP::EventAccumulatorTable::create("bono_queue_size",
-                                                      ".1.2.826.0.1.1578918.9.2.6");
-    requests_counter = SNMP::CounterTable::create("bono_incoming_requests",
-                                                  ".1.2.826.0.1.1578918.9.2.4");
-    overload_counter = SNMP::CounterTable::create("bono_rejected_overload",
-                                                  ".1.2.826.0.1.1578918.9.2.5");
+    latency_table = SNMP::EventAccumulatorByScopeTable::create("bono_latency",
+                                                               ".1.2.826.0.1.1578918.9.2.2");
+    queue_size_table = SNMP::EventAccumulatorByScopeTable::create("bono_queue_size",
+                                                                  ".1.2.826.0.1.1578918.9.2.6");
+    requests_counter = SNMP::CounterByScopeTable::create("bono_incoming_requests",
+                                                         ".1.2.826.0.1.1578918.9.2.4");
+    overload_counter = SNMP::CounterByScopeTable::create("bono_rejected_overload",
+                                                         ".1.2.826.0.1.1578918.9.2.5");
   }
   else
   {
-    latency_table = SNMP::EventAccumulatorTable::create("sprout_latency",
-                                                   ".1.2.826.0.1.1578918.9.3.1");
-    queue_size_table = SNMP::EventAccumulatorTable::create("sprout_queue_size",
-                                                      ".1.2.826.0.1.1578918.9.3.8");
-    requests_counter = SNMP::CounterTable::create("sprout_incoming_requests",
-                                                  ".1.2.826.0.1.1578918.9.3.6");
-    overload_counter = SNMP::CounterTable::create("sprout_rejected_overload",
-                                                  ".1.2.826.0.1.1578918.9.3.7");
+    latency_table = SNMP::EventAccumulatorByScopeTable::create("sprout_latency",
+                                                               ".1.2.826.0.1.1578918.9.3.1");
+    queue_size_table = SNMP::EventAccumulatorByScopeTable::create("sprout_queue_size",
+                                                                  ".1.2.826.0.1.1578918.9.3.8");
+    requests_counter = SNMP::CounterByScopeTable::create("sprout_incoming_requests",
+                                                         ".1.2.826.0.1.1578918.9.3.6");
+    overload_counter = SNMP::CounterByScopeTable::create("sprout_rejected_overload",
+                                                         ".1.2.826.0.1.1578918.9.3.7");
 
     homestead_cxn_count = SNMP::IPCountTable::create("sprout_homestead_cxn_count",
                                                      ".1.2.826.0.1.1578918.9.3.3.1");
@@ -1612,16 +1634,16 @@ int main(int argc, char* argv[])
     auth_stats_tbls.non_register_auth_tbl = SNMP::SuccessFailCountTable::create("non_register_auth_success_fail_count",
                                                                                 ".1.2.826.0.1.1578918.9.3.17");
 
-    token_rate_table = SNMP::ContinuousAccumulatorTable::create("sprout_token_rate",
-                                                      ".1.2.826.0.1.1578918.9.3.27");
-    smoothed_latency_scalar = new SNMP::U32Scalar("sprout_smoothed_latency",
-                                                      ".1.2.826.0.1.1578918.9.3.28");
-    target_latency_scalar = new SNMP::U32Scalar("sprout_target_latency",
-                                                      ".1.2.826.0.1.1578918.9.3.29");
-    penalties_scalar = new SNMP::U32Scalar("sprout_penalties",
-                                                      ".1.2.826.0.1.1578918.9.3.30");
-    token_rate_scalar = new SNMP::U32Scalar("sprout_current_token_rate",
-                                                      ".1.2.826.0.1.1578918.9.3.31");
+    token_rate_table = SNMP::ContinuousAccumulatorByScopeTable::create("sprout_token_rate",
+                                                                       ".1.2.826.0.1.1578918.9.3.27");
+    smoothed_latency_scalar = SNMP::ScalarByScopeTable::create("sprout_smoothed_latency",
+                                                                ".1.2.826.0.1.1578918.9.3.28");
+    target_latency_scalar = SNMP::ScalarByScopeTable::create("sprout_target_latency",
+                                                             ".1.2.826.0.1.1578918.9.3.29");
+    penalties_scalar = SNMP::ScalarByScopeTable::create("sprout_penalties",
+                                                        ".1.2.826.0.1.1578918.9.3.30");
+    token_rate_scalar = SNMP::ScalarByScopeTable::create("sprout_current_token_rate",
+                                                         ".1.2.826.0.1.1578918.9.3.31");
   }
 
   // Create Sprout's alarm objects.
@@ -1794,7 +1816,8 @@ int main(int argc, char* argv[])
                                        homestead_uar_latency_table,
                                        homestead_lir_latency_table,
                                        hss_comm_monitor,
-                                       opt.uri_scscf);
+                                       opt.uri_scscf,
+                                       opt.allow_fallback_ifcs);
   }
 
   // Create ENUM service.
@@ -1817,7 +1840,6 @@ int main(int argc, char* argv[])
     enum_service = new DummyEnumService(opt.home_domain);
   }
 
-  HttpStack* http_stack = HttpStack::get_instance();
   if (opt.pcscf_enabled)
   {
     // Create an ACR factory for the P-CSCF.
@@ -1872,19 +1894,29 @@ int main(int argc, char* argv[])
 
   // Create a connection to Chronos.
   std::string port_str = std::to_string(opt.http_port);
+
+  std::string chronos_service;
   std::string chronos_callback_host = "127.0.0.1:" + port_str;
 
-  // We want Chronos to call back to its local sprout instance so that we can
-  // handle Sprouts failing without missing timers.
-  Utils::IPAddressType address_type = Utils::parse_ip_address(opt.http_address);
-  if ((address_type == Utils::IPAddressType::IPV6_ADDRESS) ||
-      (address_type == Utils::IPAddressType::IPV6_ADDRESS_WITH_PORT) ||
-      (address_type == Utils::IPAddressType::IPV6_ADDRESS_BRACKETED))
+  if (opt.chronos_hostname == "")
   {
-    chronos_callback_host = "[::1]:" + port_str;
+    chronos_service = "127.0.0.1:7253";
+
+    Utils::IPAddressType address_type = Utils::parse_ip_address(opt.http_address);
+
+    if ((address_type == Utils::IPAddressType::IPV6_ADDRESS) ||
+        (address_type == Utils::IPAddressType::IPV6_ADDRESS_WITH_PORT) ||
+        (address_type == Utils::IPAddressType::IPV6_ADDRESS_BRACKETED))
+    {
+      chronos_callback_host = "[::1]:" + port_str;
+    }
+  }
+  else
+  {
+    chronos_service = opt.chronos_hostname + ":7253";
+    chronos_callback_host = opt.sprout_hostname + ":" + port_str;
   }
 
-  std::string chronos_service = "127.0.0.1:7253";
   TRC_STATUS("Creating connection to Chronos %s using %s as the callback URI",
              chronos_service.c_str(),
              chronos_callback_host.c_str());
@@ -1976,74 +2008,90 @@ int main(int argc, char* argv[])
 
   // Start the HTTP stack early as plugins might need to register handlers
   // with it.
+  HttpStack* http_stack_sig = new HttpStack(opt.http_threads,
+                                            exception_handler,
+                                            access_logger);
   try
   {
-    http_stack->initialize();
-    http_stack->configure(opt.http_address,
-                          opt.http_port,
-                          opt.http_threads,
-                          exception_handler,
-                          access_logger);
+    http_stack_sig->initialize();
   }
   catch (HttpStack::Exception& e)
   {
     CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
     closelog();
-    TRC_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
+    TRC_ERROR("Caught signaling HttpStack::Exception - %s - %d\n", e._func, e._rc);
     return 1;
   }
 
-  if (opt.auth_enabled)
+  HttpStack* http_stack_mgmt = new HttpStack(NUM_HTTP_MGMT_THREADS,
+                                             exception_handler,
+                                             access_logger);
+  try
   {
-    // Create an AV store using the local store and initialise the authentication
-    // module.  We don't create a AV store using the remote data store as
-    // Authentication Vectors are only stored for a short period after the
-    // relevant challenge is sent.
-    TRC_STATUS("Initialise S-CSCF authentication module");
-    impi_store = new ImpiStore(local_data_store, opt.impi_store_mode);
-    status = init_authentication(opt.auth_realm,
-                                 impi_store,
-                                 hss_connection,
-                                 chronos_connection,
-                                 scscf_acr_factory,
-                                 opt.non_register_auth_mode,
-                                 analytics_logger,
-                                 &auth_stats_tbls,
-                                 opt.nonce_count_supported,
-                                 expiry_for_binding);
+    http_stack_mgmt->initialize();
   }
-
-  // Launch the registrar.
-  status = init_registrar(local_sdm,
-                          {remote_sdm},
-                          hss_connection,
-                          analytics_logger,
-                          scscf_acr_factory,
-                          opt.reg_max_expires,
-                          opt.force_third_party_register_body,
-                          &reg_stats_tbls,
-                          &third_party_reg_stats_tbls);
-
-  if (status != PJ_SUCCESS)
+  catch (HttpStack::Exception& e)
   {
-    CL_SPROUT_INIT_SERVICE_ROUTE_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
-    TRC_ERROR("Failed to enable S-CSCF registrar");
+    CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
+    closelog();
+    TRC_ERROR("Caught management HttpStack::Exception - %s - %d\n", e._func, e._rc);
     return 1;
   }
 
-  // Launch the subscription module.
-  status = init_subscription(local_sdm,
-                             {remote_sdm},
-                             hss_connection,
-                             scscf_acr_factory,
-                             analytics_logger,
-                             opt.sub_max_expires);
-
-  if (status != PJ_SUCCESS)
+  if (opt.enabled_scscf)
   {
-    CL_SPROUT_REG_SUBSCRIBER_HAND_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
-    TRC_ERROR("Failed to enable subscription module");
-    return 1;
+    if (opt.auth_enabled)
+    {
+      // Create an AV store using the local store and initialise the authentication
+      // module.  We don't create a AV store using the remote data store as
+      // Authentication Vectors are only stored for a short period after the
+      // relevant challenge is sent.
+      TRC_STATUS("Initialise S-CSCF authentication module");
+      impi_store = new ImpiStore(local_data_store, opt.impi_store_mode);
+      status = init_authentication(opt.auth_realm,
+                                   impi_store,
+                                   hss_connection,
+                                   chronos_connection,
+                                   scscf_acr_factory,
+                                   opt.non_register_auth_mode,
+                                   analytics_logger,
+                                   &auth_stats_tbls,
+                                   opt.nonce_count_supported,
+                                   expiry_for_binding);
+    }
+
+    // Launch the registrar.
+    status = init_registrar(local_sdm,
+                            {remote_sdm},
+                            hss_connection,
+                            analytics_logger,
+                            scscf_acr_factory,
+                            opt.reg_max_expires,
+                            opt.force_third_party_register_body,
+                            &reg_stats_tbls,
+                            &third_party_reg_stats_tbls);
+
+    if (status != PJ_SUCCESS)
+    {
+      CL_SPROUT_INIT_SERVICE_ROUTE_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
+      TRC_ERROR("Failed to enable S-CSCF registrar");
+      return 1;
+    }
+
+    // Launch the subscription module.
+    status = init_subscription(local_sdm,
+                               {remote_sdm},
+                               hss_connection,
+                               scscf_acr_factory,
+                               analytics_logger,
+                               opt.sub_max_expires);
+
+    if (status != PJ_SUCCESS)
+    {
+      CL_SPROUT_REG_SUBSCRIBER_HAND_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
+      TRC_ERROR("Failed to enable subscription module");
+      return 1;
+    }
   }
 
   // Load the sproutlet plugins.
@@ -2128,6 +2176,8 @@ int main(int argc, char* argv[])
                                                    hss_connection,
                                                    sip_resolver,
                                                    impi_store);
+  GetCachedDataTask::Config get_cached_data_config(local_sdm, {remote_sdm});
+  DeleteImpuTask::Config delete_impu_config(local_sdm, {remote_sdm}, hss_connection);
 
   // The AoRTimeoutTask and AuthTimeoutTask both handle
   // chronos requests, so use the ChronosHandler.
@@ -2135,25 +2185,49 @@ int main(int argc, char* argv[])
   ChronosHandler<AuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
   HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
   HttpStackUtils::PingHandler ping_handler;
+  HttpStackUtils::SpawningHandler<GetBindingsTask, GetCachedDataTask::Config> get_bindings_handler(&get_cached_data_config);
+  HttpStackUtils::SpawningHandler<GetSubscriptionsTask, GetCachedDataTask::Config> get_subscriptions_handler(&get_cached_data_config);
+  HttpStackUtils::SpawningHandler<DeleteImpuTask, DeleteImpuTask::Config> delete_impu_handler(&delete_impu_config);
 
   if (opt.enabled_scscf)
   {
     try
     {
-      http_stack->register_handler("^/ping$",
-                                   &ping_handler);
-      http_stack->register_handler("^/timers$",
-                                   &aor_timeout_handler);
-      http_stack->register_handler("^/authentication-timeout$",
-                                   &auth_timeout_handler);
-      http_stack->register_handler("^/registrations?*$",
-                                   &deregistration_handler);
-      http_stack->start(&reg_httpthread_with_pjsip);
+      http_stack_sig->register_handler("^/ping$",
+                                       &ping_handler);
+      http_stack_sig->register_handler("^/timers$",
+                                       &aor_timeout_handler);
+      http_stack_sig->register_handler("^/authentication-timeout$",
+                                       &auth_timeout_handler);
+      http_stack_sig->register_handler("^/registrations?*$",
+                                       &deregistration_handler);
+      http_stack_sig->start(&reg_httpthread_with_pjsip);
+      http_stack_sig->bind_tcp_socket(opt.http_address, opt.http_port);
     }
     catch (HttpStack::Exception& e)
     {
       CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
-      TRC_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      TRC_ERROR("Caught signaling HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      return 1;
+    }
+
+    try
+    {
+      http_stack_mgmt->register_handler("^/ping$",
+                                        &ping_handler);
+      http_stack_mgmt->register_handler("^/impu/[^/]+/bindings$",
+                                        &get_bindings_handler);
+      http_stack_mgmt->register_handler("^/impu/[^/]+/subscriptions$",
+                                        &get_subscriptions_handler);
+      http_stack_mgmt->register_handler("^/impu/[^/]+$",
+                                        &delete_impu_handler);
+      http_stack_mgmt->start(&reg_httpthread_with_pjsip);
+      http_stack_mgmt->bind_unix_socket(SPROUT_HTTP_MGMT_SOCKET_PATH);
+    }
+    catch (HttpStack::Exception& e)
+    {
+      CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
+      TRC_ERROR("Caught management HttpStack::Exception - %s - %d\n", e._func, e._rc);
       return 1;
     }
   }
@@ -2167,13 +2241,24 @@ int main(int argc, char* argv[])
   {
     try
     {
-      http_stack->stop();
-      http_stack->wait_stopped();
+      http_stack_sig->stop();
+      http_stack_sig->wait_stopped();
     }
     catch (HttpStack::Exception& e)
     {
       CL_SPROUT_HTTP_INTERFACE_STOP_FAIL.log(e._func, e._rc);
-      TRC_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      TRC_ERROR("Caught signaling HttpStack::Exception - %s - %d\n", e._func, e._rc);
+    }
+
+    try
+    {
+      http_stack_mgmt->stop();
+      http_stack_mgmt->wait_stopped();
+    }
+    catch (HttpStack::Exception& e)
+    {
+      CL_SPROUT_HTTP_INTERFACE_STOP_FAIL.log(e._func, e._rc);
+      TRC_ERROR("Caught management HttpStack::Exception - %s - %d\n", e._func, e._rc);
     }
   }
 
@@ -2221,6 +2306,8 @@ int main(int argc, char* argv[])
   destroy_options();
   destroy_stack();
 
+  delete http_stack_sig; http_stack_sig = NULL;
+  delete http_stack_mgmt; http_stack_mgmt = NULL;
   delete chronos_connection;
   delete hss_connection;
   delete quiescing_mgr;
@@ -2241,7 +2328,6 @@ int main(int argc, char* argv[])
   delete dns_resolver;
 
   delete analytics_logger;
-  delete analytics_logger_logger;
 
   // Delete Sprout's alarm objects
   delete chronos_comm_monitor;

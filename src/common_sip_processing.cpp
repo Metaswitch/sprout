@@ -69,8 +69,8 @@ extern "C" {
 #include "health_checker.h"
 #include "uri_classifier.h"
 
-static SNMP::CounterTable* requests_counter = NULL;
-static SNMP::CounterTable* overload_counter = NULL;
+static SNMP::CounterByScopeTable* requests_counter = NULL;
+static SNMP::CounterByScopeTable* overload_counter = NULL;
 static LoadMonitor* load_monitor = NULL;
 static HealthChecker* health_checker = NULL;
 
@@ -330,8 +330,8 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
     return PJ_TRUE;
   }
 
-  // If a message has parse errors, reject it (if it's a request) or
-  // drop it (if it's a response).
+  // If a message has parse errors, reject it (if it's a request other than ACK)
+  // or drop it (if it's a response or an ACK request).
   if (!pj_list_empty((pj_list_type*)&rdata->msg_info.parse_err))
   {
     SAS::TrailId trail = get_trail(rdata);
@@ -354,13 +354,20 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
 
     if (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG)
     {
-      TRC_WARNING("Rejecting malformed request with a 400 error");
-      PJUtils::respond_stateless(stack_data.endpt,
-                                 rdata,
-                                 PJSIP_SC_BAD_REQUEST,
-                                 NULL,
-                                 NULL,
-                                 NULL);
+      if (rdata->msg_info.msg->line.req.method.id == PJSIP_ACK_METHOD)
+      {
+        TRC_WARNING("Dropping malformed ACK request");
+      }
+      else
+      {
+        TRC_WARNING("Rejecting malformed request with a 400 error");
+        PJUtils::respond_stateless(stack_data.endpt,
+                                   rdata,
+                                   PJSIP_SC_BAD_REQUEST,
+                                   NULL,
+                                   NULL,
+                                   NULL);
+      }
     }
     else
     {
@@ -395,8 +402,8 @@ static pj_status_t process_on_tx_msg(pjsip_tx_data* tdata)
 
 pj_status_t
 init_common_sip_processing(LoadMonitor* load_monitor_arg,
-                           SNMP::CounterTable* requests_counter_arg,
-                           SNMP::CounterTable* overload_counter_arg,
+                           SNMP::CounterByScopeTable* requests_counter_arg,
+                           SNMP::CounterByScopeTable* overload_counter_arg,
                            HealthChecker* health_checker_arg)
 {
   // Register the stack modules.

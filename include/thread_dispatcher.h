@@ -49,11 +49,12 @@ extern "C" {
 
 #include "load_monitor.h"
 #include "snmp_event_accumulator_table.h"
+#include "snmp_event_accumulator_by_scope_table.h"
 #include "exception_handler.h"
 
 pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
-                                   SNMP::EventAccumulatorTable* latency_tbl_arg,
-                                   SNMP::EventAccumulatorTable* queue_size_tbl_arg,
+                                   SNMP::EventAccumulatorByScopeTable* latency_tbl_arg,
+                                   SNMP::EventAccumulatorByScopeTable* queue_size_tbl_arg,
                                    LoadMonitor* load_monitor_arg,
                                    ExceptionHandler* exception_handler_arg);
 

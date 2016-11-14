@@ -162,7 +162,9 @@ TYPED_TEST(BasicSubscriberDataManagerTest, BindingTests)
   b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("5102175698@cw-ngv.com");
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -190,7 +192,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, BindingTests)
 
   // Update AoR record in the store and check it.
   b1->_cseq = 17039;
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -208,7 +210,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, BindingTests)
 
   // Update AoR record again in the store and check it, this time using get_binding.
   b1->_cseq = 17040;
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -230,7 +232,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, BindingTests)
   EXPECT_EQ(1u, aor_data1->get_current()->bindings().size());
   aor_data1->get_current()->remove_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -271,7 +273,9 @@ TYPED_TEST(BasicSubscriberDataManagerTest, SubscriptionTests)
   b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("5102175698@cw-ngv.com");
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -301,7 +305,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, SubscriptionTests)
   s1->_timer_id = "shouldbecomeDeprecated";
 
   // Write the record back to the store.
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -475,7 +479,9 @@ TYPED_TEST(BasicSubscriberDataManagerTest, ExpiryTests)
   s2->_timer_id = "shouldbecomeDeprecated";
 
   // Write the record to the store.
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("5102175698@cw-ngv.com");
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -595,7 +601,9 @@ TYPED_TEST(MultiFormatSubscriberDataManagerTest, AllFormatsCanBeRead)
   b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
-  rc = this->_single_store->set_aor_data(std::string("2010000001@cw-ngv.com"), aor_data1, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("2010000001@cw-ngv.com");
+  rc = this->_single_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -783,7 +791,9 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, BasicAoRTimerTest)
   EXPECT_CALL(*(this->_chronos_connection), send_post(aor_data1->get_current()->_timer_id, _, _, _, _, _)).
                    WillOnce(DoAll(SetArgReferee<0>("TIMER_ID"),
                                   Return(HTTP_OK)));
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("5102175698@cw-ngv.com");
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -802,7 +812,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, BasicAoRTimerTest)
 
   // Write the record back to the store. Check DELETE request is sent.
   EXPECT_CALL(*(this->_chronos_connection), send_delete(aor_data1->get_current()->_timer_id, _)).Times(1);
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 }
@@ -844,7 +854,9 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, UpdateAoRTimerTest)
   EXPECT_CALL(*(this->_chronos_connection), send_post(_, _, _, _, _, expected_tags)).
                    WillOnce(DoAll(SetArgReferee<0>("TIMER_ID"),
                                   Return(HTTP_OK)));
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("5102175698@cw-ngv.com");
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -870,7 +882,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, UpdateAoRTimerTest)
   // Write the record back to the store, expecting a chronos PUT request.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, expected_tags)).
                    WillOnce(Return(HTTP_OK));
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -899,7 +911,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, UpdateAoRTimerTest)
   // Write the record back to the store, expecting a chronos PUT request.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, expected_tags)).
                    WillOnce(Return(HTTP_OK));
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 }
@@ -956,7 +968,9 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRChangeNoUpdateTimerTest)
   EXPECT_CALL(*(this->_chronos_connection), send_post(_, _, _, _, _, expected_tags)).
                    WillOnce(DoAll(SetArgReferee<0>("TIMER_ID"),
                                   Return(HTTP_OK)));
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("5102175698@cw-ngv.com");
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1004,7 +1018,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRChangeNoUpdateTimerTest)
 
   // Write the record back to the store, expecting no chronos PUT request.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _)).Times(0);
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1069,7 +1083,9 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
   EXPECT_CALL(*(this->_chronos_connection), send_post(_, (300), _, _, _, expected_tags)).
                    WillOnce(DoAll(SetArgReferee<0>("TIMER_ID"),
                                   Return(HTTP_OK)));
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("5102175698@cw-ngv.com");
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1084,7 +1100,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
 
   // Write the record back to the store.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _)).Times(0);
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1099,7 +1115,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
   // Write the record back to the store.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, (200), _, _, _, _)).
                    WillOnce(Return(HTTP_OK));
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1114,7 +1130,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
   // Write the record back to the store.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, (100), _, _, _, _)).
                    WillOnce(Return(HTTP_OK));
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 }
@@ -1150,7 +1166,9 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRTimerBadRequestNoIDTest)
   EXPECT_CALL(*(this->_chronos_connection), send_post(aor_data1->get_current()->_timer_id, _, _, _, _, _)).
                    WillOnce(DoAll(SetArgReferee<0>("TIMER_ID"),
                                   Return(HTTP_BAD_REQUEST)));
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("5102175698@cw-ngv.com");
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 

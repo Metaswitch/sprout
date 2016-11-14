@@ -46,6 +46,7 @@ extern "C" {
 #include <pjsip.h>
 #include <pjlib-util.h>
 #include <pjlib.h>
+#include <pjmedia.h>
 #include <stdint.h>
 }
 
@@ -140,7 +141,9 @@ pj_bool_t msg_supports_extension(pjsip_msg* msg, const char* extension);
 
 pj_bool_t is_first_hop(pjsip_msg* msg);
 
-int max_expires(pjsip_msg* msg, int default_expires);
+bool get_max_expires(pjsip_msg* msg, int default_expires, int& max_expires);
+
+bool is_deregistration(pjsip_msg* msg);
 
 pjsip_tx_data* clone_msg(pjsip_endpoint* endpt,
                          pjsip_rx_data* rdata);
@@ -149,15 +152,15 @@ pjsip_tx_data* clone_msg(pjsip_endpoint* endpt,
                          pjsip_tx_data* tdata);
 
 pj_status_t create_response(pjsip_endpoint *endpt,
-      		            const pjsip_rx_data *rdata,
-      		            int st_code,
-      		            const pj_str_t* st_text,
-      		            pjsip_tx_data **p_tdata);
+                      const pjsip_rx_data *rdata,
+                      int st_code,
+                      const pj_str_t* st_text,
+                      pjsip_tx_data **p_tdata);
 
 pj_status_t create_response(pjsip_endpoint *endpt,
                             const pjsip_tx_data *tdata,
                             int st_code,
-      		            const pj_str_t* st_text,
+                      const pj_str_t* st_text,
                             pjsip_tx_data **p_tdata);
 
 pj_status_t create_request_fwd(pjsip_endpoint *endpt,
@@ -272,6 +275,7 @@ std::string remove_visual_separators(const pj_str_t& number);
 
 bool get_npdi(pjsip_uri* uri);
 bool get_rn(pjsip_uri* uri, std::string& routing_value);
+pjsip_param* get_userpart_param(pjsip_uri* uri, pj_str_t param);
 
 void translate_request_uri(pjsip_msg* req,
                            pj_pool_t* pool,
@@ -295,8 +299,17 @@ bool should_update_np_data(URIClass old_uri_class,
 // request URI if there's no route headers). This can return
 // an empty string (if the header isn't a valid URI), so callers
 // should validate the result.
-std::string get_next_routing_header(pjsip_msg* msg);
+std::string get_next_routing_header(const pjsip_msg* msg);
 
+// Gets the media types specified in the SDP on the message.  Currently only
+// looks for Audio and Video media types.
+std::set<pjmedia_type> get_media_types(const pjsip_msg *msg);
+
+// Get the next routing URI - this is the top routing header (or the
+// request URI if there's no route headers), and it's context.
+// The URI returned is only valid while the passed in PJSIP message is valid
+pjsip_uri* get_next_routing_uri(const pjsip_msg* msg,
+                                pjsip_uri_context_e* context);
 } // namespace PJUtils
 
 #endif

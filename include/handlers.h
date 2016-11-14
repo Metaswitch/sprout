@@ -94,6 +94,7 @@ protected:
   SubscriberDataManager::AoRPair* set_aor_data(
                         SubscriberDataManager* current_sdm,
                         std::string aor_id,
+                        std::vector<std::string> irs_impus,
                         SubscriberDataManager::AoRPair* previous_aor_data,
                         std::vector<SubscriberDataManager*> remote_sdms,
                         bool& all_bindings_expired);
@@ -174,6 +175,91 @@ protected:
   std::string _impu;
   std::string _nonce;
 
+};
+
+
+/// Abstract class that contains most of the logic for retrieving stored
+/// bindings and subscriptions.
+///
+/// This class handles checking the request, extracting the requested IMPU and
+/// retrieving data from the store. It calls into the subclass to build a
+/// response, which it then sends.
+class GetCachedDataTask : public HttpStackUtils::Task
+{
+public:
+  struct Config
+  {
+    Config(SubscriberDataManager* sdm,
+           std::vector<SubscriberDataManager*> remote_sdms) :
+      _sdm(sdm),
+      _remote_sdms(remote_sdms)
+    {}
+
+    SubscriberDataManager* _sdm;
+    std::vector<SubscriberDataManager*> _remote_sdms;
+  };
+
+  GetCachedDataTask(HttpStack::Request& req, const Config* cfg, SAS::TrailId trail) :
+    HttpStackUtils::Task(req, trail), _cfg(cfg)
+  {};
+
+  void run();
+
+protected:
+  virtual std::string serialize_data(SubscriberDataManager::AoR* aor) = 0;
+  const Config* _cfg;
+};
+
+/// Concrete subclass for retrieving bindings.
+class GetBindingsTask : public GetCachedDataTask
+{
+public:
+  using GetCachedDataTask::GetCachedDataTask;
+protected:
+  std::string serialize_data(SubscriberDataManager::AoR* aor);
+};
+
+/// Concrete subclass for retrieving subscriptions.
+class GetSubscriptionsTask : public GetCachedDataTask
+{
+public:
+  using GetCachedDataTask::GetCachedDataTask;
+protected:
+  std::string serialize_data(SubscriberDataManager::AoR* aor);
+};
+
+/// Task for performing an administrative deregistration at the S-CSCF. This
+///
+/// -  Deletes subscriber data from the store (including all bindings and
+///    subscriptions).
+/// -  Sends a deregistration request to homestead.
+/// -  Sends NOTIFYs for any subscriptions to the reg state package for the AoR.
+/// -  Sends 3rd party deregister requests to Application Servers if required.
+class DeleteImpuTask : public HttpStackUtils::Task
+{
+public:
+  struct Config
+  {
+    Config(SubscriberDataManager* sdm,
+           std::vector<SubscriberDataManager*> remote_sdms,
+           HSSConnection* hss) :
+      _sdm(sdm), _remote_sdms(remote_sdms), _hss(hss)
+    {}
+
+    SubscriberDataManager* _sdm;
+    std::vector<SubscriberDataManager*> _remote_sdms;
+    HSSConnection* _hss;
+  };
+
+  DeleteImpuTask(HttpStack::Request& req, const Config* cfg, SAS::TrailId trail) :
+    HttpStackUtils::Task(req, trail), _cfg(cfg)
+  {};
+  virtual ~DeleteImpuTask() {}
+
+  void run();
+
+private:
+  const Config* _cfg;
 };
 
 #endif

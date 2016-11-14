@@ -148,15 +148,15 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
     SAS::report_event(event);
 
     status = pjsip_endpt_create_request(stack_data.endpt,
-                                        &method,               // Method
-                                        &stack_data.scscf_uri, // Target
-                                        &served_user_uri,      // From
-                                        &served_user_uri,      // To
-                                        &served_user_uri,      // Contact
-                                        NULL,                  // Auto-generate Call-ID
-                                        1,                     // CSeq
-                                        NULL,                  // No body
-                                        &tdata);               // OUT
+                                        &method,                   // Method
+                                        &stack_data.scscf_uri_str, // Target
+                                        &served_user_uri,          // From
+                                        &served_user_uri,          // To
+                                        &served_user_uri,          // Contact
+                                        NULL,                      // Auto-generate Call-ID
+                                        1,                         // CSeq
+                                        NULL,                      // No body
+                                        &tdata);                   // OUT
 
     if (status == PJ_SUCCESS)
     {
@@ -287,15 +287,15 @@ void send_register_to_as(pjsip_rx_data *received_register,
   pj_cstr(&as_uri, as.server_name.c_str());
 
   status = pjsip_endpt_create_request(stack_data.endpt,
-                                      &method,               // Method
-                                      &as_uri,               // Target
-                                      &stack_data.scscf_uri, // From
-                                      &user_uri,             // To
-                                      &stack_data.scscf_uri, // Contact
-                                      NULL,                  // Auto-generate Call-ID
-                                      1,                     // CSeq
-                                      NULL,                  // No body
-                                      &tdata);               // OUT
+                                      &method,                   // Method
+                                      &as_uri,                   // Target
+                                      &stack_data.scscf_uri_str, // From
+                                      &user_uri,                 // To
+                                      &stack_data.scscf_uri_str, // Contact
+                                      NULL,                      // Auto-generate Call-ID
+                                      1,                         // CSeq
+                                      NULL,                      // No body
+                                      &tdata);                   // OUT
 
   if (status != PJ_SUCCESS)
   {
@@ -422,6 +422,7 @@ void notify_application_servers()
 
 static bool expire_bindings(SubscriberDataManager *sdm,
                             const std::string& aor,
+                            std::vector<std::string> irs_impus,
                             const std::string& binding_id,
                             SAS::TrailId trail)
 {
@@ -452,7 +453,7 @@ static bool expire_bindings(SubscriberDataManager *sdm,
                                                            // single binding (flow failed).
     }
 
-    set_rc = sdm->set_aor_data(aor, aor_pair, trail, all_bindings_expired);
+    set_rc = sdm->set_aor_data(aor, irs_impus, aor_pair, trail, all_bindings_expired);
     delete aor_pair; aor_pair = NULL;
 
     // We can only say for sure that the bindings were expired if we were able
@@ -465,28 +466,52 @@ static bool expire_bindings(SubscriberDataManager *sdm,
   return all_bindings_expired;
 }
 
-void RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
+bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
                                         std::vector<SubscriberDataManager*> remote_sdms,
                                         HSSConnection* hss,
                                         const std::string& aor,
                                         const std::string& binding_id,
                                         const std::string& dereg_type,
-                                        SAS::TrailId trail)
+                                        SAS::TrailId trail,
+                                        HTTPCode* hss_status_code)
 {
   TRC_INFO("Remove binding(s) %s from IMPU %s", binding_id.c_str(), aor.c_str());
+  bool all_bindings_expired = false;
 
-  if (expire_bindings(sdm, aor, binding_id, trail))
+  // Determine the set of IMPUs in the Implicit Registration Set
+  std::vector<std::string> irs_impus;
+  std::string state;
+  std::map<std::string, Ifcs> ifc_map;
+  HTTPCode http_code = hss->get_registration_data(aor,
+                                                  state,
+                                                  ifc_map,
+                                                  irs_impus,
+                                                  trail);
+
+  if ((http_code != HTTP_OK) || irs_impus.empty())
+  {
+    // We were unable to determine the set of IMPUs for this AoR.  Push the AoR
+    // we have into the IRS list so that we have at least one IMPU we can issue
+    // NOTIFYs for.
+    TRC_WARNING("Unable to get Implicit Registration Set for %s: %d", aor.c_str(), http_code);
+    irs_impus.clear();
+    irs_impus.push_back(aor);
+  }
+
+  if (expire_bindings(sdm, aor, irs_impus, binding_id, trail))
   {
     // All bindings have been expired, so do deregistration processing for the
     // IMPU.
     TRC_INFO("All bindings for %s expired, so deregister at HSS and ASs", aor.c_str());
+    all_bindings_expired = true;
+
     std::vector<std::string> uris;
     std::map<std::string, Ifcs> ifc_map;
     HTTPCode http_code = hss->update_registration_state(aor,
                                                         "",
                                                         dereg_type,
                                                         ifc_map,
-                                                        uris,
+                                                        irs_impus,
                                                         trail);
 
     if (http_code == HTTP_OK)
@@ -495,6 +520,11 @@ void RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
       // should be passed on the REGISTER message, so we don't need the binding ID.
       deregister_with_application_servers(ifc_map[aor], sdm, aor, trail);
       notify_application_servers();
+    }
+
+    if (hss_status_code)
+    {
+      *hss_status_code = http_code;
     }
   }
 
@@ -507,6 +537,8 @@ void RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
        remote_sdm != remote_sdms.end();
        ++remote_sdm)
   {
-    (void) expire_bindings(*remote_sdm, aor, binding_id, trail);
+    (void) expire_bindings(*remote_sdm, aor, irs_impus, binding_id, trail);
   }
+
+  return all_bindings_expired;
 };

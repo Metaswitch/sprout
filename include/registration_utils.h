@@ -55,13 +55,14 @@ namespace RegistrationUtils {
 void init(SNMP::RegistrationStatsTables* third_party_reg_stats_tables_arg,
           bool force_third_party_register_body_arg);
 
-void remove_bindings(SubscriberDataManager* sdm,
+bool remove_bindings(SubscriberDataManager* sdm,
                      std::vector<SubscriberDataManager*> remote_sdms,
                      HSSConnection* hss,
                      const std::string& aor,
                      const std::string& binding_id,
                      const std::string& dereg_type,
-                     SAS::TrailId trail);
+                     SAS::TrailId trail,
+                     HTTPCode* hss_status_code = nullptr);
 
 void register_with_application_servers(Ifcs& ifcs,
                                        SubscriberDataManager* sdm,

@@ -277,6 +277,10 @@ static pj_bool_t proxy_on_rx_request(pjsip_rx_data *rdata)
 {
   TRC_DEBUG("Proxy RX request");
 
+  // SAS log the start of processing by this module
+  SAS::Event event(get_trail(rdata), SASEvent::BEGIN_STATEFUL_PROXY_REQ, 0);
+  SAS::report_event(event);
+
   if (rdata->msg_info.msg->line.req.method.id != PJSIP_CANCEL_METHOD)
   {
     // Request is a normal transaction request.
@@ -303,6 +307,10 @@ static pj_bool_t proxy_on_rx_response(pjsip_rx_data *rdata)
   pjsip_response_addr res_addr;
   pjsip_via_hdr *hvia;
   pj_status_t status;
+
+  // SAS log the start of processing by this module
+  SAS::Event event(get_trail(rdata), SASEvent::BEGIN_STATEFUL_PROXY_RSP, 0);
+  SAS::report_event(event);
 
   // Only forward responses to INVITES
   if (rdata->msg_info.cseq->method.id == PJSIP_INVITE_METHOD)
@@ -740,6 +748,13 @@ static int proxy_verify_request(pjsip_rx_data *rdata)
 /// Rejects a request statelessly.
 static void reject_request(pjsip_rx_data* rdata, int status_code)
 {
+  // Log start and end markers. These are needed for the failed request to
+  // appear in SAS.
+  SAS::Marker start_marker(get_trail(rdata), MARKER_ID_START, 1u);
+  SAS::report_marker(start_marker);
+  SAS::Marker end_marker(get_trail(rdata), MARKER_ID_END, 1u);
+  SAS::report_marker(end_marker);
+
   pj_status_t status;
 
   ACR* acr = cscf_acr_factory->get_acr(get_trail(rdata),
@@ -1674,7 +1689,8 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
         // in 5 minutes (300s).  This should never happens as it means the
         // registrar is misbehaving, but we defensively assume a short expiry
         // time as this is more secure.
-        int max_expires = PJUtils::max_expires(rdata->msg_info.msg, 300);
+        int max_expires;
+        PJUtils::get_max_expires(rdata->msg_info.msg, 300, max_expires);
         TRC_DEBUG("Maximum contact expiry is %d", max_expires);
 
         // Find the Service-Route header so we can record this with each
