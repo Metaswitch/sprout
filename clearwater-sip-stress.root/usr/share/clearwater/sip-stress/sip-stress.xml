@@ -41,8 +41,8 @@
            You'll also potentially want to change some other values - these
            are commented inline by CHANGES. -->
       <assign assign_to="reg_pause" value="300000"/>
-      <assign assign_to="call_delay" value="204000"/>
-      <assign assign_to="call_length" value="90000"/>
+      <assign assign_to="call_delay" value="270000"/>
+      <assign assign_to="call_length" value="24000"/>
       <assign assign_to="call_answer" value="6000"/>
     </action>
   </nop>
@@ -233,7 +233,7 @@
     <action>
       <add assign_to="call_repeat" value="1" />
       <!-- CHANGES. Set this to the same as the call_delay value set above -->
-      <sample assign_to="pre_call_delay" distribution="uniform" min="0" max="204000" />
+      <sample assign_to="pre_call_delay" distribution="uniform" min="0" max="270000" />
       <assign assign_to="post_call_delay" variable="call_delay" />
       <subtract assign_to="post_call_delay" variable="pre_call_delay" />
     </action>
@@ -568,7 +568,7 @@
   <recv response="200" rtd="call-teardown">
   </recv>
 
-  <pause variable="post_call_delay" next="1"/>
+  <pause variable="post_call_delay" next="1" />
 
   <!-- definition of the response time repartition table (unit is ms)   -->
   <ResponseTimeRepartition value="500, 1000, 2000, 3000, 4000, 7000, 10000"/>
