@@ -423,6 +423,7 @@ BasicProxy::UASTsx* BasicProxy::create_uas_tsx()
 BasicProxy::UASTsx::UASTsx(BasicProxy* proxy) :
   _proxy(proxy),
   _req(NULL),
+  _original_transport(NULL),
   _tsx(NULL),
   _lock(NULL),
   _trail(0),
@@ -493,6 +494,13 @@ BasicProxy::UASTsx::~UASTsx()
     }
   }
 
+  if (_original_transport != NULL)
+  {
+    TRC_DEBUG("Free original transport");
+    pjsip_transport_dec_ref(_original_transport);
+    _original_transport = NULL;
+  }
+
   if (_req != NULL)
   {
     TRC_DEBUG("Free original request");
@@ -550,6 +558,12 @@ pj_status_t BasicProxy::UASTsx::init(pjsip_rx_data* rdata)
     _pending_destroy = true;
     return PJ_ENOMEM;
     // LCOV_EXCL_STOP
+  }
+
+  _original_transport = rdata->tp_info.transport;
+  if (_original_transport != NULL)
+  {
+    pjsip_transport_add_ref(_original_transport);
   }
 
   if (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD)

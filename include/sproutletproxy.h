@@ -271,6 +271,7 @@ public:
                    Sproutlet* sproutlet,
                    const std::string& sproutlet_alias,
                    pjsip_tx_data* req,
+                   pjsip_transport* original_transport,
                    SAS::TrailId trail_id);
 
   /// Virtual destructor.
@@ -283,6 +284,7 @@ public:
   /// the following.
   void add_to_dialog(const std::string& dialog_id="");
   pjsip_msg* original_request();
+  void copy_original_transport(pjsip_msg*);
   const char* msg_info(pjsip_msg*);
   const pjsip_route_hdr* route_hdr() const;
   const std::string& dialog_id() const;
@@ -343,6 +345,9 @@ private:
   /// is passed to the Sproutlet.
   pjsip_tx_data* _req;
   SNMP::SIPRequestTypes _req_type;
+
+  // Immutable reference to the transport used by the original request.
+  pjsip_transport* _original_transport;
 
   typedef std::unordered_map<const pjsip_msg*, pjsip_tx_data*> Packets;
   Packets _packets;
