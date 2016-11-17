@@ -229,10 +229,16 @@ static void sas_log_rx_msg(pjsip_rx_data* rdata)
   // Store the trail in the message as it gets passed up the stack.
   set_trail(rdata, trail);
 
-  PJUtils::report_sas_to_from_markers(trail, rdata->msg_info.msg);
+  // Raise SAS markers on initial requests only - responses in the same
+  // transaction will have the same trail ID so don't need additional markers
+  if (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG)
+  {
+    PJUtils::report_sas_to_from_markers(trail, rdata->msg_info.msg);
 
-  pjsip_cid_hdr* cid = (pjsip_cid_hdr*)rdata->msg_info.cid;
-  PJUtils::mark_sas_call_branch_ids(trail, cid, rdata->msg_info.msg);
+    pjsip_cid_hdr* cid = (pjsip_cid_hdr*)rdata->msg_info.cid;
+
+    PJUtils::mark_sas_call_branch_ids(trail, cid, rdata->msg_info.msg);
+  }
 
   // Log the message event.
   SAS::Event event(trail, SASEvent::RX_SIP_MSG, 0);
@@ -256,9 +262,14 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
   }
   else if (trail != 0)
   {
-    PJUtils::report_sas_to_from_markers(trail, tdata->msg);
+    // Raise SAS markers on initial requests only - responses in the same
+    // transaction will have the same trail ID so don't need additional markers
+    if (tdata->msg->type == PJSIP_REQUEST_MSG)
+    {
+      PJUtils::report_sas_to_from_markers(trail, tdata->msg);
 
-    PJUtils::mark_sas_call_branch_ids(trail, NULL, tdata->msg);
+      PJUtils::mark_sas_call_branch_ids(trail, NULL, tdata->msg);
+    }
 
     // Log the message event.
     SAS::Event event(trail, SASEvent::TX_SIP_MSG, 0);
@@ -339,9 +350,6 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
     SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
     SAS::report_marker(start_marker);
 
-    PJUtils::report_sas_to_from_markers(trail, rdata->msg_info.msg);
-    PJUtils::mark_sas_call_branch_ids(trail, rdata->msg_info.cid, rdata->msg_info.msg);
-
     pjsip_parser_err_report *err = rdata->msg_info.parse_err.next;
     while (err != &rdata->msg_info.parse_err)
     {
@@ -354,6 +362,10 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
 
     if (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG)
     {
+      
+      PJUtils::report_sas_to_from_markers(trail, rdata->msg_info.msg);
+      PJUtils::mark_sas_call_branch_ids(trail, rdata->msg_info.cid, rdata->msg_info.msg);
+
       if (rdata->msg_info.msg->line.req.method.id == PJSIP_ACK_METHOD)
       {
         TRC_WARNING("Dropping malformed ACK request");
