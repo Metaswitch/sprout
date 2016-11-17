@@ -1665,15 +1665,6 @@ std::string PJUtils::get_header_value(pjsip_hdr* header)
 /// Add SAS markers for the specified call ID and branch IDs on the message (call ID may be omitted, but not message).
 void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* cid_hdr, pjsip_msg* msg)
 {
-  if (msg->type != PJSIP_REQUEST_MSG)
-  {
-    // We should only log SAS markers on a request, to minimise data written to
-    // SAS - responses will be raised on the same trail so don't need
-    // additional markers for correlation.
-    TRC_DEBUG("mark_sas_call_branch_ids incorrectly called on a response");
-    return;
-  }
-
   // Decide whether this is a message where we want to correlate on Call-ID or branch ID
   //
   // - Normally, we want to correlate on Call-ID (so different transactions in
@@ -1685,19 +1676,23 @@ void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* 
   //   file. Here, we correlate on branch ID so that only transactions are
   //   grouped together, but we also want to raise a non-correlating Call-ID
   //   marker so that users can search by Call-ID.
-  bool branch_id_correlation = ((msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
-                                (pjsip_method_cmp(&msg->line.req.method, pjsip_get_subscribe_method()) == 0) ||
-                                (pjsip_method_cmp(&msg->line.req.method, pjsip_get_notify_method()) == 0));
+  // - If we're logging a response (which will only happen if we receive a
+  //   response after a transaction ends and statelessly forward it), we'll
+  //   correlate on Call-ID by default.
+  bool branch_id_correlation = ((msg->type == PJSIP_REQUEST_MSG) &&
+                                ((msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
+                                 (pjsip_method_cmp(&msg->line.req.method, pjsip_get_subscribe_method()) == 0) ||
+                                 (pjsip_method_cmp(&msg->line.req.method, pjsip_get_notify_method()) == 0)));
   
   if (cid_hdr != NULL)
   {
     TRC_DEBUG("Logging SAS Call-ID marker, Call-ID %.*s", cid_hdr->id.slen, cid_hdr->id.ptr);
     SAS::Marker cid_marker(trail, MARKER_ID_SIP_CALL_ID, 1u);
     cid_marker.add_var_param(cid_hdr->id.slen, cid_hdr->id.ptr);
-    SAS::report_marker(cid_marker, branch_id_correlation ? SAS::Marker::Scope::Trace : SAS::Marker::Scope::None);
+    SAS::report_marker(cid_marker, branch_id_correlation ? SAS::Marker::Scope::None : SAS::Marker::Scope::Trace);
   }
 
-  // If we have a message, look for branch IDs too.
+  // If we want to do branch ID correlation, raise that marker now.
   if (branch_id_correlation)
   {
     // First find the top Via header.  This was added by us.

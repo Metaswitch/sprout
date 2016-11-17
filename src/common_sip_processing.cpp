@@ -139,6 +139,7 @@ static void local_log_tx_msg(pjsip_tx_data* tdata)
 // LCOV_EXCL_START - can't meaningfully test SAS in UT
 static void sas_log_rx_msg(pjsip_rx_data* rdata)
 {
+  bool first_message_in_trail = false;
   SAS::TrailId trail = 0;
 
   // Look for the SAS Trail ID for the corresponding transaction object.
@@ -224,14 +225,15 @@ static void sas_log_rx_msg(pjsip_rx_data* rdata)
     {
       trail = SAS::new_trail(1u);
     }
+    first_message_in_trail = true;
   }
 
   // Store the trail in the message as it gets passed up the stack.
   set_trail(rdata, trail);
 
-  // Raise SAS markers on initial requests only - responses in the same
-  // transaction will have the same trail ID so don't need additional markers
-  if (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG)
+  // Raise SAS markers on the first message in a trail only only - subsequent
+  // messages with the same trail ID don't need additional markers
+  if (first_message_in_trail)
   {
     PJUtils::report_sas_to_from_markers(trail, rdata->msg_info.msg);
 
@@ -362,10 +364,6 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
 
     if (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG)
     {
-      
-      PJUtils::report_sas_to_from_markers(trail, rdata->msg_info.msg);
-      PJUtils::mark_sas_call_branch_ids(trail, rdata->msg_info.cid, rdata->msg_info.msg);
-
       if (rdata->msg_info.msg->line.req.method.id == PJSIP_ACK_METHOD)
       {
         TRC_WARNING("Dropping malformed ACK request");
