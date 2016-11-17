@@ -25,9 +25,6 @@
 [submodule "modules/restund"]
 	path = modules/restund
 	url = git@github.com:Metaswitch/restund.git
-[submodule "modules/sipp"]
-	path = modules/sipp
-	url = git@github.com:Metaswitch/sipp.git
 [submodule "modules/websocketpp"]
 	path = modules/websocketpp
 	url = git@github.com:zaphoyd/websocketpp.git

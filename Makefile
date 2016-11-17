@@ -26,13 +26,11 @@ DEB_NAMES += call-diversion-as call-diversion-as-dbg
 DEB_NAMES += mangelwurzel-as mangelwurzel-as-dbg
 DEB_NAMES += bono bono-dbg restund
 DEB_NAMES += bono-node bono-node-dbg
-DEB_NAMES += clearwater-sipp clearwater-sipp-dbg
-DEB_NAMES += clearwater-sip-stress clearwater-sip-stress-stats clearwater-sip-perf
 
 INCLUDE_DIR := ${INSTALL_DIR}/include
 LIB_DIR := ${INSTALL_DIR}/lib
 
-SUBMODULES := pjsip c-ares curl libevhtp libmemcached libre restund openssl websocketpp sipp sas-client thrift cassandra
+SUBMODULES := pjsip c-ares curl libevhtp libmemcached libre restund openssl websocketpp sas-client thrift cassandra
 
 include build-infra/cw-module-install.mk
 
