@@ -242,8 +242,8 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
   return sproutlet;
 }
 
-// Extract the service name. This can appear in either the username or the
-// first domain label.
+// Extract the service name. This can appear in either the 'services'
+// parameter, the username or the first domain label.
 //
 // In each case, the domain name (minus the prefix in the latter case) also
 // has to be one of the registered local domains.
@@ -252,6 +252,25 @@ std::list<std::string> SproutletProxy::extract_possible_services(const pjsip_sip
   std::string service_name;
   std::list<std::string> possible_service_names;
   std::string domain;
+
+  // Check services parameter.
+  pjsip_param* services_param = pjsip_param_find(&sip_uri->other_param,
+                                                 &STR_SERVICE);
+  if (services_param != NULL)
+  {
+    // Check the services param
+    TRC_DEBUG("Found services param - %.*s",
+              services_param->value.slen,
+              services_param->value.ptr);
+    service_name = PJUtils::pj_str_to_string(&services_param->value);
+
+    if (is_host_local(&sip_uri->host))
+    {
+      TRC_DEBUG("Adding possible service name %s based on services parameter",
+                service_name.c_str());
+      possible_service_names.push_back(service_name);
+    }
+  }
 
   if (sip_uri->user.slen != 0)
   {
