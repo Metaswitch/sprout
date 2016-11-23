@@ -1361,6 +1361,7 @@ void AuthenticationTest::TestAKAAuthSuccess(char* key)
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
 }
 
+// Test that a normal AKA authenticated registration succeeds.
 TEST_F(AuthenticationTest, AKAAuthSuccess)
 {
   // Set up the HSS response for the AV query using a default private user identity.
@@ -1376,6 +1377,9 @@ TEST_F(AuthenticationTest, AKAAuthSuccess)
   AuthenticationTest::TestAKAAuthSuccess("12345678123456781234567812345678");
 }
 
+// Test that a normal AKA authenticated registration succeeds, when the response
+// contains null bytes. This was previously seen to cause incorrect behaviour
+// when the null bytes were hex decoded and placed in a string.
 TEST_F(AuthenticationTest, AKAAuthSuccessWithNullBytes)
 {
   // Set up the HSS response for the AV query using a default private user identity.
