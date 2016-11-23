@@ -167,6 +167,16 @@ pj_bool_t BasicProxy::on_rx_response(pjsip_rx_data *rdata)
       res_addr.dst_host.addr.port = hvia->sent_by.port;
     }
 
+    // Re-use incoming transport for response.
+    if (rdata->tp_info.transport != NULL)
+    {
+      res_addr.transport = rdata->tp_info.transport;
+      pj_memcpy(&res_addr.addr,
+                &rdata->pkt_info.src_addr,
+                rdata->pkt_info.src_addr_len);
+      res_addr.addr_len = rdata->pkt_info.src_addr_len;
+    }
+
     // Forward response
     status = pjsip_endpt_send_response(stack_data.endpt, &res_addr, tdata, NULL, NULL);
 
