@@ -315,7 +315,7 @@ pj_status_t user_lookup(pj_pool_t *pool,
       }
 
       cred_info->data_type = PJSIP_CRED_DATA_PLAIN_PASSWD;
-      pj_strdup2(pool, &cred_info->data, xres.c_str());
+      pj_strdup4(pool, &cred_info->data, xres.data(), xres.length());
       TRC_DEBUG("Found AKA XRES = %.*s", cred_info->data.slen, cred_info->data.ptr);
 
       // Use default realm as it isn't specified in the AV.
@@ -493,14 +493,15 @@ void create_challenge(pjsip_digest_credential* credentials,
         // - base64-encode that
         std::string joined = unhex(xres + integritykey + cryptkey);
         std::string formality = "http-digest-akav2-password";
+        unsigned int digest_len;
         unsigned char* digest = HMAC(EVP_md5(),
                                      (unsigned char*)joined.data(),
                                      joined.size(),
                                      (unsigned char*)(formality.data()),
                                      formality.size(),
                                      NULL,
-                                     NULL);
-        std::string password = base64_encode(std::string(reinterpret_cast<char*>(digest)));
+                                     &digest_len);
+        std::string password = base64_encode(std::string((char*) digest, digest_len));
 
         // We hex-decode this when getting it out of memcached later (for
         // consistency with AKAv1) so hex-encode it now.
