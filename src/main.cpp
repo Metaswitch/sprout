@@ -73,7 +73,6 @@ extern "C" {
 #include "websockets.h"
 #include "memcachedstore.h"
 #include "mmtel.h"
-#include "subscription.h"
 #include "registrar.h"
 #include "authentication.h"
 #include "options.h"
@@ -1291,6 +1290,7 @@ ACRFactory* scscf_acr_factory = NULL;
 EnumService* enum_service = NULL;
 ExceptionHandler* exception_handler = NULL;
 AlarmManager* alarm_manager = NULL;
+AnalyticsLogger* analytics_logger = NULL;
 
 /*
  * main()
@@ -1300,7 +1300,6 @@ int main(int argc, char* argv[])
   pj_status_t status;
   struct options opt;
 
-  AnalyticsLogger* analytics_logger = NULL;
   SIPResolver* sip_resolver = NULL;
   Store* remote_data_store = NULL;
   ImpiStore* impi_store = NULL;
@@ -2088,21 +2087,6 @@ int main(int argc, char* argv[])
       TRC_ERROR("Failed to enable S-CSCF registrar");
       return 1;
     }
-
-    // Launch the subscription module.
-    status = init_subscription(local_sdm,
-                               {remote_sdm},
-                               hss_connection,
-                               scscf_acr_factory,
-                               analytics_logger,
-                               opt.sub_max_expires);
-
-    if (status != PJ_SUCCESS)
-    {
-      CL_SPROUT_REG_SUBSCRIBER_HAND_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
-      TRC_ERROR("Failed to enable subscription module");
-      return 1;
-    }
   }
 
   // Load the sproutlet plugins.
@@ -2297,7 +2281,6 @@ int main(int argc, char* argv[])
 
   if (opt.enabled_scscf)
   {
-    destroy_subscription();
     destroy_registrar();
     if (opt.auth_enabled)
     {

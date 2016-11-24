@@ -171,9 +171,7 @@ Store::Status SubscriberDataManager::set_aor_data(
                                      std::vector<std::string> irs_impus,
                                      AoRPair* aor_pair,
                                      SAS::TrailId trail,
-                                     bool& all_bindings_expired,
-                                     pjsip_rx_data* extra_message_rdata,
-                                     pjsip_tx_data* extra_message_tdata)
+                                     bool& all_bindings_expired)
 {
   // The ordering of this function is quite important.
   //
@@ -239,17 +237,6 @@ Store::Status SubscriberDataManager::set_aor_data(
 
   if (_primary_sdm)
   {
-    // We may have been given some messages to send by the caller.
-    if ((extra_message_rdata != NULL) &&
-        (extra_message_tdata != NULL))
-    {
-      pjsip_endpt_send_response2(stack_data.endpt,
-                                 extra_message_rdata,
-                                 extra_message_tdata,
-                                 NULL,
-                                 NULL);
-    }
-
     // Send any NOTIFYs needed
     _notify_sender->send_notifys(aor_id, irs_impus, aor_pair, now, trail);
   }

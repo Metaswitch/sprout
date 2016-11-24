@@ -591,9 +591,7 @@ public:
                                      std::vector<std::string> irs_impus,
                                      AoRPair* aor_pair,
                                      SAS::TrailId trail,
-                                     bool& all_bindings_expired = unused_bool,
-                                     pjsip_rx_data* extra_message_rdata = NULL,
-                                     pjsip_tx_data* extra_message_tdata = NULL);
+                                     bool& all_bindings_expired = unused_bool);
 
 private:
   // Expire any out of date bindings in the current AoR

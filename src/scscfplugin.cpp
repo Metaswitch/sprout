@@ -42,6 +42,7 @@
 #include "cfgoptions.h"
 #include "sproutletplugin.h"
 #include "scscfsproutlet.h"
+#include "subscriptionsproutlet.h"
 #include "sprout_alarmdefinition.h"
 #include "sprout_pd_definitions.h"
 #include "log.h"
@@ -57,6 +58,7 @@ public:
 
 private:
   SCSCFSproutlet* _scscf_sproutlet;
+  SubscriptionSproutlet* _subscription_sproutlet;
   Alarm* _sess_cont_as_alarm;
   Alarm* _sess_term_as_alarm;
 
@@ -71,6 +73,7 @@ SCSCFPlugin sproutlet_plugin;
 
 SCSCFPlugin::SCSCFPlugin() :
   _scscf_sproutlet(NULL),
+  _subscription_sproutlet(NULL),
   _incoming_sip_transactions_tbl(NULL),
   _outgoing_sip_transactions_tbl(NULL)
 {
@@ -148,7 +151,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                    &CL_SPROUT_SESS_CONT_AS_COMM_FAILURE,
                                    &CL_SPROUT_SESS_CONT_AS_COMM_SUCCESS);
 
-    _scscf_sproutlet = new SCSCFSproutlet(opt.prefix_scscf,
+    _scscf_sproutlet = new SCSCFSproutlet("scscf-proxy",
                                           opt.uri_scscf,
                                           scscf_node_uri,
                                           icscf_uri,
@@ -169,9 +172,19 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           sess_cont_as_tracker);
     plugin_loaded = _scscf_sproutlet->init();
 
+    _subscription_sproutlet = new SubscriptionSproutlet(opt.prefix_scscf,
+                                                        opt.port_scscf,
+                                                        opt.uri_scscf,
+                                                        local_sdm,
+                                                        {remote_sdm},
+                                                        hss_connection,
+                                                        scscf_acr_factory,
+                                                        analytic_logger,
+                                                        opt.sub_max_expires);
+
     // We want to prioritise choosing the S-CSCF in ambiguous situations, so
     // make sure it's at the front of the sproutlet list
-    sproutlets.push_front(_scscf_sproutlet);
+    sproutlets.push_front(_subscription_sproutlet);
   }
 
   return plugin_loaded;
@@ -182,6 +195,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 void SCSCFPlugin::unload()
 {
   delete _scscf_sproutlet;
+  delete _subscription_sproutlet;
   delete _sess_term_as_alarm; _sess_term_as_alarm = NULL;
   delete _sess_cont_as_alarm; _sess_cont_as_alarm = NULL;
 }
