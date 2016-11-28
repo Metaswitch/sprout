@@ -2350,62 +2350,65 @@ TEST_F(SproutletProxyTest, SproutletCopiesOriginalTransport)
   // that reuses the original transport for onwards messages.
   pjsip_tx_data* tdata;
 
-  // Create a TCP connection to the listening port.
-  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.scscf_port,
-                                        "10.10.28.1",   // node1.awaydomain
-                                        49152);
+  // Create two TCP connections to the listening port.
+  TransportFlow* tp1 = new TransportFlow(TransportFlow::Protocol::TCP,
+                                         stack_data.scscf_port,
+                                         "10.10.28.1",   // node1.awaydomain
+                                         49152);
+  TransportFlow* tp2 = new TransportFlow(TransportFlow::Protocol::TCP,
+                                         stack_data.scscf_port,
+                                         "10.10.28.1",   // node1.awaydomain
+                                         54321);
 
-  // Inject a request with two Route headers - the first referencing the
-  // transport-copying Sproutlet and the second going back to the sender.
-  Message msg1;
-  msg1._method = "INVITE";
-  msg1._requri = "sip:bob@awaydomain";
-  msg1._from = "sip:alice@homedomain";
-  msg1._to = "sip:bob@awaydomain";
-  msg1._via = tp->to_string(false);
-  msg1._route = "Route: <sip:transport.proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:node1.awaydomain;transport=TCP;lr>";
-  inject_msg(msg1.get_request(), tp);
+  // We're going to show that whichever transport we use to send in an INVITE
+  // is reused on the outgoing side.
+  for (int ii = 0; ii < 2; ii++)
+  {
+    // Use one, or the other, of our transport flows.
+    TransportFlow* tp = (ii == 0) ? tp1 : tp2;
 
-  // Expecting 100 Trying and forwarded INVITE
-  ASSERT_EQ(2, txdata_count());
+    // Inject a request with two Route headers - the first referencing the
+    // transport-copying Sproutlet and the second going back to the sender.
+    Message msg1;
+    msg1._method = "INVITE";
+    msg1._requri = "sip:bob@awaydomain";
+    msg1._from = "sip:alice@homedomain";
+    msg1._to = "sip:bob@awaydomain";
+    msg1._via = tp->to_string(false);
+    msg1._route = "Route: <sip:transport.proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:node1.awaydomain;transport=TCP;lr>";
+    inject_msg(msg1.get_request(), tp);
 
-  // Check the 100 Trying.
-  tdata = current_txdata();
-  RespMatcher(100).matches(tdata->msg);
-  tp->expect_target(tdata);
-  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
-  free_txdata();
+    // Expecting 100 Trying and forwarded INVITE
+    ASSERT_EQ(2, txdata_count());
 
-  // Request is forwarded to the node in the second Route header, reusing the
-  // incoming transport
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  expect_target("TCP", "10.10.28.1", 49152, tdata);
-  ReqMatcher("INVITE").matches(tdata->msg);
+    // Check the 100 Trying.
+    tdata = current_txdata();
+    RespMatcher(100).matches(tdata->msg);
+    tp->expect_target(tdata);
+    EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
+    free_txdata();
 
-  // Check the RequestURI has not been altered.
-  EXPECT_EQ("sip:bob@awaydomain", str_uri(tdata->msg->line.req.uri));
+    // Request is forwarded to the node in the second Route header, reusing the
+    // incoming transport
+    ASSERT_EQ(1, txdata_count());
+    tdata = current_txdata();
+    tp->expect_target(tdata);
+    ReqMatcher("INVITE").matches(tdata->msg);
 
-  // Check the first Route header has been removed.
-  EXPECT_EQ("Route: <sip:node1.awaydomain;transport=TCP;lr>",
-            get_headers(tdata->msg, "Route"));
+    // Send a 200 OK response.
+    inject_msg(respond_to_current_txdata(200));
 
-  // Check no Record-Route headers have been added.
-  EXPECT_EQ("", get_headers(tdata->msg, "Record-Route"));
+    // Check the response is forwarded back to the source.
+    ASSERT_EQ(1, txdata_count());
+    tdata = current_txdata();
+    tp->expect_target(tdata);
+    RespMatcher(200).matches(tdata->msg);
+    free_txdata();
 
-  // Send a 200 OK response.
-  inject_msg(respond_to_current_txdata(200));
+    // All done!
+    ASSERT_EQ(0, txdata_count());
+  }
 
-  // Check the response is forwarded back to the source.
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  tp->expect_target(tdata);
-  RespMatcher(200).matches(tdata->msg);
-  free_txdata();
-
-  // All done!
-  ASSERT_EQ(0, txdata_count());
-
-  delete tp;
+  delete tp1;
+  delete tp2;
 }
