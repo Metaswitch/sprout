@@ -2392,7 +2392,7 @@ TEST_F(SproutletProxyTest, SproutletCopiesOriginalTransport)
     // incoming transport
     ASSERT_EQ(1, txdata_count());
     tdata = current_txdata();
-    tp->expect_target(tdata);
+    tp->expect_target(tdata, true);
     ReqMatcher("INVITE").matches(tdata->msg);
 
     // Send a 200 OK response.
