@@ -1776,7 +1776,21 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
           status = pjsip_tsx_send_msg(_cancel_tsx, cancel);
         }
 
-        if (status != PJ_SUCCESS)
+        // There are some known but hard-to-hit ways for this to fail - we
+        // only WARN for these:
+        //
+        // - EEXISTS can be hit if we've already sent out the CANCEL and then
+        //   see a transport failure on the incoming side of the call - that
+        //   brings us through this path for a second time.
+        //
+        // - EINVALIDOP can be hit if the transport on which we're trying to
+        //   send the CANCEL is unavailable.
+        if ((status == PJ_EEXISTS) || (status == PJ_EINVALIDOP))
+        {
+          TRC_WARNING("Error sending CANCEL, %s",
+                      PJUtils::pj_status_to_string(status).c_str());
+        }
+        else if (status != PJ_SUCCESS)
         {
           //LCOV_EXCL_START
           TRC_ERROR("Error sending CANCEL, %s",
