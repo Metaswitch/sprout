@@ -57,10 +57,11 @@ then
   exit 2
 fi
 
-# Populate the file with defaults if not already present
+# Check the file is already present. If not, there may be problems with the plugin
 if [[ ! -f $CONFPATH/$FILENAME ]]
 then
-  cp $CONFPATH/sample/$FILENAME $CONFPATH/$FILENAME
+  echo "No configuration file present. There may be a problem with the Clearwater Configuration Manager"
+  exit 2
 fi
 
 # Upload the file to etcd
