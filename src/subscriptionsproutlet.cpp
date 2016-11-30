@@ -713,7 +713,12 @@ void SubscriptionSproutletTsx::log_subscriptions(const std::string& aor_name,
   }
 }
 
-void route_to_scscf_proxy(pjsip_msg* req)
+void SubscriptionSproutletTsx::route_to_scscf_proxy(pjsip_msg* req)
 {
-  assert(!"Not implemented"); // TODO
+  // TODO Route to a sensible URI.
+  pjsip_sip_uri* uri =
+    (pjsip_sip_uri*)PJUtils::uri_from_string("sip:scscf-proxy.example.com;lr",
+                                             get_pool(req));
+  PJUtils::add_top_route_header(req, uri, get_pool(req));
+  send_request(req);
 }
