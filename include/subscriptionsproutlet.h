@@ -125,7 +125,6 @@ protected:
   void process_subscription_request(pjsip_msg* msg);
   void route_to_scscf_proxy(pjsip_msg* req);
 
-  // TODO: Should this live on the sproutlet?
   SubscriberDataManager::AoRPair* write_subscriptions_to_store(
                      SubscriberDataManager* primary_sdm,        ///<store to write to
                      std::string aor,                           ///<address of record to write to
