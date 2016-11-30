@@ -74,28 +74,78 @@ class SubscriptionSproutletTsx;
 class SubscriptionSproutlet : public Sproutlet
 {
 public:
-  SubscriptionSproutlet();
+  SubscriptionSproutlet(const std::string& name,
+                        int port,
+                        const std::string& uri,
+                        SubscriberDataManager* sdm,
+                        std::vector<SubscriberDataManager*> remote_sdms,
+                        HSSConnection* hss_connection,
+                        ACRFactory* acr_factory,
+                        AnalyticsLogger* analytics_logger,
+                        int cfg_max_expires);
   ~SubscriptionSproutlet();
 
-private:
+  SproutletTsx* get_tsx(SproutletTsxHelper* helper,
+                        const std::string& alias,
+                        pjsip_msg* req) override;
 
+private:
+  friend class SubscriptionSproutletTsx;
+
+  SubscriberDataManager* _sdm;
+  std::vector<SubscriberDataManager*> _remote_sdms;
+
+  // Connection to the HSS service for retrieving associated public URIs.
+  HSSConnection* _hss;
+
+  /// Factory for generating ACR messages for Rf billing.
+  ACRFactory* _acr_factory;
+
+  AnalyticsLogger* _analytics;
+
+  /// The maximum time (in seconds) that a device can subscribe for.
+  int _max_expires;
+
+  /// Default value for a subscription expiry. RFC3860 has this as 3761 seconds.
+  static const int DEFAULT_SUBSCRIPTION_EXPIRES = 3761;
 };
 
 
 class SubscriptionSproutletTsx : public SproutletTsx
 {
 public:
-  SubscriptionSproutletTsx();
+  SubscriptionSproutletTsx(SproutletTsxHelper* helper,
+                           SubscriptionSproutlet* sproutlet);
   ~SubscriptionSproutletTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req) override;
-  virtual void on_tx_request(pjsip_msg* req, int fork_id) override;
-  virtual void on_rx_response(pjsip_msg* rsp, int fork_id) override;
-  virtual void on_tx_response(pjsip_msg* rsp) override;
-  virtual void on_rx_cancel(int status_code, pjsip_msg* req) override;
 
-private:
+protected:
+  bool accept_request(pjsip_msg* msg, SAS::TrailId trail);
+  void process_subscription_request(pjsip_msg* msg);
+  void route_to_scscf_proxy(pjsip_msg* req);
 
+  // TODO: Should this live on the sproutlet?
+  SubscriberDataManager::AoRPair* write_subscriptions_to_store(
+                     SubscriberDataManager* primary_sdm,        ///<store to write to
+                     std::string aor,                           ///<address of record to write to
+                     std::vector<std::string> irs_impus,        ///(IMPUs in Implicit Registration Set
+                     pjsip_msg* msg,                            ///<received message to read headers from
+                     int now,                                   ///<time now
+                     SubscriberDataManager::AoRPair* backup_aor,///<backup data if no entry in store
+                     std::vector<SubscriberDataManager*> backup_sdms,
+                                                                ///<backup stores to read from if no entry in store and no backup data
+                     SAS::TrailId trail,                        ///<SAS trail
+                     std::string public_id,                     ///
+                     bool send_ok,                              ///<Should we create an OK
+                     ACR* acr,                                  ///
+                     std::deque<std::string> ccfs,              ///
+                     std::deque<std::string> ecfs);             ///
+
+  void log_subscriptions(const std::string& aor_name,
+                         SubscriberDataManager::AoR* aor_data);
+
+  SubscriptionSproutlet* _sproutlet;
 };
 
 #endif

@@ -58,7 +58,6 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          acr.cpp \
                          signalhandler.cpp \
                          health_checker.cpp \
-                         subscription.cpp \
                          notify_utils.cpp \
                          unique.cpp \
                          chronosconnection.cpp \

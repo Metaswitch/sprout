@@ -218,22 +218,7 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
     }
   }
 
-  // Now check whether we've allocated any sproutlets when we really want to
-  // route the message to the Subscription module instead
-  if ((sproutlet) &&
-      (sproutlet->service_name() == _scscf_name) &&
-      (request_acceptable_to_subscription_module(req, 0)))
-  {
-    // This is a subscribe being routed back to the S-CSCF sproutlet but to
-    // get this handled correctly we need to route it externally to make sure it
-    // hits the subscription module.
-    TRC_DEBUG("Force the SUBSCRIBE message to be routed externally");
-    SAS::Event event(trail, SASEvent::FORCE_EXTERNAL_ROUTING_SUBSCRIBE, 0);
-    SAS::report_event(event);
-    force_external_routing = true;
-    sproutlet = NULL;
-  }
-  else if (sproutlet == NULL)
+  if (sproutlet == NULL)
   {
     SAS::Event event(trail, SASEvent::NO_SPROUTLET_SELECTED, 0);
     SAS::report_event(event);
@@ -329,7 +314,7 @@ bool SproutletProxy::does_uri_match_sproutlet(const pjsip_uri* uri,
     return false;
     // LCOV_EXCL_STOP
   }
-  
+
   // Now we know we have a SIP URI, cast to one.
   pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)uri;
   std::list<std::string> possible_service_names = extract_possible_services(sip_uri);

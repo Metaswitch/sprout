@@ -42,6 +42,11 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+extern "C" {
+#include "pjsip-simple/evsub.h"
+#include <pjsip-simple/evsub_msg.h>
+}
+
 #include "log.h"
 #include "sproutsasevent.h"
 #include "constants.h"
@@ -53,30 +58,28 @@
 #include "uri_classifier.h"
 
 /// SubscriptionSproutlet constructor
-SubscriptionSproutlet::SubscriptionSproutlet(const std::string& scscf_name,
+SubscriptionSproutlet::SubscriptionSproutlet(const std::string& name,
                                              int port,
                                              const std::string& uri,
-                                             SubscriberDataManager* reg_sdm,
-                                             std::vector<SubscriberDataManager*> reg_remote_sdm,
+                                             SubscriberDataManager* sdm,
+                                             std::vector<SubscriberDataManager*> remote_sdms,
                                              HSSConnection* hss_connection,
-                                             ACRFactory* rfacr_factory,
+                                             ACRFactory* acr_factory,
                                              AnalyticsLogger* analytics_logger,
                                              int cfg_max_expires) :
-  Sproutlet(scscf_name, port, uri, ""),
-  _reg_sdm(reg_sdm),
-  _reg_remote_sdm(reg_remote_sdm),
-  _hss_connection(hss_connection),
-  _rfacr_factory(rfacr_factory),
-  _analytics_logger(analytics_logger),
-  _cfg_max_expires(cfg_max_expires)
+  Sproutlet(name, port, uri, ""),
+  _sdm(sdm),
+  _remote_sdms(remote_sdms),
+  _hss(hss_connection),
+  _acr_factory(acr_factory),
+  _analytics(analytics_logger),
+  _max_expires(cfg_max_expires)
 {
-  // To-do
 }
 
 /// SubscriptionSproutlet destructor
 SubscriptionSproutlet::~SubscriptionSproutlet()
 {
-  // To-do
 }
 
 SproutletTsx* SubscriptionSproutlet::get_tsx(SproutletTsxHelper* helper,
@@ -87,9 +90,9 @@ SproutletTsx* SubscriptionSproutlet::get_tsx(SproutletTsxHelper* helper,
 }
 
 SubscriptionSproutletTsx::SubscriptionSproutletTsx(SproutletTsxHelper* helper,
-                                                   SubscriptionSproutlet* subscription):
-  SproutletTsx(helper)
-  _subscription(subscription)
+                                                   SubscriptionSproutlet* sproutlet):
+  SproutletTsx(helper),
+  _sproutlet(sproutlet)
 {
   TRC_DEBUG("Subscription Transaction (%p) created", this);
 }
@@ -107,22 +110,20 @@ void SubscriptionSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   SAS::Event event(trail(), SASEvent::BEGIN_SUBSCRIPTION_MODULE, 0);
   SAS::report_event(event);
 
-  bool accept = request_acceptable_to_subscription_module(req, trail());
+  bool accept = accept_request(req, trail());
 
   if (accept)
   {
-    process_subscription_request(req); //Fix this function
+    process_subscription_request(req);
   }
   else
   {
-    route_to_scscf_proxy(req); // Write function
+    route_to_scscf_proxy(req);
   }
 }
 
 // Check whether this request should be absorbed by the subscription module
-bool SubscriptionSproutletTsx::request_acceptable_to_subscription_module(
-                                                            pjsip_msg* msg,
-                                                            SAS::TrailId trail)
+bool SubscriptionSproutletTsx::accept_request(pjsip_msg* msg, SAS::TrailId trail)
 {
   if (pjsip_method_cmp(&msg->line.req.method, pjsip_get_subscribe_method()))
   {
@@ -152,7 +153,7 @@ bool SubscriptionSproutletTsx::request_acceptable_to_subscription_module(
   // by this module or passed up to an AS.
 
   // A valid subscription must have the Event header set to "reg". This is case-sensitive
-  pj_str_t event_name = pj_str("Event");
+  pj_str_t event_name = pj_str((char*)"Event");
   pjsip_event_hdr* event = (pjsip_event_hdr*)pjsip_msg_find_hdr_by_name(msg, &event_name, NULL);
 
   if (!event || (PJUtils::pj_str_to_string(&event->event_type) != "reg"))
@@ -183,7 +184,7 @@ bool SubscriptionSproutletTsx::request_acceptable_to_subscription_module(
   if (accept)
   {
     bool found = false;
-    pj_str_t reginfo = pj_str("application/reginfo+xml");
+    pj_str_t reginfo = pj_str((char*)"application/reginfo+xml");
     for (uint32_t i = 0; i < accept->count; i++)
     {
       if (!pj_strcmp(accept->values + i, &reginfo))
@@ -219,19 +220,19 @@ bool SubscriptionSproutletTsx::request_acceptable_to_subscription_module(
 
 void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* msg)
 {
-  int st_code = PJSIP_SC_OK;
+  pjsip_status_code st_code = PJSIP_SC_OK;
 
-  SAS::TrailId trail = trail();
+  SAS::TrailId trail_id = trail();
 
   // Get the URI from the To header and check it is a SIP or SIPS URI.
   pjsip_uri* uri = PJSIP_MSG_TO_HDR(msg)->uri;
   pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
-  int expiry = (expires != NULL) ? expires->ivalue : DEFAULT_SUBSCRIPTION_EXPIRES;
+  int expiry = (expires != NULL) ? expires->ivalue : SubscriptionSproutlet::DEFAULT_SUBSCRIPTION_EXPIRES;
 
-  if (expiry > max_expires)
+  if (expiry > _sproutlet->_max_expires)
   {
     // Expiry is too long, set it to the maximum.
-    expiry = max_expires;
+    expiry = _sproutlet->_max_expires;
   }
 
   if ((!PJSIP_URI_SCHEME_IS_SIP(uri)) && (!PJSIP_URI_SCHEME_IS_TEL(uri)))
@@ -241,7 +242,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* msg)
     // the AoR isn't valid for the domain in the RequestURI).
     TRC_ERROR("Rejecting subscribe request using invalid URI scheme");
 
-    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_URLSCHEME, 0);
+    SAS::Event event(trail_id, SASEvent::SUBSCRIBE_FAILED_EARLY_URLSCHEME, 0);
     SAS::report_event(event);
 
     pjsip_msg* rsp = create_response(msg, PJSIP_SC_NOT_FOUND);
@@ -275,13 +276,15 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* msg)
     // that's been registered for emergency service.
     TRC_ERROR("Rejecting subscribe request from emergency registration");
 
-    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_EMERGENCY, 0);
+    SAS::Event event(trail_id, SASEvent::SUBSCRIBE_FAILED_EARLY_EMERGENCY, 0);
     SAS::report_event(event);
 
     // Allow-Events is a mandatory header on 489 responses.
-    pjsip_generic_string_hdr* allow_events_hdr = pjsip_generic_string_hdr_create(get_pool(msg), &STR_ALLOW_EVENTS, &STR_REG);
+    pjsip_generic_string_hdr* allow_events_hdr =
+      pjsip_generic_string_hdr_create(get_pool(msg), &STR_ALLOW_EVENTS, &STR_REG);
 
     pjsip_msg* rsp = create_response(msg, PJSIP_SC_BAD_EVENT);
+    pjsip_msg_add_hdr(rsp, (pjsip_hdr*)allow_events_hdr);
     send_response(rsp);
     free_msg(msg);
     return;
@@ -289,9 +292,9 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* msg)
 
   // Create an ACR for the request.  The node role is always considered
   // originating for SUBSCRIBE requests.
-  ACR* acr = acr_factory->get_acr(trail,
-                                  ACR::CALLING_PARTY,
-                                  ACR::NODE_ROLE_ORIGINATING);
+  ACR* acr = _sproutlet->_acr_factory->get_acr(trail_id,
+                                               ACR::CALLING_PARTY,
+                                               ACR::NODE_ROLE_ORIGINATING);
   acr->rx_request(msg);
 
   // Canonicalize the public ID from the URI in the To header.
@@ -304,12 +307,12 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* msg)
 
   // Add SAS markers to the trail attached to the message so the trail
   // becomes searchable.
-  SAS::Event event(trail, SASEvent::SUBSCRIBE_START, 0);
+  SAS::Event event(trail_id, SASEvent::SUBSCRIBE_START, 0);
   event.add_var_param(public_id);
   SAS::report_event(event);
 
-  TRC_DEBUG("Report SAS start marker - trail (%llx)", trail);
-  SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
+  TRC_DEBUG("Report SAS start marker - trail (%llx)", trail_id);
+  SAS::Marker start_marker(trail_id, MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
 
   // Query the HSS for the associated URIs.
@@ -320,14 +323,14 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* msg)
   std::string state;
   std::deque<std::string> ccfs;
   std::deque<std::string> ecfs;
-  HTTPCode http_code = hss->get_registration_data(public_id,
-                                                  state,
-                                                  ifc_map,
-                                                  uris,
-                                                  ccfs,
-                                                  ecfs,
-                                                  trail);
-
+  HTTPCode http_code = _sproutlet->_hss->get_registration_data(public_id,
+                                                               state,
+                                                               ifc_map,
+                                                               uris,
+                                                               ccfs,
+                                                               ecfs,
+                                                               trail_id);
+#if 0 // TODO refactor this method.
   if (process_hss_sip_failure(http_code,
                               state,
                               rdata,
@@ -338,6 +341,9 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* msg)
     delete acr;
     return;
   }
+#else
+  http_code = http_code; // Clean compile
+#endif
 
   // Determine the AOR from the first entry in the uris array.
   std::string aor = uris.front();
@@ -351,14 +357,14 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* msg)
   // Write to the local store, checking the remote stores if there is no entry locally.
   // If the write to the local store succeeds, then write to the remote stores.
   SubscriberDataManager::AoRPair* aor_pair =
-                              write_subscriptions_to_store(sdm,
+                              write_subscriptions_to_store(_sproutlet->_sdm,
                                                            aor,
                                                            uris,
                                                            msg,
                                                            now,
                                                            NULL,
-                                                           remote_sdms,
-                                                           trail,
+                                                           _sproutlet->_remote_sdms,
+                                                           trail_id,
                                                            public_id,
                                                            true,
                                                            acr,
@@ -372,8 +378,8 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* msg)
 
     // If we have any remote stores, try to store this there too.  We don't worry
     // about failures in this case.
-    for (std::vector<SubscriberDataManager*>::iterator it = remote_sdms.begin();
-         it != remote_sdms.end();
+    for (std::vector<SubscriberDataManager*>::iterator it = _sproutlet->_remote_sdms.begin();
+         it != _sproutlet->_remote_sdms.end();
          ++it)
     {
       if ((*it)->has_servers())
@@ -386,7 +392,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* msg)
                                        now,
                                        aor_pair,
                                        {},
-                                       trail,
+                                       trail_id,
                                        public_id,
                                        false,
                                        acr,
@@ -413,10 +419,11 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* msg)
 
     if (subscription_id == "")
     {
-      // If there's no to tag, generate an unique one
+      // If there's no to tag, generate an unique one.
+      // TODO Should use unique deployment and instance IDs here.
+
       // LCOV_EXCL_START
-      subscription_id = std::to_string(Utils::generate_unique_integer(id_deployment,
-                                                                      id_instance));
+      subscription_id = std::to_string(Utils::generate_unique_integer(0, 0));
       // LCOV_EXCL_STOP
     }
 
@@ -430,15 +437,15 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* msg)
     free_msg(msg);
   }
 
-  SAS::Event sub_accepted(trail, SASEvent::SUBSCRIBE_ACCEPTED, 0);
+  SAS::Event sub_accepted(trail_id, SASEvent::SUBSCRIBE_ACCEPTED, 0);
   SAS::report_event(sub_accepted);
 
   // Send the ACR and delete it.
   acr->send();
   delete acr;
 
-  TRC_DEBUG("Report SAS end marker - trail (%llx)", trail);
-  SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
+  TRC_DEBUG("Report SAS end marker - trail (%llx)", trail_id);
+  SAS::Marker end_marker(trail_id, MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
 
   delete aor_pair;
@@ -475,7 +482,6 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
   // reading, updating and writing the AoR until the write is successful.
   bool backup_aor_alloced = false;
   int expiry = 0;
-  pj_status_t status = PJ_FALSE;
   Store::Status set_rc;
   SubscriberDataManager::AoRPair* aor_pair = NULL;
   std::string subscription_contact;
@@ -575,8 +581,8 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
       if (subscription_id == "")
       {
         // If there's no to tag, generate an unique one
-        subscription_id = std::to_string(Utils::generate_unique_integer(id_deployment,
-                                                                        id_instance));
+        // TODO: Should use unique depolyment and instance IDs here.
+        subscription_id = std::to_string(Utils::generate_unique_integer(0, 0));
       }
 
       TRC_DEBUG("Subscription identifier = %s", subscription_id.c_str());
@@ -614,42 +620,17 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
       subscription->_from_tag = PJUtils::pj_str_to_string(&from->tag);
 
       // Calculate the expiry period for the subscription.
-      expiry = (expires != NULL) ? expires->ivalue : DEFAULT_SUBSCRIPTION_EXPIRES;
+      expiry = (expires != NULL) ?
+        expires->ivalue : SubscriptionSproutlet::DEFAULT_SUBSCRIPTION_EXPIRES;
 
-      if (expiry > max_expires)
+      if (expiry > _sproutlet->_max_expires)
       {
         // Expiry is too long, set it to the maximum.
-        expiry = max_expires;
+        expiry = _sproutlet->_max_expires;
       }
 
       subscription->_expires = now + expiry;
       subscription_contact = subscription->_req_uri;
-    }
-
-    if (send_ok)
-    {
-      pjsip_msg* rsp = create_response(msg, PJSIP_SC_OK);
-
-      // Add expires headers
-      pjsip_expires_hdr* expires_hdr = pjsip_expires_hdr_create(get_pool(rsp), expiry);
-      pjsip_msg_add_hdr(rsp, (pjsip_hdr*)expires_hdr);
-
-      // Add the to tag to the response
-      pjsip_to_hdr *to = (pjsip_to_hdr*) pjsip_msg_find_hdr(rsp,
-                                                            PJSIP_H_TO,
-                                                            NULL);
-      pj_strdup2(get_pool(rsp), &to->tag, subscription_id.c_str());
-
-      // Add a P-Charging-Function-Addresses header to the successful SUBSCRIBE
-      // response containing the charging addresses returned by the HSS.
-      PJUtils::add_pcfa_header(rsp,
-                               get_pool(rsp),
-                               ccfs,
-                               ecfs,
-                               false);
-
-      // Pass the response to the ACR.
-      acr->tx_response(rsp);
     }
 
     // Try to write the AoR back to the store.
@@ -658,8 +639,34 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
 
     if (set_rc == Store::OK)
     {
-      send_response(rsp);
-      free_msg(msg);
+      if (send_ok)
+      {
+        pjsip_msg* rsp = create_response(msg, PJSIP_SC_OK);
+
+        // Add expires headers
+        pjsip_expires_hdr* expires_hdr = pjsip_expires_hdr_create(get_pool(rsp), expiry);
+        pjsip_msg_add_hdr(rsp, (pjsip_hdr*)expires_hdr);
+
+        // Add the to tag to the response
+        pjsip_to_hdr *to = (pjsip_to_hdr*) pjsip_msg_find_hdr(rsp,
+                                                              PJSIP_H_TO,
+                                                              NULL);
+        pj_strdup2(get_pool(rsp), &to->tag, subscription_id.c_str());
+
+        // Add a P-Charging-Function-Addresses header to the successful SUBSCRIBE
+        // response containing the charging addresses returned by the HSS.
+        PJUtils::add_pcfa_header(rsp,
+                                 get_pool(rsp),
+                                 ccfs,
+                                 ecfs,
+                                 false);
+
+        // Pass the response to the ACR.
+        acr->tx_response(rsp);
+
+        send_response(rsp);
+        free_msg(msg);
+      }
     }
     else
     {
@@ -668,13 +675,13 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
   }
   while (set_rc == Store::DATA_CONTENTION);
 
-  if (analytics != NULL)
+  if (_sproutlet->_analytics != NULL)
   {
     // Generate an analytics log for this subscription update.
-    analytics->subscription(aor,
-                            subscription_id,
-                            subscription_contact,
-                            expiry);
+    _sproutlet->_analytics->subscription(aor,
+                                         subscription_id,
+                                         subscription_contact,
+                                         expiry);
   }
 
   // If we allocated the backup AoR, tidy up.
@@ -707,4 +714,9 @@ void SubscriptionSproutletTsx::log_subscriptions(const std::string& aor_name,
               subscription->_to_tag.c_str(),
               subscription->_cid.c_str());
   }
+}
+
+void route_to_scscf_proxy(pjsip_msg* req)
+{
+  assert(!"Not implemented"); // TODO
 }

@@ -585,8 +585,6 @@ public:
   /// @param trail                SAS trail
   /// @param all_bindings_expired Whether all bindings have expired
   ///                             as a result of the set
-  /// @param extra_message_rdata  Message to respond to
-  /// @param extra_message_tdata  Message to respond with
   virtual Store::Status set_aor_data(const std::string& aor_id,
                                      std::vector<std::string> irs_impus,
                                      AoRPair* aor_pair,

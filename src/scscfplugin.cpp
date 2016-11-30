@@ -179,7 +179,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                                         {remote_sdm},
                                                         hss_connection,
                                                         scscf_acr_factory,
-                                                        analytic_logger,
+                                                        analytics_logger,
                                                         opt.sub_max_expires);
 
     // We want to prioritise choosing the S-CSCF in ambiguous situations, so

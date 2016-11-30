@@ -166,5 +166,6 @@ extern ACRFactory* scscf_acr_factory;
 extern EnumService* enum_service;
 extern ExceptionHandler* exception_handler;
 extern AlarmManager* alarm_manager;
+extern AnalyticsLogger* analytics_logger;
 
 #endif
