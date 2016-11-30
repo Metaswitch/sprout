@@ -481,7 +481,7 @@ SubscriberDataManager::AoRPair* write_to_store(
 void process_register_request(pjsip_rx_data* rdata)
 {
   pj_status_t status;
-  int st_code = PJSIP_SC_OK;
+  pjsip_status_code st_code = PJSIP_SC_OK;
   SAS::TrailId trail = get_trail(rdata);
 
   // Get the system time in seconds for calculating absolute expiry times.
@@ -646,13 +646,18 @@ void process_register_request(pjsip_rx_data* rdata)
                                                       ecfs,
                                                       trail);
 
-  if (process_hss_sip_failure(http_code,
-                              regstate,
-                              rdata,
-                              stack_data,
-                              acr,
-                              "REGISTER"))
+  st_code = determine_hss_sip_response(http_code, regstate, "REGISTER");
+
+  if (st_code != PJSIP_SC_OK)
   {
+    PJUtils::respond_stateless(stack_data.endpt,
+                               rdata,
+                               st_code,
+                               NULL,
+                               NULL,
+                               NULL,
+                               acr);
+
     SAS::Event event(trail, SASEvent::REGISTER_FAILED_INVALIDPUBPRIV, 0);
     event.add_var_param(public_id);
     event.add_var_param(private_id);

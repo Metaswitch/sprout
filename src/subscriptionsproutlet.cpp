@@ -56,6 +56,7 @@ extern "C" {
 #include "registration_utils.h"
 #include "subscriptionsproutlet.h"
 #include "uri_classifier.h"
+#include "hss_sip_mapping.h"
 
 /// SubscriptionSproutlet constructor
 SubscriptionSproutlet::SubscriptionSproutlet(const std::string& name,
@@ -330,20 +331,16 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* msg)
                                                                ccfs,
                                                                ecfs,
                                                                trail_id);
-#if 0 // TODO refactor this method.
-  if (process_hss_sip_failure(http_code,
-                              state,
-                              rdata,
-                              stack_data,
-                              NULL,
-                              "SUBSCRIBE"))
+  st_code = determine_hss_sip_response(http_code, state, "SUBSCRIBE");
+
+  if (st_code != PJSIP_SC_OK)
   {
+    pjsip_msg* rsp = create_response(msg, st_code);
+    send_response(rsp);
+    free_msg(msg);
     delete acr;
     return;
   }
-#else
-  http_code = http_code; // Clean compile
-#endif
 
   // Determine the AOR from the first entry in the uris array.
   std::string aor = uris.front();
