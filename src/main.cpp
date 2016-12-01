@@ -2004,7 +2004,7 @@ int main(int argc, char* argv[])
                                            serializer,
                                            deserializers,
                                            chronos_connection,
-                                           analytics_logger,
+                                           NULL,
                                            false);
   }
 
