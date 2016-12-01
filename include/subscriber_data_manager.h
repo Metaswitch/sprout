@@ -59,7 +59,9 @@ extern "C" {
 // We need to declare the parts of NotifyUtils needed below to avoid a 
 // circular dependency between this and notify_utils.h
 namespace NotifyUtils { struct BindingNotifyInformation; };
-typedef std::vector<NotifyUtils::BindingNotifyInformation*> ClassifiedBindings;
+
+typedef NotifyUtils::BindingNotifyInformation ClassifiedBinding;
+typedef std::vector<ClassifiedBinding*> ClassifiedBindings;
 
 class SubscriberDataManager
 {
