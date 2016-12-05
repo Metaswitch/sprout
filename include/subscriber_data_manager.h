@@ -642,11 +642,11 @@ private:
   
   // Iterate over a list of classified bindings, and emit registration logs for those
   // that are EXPIRED or SHORTENED.
-  void log_removed_shortened_bindings(ClassifiedBindings& classified_bindings);
+  void log_removed_or_shortened_bindings(ClassifiedBindings& classified_bindings);
 
   // Iterate over a list of classified bindings, and emit registration logs for those
   // that are CREATED or REFRESHED.
-  void log_new_extended_bindings(ClassifiedBindings& classified_bindings);
+  void log_new_or_extended_bindings(ClassifiedBindings& classified_bindings);
 
   static bool unused_bool;
   AnalyticsLogger* _analytics;

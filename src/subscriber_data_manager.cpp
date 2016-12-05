@@ -67,7 +67,7 @@ extern "C" {
 #include "json_parse_utils.h"
 #include "rapidjson/error/en.h"
 
-// JSON serialization constants.
+/// JSON serialization constants.
 static const char* const JSON_BINDINGS = "bindings";
 static const char* const JSON_URI = "uri";
 static const char* const JSON_CID = "cid";
@@ -87,6 +87,17 @@ static const char* const JSON_TO_URI = "to_uri";
 static const char* const JSON_TO_TAG = "to_tag";
 static const char* const JSON_ROUTES = "routes";
 static const char* const JSON_NOTIFY_CSEQ = "notify_cseq";
+
+/// Helper to delete vectors of bindings safely
+void delete_bindings(ClassifiedBindings& cbs)
+{
+  for (ClassifiedBinding* cb : cbs)
+  {
+    delete cb;
+  }
+
+  cbs.clear();
+}
 
 /// SubscriberDataManager Methods
 SubscriberDataManager::SubscriberDataManager(Store* data_store,
@@ -195,9 +206,7 @@ Store::Status SubscriberDataManager::set_aor_data(
   // state. Therefore, we log removed or shortened bindings before any such calls,
   // and we log new or extended bindings afterwards.
 
-  ////////////////////////////////////////////
   // 1. Expire any old bindings/subscriptions.
-  ////////////////////////////////////////////
   all_bindings_expired = false;
 
   // Expire old subscriptions and bindings before writing to the server. If
@@ -228,27 +237,21 @@ Store::Status SubscriberDataManager::set_aor_data(
 
   ClassifiedBindings classified_bindings;
   
-  if(_primary_sdm)
+  if (_primary_sdm)
   {
-    ///////////////////////////////////////
     // 2. Log removed or shortened bindings
-    ///////////////////////////////////////
     classify_bindings(aor_id, aor_pair, classified_bindings);
 
     if (_analytics != NULL)
     {
-      log_removed_shortened_bindings(classified_bindings);
+      log_removed_or_shortened_bindings(classified_bindings);
     }
    
-    /////////////////////////////////////
     // 3. Send any Chronos timer requests
-    /////////////////////////////////////
     _chronos_timer_request_sender->send_timers(aor_id, aor_pair, now, trail);
   }
 
-  ///////////////////////////////////////////////////////////////
   // 4. Write the data to memcached. If this fails, bail out here
-  ///////////////////////////////////////////////////////////////
 
   // Update the Notify CSeq, and write to store. We always update the cseq
   // as it's safe to increment it unnecessarily, and if we wait to find out
@@ -264,26 +267,19 @@ Store::Status SubscriberDataManager::set_aor_data(
   {
     // We were unable to write to the store - return to the caller and
     // send no further messages
-    for (ClassifiedBinding* cb : classified_bindings)
-    {
-      delete cb;
-    }
+    delete_bindings(classified_bindings);
     return rc;
   }
 
   if (_primary_sdm)
   {
-    /////////////////////////////////
     // 5. Log new / extended bindings
-    /////////////////////////////////
     if (_analytics != NULL)
     {
-      log_new_extended_bindings(classified_bindings);
+      log_new_or_extended_bindings(classified_bindings);
     }
 
-    //////////////////////////////////////////////////////
     // 6. Send any messages we were asked to by the caller
-    //////////////////////////////////////////////////////
 
     if ((extra_message_rdata != NULL) &&
         (extra_message_tdata != NULL))
@@ -295,17 +291,12 @@ Store::Status SubscriberDataManager::set_aor_data(
                                  NULL);
     }
 
-    //////////////////////
     // 7. Send any NOTIFYs
-    //////////////////////
  
     _notify_sender->send_notifys(aor_id, irs_impus, aor_pair, now, trail);
   }
 
-  for (ClassifiedBinding* cb : classified_bindings)
-  {
-    delete cb;
-  }
+  delete_bindings(classified_bindings);
 
   return Store::Status::OK;
 }
@@ -316,7 +307,7 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
 {
   // We should have been given an empty classified_bindings vector, but clear 
   // it just in case 
-  classified_bindings.clear();
+  delete_bindings(classified_bindings);
 
   // 1/2: Iterate over original bindings and record those not in current AoR
   for (std::pair<std::string, SubscriberDataManager::AoR::Binding*> aor_orig_b : 
@@ -376,18 +367,12 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
   }
 }
 
-void SubscriberDataManager::log_removed_shortened_bindings(ClassifiedBindings& classified_bindings)
+void SubscriberDataManager::log_removed_or_shortened_bindings(ClassifiedBindings& classified_bindings)
 {
   for (ClassifiedBinding* classified_binding : classified_bindings)
   {
-    if (classified_binding->_contact_event == NotifyUtils::ContactEvent::EXPIRED)
-    {
-      _analytics->registration(classified_binding->_b->_address_of_record,
-                               classified_binding->_id,
-                               classified_binding->_b->_uri,
-                               0);
-    }
-    else if (classified_binding->_contact_event == NotifyUtils::ContactEvent::SHORTENED)
+    if (classified_binding->_contact_event == NotifyUtils::ContactEvent::EXPIRED ||
+        classified_binding->_contact_event == NotifyUtils::ContactEvent::SHORTENED)
     {
       _analytics->registration(classified_binding->_b->_address_of_record,
                                classified_binding->_id,
@@ -397,7 +382,7 @@ void SubscriberDataManager::log_removed_shortened_bindings(ClassifiedBindings& c
   }
 }
 
-void SubscriberDataManager::log_new_extended_bindings(ClassifiedBindings& classified_bindings)
+void SubscriberDataManager::log_new_or_extended_bindings(ClassifiedBindings& classified_bindings)
 {
   for (ClassifiedBinding* classified_binding : classified_bindings)
   {
@@ -1724,10 +1709,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
         }
       }
 
-      for (ClassifiedBinding* bn : binding_notify)
-      {
-        delete bn;
-      }
+      delete_bindings(binding_notify);
     }
   }
 }
@@ -1844,9 +1826,6 @@ void SubscriberDataManager::NotifySender::send_notifys_for_current_subscriptions
       }
     }
 
-    for (ClassifiedBinding* bn : binding_notify)
-    {
-      delete bn;
-    }
+    delete_bindings(binding_notify);
   }
 }
