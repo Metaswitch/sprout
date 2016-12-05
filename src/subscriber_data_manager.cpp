@@ -1647,7 +1647,6 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
         if (!aor_current_b.second->_emergency_registration)
         {
           bindings_remaining = true;
-          break;
         }
       }
 
