@@ -1749,16 +1749,6 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
                                                        st_code);
         set_trail(cancel, _trail);
 
-        if (_tsx->transport != NULL)
-        {
-          // The transaction being cancelled has already selected a transport,
-          // so make sure the CANCEL uses this transport as well.
-          pjsip_tpselector tp_selector;
-          tp_selector.type = PJSIP_TPSELECTOR_TRANSPORT;
-          tp_selector.u.transport = _tsx->transport;
-          pjsip_tx_data_set_transport(cancel, &tp_selector);
-        }
-
         // Create a PJSIP UAC transaction on which to send the CANCEL, and
         // make sure this is using the same group lock.
         pj_status_t status = pjsip_tsx_create_uac2(_proxy->_mod_tu.module(),
@@ -1771,6 +1761,16 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
           // transaction to refer to this UACTsx object.
           _proxy->bind_transaction(this, _cancel_tsx);
           set_trail(_cancel_tsx, _trail);
+
+          if (_tsx->transport != NULL)
+          {
+            // The transaction being cancelled has already selected a transport,
+            // so make sure the CANCEL uses this transport as well.
+            pjsip_tpselector tp_selector;
+            tp_selector.type = PJSIP_TPSELECTOR_TRANSPORT;
+            tp_selector.u.transport = _tsx->transport;
+            pjsip_tsx_set_transport(_cancel_tsx, &tp_selector);
+          }
 
           // Send the CANCEL on the new transaction.
           status = pjsip_tsx_send_msg(_cancel_tsx, cancel);

@@ -29,9 +29,25 @@
       <!-- field3 is peer_auth, but we can't store it in a variable -->
       <assign assign_to="reg_repeat" value="0"/>
       <assign assign_to="call_repeat" value="0"/>
+      <!-- Change these values to tweak the traffic profile. There have to be
+           more registers than calls in the profile:
+             - reg_pause   : How long you want to wait between registers - for
+                             registers every 5 minutes set this to 300000
+             - call_length : How long a call should be
+             - call_delay  : What time period to spread out when calls start.
+                             This is the reg_pause time minus the call_length
+                             and call_answer time.
+           You'll also potentially want to change some other values - these
+           are commented inline by CHANGES. -->
+      <assign assign_to="reg_pause" value="300000"/>
+      <assign assign_to="call_delay" value="270000"/>
+      <assign assign_to="call_length" value="24000"/>
+      <assign assign_to="call_answer" value="6000"/>
     </action>
   </nop>
 
+  <!-- CHANGES. This controls how long it is until all calls have been attempted. Set
+       this to twice the reg_pause value -->
   <pause distribution="uniform" min="0" max="600000" />
 
   <send>
@@ -140,13 +156,13 @@
     ]]>
   </send>
 
-  <recv response="200" chance="0.161" next="2">
+  <recv response="200">
     <action>
       <add assign_to="reg_repeat" value="1" />
     </action>
   </recv>
 
-  <pause milliseconds="290000" />
+  <pause milliseconds="10000" />
 
   <label id="1"/>
 
@@ -200,21 +216,24 @@
     ]]>
   </send>
 
-  <recv response="200" rtd="register" chance="0.161" next="2">
+  <!-- CHANGES. This controls how likely an INVITE is going to be sent. Set the chance
+       value to the proportion of INVITEs/REGISTERs -->
+  <recv response="200" rtd="register" chance="0.167" next="2">
     <action>
       <add assign_to="reg_repeat" value="1" />
     </action>
   </recv>
 
-  <pause milliseconds="290000" next="1" />
+  <pause variable="reg_pause" next="1" />
 
   <label id="2" />
 
   <nop hide="true">
     <action>
       <add assign_to="call_repeat" value="1" />
-      <sample assign_to="pre_call_delay" distribution="uniform" min="0" max="260000" />
-      <assign assign_to="post_call_delay" value="260000" />
+      <!-- CHANGES. Set this to the same as the call_delay value set above -->
+      <sample assign_to="pre_call_delay" distribution="uniform" min="0" max="270000" />
+      <assign assign_to="post_call_delay" variable="call_delay" />
       <subtract assign_to="post_call_delay" variable="pre_call_delay" />
     </action>
   </nop>
@@ -342,7 +361,7 @@
   <recv response="180">
   </recv>
 
-  <pause milliseconds="6000" />
+  <pause variable="call_answer" />
 
   <send>
     <![CDATA[
@@ -506,7 +525,7 @@
   <recv response="200" rtd="call-setup">
   </recv>
 
-  <pause milliseconds="24000" />
+  <pause variable="call_length" />
 
   <send start_rtd="call-teardown">
     <![CDATA[

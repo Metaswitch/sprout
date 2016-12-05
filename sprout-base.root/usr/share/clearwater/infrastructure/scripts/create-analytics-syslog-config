@@ -53,7 +53,10 @@ cat > $temp_file << EOF
 \$FileCreateMode 0666
 \$umask 0000
 
-# Define a template that strips the "<analytics>" tag off the front of it.
+# Define a template that strips the "<analytics>" tag off the front of it.  This
+# actually strips 14 characters off the message because we also strip off the
+# leading whitespace that rsyslog adds in order to conform with RFC3164 syslog
+# format, but that we don't want.
 \$template analytics-format,"%msg:14:$%\r\n"
 
 :msg, contains, "<analytics>" /var/log/sprout/analytics.log;analytics-format
