@@ -231,7 +231,7 @@ static void sas_log_rx_msg(pjsip_rx_data* rdata)
   // Store the trail in the message as it gets passed up the stack.
   set_trail(rdata, trail);
 
-  // Raise SAS markers on the first message in a trail only only - subsequent
+  // Raise SAS markers on the first message in a trail only - subsequent
   // messages with the same trail ID don't need additional markers
   if (first_message_in_trail)
   {
