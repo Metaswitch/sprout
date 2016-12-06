@@ -133,7 +133,6 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
     // TODO: Once the registrar and subscription managers are Sproutlets, this should
     // consider the ReqURI regardess of the method.
     if ((pjsip_method_cmp(&req->line.req.method, &pjsip_register_method) != 0) &&
-        (pjsip_method_cmp(&req->line.req.method, pjsip_get_subscribe_method()) != 0) &&
         (PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri)))
     {
       uri = (pjsip_sip_uri*)req->line.req.uri;

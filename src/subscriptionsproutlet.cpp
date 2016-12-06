@@ -103,6 +103,23 @@ SubscriptionSproutletTsx::~SubscriptionSproutletTsx()
   TRC_DEBUG("Subscription Transaction (%p) destroyed", this);
 }
 
+void SubscriptionSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
+{
+  TRC_INFO("Subscription sproutlet received in dialog request");
+
+  bool accept = accept_request(req, trail());
+
+  if (accept)
+  {
+    process_subscription_request(req);
+  }
+  else
+  {
+    route_to_scscf_proxy(req);
+  }
+
+}
+
 void SubscriptionSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 {
   TRC_INFO("Subscription sproutlet received intitial request");
@@ -226,7 +243,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* msg)
   SAS::TrailId trail_id = trail();
 
   // Get the URI from the To header and check it is a SIP or SIPS URI.
-  pjsip_uri* uri = PJSIP_MSG_TO_HDR(msg)->uri;
+  pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(msg)->uri);
   pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
   int expiry = (expires != NULL) ? expires->ivalue : SubscriptionSproutlet::DEFAULT_SUBSCRIPTION_EXPIRES;
 

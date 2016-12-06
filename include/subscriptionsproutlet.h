@@ -119,6 +119,7 @@ public:
   ~SubscriptionSproutletTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req) override;
+  virtual void on_rx_in_dialog_request(pjsip_msg* req) override;
 
 protected:
   bool accept_request(pjsip_msg* msg, SAS::TrailId trail);

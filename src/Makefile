@@ -106,6 +106,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        scscfsproutlet.cpp \
                        icscfsproutlet.cpp \
                        bgcfsproutlet.cpp \
+                       subscriptionsproutlet.cpp \
                        sproutletappserver.cpp \
                        mmtel.cpp \
                        test_main.cpp \
