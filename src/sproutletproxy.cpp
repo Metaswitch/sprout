@@ -54,7 +54,6 @@ extern "C" {
 #include "sproutsasevent.h"
 #include "sproutletproxy.h"
 #include "snmp_sip_request_types.h"
-#include "subscription.h"
 
 const pj_str_t SproutletProxy::STR_SERVICE = {"service", 7};
 
