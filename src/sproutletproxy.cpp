@@ -405,9 +405,9 @@ bool SproutletProxy::is_uri_local(const pjsip_uri* uri)
     {
       hostname.slen -= sep - hostname.ptr + 1;
       hostname.ptr = sep + 1;
-    }
 
-    return is_host_local(&hostname);
+      return is_host_local(&hostname);
+    }
   }
   //LCOV_EXCL_START
   return false;
