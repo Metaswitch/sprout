@@ -298,10 +298,9 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* msg)
     SAS::report_event(event);
 
     // Allow-Events is a mandatory header on 489 responses.
-    pjsip_generic_string_hdr* allow_events_hdr =
-      pjsip_generic_string_hdr_create(get_pool(msg), &STR_ALLOW_EVENTS, &STR_REG);
-
     pjsip_msg* rsp = create_response(msg, PJSIP_SC_BAD_EVENT);
+    pjsip_generic_string_hdr* allow_events_hdr =
+         pjsip_generic_string_hdr_create(get_pool(rsp), &STR_ALLOW_EVENTS, &STR_REG);
     pjsip_msg_add_hdr(rsp, (pjsip_hdr*)allow_events_hdr);
     send_response(rsp);
     free_msg(msg);
@@ -448,7 +447,6 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* msg)
 
     // Send the response.
     send_response(rsp);
-    free_msg(msg);
   }
 
   SAS::Event sub_accepted(trail_id, SASEvent::SUBSCRIBE_ACCEPTED, 0);
@@ -461,6 +459,8 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* msg)
   TRC_DEBUG("Report SAS end marker - trail (%llx)", trail_id);
   SAS::Marker end_marker(trail_id, MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
+
+  free_msg(msg);
 
   delete aor_pair;
 }
@@ -679,7 +679,6 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
         acr->tx_response(rsp);
 
         send_response(rsp);
-        free_msg(msg);
       }
     }
     else

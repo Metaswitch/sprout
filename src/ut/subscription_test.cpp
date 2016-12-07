@@ -314,8 +314,7 @@ TEST_F(SubscriptionTest, NotSubscribe)
   ASSERT_EQ(1, txdata_count());
   inject_msg(respond_to_current_txdata(200));
   pjsip_msg* out = current_txdata()->msg;
-  out = pop_txdata()->msg;
-  //ASSERT_EQ(2, txdata_count());
+  ASSERT_EQ(1, txdata_count());
   EXPECT_EQ(200, out->line.status.code);
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
@@ -328,13 +327,13 @@ TEST_F(SubscriptionTest, NotOurs)
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
-/*TEST_F(SubscriptionTest, RouteHeaderNotMatching)
+TEST_F(SubscriptionTest, RouteHeaderNotMatching)
 {
   SubscribeMessage msg;
   msg._route = "notthehomedomain";
   inject_msg(msg.get());
   check_subscriptions("sip:6505550231@homedomain", 0u);
-}*/
+}
 
 TEST_F(SubscriptionTest, BadScheme)
 {
@@ -650,7 +649,7 @@ TEST_F(SubscriptionTest, AssociatedUrisTimeOut)
 
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
-  pjsip_msg* out = current_txdata()->msg;
+  pjsip_msg* out = pop_txdata()->msg;
   EXPECT_EQ(504, out->line.status.code);
   EXPECT_EQ("Server Timeout", str_pj(out->line.status.reason));
   check_subscriptions("sip:6505550232@homedomain", 0u);
@@ -747,13 +746,9 @@ TEST_F(SubscriptionTest, NoNotificationsForEmergencyRegistrations)
   SubscribeMessage msg;
   inject_msg(msg.get());
 
-  ASSERT_EQ(2, txdata_count());
-  pjsip_msg* out = pop_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-
   // The NOTIFY should only contain the non-emergency binding
-  out = current_txdata()->msg;
+  ASSERT_EQ(2, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
   char buf[16384];
   int n = out->body->print_body(out->body, buf, sizeof(buf));
@@ -761,6 +756,11 @@ TEST_F(SubscriptionTest, NoNotificationsForEmergencyRegistrations)
   EXPECT_THAT(body, HasSubstr("&lt;sip:6505550231@192.91.191.29:59934;transport=tcp;ob&gt;"));
   EXPECT_THAT(body, Not(HasSubstr("sos")));
   inject_msg(respond_to_current_txdata(200));
+
+  // Get OK
+  out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
 
   check_subscriptions("sip:6505550231@homedomain", 1u);
 }
@@ -782,7 +782,15 @@ TEST_F(SubscriptionTest, CheckNotifyCseqs)
 
   // Receive the SUBSCRIBE 200 OK and NOTIFY, then send NOTIFY 200 OK.
   ASSERT_EQ(2, txdata_count());
-  pjsip_msg* out = pop_txdata()->msg;
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
+
+  // Store off CSeq for later checking.
+  std::string first_cseq = get_headers(out, "CSeq");
+  inject_msg(respond_to_current_txdata(200));
+
+  // Receive OK
+  out = pop_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   std::vector<std::string> to_params;
   Utils::split_string(get_headers(out, "To"), ';', to_params, 0, true);
@@ -795,25 +803,19 @@ TEST_F(SubscriptionTest, CheckNotifyCseqs)
     }
   }
 
-  out = current_txdata()->msg;
-  EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-
-  // Store off CSeq for later checking.
-  std::string first_cseq = get_headers(out, "CSeq");
-  inject_msg(respond_to_current_txdata(200));
-
   msg._expires = "0";
+  msg._unique += 1;
   msg._to_tag = to_tag;
   inject_msg(msg.get());
 
   // Receive another SUBSCRIBE 200 OK and NOTIFY, then send NOTIFY 200 OK.
   ASSERT_EQ(2, txdata_count());
-  out = pop_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
   out = current_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
   std::string second_cseq = get_headers(out, "CSeq");
   inject_msg(respond_to_current_txdata(200));
+  out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
 
   // Check the NOTIFY CSeq has increased.
   int first_cseq_val = strtol(&(first_cseq.c_str()[5]), NULL, 0);
@@ -888,7 +890,7 @@ std::string SubscriptionTest::check_OK_and_NOTIFY(std::string reg_state,
   std::string from_hdr = get_headers(out, "From");
   inject_msg(respond_to_current_txdata(200));
 
-  out = current_txdata()->msg;
+  out = pop_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_THAT(get_headers(out, "From"), testing::MatchesRegex("From: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));
@@ -911,9 +913,6 @@ std::string SubscriptionTest::check_OK_and_NOTIFY(std::string reg_state,
 
   EXPECT_THAT(from_hdr, testing::MatchesRegex(string(".*tag=").append(to_tag)));
 
-  free_txdata();
-
-  //inject_msg(respond_to_current_txdata(200));
   return to_tag;
 }
 
