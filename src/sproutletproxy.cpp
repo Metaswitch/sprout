@@ -384,8 +384,11 @@ bool SproutletProxy::is_uri_local(const pjsip_uri* uri)
 
     // Maybe this is service.<domain> for a local domain.  Check now.
     char* sep = pj_strchr(&hostname, '.');
-    hostname.slen -= sep - hostname.ptr + 1;
-    hostname.ptr = sep + 1;
+    if (sep != NULL)
+    {
+      hostname.slen -= sep - hostname.ptr + 1;
+      hostname.ptr = sep + 1;
+    }
 
     return is_host_local(&hostname);
   }
