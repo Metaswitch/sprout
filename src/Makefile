@@ -14,7 +14,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          bono.cpp \
                          registration_utils.cpp \
                          hss_sip_mapping.cpp \
-                         authentication.cpp \
+                         authenticationsproutlet.cpp \
                          options.cpp \
                          sip_connection_pool.cpp \
                          flowtable.cpp \
