@@ -329,7 +329,7 @@ bool SproutletProxy::does_uri_match_sproutlet(const pjsip_uri* uri,
     return false;
     // LCOV_EXCL_STOP
   }
-  
+
   // Now we know we have a SIP URI, cast to one.
   pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)uri;
   std::list<std::string> possible_service_names = extract_possible_services(sip_uri);
@@ -401,10 +401,13 @@ bool SproutletProxy::is_uri_local(const pjsip_uri* uri)
 
     // Maybe this is service.<domain> for a local domain.  Check now.
     char* sep = pj_strchr(&hostname, '.');
-    hostname.slen -= sep - hostname.ptr + 1;
-    hostname.ptr = sep + 1;
+    if (sep != NULL)
+    {
+      hostname.slen -= sep - hostname.ptr + 1;
+      hostname.ptr = sep + 1;
 
-    return is_host_local(&hostname);
+      return is_host_local(&hostname);
+    }
   }
   //LCOV_EXCL_START
   return false;
