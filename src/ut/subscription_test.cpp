@@ -942,10 +942,34 @@ public:
     _hss_connection->set_impu_result("tel:6505550231", "", HSSConnection::STATE_REGISTERED, "");
 
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
+
+    _subscription_sproutlet = new SubscriptionSproutlet("scscf",
+                                                        5058,
+                                                        "sip:scscf.homedomain:5058;transport=tcp",
+                                                        _sdm,
+                                                        {},
+                                                        _hss_connection,
+                                                        _acr_factory,
+                                                        _analytics,
+                                                        300);
+
+    std::list<Sproutlet*> sproutlets;
+    sproutlets.push_back(_subscription_sproutlet);
+
+    _subscription_proxy = new SproutletProxy(stack_data.endpt,
+                                             PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
+                                             "homedomain",
+                                             std::unordered_set<std::string>(),
+                                             sproutlets,
+                                             std::set<std::string>(),
+                                             "scscf");
   }
 
   static void TearDownTestCase()
   {
+    // Shut down the transaction module first, before we destroy the
+    // objects that might handle any callbacks!
+    pjsip_tsx_layer_destroy();
     SipTest::TearDownTestCase();
   }
 
@@ -959,8 +983,33 @@ public:
     delete _chronos_connection; _chronos_connection = NULL;
   }
 
-  SubscriptionTestMockStore()
+  ~SubscriptionTestMockStore()
   {
+    pjsip_tsx_layer_dump(true);
+
+    // Terminate all transactions
+    std::list<pjsip_transaction*> tsxs = get_all_tsxs();
+    for (std::list<pjsip_transaction*>::iterator it2 = tsxs.begin();
+         it2 != tsxs.end();
+         ++it2)
+    {
+      pjsip_tsx_terminate(*it2, PJSIP_SC_SERVICE_UNAVAILABLE);
+    }
+
+    // PJSIP transactions aren't actually destroyed until a zero ms
+    // timer fires (presumably to ensure destruction doesn't hold up
+    // real work), so poll for that to happen. Otherwise we leak!
+    // Allow a good length of time to pass too, in case we have
+    // transactions still open. 32s is the default UAS INVITE
+    // transaction timeout, so we go higher than that.
+    cwtest_advance_time_ms(33000L);
+    poll();
+    // Stop and restart the transaction layer just in case
+    pjsip_tsx_layer_instance()->stop();
+    pjsip_tsx_layer_instance()->start();
+
+    delete _subscription_proxy; _subscription_proxy = NULL;
+    delete _subscription_sproutlet; _subscription_sproutlet = NULL;
   }
 
 protected:
@@ -970,6 +1019,8 @@ protected:
   ACRFactory* _acr_factory;
   FakeHSSConnection* _hss_connection;
   FakeChronosConnection* _chronos_connection;
+  SubscriptionSproutlet* _subscription_sproutlet;
+  SproutletProxy* _subscription_proxy;
 };
 
 
