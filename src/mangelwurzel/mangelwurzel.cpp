@@ -152,8 +152,8 @@ void MangelwurzelTsx::on_rx_initial_request(pjsip_msg* req)
   {
     pjsip_status_code status_code = PJSIP_SC_OK;
     pjsip_msg* rsp = create_response(req, status_code);
-    send_response(req);
-    free_msg(req);
+    send_response(rsp);
+    free_msg(rsp);
     return;
   }
 
