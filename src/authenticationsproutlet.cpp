@@ -265,7 +265,7 @@ pj_status_t AuthenticationSproutletTsx::user_lookup(pj_pool_t *pool,
 {
   const pj_str_t* acc_name = &param->acc_name;
   const pj_str_t* realm = &param->realm;
-  const pjsip_msg* req = NULL; // TODO figure out how to get at this.
+  const pjsip_msg* req = param->msg;
 
   pj_status_t status = PJSIP_EAUTHACCNOTFOUND;
 
@@ -989,10 +989,11 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       // Request contains a response to a previous challenge, so pass it to
       // the authentication module to verify.
       TRC_DEBUG("Verify authentication information in request");
-      status = pjsip_auth_srv_verify2((is_register ?
+      status = pjsip_auth_srv_verify3((is_register ?
                                          &_sproutlet->_auth_srv :
                                          &_sproutlet->_auth_srv_proxy),
-                                      NULL, // TODO - how to pass in an rdata here?
+                                      req,
+                                      get_pool(req),
                                       &sc,
                                       (void*)auth_challenge);
 
