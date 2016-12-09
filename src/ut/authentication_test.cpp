@@ -683,32 +683,6 @@ TEST_F(AuthenticationTest, IntegrityProtected)
   EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
 }
 
-// TODO Test that we haven't broken this horrendous hack.
-#if 0
-
-TEST_F(AuthenticationTest, IntegrityProtectedChangedSCSCF)
-{
-  // Test that the authentication module challenges requests that are for the
-  // wrong S-CSCF.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
-                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
-
-  AuthenticationMessage msg("REGISTER");
-  msg._auth_hdr = true;
-  msg._integ_prot = "ip-assoc-yes";
-  msg._route = "sip:differentscscf:5058;transport=TCP";
-  pj_bool_t ret = inject_msg(msg.get(), _tp);
-  EXPECT_EQ(PJ_TRUE, ret);
-
-  // Expect a 401 Not Authorized response.
-  ASSERT_EQ(1, txdata_count());
-  pjsip_tx_data* tdata = current_txdata();
-  RespMatcher(401).matches(tdata->msg);
-  free_txdata();
-
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
-}
-#endif
 
 // Tests that authentication is needed on registers that have at least one non
 // emergency contact
@@ -732,6 +706,7 @@ TEST_F(AuthenticationTest, AuthorizationEmergencyReg)
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
+
 
 TEST_F(AuthenticationTest, DigestAuthSuccess)
 {
