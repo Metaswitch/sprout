@@ -496,6 +496,7 @@ HTTPCode DeregistrationTask::handle_request()
   {
     SubscriberDataManager::AoRPair* aor_pair =
       deregister_bindings(_cfg->_sdm,
+                          _cfg->_hss,
                           it->first,
                           it->second,
                           NULL,
@@ -516,6 +517,7 @@ HTTPCode DeregistrationTask::handle_request()
         {
           SubscriberDataManager::AoRPair* remote_aor_pair =
             deregister_bindings(*sdm,
+                                _cfg->_hss,
                                 it->first,
                                 it->second,
                                 aor_pair,
@@ -573,6 +575,7 @@ HTTPCode DeregistrationTask::handle_request()
 
 SubscriberDataManager::AoRPair* DeregistrationTask::deregister_bindings(
                                         SubscriberDataManager* current_sdm,
+                                        HSSConnection* hss,
                                         std::string aor_id,
                                         std::string private_id,
                                         SubscriberDataManager::AoRPair* previous_aor_pair,
@@ -654,6 +657,8 @@ SubscriberDataManager::AoRPair* DeregistrationTask::deregister_bindings(
     {
       RegistrationUtils::deregister_with_application_servers(ifc_map[aor_id],
                                                              current_sdm,
+                                                             remote_sdms,
+                                                             hss,
                                                              aor_id,
                                                              trail());
     }

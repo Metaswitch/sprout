@@ -43,6 +43,7 @@
 #include "sproutletplugin.h"
 #include "scscfsproutlet.h"
 #include "subscriptionsproutlet.h"
+#include "registrarsproutlet.h"
 #include "sprout_alarmdefinition.h"
 #include "sprout_pd_definitions.h"
 #include "log.h"
@@ -59,6 +60,7 @@ public:
 private:
   SCSCFSproutlet* _scscf_sproutlet;
   SubscriptionSproutlet* _subscription_sproutlet;
+  RegistrarSproutlet* _registrar_sproutlet;
   Alarm* _sess_cont_as_alarm;
   Alarm* _sess_term_as_alarm;
 
@@ -74,6 +76,7 @@ SCSCFPlugin sproutlet_plugin;
 SCSCFPlugin::SCSCFPlugin() :
   _scscf_sproutlet(NULL),
   _subscription_sproutlet(NULL),
+  _registrar_sproutlet(NULL),
   _incoming_sip_transactions_tbl(NULL),
   _outgoing_sip_transactions_tbl(NULL)
 {
@@ -170,9 +173,12 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           opt.session_terminated_timeout_ms,
                                           sess_term_as_tracker,
                                           sess_cont_as_tracker);
-    plugin_loaded = _scscf_sproutlet->init();
+    if (!_scscf_sproutlet->init())
+    {
+      return false;
+    }
 
-    _subscription_sproutlet = new SubscriptionSproutlet(opt.prefix_scscf,
+    _subscription_sproutlet = new SubscriptionSproutlet("subscription",
                                                         opt.port_scscf,
                                                         opt.uri_scscf,
                                                         local_sdm,
@@ -182,9 +188,25 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                                         analytics_logger,
                                                         opt.sub_max_expires);
 
+    if (opt.auth_enabled)
+    {
+      _registrar_sproutlet = new RegistrarSproutlet(opt.prefix_scscf,
+                                                    opt.port_scscf,
+                                                    opt.uri_scscf,
+                                                    local_sdm,
+                                                    {remote_sdm},
+                                                    hss_connection,
+                                                    analytics_logger,
+                                                    scscf_acr_factory,
+                                                    opt.sub_max_expires,
+                                                    opt.force_third_party_register_body);
+
+      plugin_loaded = _registrar_sproutlet->init();
+    }
+
     // We want to prioritise choosing the S-CSCF in ambiguous situations, so
     // make sure it's at the front of the sproutlet list
-    sproutlets.push_front(_subscription_sproutlet);
+    sproutlets.push_front(_registrar_sproutlet);
   }
 
   return plugin_loaded;
@@ -196,6 +218,7 @@ void SCSCFPlugin::unload()
 {
   delete _scscf_sproutlet;
   delete _subscription_sproutlet;
+  delete _registrar_sproutlet;
   delete _sess_term_as_alarm; _sess_term_as_alarm = NULL;
   delete _sess_cont_as_alarm; _sess_cont_as_alarm = NULL;
 }

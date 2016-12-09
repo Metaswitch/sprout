@@ -1258,13 +1258,13 @@ pjsip_msg* SproutletWrapper::create_request()
   return new_tdata->msg;
 }
 
-pjsip_msg* SproutletWrapper::clone_request(pjsip_msg* req)
+pjsip_msg* SproutletWrapper::clone_msg(pjsip_msg* msg)
 {
   // Get the old tdata from the map of clones
-  Packets::iterator it = _packets.find(req);
+  Packets::iterator it = _packets.find(msg);
   if (it == _packets.end())
   {
-    TRC_WARNING("Sproutlet attempted to clone an unrecognised request");
+    TRC_WARNING("Sproutlet attempted to clone an unrecognised message");
     return NULL;
   }
 
@@ -1274,7 +1274,7 @@ pjsip_msg* SproutletWrapper::clone_request(pjsip_msg* req)
   if (new_tdata == NULL)
   {
     //LCOV_EXCL_START
-    TRC_ERROR("Failed to clone request for Sproutlet %s", _service_name.c_str());
+    TRC_ERROR("Failed to clone message for Sproutlet %s", _service_name.c_str());
     return NULL;
     //LCOV_EXCL_STOP
   }

@@ -13,7 +13,6 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          sipresolver.cpp \
                          bono.cpp \
                          registration_utils.cpp \
-                         registrar.cpp \
                          hss_sip_mapping.cpp \
                          authentication.cpp \
                          options.cpp \
@@ -107,6 +106,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        icscfsproutlet.cpp \
                        bgcfsproutlet.cpp \
                        subscriptionsproutlet.cpp \
+                       registrarsproutlet.cpp \
                        sproutletappserver.cpp \
                        mmtel.cpp \
                        test_main.cpp \
@@ -270,7 +270,7 @@ sprout_mmtel_as.so_SOURCES := mmtel.cpp sproutletappserver.cpp mmtelasplugin.cpp
 sprout_mmtel_as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -Wno-write-strings
 sprout_mmtel_as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
-sprout_scscf.so_SOURCES := subscriptionsproutlet.cpp scscfsproutlet.cpp scscfplugin.cpp
+sprout_scscf.so_SOURCES := registrarsproutlet.cpp subscriptionsproutlet.cpp scscfsproutlet.cpp scscfplugin.cpp
 sprout_scscf.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS}
 sprout_scscf.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
