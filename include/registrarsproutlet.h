@@ -113,8 +113,8 @@ private:
 
   // SNMP tables that count the number of attempts, successes and failures of
   // registration attempts.
-  SNMP::RegistrationStatsTables* _reg_stats_tbls;
-  SNMP::RegistrationStatsTables* _third_party_reg_stats_tbls;
+  SNMP::RegistrationStatsTables _reg_stats_tbls;
+  SNMP::RegistrationStatsTables _third_party_reg_stats_tbls;
 };
 
 
@@ -129,11 +129,6 @@ public:
   static int expiry_for_binding(pjsip_contact_hdr* contact,
                                 pjsip_expires_hdr* expires,
                                 int max_expires);
-  static void third_party_register_failed(SubscriberDataManager* sdm,
-                                          std::vector<SubscriberDataManager*> remote_sdms,
-                                          HSSConnection* hss,
-                                          const std::string& public_id,
-                                          SAS::TrailId trail);
 
 protected:
   void process_register_request(pjsip_msg *msg);

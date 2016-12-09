@@ -83,18 +83,18 @@ RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
   _max_expires(cfg_max_expires),
   _force_original_register_inclusion(force_original_register_inclusion)
 {
-  _reg_stats_tbls->init_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+  _reg_stats_tbls.init_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
                                                                      ".1.2.826.0.1.1578918.9.3.9");
-  _reg_stats_tbls->re_reg_tbl = SNMP::SuccessFailCountTable::create("re_reg_success_fail_count",
+  _reg_stats_tbls.re_reg_tbl = SNMP::SuccessFailCountTable::create("re_reg_success_fail_count",
                                                                    ".1.2.826.0.1.1578918.9.3.10");
-  _reg_stats_tbls->de_reg_tbl = SNMP::SuccessFailCountTable::create("de_reg_success_fail_count",
+  _reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("de_reg_success_fail_count",
                                                                     ".1.2.826.0.1.1578918.9.3.11");
 
-  _third_party_reg_stats_tbls->init_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_initial_reg_success_fail_count",
+  _third_party_reg_stats_tbls.init_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_initial_reg_success_fail_count",
                                                                                  ".1.2.826.0.1.1578918.9.3.12");
-  _third_party_reg_stats_tbls->re_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_re_reg_success_fail_count",
+  _third_party_reg_stats_tbls.re_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_re_reg_success_fail_count",
                                                                                ".1.2.826.0.1.1578918.9.3.13");
-  _third_party_reg_stats_tbls->de_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_de_reg_success_fail_count",
+  _third_party_reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_de_reg_success_fail_count",
                                                                                ".1.2.826.0.1.1578918.9.3.14");
 }
 
@@ -102,20 +102,19 @@ RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
 //RegistrarSproutlet destructor.
 RegistrarSproutlet::~RegistrarSproutlet()
 {
-  delete _service_route;
-  delete _reg_stats_tbls->init_reg_tbl;
-  delete _reg_stats_tbls->re_reg_tbl;
-  delete _reg_stats_tbls->de_reg_tbl;
-  delete _third_party_reg_stats_tbls->init_reg_tbl;
-  delete _third_party_reg_stats_tbls->re_reg_tbl;
-  delete _third_party_reg_stats_tbls->de_reg_tbl;
+  delete _reg_stats_tbls.init_reg_tbl;
+  delete _reg_stats_tbls.re_reg_tbl;
+  delete _reg_stats_tbls.de_reg_tbl;
+  delete _third_party_reg_stats_tbls.init_reg_tbl;
+  delete _third_party_reg_stats_tbls.re_reg_tbl;
+  delete _third_party_reg_stats_tbls.de_reg_tbl;
 }
 
 bool RegistrarSproutlet::init()
 {
   bool init_success = true;
 
-  RegistrationUtils::init(_third_party_reg_stats_tbls, _force_original_register_inclusion);
+  RegistrationUtils::init(&_third_party_reg_stats_tbls, _force_original_register_inclusion);
 
   // Construct a Service-Route header pointing at the S-CSCF ready to be added
   // to REGISTER 200 OK response.
@@ -269,15 +268,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
     {
       if (expiry == 0)
       {
-        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_attempts();
-        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
+        _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_attempts();
+        _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_failures();
       }
       else
       // Invalid URI means this cannot be a re-register request, so if not
       // a de-register request, then treat as an initial register request.
       {
-        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_attempts();
-        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_failures();
+        _sproutlet->_reg_stats_tbls.init_reg_tbl->increment_attempts();
+        _sproutlet->_reg_stats_tbls.init_reg_tbl->increment_failures();
       }
     }
     return;
@@ -379,15 +378,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
     {
       if (expiry == 0)
       {
-        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_attempts();
-        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
+        _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_attempts();
+        _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_failures();
       }
       else
       // Invalid public/private identity means this cannot be a re-register request,
       // so if not a de-register request, then treat as an initial register request.
       {
-        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_attempts();
-        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_failures();
+        _sproutlet->_reg_stats_tbls.init_reg_tbl->increment_attempts();
+        _sproutlet->_reg_stats_tbls.init_reg_tbl->increment_failures();
       }
     }
     return;
@@ -412,8 +411,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
 
     if (num_contacts > 0)
     {
-      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_attempts();
-      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
+      _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_attempts();
+      _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_failures();
     }
 
     return;
@@ -436,8 +435,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
 
     if (num_contacts > 0)
     {
-      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_attempts();
-      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
+      _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_attempts();
+      _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_failures();
     }
 
     return;
@@ -506,15 +505,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
   {
     if (expiry == 0)
     {
-      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_attempts();
+      _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_attempts();
     }
     else if (is_initial_registration)
     {
-      _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_attempts();
+      _sproutlet->_reg_stats_tbls.init_reg_tbl->increment_attempts();
     }
     else
     {
-      _sproutlet->_reg_stats_tbls->re_reg_tbl->increment_attempts();
+      _sproutlet->_reg_stats_tbls.re_reg_tbl->increment_attempts();
     }
   }
 
@@ -544,15 +543,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
     {
       if (is_initial_registration)
       {
-        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_failures();
+        _sproutlet->_reg_stats_tbls.init_reg_tbl->increment_failures();
       }
       else if (expiry == 0)
       {
-        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
+        _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_failures();
       }
       else
       {
-        _sproutlet->_reg_stats_tbls->re_reg_tbl->increment_failures();
+        _sproutlet->_reg_stats_tbls.re_reg_tbl->increment_failures();
       }
     }
 
@@ -589,15 +588,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
     {
       if (is_initial_registration)
       {
-        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_failures();
+        _sproutlet->_reg_stats_tbls.init_reg_tbl->increment_failures();
       }
       else if (expiry == 0)
       {
-        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
+        _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_failures();
       }
       else
       {
-        _sproutlet->_reg_stats_tbls->re_reg_tbl->increment_failures();
+        _sproutlet->_reg_stats_tbls.re_reg_tbl->increment_failures();
       }
     }
 
@@ -682,15 +681,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
   {
     if (expiry == 0)
     {
-      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_successes();
+      _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_successes();
     }
     else if (is_initial_registration)
     {
-      _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_successes();
+      _sproutlet->_reg_stats_tbls.init_reg_tbl->increment_successes();
     }
     else
     {
-      _sproutlet->_reg_stats_tbls->re_reg_tbl->increment_successes();
+      _sproutlet->_reg_stats_tbls.re_reg_tbl->increment_successes();
     }
   }
 
@@ -1160,26 +1159,6 @@ int RegistrarSproutletTsx::expiry_for_binding(pjsip_contact_hdr* contact,
   }
 
   return expiry;
-}
-
-// Called when a third-party register request failed when the default handling
-// on the iFC was set to SESSION_TERMINATE.
-void RegistrarSproutletTsx::third_party_register_failed(SubscriberDataManager* sdm,
-                                                        std::vector<SubscriberDataManager*> remote_sdms,
-                                                        HSSConnection* hss,
-                                                        const std::string& public_id,
-                                                        SAS::TrailId trail)
-{
-  // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure
-  // where SESSION_TERMINATED is set means that we should deregister "the
-  // currently registered public user identity" - i.e. all bindings
-  RegistrationUtils::remove_bindings(sdm,
-                                     remote_sdms,
-                                     hss,
-                                     public_id,
-                                     "*",
-                                     HSSConnection::DEREG_ADMIN,
-                                     trail);
 }
 
 void RegistrarSproutletTsx::route_to_subscription(pjsip_msg* req)

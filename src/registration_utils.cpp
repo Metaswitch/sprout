@@ -238,7 +238,16 @@ static void send_register_cb(void* token, pjsip_event *event)
     event.add_var_param(error_msg);
     SAS::report_event(event);
 
-    //RegistrarSproutletTsx::third_party_register_failed(tsxdata->sdm, tsxdata->remote_sdms, tsxdata->hss, tsxdata->public_id, tsxdata->trail); TODO: Fix up this call.
+    // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure
+    // where SESSION_TERMINATED is set means that we should deregister "the
+    // currently registered public user identity" - i.e. all bindings
+    RegistrationUtils::remove_bindings(tsxdata->sdm,
+                                       tsxdata->remote_sdms,
+                                       tsxdata->hss,
+                                       tsxdata->public_id,
+                                       "*",
+                                       HSSConnection::DEREG_ADMIN,
+                                       tsxdata->trail);
   }
 
   if (third_party_reg_stats_tables != NULL)
