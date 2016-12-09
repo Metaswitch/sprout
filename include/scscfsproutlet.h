@@ -228,6 +228,7 @@ private:
   SNMP::CounterTable* _routed_by_preloaded_route_tbl = NULL;
   SNMP::CounterTable* _invites_cancelled_before_1xx_tbl = NULL;
   SNMP::CounterTable* _invites_cancelled_after_1xx_tbl = NULL;
+  SNMP::CounterTable* _forked_request_tbl = NULL;
   SNMP::EventAccumulatorTable* _video_session_setup_time_tbl = NULL;
   SNMP::EventAccumulatorTable* _audio_session_setup_time_tbl = NULL;
 

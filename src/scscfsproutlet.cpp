@@ -99,11 +99,12 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
                                                                  "1.2.826.0.1.1578918.9.3.32");
   _invites_cancelled_after_1xx_tbl = SNMP::CounterTable::create("invites_cancelled_after_1xx",
                                                                 "1.2.826.0.1.1578918.9.3.33");
+  _forked_request_tbl = SNMP::CounterTable::create("scscf_forked_requests",
+                                                   "1.2.826.0.1.1578918.9.3.36");
   _audio_session_setup_time_tbl = SNMP::EventAccumulatorTable::create("scscf_audio_session_setup_time",
                                                                       "1.2.826.0.1.1578918.9.3.34");
   _video_session_setup_time_tbl = SNMP::EventAccumulatorTable::create("scscf_video_session_setup_time",
                                                                       "1.2.826.0.1.1578918.9.3.35");
-
 }
 
 
@@ -114,6 +115,7 @@ SCSCFSproutlet::~SCSCFSproutlet()
   delete _routed_by_preloaded_route_tbl;
   delete _invites_cancelled_before_1xx_tbl;
   delete _invites_cancelled_after_1xx_tbl;
+  delete _forked_request_tbl;
   delete _audio_session_setup_time_tbl;
   delete _video_session_setup_time_tbl;
 }
@@ -1662,6 +1664,11 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       // in case we get a 430 Flow Failed response.
       int fork_id = send_request(to_send);
       _target_bindings.insert(std::make_pair(fork_id, targets[ii].binding_id));
+
+      if (ii != 0)
+      {
+        _scscf->_forked_request_tbl->increment();
+      }
     }
   }
 }
