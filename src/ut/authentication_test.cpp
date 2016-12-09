@@ -101,13 +101,63 @@ public:
     SipTest::TearDownTestCase();
   }
 
-  BaseAuthenticationTest() : SipTest()
+  // Hook to allow subclasses to set up the auth sproutlet how they want.
+  virtual AuthenticationSproutlet* create_auth_sproutlet() = 0;
+
+  void SetUp()
   {
     _current_cseq = 1;
+
+    _auth_sproutlet = create_auth_sproutlet();
+
+    std::list<Sproutlet*> sproutlets;
+    sproutlets.push_back(_auth_sproutlet);
+
+    _sproutlet_proxy = new SproutletProxy(stack_data.endpt,
+                                          PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
+                                          "sprout.homedomain",
+                                          std::unordered_set<std::string>(),
+                                          sproutlets,
+                                          std::set<std::string>(),
+                                          "scscf");
+
+    add_host_mapping("registrar.example.com", "10.10.10.1");
+
+    _tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                            stack_data.scscf_port,
+                            "0.0.0.0",
+                            5060);
   }
 
-  ~BaseAuthenticationTest()
+  void TearDown()
   {
+    pjsip_tsx_layer_dump(true);
+
+    // Terminate all transactions
+    list<pjsip_transaction*> tsxs = get_all_tsxs();
+    for (list<pjsip_transaction*>::iterator it2 = tsxs.begin();
+         it2 != tsxs.end();
+         ++it2)
+    {
+      pjsip_tsx_terminate(*it2, PJSIP_SC_SERVICE_UNAVAILABLE);
+    }
+
+    // PJSIP transactions aren't actually destroyed until a zero ms
+    // timer fires (presumably to ensure destruction doesn't hold up
+    // real work), so poll for that to happen. Otherwise we leak!
+    // Allow a good length of time to pass too, in case we have
+    // transactions still open. 32s is the default UAS INVITE
+    // transaction timeout, so we go higher than that.
+    cwtest_advance_time_ms(33000L);
+    poll();
+    // Stop and restart the transaction layer just in case
+    pjsip_tsx_layer_instance()->stop();
+    pjsip_tsx_layer_instance()->start();
+
+    delete _auth_sproutlet; _auth_sproutlet = NULL;
+    delete _sproutlet_proxy; _sproutlet_proxy = NULL;
+    delete _tp; _tp = NULL;
+
     // Clear out transactions
     cwtest_advance_time_ms(33000L);
     poll();
@@ -186,6 +236,10 @@ protected:
   static FakeChronosConnection* _chronos_connection;
   static AnalyticsLogger* _analytics;
   static int _current_cseq;
+
+  AuthenticationSproutlet* _auth_sproutlet;
+  SproutletProxy* _sproutlet_proxy;
+  TransportFlow* _tp;
 };
 
 LocalStore* BaseAuthenticationTest::_local_data_store;
@@ -204,144 +258,62 @@ class AuthenticationTest : public BaseAuthenticationTest
     BaseAuthenticationTest::SetUpTestCase();
   }
 
-  void SetUp()
-  {
-    _auth_sproutlet = new AuthenticationSproutlet("scscf", // TODO should be using an alias here.
-                                                  stack_data.scscf_port,
-                                                  "sip:authentication.homedomain",
-                                                  "homedomain",
-                                                  _impi_store,
-                                                  _hss_connection,
-                                                  _chronos_connection,
-                                                  _acr_factory,
-                                                  NonRegisterAuthentication::NEVER,
-                                                  _analytics,
-                                                  &SNMP::FAKE_AUTHENTICATION_STATS_TABLES,
-                                                  true,
-                                                  get_binding_expiry);
-    ASSERT_TRUE(_auth_sproutlet->init());
-
-    std::list<Sproutlet*> sproutlets;
-    sproutlets.push_back(_auth_sproutlet);
-
-    _sproutlet_proxy = new SproutletProxy(stack_data.endpt,
-                                          PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
-                                          "sprout.homedomain",
-                                          std::unordered_set<std::string>(),
-                                          sproutlets,
-                                          std::set<std::string>(),
-                                          "scscf");
-
-    add_host_mapping("registrar.example.com", "10.10.10.1");
-
-    _tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                            stack_data.scscf_port,
-                            "0.0.0.0",
-                            5060);
-  }
-
-  void TearDown()
-  {
-    pjsip_tsx_layer_dump(true);
-
-    // Terminate all transactions
-    list<pjsip_transaction*> tsxs = get_all_tsxs();
-    for (list<pjsip_transaction*>::iterator it2 = tsxs.begin();
-         it2 != tsxs.end();
-         ++it2)
-    {
-      pjsip_tsx_terminate(*it2, PJSIP_SC_SERVICE_UNAVAILABLE);
-    }
-
-    // PJSIP transactions aren't actually destroyed until a zero ms
-    // timer fires (presumably to ensure destruction doesn't hold up
-    // real work), so poll for that to happen. Otherwise we leak!
-    // Allow a good length of time to pass too, in case we have
-    // transactions still open. 32s is the default UAS INVITE
-    // transaction timeout, so we go higher than that.
-    cwtest_advance_time_ms(33000L);
-    poll();
-    // Stop and restart the transaction layer just in case
-    pjsip_tsx_layer_instance()->stop();
-    pjsip_tsx_layer_instance()->start();
-
-    delete _auth_sproutlet; _auth_sproutlet = NULL;
-    delete _sproutlet_proxy; _sproutlet_proxy = NULL;
-    delete _tp; _tp = NULL;
-  }
-
   static void TearDownTestCase()
   {
     BaseAuthenticationTest::TearDownTestCase();
   }
 
-  AuthenticationSproutlet* _auth_sproutlet;
-  SproutletProxy* _sproutlet_proxy;
-  TransportFlow* _tp;
+  AuthenticationSproutlet* create_auth_sproutlet()
+  {
+    AuthenticationSproutlet* auth_sproutlet =
+      new AuthenticationSproutlet("scscf", // TODO should be using an alias here.
+                                  stack_data.scscf_port,
+                                  "sip:authentication.homedomain",
+                                  "homedomain",
+                                  _impi_store,
+                                  _hss_connection,
+                                  _chronos_connection,
+                                  _acr_factory,
+                                  NonRegisterAuthentication::NEVER,
+                                  _analytics,
+                                  &SNMP::FAKE_AUTHENTICATION_STATS_TABLES,
+                                  true,
+                                  get_binding_expiry);
+    EXPECT_TRUE(auth_sproutlet->init());
+    return auth_sproutlet;
+  }
 };
 
 
-#if 0
 class AuthenticationPxyAuthHdrTest : public BaseAuthenticationTest
 {
   static void SetUpTestCase()
   {
     BaseAuthenticationTest::SetUpTestCase();
+  }
 
-    _auth_sproutlet = new AuthenticationSproutlet("authentication",
-                                                  0,
-                                                  "sip:authentication.homedomain",
-                                                  "homedomain",
-                                                  _impi_store,
-                                                  _hss_connection,
-                                                  _chronos_connection,
-                                                  _acr_factory,
-                                                  NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT,
-                                                  _analytics,
-                                                  &SNMP::FAKE_AUTHENTICATION_STATS_TABLES,
-                                                  true,
-                                                  get_binding_expiry);
-    std::list<Sproutlet*> sproutlets;
-    sproutlets.push_back(_auth_sproutlet);
-
-    _sproutlet_proxy = new SproutletProxy(stack_data.endpt,
-                                          PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
-                                          "homedomain",
-                                          std::unordered_set<std::string>(),
-                                          sproutlets,
-                                          std::set<std::string>(),
-                                          "scscf");
-    ASSERT_EQ(PJ_SUCCESS, ret);
+  AuthenticationSproutlet* create_auth_sproutlet()
+  {
+    AuthenticationSproutlet* auth_sproutlet =
+      new AuthenticationSproutlet("authentication",
+                                  0,
+                                  "sip:authentication.homedomain",
+                                  "homedomain",
+                                  _impi_store,
+                                  _hss_connection,
+                                  _chronos_connection,
+                                  _acr_factory,
+                                  NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT,
+                                  _analytics,
+                                  &SNMP::FAKE_AUTHENTICATION_STATS_TABLES,
+                                  true,
+                                  get_binding_expiry);
+    EXPECT_TRUE(auth_sproutlet->init());
+    return auth_sproutlet;
   }
 
   static void TearDownTestCase()
   {
-    pjsip_tsx_layer_dump(true);
-
-    // Terminate all transactions
-    list<pjsip_transaction*> tsxs = get_all_tsxs();
-    for (list<pjsip_transaction*>::iterator it2 = tsxs.begin();
-         it2 != tsxs.end();
-         ++it2)
-    {
-      pjsip_tsx_terminate(*it2, PJSIP_SC_SERVICE_UNAVAILABLE);
-    }
-
-    // PJSIP transactions aren't actually destroyed until a zero ms
-    // timer fires (presumably to ensure destruction doesn't hold up
-    // real work), so poll for that to happen. Otherwise we leak!
-    // Allow a good length of time to pass too, in case we have
-    // transactions still open. 32s is the default UAS INVITE
-    // transaction timeout, so we go higher than that.
-    cwtest_advance_time_ms(33000L);
-    poll();
-    // Stop and restart the transaction layer just in case
-    pjsip_tsx_layer_instance()->stop();
-    pjsip_tsx_layer_instance()->start();
-
-    delete _icscf_proxy; _icscf_proxy = NULL;
-    delete _icscf_sproutlet; _icscf_sproutlet = NULL;
-
     BaseAuthenticationTest::TearDownTestCase();
   }
 };
@@ -352,64 +324,33 @@ class AuthenticationNonceCountDisabledTest : public BaseAuthenticationTest
   static void SetUpTestCase()
   {
     BaseAuthenticationTest::SetUpTestCase();
+  }
 
-    _auth_sproutlet = new AuthenticationSproutlet("authentication",
-                                                  0,
-                                                  "sip:authentication.homedomain",
-                                                  "homedomain",
-                                                  _impi_store,
-                                                  _hss_connection,
-                                                  _chronos_connection,
-                                                  _acr_factory,
-                                                  NonRegisterAuthentication::NEVER,
-                                                  _analytics,
-                                                  &SNMP::FAKE_AUTHENTICATION_STATS_TABLES,
-                                                  false,
-                                                  get_binding_expiry);
-    std::list<Sproutlet*> sproutlets;
-    sproutlets.push_back(_auth_sproutlet);
-
-    _sproutlet_proxy = new SproutletProxy(stack_data.endpt,
-                                          PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
-                                          "homedomain",
-                                          std::unordered_set<std::string>(),
-                                          sproutlets,
-                                          std::set<std::string>(),
-                                          "scscf");
+  AuthenticationSproutlet* create_auth_sproutlet()
+  {
+    AuthenticationSproutlet* auth_sproutlet =
+      new AuthenticationSproutlet("authentication",
+                                  0,
+                                  "sip:authentication.homedomain",
+                                  "homedomain",
+                                  _impi_store,
+                                  _hss_connection,
+                                  _chronos_connection,
+                                  _acr_factory,
+                                  NonRegisterAuthentication::NEVER,
+                                  _analytics,
+                                  &SNMP::FAKE_AUTHENTICATION_STATS_TABLES,
+                                  false,
+                                  get_binding_expiry);
+    EXPECT_TRUE(auth_sproutlet->init());
+    return auth_sproutlet;
   }
 
   static void TearDownTestCase()
   {
-    pjsip_tsx_layer_dump(true);
-
-    // Terminate all transactions
-    list<pjsip_transaction*> tsxs = get_all_tsxs();
-    for (list<pjsip_transaction*>::iterator it2 = tsxs.begin();
-         it2 != tsxs.end();
-         ++it2)
-    {
-      pjsip_tsx_terminate(*it2, PJSIP_SC_SERVICE_UNAVAILABLE);
-    }
-
-    // PJSIP transactions aren't actually destroyed until a zero ms
-    // timer fires (presumably to ensure destruction doesn't hold up
-    // real work), so poll for that to happen. Otherwise we leak!
-    // Allow a good length of time to pass too, in case we have
-    // transactions still open. 32s is the default UAS INVITE
-    // transaction timeout, so we go higher than that.
-    cwtest_advance_time_ms(33000L);
-    poll();
-    // Stop and restart the transaction layer just in case
-    pjsip_tsx_layer_instance()->stop();
-    pjsip_tsx_layer_instance()->start();
-
-    delete _icscf_proxy; _icscf_proxy = NULL;
-    delete _icscf_sproutlet; _icscf_sproutlet = NULL;
-
     BaseAuthenticationTest::TearDownTestCase();
   }
 };
-#endif
 
 
 class AuthenticationMessage
