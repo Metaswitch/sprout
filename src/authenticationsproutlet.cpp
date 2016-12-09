@@ -730,71 +730,94 @@ bool AuthenticationSproutletTsx::needs_authentication(pjsip_msg* req)
         pjsip_param_find(&auth_hdr->credential.digest.other_param,
                          &STR_INTEGRITY_PROTECTED);
 
-      if ((integrity != NULL) &&
-          ((pj_stricmp(&integrity->value, &STR_TLS_YES) == 0) ||
-           (pj_stricmp(&integrity->value, &STR_IP_ASSOC_YES) == 0)))
+      if (integrity != NULL)
       {
         TRC_DEBUG("Integrity protected with %.*s",
                   integrity->value.slen, integrity->value.ptr);
 
-        // The integrity protected indicator is included and set to tls-yes or
-        // ip-assoc-yes.  This indicates the client has already been authenticated
-        // so we will accept this REGISTER even if there is a challenge response.
-        // Values of tls-pending or ip-assoc-pending indicate the challenge
-        // should be checked.
-
-        // We should still challenge though if we find that the request wasn't
-        // sent to this S-CSCF, as this triggers the HSS to accept an S-CSCF
-        // change (by generating the correct MAR).
-        pjsip_uri_context_e context;
-        pjsip_uri* next_routing_uri = PJUtils::get_next_routing_uri(req, &context);
-
-        if (pjsip_uri_cmp(context,
-                          next_routing_uri,
-                          (pjsip_uri*) stack_data.scscf_uri) == PJ_SUCCESS)
+        if ((pj_stricmp(&integrity->value, &STR_TLS_YES) == 0) ||
+            (pj_stricmp(&integrity->value, &STR_IP_ASSOC_YES) == 0))
         {
-          TRC_INFO("SIP Digest authenticated request integrity protected by edge proxy");
-
-          SAS::Event event(trail(), SASEvent::AUTHENTICATION_NOT_NEEDED_INTEGRITY_PROTECTED, 0);
-          SAS::report_event(event);
-
+          // The integrity protected indicator is included and set to tls-yes or
+          // ip-assoc-yes.  This indicates the client has already been authenticated
+          // so we will accept this REGISTER even if there is a challenge response.
+          // Values of tls-pending or ip-assoc-pending indicate the challenge
+          // should be checked.
           return PJ_FALSE;
+
+          // TODO reinstate this code.
+#if 0
+          // We should still challenge though if we find that the request wasn't
+          // sent to this S-CSCF, as this triggers the HSS to accept an S-CSCF
+          // change (by generating the correct MAR).
+          pjsip_uri_context_e context;
+          pjsip_uri* next_routing_uri = PJUtils::get_next_routing_uri(req, &context);
+
+          if (pjsip_uri_cmp(context,
+                            next_routing_uri,
+                            (pjsip_uri*) stack_data.scscf_uri) == PJ_SUCCESS)
+          {
+            TRC_INFO("SIP Digest authenticated request integrity protected by edge proxy");
+
+            SAS::Event event(trail(), SASEvent::AUTHENTICATION_NOT_NEEDED_INTEGRITY_PROTECTED, 0);
+            SAS::report_event(event);
+
+            return PJ_FALSE;
+          }
+          else
+          {
+            TRC_DEBUG("Needs authentication despite integrity protection as next routing URI (%s) "
+                      " does not match this S-CSCF (%.*s)",
+                      stack_data.scscf_uri_str.slen, stack_data.scscf_uri_str.ptr,
+                      PJUtils::uri_to_string(context, next_routing_uri).c_str());
+          }
+#endif
         }
-        else
+        else if ((integrity != NULL) &&
+                 (pj_stricmp(&integrity->value, &STR_YES) == 0) &&
+                 (auth_hdr->credential.digest.response.slen == 0))
         {
-          TRC_DEBUG("Needs authentication despite integrity protection as next routing URI (%s) "
-                    " does not match this S-CSCF (%.*s)",
-                    stack_data.scscf_uri_str.slen, stack_data.scscf_uri_str.ptr,
-                    PJUtils::uri_to_string(context, next_routing_uri).c_str());
-        }
-      }
-      else if ((integrity != NULL) &&
-               (pj_stricmp(&integrity->value, &STR_YES) == 0) &&
-               (auth_hdr->credential.digest.response.slen == 0))
-      {
-        // The integrity protected indicator is include and set to yes.  This
-        // indicates that AKA authentication is in use and the REGISTER was
-        // received on an integrity protected channel, so we will let the
-        // request through if there is no challenge response, but must check
-        // the challenge response if included.
-
-        // We should still challenge though if we find that the request wasn't
-        // sent to this S-CSCF, as this triggers the HSS to accept an S-CSCF
-        // change (by generating the correct MAR).
-
-        pjsip_uri_context_e context;
-        pjsip_uri* next_routing_uri = PJUtils::get_next_routing_uri(req, &context);
-
-        if (pjsip_uri_cmp(context,
-                          next_routing_uri,
-                          (pjsip_uri*) stack_data.scscf_uri) == PJ_SUCCESS)
-        {
-          TRC_INFO("AKA authenticated request integrity protected by edge proxy");
-
-          SAS::Event event(trail(), SASEvent::AUTHENTICATION_NOT_NEEDED_INTEGRITY_PROTECTED, 1);
-          SAS::report_event(event);
-
+          // The integrity protected indicator is include and set to yes.  This
+          // indicates that AKA authentication is in use and the REGISTER was
+          // received on an integrity protected channel, so we will let the
+          // request through if there is no challenge response, but must check
+          // the challenge response if included.
+          //
+          // We should still challenge though if we find that the request wasn't
+          // sent to this S-CSCF, as this triggers the HSS to accept an S-CSCF
+          // change (by generating the correct MAR).
           return PJ_FALSE;
+
+          // TODO reinstate this code.
+#if 0
+          pjsip_uri_context_e context;
+          pjsip_uri* next_routing_uri = PJUtils::get_next_routing_uri(req, &context);
+
+          if (pjsip_uri_cmp(context,
+                            next_routing_uri,
+                            (pjsip_uri*) stack_data.scscf_uri) == PJ_SUCCESS)
+          {
+            TRC_INFO("AKA authenticated request integrity protected by edge proxy");
+
+            SAS::Event event(trail(), SASEvent::AUTHENTICATION_NOT_NEEDED_INTEGRITY_PROTECTED, 1);
+            SAS::report_event(event);
+
+            return PJ_FALSE;
+          }
+          else
+          {
+            if (Log::enabled(Log::DEBUG_LEVEL))
+            {
+              std::string next_uri_s =
+                PJUtils::uri_to_string(context, (pjsip_uri*)next_routing_uri);
+              std::string scscf_uri_s =
+                PJUtils::uri_to_string(context, (pjsip_uri*)stack_data.scscf_uri);
+              TRC_DEBUG("Re-challenge as next hop URI does not match S-CSCF URI. "
+                        "next URI = %s, S-CSCF URI = %s",
+                        next_uri_s.c_str(), scscf_uri_s.c_str());
+            }
+          }
+#endif
         }
       }
     }
