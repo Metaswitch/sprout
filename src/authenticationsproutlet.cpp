@@ -1239,5 +1239,10 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
 void AuthenticationSproutletTsx::forward_request(pjsip_msg* req)
 {
-  // TODO actually forward the request.
+  // TODO Route to a sensible URI.
+  pjsip_sip_uri* uri =
+    (pjsip_sip_uri*)PJUtils::uri_from_string("sip:registrar.example.com;lr",
+                                             get_pool(req));
+  PJUtils::add_top_route_header(req, uri, get_pool(req));
+  send_request(req);
 }
