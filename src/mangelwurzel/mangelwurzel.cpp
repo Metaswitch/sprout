@@ -147,19 +147,19 @@ SproutletTsx* Mangelwurzel::get_tsx(SproutletTsxHelper* helper,
 /// - It can mangle the Record-Route headers URIs.
 void MangelwurzelTsx::on_rx_initial_request(pjsip_msg* req)
 {
-  // If Mangelwurzel receives an INVITE we would to respond with a 200OK
+  // If Mangelwurzel receives a REGISTER, we need to respond with a 200 OK
+  // rather than mangling the request and forwarding it on.
   if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
   {
-    pjsip_status_code status_code = PJSIP_SC_OK;
-    pjsip_msg* rsp = create_response(req, status_code);
+    pjsip_msg* rsp = create_response(req, PJSIP_SC_OK);
     send_response(rsp);
-    free_msg(rsp);
+    free_msg(req);
     return;
   }
 
   pj_pool_t* pool = get_pool(req);
 
-  // Get mangewurzel's route header and clone the URI. We use this in the SAS
+  // Get Mangelwurzel's route header and clone the URI. We use this in the SAS
   // event logging that we've received a request, and then we use it to
   // Record-Route ourselves.
   const pjsip_route_hdr* mangelwurzel_route_hdr = route_hdr();
