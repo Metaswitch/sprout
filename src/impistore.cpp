@@ -449,7 +449,7 @@ ImpiStore::DigestAuthChallenge* ImpiStore::DigestAuthChallenge::from_json_av(rap
       delete auth_challenge; auth_challenge = NULL;
     }
   }
-  else 
+  else
   {
     TRC_WARNING("JSON digest AV is not an object - dropping");
   }
@@ -513,7 +513,7 @@ ImpiStore::AKAAuthChallenge* ImpiStore::AKAAuthChallenge::from_json_av(rapidjson
       delete auth_challenge; auth_challenge = NULL;
     }
   }
-  else 
+  else
   {
     TRC_WARNING("JSON digest AV is not an object - dropping");
   }
@@ -559,7 +559,7 @@ void ImpiStore::Impi::write_json(rapidjson::Writer<rapidjson::StringBuffer>* wri
       {
         writer->StartObject();
         {
-          (*it)->write_json(writer); 
+          (*it)->write_json(writer);
         }
         writer->EndObject();
       }
@@ -664,7 +664,6 @@ Store::Status ImpiStore::set_impi(Impi* impi,
     TRC_ERROR("Failed to write IMPI for private_id %s", impi->impi.c_str());
     SAS::Event event(trail, SASEvent::IMPISTORE_IMPI_SET_FAILURE, 0);
     event.add_var_param(impi->impi);
-    event.add_static_param(status);
     SAS::report_event(event);
     // LCOV_EXCL_STOP
   }
@@ -709,7 +708,6 @@ Store::Status ImpiStore::set_impi(Impi* impi,
           SAS::Event event(trail, SASEvent::IMPISTORE_AV_SET_FAILURE, 0);
           event.add_var_param(impi->impi);
           event.add_var_param(nonce.c_str());
-          event.add_static_param(local_status);
           SAS::report_event(event);
           // Update status, but only if it's not already DATA_CONTENTION - that's
           // the most significant status.
@@ -757,7 +755,6 @@ Store::Status ImpiStore::set_impi(Impi* impi,
         SAS::Event event(trail, SASEvent::IMPISTORE_AV_DELETE_FAILURE, 0);
         event.add_var_param(impi->impi);
         event.add_var_param(nonce.c_str());
-        event.add_static_param(local_status);
         SAS::report_event(event);
         // Update status, but only if it's not already DATA_CONTENTION - that's
         // the most significant status.
@@ -822,7 +819,6 @@ ImpiStore::Impi* ImpiStore::get_impi(const std::string& impi,
   {
     SAS::Event event(trail, SASEvent::IMPISTORE_IMPI_GET_FAILURE, 0);
     event.add_var_param(impi);
-    event.add_static_param(status);
     SAS::report_event(event);
   }
   return impi_obj;
@@ -953,7 +949,6 @@ ImpiStore::AuthChallenge* ImpiStore::get_av(const std::string& impi,
     SAS::Event event(trail, SASEvent::IMPISTORE_AV_GET_FAILURE, 0);
     event.add_var_param(impi);
     event.add_var_param(nonce);
-    event.add_static_param(status);
     SAS::report_event(event);
   }
   return auth_challenge;
