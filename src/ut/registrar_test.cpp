@@ -380,6 +380,7 @@ private:
     free_txdata();
 
     // Reregistration of first binding is OK but doesn't add a new one.
+    msg0._unique += 1;
     msg = msg0;
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
@@ -399,6 +400,7 @@ private:
     free_txdata();
 
     // Registering the first binding again but without the binding ID counts as a separate binding (named by the contact itself).  Bindings are ordered by binding ID.
+    msg0._unique += 1;
     msg = msg0;
     msg._contact_instance = "";
     inject_msg(msg.get());
@@ -421,6 +423,7 @@ private:
     free_txdata();
 
     // Reregistering that yields no change.
+    msg._unique += 1;
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -441,6 +444,7 @@ private:
 
     // A fetch bindings registration (no Contact headers).  Should just return current state.
     string save_contact = msg._contact;
+    msg._unique += 1;
     msg._contact = "";
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
@@ -462,6 +466,7 @@ private:
     msg._contact = save_contact;
 
     // Reregistering again with an updated cseq triggers an update of the binding.
+    msg._unique += 1;
     msg._cseq = "16568";
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
@@ -482,6 +487,7 @@ private:
     free_txdata();
 
     // Registration of star but with a non zero expiry means the request is rejected with a 400.
+    msg0._unique += 4;
     msg = msg0;
     msg._contact = "*";
     msg._contact_instance = "";
@@ -496,6 +502,7 @@ private:
     free_txdata();
 
     // Registration of star with expiry = 0 clears all bindings.
+    msg0._unique += 1;
     msg = msg0;
     msg._expires = "Expires: 0";
     msg._contact = "*";
@@ -634,13 +641,13 @@ TEST_F(RegistrarTest, NotOurs)
   ASSERT_EQ(1, txdata_count());
 }
 
-/*TEST_F(RegistrarTest, RouteHeaderNotMatching)
+TEST_F(RegistrarTest, RouteHeaderNotMatching)
 {
   Message msg;
   msg._domain = "notthehomedomain";
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
-}*/
+}
 
 TEST_F(RegistrarTest, BadScheme)
 {
@@ -985,25 +992,11 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
   inject_msg(msg.get());
   SCOPED_TRACE("REGISTER (injected)");
   ASSERT_EQ(2, txdata_count());
-  SCOPED_TRACE("REGISTER (200 OK)");
-  pjsip_msg* out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
-            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
-  free_txdata();
 
   SCOPED_TRACE("REGISTER (forwarded)");
   // INVITE passed on to AS
   SCOPED_TRACE("REGISTER (S)");
-  out = current_txdata()->msg;
+  pjsip_msg* out = current_txdata()->msg;
   ReqMatcher r1("REGISTER");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
   pj_str_t multipart = pj_str("multipart");
@@ -1017,6 +1010,19 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_successes);
 
+  SCOPED_TRACE("REGISTER (200 OK)");
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -1058,25 +1064,10 @@ TEST_F(RegistrarTest, AppServersWithMultipartBodyWithTelURI)
   inject_msg(msg.get());
   SCOPED_TRACE("REGISTER (injected)");
   ASSERT_EQ(2, txdata_count());
-  SCOPED_TRACE("REGISTER (200 OK)");
-  pjsip_msg* out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1",
-            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <tel:6505550231>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
-  free_txdata();
-
   SCOPED_TRACE("REGISTER (forwarded)");
   // INVITE passed on to AS
   SCOPED_TRACE("REGISTER (S)");
-  out = current_txdata()->msg;
+  pjsip_msg* out = current_txdata()->msg;
   ReqMatcher r1("REGISTER");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
   pj_str_t multipart = pj_str("multipart");
@@ -1090,6 +1081,19 @@ TEST_F(RegistrarTest, AppServersWithMultipartBodyWithTelURI)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_successes);
 
+  SCOPED_TRACE("REGISTER (200 OK)");
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: <tel:6505550231>", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -1128,22 +1132,9 @@ TEST_F(RegistrarTest, AppServersWithOneBody)
   inject_msg(msg.get());
   SCOPED_TRACE("REGISTER (injected)");
   ASSERT_EQ(2, txdata_count());
-  SCOPED_TRACE("REGISTER (200 OK)");
-  pjsip_msg* out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
-            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
-  free_txdata();
-
   SCOPED_TRACE("REGISTER (forwarded)");
   // REGISTER passed on to AS
-  out = current_txdata()->msg;
+  pjsip_msg* out = current_txdata()->msg;
   ReqMatcher r1("REGISTER");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
   pj_str_t message = pj_str("message");
@@ -1157,6 +1148,17 @@ TEST_F(RegistrarTest, AppServersWithOneBody)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_successes);
 
+  SCOPED_TRACE("REGISTER (200 OK)");
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -1194,22 +1196,9 @@ TEST_F(RegistrarTest, AppServersWithNoBody)
   inject_msg(msg.get());
   SCOPED_TRACE("REGISTER (injected)");
   ASSERT_EQ(2, txdata_count());
-  SCOPED_TRACE("REGISTER (200 OK)");
-  pjsip_msg* out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
-            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
-  free_txdata();
-
   SCOPED_TRACE("REGISTER (forwarded)");
   // REGISTER passed on to AS
-  out = current_txdata()->msg;
+  pjsip_msg* out = current_txdata()->msg;
   ReqMatcher r1("REGISTER");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
   EXPECT_EQ(NULL, out->body);
@@ -1220,6 +1209,17 @@ TEST_F(RegistrarTest, AppServersWithNoBody)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_successes);
 
+  SCOPED_TRACE("REGISTER (200 OK)");
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -1257,22 +1257,9 @@ TEST_F(RegistrarTest, AppServersPassthrough)
   inject_msg(msg.get());
   SCOPED_TRACE("REGISTER (injected)");
   ASSERT_EQ(2, txdata_count());
-  SCOPED_TRACE("REGISTER (200 OK)");
-  pjsip_msg* out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
-            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
-  free_txdata();
-
   SCOPED_TRACE("REGISTER (forwarded)");
   // REGISTER passed on to AS
-  out = current_txdata()->msg;
+  pjsip_msg* out = current_txdata()->msg;
   ReqMatcher r1("REGISTER");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
 
@@ -1286,6 +1273,17 @@ TEST_F(RegistrarTest, AppServersPassthrough)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_successes);
 
+  SCOPED_TRACE("REGISTER (200 OK)");
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -1388,17 +1386,9 @@ TEST_F(RegistrarTest, AppServersInitialRegistration)
   inject_msg(msg.get());
   SCOPED_TRACE("REGISTER (injected)");
   ASSERT_EQ(2, txdata_count());
-  SCOPED_TRACE("REGISTER (200 OK)");
-  pjsip_msg* out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
-  free_txdata();
-
   SCOPED_TRACE("REGISTER (forwarded)");
   // REGISTER passed on to AS
-  out = current_txdata()->msg;
+  pjsip_msg* out = current_txdata()->msg;
   ReqMatcher r1("REGISTER");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
   EXPECT_EQ(NULL, out->body);
@@ -1407,12 +1397,19 @@ TEST_F(RegistrarTest, AppServersInitialRegistration)
   inject_msg(respond_to_current_txdata(200));
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_successes);
+
+
+  SCOPED_TRACE("REGISTER (200 OK)");
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
   free_txdata();
+  ASSERT_EQ(0, txdata_count());
 
   SCOPED_TRACE("REGISTER (reregister)");
-  Message msg2;
-  msg2._expires = "Expires: 800";
-  msg2._contact_params = ";+sip.ice;reg-id=1";
+  msg._unique += 1;
   SCOPED_TRACE("REGISTER (reregister, about to inject)");
   inject_msg(msg.get());
   SCOPED_TRACE("REGISTER (reregister, injected)");
@@ -1428,8 +1425,6 @@ TEST_F(RegistrarTest, AppServersInitialRegistration)
   SCOPED_TRACE("REGISTER (forwarded)");
   // REGISTER not passed on to AS
   ASSERT_EQ(0, txdata_count());
-
-  free_txdata();
 }
 
 TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
@@ -1471,14 +1466,8 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
   inject_msg(msg.get());
   SCOPED_TRACE("REGISTER (injected)");
   ASSERT_EQ(2, txdata_count());
-  SCOPED_TRACE("REGISTER (200 OK)");
-  pjsip_msg* out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
-  free_txdata();
 
+  // Check that we create a binding
   SubscriberDataManager::AoRPair* aor_data;
   aor_data = _sdm->get_aor_data(user, 0);
   ASSERT_TRUE(aor_data != NULL);
@@ -1487,7 +1476,7 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
 
   SCOPED_TRACE("REGISTER (forwarded)");
   // REGISTER passed on to AS
-  out = current_txdata()->msg;
+  pjsip_msg* out = current_txdata()->msg;
   ReqMatcher r1("REGISTER");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
   EXPECT_EQ(NULL, out->body);
@@ -1496,6 +1485,14 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
   // Respond with a 500 - this should trigger a deregistration since
   // DEFAULT_HANDLING is 1
   inject_msg(respond_to_current_txdata(500));
+
+  SCOPED_TRACE("REGISTER (200 OK)");
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  free_txdata();
 
   tpAS.expect_target(current_txdata(), false);
   // Respond with a 500 - this should trigger a deregistration since
@@ -1522,8 +1519,6 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
 
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.de_reg_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.de_reg_tbl)->_successes);
-
-  free_txdata();
 }
 
 TEST_F(RegistrarTest, AppServersDeRegistrationFailure)
@@ -1567,23 +1562,18 @@ TEST_F(RegistrarTest, AppServersDeRegistrationFailure)
   inject_msg(msg.get());
   SCOPED_TRACE("REGISTER (injected)");
   ASSERT_EQ(2, txdata_count());
-  SCOPED_TRACE("REGISTER (200 OK)");
-  pjsip_msg* out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.de_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.de_reg_tbl)->_successes);
-  free_txdata();
 
+  // Check that we create a binding
   SubscriberDataManager::AoRPair* aor_data;
   aor_data = _sdm->get_aor_data(user, 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(0u, aor_data->get_current()->_bindings.size());
   delete aor_data; aor_data = NULL;
 
+
   SCOPED_TRACE("REGISTER (forwarded)");
   // REGISTER passed on to AS
-  out = current_txdata()->msg;
+  pjsip_msg* out = current_txdata()->msg;
   ReqMatcher r1("REGISTER");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
   EXPECT_EQ(NULL, out->body);
@@ -1592,6 +1582,14 @@ TEST_F(RegistrarTest, AppServersDeRegistrationFailure)
   // Respond with a 500 - this should trigger a deregistration since
   // DEFAULT_HANDLING is 1
   inject_msg(respond_to_current_txdata(500));
+
+  SCOPED_TRACE("REGISTER (200 OK)");
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.de_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.de_reg_tbl)->_successes);
+  free_txdata();
 
   tpAS.expect_target(current_txdata(), false);
   // Respond with a 500 - this should trigger a deregistration since
@@ -1606,8 +1604,6 @@ TEST_F(RegistrarTest, AppServersDeRegistrationFailure)
   ASSERT_TRUE(aor_data != NULL);
   ASSERT_EQ(0u, aor_data->get_current()->_bindings.size());
   delete aor_data; aor_data = NULL;
-
-  free_txdata();
 }
 
 TEST_F(RegistrarTest, AppServersReRegistrationFailure)
@@ -1656,21 +1652,11 @@ TEST_F(RegistrarTest, AppServersReRegistrationFailure)
   ASSERT_EQ(0, txdata_count());
 
   SCOPED_TRACE("REGISTER (reregister)");
-  Message msg2;
-  msg2._expires = "Expires: 800";
-  msg2._contact_params = ";+sip.ice;reg-id=1";
+  msg._unique += 1;
   SCOPED_TRACE("REGISTER (reregister, about to inject)");
   inject_msg(msg.get());
   SCOPED_TRACE("REGISTER (reregister, injected)");
   ASSERT_EQ(2, txdata_count());
-  SCOPED_TRACE("REGISTER (200 OK)");
-  out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_successes);
-  free_txdata();
-
   SCOPED_TRACE("REGISTER (forwarded)");
   // REGISTER passed on to AS
   out = current_txdata()->msg;
@@ -1684,6 +1670,12 @@ TEST_F(RegistrarTest, AppServersReRegistrationFailure)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.re_reg_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.re_reg_tbl)->_failures);
 
+  SCOPED_TRACE("REGISTER (200 OK)");
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -1732,21 +1724,11 @@ TEST_F(RegistrarTest, AppServersReRegistration)
   ASSERT_EQ(0, txdata_count());
 
   SCOPED_TRACE("REGISTER (reregister)");
-  Message msg2;
-  msg2._expires = "Expires: 800";
-  msg2._contact_params = ";+sip.ice;reg-id=1";
+  msg._unique += 1;
   SCOPED_TRACE("REGISTER (reregister, about to inject)");
   inject_msg(msg.get());
   SCOPED_TRACE("REGISTER (reregister, injected)");
   ASSERT_EQ(2, txdata_count());
-  SCOPED_TRACE("REGISTER (200 OK)");
-  out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_successes);
-  free_txdata();
-
   SCOPED_TRACE("REGISTER (forwarded)");
   // REGISTER passed on to AS
   out = current_txdata()->msg;
@@ -1759,6 +1741,12 @@ TEST_F(RegistrarTest, AppServersReRegistration)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.re_reg_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.re_reg_tbl)->_successes);
 
+  SCOPED_TRACE("REGISTER (200 OK)");
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -1984,22 +1972,9 @@ TEST_F(RegistrarTest, AppServersWithNoExtension)
   inject_msg(msg.get());
   SCOPED_TRACE("REGISTER (injected)");
   ASSERT_EQ(2, txdata_count());
-  SCOPED_TRACE("REGISTER (200 OK)");
-  pjsip_msg* out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
-            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
-  free_txdata();
-
   SCOPED_TRACE("REGISTER (forwarded)");
   // REGISTER passed on to AS
-  out = current_txdata()->msg;
+  pjsip_msg* out = current_txdata()->msg;
   ReqMatcher r1("REGISTER");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
   EXPECT_EQ(NULL, out->body);
@@ -2010,6 +1985,17 @@ TEST_F(RegistrarTest, AppServersWithNoExtension)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_successes);
 
+  SCOPED_TRACE("REGISTER (200 OK)");
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -2213,6 +2199,7 @@ TEST_F(RegistrarTest, EmergencyDeregistration)
 
   // Attempt to deregister a single emergency binding
   msg._contact = "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob";
+  msg._unique += 1;
   msg._cseq = "16568";
   msg._contact_params = ";expires=0;+sip.ice;reg-id=1";
   inject_msg(msg.get());
@@ -2227,6 +2214,7 @@ TEST_F(RegistrarTest, EmergencyDeregistration)
 
   // Attempt to reduce the expiry time of an emergency binding.
   msg._expires = "Expires: 100";
+  msg._unique += 1;
   msg._cseq = "16569";
   msg._contact = "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob";
   msg._contact_params = ";expires=100;+sip.ice;reg-id=1";
@@ -2287,6 +2275,7 @@ TEST_F(RegistrarTest, MultipleEmergencyRegistrations)
 
   // Make an emergency registration
   msg._contact = "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob";
+  msg._unique += 1;
   inject_msg(msg.get());
 
   // Check the 200 OK - the contact header should contain the sos URI parameter
@@ -2315,6 +2304,7 @@ TEST_F(RegistrarTest, MultipleEmergencyRegistrations)
   // Make an emergency registration
   msg._contact = "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob";
   msg._contact_instance = "";
+  msg._unique += 1;
   inject_msg(msg.get());
 
   // Check the 200 OK - the contact header should contain the sos URI parameter
@@ -2346,6 +2336,7 @@ TEST_F(RegistrarTest, MultipleEmergencyRegistrations)
   msg._contact = "*";
   msg._contact_instance = "";
   msg._contact_params = "";
+  msg._unique += 1;
   inject_msg(msg.get());
 
   // Check the 200 OK. The emergency bindings shouldn't have been deregistered, but the standard one has
@@ -2458,6 +2449,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   // Extend the registration
   msg._expires = "Expires: 300";
   msg._cseq = "16568";
+  msg._unique += 1;
   inject_msg(msg.get());
   ASSERT_EQ(2, txdata_count());
   out = pop_txdata()->msg;
@@ -2469,6 +2461,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   // Shorten the registration
   msg._expires = "Expires: 200";
   msg._cseq = "16569";
+  msg._unique += 1;
   inject_msg(msg.get());
   ASSERT_EQ(2, txdata_count());
   out = pop_txdata()->msg;
@@ -2480,6 +2473,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   // Delete the registration
   msg._expires = "Expires: 0";
   msg._cseq = "16570";
+  msg._unique += 1;
   inject_msg(msg.get());
   ASSERT_EQ(2, txdata_count());
   out = pop_txdata()->msg;
@@ -2600,6 +2594,7 @@ TEST_F(RegistrarTest, MultipleRegistrationsWithSubscription)
   msg._contact = "sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob";
   msg._contact_instance = ";+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"";
   msg._path = "Path: <sip:XxxxxxxXXXXXXAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-119.compute-1.amazonaws.com:5060;lr;ob>";
+  msg._unique += 1;
   inject_msg(msg.get());
   ASSERT_EQ(2, txdata_count());
   out = pop_txdata()->msg;
@@ -2611,6 +2606,7 @@ TEST_F(RegistrarTest, MultipleRegistrationsWithSubscription)
   // Expire the second binding
   msg._contact_params = ";expires=0;+sip.ice;reg-id=1";
   msg._cseq = "16570";
+  msg._unique += 1;
   inject_msg(msg.get());
   ASSERT_EQ(2, txdata_count());
   out = pop_txdata()->msg;
@@ -2646,28 +2642,7 @@ public:
     _hss_connection->set_rc("/impu/sip%3A6505550231%40homedomain/reg-data", HTTP_OK);
     _chronos_connection->set_result("", HTTP_OK);
     _chronos_connection->set_result("post_identity", HTTP_OK);
-  }
 
-  static void TearDownTestCase()
-  {
-    SipTest::TearDownTestCase();
-  }
-
-  void TearDown()
-  {
-    // Shut down the transaction module first, before we destroy the
-    // objects that might handle any callbacks!
-    pjsip_tsx_layer_destroy();
-    delete _acr_factory; _acr_factory = NULL;
-    delete _hss_connection; _hss_connection = NULL;
-    delete _analytics;
-    delete _sdm; _sdm = NULL;
-    delete _local_data_store; _local_data_store = NULL;
-    delete _chronos_connection; _chronos_connection = NULL;
-  }
-
-  RegistrarTestMockStore()
-  {
     _registrar_sproutlet = new RegistrarSproutlet("scscf",
                                                   5058,
                                                   "sip:scscf.homedomain:5058;transport=tcp",
@@ -2691,6 +2666,27 @@ public:
                                           sproutlets,
                                           std::set<std::string>(),
                                           "scscf");
+
+    _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
+  }
+
+  static void TearDownTestCase()
+  {
+    // Shut down the transaction module first, before we destroy the
+    // objects that might handle any callbacks!
+    pjsip_tsx_layer_destroy();
+
+    SipTest::TearDownTestCase();
+  }
+
+  void TearDown()
+  {
+    delete _acr_factory; _acr_factory = NULL;
+    delete _hss_connection; _hss_connection = NULL;
+    delete _analytics;
+    delete _sdm; _sdm = NULL;
+    delete _local_data_store; _local_data_store = NULL;
+    delete _chronos_connection; _chronos_connection = NULL;
   }
 
   ~RegistrarTestMockStore()
