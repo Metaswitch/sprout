@@ -708,7 +708,6 @@ Store::Status ImpiStore::set_impi(Impi* impi,
           SAS::Event event(trail, SASEvent::IMPISTORE_AV_SET_FAILURE, 0);
           event.add_var_param(impi->impi);
           event.add_var_param(nonce.c_str());
-          event.add_static_param(local_status);
           SAS::report_event(event);
           // Update status, but only if it's not already DATA_CONTENTION - that's
           // the most significant status.
@@ -756,7 +755,6 @@ Store::Status ImpiStore::set_impi(Impi* impi,
         SAS::Event event(trail, SASEvent::IMPISTORE_AV_DELETE_FAILURE, 0);
         event.add_var_param(impi->impi);
         event.add_var_param(nonce.c_str());
-        event.add_static_param(local_status);
         SAS::report_event(event);
         // Update status, but only if it's not already DATA_CONTENTION - that's
         // the most significant status.
@@ -821,7 +819,6 @@ ImpiStore::Impi* ImpiStore::get_impi(const std::string& impi,
   {
     SAS::Event event(trail, SASEvent::IMPISTORE_IMPI_GET_FAILURE, 0);
     event.add_var_param(impi);
-    event.add_static_param(status);
     SAS::report_event(event);
   }
   return impi_obj;
@@ -952,7 +949,6 @@ ImpiStore::AuthChallenge* ImpiStore::get_av(const std::string& impi,
     SAS::Event event(trail, SASEvent::IMPISTORE_AV_GET_FAILURE, 0);
     event.add_var_param(impi);
     event.add_var_param(nonce);
-    event.add_static_param(status);
     SAS::report_event(event);
   }
   return auth_challenge;
