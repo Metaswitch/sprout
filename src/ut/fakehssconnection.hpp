@@ -41,13 +41,14 @@
 #include "log.h"
 #include "sas.h"
 #include "hssconnection.h"
-#include "mock_hss_connection"
+#include "mock_hss_connection.h"
 
 /// HSSConnection that writes to/reads from a local map rather than the HSS.
 class FakeHSSConnection : public HSSConnection
 {
 public:
-  FakeHSSConnection(MockHSSConnection* = NULL);
+  FakeHSSConnection();
+  FakeHSSConnection(MockHSSConnection*);
   ~FakeHSSConnection();
 
   void flush_all();
@@ -64,6 +65,21 @@ public:
   bool url_was_requested(const std::string& url, const std::string& body);
   void allow_fallback_ifcs();
 
+  HTTPCode update_registration_state(const std::string&,
+                                                  const std::string&,
+                                                  const std::string&,
+                                                  SAS::TrailId);
+
+  HTTPCode update_registration_state(const std::string&,
+                                                  const std::string&,
+                                                  const std::string&,
+                                                  std::string&,
+                                                  std::map<std::string, Ifcs >&,
+                                                  std::vector<std::string>&,
+                                                  std::deque<std::string>&,
+                                                  std::deque<std::string>&,
+                                                  SAS::TrailId);
+
 private:
   long get_json_object(const std::string& path, rapidjson::Document*& object, SAS::TrailId trail);
   long get_xml_object(const std::string& path, rapidxml::xml_document<>*& root, SAS::TrailId trail);
@@ -75,5 +91,5 @@ private:
   std::map<UrlBody, std::string> _results;
   std::map<std::string, long> _rcs;
   std::set<UrlBody> _calls;
-  MockHSSConnection _mock_hss;
+  MockHSSConnection* _mock_hss;
 };

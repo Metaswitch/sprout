@@ -198,6 +198,7 @@ public:
     destroy_registrar();
     delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
+    delete _mock_hss_connection; _mock_hss_connection = NULL;
     delete _analytics;
     delete _remote_sdm; _remote_sdm = NULL;
     delete _sdm; _sdm = NULL;
@@ -296,6 +297,7 @@ protected:
   static AnalyticsLogger* _analytics;
   static IfcHandler* _ifc_handler;
   static ACRFactory* _acr_factory;
+  static MockHSSConnection* _mock_hss_connection;
   static FakeHSSConnection* _hss_connection;
   static FakeChronosConnection* _chronos_connection;
 
@@ -307,6 +309,9 @@ private:
   {
     // First registration OK.
     Message msg;
+
+    EXPECT_CALL(*_mock_hss_connection, update_registration_state(_, _, _, _)).WillOnce(Return(HTTP_OK));
+
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     pjsip_msg* out = current_txdata()->msg;
@@ -508,66 +513,6 @@ public:
   }
 };
 
-/// Fixture for RegistrarTestMockHSS (for REGISTER tests that use a Mock HSS to
-/// test that the correct calls are made to the HSS.
-class RegistrarTestMockHSS : public RegistrarTest
-{
-public:
-  // Similar to RegistrarTest, but we use a MockHSS instad of a FakeHSS.
-  static void SetUpTestCase()
-  {
-    SipTest::SetUpTestCase();
-    SipTest::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
-
-    _chronos_connection = new FakeChronosConnection();
-    _local_data_store = new LocalStore();
-    _remote_data_store_no_bindings = new LocalStore();
-    _remote_data_store = new LocalStore();
-    _sdm = new SDMNoBindings((Store*)_local_data_store, _chronos_connection, true);
-    _remote_sdm_no_bindings = new SDMNoBindings((Store*)_remote_data_store_no_bindings, _chronos_connection, false);
-    _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, false);
-    _remote_sdms = {_remote_sdm_no_bindings, _remote_sdm};
-    _analytics = new AnalyticsLogger();
-    _hss_connection = new FakeHSSConnection();
-    _acr_factory = new ACRFactory();
-    pj_status_t ret = init_registrar(_sdm,
-                                     _remote_sdms,
-                                     _hss_connection,
-                                     _analytics,
-                                     _acr_factory,
-                                     300,
-                                     false,
-                                     &SNMP::FAKE_REGISTRATION_STATS_TABLES,
-                                     &SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES);
-    ASSERT_EQ(PJ_SUCCESS, ret);
-  }
-
-  RegistrarTestRemoteSDM() : RegistrarTest()
-  {
-    _remote_data_store_no_bindings->flush_all();
-                                 // start from a clean slate on each test
-  }
-
-  static void TearDownTestCase()
-  {
-    destroy_registrar();
-    delete _acr_factory; _acr_factory = NULL;
-    delete _hss_connection; _hss_connection = NULL;
-    delete _analytics;
-    delete _remote_sdm_no_bindings; _remote_sdm_no_bindings = NULL;
-    delete _remote_sdm; _remote_sdm = NULL;
-    delete _sdm; _sdm = NULL;
-    delete _remote_data_store; _remote_data_store = NULL;
-    delete _remote_data_store_no_bindings; _remote_data_store_no_bindings = NULL;
-    delete _local_data_store; _local_data_store = NULL;
-    delete _chronos_connection; _chronos_connection = NULL;
-    SipTest::TearDownTestCase();
-  }
-
-protected:
-  static LocalStore* _remote_data_store_no_bindings;
-  static SubscriberDataManager* _remote_sdm_no_bindings;
-};
 
 /// Fixture for RegistrarTestRemoteSDM (for REGISTER tests that use the remote
 /// store by artificially causing the local SDM and first remote SDM lookups to
@@ -591,7 +536,8 @@ public:
     _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, false);
     _remote_sdms = {_remote_sdm_no_bindings, _remote_sdm};
     _analytics = new AnalyticsLogger();
-    _hss_connection = new FakeHSSConnection();
+    _mock_hss_connection = new MockHSSConnection();
+    _hss_connection = new FakeHSSConnection(_mock_hss_connection);
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_registrar(_sdm,
                                      _remote_sdms,
@@ -615,6 +561,7 @@ public:
   {
     destroy_registrar();
     delete _acr_factory; _acr_factory = NULL;
+    delete _mock_hss_connection; _hss_connection = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _analytics;
     delete _remote_sdm_no_bindings; _remote_sdm_no_bindings = NULL;

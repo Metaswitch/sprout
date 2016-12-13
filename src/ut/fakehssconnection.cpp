@@ -40,6 +40,8 @@
 
 #include "fakesnmp.hpp"
 
+FakeHSSConnection::FakeHSSConnection() : FakeHSSConnection(NULL){}
+
 FakeHSSConnection::FakeHSSConnection(MockHSSConnection* mock_hss) : HSSConnection("localhost",
                                                        NULL,
                                                        NULL,
@@ -245,3 +247,58 @@ bool FakeHSSConnection::url_was_requested(const std::string& url, const std::str
 {
   return (_calls.find(UrlBody(url, body)) != _calls.end());
 }
+
+HTTPCode FakeHSSConnection::update_registration_state(const std::string& public_user_identity,
+                                                  const std::string& private_user_identity,
+                                                  const std::string& type,
+                                                  SAS::TrailId trail)
+{
+  if (_mock_hss != NULL)
+  {
+    _mock_hss->update_registration_state(public_user_identity,
+                                        private_user_identity,
+                                        type,
+                                        trail);
+  }
+
+  return HSSConnection::update_registration_state(public_user_identity,
+                                                  private_user_identity,
+                                                  type,
+                                                  trail);
+}
+
+HTTPCode FakeHSSConnection::update_registration_state(const std::string& public_user_identity,
+                                                  const std::string& private_user_identity,
+                                                  const std::string& type,
+                                                  std::string& regstate,
+                                                  std::map<std::string, Ifcs >& ifcs_map,
+                                                  std::vector<std::string>& associated_uris,
+                                                  std::deque<std::string>& ccfs,
+                                                  std::deque<std::string>& ecfs,
+                                                  SAS::TrailId trail)
+{
+  if (_mock_hss != NULL)
+  {
+    _mock_hss->update_registration_state(public_user_identity,
+                                      private_user_identity,
+                                      type,
+                                      regstate,
+                                      ifcs_map,
+                                      associated_uris,
+                                      ccfs,
+                                      ecfs,
+                                      trail);
+  }
+
+  return HSSConnection::update_registration_state(public_user_identity,
+                                                  private_user_identity,
+                                                  type,
+                                                  regstate,
+                                                  ifcs_map,
+                                                  associated_uris,
+                                                  ccfs,
+                                                  ecfs,
+                                                  trail);
+}
+
+
