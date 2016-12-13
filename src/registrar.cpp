@@ -636,6 +636,7 @@ void process_register_request(pjsip_rx_data* rdata)
   std::string regstate;
   std::deque<std::string> ccfs;
   std::deque<std::string> ecfs;
+
   HTTPCode http_code = hss->update_registration_state(public_id,
                                                       private_id,
                                                       HSSConnection::REG,

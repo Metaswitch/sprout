@@ -66,19 +66,19 @@ public:
   void allow_fallback_ifcs();
 
   HTTPCode update_registration_state(const std::string&,
-                                                  const std::string&,
-                                                  const std::string&,
-                                                  SAS::TrailId);
+                                     const std::string&,
+                                     const std::string&,
+                                     SAS::TrailId);
 
-  HTTPCode update_registration_state(const std::string&,
-                                                  const std::string&,
-                                                  const std::string&,
-                                                  std::string&,
-                                                  std::map<std::string, Ifcs >&,
-                                                  std::vector<std::string>&,
-                                                  std::deque<std::string>&,
-                                                  std::deque<std::string>&,
-                                                  SAS::TrailId);
+  HTTPCode update_registration_state(const std::string& public_user_identity,
+                                     const std::string& private_user_identity,
+                                     const std::string& type,
+                                     std::string& regstate,
+                                     std::map<std::string, Ifcs >& service_profiles,
+                                     std::vector<std::string>& associated_uris,
+                                     std::deque<std::string>& ccfs,
+                                     std::deque<std::string>& ecfs,
+                                     SAS::TrailId trail);
 
 private:
   long get_json_object(const std::string& path, rapidjson::Document*& object, SAS::TrailId trail);
