@@ -14,7 +14,6 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          bono.cpp \
                          registration_utils.cpp \
                          hss_sip_mapping.cpp \
-                         authenticationsproutlet.cpp \
                          options.cpp \
                          sip_connection_pool.cpp \
                          flowtable.cpp \
@@ -179,6 +178,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        httpnotifier_test.cpp \
                        bgcf_test.cpp \
                        as_communication_tracker_test.cpp \
+                       authenticationsproutlet.cpp \
                        pthread_cond_var_helper.cpp
 
 COVERAGE_ROOT := ..
@@ -270,7 +270,7 @@ sprout_mmtel_as.so_SOURCES := mmtel.cpp sproutletappserver.cpp mmtelasplugin.cpp
 sprout_mmtel_as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -Wno-write-strings
 sprout_mmtel_as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
-sprout_scscf.so_SOURCES := registrarsproutlet.cpp subscriptionsproutlet.cpp scscfsproutlet.cpp scscfplugin.cpp
+sprout_scscf.so_SOURCES := authenticationsproutlet.cpp registrarsproutlet.cpp subscriptionsproutlet.cpp scscfsproutlet.cpp scscfplugin.cpp
 sprout_scscf.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS}
 sprout_scscf.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 

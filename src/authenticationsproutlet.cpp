@@ -42,7 +42,7 @@
 #include "base64.h"
 
 // Configuring PJSIP with a realm of "*" means that all realms are considered.
-const pj_str_t WILDCARD_REALM = pj_str("*");
+const pj_str_t WILDCARD_REALM = pj_str((char*)"*");
 
 // Initial expiry time (in seconds) for authentication challenges.  This should
 // always be long enough for the UE to respond to the authentication challenge,
