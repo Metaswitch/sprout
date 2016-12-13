@@ -220,7 +220,7 @@ public:
     }
   }
 
-  void auth_module_allows_request(bool expect_100_trying = false)
+  void auth_sproutlet_allows_request(bool expect_100_trying = false)
   {
     if (expect_100_trying)
     {
@@ -603,7 +603,7 @@ TEST_F(AuthenticationTest, NoAuthorizationNonReg)
   AuthenticationMessage msg("PUBLISH");
   msg._auth_hdr = false;
   inject_msg(msg.get(), _tp);
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 }
 
 TEST_F(AuthenticationTest, NoAuthorizationNonRegWithPxyAuthHdr)
@@ -614,7 +614,7 @@ TEST_F(AuthenticationTest, NoAuthorizationNonRegWithPxyAuthHdr)
   msg._auth_hdr = false;
   msg._proxy_auth_hdr = true;
   inject_msg(msg.get(), _tp);
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 }
 
 TEST_F(AuthenticationTest, NoAuthorizationInDialog)
@@ -626,7 +626,7 @@ TEST_F(AuthenticationTest, NoAuthorizationInDialog)
   msg._proxy_auth_hdr = true;
   msg._to_tag = ";tag=abcde";
   inject_msg(msg.get(), _tp);
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 }
 
 TEST_F(AuthenticationTest, NoAuthorizationEmergencyReg)
@@ -636,7 +636,7 @@ TEST_F(AuthenticationTest, NoAuthorizationEmergencyReg)
   msg._auth_hdr = false;
   msg._sos = true;
   inject_msg(msg.get(), _tp);
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 }
 
 TEST_F(AuthenticationTest, IntegrityProtected)
@@ -650,34 +650,34 @@ TEST_F(AuthenticationTest, IntegrityProtected)
   msg1._auth_hdr = true;
   msg1._integ_prot = "yes";
   inject_msg(msg1.get(), _tp);
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   AuthenticationMessage msg2("REGISTER");
   msg2._auth_hdr = true;
   msg2._integ_prot = "yes";
   msg2._route = "sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig";
   inject_msg(msg2.get(), _tp);
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   AuthenticationMessage msg3("REGISTER");
   msg3._auth_hdr = true;
   msg3._integ_prot = "tls-yes";
   inject_msg(msg3.get(), _tp);
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
   msg3._response = "12341234123412341234123412341234";
   msg3._cseq++;
   inject_msg(msg3.get(), _tp);
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   AuthenticationMessage msg4("REGISTER");
   msg4._auth_hdr = true;
   msg4._integ_prot = "ip-assoc-yes";
   inject_msg(msg4.get(), _tp);
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
   msg4._response = "12341234123412341234123412341234";
   msg4._cseq++;
   inject_msg(msg4.get(), _tp);
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
   EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
@@ -751,7 +751,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccess)
   inject_msg(msg2.get(), _tp);
 
   // The authentication module lets the request through.
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_successes);
@@ -802,7 +802,7 @@ TEST_F(AuthenticationTest, NoAlgorithmDigestAuthSuccess)
   inject_msg(msg2.get(), _tp);
 
   // The authentication module lets the request through.
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_successes);
@@ -853,7 +853,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessWithNonceCount)
   inject_msg(msg2.get(), _tp);
 
   // The authentication module lets the request through.
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   // Advance time to just before the binding is due to expire. The auth module
   // should still know about the challenge so a re-REGISTER with a higher nonce
@@ -873,7 +873,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessWithNonceCount)
   inject_msg(msg3.get(), _tp);
 
   // The authentication module lets the request through.
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
@@ -922,7 +922,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessNonceCountJump)
   inject_msg(msg2.get(), _tp);
 
   // The authentication module lets the request through.
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
@@ -1106,7 +1106,7 @@ TEST_F(AuthenticationTest, DigestAuthFailStale)
   inject_msg(msg2.get(), _tp);
 
   // The authentication module lets the request through.
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_successes);
@@ -1254,7 +1254,7 @@ TEST_F(AuthenticationTest, DigestNonceCountTooLow)
   inject_msg(msg2.get(), _tp);
 
   // The authentication module lets the request through.
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   // Resubmit the same register. This should be re-challenged.
   msg2._cseq++;
@@ -1284,7 +1284,7 @@ TEST_F(AuthenticationTest, DigestNonceCountTooLow)
   inject_msg(msg3.get(), _tp);
 
   // The authentication module lets the request through.
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
@@ -1333,7 +1333,7 @@ TEST_F(AuthenticationTest, DigestChallengeExpired)
   inject_msg(msg2.get(), _tp);
 
   // The authentication module lets the request through.
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   // Advance time to after the binding will have expired. An attempt to
   // REGISTER with this challenge should be re-challenged.
@@ -1419,7 +1419,7 @@ TEST_F(AuthenticationTest, AKAAuthSuccess)
   inject_msg(msg2.get(), _tp);
 
   // The authentication module lets the request through.
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes);
@@ -1476,7 +1476,7 @@ TEST_F(AuthenticationTest, AKAv2AuthSuccess)
   inject_msg(msg2.get(), _tp);
 
   // The authentication module lets the request through.
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes);
@@ -1536,7 +1536,7 @@ TEST_F(AuthenticationTest, NoAlgorithmAKAAuthSuccess)
   inject_msg(msg2.get(), _tp);
 
   // The authentication module lets the request through.
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes);
@@ -1595,7 +1595,7 @@ TEST_F(AuthenticationTest, AKAAuthSuccessWithNonceCount)
   inject_msg(msg2.get(), _tp);
 
   // The authentication module lets the request through.
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   // Advance time to just before the binding is due to expire. The auth module
   // should still know about the challenge so a re-REGISTER with a higher nonce
@@ -1616,7 +1616,7 @@ TEST_F(AuthenticationTest, AKAAuthSuccessWithNonceCount)
   inject_msg(msg3.get(), _tp);
 
   // The authentication module lets the request through.
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
 }
@@ -1824,7 +1824,7 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
   inject_msg(msg3.get(), _tp);
 
   // The authentication module lets the request through.
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
   EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_successes);
@@ -2100,7 +2100,7 @@ TEST_F(AuthenticationPxyAuthHdrTest, ProxyAuthorizationOneResponsePerChallenge)
   inject_msg(msg2.get(), _tp);
 
   // The authentication module lets the request through.
-  auth_module_allows_request(true);
+  auth_sproutlet_allows_request(true);
 
   // Submit a same request with the same authentication response. Check it is
   // rejected.
@@ -2286,7 +2286,7 @@ TEST_F(AuthenticationNonceCountDisabledTest, DigestAuthSuccessWithNonceCount)
   inject_msg(msg2.get(), _tp);
 
   // The authentication module lets the request through.
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   // Send a new REGISTER request but using a higher nonce count.
   AuthenticationMessage msg3("REGISTER");
@@ -2351,7 +2351,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessWithDataContention)
   inject_msg(msg2.get(), _tp);
 
   // The authentication module lets the request through.
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   // Simulate data contention. This means that the second registration flow
   // will fail.
@@ -2383,7 +2383,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessWithDataContention)
   inject_msg(msg4.get(), _tp);
 
   // The authentication module lets the request through.
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   // Check that the first challenge can still be used to authenticate with.
   AuthenticationMessage msg5("REGISTER");
@@ -2398,7 +2398,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessWithDataContention)
   inject_msg(msg5.get(), _tp);
 
   // The authentication module lets the request through.
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   // Check that the second challenge can still be used to authenticate with.
   AuthenticationMessage msg6("REGISTER");
@@ -2413,7 +2413,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessWithDataContention)
   inject_msg(msg6.get(), _tp);
 
   // The authentication module lets the request through.
-  auth_module_allows_request();
+  auth_sproutlet_allows_request();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
