@@ -477,7 +477,7 @@ private:
     msg._contact_instance = "";
     msg._contact_params = "";
     EXPECT_CALL(*_mock_hss_connection, update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
-    EXPECT_CALL(*_mock_hss_connection, update_registration_state("sip:6505550231@homedomain", _, HSSConnection::DEREG_USER, _)).Times(2).WillRepeatedly(Return(HTTP_OK));
+    EXPECT_CALL(*_mock_hss_connection, update_registration_state("sip:6505550231@homedomain", _, HSSConnection::DEREG_USER, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
