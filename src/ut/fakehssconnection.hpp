@@ -41,12 +41,13 @@
 #include "log.h"
 #include "sas.h"
 #include "hssconnection.h"
+#include "mock_hss_connection"
 
 /// HSSConnection that writes to/reads from a local map rather than the HSS.
 class FakeHSSConnection : public HSSConnection
 {
 public:
-  FakeHSSConnection();
+  FakeHSSConnection(MockHSSConnection* = NULL);
   ~FakeHSSConnection();
 
   void flush_all();
@@ -74,4 +75,5 @@ private:
   std::map<UrlBody, std::string> _results;
   std::map<std::string, long> _rcs;
   std::set<UrlBody> _calls;
+  MockHSSConnection _mock_hss;
 };

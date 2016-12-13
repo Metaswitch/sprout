@@ -40,7 +40,7 @@
 
 #include "fakesnmp.hpp"
 
-FakeHSSConnection::FakeHSSConnection() : HSSConnection("localhost",
+FakeHSSConnection::FakeHSSConnection(MockHSSConnection* mock_hss) : HSSConnection("localhost",
                                                        NULL,
                                                        NULL,
                                                        &SNMP::FAKE_IP_COUNT_TABLE,
@@ -52,6 +52,7 @@ FakeHSSConnection::FakeHSSConnection() : HSSConnection("localhost",
                                                        NULL,
                                                        "sip:scscf.sprout.homedomain:5058;transport=TCP")
 {
+  _mock_hss = mock_hss;
 }
 
 
