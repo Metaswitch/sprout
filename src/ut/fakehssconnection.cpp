@@ -40,8 +40,6 @@
 
 #include "fakesnmp.hpp"
 
-FakeHSSConnection::FakeHSSConnection() : FakeHSSConnection(NULL){}
-
 FakeHSSConnection::FakeHSSConnection(MockHSSConnection* mock_hss) : HSSConnection("localhost",
                                                        NULL,
                                                        NULL,

@@ -44,11 +44,14 @@
 #include "mock_hss_connection.h"
 
 /// HSSConnection that writes to/reads from a local map rather than the HSS.
+/// Optionally accepts a MockHSSConnection object -- if this is provided then
+/// (currently only some) methods call through to the corresponding Mock
+/// methods so method invocation parameters / counts can be policied by test
+/// scripts.
 class FakeHSSConnection : public HSSConnection
 {
 public:
-  FakeHSSConnection();
-  FakeHSSConnection(MockHSSConnection*);
+  FakeHSSConnection(MockHSSConnection* = NULL);
   ~FakeHSSConnection();
 
   void flush_all();
@@ -91,5 +94,8 @@ private:
   std::map<UrlBody, std::string> _results;
   std::map<std::string, long> _rcs;
   std::set<UrlBody> _calls;
+
+  // Optional MockHSSConnection object.  May be NULL if the creator of the
+  // FakeHSSConnection  does not want to explicitly check method invocation.
   MockHSSConnection* _mock_hss;
 };
