@@ -40,6 +40,11 @@
 
 #include "fakesnmp.hpp"
 
+/// HSSConnection that writes to/reads from a local map rather than the HSS.
+/// Optionally accepts a MockHSSConnection object -- if this is provided then
+/// (currently only some) methods call through to the corresponding Mock
+/// methods so method invocation parameters / counts can be policied by test
+/// scripts.
 FakeHSSConnection::FakeHSSConnection(MockHSSConnection* mock_hss) : HSSConnection("localhost",
                                                        NULL,
                                                        NULL,
