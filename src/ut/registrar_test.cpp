@@ -178,8 +178,8 @@ public:
     _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, false);
     _remote_sdms = {_remote_sdm};
     _analytics = new AnalyticsLogger();
-    _mock_hss_connection = new MockHSSConnection();
-    _hss_connection = new FakeHSSConnection(_mock_hss_connection);
+    _hss_connection_observer = new MockHSSConnection();
+    _hss_connection = new FakeHSSConnection(_hss_connection_observer);
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_registrar(_sdm,
                                      _remote_sdms,
@@ -198,7 +198,7 @@ public:
     destroy_registrar();
     delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
-    delete _mock_hss_connection; _mock_hss_connection = NULL;
+    delete _hss_connection_observer; _hss_connection_observer = NULL;
     delete _analytics;
     delete _remote_sdm; _remote_sdm = NULL;
     delete _sdm; _sdm = NULL;
@@ -223,7 +223,7 @@ public:
   {
     _hss_connection->flush_all();
     _chronos_connection->flush_all();
-    ::testing::Mock::VerifyAndClear(_mock_hss_connection);
+    ::testing::Mock::VerifyAndClear(_hss_connection_observer);
   }
 
   RegistrarTest() : SipTest(&mod_registrar)
@@ -298,7 +298,7 @@ protected:
   static AnalyticsLogger* _analytics;
   static IfcHandler* _ifc_handler;
   static ACRFactory* _acr_factory;
-  static MockHSSConnection* _mock_hss_connection;
+  static MockHSSConnection* _hss_connection_observer;
   static FakeHSSConnection* _hss_connection;
   static FakeChronosConnection* _chronos_connection;
 
@@ -311,8 +311,8 @@ private:
     // First registration OK.
     Message msg;
 
-    EXPECT_CALL(*_mock_hss_connection, update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
-
+    EXPECT_CALL(*_hss_connection_observer,
+                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     pjsip_msg* out = current_txdata()->msg;
@@ -327,7 +327,8 @@ private:
     msg._contact = "sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob";
     msg._contact_instance = ";+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"";
     msg._path = "Path: <sip:XxxxxxxXXXXXXAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-119.compute-1.amazonaws.com:5060;lr;ob>";
-    EXPECT_CALL(*_mock_hss_connection, update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+    EXPECT_CALL(*_hss_connection_observer,
+                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -350,7 +351,8 @@ private:
 
     // Reregistration of first binding is OK but doesn't add a new one.
     msg = msg0;
-    EXPECT_CALL(*_mock_hss_connection, update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+    EXPECT_CALL(*_hss_connection_observer,
+                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -371,7 +373,8 @@ private:
     // Registering the first binding again but without the binding ID counts as a separate binding (named by the contact itself).  Bindings are ordered by binding ID.
     msg = msg0;
     msg._contact_instance = "";
-    EXPECT_CALL(*_mock_hss_connection, update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+    EXPECT_CALL(*_hss_connection_observer,
+                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -392,7 +395,8 @@ private:
     free_txdata();
 
     // Reregistering that yields no change.
-    EXPECT_CALL(*_mock_hss_connection, update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+    EXPECT_CALL(*_hss_connection_observer,
+                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -414,7 +418,8 @@ private:
     // A fetch bindings registration (no Contact headers).  Should just return current state.
     string save_contact = msg._contact;
     msg._contact = "";
-    EXPECT_CALL(*_mock_hss_connection, update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+    EXPECT_CALL(*_hss_connection_observer,
+                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -436,7 +441,8 @@ private:
 
     // Reregistering again with an updated cseq triggers an update of the binding.
     msg._cseq = "16568";
-    EXPECT_CALL(*_mock_hss_connection, update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+    EXPECT_CALL(*_hss_connection_observer,
+                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -460,7 +466,8 @@ private:
     msg._contact = "*";
     msg._contact_instance = "";
     msg._contact_params = "";
-    EXPECT_CALL(*_mock_hss_connection, update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+    EXPECT_CALL(*_hss_connection_observer,
+                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -476,8 +483,10 @@ private:
     msg._contact = "*";
     msg._contact_instance = "";
     msg._contact_params = "";
-    EXPECT_CALL(*_mock_hss_connection, update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
-    EXPECT_CALL(*_mock_hss_connection, update_registration_state("sip:6505550231@homedomain", _, HSSConnection::DEREG_USER, _)).WillOnce(Return(HTTP_OK));
+    EXPECT_CALL(*_hss_connection_observer,
+                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+    EXPECT_CALL(*_hss_connection_observer,
+                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::DEREG_USER, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -546,8 +555,8 @@ public:
     _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, false);
     _remote_sdms = {_remote_sdm_no_bindings, _remote_sdm};
     _analytics = new AnalyticsLogger();
-    _mock_hss_connection = new MockHSSConnection();
-    _hss_connection = new FakeHSSConnection(_mock_hss_connection);
+    _hss_connection_observer = new MockHSSConnection();
+    _hss_connection = new FakeHSSConnection(_hss_connection_observer);
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_registrar(_sdm,
                                      _remote_sdms,
@@ -571,7 +580,7 @@ public:
   {
     destroy_registrar();
     delete _acr_factory; _acr_factory = NULL;
-    delete _mock_hss_connection; _hss_connection = NULL;
+    delete _hss_connection_observer; _hss_connection = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _analytics;
     delete _remote_sdm_no_bindings; _remote_sdm_no_bindings = NULL;
@@ -600,7 +609,7 @@ AnalyticsLogger* RegistrarTest::_analytics;
 IfcHandler* RegistrarTest::_ifc_handler;
 ACRFactory* RegistrarTest::_acr_factory;
 FakeHSSConnection* RegistrarTest::_hss_connection;
-MockHSSConnection* RegistrarTest::_mock_hss_connection;
+MockHSSConnection* RegistrarTest::_hss_connection_observer;
 FakeChronosConnection* RegistrarTest::_chronos_connection;
 
 TEST_F(RegistrarTest, NotRegister)

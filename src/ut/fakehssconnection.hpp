@@ -46,8 +46,10 @@
 /// HSSConnection that writes to/reads from a local map rather than the HSS.
 /// Optionally accepts a MockHSSConnection object -- if this is provided then
 /// (currently only some) methods call through to the corresponding Mock
-/// methods so method invocation parameters / counts can be policied by test
-/// scripts.
+/// methods so method invocation parameters / counts can be policed by test
+/// scripts.  This only enables method invocations to be checked -- it does not
+/// allow control of the behaviour of those functions -- in all cases the
+/// resulting behaviour is dictated by the FakeHSSConnection class.
 class FakeHSSConnection : public HSSConnection
 {
 public:
@@ -97,5 +99,5 @@ private:
 
   // Optional MockHSSConnection object.  May be NULL if the creator of the
   // FakeHSSConnection  does not want to explicitly check method invocation.
-  MockHSSConnection* _mock_hss;
+  MockHSSConnection* _hss_connection_observer;
 };
