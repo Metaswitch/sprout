@@ -77,16 +77,16 @@ struct ThirdPartyRegData
   bool is_initial_registration;
 };
 
-void send_register_to_as(SubscriberDataManager* sdm,
-                         std::vector<SubscriberDataManager*> remote_sdms,
-                         HSSConnection* hss,
-                         pjsip_msg* received_register_msg,
-                         pjsip_msg* ok_response_msg,
-                         AsInvocation& as,
-                         int expires,
-                         bool is_initial_registration,
-                         const std::string&,
-                         SAS::TrailId);
+static void send_register_to_as(SubscriberDataManager* sdm,
+                                std::vector<SubscriberDataManager*> remote_sdms,
+                                HSSConnection* hss,
+                                pjsip_msg* received_register_msg,
+                                pjsip_msg* ok_response_msg,
+                                AsInvocation& as,
+                                int expires,
+                                bool is_initial_registration,
+                                const std::string&,
+                                SAS::TrailId);
 
 void RegistrationUtils::init(SNMP::RegistrationStatsTables* third_party_reg_stats_tables_arg,
                              bool force_third_party_register_body_arg)
@@ -289,16 +289,16 @@ static void send_register_cb(void* token, pjsip_event *event)
   delete tsxdata; tsxdata = NULL;
 }
 
-void send_register_to_as(SubscriberDataManager* sdm,
-                         std::vector<SubscriberDataManager*> remote_sdms,
-                         HSSConnection* hss,
-                         pjsip_msg *received_register_msg,
-                         pjsip_msg *ok_response_msg,
-                         AsInvocation& as,
-                         int expires,
-                         bool is_initial_registration,
-                         const std::string& served_user,
-                         SAS::TrailId trail)
+static void send_register_to_as(SubscriberDataManager* sdm,
+                                std::vector<SubscriberDataManager*> remote_sdms,
+                                HSSConnection* hss,
+                                pjsip_msg *received_register_msg,
+                                pjsip_msg *ok_response_msg,
+                                AsInvocation& as,
+                                int expires,
+                                bool is_initial_registration,
+                                const std::string& served_user,
+                                SAS::TrailId trail)
 {
   pj_status_t status;
   pjsip_tx_data *tdata;
@@ -441,7 +441,7 @@ void send_register_to_as(SubscriberDataManager* sdm,
   }
 }
 
-void notify_application_servers()
+static void notify_application_servers()
 {
   TRC_DEBUG("In dummy notify_application_servers function");
   // TODO: implement as part of reg events package

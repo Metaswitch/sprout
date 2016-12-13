@@ -65,15 +65,12 @@ public:
   /// @param  sproutlets        - Sproutlets to load in this proxy.
   /// @param  stateless_proxies - A set of next-hops that are considered to be
   ///                             stateless proxies.
-  /// @param  scscf_name        - The name of the S-CSCF sproutlet (so we can
-  //                              prioritise this if possible)
   SproutletProxy(pjsip_endpoint* endpt,
                  int priority,
                  const std::string& root_uri,
                  const std::unordered_set<std::string>& host_aliases,
                  const std::list<Sproutlet*>& sproutlets,
-                 const std::set<std::string>& stateless_proxies,
-                 const std::string scscf_name);
+                 const std::set<std::string>& stateless_proxies);
 
   /// Destructor.
   virtual ~SproutletProxy();
@@ -253,8 +250,6 @@ protected:
 
   std::list<Sproutlet*> _sproutlets;
 
-  std::string _scscf_name;
-
   static const pj_str_t STR_SERVICE;
 
   friend class UASTsx;
@@ -287,7 +282,8 @@ public:
   const pjsip_route_hdr* route_hdr() const;
   const std::string& dialog_id() const;
   pjsip_msg* create_request();
-  pjsip_msg* clone_msg(pjsip_msg* req);
+  pjsip_msg* clone_request(pjsip_msg* req);
+  pjsip_msg* clone_msg(pjsip_msg* msg);
   pjsip_msg* create_response(pjsip_msg* req,
                              pjsip_status_code status_code,
                              const std::string& status_text="");

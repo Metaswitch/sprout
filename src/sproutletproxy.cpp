@@ -65,8 +65,7 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
                                const std::string& root_uri,
                                const std::unordered_set<std::string>& host_aliases,
                                const std::list<Sproutlet*>& sproutlets,
-                               const std::set<std::string>& stateless_proxies,
-                               const std::string scscf_name) :
+                               const std::set<std::string>& stateless_proxies) :
   BasicProxy(endpt,
              "mod-sproutlet-controller",
              priority,
@@ -74,8 +73,7 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
              stateless_proxies),
   _root_uri(NULL),
   _host_aliases(host_aliases),
-  _sproutlets(sproutlets),
-  _scscf_name(scscf_name)
+  _sproutlets(sproutlets)
 {
   /// Store the URI of this SproutletProxy - this is used for Record-Routing.
   TRC_DEBUG("Root Record-Route URI = %s", root_uri.c_str());
@@ -129,8 +127,6 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
   pjsip_sip_uri* uri = NULL;
   if (route == NULL)
   {
-    // TODO: Once the registrar and subscription managers are Sproutlets, this should
-    // consider the ReqURI regardess of the method.
     if (PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri))
     {
       uri = (pjsip_sip_uri*)req->line.req.uri;
@@ -1255,6 +1251,11 @@ pjsip_msg* SproutletWrapper::create_request()
   register_tdata(new_tdata);
 
   return new_tdata->msg;
+}
+
+pjsip_msg* SproutletWrapper::clone_request(pjsip_msg* req)
+{
+  return clone_msg(req);
 }
 
 pjsip_msg* SproutletWrapper::clone_msg(pjsip_msg* msg)

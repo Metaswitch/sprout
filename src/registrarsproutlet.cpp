@@ -42,6 +42,13 @@
 
 #include <time.h>
 
+extern "C" {
+#include <pjsip.h>
+#include <pjlib-util.h>
+#include <pjlib.h>
+#include <stdint.h>
+}
+
 // Common STL includes.
 #include <cassert>
 #include <vector>
@@ -51,6 +58,7 @@
 #include <queue>
 #include <string>
 
+#include "pjutils.h"
 #include "utils.h"
 #include "sproutsasevent.h"
 #include "memcachedstore.h"
@@ -73,7 +81,9 @@ RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
                                        AnalyticsLogger* analytics_logger,
                                        ACRFactory* rfacr_factory,
                                        int cfg_max_expires,
-                                       bool force_original_register_inclusion):
+                                       bool force_original_register_inclusion,
+                                       SNMP::RegistrationStatsTables* reg_stats_tbls,
+                                       SNMP::RegistrationStatsTables* third_party_reg_stats_tbls):
   Sproutlet(name, port, uri, ""),
   _sdm(reg_sdm),
   _remote_sdms(reg_remote_sdms),
@@ -81,40 +91,23 @@ RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
   _analytics(analytics_logger),
   _acr_factory(rfacr_factory),
   _max_expires(cfg_max_expires),
-  _force_original_register_inclusion(force_original_register_inclusion)
+  _force_original_register_inclusion(force_original_register_inclusion),
+  _reg_stats_tbls(reg_stats_tbls),
+  _third_party_reg_stats_tbls(third_party_reg_stats_tbls)
 {
-  _reg_stats_tbls.init_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
-                                                                     ".1.2.826.0.1.1578918.9.3.9");
-  _reg_stats_tbls.re_reg_tbl = SNMP::SuccessFailCountTable::create("re_reg_success_fail_count",
-                                                                   ".1.2.826.0.1.1578918.9.3.10");
-  _reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("de_reg_success_fail_count",
-                                                                    ".1.2.826.0.1.1578918.9.3.11");
-
-  _third_party_reg_stats_tbls.init_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_initial_reg_success_fail_count",
-                                                                                 ".1.2.826.0.1.1578918.9.3.12");
-  _third_party_reg_stats_tbls.re_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_re_reg_success_fail_count",
-                                                                               ".1.2.826.0.1.1578918.9.3.13");
-  _third_party_reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_de_reg_success_fail_count",
-                                                                               ".1.2.826.0.1.1578918.9.3.14");
 }
 
 
 //RegistrarSproutlet destructor.
 RegistrarSproutlet::~RegistrarSproutlet()
 {
-  delete _reg_stats_tbls.init_reg_tbl;
-  delete _reg_stats_tbls.re_reg_tbl;
-  delete _reg_stats_tbls.de_reg_tbl;
-  delete _third_party_reg_stats_tbls.init_reg_tbl;
-  delete _third_party_reg_stats_tbls.re_reg_tbl;
-  delete _third_party_reg_stats_tbls.de_reg_tbl;
 }
 
 bool RegistrarSproutlet::init()
 {
   bool init_success = true;
 
-  RegistrationUtils::init(&_third_party_reg_stats_tbls, _force_original_register_inclusion);
+  RegistrationUtils::init(_third_party_reg_stats_tbls, _force_original_register_inclusion);
 
   // Construct a Service-Route header pointing at the S-CSCF ready to be added
   // to REGISTER 200 OK response.
@@ -173,30 +166,26 @@ RegistrarSproutletTsx::~RegistrarSproutletTsx()
   TRC_DEBUG("Registrar Transaction (%p) destroyed", this);
 }
 
-void RegistrarSproutletTsx::on_rx_initial_request(pjsip_msg *msg)
+void RegistrarSproutletTsx::on_rx_initial_request(pjsip_msg *req)
 {
   TRC_INFO("Registrar sproutlet received initial request");
 
-  // SAS log the start of processing by this module
-  SAS::Event event(trail(), SASEvent::BEGIN_REGISTRAR_MODULE, 0);
-  SAS::report_event(event);
-
-  URIClass uri_class = URIClassifier::classify_uri(msg->line.req.uri);
-  if ((msg->line.req.method.id == PJSIP_REGISTER_METHOD) &&
+  URIClass uri_class = URIClassifier::classify_uri(req->line.req.uri);
+  if ((req->line.req.method.id == PJSIP_REGISTER_METHOD) &&
       ((uri_class == NODE_LOCAL_SIP_URI) ||
        (uri_class == HOME_DOMAIN_SIP_URI)) &&
-      (PJUtils::check_route_headers(msg)))
+      (PJUtils::check_route_headers(req)))
   {
     // REGISTER request targeted at the home domain or specifically at this node.
-    process_register_request(msg);
+    process_register_request(req);
   }
   else
   {
-    route_to_subscription(msg);
+    route_to_subscription(req);
   }
 }
 
-void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
+void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 {
   pjsip_status_code st_code = PJSIP_SC_OK;
 
@@ -215,12 +204,12 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
   int num_emergency_bindings = 0;
   int num_emergency_deregisters = 0;
   bool reject_with_400 = false;
-  pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
+  pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, NULL);
 
   while (contact_hdr != NULL)
   {
     num_contacts++;
-    pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
+    pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_EXPIRES, NULL);
     expiry = expiry_for_binding(contact_hdr, expires, _sproutlet->_max_expires);
 
     if ((contact_hdr->star) && (expiry != 0))
@@ -240,13 +229,13 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
       }
     }
 
-    contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(msg,
+    contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(req,
                                                           PJSIP_H_CONTACT,
                                                           contact_hdr->next);
   }
 
   // Get the URI from the To header and check it is a SIP or SIPS URI.
-  pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(msg)->uri);
+  pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(req)->uri);
 
   if ((!PJSIP_URI_SCHEME_IS_SIP(uri)) && (!PJSIP_URI_SCHEME_IS_TEL(uri)))
   {
@@ -258,9 +247,9 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
     SAS::Event event(trail(), SASEvent::REGISTER_FAILED_INVALIDURISCHEME, 0);
     SAS::report_event(event);
 
-    pjsip_msg* rsp = create_response(msg, PJSIP_SC_NOT_FOUND);
+    pjsip_msg* rsp = create_response(req, PJSIP_SC_NOT_FOUND);
     send_response(rsp);
-    free_msg(msg);
+    free_msg(req);
 
     // Only update statistics if this is going to change the state of the
     // IRS (i.e. if the number of contact headers is non-zero)
@@ -268,15 +257,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
     {
       if (expiry == 0)
       {
-        _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_attempts();
-        _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_failures();
+        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_attempts();
+        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
       }
       else
       // Invalid URI means this cannot be a re-register request, so if not
       // a de-register request, then treat as an initial register request.
       {
-        _sproutlet->_reg_stats_tbls.init_reg_tbl->increment_attempts();
-        _sproutlet->_reg_stats_tbls.init_reg_tbl->increment_failures();
+        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_attempts();
+        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_failures();
       }
     }
     return;
@@ -287,7 +276,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
   ACR* acr = _sproutlet->_acr_factory->get_acr(trail(),
                                                ACR::CALLING_PARTY,
                                                ACR::NODE_ROLE_ORIGINATING);
-  acr->rx_request(msg);
+  acr->rx_request(req);
 
   // Canonicalize the public ID from the URI in the To header.
   std::string public_id = PJUtils::public_id_from_uri(uri);
@@ -295,7 +284,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
   TRC_DEBUG("Process REGISTER for public ID %s", public_id.c_str());
 
   // Get the call identifier and the cseq number from the respective headers.
-  std::string cid = PJUtils::pj_str_to_string(&PJSIP_MSG_CID_HDR(msg)->id);;
+  std::string cid = PJUtils::pj_str_to_string(&PJSIP_MSG_CID_HDR(req)->id);;
 
   // Add SAS markers to the trail attached to the message so the trail
   // becomes searchable.
@@ -308,7 +297,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
   std::map<std::string, Ifcs> ifc_map;
   std::string private_id;
   std::string private_id_for_binding;
-  bool success = get_private_id(msg, private_id);
+  bool success = get_private_id(req, private_id);
   if (!success)
   {
     // There are legitimate cases where we don't have a private ID
@@ -362,9 +351,9 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
 
   if (st_code != PJSIP_SC_OK)
   {
-    pjsip_msg* rsp = create_response(msg, st_code);
+    pjsip_msg* rsp = create_response(req, st_code);
     send_response(rsp);
-    free_msg(msg);
+    free_msg(req);
 
     SAS::Event event(trail(), SASEvent::REGISTER_FAILED_INVALIDPUBPRIV, 0);
     event.add_var_param(public_id);
@@ -378,15 +367,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
     {
       if (expiry == 0)
       {
-        _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_attempts();
-        _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_failures();
+        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_attempts();
+        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
       }
       else
       // Invalid public/private identity means this cannot be a re-register request,
       // so if not a de-register request, then treat as an initial register request.
       {
-        _sproutlet->_reg_stats_tbls.init_reg_tbl->increment_attempts();
-        _sproutlet->_reg_stats_tbls.init_reg_tbl->increment_failures();
+        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_attempts();
+        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_failures();
       }
     }
     return;
@@ -402,17 +391,17 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
     event.add_var_param(public_id);
     SAS::report_event(event);
 
-    pjsip_msg* rsp = create_response(msg, PJSIP_SC_BAD_REQUEST);
+    pjsip_msg* rsp = create_response(req, PJSIP_SC_BAD_REQUEST);
     send_response(rsp);
-    free_msg(msg);
+    free_msg(req);
 
     acr->send();
     delete acr;
 
     if (num_contacts > 0)
     {
-      _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_attempts();
-      _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_failures();
+      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_attempts();
+      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
     }
 
     return;
@@ -426,17 +415,17 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
     event.add_var_param(public_id);
     SAS::report_event(event);
 
-    pjsip_msg* rsp = create_response(msg, PJSIP_SC_NOT_IMPLEMENTED);
+    pjsip_msg* rsp = create_response(req, PJSIP_SC_NOT_IMPLEMENTED);
     send_response(rsp);
-    free_msg(msg);
+    free_msg(req);
 
     acr->send();
     delete acr;
 
     if (num_contacts > 0)
     {
-      _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_attempts();
-      _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_failures();
+      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_attempts();
+      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
     }
 
     return;
@@ -447,14 +436,13 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
                                  write_to_store(_sproutlet->_sdm,
                                                 aor,
                                                 uris,
-                                                msg,
+                                                req,
                                                 now,
                                                 expiry,
                                                 is_initial_registration,
                                                 NULL,
                                                 _sproutlet->_remote_sdms,
-                                                private_id_for_binding,
-                                                trail());
+                                                private_id_for_binding);
 
   if ((aor_pair != NULL) && (aor_pair->get_current() != NULL))
   {
@@ -475,14 +463,13 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
           write_to_store(*it,
                          aor,
                          uris,
-                         msg,
+                         req,
                          now,
                          tmp_expiry,
                          ignored,
                          aor_pair,
                          {},
-                         private_id_for_binding,
-                         trail());
+                         private_id_for_binding);
         delete remote_aor_pair;
       }
     }
@@ -505,20 +492,20 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
   {
     if (expiry == 0)
     {
-      _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_attempts();
+      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_attempts();
     }
     else if (is_initial_registration)
     {
-      _sproutlet->_reg_stats_tbls.init_reg_tbl->increment_attempts();
+      _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_attempts();
     }
     else
     {
-      _sproutlet->_reg_stats_tbls.re_reg_tbl->increment_attempts();
+      _sproutlet->_reg_stats_tbls->re_reg_tbl->increment_attempts();
     }
   }
 
   // Build and send the reply.
-  pjsip_msg* rsp = create_response(msg, st_code);
+  pjsip_msg* rsp = create_response(req, st_code);
 
   if (st_code != PJSIP_SC_OK)
   {
@@ -527,7 +514,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
     acr->tx_response(rsp);
 
     send_response(rsp);
-    free_msg(msg);
+    free_msg(req);
 
     SAS::Event event(trail(), SASEvent::REGISTER_FAILED, 0);
     event.add_var_param(public_id);
@@ -543,15 +530,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
     {
       if (is_initial_registration)
       {
-        _sproutlet->_reg_stats_tbls.init_reg_tbl->increment_failures();
+        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_failures();
       }
       else if (expiry == 0)
       {
-        _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_failures();
+        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
       }
       else
       {
-        _sproutlet->_reg_stats_tbls.re_reg_tbl->increment_failures();
+        _sproutlet->_reg_stats_tbls->re_reg_tbl->increment_failures();
       }
     }
 
@@ -578,7 +565,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
     acr->tx_response(rsp);
 
     send_response(rsp);
-    free_msg(msg);
+    free_msg(req);
 
     acr->send();
     delete acr;
@@ -588,15 +575,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
     {
       if (is_initial_registration)
       {
-        _sproutlet->_reg_stats_tbls.init_reg_tbl->increment_failures();
+        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_failures();
       }
       else if (expiry == 0)
       {
-        _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_failures();
+        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
       }
       else
       {
-        _sproutlet->_reg_stats_tbls.re_reg_tbl->increment_failures();
+        _sproutlet->_reg_stats_tbls->re_reg_tbl->increment_failures();
       }
     }
 
@@ -639,7 +626,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
 
         // Add a GRUU if the UE supports GRUUs and the contact header contains
         // a +sip.instance parameter.
-        if (PJUtils::msg_supports_extension(msg, "gruu"))
+        if (PJUtils::msg_supports_extension(req, "gruu"))
         {
           // The pub-gruu parameter on the Contact header is calculated
           // from the instance-id, to avoid unnecessary storage in
@@ -681,21 +668,21 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
   {
     if (expiry == 0)
     {
-      _sproutlet->_reg_stats_tbls.de_reg_tbl->increment_successes();
+      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_successes();
     }
     else if (is_initial_registration)
     {
-      _sproutlet->_reg_stats_tbls.init_reg_tbl->increment_successes();
+      _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_successes();
     }
     else
     {
-      _sproutlet->_reg_stats_tbls.re_reg_tbl->increment_successes();
+      _sproutlet->_reg_stats_tbls->re_reg_tbl->increment_successes();
     }
   }
 
   // Deal with path header related fields in the response.
   pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
-                              pjsip_msg_find_hdr_by_name(msg, &STR_PATH, NULL);
+                              pjsip_msg_find_hdr_by_name(req, &STR_PATH, NULL);
   if ((path_hdr != NULL) &&
       (!aor_pair->get_current()->bindings().empty()))
   {
@@ -714,7 +701,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
     pjsip_msg_add_hdr(rsp,
                       (pjsip_hdr*)pjsip_hdr_clone(get_pool(rsp), path_hdr));
     path_hdr = (pjsip_routing_hdr*)
-                    pjsip_msg_find_hdr_by_name(msg, &STR_PATH, path_hdr->next);
+                    pjsip_msg_find_hdr_by_name(req, &STR_PATH, path_hdr->next);
   }
 
   // Add the Service-Route header.  It isn't safe to do this with the
@@ -763,7 +750,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
                                                          _sproutlet->_sdm,
                                                          _sproutlet->_remote_sdms,
                                                          _sproutlet->_hss,
-                                                         msg,
+                                                         req,
                                                          clone_rsp,
                                                          expiry,
                                                          is_initial_registration,
@@ -773,7 +760,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *msg)
 
   // Now we can free the messages.
   free_msg(clone_rsp);
-  free_msg(msg);
+  free_msg(req);
 
   TRC_DEBUG("Report SAS end marker - trail (%llx)", trail());
   SAS::Marker end_marker(trail(), MARKER_ID_END, 1u);
@@ -789,22 +776,21 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
                    SubscriberDataManager* primary_sdm,         ///<store to write to
                    std::string aor,                            ///<address of record to write to
                    std::vector<std::string> irs_impus,         ///<IMPUs in Implicit Registration Set
-                   pjsip_msg* msg,                             ///<received message to read headers from
+                   pjsip_msg* req,                             ///<received request to read headers from
                    int now,                                    ///<time now
                    int& expiry,                                ///<[out] longest expiry time
                    bool& out_is_initial_registration,
                    SubscriberDataManager::AoRPair* backup_aor, ///<backup data if no entry in store
                    std::vector<SubscriberDataManager*> backup_sdms,
                                                                ///<backup stores to read from if no entry in store and no backup data
-                   std::string private_id,                     ///<private id that the binding was registered with
-                   SAS::TrailId trail)
+                   std::string private_id)                     ///<private id that the binding was registered with
 {
   // Get the call identifier and the cseq number from the respective headers.
-  std::string cid = PJUtils::pj_str_to_string(&PJSIP_MSG_CID_HDR(msg)->id);
-  int cseq = ((pjsip_cseq_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CSEQ, NULL))->cseq;
+  std::string cid = PJUtils::pj_str_to_string(&PJSIP_MSG_CID_HDR(req)->id);
+  int cseq = ((pjsip_cseq_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_CSEQ, NULL))->cseq;
 
   // Find the expire headers in the message.
-  pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
+  pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_EXPIRES, NULL);
 
   // The registration service uses optimistic locking to avoid concurrent
   // updates to the same AoR conflicting.  This means we have to loop
@@ -821,7 +807,7 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
     delete aor_pair;
 
     // Find the current bindings for the AoR.
-    aor_pair = primary_sdm->get_aor_data(aor, trail);
+    aor_pair = primary_sdm->get_aor_data(aor, trail());
     TRC_DEBUG("Retrieved AoR data %p", aor_pair);
 
     if ((aor_pair == NULL) ||
@@ -852,7 +838,7 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
         {
           if ((*it)->has_servers())
           {
-            local_backup_aor = (*it)->get_aor_data(aor, trail);
+            local_backup_aor = (*it)->get_aor_data(aor, trail());
 
             if ((local_backup_aor != NULL) &&
                 (local_backup_aor->current_contains_bindings()))
@@ -890,7 +876,7 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
     // Now loop through all the contacts.  If there are multiple contacts in
     // the contact header in the SIP message, pjsip parses them to separate
     // contact header structures.
-    pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
+    pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, NULL);
     int changed_bindings = 0;
 
     while (contact != NULL)
@@ -945,7 +931,7 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
           // that the edge proxy knows what it's doing.
           binding->_path_headers.clear();
           pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
-                              pjsip_msg_find_hdr_by_name(msg, &STR_PATH, NULL);
+                              pjsip_msg_find_hdr_by_name(req, &STR_PATH, NULL);
 
           while (path_hdr)
           {
@@ -958,7 +944,7 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
 
             // Look for the next header.
             path_hdr = (pjsip_routing_hdr*)
-                    pjsip_msg_find_hdr_by_name(msg, &STR_PATH, path_hdr->next);
+                    pjsip_msg_find_hdr_by_name(req, &STR_PATH, path_hdr->next);
           }
 
           binding->_cid = cid;
@@ -1000,7 +986,7 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
           }
         }
       }
-      contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, contact->next);
+      contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, contact->next);
     }
 
     if (changed_bindings > 0)
@@ -1008,7 +994,7 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
       set_rc = primary_sdm->set_aor_data(aor,
                                          irs_impus,
                                          aor_pair,
-                                         trail,
+                                         trail(),
                                          all_bindings_expired);
     }
     else
@@ -1040,7 +1026,7 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
     _sproutlet->_hss->update_registration_state(aor,
                                                 "",
                                                 HSSConnection::DEREG_USER,
-                                                trail);
+                                                trail());
   }
 
   out_is_initial_registration = is_initial_registration;
@@ -1052,12 +1038,12 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
 /// header. If that uses the Digest scheme and contains a non-empty
 /// username, it puts that username into id and returns true;
 /// otherwise returns false.
-bool RegistrarSproutletTsx::get_private_id(pjsip_msg* msg, std::string& id)
+bool RegistrarSproutletTsx::get_private_id(pjsip_msg* req, std::string& id)
 {
   bool success = false;
 
   pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
-    pjsip_msg_find_hdr(msg, PJSIP_H_AUTHORIZATION, NULL);
+    pjsip_msg_find_hdr(req, PJSIP_H_AUTHORIZATION, NULL);
   if (auth_hdr != NULL)
   {
     if (pj_stricmp2(&auth_hdr->scheme, "digest") == 0)

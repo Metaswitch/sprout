@@ -102,9 +102,9 @@ public:
     _local_data_store->flush_all();  // start from a clean slate on each test
     _remote_data_store->flush_all();
 
-    _subscription_sproutlet = new SubscriptionSproutlet("scscf",
+    _subscription_sproutlet = new SubscriptionSproutlet("subscription",
                                                         5058,
-                                                        "sip:scscf.homedomain:5058;transport=tcp",
+                                                        "sip:subscription.homedomain:5058;transport=tcp",
                                                         _sdm,
                                                         {_remote_sdm},
                                                         _hss_connection,
@@ -120,8 +120,7 @@ public:
                                              "homedomain",
                                              std::unordered_set<std::string>(),
                                              sproutlets,
-                                             std::set<std::string>(),
-                                             "scscf");
+                                             std::set<std::string>());
 
     // Get an initial empty AoR record and add a binding.
     int now = time(NULL);
@@ -175,6 +174,15 @@ public:
     delete _subscription_proxy; _subscription_proxy = NULL;
     delete _subscription_sproutlet; _subscription_sproutlet = NULL;
   }
+
+void subscription_sproutlet_handle_200()
+{
+  ASSERT_EQ(1, txdata_count());
+  inject_msg(respond_to_current_txdata(200));
+  ASSERT_EQ(1, txdata_count());
+  EXPECT_EQ(200, current_txdata()->msg->line.status.code);
+  free_txdata();
+}
 
 protected:
   static LocalStore* _local_data_store;
@@ -311,11 +319,7 @@ TEST_F(SubscriptionTest, NotSubscribe)
   SubscribeMessage msg;
   msg._method = "PUBLISH";
   inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  inject_msg(respond_to_current_txdata(200));
-  pjsip_msg* out = current_txdata()->msg;
-  ASSERT_EQ(1, txdata_count());
-  EXPECT_EQ(200, out->line.status.code);
+  subscription_sproutlet_handle_200();
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
@@ -324,6 +328,7 @@ TEST_F(SubscriptionTest, NotOurs)
   SubscribeMessage msg;
   msg._domain = "not-us.example.org";
   inject_msg(msg.get());
+  subscription_sproutlet_handle_200();
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
@@ -943,9 +948,9 @@ public:
 
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
 
-    _subscription_sproutlet = new SubscriptionSproutlet("scscf",
+    _subscription_sproutlet = new SubscriptionSproutlet("subscription",
                                                         5058,
-                                                        "sip:scscf.homedomain:5058;transport=tcp",
+                                                        "sip:subscription.homedomain:5058;transport=tcp",
                                                         _sdm,
                                                         {},
                                                         _hss_connection,
@@ -961,8 +966,7 @@ public:
                                              "homedomain",
                                              std::unordered_set<std::string>(),
                                              sproutlets,
-                                             std::set<std::string>(),
-                                             "scscf");
+                                             std::set<std::string>());
   }
 
   static void TearDownTestCase()

@@ -231,16 +231,18 @@ public:
     _local_data_store->flush_all();  // start from a clean slate on each test
     _remote_data_store->flush_all();
 
-    _registrar_sproutlet = new RegistrarSproutlet("scscf",
+    _registrar_sproutlet = new RegistrarSproutlet("registrar",
                                                   5058,
-                                                  "sip:scscf.homedomain:5058;transport=tcp",
+                                                  "sip:registrar.homedomain:5058;transport=tcp",
                                                   _sdm,
                                                   _remote_sdms,
                                                   _hss_connection,
                                                   _analytics,
                                                   _acr_factory,
                                                   300,
-                                                  false);
+                                                  false,
+                                                  &SNMP::FAKE_REGISTRATION_STATS_TABLES,
+                                                  &SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES);
 
     _registrar_sproutlet->init();
 
@@ -252,8 +254,7 @@ public:
                                           "homedomain",
                                           std::unordered_set<std::string>(),
                                           sproutlets,
-                                          std::set<std::string>(),
-                                          "scscf");
+                                          std::set<std::string>());
   }
 
   ~RegistrarTest()
@@ -280,6 +281,13 @@ public:
     // Stop and restart the transaction layer just in case
     pjsip_tsx_layer_instance()->stop();
     pjsip_tsx_layer_instance()->start();
+
+    ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->reset_count();
+    ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->reset_count();
+    ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->reset_count();
+    ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->reset_count();
+    ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.re_reg_tbl)->reset_count();
+    ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.de_reg_tbl)->reset_count();
 
     delete _registrar_proxy; _registrar_proxy = NULL;
     delete _registrar_sproutlet; _registrar_sproutlet = NULL;
@@ -323,6 +331,15 @@ public:
     ASSERT_EQ(contact_values.second, std::string(contact->first_attribute("event")->value()));
   }
 
+void registrar_sproutlet_handle_200()
+{
+  ASSERT_EQ(1, txdata_count());
+  inject_msg(respond_to_current_txdata(200));
+  ASSERT_EQ(1, txdata_count());
+  EXPECT_EQ(200, current_txdata()->msg->line.status.code);
+  free_txdata();
+}
+
 protected:
   static LocalStore* _local_data_store;
   static LocalStore* _remote_data_store;
@@ -349,8 +366,8 @@ private:
     ASSERT_EQ(1, txdata_count());
     pjsip_msg* out = current_txdata()->msg;
     EXPECT_EQ(200, out->line.status.code);
-    EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-    EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+    EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+    EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
     free_txdata();
 
     // Second registration also OK.  Bindings are ordered by binding ID.
@@ -375,8 +392,8 @@ private:
     EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
     // Creating a new binding for an existing URI is counted as a re-registration,
     // not an initial registration.
-    EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_attempts);
-    EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_successes);
+    EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
+    EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
     free_txdata();
 
     // Reregistration of first binding is OK but doesn't add a new one.
@@ -395,8 +412,8 @@ private:
     EXPECT_EQ(msg._path, get_headers(out, "Path"));
     EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
     EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-    EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_attempts);
-    EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_successes);
+    EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
+    EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
     free_txdata();
 
     // Registering the first binding again but without the binding ID counts as a separate binding (named by the contact itself).  Bindings are ordered by binding ID.
@@ -418,8 +435,8 @@ private:
     EXPECT_EQ(msg._path, get_headers(out, "Path"));
     EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
     EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-    EXPECT_EQ(3,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_attempts);
-    EXPECT_EQ(3,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_successes);
+    EXPECT_EQ(3,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
+    EXPECT_EQ(3,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
     free_txdata();
 
     // Reregistering that yields no change.
@@ -438,8 +455,8 @@ private:
     EXPECT_EQ(msg._path, get_headers(out, "Path"));
     EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
     EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-    EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_attempts);
-    EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_successes);
+    EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
+    EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
     free_txdata();
 
     // A fetch bindings registration (no Contact headers).  Should just return current state.
@@ -460,8 +477,8 @@ private:
     EXPECT_EQ(msg._path, get_headers(out, "Path"));
     EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
     EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-    EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_attempts);
-    EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_successes);
+    EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
+    EXPECT_EQ(4,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
     free_txdata();
     msg._contact = save_contact;
 
@@ -482,8 +499,8 @@ private:
     EXPECT_EQ(msg._path, get_headers(out, "Path"));
     EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
     EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-    EXPECT_EQ(5,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_attempts);
-    EXPECT_EQ(5,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_successes);
+    EXPECT_EQ(5,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
+    EXPECT_EQ(5,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
     free_txdata();
 
     // Registration of star but with a non zero expiry means the request is rejected with a 400.
@@ -497,8 +514,8 @@ private:
     out = current_txdata()->msg;
     EXPECT_EQ(400, out->line.status.code);
     EXPECT_EQ("Bad Request", str_pj(out->line.status.reason));
-    EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.de_reg_tbl)->_attempts);
-    EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.de_reg_tbl)->_failures);
+    EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
+    EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_failures);
     free_txdata();
 
     // Registration of star with expiry = 0 clears all bindings.
@@ -519,8 +536,8 @@ private:
     EXPECT_EQ(msg._path, get_headers(out, "Path"));
     EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
     EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-    EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.de_reg_tbl)->_attempts);
-    EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.de_reg_tbl)->_successes);
+    EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
+    EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_successes);
 
     free_txdata();
   }
@@ -626,11 +643,7 @@ TEST_F(RegistrarTest, NotRegister)
   Message msg;
   msg._method = "PUBLISH";
   inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  inject_msg(respond_to_current_txdata(200));
-  pjsip_msg* out = current_txdata()->msg;
-  ASSERT_EQ(1, txdata_count());
-  EXPECT_EQ(200, out->line.status.code);
+  registrar_sproutlet_handle_200();
 }
 
 TEST_F(RegistrarTest, NotOurs)
@@ -638,7 +651,7 @@ TEST_F(RegistrarTest, NotOurs)
   Message msg;
   msg._domain = "not-us.example.org";
   inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
+  registrar_sproutlet_handle_200();
 }
 
 TEST_F(RegistrarTest, RouteHeaderNotMatching)
@@ -659,8 +672,8 @@ TEST_F(RegistrarTest, BadScheme)
   out = pop_txdata()->msg;
   EXPECT_EQ(404, out->line.status.code);
   EXPECT_EQ("Not Found", str_pj(out->line.status.reason));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_failures);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_failures);
 }
 
 TEST_F(RegistrarTest, DeRegBadScheme)
@@ -677,8 +690,8 @@ TEST_F(RegistrarTest, DeRegBadScheme)
   out = pop_txdata()->msg;
   EXPECT_EQ(404, out->line.status.code);
   EXPECT_EQ("Not Found", str_pj(out->line.status.reason));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.de_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.de_reg_tbl)->_failures);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_failures);
 }
 
 ///----------------------------------------------------------------------------
@@ -692,8 +705,8 @@ TEST_F(RegistrarTest, BadGRUU)
   ASSERT_EQ(1, txdata_count());
   pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -721,8 +734,8 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 
   // Fetch this binding by sending in the same request with no Contact header
@@ -741,8 +754,8 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -770,8 +783,8 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeaderWithTelURI)
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <tel:6505550231>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -793,8 +806,8 @@ TEST_F(RegistrarTest, SimpleMainlineExpiresHeader)
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -812,8 +825,8 @@ TEST_F(RegistrarTest, SimpleMainlinePassthrough)
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("P-Charging-Vector: icid-value=\"100\"", get_headers(out, "P-Charging-Vector"));
   EXPECT_EQ("P-Charging-Function-Addresses: ccf=ccf1;ecf=ecf1;ecf=ecf2", get_headers(out, "P-Charging-Function-Addresses"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
 
   free_txdata();
 }
@@ -835,8 +848,8 @@ TEST_F(RegistrarTest, SimpleMainlineExpiresParameter)
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -853,8 +866,8 @@ TEST_F(RegistrarTest, SimpleMainlineDeregister)
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
   EXPECT_EQ("", get_headers(out, "Contact"));  // no existing bindings
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.de_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.de_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -875,8 +888,8 @@ TEST_F(RegistrarTest, SimpleMainlineNoExpiresHeaderParameter)
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -901,8 +914,8 @@ TEST_F(RegistrarTest, GRUUNotSupported)
   // No pub-gruu as UE doesn't support GRUUs.
   EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1",
             get_headers(out, "Contact"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -929,8 +942,8 @@ TEST_F(RegistrarTest, FetchBindingsUnregistered)
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_attempts);
-  EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_successes);
+  EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
+  EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -950,8 +963,8 @@ TEST_F(RegistrarTest, NoPath)
   EXPECT_EQ("", get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -1007,8 +1020,8 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
   tpAS.expect_target(current_txdata(), false);
   inject_msg(respond_to_current_txdata(200));
 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
 
   SCOPED_TRACE("REGISTER (200 OK)");
   out = current_txdata()->msg;
@@ -1021,8 +1034,8 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -1078,8 +1091,8 @@ TEST_F(RegistrarTest, AppServersWithMultipartBodyWithTelURI)
   tpAS.expect_target(current_txdata(), false);
   inject_msg(respond_to_current_txdata(200));
 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
 
   SCOPED_TRACE("REGISTER (200 OK)");
   out = current_txdata()->msg;
@@ -1092,8 +1105,8 @@ TEST_F(RegistrarTest, AppServersWithMultipartBodyWithTelURI)
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <tel:6505550231>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -1145,8 +1158,8 @@ TEST_F(RegistrarTest, AppServersWithOneBody)
   tpAS.expect_target(current_txdata(), false);
   inject_msg(respond_to_current_txdata(200));
 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
 
   SCOPED_TRACE("REGISTER (200 OK)");
   out = current_txdata()->msg;
@@ -1157,8 +1170,8 @@ TEST_F(RegistrarTest, AppServersWithOneBody)
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -1206,8 +1219,8 @@ TEST_F(RegistrarTest, AppServersWithNoBody)
   tpAS.expect_target(current_txdata(), false);
   inject_msg(respond_to_current_txdata(200));
 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
 
   SCOPED_TRACE("REGISTER (200 OK)");
   out = current_txdata()->msg;
@@ -1218,8 +1231,8 @@ TEST_F(RegistrarTest, AppServersWithNoBody)
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -1270,8 +1283,8 @@ TEST_F(RegistrarTest, AppServersPassthrough)
   tpAS.expect_target(current_txdata(), false);
   inject_msg(respond_to_current_txdata(200));
 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
 
   SCOPED_TRACE("REGISTER (200 OK)");
   out = current_txdata()->msg;
@@ -1282,8 +1295,8 @@ TEST_F(RegistrarTest, AppServersPassthrough)
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -1342,8 +1355,8 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
   tpAS.expect_target(current_txdata(), false);
   inject_msg(respond_to_current_txdata(200));
 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.de_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.de_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.de_reg_tbl)->_successes);
 
   free_txdata();
   // Check that we deleted the binding
@@ -1395,16 +1408,16 @@ TEST_F(RegistrarTest, AppServersInitialRegistration)
 
   tpAS.expect_target(current_txdata(), false);
   inject_msg(respond_to_current_txdata(200));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
 
 
   SCOPED_TRACE("REGISTER (200 OK)");
   out = current_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
   ASSERT_EQ(0, txdata_count());
 
@@ -1418,8 +1431,8 @@ TEST_F(RegistrarTest, AppServersInitialRegistration)
   out = current_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
   free_txdata();
 
   SCOPED_TRACE("REGISTER (forwarded)");
@@ -1490,8 +1503,8 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
   out = current_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 
   tpAS.expect_target(current_txdata(), false);
@@ -1499,8 +1512,8 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
   // DEFAULT_HANDLING is 1
   inject_msg(respond_to_current_txdata(500));
 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_failures);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_failures);
 
   // Check that we deleted the binding
   aor_data = _sdm->get_aor_data(user, 0);
@@ -1517,8 +1530,8 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
   tpAS.expect_target(current_txdata(), false);
   inject_msg(respond_to_current_txdata(200));
 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.de_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.de_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.de_reg_tbl)->_successes);
 }
 
 TEST_F(RegistrarTest, AppServersDeRegistrationFailure)
@@ -1587,8 +1600,8 @@ TEST_F(RegistrarTest, AppServersDeRegistrationFailure)
   out = current_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.de_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.de_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_successes);
   free_txdata();
 
   tpAS.expect_target(current_txdata(), false);
@@ -1596,8 +1609,8 @@ TEST_F(RegistrarTest, AppServersDeRegistrationFailure)
   // DEFAULT_HANDLING is 1
   inject_msg(respond_to_current_txdata(500));
 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.de_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.de_reg_tbl)->_failures);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.de_reg_tbl)->_failures);
 
   // Check that we deleted the binding
   aor_data = _sdm->get_aor_data(user, 0);
@@ -1643,8 +1656,8 @@ TEST_F(RegistrarTest, AppServersReRegistrationFailure)
   pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 
   SCOPED_TRACE("REGISTER (forwarded)");
@@ -1667,15 +1680,15 @@ TEST_F(RegistrarTest, AppServersReRegistrationFailure)
   tpAS.expect_target(current_txdata(), false);
   inject_msg(respond_to_current_txdata(500));
 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.re_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.re_reg_tbl)->_failures);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.re_reg_tbl)->_failures);
 
   SCOPED_TRACE("REGISTER (200 OK)");
   out = current_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -1716,8 +1729,8 @@ TEST_F(RegistrarTest, AppServersReRegistration)
   pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 
   SCOPED_TRACE("REGISTER (forwarded)");
@@ -1738,15 +1751,15 @@ TEST_F(RegistrarTest, AppServersReRegistration)
 
   tpAS.expect_target(current_txdata(), false);
   inject_msg(respond_to_current_txdata(200));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.re_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.re_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
 
   SCOPED_TRACE("REGISTER (200 OK)");
   out = current_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -1765,8 +1778,8 @@ TEST_F(RegistrarTest, AssociatedUrisNotFound)
   pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ(403, out->line.status.code);
   EXPECT_EQ("Forbidden", str_pj(out->line.status.reason));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.de_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.de_reg_tbl)->_failures);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_failures);
 }
 
 /// Homestead fails associated URI request
@@ -1783,8 +1796,8 @@ TEST_F(RegistrarTest, DeRegAssociatedUrisNotFound)
   pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ(403, out->line.status.code);
   EXPECT_EQ("Forbidden", str_pj(out->line.status.reason));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.de_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.de_reg_tbl)->_failures);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_failures);
 }
 
 /// Homestead fails to interpret URI request
@@ -1800,8 +1813,8 @@ TEST_F(RegistrarTest, AssociatedUriFails)
   pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ(500, out->line.status.code);
   EXPECT_EQ("Internal Server Error", str_pj(out->line.status.reason));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_failures);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_failures);
 
   _hss_connection->delete_rc("/impu/sip%3A6505550232%40homedomain/reg-data");
 }
@@ -1819,8 +1832,8 @@ TEST_F(RegistrarTest, AssociatedUrisTimeOut)
   pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ(504, out->line.status.code);
   EXPECT_EQ("Server Timeout", str_pj(out->line.status.reason));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_failures);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_failures);
 
   _hss_connection->delete_rc("/impu/sip%3A6505550232%40homedomain/reg-data");
 }
@@ -1840,8 +1853,8 @@ TEST_F(RegistrarTest, AssociatedUrisUnexpectedFailure)
   pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ(504, out->line.status.code);
   EXPECT_EQ("Server Timeout", str_pj(out->line.status.reason));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_failures);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_failures);
 
   _hss_connection->delete_rc("/impu/sip%3A6505550232%40homedomain/reg-data");
 }
@@ -1869,8 +1882,8 @@ TEST_F(RegistrarTest, MultipleAssociatedUris)
             "P-Associated-URI: <sip:6505550234@homedomain>",
             get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -1897,8 +1910,8 @@ TEST_F(RegistrarTest, MultipleAssociatedUrisWithTelURI)
             "P-Associated-URI: <tel:6505550234>",
             get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -1924,8 +1937,8 @@ TEST_F(RegistrarTest, NonPrimaryAssociatedUri)
             "P-Associated-URI: <sip:6505550234@homedomain>",
             get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 
   // Check that we registered the correct URI (0233, not 0234).
@@ -1982,8 +1995,8 @@ TEST_F(RegistrarTest, AppServersWithNoExtension)
   tpAS.expect_target(current_txdata(), false);
   inject_msg(respond_to_current_txdata(200));
 
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_third_party_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
 
   SCOPED_TRACE("REGISTER (200 OK)");
   out = current_txdata()->msg;
@@ -1994,8 +2007,8 @@ TEST_F(RegistrarTest, AppServersWithNoExtension)
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -2041,8 +2054,8 @@ TEST_F(RegistrarTest, AppServersWithSDPIFCs)
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -2071,8 +2084,8 @@ TEST_F(RegistrarTest, MainlineEmergencyRegistration)
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 
   // There should be one binding, and it is an emergency registration. The emergency binding should have 'sos' prepended to its key.
@@ -2109,8 +2122,8 @@ TEST_F(RegistrarTest, MainlineEmergencyRegistrationWithTelURI)
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <tel:6505550231>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 
   // There should be one binding, and it is an emergency registration. The emergency binding should have 'sos' prepended to its key.
@@ -2148,8 +2161,8 @@ TEST_F(RegistrarTest, MainlineEmergencyRegistrationNoSipInstance)
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 
   // There should be one binding, and it is an emergency registration
@@ -2186,8 +2199,8 @@ TEST_F(RegistrarTest, EmergencyDeregistration)
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 
   // There should be one binding, and it is an emergency registration. The emergency binding should have 'sos' prepended to its key.
@@ -2208,8 +2221,8 @@ TEST_F(RegistrarTest, EmergencyDeregistration)
   out = current_txdata()->msg;
   EXPECT_EQ(501, out->line.status.code);
   EXPECT_EQ("Not Implemented", str_pj(out->line.status.reason));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.de_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.de_reg_tbl)->_failures);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_failures);
   free_txdata();
 
   // Attempt to reduce the expiry time of an emergency binding.
@@ -2233,8 +2246,8 @@ TEST_F(RegistrarTest, EmergencyDeregistration)
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -2262,8 +2275,8 @@ TEST_F(RegistrarTest, MultipleEmergencyRegistrations)
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 
   // There should be one binding, and it isn't an emergency registration
@@ -2290,8 +2303,8 @@ TEST_F(RegistrarTest, MultipleEmergencyRegistrations)
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
   free_txdata();
 
   // There should be two bindings. The emergency binding should have 'sos' prepended to its key.
@@ -2320,8 +2333,8 @@ TEST_F(RegistrarTest, MultipleEmergencyRegistrations)
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_attempts);
-  EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.re_reg_tbl)->_successes);
+  EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_attempts);
+  EXPECT_EQ(2,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->_successes);
   free_txdata();
 
   // There should be three bindings.
@@ -2352,8 +2365,8 @@ TEST_F(RegistrarTest, MultipleEmergencyRegistrations)
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.de_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.de_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_successes);
   free_txdata();
 
   // There should be two emergency bindings
@@ -2391,8 +2404,8 @@ TEST_F(RegistrarTest, RinstanceParameter)
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)_registrar_sproutlet->_reg_stats_tbls.init_reg_tbl)->_successes);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -2643,16 +2656,18 @@ public:
     _chronos_connection->set_result("", HTTP_OK);
     _chronos_connection->set_result("post_identity", HTTP_OK);
 
-    _registrar_sproutlet = new RegistrarSproutlet("scscf",
+    _registrar_sproutlet = new RegistrarSproutlet("registrar",
                                                   5058,
-                                                  "sip:scscf.homedomain:5058;transport=tcp",
+                                                  "sip:registrar.homedomain:5058;transport=tcp",
                                                   _sdm,
                                                   {},
                                                   _hss_connection,
                                                   _analytics,
                                                   _acr_factory,
                                                   300,
-                                                  false);
+                                                  false,
+                                                  &SNMP::FAKE_REGISTRATION_STATS_TABLES,
+                                                  &SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES);
 
     _registrar_sproutlet->init();
 
@@ -2664,8 +2679,7 @@ public:
                                           "homedomain",
                                           std::unordered_set<std::string>(),
                                           sproutlets,
-                                          std::set<std::string>(),
-                                          "scscf");
+                                          std::set<std::string>());
 
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
   }
@@ -2713,6 +2727,13 @@ public:
     // Stop and restart the transaction layer just in case
     pjsip_tsx_layer_instance()->stop();
     pjsip_tsx_layer_instance()->start();
+
+    ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->reset_count();
+    ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.re_reg_tbl)->reset_count();
+    ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->reset_count();
+    ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->reset_count();
+    ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.re_reg_tbl)->reset_count();
+    ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.de_reg_tbl)->reset_count();
 
     delete _registrar_proxy; _registrar_proxy = NULL;
     delete _registrar_sproutlet; _registrar_sproutlet = NULL;

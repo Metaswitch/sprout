@@ -44,26 +44,14 @@
 #ifndef SUBSCRIPTIONSPROUTLET_H__
 #define SUBSCRIPTIONSPROUTLET_H__
 
-extern "C" {
-#include <pjsip.h>
-#include <pjlib-util.h>
-#include <pjlib.h>
-#include <stdint.h>
-}
-
 #include <vector>
 #include <unordered_map>
 
-#include "pjutils.h"
-#include "enumservice.h"
 #include "analyticslogger.h"
-#include "subscriber_data_manager.h"
-#include "stack.h"
-#include "sessioncase.h"
-#include "ifchandler.h"
-#include "hssconnection.h"
 #include "aschain.h"
 #include "acr.h"
+#include "hssconnection.h"
+#include "subscriber_data_manager.h"
 #include "sproutlet.h"
 #include "snmp_counter_table.h"
 #include "session_expires_helper.h"
@@ -122,20 +110,19 @@ public:
   virtual void on_rx_in_dialog_request(pjsip_msg* req) override;
 
 protected:
-  bool accept_request(pjsip_msg* msg, SAS::TrailId trail);
-  void process_subscription_request(pjsip_msg* msg);
+  bool handle_request(pjsip_msg* req);
+  void process_subscription_request(pjsip_msg* req);
   void route_to_scscf_proxy(pjsip_msg* req);
 
   SubscriberDataManager::AoRPair* write_subscriptions_to_store(
                      SubscriberDataManager* primary_sdm,        ///<store to write to
                      std::string aor,                           ///<address of record to write to
                      std::vector<std::string> irs_impus,        ///(IMPUs in Implicit Registration Set
-                     pjsip_msg* msg,                            ///<received message to read headers from
+                     pjsip_msg* req,                            ///<received request to read headers from
                      int now,                                   ///<time now
                      SubscriberDataManager::AoRPair* backup_aor,///<backup data if no entry in store
                      std::vector<SubscriberDataManager*> backup_sdms,
                                                                 ///<backup stores to read from if no entry in store and no backup data
-                     SAS::TrailId trail,                        ///<SAS trail
                      std::string public_id,                     ///
                      bool send_ok,                              ///<Should we create an OK
                      ACR* acr,                                  ///

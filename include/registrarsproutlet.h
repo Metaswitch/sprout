@@ -43,22 +43,13 @@
 #ifndef REGISTRARSPROUTLET_H__
 #define REGISTRARSPROUTLET_H__
 
-extern "C" {
-#include <pjsip.h>
-#include <pjlib-util.h>
-#include <pjlib.h>
-#include <stdint.h>
-}
-
 #include <vector>
 #include <unordered_map>
 
-#include "pjutils.h"
 #include "enumservice.h"
 #include "analyticslogger.h"
 #include "subscriber_data_manager.h"
 #include "stack.h"
-#include "sessioncase.h"
 #include "ifchandler.h"
 #include "hssconnection.h"
 #include "aschain.h"
@@ -82,7 +73,9 @@ public:
                      AnalyticsLogger* analytics_logger,
                      ACRFactory* rfacr_factory,
                      int cfg_max_expires,
-                     bool force_original_register_inclusion);
+                     bool force_original_register_inclusion,
+                     SNMP::RegistrationStatsTables* reg_stats_tbls,
+                     SNMP::RegistrationStatsTables* third_party_reg_stats_tbls);
   ~RegistrarSproutlet();
 
   bool init();
@@ -113,8 +106,8 @@ private:
 
   // SNMP tables that count the number of attempts, successes and failures of
   // registration attempts.
-  SNMP::RegistrationStatsTables _reg_stats_tbls;
-  SNMP::RegistrationStatsTables _third_party_reg_stats_tbls;
+  SNMP::RegistrationStatsTables* _reg_stats_tbls;
+  SNMP::RegistrationStatsTables* _third_party_reg_stats_tbls;
 };
 
 
@@ -131,23 +124,22 @@ public:
                                 int max_expires);
 
 protected:
-  void process_register_request(pjsip_msg *msg);
+  void process_register_request(pjsip_msg* req);
 
   SubscriberDataManager::AoRPair* write_to_store(
                      SubscriberDataManager* primary_sdm,         ///<store to write to
                      std::string aor,                            ///<address of record to write to
                      std::vector<std::string> irs_impus,         ///<IMPUs in Implicit Registration Set
-                     pjsip_msg* msg,                             ///<received message to read headers from
+                     pjsip_msg* req,                             ///<received request to read headers from
                      int now,                                    ///<time now
                      int& expiry,                                ///<[out] longest expiry time
                      bool& out_is_initial_registration,
                      SubscriberDataManager::AoRPair* backup_aor, ///<backup data if no entry in store
                      std::vector<SubscriberDataManager*> backup_sdms,
                                                                  ///<backup stores to read from if no entry in store and no backup data
-                     std::string private_id,                     ///<private id that the binding was registered with
-                     SAS::TrailId trail);
+                     std::string private_id);                    ///<private id that the binding was registered with
 
-  bool get_private_id(pjsip_msg* msg, std::string& id);
+  bool get_private_id(pjsip_msg* req, std::string& id);
   std::string get_binding_id(pjsip_contact_hdr *contact);
   void log_bindings(const std::string& aor_name, SubscriberDataManager::AoR* aor_data);
   void route_to_subscription(pjsip_msg* req);

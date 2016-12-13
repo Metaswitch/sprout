@@ -66,6 +66,8 @@ private:
 
   SNMP::SuccessFailCountByRequestTypeTable* _incoming_sip_transactions_tbl;
   SNMP::SuccessFailCountByRequestTypeTable* _outgoing_sip_transactions_tbl;
+  SNMP::RegistrationStatsTables reg_stats_tbls = {nullptr, nullptr, nullptr};
+  SNMP::RegistrationStatsTables third_party_reg_stats_tbls = {nullptr, nullptr, nullptr};
 };
 
 /// Export the plug-in using the magic symbol "sproutlet_plugin"
@@ -173,10 +175,10 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           opt.session_terminated_timeout_ms,
                                           sess_term_as_tracker,
                                           sess_cont_as_tracker);
-    if (!_scscf_sproutlet->init())
-    {
-      return false;
-    }
+
+    plugin_loaded = _scscf_sproutlet->init();
+
+    sproutlets.push_back(_scscf_sproutlet);
 
     _subscription_sproutlet = new SubscriptionSproutlet("subscription",
                                                         opt.port_scscf,
@@ -188,21 +190,36 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                                         analytics_logger,
                                                         opt.sub_max_expires);
 
-    if (opt.auth_enabled)
-    {
-      _registrar_sproutlet = new RegistrarSproutlet(opt.prefix_scscf,
-                                                    opt.port_scscf,
-                                                    opt.uri_scscf,
-                                                    local_sdm,
-                                                    {remote_sdm},
-                                                    hss_connection,
-                                                    analytics_logger,
-                                                    scscf_acr_factory,
-                                                    opt.sub_max_expires,
-                                                    opt.force_third_party_register_body);
+    sproutlets.push_back(_subscription_sproutlet);
 
-      plugin_loaded = _registrar_sproutlet->init();
-    }
+    reg_stats_tbls.init_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
+                                                                       ".1.2.826.0.1.1578918.9.3.9");
+    reg_stats_tbls.re_reg_tbl = SNMP::SuccessFailCountTable::create("re_reg_success_fail_count",
+                                                                     ".1.2.826.0.1.1578918.9.3.10");
+    reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("de_reg_success_fail_count",
+                                                                      ".1.2.826.0.1.1578918.9.3.11");
+
+    third_party_reg_stats_tbls.init_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_initial_reg_success_fail_count",
+                                                                                   ".1.2.826.0.1.1578918.9.3.12");
+    third_party_reg_stats_tbls.re_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_re_reg_success_fail_count",
+                                                                                 ".1.2.826.0.1.1578918.9.3.13");
+    third_party_reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_de_reg_success_fail_count",
+                                                                                 ".1.2.826.0.1.1578918.9.3.14");
+
+    _registrar_sproutlet = new RegistrarSproutlet(opt.prefix_scscf,
+                                                  opt.port_scscf,
+                                                  opt.uri_scscf,
+                                                  local_sdm,
+                                                  {remote_sdm},
+                                                  hss_connection,
+                                                  analytics_logger,
+                                                  scscf_acr_factory,
+                                                  opt.sub_max_expires,
+                                                  opt.force_third_party_register_body,
+                                                  &reg_stats_tbls,
+                                                  &third_party_reg_stats_tbls);
+
+    plugin_loaded = _registrar_sproutlet->init();
 
     // We want to prioritise choosing the S-CSCF in ambiguous situations, so
     // make sure it's at the front of the sproutlet list
@@ -221,4 +238,10 @@ void SCSCFPlugin::unload()
   delete _registrar_sproutlet;
   delete _sess_term_as_alarm; _sess_term_as_alarm = NULL;
   delete _sess_cont_as_alarm; _sess_cont_as_alarm = NULL;
+  delete reg_stats_tbls.init_reg_tbl;
+  delete reg_stats_tbls.re_reg_tbl;
+  delete reg_stats_tbls.de_reg_tbl;
+  delete third_party_reg_stats_tbls.init_reg_tbl;
+  delete third_party_reg_stats_tbls.re_reg_tbl;
+  delete third_party_reg_stats_tbls.de_reg_tbl;
 }

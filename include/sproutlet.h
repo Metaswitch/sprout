@@ -129,8 +129,17 @@ public:
   ///
   virtual pjsip_msg* create_request() = 0;
 
+  /// Clones the request.  This is typically used when forking a request if
+  /// different request modifications are required on each fork or for storing
+  /// off to handle late forking.
+  ///
+  /// @returns             - The cloned request message.
+  /// @param  req          - The request message to clone.
+  ///
+  virtual pjsip_msg* clone_request(pjsip_msg* req) = 0;
+
   /// Clones the message.  This is typically used when we want to keep a
-  /// message after calling a destructive method on it.
+  /// message after calling a mutating method on it.
   ///
   /// @returns             - The cloned message.
   /// @param  msg          - The message to clone.
@@ -395,16 +404,17 @@ protected:
   /// Clones the request.  This is typically used when forking a request if
   /// different request modifications are required on each fork.
   ///
-  /// NOTE: This method only exists for backwards compatibilty.
+  /// WARNING: This method is DEPRECATED and only exists for backwards
+  ///          compatibilty.
   ///
   /// @returns             - The cloned request message.
   /// @param  req          - The request message to clone.
   ///
   pjsip_msg* clone_request(pjsip_msg* req)
-    {return _helper->clone_msg(req);}
+    {return _helper->clone_request(req);}
 
   /// Clones the message.  This is typically used when we want to keep a
-  /// message after calling a destructive method on it.
+  /// message after calling a mutative method on it.
   ///
   /// @returns             - The cloned message.
   /// @param  msg          - The message to clone.

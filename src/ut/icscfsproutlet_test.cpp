@@ -112,8 +112,7 @@ public:
                                       "homedomain",
                                       std::unordered_set<std::string>(),
                                       sproutlets,
-                                      std::set<std::string>(),
-                                      "scscf");
+                                      std::set<std::string>());
   }
 
   ~ICSCFSproutletTestBase()

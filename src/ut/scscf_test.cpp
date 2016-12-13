@@ -299,7 +299,7 @@ public:
   {
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
     _local_data_store->flush_all();  // start from a clean slate on each test
-    
+
     _hss_connection = new FakeHSSConnection();
 
 
@@ -358,10 +358,7 @@ public:
                                 "homedomain",
                                 aliases,
                                 sproutlets,
-                                std::set<std::string>(),
-                                "scscf");
-
-
+                                std::set<std::string>());
   }
 
   ~SCSCFTest()
@@ -1476,14 +1473,14 @@ TEST_F(SCSCFTest, TestTelURIWildcard)
   tpAS1.expect_target(tdata, false);
   EXPECT_THAT(get_headers(out, "Route"),
               testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;service=scscf>"));
-  
+
   string fresp1 = respond_to_txdata(tdata, 404);
   inject_msg(fresp1, &tpAS1);
   ASSERT_EQ(3, txdata_count());
   free_txdata();
   free_txdata();
   ASSERT_EQ(1, txdata_count());
-  
+
   // 100 Trying goes back to bono
   out = current_txdata()->msg;
   RespMatcher(404).matches(out);

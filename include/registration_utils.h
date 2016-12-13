@@ -81,6 +81,6 @@ void deregister_with_application_servers(Ifcs&,
                                          HSSConnection* hss,
                                          const std::string&,
                                          SAS::TrailId trail);
-} // namespace RegistrationUtils
+}
 
 #endif
