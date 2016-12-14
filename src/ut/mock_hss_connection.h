@@ -72,14 +72,14 @@ public:
                         SAS::TrailId trail));
   MOCK_METHOD9(update_registration_state,
                HTTPCode(const std::string& public_user_identity,
-                          const std::string& private_user_identity,
-                          const std::string& type,
-                          std::string& regstate,
-                          std::map<std::string, Ifcs >& ifcs_map,
-                          std::vector<std::string>& associated_uris,
-                          std::deque<std::string>& ccfs,
-                          std::deque<std::string>& ecfs,
-                          SAS::TrailId trail));
+                        const std::string& private_user_identity,
+                        const std::string& type,
+                        std::string& regstate,
+                        std::map<std::string, Ifcs >& ifcs_map,
+                        std::vector<std::string>& associated_uris,
+                        std::deque<std::string>& ccfs,
+                        std::deque<std::string>& ecfs,
+                        SAS::TrailId trail));
 
   MOCK_METHOD5(get_registration_data,
                HTTPCode(const std::string& public_user_identity,
