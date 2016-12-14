@@ -71,7 +71,7 @@ public:
                         std::vector<std::string>& associated_uris,
                         SAS::TrailId trail));
   MOCK_METHOD9(update_registration_state,
-                HTTPCode(const std::string& public_user_identity,
+               HTTPCode(const std::string& public_user_identity,
                           const std::string& private_user_identity,
                           const std::string& type,
                           std::string& regstate,
