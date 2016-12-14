@@ -226,6 +226,7 @@ SubscriberDataManager::AoRPair* write_to_store(
                    std::vector<SubscriberDataManager*> backup_sdms,
                                                                ///<backup stores to read from if no entry in store and no backup data
                    std::string private_id,                     ///<private id that the binding was registered with
+                   bool& out_all_bindings_expired,
                    SAS::TrailId trail)
 {
   // Get the call identifier and the cseq number from the respective headers.
@@ -464,16 +465,8 @@ SubscriberDataManager::AoRPair* write_to_store(
     delete backup_aor; // LCOV_EXCL_LINE
   }
 
-  if (all_bindings_expired)
-  {
-    TRC_DEBUG("All bindings have expired - triggering deregistration at the HSS");
-    hss->update_registration_state(aor,
-                                   "",
-                                   HSSConnection::DEREG_USER,
-                                   trail);
-  }
-
   out_is_initial_registration = is_initial_registration;
+  out_all_bindings_expired = all_bindings_expired;
 
   return aor_pair;
 }
@@ -488,6 +481,7 @@ void process_register_request(pjsip_rx_data* rdata)
   int now = time(NULL);
   int expiry = 0;
   bool is_initial_registration;
+  bool all_bindings_expired;
 
   // Loop through headers as early as possible so that we know the expiry time
   // and which registration statistics to update.
@@ -636,6 +630,7 @@ void process_register_request(pjsip_rx_data* rdata)
   std::string regstate;
   std::deque<std::string> ccfs;
   std::deque<std::string> ecfs;
+
   HTTPCode http_code = hss->update_registration_state(public_id,
                                                       private_id,
                                                       HSSConnection::REG,
@@ -747,7 +742,16 @@ void process_register_request(pjsip_rx_data* rdata)
                                                 NULL,
                                                 remote_sdms,
                                                 private_id_for_binding,
+                                                all_bindings_expired,
                                                 trail);
+  if (all_bindings_expired)
+  {
+    TRC_DEBUG("All bindings have expired - triggering deregistration at the HSS");
+    hss->update_registration_state(aor,
+                                   "",
+                                   HSSConnection::DEREG_USER,
+                                   trail);
+  }
 
   if ((aor_pair != NULL) && (aor_pair->get_current() != NULL))
   {
@@ -775,6 +779,7 @@ void process_register_request(pjsip_rx_data* rdata)
                          aor_pair,
                          {},
                          private_id_for_binding,
+                         ignored,
                          trail);
         delete remote_aor_pair;
       }
