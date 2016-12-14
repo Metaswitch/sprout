@@ -1269,7 +1269,7 @@ TEST_F(SCSCFTest, TestSimpleMainline)
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 
   // It also shouldn't result in any forked INVITEs
-  EXPECT_EQ(0, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_request_tbl)->_count);
+  EXPECT_EQ(0, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_invite_tbl)->_count);
 }
 
 // Send a request where the URI is for the same port as a Sproutlet,
@@ -2088,7 +2088,7 @@ TEST_F(SCSCFTest, TestForkedFlow)
   expect_all_tsx_done();
 
   // Ensure we count the forked INVITEs
-  EXPECT_EQ(2, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_request_tbl)->_count);
+  EXPECT_EQ(2, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_invite_tbl)->_count);
 }
 
 TEST_F(SCSCFTest, TestForkedFlow2)
@@ -2153,7 +2153,7 @@ TEST_F(SCSCFTest, TestForkedFlow2)
   expect_all_tsx_done();
 
   // Ensure we count the forked INVITEs
-  EXPECT_EQ(2, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_request_tbl)->_count);
+  EXPECT_EQ(2, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_invite_tbl)->_count);
 }
 
 TEST_F(SCSCFTest, TestForkedFlow3)
@@ -2206,7 +2206,7 @@ TEST_F(SCSCFTest, TestForkedFlow3)
   expect_all_tsx_done();
 
   // Ensure we count the forked INVITEs
-  EXPECT_EQ(2, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_request_tbl)->_count);
+  EXPECT_EQ(2, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_invite_tbl)->_count);
 }
 
 TEST_F(SCSCFTest, TestForkedFlow4)
@@ -2277,7 +2277,7 @@ TEST_F(SCSCFTest, TestForkedFlow4)
   expect_all_tsx_done();
 
   // Ensure we count the forked INVITEs
-  EXPECT_EQ(2, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_request_tbl)->_count);
+  EXPECT_EQ(2, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_invite_tbl)->_count);
 }
 
 // Test SIP Message flows
