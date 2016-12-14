@@ -120,8 +120,7 @@ public:
                                           "sprout.homedomain",
                                           std::unordered_set<std::string>(),
                                           sproutlets,
-                                          std::set<std::string>(),
-                                          "scscf");
+                                          std::set<std::string>());
 
     add_host_mapping("registrar.example.com", "10.10.10.1");
 
@@ -2242,6 +2241,17 @@ TEST_F(AuthenticationPxyAuthHdrTest, ProxyAuthorizationFailure)
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
 
+TEST_F(AuthenticationPxyAuthHdrTest, NoProxyAuthorization)
+{
+  // Send in a request with a Proxy-Authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg("INVITE");
+  msg._auth_hdr = false;
+  msg._proxy_auth_hdr = false;
+  inject_msg(msg.get(), _tp);
+
+  auth_sproutlet_allows_request(true);
+}
 
 TEST_F(AuthenticationNonceCountDisabledTest, DigestAuthSuccessWithNonceCount)
 {

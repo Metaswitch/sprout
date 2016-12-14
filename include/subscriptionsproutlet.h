@@ -110,6 +110,7 @@ public:
   virtual void on_rx_in_dialog_request(pjsip_msg* req) override;
 
 protected:
+  void on_rx_request(pjsip_msg* req);
   bool handle_request(pjsip_msg* req);
   void process_subscription_request(pjsip_msg* req);
   void route_to_scscf_proxy(pjsip_msg* req);

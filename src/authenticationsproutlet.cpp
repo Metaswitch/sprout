@@ -763,12 +763,6 @@ bool AuthenticationSproutletTsx::needs_authentication(pjsip_msg* req)
   }
   else
   {
-    if (PJSIP_MSG_TO_HDR(req)->tag.slen != 0)
-    {
-      // This is an in-dialog request which needs no authentication.
-      return PJ_FALSE;
-    }
-
     // Check to see if we should authenticate this non-REGISTER message - this
     if (_sproutlet->_non_register_auth_mode == NonRegisterAuthentication::NEVER)
     {

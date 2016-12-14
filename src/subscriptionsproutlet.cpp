@@ -112,26 +112,18 @@ SubscriptionSproutletTsx::~SubscriptionSproutletTsx()
 void SubscriptionSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 {
   TRC_INFO("Subscription sproutlet received intitial request");
-
-  bool handle = handle_request(req);
-
-  if (handle)
-  {
-    process_subscription_request(req);
-  }
-  else
-  {
-    route_to_scscf_proxy(req);
-  }
+  return on_rx_request(req);
 }
 
 void SubscriptionSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
 {
   TRC_INFO("Subscription sproutlet received in dialog request");
+  return on_rx_request(req);
+}
 
-  bool handle = handle_request(req);
-
-  if (handle)
+void SubscriptionSproutletTsx::on_rx_request(pjsip_msg* req)
+{
+  if (handle_request(req))
   {
     process_subscription_request(req);
   }
@@ -139,7 +131,6 @@ void SubscriptionSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
   {
     route_to_scscf_proxy(req);
   }
-
 }
 
 // Check whether this request should be absorbed by the subscription module
