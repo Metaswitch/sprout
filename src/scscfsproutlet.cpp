@@ -99,12 +99,12 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
                                                                  "1.2.826.0.1.1578918.9.3.32");
   _invites_cancelled_after_1xx_tbl = SNMP::CounterTable::create("invites_cancelled_after_1xx",
                                                                 "1.2.826.0.1.1578918.9.3.33");
-  _forked_request_tbl = SNMP::CounterTable::create("scscf_forked_requests",
-                                                   "1.2.826.0.1.1578918.9.3.36");
   _audio_session_setup_time_tbl = SNMP::EventAccumulatorTable::create("scscf_audio_session_setup_time",
                                                                       "1.2.826.0.1.1578918.9.3.34");
   _video_session_setup_time_tbl = SNMP::EventAccumulatorTable::create("scscf_video_session_setup_time",
                                                                       "1.2.826.0.1.1578918.9.3.35");
+  _forked_request_tbl = SNMP::CounterTable::create("scscf_forked_requests",
+                                                   "1.2.826.0.1.1578918.9.3.36");
 }
 
 
