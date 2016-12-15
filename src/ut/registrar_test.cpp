@@ -2551,6 +2551,7 @@ TEST_F(RegistrarTest, NoNotifyToUnregisteredUser)
   // Delete the registration. We shouldn't get a NOTIFY - it's coming over the unregistered binding.
   msg._expires = "Expires: 0";
   msg._cseq = "16570";
+  msg._unique += 1;
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
