@@ -580,8 +580,8 @@ public:
   {
     destroy_registrar();
     delete _acr_factory; _acr_factory = NULL;
-    delete _hss_connection_observer; _hss_connection = NULL;
     delete _hss_connection; _hss_connection = NULL;
+    delete _hss_connection_observer; _hss_connection_observer = NULL;
     delete _analytics;
     delete _remote_sdm_no_bindings; _remote_sdm_no_bindings = NULL;
     delete _remote_sdm; _remote_sdm = NULL;
