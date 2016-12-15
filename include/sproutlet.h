@@ -265,6 +265,18 @@ public:
   ///
   virtual SAS::TrailId trail() const = 0;
 
+  /// Get a URI that routes to the given named service.
+  ///
+  /// @returns            - The new URI.
+  ///
+  /// @param service      - Name of the service to route to.
+  /// @param pool         - Pool to allocate the URI in.
+  /// @param existing_uri - An existing URI to use as a base for the new one.
+  ///                       Parameters from this URI will be preserved if
+  ///                       possible.
+  virtual pjsip_sip_uri* get_uri_for_service(const std::string& service,
+                                             pj_pool_t* pool,
+                                             pjsip_sip_uri* existing_uri) const = 0;
 };
 
 
@@ -555,6 +567,22 @@ protected:
   ///
   SAS::TrailId trail() const
     {return _helper->trail();}
+
+  /// Get a URI that routes to the given named service.
+  ///
+  /// @returns            - The new URI.
+  ///
+  /// @param service      - Name of the service to route to.
+  /// @param pool         - Pool to allocate the URI in.
+  /// @param existing_uri - An existing URI to use as a base for the new one.
+  ///                       Parameters from this URI will be preserved if
+  ///                       possible.
+  pjsip_sip_uri* get_uri_for_service(const std::string& service,
+                                     pj_pool_t* pool,
+                                     pjsip_sip_uri* existing_uri) const
+  {
+    return _helper->get_uri_for_service(service, pool, existing_uri);
+  }
 
 private:
   /// Transaction helper to use for underlying service-related processing.

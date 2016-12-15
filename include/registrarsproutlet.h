@@ -67,6 +67,7 @@ public:
   RegistrarSproutlet(const std::string& name,
                      int port,
                      const std::string& uri,
+                     const std::string& next_hop_service,
                      SubscriberDataManager* reg_sdm,
                      std::vector<SubscriberDataManager*> reg_remote_sdms,
                      HSSConnection* hss_connection,
@@ -83,6 +84,9 @@ public:
   SproutletTsx* get_tsx(SproutletTsxHelper* helper,
                         const std::string& alias,
                         pjsip_msg* req) override;
+
+  int expiry_for_binding(pjsip_contact_hdr* contact,
+                         pjsip_expires_hdr* expires);
 
 private:
   friend class RegistrarSproutletTsx;
@@ -108,6 +112,10 @@ private:
   // registration attempts.
   SNMP::RegistrationStatsTables* _reg_stats_tbls;
   SNMP::RegistrationStatsTables* _third_party_reg_stats_tbls;
+
+  // The next service to route requests onto if the sproutlet does not handle
+  // them itself.
+  std::string _next_hop_service;
 };
 
 
@@ -119,9 +127,6 @@ public:
   ~RegistrarSproutletTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req);
-  static int expiry_for_binding(pjsip_contact_hdr* contact,
-                                pjsip_expires_hdr* expires,
-                                int max_expires);
 
 protected:
   void process_register_request(pjsip_msg* req);

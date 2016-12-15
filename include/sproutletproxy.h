@@ -107,6 +107,9 @@ protected:
   /// Create a URI that routes to a given Sproutlet.
   pjsip_sip_uri* create_sproutlet_uri(pj_pool_t* pool,
                                       Sproutlet* sproutlet) const;
+  pjsip_sip_uri* create_sproutlet_uri(pj_pool_t* pool,
+                                      const std::string& name,
+                                      pjsip_sip_uri* existing_uri) const;
 
   Sproutlet* service_from_host(pjsip_sip_uri* uri);
   Sproutlet* service_from_user(pjsip_sip_uri* uri);
@@ -300,6 +303,9 @@ public:
   SAS::TrailId trail() const;
   bool is_uri_reflexive(const pjsip_uri*) const;
   pjsip_sip_uri* get_reflexive_uri(pj_pool_t*) const;
+  pjsip_sip_uri* get_uri_for_service(const std::string& service,
+                                     pj_pool_t* pool,
+                                     pjsip_sip_uri* existing_uri) const;
 
 private:
   void rx_request(pjsip_tx_data* req);

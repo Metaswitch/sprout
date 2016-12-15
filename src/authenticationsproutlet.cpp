@@ -70,6 +70,8 @@ std::string unhex(std::string hexstr)
 AuthenticationSproutlet::AuthenticationSproutlet(const std::string& name,
                                                  int port,
                                                  const std::string& uri,
+                                                 const std::string& next_hop_service,
+                                                 const std::list<std::string>& aliases,
                                                  const std::string& realm_name,
                                                  ImpiStore* _impi_store,
                                                  HSSConnection* hss_connection,
@@ -92,7 +94,9 @@ AuthenticationSproutlet::AuthenticationSproutlet(const std::string& name,
   _auth_stats_tables(auth_stats_tbls),
   _nonce_count_supported(nonce_count_supported_arg),
   _get_expiry_for_binding(get_expiry_for_binding_arg),
-  _non_register_auth_mode(non_register_auth_mode_param)
+  _non_register_auth_mode(non_register_auth_mode_param),
+  _next_hop_service(next_hop_service),
+  _aliases(aliases)
 {
 }
 
@@ -111,7 +115,6 @@ bool AuthenticationSproutlet::init()
 
   params.options = PJSIP_AUTH_SRV_IS_PROXY;
   status = pjsip_auth_srv_init2(stack_data.pool, &_auth_srv_proxy, &params);
-
   return (status == PJ_SUCCESS);
 }
 
@@ -120,6 +123,12 @@ SproutletTsx* AuthenticationSproutlet::get_tsx(SproutletTsxHelper* helper,
                                                pjsip_msg* req)
 {
   return new AuthenticationSproutletTsx(helper, this);
+}
+
+
+const std::list<std::string> AuthenticationSproutlet::aliases() const
+{
+  return { _aliases };
 }
 
 //
@@ -1190,10 +1199,10 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
 void AuthenticationSproutletTsx::forward_request(pjsip_msg* req)
 {
-  // TODO Route to a sensible URI.
   pjsip_sip_uri* uri =
-    (pjsip_sip_uri*)PJUtils::uri_from_string("sip:registrar.example.com;lr",
-                                             get_pool(req));
+    (pjsip_sip_uri*)get_uri_for_service(_sproutlet->_next_hop_service,
+                                        get_pool(req),
+                                        (pjsip_sip_uri*)route_hdr()->name_addr.uri);
   PJUtils::add_top_route_header(req, uri, get_pool(req));
   send_request(req);
 }

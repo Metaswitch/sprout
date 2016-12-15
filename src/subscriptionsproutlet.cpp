@@ -68,6 +68,7 @@ extern "C" {
 SubscriptionSproutlet::SubscriptionSproutlet(const std::string& name,
                                              int port,
                                              const std::string& uri,
+                                             const std::string& next_hop_service,
                                              SubscriberDataManager* sdm,
                                              std::vector<SubscriberDataManager*> remote_sdms,
                                              HSSConnection* hss_connection,
@@ -80,13 +81,19 @@ SubscriptionSproutlet::SubscriptionSproutlet(const std::string& name,
   _hss(hss_connection),
   _acr_factory(acr_factory),
   _analytics(analytics_logger),
-  _max_expires(cfg_max_expires)
+  _max_expires(cfg_max_expires),
+  _next_hop_service(next_hop_service)
 {
 }
 
 /// SubscriptionSproutlet destructor
 SubscriptionSproutlet::~SubscriptionSproutlet()
 {
+}
+
+bool SubscriptionSproutlet::init()
+{
+  return true;
 }
 
 SproutletTsx* SubscriptionSproutlet::get_tsx(SproutletTsxHelper* helper,
@@ -712,10 +719,10 @@ void SubscriptionSproutletTsx::log_subscriptions(const std::string& aor_name,
 
 void SubscriptionSproutletTsx::route_to_scscf_proxy(pjsip_msg* req)
 {
-  // TODO Route to a sensible URI.
   pjsip_sip_uri* uri =
-    (pjsip_sip_uri*)PJUtils::uri_from_string("sip:scscf-proxy.example.com;lr",
-                                             get_pool(req));
+    (pjsip_sip_uri*)get_uri_for_service(_sproutlet->_next_hop_service,
+                                        get_pool(req),
+                                        (pjsip_sip_uri*)route_hdr()->name_addr.uri);
   PJUtils::add_top_route_header(req, uri, get_pool(req));
   send_request(req);
 }

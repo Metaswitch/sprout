@@ -75,6 +75,7 @@ extern "C" {
 RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
                                        int port,
                                        const std::string& uri,
+                                       const std::string& next_hop_service,
                                        SubscriberDataManager* reg_sdm,
                                        std::vector<SubscriberDataManager*> reg_remote_sdms,
                                        HSSConnection* hss_connection,
@@ -93,7 +94,8 @@ RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
   _max_expires(cfg_max_expires),
   _force_original_register_inclusion(force_original_register_inclusion),
   _reg_stats_tbls(reg_stats_tbls),
-  _third_party_reg_stats_tbls(third_party_reg_stats_tbls)
+  _third_party_reg_stats_tbls(third_party_reg_stats_tbls),
+  _next_hop_service(next_hop_service)
 {
 }
 
@@ -210,7 +212,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   {
     num_contacts++;
     pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_EXPIRES, NULL);
-    expiry = expiry_for_binding(contact_hdr, expires, _sproutlet->_max_expires);
+    expiry = _sproutlet->expiry_for_binding(contact_hdr, expires);
 
     if ((contact_hdr->star) && (expiry != 0))
     {
@@ -882,7 +884,7 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
     while (contact != NULL)
     {
       changed_bindings++;
-      expiry = expiry_for_binding(contact, expires, _sproutlet->_max_expires);
+      expiry = _sproutlet->expiry_for_binding(contact, expires);
 
       if (contact->star)
       {
@@ -1131,17 +1133,16 @@ void RegistrarSproutletTsx::log_bindings(const std::string& aor_name,
   }
 }
 
-int RegistrarSproutletTsx::expiry_for_binding(pjsip_contact_hdr* contact,
-                                              pjsip_expires_hdr* expires,
-                                              int max_expires)
+int RegistrarSproutlet::expiry_for_binding(pjsip_contact_hdr* contact,
+                                           pjsip_expires_hdr* expires)
 {
   int expiry = (contact->expires != -1) ? contact->expires :
                (expires != NULL) ? expires->ivalue :
-               max_expires;
-  if (expiry > max_expires)
+               _max_expires;
+  if (expiry > _max_expires)
   {
     // Expiry is too long, set it to the maximum.
-    expiry = max_expires;
+    expiry = _max_expires;
   }
 
   return expiry;
@@ -1149,10 +1150,10 @@ int RegistrarSproutletTsx::expiry_for_binding(pjsip_contact_hdr* contact,
 
 void RegistrarSproutletTsx::route_to_subscription(pjsip_msg* req)
 {
-  // TODO Route to a sensible URI.
   pjsip_sip_uri* uri =
-    (pjsip_sip_uri*)PJUtils::uri_from_string("sip:subscription.example.com;lr",
-                                             get_pool(req));
+    (pjsip_sip_uri*)get_uri_for_service(_sproutlet->_next_hop_service,
+                                        get_pool(req),
+                                        (pjsip_sip_uri*)route_hdr()->name_addr.uri);
   PJUtils::add_top_route_header(req, uri, get_pool(req));
   send_request(req);
 }

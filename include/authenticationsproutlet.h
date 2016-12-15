@@ -61,8 +61,7 @@ extern "C" {
 #include "snmp_success_fail_count_table.h"
 #include "cfgoptions.h"
 
-typedef int(*get_expiry_for_binding_fn)(pjsip_contact_hdr* contact,
-                                        pjsip_expires_hdr* expires);
+typedef std::function<int(pjsip_contact_hdr*, pjsip_expires_hdr*)> get_expiry_for_binding_fn;
 
 class AuthenticationSproutletTsx;
 
@@ -72,6 +71,8 @@ public:
   AuthenticationSproutlet(const std::string& name,
                           int port,
                           const std::string& uri,
+                          const std::string& next_hop_service,
+                          const std::list<std::string>& aliases,
                           const std::string& realm_name,
                           ImpiStore* _impi_store,
                           HSSConnection* hss_connection,
@@ -89,6 +90,8 @@ public:
   SproutletTsx* get_tsx(SproutletTsxHelper* helper,
                         const std::string& alias,
                         pjsip_msg* req) override;
+
+  const std::list<std::string> aliases() const override;
 
 private:
   friend class AuthenticationSproutletTsx;
@@ -128,6 +131,13 @@ private:
 
   // Controls when to challenge non-REGISTER messages.
   NonRegisterAuthentication _non_register_auth_mode;
+
+  // The next service to route requests onto if the sproutlet does not handle them
+  // itself.
+  std::string _next_hop_service;
+
+  // Aliases that this sproutlet registers for.
+  const std::list<std::string> _aliases;
 };
 
 

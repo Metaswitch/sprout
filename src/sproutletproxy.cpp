@@ -366,6 +366,33 @@ pjsip_sip_uri* SproutletProxy::create_sproutlet_uri(pj_pool_t* pool,
   return uri;
 }
 
+pjsip_sip_uri* SproutletProxy::create_sproutlet_uri(pj_pool_t* pool,
+                                                    const std::string& name,
+                                                    pjsip_sip_uri* existing_uri) const
+{
+  // TODO We should really commonalize the two create_sproutlet_uri methods but
+  // the other one is not guaranteed to route to a unique sproutlet.
+
+  pjsip_sip_uri* uri =
+    (pjsip_sip_uri*)pjsip_uri_clone(pool, existing_uri);
+  pj_strdup(pool, &uri->host, &_root_uri->host);
+  uri->port = 0;
+  uri->lr_param = 1;
+
+  pjsip_param* p = pjsip_param_find(&uri->other_param, &STR_SERVICE);
+
+  if (p == nullptr)
+  {
+    p = PJ_POOL_ALLOC_T(pool, pjsip_param);
+    pj_strdup(pool, &p->name, &STR_SERVICE);
+    pj_list_insert_before(&uri->other_param, p);
+  }
+
+  pj_strdup2(pool, &p->value, name.c_str());
+
+  return uri;
+}
+
 
 bool SproutletProxy::is_uri_local(const pjsip_uri* uri)
 {
@@ -1525,6 +1552,13 @@ bool SproutletWrapper::is_uri_local(const pjsip_uri* uri) const
 pjsip_sip_uri* SproutletWrapper::get_reflexive_uri(pj_pool_t* pool) const
 {
   return _proxy->create_sproutlet_uri(pool, _sproutlet);
+}
+
+pjsip_sip_uri* SproutletWrapper::get_uri_for_service(const std::string& service,
+                                                     pj_pool_t* pool,
+                                                     pjsip_sip_uri* existing_uri) const
+{
+  return _proxy->create_sproutlet_uri(pool, service, existing_uri);
 }
 
 void SproutletWrapper::rx_request(pjsip_tx_data* req)

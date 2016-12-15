@@ -65,6 +65,7 @@ public:
   SubscriptionSproutlet(const std::string& name,
                         int port,
                         const std::string& uri,
+                        const std::string& next_hop_service,
                         SubscriberDataManager* sdm,
                         std::vector<SubscriberDataManager*> remote_sdms,
                         HSSConnection* hss_connection,
@@ -72,6 +73,8 @@ public:
                         AnalyticsLogger* analytics_logger,
                         int cfg_max_expires);
   ~SubscriptionSproutlet();
+
+  bool init();
 
   SproutletTsx* get_tsx(SproutletTsxHelper* helper,
                         const std::string& alias,
@@ -96,6 +99,10 @@ private:
 
   /// Default value for a subscription expiry. RFC3860 has this as 3761 seconds.
   static const int DEFAULT_SUBSCRIPTION_EXPIRES = 3761;
+
+  // The next service to route requests onto if the sproutlet does not handle
+  // them itself.
+  std::string _next_hop_service;
 };
 
 
