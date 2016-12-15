@@ -812,10 +812,6 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   SNMP::SuccessFailCountTable* auth_stats_table = NULL;
   std::string resync;
 
-  // SAS log the start of processing by this module
-  SAS::Event event(trail(), SASEvent::BEGIN_AUTHENTICATION_MODULE, 0);
-  SAS::report_event(event);
-
   if (!needs_authentication(req))
   {
     TRC_DEBUG("Request does not need authentication");

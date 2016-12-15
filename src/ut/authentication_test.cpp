@@ -275,7 +275,7 @@ class AuthenticationTest : public BaseAuthenticationTest
   AuthenticationSproutlet* create_auth_sproutlet()
   {
     AuthenticationSproutlet* auth_sproutlet =
-      new AuthenticationSproutlet("scscf", // TODO should be using an alias here.
+      new AuthenticationSproutlet("authentication",
                                   stack_data.scscf_port,
                                   "sip:authentication.homedomain",
                                   "homedomain",
@@ -304,7 +304,7 @@ class AuthenticationPxyAuthHdrTest : public BaseAuthenticationTest
   AuthenticationSproutlet* create_auth_sproutlet()
   {
     AuthenticationSproutlet* auth_sproutlet =
-      new AuthenticationSproutlet("scscf",
+      new AuthenticationSproutlet("authentication",
                                   0,
                                   "sip:authentication.homedomain",
                                   "homedomain",
@@ -338,7 +338,7 @@ class AuthenticationNonceCountDisabledTest : public BaseAuthenticationTest
   AuthenticationSproutlet* create_auth_sproutlet()
   {
     AuthenticationSproutlet* auth_sproutlet =
-      new AuthenticationSproutlet("scscf",
+      new AuthenticationSproutlet("authentication",
                                   0,
                                   "sip:authentication.homedomain",
                                   "homedomain",
@@ -413,7 +413,7 @@ public:
     _extra_contact(""),
     _to_tag(""),
     _force_aka(false),
-    _route("sip:scscf.sprout.homedomain:5058;transport=TCP")
+    _route("sip:authentication.sprout.homedomain:5058;transport=TCP")
   {
   }
 
