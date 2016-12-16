@@ -440,7 +440,7 @@ void create_challenge(pjsip_digest_credential* credentials,
       // AKA version defaults to 1, for back-compatibility with pre-AKAv2
       // Homestead versions.
       int akaversion = 1;
-      
+
       JSON_SAFE_GET_STRING_MEMBER(aka, "challenge", nonce);
       JSON_SAFE_GET_STRING_MEMBER(aka, "cryptkey", cryptkey);
       JSON_SAFE_GET_STRING_MEMBER(aka, "integritykey", integritykey);
@@ -494,12 +494,13 @@ void create_challenge(pjsip_digest_credential* credentials,
         std::string joined = unhex(xres + integritykey + cryptkey);
         std::string formality = "http-digest-akav2-password";
         unsigned int digest_len;
+        unsigned char hmac[EVP_MAX_MD_SIZE];
         unsigned char* digest = HMAC(EVP_md5(),
                                      (unsigned char*)joined.data(),
                                      joined.size(),
                                      (unsigned char*)(formality.data()),
                                      formality.size(),
-                                     NULL,
+                                     hmac,
                                      &digest_len);
         std::string password = base64_encode(std::string((char*) digest, digest_len));
 
