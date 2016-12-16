@@ -373,8 +373,8 @@ pjsip_sip_uri* SproutletProxy::create_sproutlet_uri(pj_pool_t* pool,
   // TODO We should really commonalize the two create_sproutlet_uri methods but
   // the other one is not guaranteed to route to a unique sproutlet.
 
-  pjsip_sip_uri* uri =
-    (pjsip_sip_uri*)pjsip_uri_clone(pool, existing_uri);
+  pjsip_sip_uri* base_uri = ((existing_uri != nullptr) ? existing_uri : _root_uri);
+  pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, base_uri);
   pj_strdup(pool, &uri->host, &_root_uri->host);
   uri->port = 0;
   uri->lr_param = 1;

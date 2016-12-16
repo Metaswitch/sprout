@@ -1199,10 +1199,12 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
 void AuthenticationSproutletTsx::forward_request(pjsip_msg* req)
 {
+  const pjsip_route_hdr* route = route_hdr();
+  pjsip_sip_uri* base_uri = (pjsip_sip_uri*)(route ? route->name_addr.uri : nullptr);
   pjsip_sip_uri* uri =
     (pjsip_sip_uri*)get_uri_for_service(_sproutlet->_next_hop_service,
                                         get_pool(req),
-                                        (pjsip_sip_uri*)route_hdr()->name_addr.uri);
+                                        base_uri);
   PJUtils::add_top_route_header(req, uri, get_pool(req));
   send_request(req);
 }
