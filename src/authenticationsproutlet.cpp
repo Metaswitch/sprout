@@ -1197,6 +1197,11 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   delete impi_obj;
 }
 
+void AuthenticationSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
+{
+  return forward_request(req);
+}
+
 void AuthenticationSproutletTsx::forward_request(pjsip_msg* req)
 {
   const pjsip_route_hdr* route = route_hdr();

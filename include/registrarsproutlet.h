@@ -127,6 +127,7 @@ public:
   ~RegistrarSproutletTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req);
+  virtual void on_rx_in_dialog_request(pjsip_msg* req);
 
 protected:
   void process_register_request(pjsip_msg* req);

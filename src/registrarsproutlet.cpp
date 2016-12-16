@@ -187,6 +187,11 @@ void RegistrarSproutletTsx::on_rx_initial_request(pjsip_msg *req)
   }
 }
 
+void RegistrarSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
+{
+  return route_to_subscription(req);
+}
+
 void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 {
   pjsip_status_code st_code = PJSIP_SC_OK;
