@@ -246,12 +246,6 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
         SNMP::SuccessFailCountTable::create("non_register_auth_success_fail_count",
                                             ".1.2.826.0.1.1578918.9.3.17");
 
-
-      // Create an AV store using the local store and initialise the
-      // authentication sproutlet.  We don't create a AV store using the remote
-      // data store as Authentication Vectors are only stored for a short period
-      // after the relevant challenge is sent.
-      _impi_store = new ImpiStore(local_data_store, opt.impi_store_mode);
       _auth_sproutlet =
         new AuthenticationSproutlet(AUTHENTICATION_SERVICE_NAME,
                                     opt.port_scscf,
@@ -259,7 +253,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                     REGISTRAR_SERVICE_NAME,
                                     {"scscf"},
                                     opt.auth_realm,
-                                    _impi_store,
+                                    impi_store,
                                     hss_connection,
                                     chronos_connection,
                                     scscf_acr_factory,

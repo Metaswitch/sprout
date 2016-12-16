@@ -1290,6 +1290,7 @@ ExceptionHandler* exception_handler = NULL;
 AlarmManager* alarm_manager = NULL;
 AnalyticsLogger* analytics_logger = NULL;
 ChronosConnection* chronos_connection = NULL;
+ImpiStore* impi_store = NULL;
 
 /*
  * main()
@@ -1301,7 +1302,6 @@ int main(int argc, char* argv[])
 
   SIPResolver* sip_resolver = NULL;
   Store* remote_data_store = NULL;
-  ImpiStore* impi_store = NULL;
   HttpConnection* ralf_connection = NULL;
   ACRFactory* pcscf_acr_factory = NULL;
   pj_bool_t websockets_enabled = PJ_FALSE;
@@ -2018,6 +2018,12 @@ int main(int argc, char* argv[])
     TRC_ERROR("Caught management HttpStack::Exception - %s - %d\n", e._func, e._rc);
     return 1;
   }
+
+  // Create an AV store using the local store and initialise the authentication
+  // sproutlet.  We don't create a AV store using the remote data store as
+  // Authentication Vectors are only stored for a short period after the
+  // relevant challenge is sent.
+  impi_store = new ImpiStore(local_data_store, opt.impi_store_mode);
 
   // Load the sproutlet plugins.
   PluginLoader* loader = new PluginLoader("/usr/share/clearwater/sprout/plugins",
