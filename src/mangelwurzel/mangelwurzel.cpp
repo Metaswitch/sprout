@@ -66,71 +66,71 @@ SproutletTsx* Mangelwurzel::get_tsx(SproutletTsxHelper* helper,
   // Find the mangewurzel Route header, parse the parameters and use them to
   // build a Config object. Then construct the MangelwurzelTsx.
   pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)helper->route_hdr();
+  pjsip_sip_uri* mangelwurzel_uri;
 
   if (route_hdr != NULL)
   {
-    pjsip_sip_uri* route_hdr_uri = (pjsip_sip_uri*)route_hdr->name_addr.uri;
-
-    if (pjsip_param_find(&route_hdr_uri->other_param, &DIALOG_PARAM) != NULL)
-    {
-      config.dialog = true;
-    }
-    if (pjsip_param_find(&route_hdr_uri->other_param, &REQ_URI_PARAM) != NULL)
-    {
-      config.req_uri = true;
-    }
-    if (pjsip_param_find(&route_hdr_uri->other_param, &TO_PARAM) != NULL)
-    {
-      config.to = true;
-    }
-    if (pjsip_param_find(&route_hdr_uri->other_param, &ROUTES_PARAM) != NULL)
-    {
-      config.routes = true;
-    }
-    if (pjsip_param_find(&route_hdr_uri->other_param, &DOMAIN_PARAM) != NULL)
-    {
-      config.change_domain = true;
-    }
-    if (pjsip_param_find(&route_hdr_uri->other_param, &ORIG_PARAM) != NULL)
-    {
-      config.orig = true;
-    }
-    if (pjsip_param_find(&route_hdr_uri->other_param, &OOTB_PARAM) != NULL)
-    {
-      config.ootb = true;
-    }
-
-    // The mangalgorithm defaults to ROT_13, so only change it if REVERSE is
-    // specified, but raise a log if an invalid mangalgorithm is specified.
-    pjsip_param* mangalgorithm_param =
-      pjsip_param_find(&route_hdr_uri->other_param,
-                       &MANGALGORITHM_PARAM);
-    if (mangalgorithm_param != NULL)
-    {
-      std::string mangalgorithm =
-        PJUtils::pj_str_to_string(&mangalgorithm_param->value);
-
-      if (mangalgorithm == REVERSE_MANGALGORITHM)
-      {
-        config.mangalgorithm = MangelwurzelTsx::REVERSE;
-      }
-      else if (mangalgorithm != ROT_13_MANGALGORITHM)
-      {
-        TRC_ERROR("Invalid mangalgorithm specified: %s",
-                  mangalgorithm.c_str());
-        SAS::Event event(helper->trail(), SASEvent::INVALID_MANGALGORITHM, 0);
-        event.add_var_param(mangalgorithm);
-        SAS::report_event(event);
-      }
-    }
-
-    return new MangelwurzelTsx(helper, config);
+    mangelwurzel_uri = (pjsip_sip_uri*)route_hdr->name_addr.uri;
   }
   else
   {
-    TRC_DEBUG("Failed to find Route header - not invoking mangelwurzel");
-    return NULL;
+    mangelwurzel_uri = (pjsip_sip_uri*)req->line.req.uri;
   }
+
+  if (pjsip_param_find(&mangelwurzel_uri->other_param, &DIALOG_PARAM) != NULL)
+  {
+    config.dialog = true;
+  }
+  if (pjsip_param_find(&mangelwurzel_uri->other_param, &REQ_URI_PARAM) != NULL)
+  {
+    config.req_uri = true;
+  }
+  if (pjsip_param_find(&mangelwurzel_uri->other_param, &TO_PARAM) != NULL)
+  {
+    config.to = true;
+  }
+  if (pjsip_param_find(&mangelwurzel_uri->other_param, &ROUTES_PARAM) != NULL)
+  {
+    config.routes = true;
+  }
+  if (pjsip_param_find(&mangelwurzel_uri->other_param, &DOMAIN_PARAM) != NULL)
+  {
+    config.change_domain = true;
+  }
+  if (pjsip_param_find(&mangelwurzel_uri->other_param, &ORIG_PARAM) != NULL)
+  {
+    config.orig = true;
+  }
+  if (pjsip_param_find(&mangelwurzel_uri->other_param, &OOTB_PARAM) != NULL)
+  {
+    config.ootb = true;
+  }
+
+  // The mangalgorithm defaults to ROT_13, so only change it if REVERSE is
+  // specified, but raise a log if an invalid mangalgorithm is specified.
+  pjsip_param* mangalgorithm_param =
+    pjsip_param_find(&mangelwurzel_uri->other_param,
+                     &MANGALGORITHM_PARAM);
+  if (mangalgorithm_param != NULL)
+  {
+    std::string mangalgorithm =
+      PJUtils::pj_str_to_string(&mangalgorithm_param->value);
+
+    if (mangalgorithm == REVERSE_MANGALGORITHM)
+    {
+      config.mangalgorithm = MangelwurzelTsx::REVERSE;
+    }
+    else if (mangalgorithm != ROT_13_MANGALGORITHM)
+    {
+      TRC_ERROR("Invalid mangalgorithm specified: %s",
+                mangalgorithm.c_str());
+      SAS::Event event(helper->trail(), SASEvent::INVALID_MANGALGORITHM, 0);
+      event.add_var_param(mangalgorithm);
+      SAS::report_event(event);
+    }
+  }
+
+  return new MangelwurzelTsx(helper, config);
 }
 
 /// Mangelwurzel receives an initial request. It will Record-Route itself,
