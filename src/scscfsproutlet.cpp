@@ -104,7 +104,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
   _video_session_setup_time_tbl = SNMP::EventAccumulatorTable::create("scscf_video_session_setup_time",
                                                                       "1.2.826.0.1.1578918.9.3.35");
   _forked_invite_tbl = SNMP::CounterTable::create("scscf_forked_invites",
-                                                  "1.2.826.0.1.1578918.9.3.36");
+                                                  "1.2.826.0.1.1578918.9.3.38");
 }
 
 
@@ -1667,6 +1667,8 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
 
       if ((_req_type == PJSIP_INVITE_METHOD) && (ii != 0))
       {
+        // Increment stat tracking the number of additional INVITEs generated
+        // due to there being multiple registered targets.
         _scscf->_forked_invite_tbl->increment();
       }
     }
