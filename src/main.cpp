@@ -1505,20 +1505,6 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  if ((opt.auth_enabled) && (opt.hss_server == ""))
-  {
-    CL_SPROUT_AUTH_NO_HOMESTEAD.log();
-    TRC_ERROR("Authentication enabled, but no Homestead server specified");
-    return 1;
-  }
-
-  if ((opt.xdm_server != "") && (opt.hss_server == ""))
-  {
-    CL_SPROUT_XDM_NO_HOMESTEAD.log();
-    TRC_ERROR("XDM server configured for services, but no Homestead server specified");
-    return 1;
-  }
-
   if ((opt.pcscf_enabled) && (opt.hss_server != ""))
   {
     TRC_WARNING("Homestead server configured on P-CSCF, ignoring");
