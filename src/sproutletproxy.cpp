@@ -89,7 +89,10 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
                                                        (*it)->uri_as_str(),
                                                        stack_data.pool,
                                                        false);
-    _root_uris.insert(std::make_pair((*it)->service_name(), root_uri));
+    if (root_uri != nullptr)
+    {
+      _root_uris.insert(std::make_pair((*it)->service_name(), root_uri));
+    }
   }
 }
 
@@ -350,18 +353,33 @@ pjsip_sip_uri* SproutletProxy::create_sproutlet_uri(pj_pool_t* pool,
                                                     Sproutlet* sproutlet) const
 {
   TRC_DEBUG("Creating URI for %s", sproutlet->service_name().c_str());
-  pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, _root_uris.find(sproutlet->service_name())->second);
-  uri->lr_param = 1;
+  pjsip_sip_uri* uri = nullptr;
 
-  TRC_DEBUG("Add services parameter");
-  pjsip_param* p = PJ_POOL_ALLOC_T(pool, pjsip_param);
-  pj_strdup(pool, &p->name, &STR_SERVICE);
-  pj_list_insert_before(&uri->other_param, p);
-  std::string services = sproutlet->service_name();
-  pj_strdup2(pool, &p->value, services.c_str());
+  std::map<std::string, pjsip_sip_uri*>::const_iterator it =
+    _root_uris.find(sproutlet->service_name());
 
-  TRC_DEBUG(PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                   (pjsip_uri*)uri).c_str());
+  if (it != _root_uris.end())
+  {
+    TRC_DEBUG("Found root URI");
+    uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, it->second);
+    uri->lr_param = 1;
+
+    TRC_DEBUG("Add services parameter");
+    pjsip_param* p = PJ_POOL_ALLOC_T(pool, pjsip_param);
+    pj_strdup(pool, &p->name, &STR_SERVICE);
+    pj_list_insert_before(&uri->other_param, p);
+    std::string services = sproutlet->service_name();
+    pj_strdup2(pool, &p->value, services.c_str());
+
+    TRC_DEBUG("Constructed URI %s",
+              PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)uri).c_str());
+  }
+  else
+  {
+    // LCOV_EXCL_START
+    TRC_WARNING("No root URI found - unable to construct URI");
+    // LCOV_EXCL_STOP
+  }
 
   return uri;
 }
