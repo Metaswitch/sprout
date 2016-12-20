@@ -377,12 +377,11 @@ pjsip_sip_uri* SproutletProxy::create_sproutlet_uri(pj_pool_t* pool,
   return uri;
 }
 
-pjsip_sip_uri* SproutletProxy::create_sproutlet_uri(pj_pool_t* pool,
-                                                    const std::string& name,
-                                                    pjsip_sip_uri* existing_uri) const
+pjsip_sip_uri* SproutletProxy::create_internal_sproutlet_uri(pj_pool_t* pool,
+                                                             const std::string& name,
+                                                             pjsip_sip_uri* existing_uri) const
 {
-  // TODO We should really commonalize the two create_sproutlet_uri methods but
-  // the other one is not guaranteed to route to a unique sproutlet.
+  TRC_DEBUG("Creating URI for service %s", name.c_str());
 
   pjsip_sip_uri* base_uri = ((existing_uri != nullptr) ? existing_uri : _root_uri);
   pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, base_uri);
@@ -400,6 +399,9 @@ pjsip_sip_uri* SproutletProxy::create_sproutlet_uri(pj_pool_t* pool,
   }
 
   pj_strdup2(pool, &p->value, name.c_str());
+
+  TRC_DEBUG("Constructed URI %s",
+              PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)uri).c_str());
 
   return uri;
 }
@@ -1569,7 +1571,7 @@ pjsip_sip_uri* SproutletWrapper::get_uri_for_service(const std::string& service,
                                                      pj_pool_t* pool,
                                                      pjsip_sip_uri* existing_uri) const
 {
-  return _proxy->create_sproutlet_uri(pool, service, existing_uri);
+  return _proxy->create_internal_sproutlet_uri(pool, service, existing_uri);
 }
 
 void SproutletWrapper::rx_request(pjsip_tx_data* req)

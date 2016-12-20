@@ -107,9 +107,18 @@ protected:
   /// Create a URI that routes to a given Sproutlet.
   pjsip_sip_uri* create_sproutlet_uri(pj_pool_t* pool,
                                       Sproutlet* sproutlet) const;
-  pjsip_sip_uri* create_sproutlet_uri(pj_pool_t* pool,
-                                      const std::string& name,
-                                      pjsip_sip_uri* existing_uri) const;
+
+  /// Create a URI that routes to the named sproutlet internally within the
+  /// sproutlet proxy.
+  ///
+  /// @param pool         - Pool to allocate the URI from.
+  /// @param name         - The name of the service to invoke.
+  /// @param existing_uri - An existing URI to base the new URI on. Any user
+  ///                       part and URI parameters are copied over to the new
+  ///                       URI.
+  pjsip_sip_uri* create_internal_sproutlet_uri(pj_pool_t* pool,
+                                               const std::string& name,
+                                               pjsip_sip_uri* existing_uri) const;
 
   Sproutlet* service_from_host(pjsip_sip_uri* uri);
   Sproutlet* service_from_user(pjsip_sip_uri* uri);
