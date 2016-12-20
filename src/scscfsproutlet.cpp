@@ -1770,6 +1770,7 @@ void SCSCFSproutletTsx::add_to_dialog(pjsip_msg* msg,
     // Get the cluster URI. Don't use `get_reflexive_uri` here as we want to
     // record route the entire S-CSCF service, not just this sproutlet.
     pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, _scscf->scscf_cluster_uri());
+    uri->lr_param = 1;
 
     rr = pjsip_rr_hdr_create(pool);
     rr->name_addr.uri = (pjsip_uri*)uri;
