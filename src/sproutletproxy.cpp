@@ -364,13 +364,6 @@ pjsip_sip_uri* SproutletProxy::create_sproutlet_uri(pj_pool_t* pool,
     uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, it->second);
     uri->lr_param = 1;
 
-    TRC_DEBUG("Add services parameter");
-    pjsip_param* p = PJ_POOL_ALLOC_T(pool, pjsip_param);
-    pj_strdup(pool, &p->name, &STR_SERVICE);
-    pj_list_insert_before(&uri->other_param, p);
-    std::string services = sproutlet->service_name();
-    pj_strdup2(pool, &p->value, services.c_str());
-
     TRC_DEBUG("Constructed URI %s",
               PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)uri).c_str());
   }

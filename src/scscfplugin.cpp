@@ -174,7 +174,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           icscf_uri,
                                           opt.uri_bgcf,
                                           0,
-                                          opt.uri_scscf,
+                                          "",
                                           local_sdm,
                                           {remote_sdm},
                                           hss_connection,
@@ -192,7 +192,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 
     _subscription_sproutlet = new SubscriptionSproutlet(SUBSCRIPTION_SERVICE_NAME,
                                                         0,
-                                                        opt.uri_scscf,
+                                                        "",
                                                         PROXY_SERVICE_NAME,
                                                         local_sdm,
                                                         {remote_sdm},
@@ -219,7 +219,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 
     _registrar_sproutlet = new RegistrarSproutlet(REGISTRAR_SERVICE_NAME,
                                                   0,
-                                                  opt.uri_scscf,
+                                                  "",
                                                   SUBSCRIPTION_SERVICE_NAME,
                                                   local_sdm,
                                                   {remote_sdm},
@@ -249,7 +249,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
       _auth_sproutlet =
         new AuthenticationSproutlet(AUTHENTICATION_SERVICE_NAME,
                                     opt.port_scscf,
-                                    opt.uri_scscf,
+                                    "",
                                     REGISTRAR_SERVICE_NAME,
                                     {"scscf"},
                                     opt.auth_realm,
