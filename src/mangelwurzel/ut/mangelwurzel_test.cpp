@@ -328,22 +328,23 @@ TEST_F(MangelwurzelTest, CreateInvalidMangalgorithm)
 }
 
 /// Test creating a mangelwurzel transaction with no mangelwurzel Route header.
-/// We won't create a transaction.
+/// We should pick up information from the Request-URI.
 TEST_F(MangelwurzelTest, CreateNoRouteHdr)
 {
   Mangelwurzel mangelwurzel("mangelwurzel", 5058, "sip:mangelwurzel.homedomain:5058;transport=tcp");
   Message msg;
+  msg._requri = "sip:mangelwurzel.homedomain;mangalgorithm=reverse";
   pjsip_msg* req = parse_msg(msg.get_request());
 
-  // Check that we don't create a mangelwurzel transaction if we can't find the
-  // mangelwurzel Route header.
   EXPECT_CALL(*_helper, route_hdr()).WillOnce(ReturnNull());
 
   MangelwurzelTsx* mangelwurzel_tsx =
     (MangelwurzelTsx*)mangelwurzel.get_tsx(_helper,
                                            "mangelwurzel",
                                            req);
-  EXPECT_TRUE(mangelwurzel_tsx == NULL);
+  EXPECT_TRUE(mangelwurzel_tsx != NULL);
+  EXPECT_EQ(mangelwurzel_tsx->_config.mangalgorithm, MangelwurzelTsx::REVERSE);
+  delete mangelwurzel_tsx; mangelwurzel_tsx = NULL;
 }
 
 TEST_F(MangelwurzelTest, InitialReq)
