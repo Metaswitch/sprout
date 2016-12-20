@@ -58,6 +58,7 @@
 #include "snmp_success_fail_count_table.h"
 #include "session_expires_helper.h"
 #include "as_communication_tracker.h"
+#include "forwardingsproutlet.h"
 
 class RegistrarSproutletTsx;
 
@@ -119,15 +120,15 @@ private:
 };
 
 
-class RegistrarSproutletTsx : public SproutletTsx
+class RegistrarSproutletTsx : public ForwardingSproutletTsx
 {
 public:
   RegistrarSproutletTsx(SproutletTsxHelper* helper,
+                        const std::string& next_hop_service,
                         RegistrarSproutlet* sproutlet);
   ~RegistrarSproutletTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req);
-  virtual void on_rx_in_dialog_request(pjsip_msg* req);
 
 protected:
   void process_register_request(pjsip_msg* req);
@@ -148,7 +149,6 @@ protected:
   bool get_private_id(pjsip_msg* req, std::string& id);
   std::string get_binding_id(pjsip_contact_hdr *contact);
   void log_bindings(const std::string& aor_name, SubscriberDataManager::AoR* aor_data);
-  void route_to_subscription(pjsip_msg* req);
 
   RegistrarSproutlet* _sproutlet;
 };

@@ -152,12 +152,13 @@ SproutletTsx* RegistrarSproutlet::get_tsx(SproutletTsxHelper* helper,
                                           const std::string& alias,
                                           pjsip_msg* req)
 {
-  return (SproutletTsx*)new RegistrarSproutletTsx(helper, this);
+  return (SproutletTsx*)new RegistrarSproutletTsx(helper, _next_hop_service, this);
 }
 
 RegistrarSproutletTsx::RegistrarSproutletTsx(SproutletTsxHelper* helper,
+                                             const std::string& next_hop_service,
                                              RegistrarSproutlet* sproutlet):
-  SproutletTsx(helper),
+  ForwardingSproutletTsx(helper, next_hop_service),
   _sproutlet(sproutlet)
 {
   TRC_DEBUG("Registrar Transaction (%p) created", this);
@@ -183,13 +184,8 @@ void RegistrarSproutletTsx::on_rx_initial_request(pjsip_msg *req)
   }
   else
   {
-    route_to_subscription(req);
+    forward_request(req);
   }
-}
-
-void RegistrarSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
-{
-  return route_to_subscription(req);
 }
 
 void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
@@ -1151,16 +1147,4 @@ int RegistrarSproutlet::expiry_for_binding(pjsip_contact_hdr* contact,
   }
 
   return expiry;
-}
-
-void RegistrarSproutletTsx::route_to_subscription(pjsip_msg* req)
-{
-  const pjsip_route_hdr* route = route_hdr();
-  pjsip_sip_uri* base_uri = (pjsip_sip_uri*)(route ? route->name_addr.uri : nullptr);
-  pjsip_sip_uri* uri =
-    (pjsip_sip_uri*)get_uri_for_service(_sproutlet->_next_hop_service,
-                                        get_pool(req),
-                                        base_uri);
-  PJUtils::add_top_route_header(req, uri, get_pool(req));
-  send_request(req);
 }

@@ -60,6 +60,7 @@ extern "C" {
 #include "analyticslogger.h"
 #include "snmp_success_fail_count_table.h"
 #include "cfgoptions.h"
+#include "forwardingsproutlet.h"
 
 typedef std::function<int(pjsip_contact_hdr*, pjsip_expires_hdr*)> get_expiry_for_binding_fn;
 
@@ -141,15 +142,15 @@ private:
 };
 
 
-class AuthenticationSproutletTsx : public SproutletTsx
+class AuthenticationSproutletTsx : public ForwardingSproutletTsx
 {
 public:
   AuthenticationSproutletTsx(SproutletTsxHelper* helper,
+                             const std::string& next_hop_service,
                              AuthenticationSproutlet* sproutlet);
   ~AuthenticationSproutletTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req) override;
-  virtual void on_rx_in_dialog_request(pjsip_msg* req) override;
 
 protected:
   friend class AuthenticationSproutlet;
@@ -163,8 +164,6 @@ protected:
   int calculate_challenge_expiration_time(pjsip_msg* req);
   bool verify_auth_vector(rapidjson::Document* av,
                           const std::string& impi);
-  void forward_request(pjsip_msg* req);
-
   static pj_status_t user_lookup(pj_pool_t *pool,
                                  const pjsip_auth_lookup_cred_param *param,
                                  pjsip_cred_info *cred_info,

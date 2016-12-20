@@ -37,23 +37,6 @@
 #include "forwardingsproutlet.h"
 #include "pjutils.h"
 
-ForwardingSproutlet::
-ForwardingSproutlet(const std::string& service_name,
-                    int port,
-                    const std::string& uri,
-                    const std::string& upstream_service_name,
-                    const std::string& service_host,
-                    SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
-                    SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl) :
-  Sproutlet(service_name,
-            port,
-            uri,
-            service_host,
-            incoming_sip_transactions_tbl,
-            outgoing_sip_transactions_tbl),
-  _upstream_service_name(upstream_service_name)
-{}
-
 ForwardingSproutletTsx::ForwardingSproutletTsx(SproutletTsxHelper* helper,
                                                const std::string& upstream_service_name) :
   SproutletTsx(helper), _upstream_service_name(upstream_service_name)

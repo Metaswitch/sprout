@@ -122,7 +122,7 @@ SproutletTsx* AuthenticationSproutlet::get_tsx(SproutletTsxHelper* helper,
                                                const std::string& alias,
                                                pjsip_msg* req)
 {
-  return new AuthenticationSproutletTsx(helper, this);
+  return new AuthenticationSproutletTsx(helper, _next_hop_service, this);
 }
 
 
@@ -136,8 +136,9 @@ const std::list<std::string> AuthenticationSproutlet::aliases() const
 //
 
 AuthenticationSproutletTsx::AuthenticationSproutletTsx(SproutletTsxHelper* helper,
+                                                       const std::string& next_hop_service,
                                                        AuthenticationSproutlet* auth_sproutlet) :
-  SproutletTsx(helper),
+  ForwardingSproutletTsx(helper, next_hop_service),
   _sproutlet(auth_sproutlet)
 {
 }
@@ -1195,21 +1196,4 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
   delete acr;
   delete impi_obj;
-}
-
-void AuthenticationSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
-{
-  return forward_request(req);
-}
-
-void AuthenticationSproutletTsx::forward_request(pjsip_msg* req)
-{
-  const pjsip_route_hdr* route = route_hdr();
-  pjsip_sip_uri* base_uri = (pjsip_sip_uri*)(route ? route->name_addr.uri : nullptr);
-  pjsip_sip_uri* uri =
-    (pjsip_sip_uri*)get_uri_for_service(_sproutlet->_next_hop_service,
-                                        get_pool(req),
-                                        base_uri);
-  PJUtils::add_top_route_header(req, uri, get_pool(req));
-  send_request(req);
 }

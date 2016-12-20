@@ -56,6 +56,7 @@
 #include "snmp_counter_table.h"
 #include "session_expires_helper.h"
 #include "as_communication_tracker.h"
+#include "forwardingsproutlet.h"
 
 class SubscriptionSproutletTsx;
 
@@ -106,10 +107,11 @@ private:
 };
 
 
-class SubscriptionSproutletTsx : public SproutletTsx
+class SubscriptionSproutletTsx : public ForwardingSproutletTsx
 {
 public:
   SubscriptionSproutletTsx(SproutletTsxHelper* helper,
+                           const std::string& next_hop_service,
                            SubscriptionSproutlet* sproutlet);
   ~SubscriptionSproutletTsx();
 
@@ -120,7 +122,6 @@ protected:
   void on_rx_request(pjsip_msg* req);
   bool handle_request(pjsip_msg* req);
   void process_subscription_request(pjsip_msg* req);
-  void route_to_scscf_proxy(pjsip_msg* req);
 
   SubscriberDataManager::AoRPair* write_subscriptions_to_store(
                      SubscriberDataManager* primary_sdm,        ///<store to write to

@@ -40,25 +40,9 @@
 #include "sproutlet.h"
 
 ///
-/// A Sproutlet that by default forwards requests to an upstream sproutlet
+/// A Sproutlet TSX that by default forwards requests to an upstream sproutlet
 /// identified by a service name.
 ///
-
-class ForwardingSproutlet : public Sproutlet
-{
-public:
-  ForwardingSproutlet(const std::string& service_name,
-                      int port,
-                      const std::string& uri,
-                      const std::string& upstream_service_name,
-                      const std::string& service_host="",
-                      SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl = NULL,
-                      SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl = NULL);
-  virtual ~ForwardingSproutlet() {}
-
-private:
-  std::string _upstream_service_name;
-};
 
 class ForwardingSproutletTsx : public SproutletTsx
 {
@@ -70,7 +54,7 @@ public:
   void on_rx_initial_request(pjsip_msg* req) { forward_request(req); }
   void on_rx_in_dialog_request(pjsip_msg* req) { forward_request(req); }
 
-private:
+protected:
   void forward_request(pjsip_msg* req);
 
   std::string _upstream_service_name;

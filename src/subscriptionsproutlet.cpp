@@ -100,12 +100,13 @@ SproutletTsx* SubscriptionSproutlet::get_tsx(SproutletTsxHelper* helper,
                                              const std::string& alias,
                                              pjsip_msg* req)
 {
-  return (SproutletTsx*)new SubscriptionSproutletTsx(helper, this);
+  return (SproutletTsx*)new SubscriptionSproutletTsx(helper, _next_hop_service, this);
 }
 
 SubscriptionSproutletTsx::SubscriptionSproutletTsx(SproutletTsxHelper* helper,
+                                                   const std::string& next_hop_service,
                                                    SubscriptionSproutlet* sproutlet):
-  SproutletTsx(helper),
+  ForwardingSproutletTsx(helper, next_hop_service),
   _sproutlet(sproutlet)
 {
   TRC_DEBUG("Subscription Transaction (%p) created", this);
@@ -136,7 +137,7 @@ void SubscriptionSproutletTsx::on_rx_request(pjsip_msg* req)
   }
   else
   {
-    route_to_scscf_proxy(req);
+    forward_request(req);
   }
 }
 
@@ -715,16 +716,4 @@ void SubscriptionSproutletTsx::log_subscriptions(const std::string& aor_name,
               subscription->_to_tag.c_str(),
               subscription->_cid.c_str());
   }
-}
-
-void SubscriptionSproutletTsx::route_to_scscf_proxy(pjsip_msg* req)
-{
-  const pjsip_route_hdr* route = route_hdr();
-  pjsip_sip_uri* base_uri = (pjsip_sip_uri*)(route ? route->name_addr.uri : nullptr);
-  pjsip_sip_uri* uri =
-    (pjsip_sip_uri*)get_uri_for_service(_sproutlet->_next_hop_service,
-                                        get_pool(req),
-                                        base_uri);
-  PJUtils::add_top_route_header(req, uri, get_pool(req));
-  send_request(req);
 }

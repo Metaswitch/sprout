@@ -179,6 +179,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        bgcf_test.cpp \
                        as_communication_tracker_test.cpp \
                        authenticationsproutlet.cpp \
+                       forwardingsproutlet.cpp \
                        pthread_cond_var_helper.cpp
 
 COVERAGE_ROOT := ..
