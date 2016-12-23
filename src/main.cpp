@@ -1994,6 +1994,7 @@ int main(int argc, char* argv[])
                                         serializer,
                                         deserializers,
                                         chronos_connection,
+                                        analytics_logger,
                                         true);
 
   if (remote_data_store != NULL)
@@ -2005,6 +2006,7 @@ int main(int argc, char* argv[])
                                            serializer,
                                            deserializers,
                                            chronos_connection,
+                                           NULL,
                                            false);
   }
 
@@ -2068,7 +2070,6 @@ int main(int argc, char* argv[])
     status = init_registrar(local_sdm,
                             {remote_sdm},
                             hss_connection,
-                            analytics_logger,
                             scscf_acr_factory,
                             opt.reg_max_expires,
                             opt.force_third_party_register_body,

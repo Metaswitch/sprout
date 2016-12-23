@@ -75,8 +75,6 @@ static HSSConnection* hss;
 // Factory for create ACR messages for Rf billing flows.
 static ACRFactory* acr_factory;
 
-static AnalyticsLogger* analytics;
-
 static int max_expires;
 
 // Pre-constructed Service Route header added to REGISTER responses.
@@ -422,12 +420,6 @@ SubscriberDataManager::AoRPair* write_to_store(
           else
           {
             binding->_expires = now + expiry;
-          }
-
-          if (analytics != NULL)
-          {
-            // Generate an analytics log for this binding update.
-            analytics->registration(aor, binding_id, contact_uri, expiry);
           }
         }
       }
@@ -1161,7 +1153,6 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 pj_status_t init_registrar(SubscriberDataManager* reg_sdm,
                            std::vector<SubscriberDataManager*> reg_remote_sdms,
                            HSSConnection* hss_connection,
-                           AnalyticsLogger* analytics_logger,
                            ACRFactory* rfacr_factory,
                            int cfg_max_expires,
                            bool force_original_register_inclusion,
@@ -1173,7 +1164,6 @@ pj_status_t init_registrar(SubscriberDataManager* reg_sdm,
   sdm = reg_sdm;
   remote_sdms = reg_remote_sdms;
   hss = hss_connection;
-  analytics = analytics_logger;
   max_expires = cfg_max_expires;
   acr_factory = rfacr_factory;
   reg_stats_tables = reg_stats_tbls;
