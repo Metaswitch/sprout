@@ -39,7 +39,8 @@
 
 ForwardingSproutletTsx::ForwardingSproutletTsx(SproutletTsxHelper* helper,
                                                const std::string& upstream_service_name) :
-  SproutletTsx(helper), _upstream_service_name(upstream_service_name)
+  SproutletTsx(helper),
+  _upstream_service_name(upstream_service_name)
 {}
 
 void ForwardingSproutletTsx::forward_request(pjsip_msg* req)
