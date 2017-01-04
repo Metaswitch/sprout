@@ -612,7 +612,7 @@ TEST_F(HssConnectionTest, CacheNotAllowed)
                                                0);
   // The request has a cache control header on it to prevent cached responses.
   Request& request = fakecurl_requests[
-    "http://10.42.42.42:80/impu/public-needs-private/reg-data?private_id=a-private-id"];
+    "http://narcissus:80/impu/public-needs-private/reg-data?private_id=a-private-id"];
   EXPECT_NE(std::find(request._headers.begin(),
                       request._headers.end(),
                       "Cache-control: no-cache"),

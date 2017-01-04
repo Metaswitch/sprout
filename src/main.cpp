@@ -1139,7 +1139,23 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case OPT_SPROUT_HOSTNAME:
       options->sprout_hostname = std::string(pj_optarg);
-      break;
+
+      if (Utils::parse_ip_address(options->sprout_hostname) ==
+          Utils::IPAddressType::INVALID_WITH_PORT)
+      {
+        TRC_ERROR("The sprout hostname (%s) must not include a port",
+                  options->sprout_hostname.c_str());
+        return -1;
+      }
+      else if (Utils::parse_ip_address(options->sprout_hostname) !=
+               Utils::IPAddressType::INVALID)
+      {
+        TRC_ERROR("The sprout hostname (%s) must not be an IP address",
+                  options->sprout_hostname.c_str());
+        return -1;
+      }
+
+     break;
 
     case OPT_CHRONOS_HOSTNAME:
       options->chronos_hostname = std::string(pj_optarg);
@@ -1493,20 +1509,6 @@ int main(int argc, char* argv[])
   {
     CL_SPROUT_SI_CSCF_NO_HOMESTEAD.log();
     TRC_ERROR("S/I-CSCF enabled with no Homestead server");
-    return 1;
-  }
-
-  if ((opt.auth_enabled) && (opt.hss_server == ""))
-  {
-    CL_SPROUT_AUTH_NO_HOMESTEAD.log();
-    TRC_ERROR("Authentication enabled, but no Homestead server specified");
-    return 1;
-  }
-
-  if ((opt.xdm_server != "") && (opt.hss_server == ""))
-  {
-    CL_SPROUT_XDM_NO_HOMESTEAD.log();
-    TRC_ERROR("XDM server configured for services, but no Homestead server specified");
     return 1;
   }
 
@@ -1992,6 +1994,7 @@ int main(int argc, char* argv[])
                                         serializer,
                                         deserializers,
                                         chronos_connection,
+                                        analytics_logger,
                                         true);
 
   if (remote_data_store != NULL)
@@ -2003,6 +2006,7 @@ int main(int argc, char* argv[])
                                            serializer,
                                            deserializers,
                                            chronos_connection,
+                                           NULL,
                                            false);
   }
 
@@ -2010,7 +2014,8 @@ int main(int argc, char* argv[])
   // with it.
   HttpStack* http_stack_sig = new HttpStack(opt.http_threads,
                                             exception_handler,
-                                            access_logger);
+                                            access_logger,
+                                            load_monitor);
   try
   {
     http_stack_sig->initialize();
@@ -2025,7 +2030,8 @@ int main(int argc, char* argv[])
 
   HttpStack* http_stack_mgmt = new HttpStack(NUM_HTTP_MGMT_THREADS,
                                              exception_handler,
-                                             access_logger);
+                                             access_logger,
+                                             load_monitor);
   try
   {
     http_stack_mgmt->initialize();
@@ -2064,7 +2070,6 @@ int main(int argc, char* argv[])
     status = init_registrar(local_sdm,
                             {remote_sdm},
                             hss_connection,
-                            analytics_logger,
                             scscf_acr_factory,
                             opt.reg_max_expires,
                             opt.force_third_party_register_body,

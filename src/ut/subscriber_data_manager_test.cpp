@@ -51,6 +51,7 @@
 #include "fakechronosconnection.hpp"
 #include "mock_chronos_connection.h"
 #include "mock_store.h"
+#include "analyticslogger.h"
 
 using ::testing::_;
 using ::testing::DoAll;
@@ -89,6 +90,7 @@ class BasicSubscriberDataManagerTest : public SipTest
   {
     _chronos_connection = new FakeChronosConnection();
     _datastore = new LocalStore();
+    _analytics_logger = new AnalyticsLogger();
 
     SubscriberDataManager::SerializerDeserializer* serializer = new T();
     std::vector<SubscriberDataManager::SerializerDeserializer*> deserializers = {
@@ -99,6 +101,7 @@ class BasicSubscriberDataManagerTest : public SipTest
                                        serializer,
                                        deserializers,
                                        _chronos_connection,
+                                       _analytics_logger,
                                        true);
   }
 
@@ -120,6 +123,7 @@ class BasicSubscriberDataManagerTest : public SipTest
     delete _store; _store = NULL;
     delete _datastore; _datastore = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
+    delete _analytics_logger; _analytics_logger = NULL;
   }
 
   // Fixture variables.  Note that as the fixture is a C++ template, these must
@@ -128,6 +132,7 @@ class BasicSubscriberDataManagerTest : public SipTest
   FakeChronosConnection* _chronos_connection;
   LocalStore* _datastore;
   SubscriberDataManager* _store;
+  AnalyticsLogger* _analytics_logger;
 };
 
 // BasicSubscriberDataManagerTest is parameterized over these types.
@@ -529,6 +534,7 @@ class MultiFormatSubscriberDataManagerTest : public ::testing::Test
   {
     _chronos_connection = new FakeChronosConnection();
     _datastore = new LocalStore();
+    _analytics_logger = new AnalyticsLogger();
 
     {
       SubscriberDataManager::SerializerDeserializer* serializer = new T();
@@ -540,6 +546,7 @@ class MultiFormatSubscriberDataManagerTest : public ::testing::Test
                                                 serializer,
                                                 deserializers,
                                                 _chronos_connection,
+                                                _analytics_logger,
                                                 true);
     }
     {
@@ -554,6 +561,7 @@ class MultiFormatSubscriberDataManagerTest : public ::testing::Test
                                                serializer,
                                                deserializers,
                                                _chronos_connection,
+                                               _analytics_logger,
                                                true);
     }
   }
@@ -564,12 +572,14 @@ class MultiFormatSubscriberDataManagerTest : public ::testing::Test
     delete _single_store; _single_store = NULL;
     delete _datastore; _datastore = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
+    delete _analytics_logger; _analytics_logger = NULL;
   }
 
   FakeChronosConnection* _chronos_connection;
   LocalStore* _datastore;
   SubscriberDataManager* _multi_store;
   SubscriberDataManager* _single_store;
+  AnalyticsLogger* _analytics_logger;
 };
 
 // MultiFormatSubscriberDataManagerTest is parameterized over these types.
@@ -629,6 +639,7 @@ class SubscriberDataManagerCorruptDataTest : public ::testing::Test
   {
     _chronos_connection = new FakeChronosConnection();
     _datastore = new MockStore();
+    _analytics_logger = new AnalyticsLogger();
 
     {
       SubscriberDataManager::SerializerDeserializer* serializer =
@@ -642,6 +653,7 @@ class SubscriberDataManagerCorruptDataTest : public ::testing::Test
                                          serializer,
                                          deserializers,
                                          _chronos_connection,
+                                         _analytics_logger,
                                          true);
     }
   }
@@ -651,11 +663,13 @@ class SubscriberDataManagerCorruptDataTest : public ::testing::Test
     delete _store; _store = NULL;
     delete _datastore; _datastore = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
+    delete _analytics_logger; _analytics_logger = NULL;
   }
 
   FakeChronosConnection* _chronos_connection;
   MockStore* _datastore;
   SubscriberDataManager* _store;
+  AnalyticsLogger* _analytics_logger;
 };
 
 
@@ -721,6 +735,7 @@ class SubscriberDataManagerChronosRequestsTest : public SipTest
   {
     _chronos_connection = new MockChronosConnection("chronos");
     _datastore = new LocalStore();
+    _analytics_logger = new AnalyticsLogger();
 
     SubscriberDataManager::SerializerDeserializer* serializer =
       new SubscriberDataManager::JsonSerializerDeserializer();
@@ -732,6 +747,7 @@ class SubscriberDataManagerChronosRequestsTest : public SipTest
                                        serializer,
                                        deserializers,
                                        _chronos_connection,
+                                       _analytics_logger,
                                        true);
   }
 
@@ -740,11 +756,13 @@ class SubscriberDataManagerChronosRequestsTest : public SipTest
     delete _store; _store = NULL;
     delete _datastore; _datastore = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
+    delete _analytics_logger; _analytics_logger = NULL;
   }
 
   MockChronosConnection* _chronos_connection;
   LocalStore* _datastore;
   SubscriberDataManager* _store;
+  AnalyticsLogger* _analytics_logger;
 };
 
 // Test that adding an AoR to the store generates a chronos POST request, and that
