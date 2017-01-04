@@ -492,13 +492,11 @@ static pj_status_t init_logging_options(int argc, char* argv[], struct options* 
     {
     case 'L':
       options->log_level = atoi(pj_optarg);
-      fprintf(stdout, "Log level set to %s\n", pj_optarg);
       break;
 
     case 'F':
       options->log_to_file = PJ_TRUE;
       options->log_directory = std::string(pj_optarg);
-      fprintf(stdout, "Log directory set to %s\n", pj_optarg);
       break;
 
     case 'd':
