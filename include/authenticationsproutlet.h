@@ -60,9 +60,9 @@ extern "C" {
 #include "analyticslogger.h"
 #include "snmp_success_fail_count_table.h"
 #include "cfgoptions.h"
+#include "forwardingsproutlet.h"
 
-typedef int(*get_expiry_for_binding_fn)(pjsip_contact_hdr* contact,
-                                        pjsip_expires_hdr* expires);
+typedef std::function<int(pjsip_contact_hdr*, pjsip_expires_hdr*)> get_expiry_for_binding_fn;
 
 class AuthenticationSproutletTsx;
 
@@ -72,6 +72,8 @@ public:
   AuthenticationSproutlet(const std::string& name,
                           int port,
                           const std::string& uri,
+                          const std::string& next_hop_service,
+                          const std::list<std::string>& aliases,
                           const std::string& realm_name,
                           ImpiStore* _impi_store,
                           HSSConnection* hss_connection,
@@ -89,6 +91,8 @@ public:
   SproutletTsx* get_tsx(SproutletTsxHelper* helper,
                         const std::string& alias,
                         pjsip_msg* req) override;
+
+  const std::list<std::string> aliases() const override;
 
 private:
   friend class AuthenticationSproutletTsx;
@@ -128,13 +132,21 @@ private:
 
   // Controls when to challenge non-REGISTER messages.
   NonRegisterAuthentication _non_register_auth_mode;
+
+  // The next service to route requests onto if the sproutlet does not handle them
+  // itself.
+  std::string _next_hop_service;
+
+  // Aliases that this sproutlet registers for.
+  const std::list<std::string> _aliases;
 };
 
 
-class AuthenticationSproutletTsx : public SproutletTsx
+class AuthenticationSproutletTsx : public ForwardingSproutletTsx
 {
 public:
   AuthenticationSproutletTsx(SproutletTsxHelper* helper,
+                             const std::string& next_hop_service,
                              AuthenticationSproutlet* sproutlet);
   ~AuthenticationSproutletTsx();
 
@@ -152,8 +164,6 @@ protected:
   int calculate_challenge_expiration_time(pjsip_msg* req);
   bool verify_auth_vector(rapidjson::Document* av,
                           const std::string& impi);
-  void forward_request(pjsip_msg* req);
-
   static pj_status_t user_lookup(pj_pool_t *pool,
                                  const pjsip_auth_lookup_cred_param *param,
                                  pjsip_cred_info *cred_info,

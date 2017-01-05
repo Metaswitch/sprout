@@ -180,7 +180,6 @@ public:
   {
     SipTest::SetUpTestCase();
     SipTest::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
-    add_host_mapping("subscription.example.com", "10.8.8.2");
 
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
@@ -234,6 +233,7 @@ public:
     _registrar_sproutlet = new RegistrarSproutlet("registrar",
                                                   5058,
                                                   "sip:registrar.homedomain:5058;transport=tcp",
+                                                  "subscription",
                                                   _sdm,
                                                   _remote_sdms,
                                                   _hss_connection,
@@ -244,7 +244,7 @@ public:
                                                   &SNMP::FAKE_REGISTRATION_STATS_TABLES,
                                                   &SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES);
 
-    _registrar_sproutlet->init();
+    EXPECT_TRUE(_registrar_sproutlet->init());
 
     std::list<Sproutlet*> sproutlets;
     sproutlets.push_back(_registrar_sproutlet);
@@ -2660,6 +2660,7 @@ public:
     _registrar_sproutlet = new RegistrarSproutlet("registrar",
                                                   5058,
                                                   "sip:registrar.homedomain:5058;transport=tcp",
+                                                  "subscription",
                                                   _sdm,
                                                   {},
                                                   _hss_connection,

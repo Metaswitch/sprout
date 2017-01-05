@@ -66,7 +66,6 @@ public:
     SipTest::SetUpTestCase();
     SipTest::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
     add_host_mapping("sprout.example.com", "10.8.8.1");
-    add_host_mapping("scscf-proxy.example.com", "10.8.8.2");
 
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
@@ -105,12 +104,14 @@ public:
     _subscription_sproutlet = new SubscriptionSproutlet("subscription",
                                                         5058,
                                                         "sip:subscription.homedomain:5058;transport=tcp",
+                                                        "scscf-proxy",
                                                         _sdm,
                                                         {_remote_sdm},
                                                         _hss_connection,
                                                         _acr_factory,
                                                         _analytics,
                                                         300);
+    EXPECT_TRUE(_subscription_sproutlet->init());
 
     std::list<Sproutlet*> sproutlets;
     sproutlets.push_back(_subscription_sproutlet);
@@ -931,7 +932,6 @@ public:
     SipTest::SetUpTestCase();
     SipTest::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
     add_host_mapping("sprout.example.com", "10.8.8.1");
-    add_host_mapping("scscf-proxy.example.com", "10.8.8.2");
   }
 
   void SetUp()
@@ -951,6 +951,7 @@ public:
     _subscription_sproutlet = new SubscriptionSproutlet("subscription",
                                                         5058,
                                                         "sip:subscription.homedomain:5058;transport=tcp",
+                                                        "scscf-proxy",
                                                         _sdm,
                                                         {},
                                                         _hss_connection,

@@ -39,6 +39,8 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+#include <functional>
+
 #include "cfgoptions.h"
 #include "sproutletplugin.h"
 #include "impistore.h"
@@ -49,6 +51,11 @@
 #include "sprout_alarmdefinition.h"
 #include "sprout_pd_definitions.h"
 #include "log.h"
+
+const std::string PROXY_SERVICE_NAME = "scscf-proxy";
+const std::string AUTHENTICATION_SERVICE_NAME = "authentication";
+const std::string REGISTRAR_SERVICE_NAME = "registrar";
+const std::string SUBSCRIPTION_SERVICE_NAME = "subscription";
 
 class SCSCFPlugin : public SproutletPlugin
 {
@@ -98,7 +105,7 @@ SCSCFPlugin::~SCSCFPlugin()
 /// Loads the S-CSCF plug-in, returning the supported Sproutlets.
 bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
-  bool plugin_loaded = true;
+  bool ok = true;
 
   // Create the SNMP tables here - they should exist based on whether the
   // plugin is loaded, not whether the Sproutlet is enabled, in order to
@@ -161,13 +168,13 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                    &CL_SPROUT_SESS_CONT_AS_COMM_FAILURE,
                                    &CL_SPROUT_SESS_CONT_AS_COMM_SUCCESS);
 
-    _scscf_sproutlet = new SCSCFSproutlet("scscf-proxy",
+    _scscf_sproutlet = new SCSCFSproutlet(PROXY_SERVICE_NAME,
                                           opt.uri_scscf,
                                           scscf_node_uri,
                                           icscf_uri,
                                           opt.uri_bgcf,
-                                          opt.port_scscf,
-                                          opt.uri_scscf,
+                                          0,
+                                          "",
                                           local_sdm,
                                           {remote_sdm},
                                           hss_connection,
@@ -180,22 +187,21 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           opt.session_terminated_timeout_ms,
                                           sess_term_as_tracker,
                                           sess_cont_as_tracker);
+    ok = ok && _scscf_sproutlet->init();
+    sproutlets.push_front(_scscf_sproutlet);
 
-    plugin_loaded = _scscf_sproutlet->init();
-
-    sproutlets.push_back(_scscf_sproutlet);
-
-    _subscription_sproutlet = new SubscriptionSproutlet("subscription",
-                                                        opt.port_scscf,
-                                                        opt.uri_scscf,
+    _subscription_sproutlet = new SubscriptionSproutlet(SUBSCRIPTION_SERVICE_NAME,
+                                                        0,
+                                                        "",
+                                                        PROXY_SERVICE_NAME,
                                                         local_sdm,
                                                         {remote_sdm},
                                                         hss_connection,
                                                         scscf_acr_factory,
                                                         analytics_logger,
                                                         opt.sub_max_expires);
-
-    sproutlets.push_back(_subscription_sproutlet);
+    ok = ok && _subscription_sproutlet->init();
+    sproutlets.push_front(_subscription_sproutlet);
 
     reg_stats_tbls.init_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
                                                                        ".1.2.826.0.1.1578918.9.3.9");
@@ -211,9 +217,10 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     third_party_reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_de_reg_success_fail_count",
                                                                                  ".1.2.826.0.1.1578918.9.3.14");
 
-    _registrar_sproutlet = new RegistrarSproutlet(opt.prefix_scscf,
-                                                  opt.port_scscf,
-                                                  opt.uri_scscf,
+    _registrar_sproutlet = new RegistrarSproutlet(REGISTRAR_SERVICE_NAME,
+                                                  0,
+                                                  "",
+                                                  SUBSCRIPTION_SERVICE_NAME,
                                                   local_sdm,
                                                   {remote_sdm},
                                                   hss_connection,
@@ -224,12 +231,8 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                                   &reg_stats_tbls,
                                                   &third_party_reg_stats_tbls);
 
-    plugin_loaded = _registrar_sproutlet->init();
-
-    // We want to prioritise choosing the S-CSCF in ambiguous situations, so
-    // make sure it's at the front of the sproutlet list
+    ok = ok && _registrar_sproutlet->init();
     sproutlets.push_front(_registrar_sproutlet);
-    sproutlets.push_front(_subscription_sproutlet);
 
     if (opt.auth_enabled)
     {
@@ -243,35 +246,31 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
         SNMP::SuccessFailCountTable::create("non_register_auth_success_fail_count",
                                             ".1.2.826.0.1.1578918.9.3.17");
 
-
-      // Create an AV store using the local store and initialise the
-      // authentication sproutlet.  We don't create a AV store using the remote
-      // data store as Authentication Vectors are only stored for a short period
-      // after the relevant challenge is sent.
-      _impi_store = new ImpiStore(local_data_store, opt.impi_store_mode);
-      _auth_sproutlet = new AuthenticationSproutlet("authentication",
-                                                    0,
-                                                    opt.uri_scscf,
-                                                    opt.auth_realm,
-                                                    _impi_store,
-                                                    hss_connection,
-                                                    chronos_connection,
-                                                    scscf_acr_factory,
-                                                    opt.non_register_auth_mode,
-                                                    analytics_logger,
-                                                    &auth_stats_tbls,
-                                                    opt.nonce_count_supported,
-                                                    NULL); // TODO sort this out.
-      if (_auth_sproutlet != nullptr)
-      {
-        _auth_sproutlet->init();
-        // TODO cope with this failing.
-        sproutlets.push_back(_auth_sproutlet);
-      }
+      _auth_sproutlet =
+        new AuthenticationSproutlet(AUTHENTICATION_SERVICE_NAME,
+                                    opt.port_scscf,
+                                    "",
+                                    REGISTRAR_SERVICE_NAME,
+                                    {"scscf"},
+                                    opt.auth_realm,
+                                    impi_store,
+                                    hss_connection,
+                                    chronos_connection,
+                                    scscf_acr_factory,
+                                    opt.non_register_auth_mode,
+                                    analytics_logger,
+                                    &auth_stats_tbls,
+                                    opt.nonce_count_supported,
+                                    std::bind(&RegistrarSproutlet::expiry_for_binding,
+                                              _registrar_sproutlet,
+                                              std::placeholders::_1,
+                                              std::placeholders::_2));
+      ok = ok && _auth_sproutlet->init();
+      sproutlets.push_front(_auth_sproutlet);
     }
   }
 
-  return plugin_loaded;
+  return ok;
 }
 
 

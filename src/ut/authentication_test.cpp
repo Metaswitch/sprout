@@ -122,8 +122,6 @@ public:
                                           sproutlets,
                                           std::set<std::string>());
 
-    add_host_mapping("registrar.example.com", "10.10.10.1");
-
     _tp = new TransportFlow(TransportFlow::Protocol::TCP,
                             stack_data.scscf_port,
                             "0.0.0.0",
@@ -278,6 +276,8 @@ class AuthenticationTest : public BaseAuthenticationTest
       new AuthenticationSproutlet("authentication",
                                   stack_data.scscf_port,
                                   "sip:authentication.homedomain",
+                                  "registrar",
+                                  { "scscf" },
                                   "homedomain",
                                   _impi_store,
                                   _hss_connection,
@@ -307,6 +307,8 @@ class AuthenticationPxyAuthHdrTest : public BaseAuthenticationTest
       new AuthenticationSproutlet("authentication",
                                   0,
                                   "sip:authentication.homedomain",
+                                  "registrar",
+                                  { "scscf" },
                                   "homedomain",
                                   _impi_store,
                                   _hss_connection,
@@ -341,6 +343,8 @@ class AuthenticationNonceCountDisabledTest : public BaseAuthenticationTest
       new AuthenticationSproutlet("authentication",
                                   0,
                                   "sip:authentication.homedomain",
+                                  "registrar",
+                                  { "scscf" },
                                   "homedomain",
                                   _impi_store,
                                   _hss_connection,
@@ -1968,6 +1972,53 @@ TEST_F(AuthenticationTest, AuthCorruptAV)
   EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
   EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
   free_txdata();
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+}
+
+
+TEST_F(AuthenticationTest, AuthSproutletCanRegisterForAliases)
+{
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Send in a REGISTER request with no authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = false;
+  msg1._route = "sip:scscf.sprout.homedomain:5058;transport=TCP";
+  inject_msg(msg1.get(), _tp);
+
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
+  std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  parse_www_authenticate(auth, auth_params);
+  free_txdata();
+
+  // Send a new REGISTER request with an authentication header including the
+  // response.
+  AuthenticationMessage msg2("REGISTER");
+  msg2._algorithm = "MD5";
+  msg2._key = "12345678123456781234567812345678";
+  msg2._nonce = auth_params["nonce"];
+  msg2._opaque = auth_params["opaque"];
+  msg2._nc = "00000001";
+  msg2._cnonce = "8765432187654321";
+  msg2._qop = "auth";
+  msg2._integ_prot = "ip-assoc-pending";
+  msg1._route = "sip:scscf.sprout.homedomain:5058;transport=TCP";
+  inject_msg(msg2.get(), _tp);
+
+  // The authentication module lets the request through.
+  auth_sproutlet_allows_request();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }

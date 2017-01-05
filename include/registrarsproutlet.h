@@ -58,6 +58,7 @@
 #include "snmp_success_fail_count_table.h"
 #include "session_expires_helper.h"
 #include "as_communication_tracker.h"
+#include "forwardingsproutlet.h"
 
 class RegistrarSproutletTsx;
 
@@ -67,6 +68,7 @@ public:
   RegistrarSproutlet(const std::string& name,
                      int port,
                      const std::string& uri,
+                     const std::string& next_hop_service,
                      SubscriberDataManager* reg_sdm,
                      std::vector<SubscriberDataManager*> reg_remote_sdms,
                      HSSConnection* hss_connection,
@@ -83,6 +85,9 @@ public:
   SproutletTsx* get_tsx(SproutletTsxHelper* helper,
                         const std::string& alias,
                         pjsip_msg* req) override;
+
+  int expiry_for_binding(pjsip_contact_hdr* contact,
+                         pjsip_expires_hdr* expires);
 
 private:
   friend class RegistrarSproutletTsx;
@@ -108,20 +113,22 @@ private:
   // registration attempts.
   SNMP::RegistrationStatsTables* _reg_stats_tbls;
   SNMP::RegistrationStatsTables* _third_party_reg_stats_tbls;
+
+  // The next service to route requests onto if the sproutlet does not handle
+  // them itself.
+  std::string _next_hop_service;
 };
 
 
-class RegistrarSproutletTsx : public SproutletTsx
+class RegistrarSproutletTsx : public ForwardingSproutletTsx
 {
 public:
   RegistrarSproutletTsx(SproutletTsxHelper* helper,
+                        const std::string& next_hop_service,
                         RegistrarSproutlet* sproutlet);
   ~RegistrarSproutletTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req);
-  static int expiry_for_binding(pjsip_contact_hdr* contact,
-                                pjsip_expires_hdr* expires,
-                                int max_expires);
 
 protected:
   void process_register_request(pjsip_msg* req);
@@ -142,7 +149,6 @@ protected:
   bool get_private_id(pjsip_msg* req, std::string& id);
   std::string get_binding_id(pjsip_contact_hdr *contact);
   void log_bindings(const std::string& aor_name, SubscriberDataManager::AoR* aor_data);
-  void route_to_subscription(pjsip_msg* req);
 
   RegistrarSproutlet* _sproutlet;
 };

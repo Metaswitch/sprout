@@ -1142,7 +1142,7 @@ TEST_F(SproutletProxyTest, SimpleSproutletForwarderRR)
             get_headers(tdata->msg, "Route"));
 
   // Check a Record-Route header has been added.
-  EXPECT_EQ("Record-Route: <sip:fwdrr.proxy1.homedomain;transport=tcp;lr;service=fwdrr;hello=world>",
+  EXPECT_EQ("Record-Route: <sip:fwdrr.proxy1.homedomain;transport=tcp;lr;hello=world>",
             get_headers(tdata->msg, "Record-Route"));
 
   // Send a 200 OK response.

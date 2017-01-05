@@ -68,6 +68,7 @@ extern "C" {
 SubscriptionSproutlet::SubscriptionSproutlet(const std::string& name,
                                              int port,
                                              const std::string& uri,
+                                             const std::string& next_hop_service,
                                              SubscriberDataManager* sdm,
                                              std::vector<SubscriberDataManager*> remote_sdms,
                                              HSSConnection* hss_connection,
@@ -80,7 +81,8 @@ SubscriptionSproutlet::SubscriptionSproutlet(const std::string& name,
   _hss(hss_connection),
   _acr_factory(acr_factory),
   _analytics(analytics_logger),
-  _max_expires(cfg_max_expires)
+  _max_expires(cfg_max_expires),
+  _next_hop_service(next_hop_service)
 {
 }
 
@@ -89,16 +91,22 @@ SubscriptionSproutlet::~SubscriptionSproutlet()
 {
 }
 
+bool SubscriptionSproutlet::init()
+{
+  return true;
+}
+
 SproutletTsx* SubscriptionSproutlet::get_tsx(SproutletTsxHelper* helper,
                                              const std::string& alias,
                                              pjsip_msg* req)
 {
-  return (SproutletTsx*)new SubscriptionSproutletTsx(helper, this);
+  return (SproutletTsx*)new SubscriptionSproutletTsx(helper, _next_hop_service, this);
 }
 
 SubscriptionSproutletTsx::SubscriptionSproutletTsx(SproutletTsxHelper* helper,
+                                                   const std::string& next_hop_service,
                                                    SubscriptionSproutlet* sproutlet):
-  SproutletTsx(helper),
+  ForwardingSproutletTsx(helper, next_hop_service),
   _sproutlet(sproutlet)
 {
   TRC_DEBUG("Subscription Transaction (%p) created", this);
@@ -129,7 +137,7 @@ void SubscriptionSproutletTsx::on_rx_request(pjsip_msg* req)
   }
   else
   {
-    route_to_scscf_proxy(req);
+    forward_request(req);
   }
 }
 
@@ -708,14 +716,4 @@ void SubscriptionSproutletTsx::log_subscriptions(const std::string& aor_name,
               subscription->_to_tag.c_str(),
               subscription->_cid.c_str());
   }
-}
-
-void SubscriptionSproutletTsx::route_to_scscf_proxy(pjsip_msg* req)
-{
-  // TODO Route to a sensible URI.
-  pjsip_sip_uri* uri =
-    (pjsip_sip_uri*)PJUtils::uri_from_string("sip:scscf-proxy.example.com;lr",
-                                             get_pool(req));
-  PJUtils::add_top_route_header(req, uri, get_pool(req));
-  send_request(req);
 }

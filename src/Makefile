@@ -179,6 +179,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        bgcf_test.cpp \
                        as_communication_tracker_test.cpp \
                        authenticationsproutlet.cpp \
+                       forwardingsproutlet.cpp \
                        pthread_cond_var_helper.cpp
 
 COVERAGE_ROOT := ..
@@ -230,7 +231,7 @@ SPROUT_COMMON_LDFLAGS := -rdynamic \
 # (which sprout-base doesn't), and the plugins are dynamically linked at run
 # time, so GCC won't link in the symbols they need unless we explicitly tell
 # it to.
-sprout_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} \-Wl,--whole-archive -lpjmedia-x86_64-unknown-linux-gnu -Wl,--no-whole-archive `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --libs libpjproject`
+sprout_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} \-Wl,--whole-archive -lpjsip-x86_64-unknown-linux-gnu -lpjmedia-x86_64-unknown-linux-gnu -Wl,--no-whole-archive `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --libs libpjproject`
 sprout_test_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} \
                        -lthrift \
                        -lcassandra \
@@ -270,7 +271,7 @@ sprout_mmtel_as.so_SOURCES := mmtel.cpp sproutletappserver.cpp mmtelasplugin.cpp
 sprout_mmtel_as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -Wno-write-strings
 sprout_mmtel_as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
-sprout_scscf.so_SOURCES := authenticationsproutlet.cpp registrarsproutlet.cpp subscriptionsproutlet.cpp scscfsproutlet.cpp scscfplugin.cpp
+sprout_scscf.so_SOURCES := authenticationsproutlet.cpp registrarsproutlet.cpp subscriptionsproutlet.cpp scscfsproutlet.cpp scscfplugin.cpp forwardingsproutlet.cpp
 sprout_scscf.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS}
 sprout_scscf.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 

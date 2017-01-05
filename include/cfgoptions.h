@@ -177,5 +177,6 @@ extern ExceptionHandler* exception_handler;
 extern AlarmManager* alarm_manager;
 extern AnalyticsLogger* analytics_logger;
 extern ChronosConnection* chronos_connection;
+extern ImpiStore* impi_store;
 
 #endif
