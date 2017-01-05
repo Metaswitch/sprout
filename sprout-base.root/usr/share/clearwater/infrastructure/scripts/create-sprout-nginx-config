@@ -43,12 +43,12 @@ split_domain_and_port()
   echo $1 | perl -ne '$_ =~ /(.+):([0-9]+)$/ && print "$1 $2\n"'
 }
 
-if [ -n "$sprout_mgmt_hostname" ]
+if [ -n "$sprout_hostname_mgmt" ]
 then
   site_file=/etc/nginx/sites-available/sprout
   enabled_file=/etc/nginx/sites-enabled/sprout
   temp_file=$(mktemp sprout.nginx.XXXXXXXX)
-  server_name_and_port=( $( split_domain_and_port $sprout_mgmt_hostname ) )
+  server_name_and_port=( $( split_domain_and_port $sprout_hostname_mgmt ) )
 
   cat > $temp_file << EOF
 upstream http_sprout {
