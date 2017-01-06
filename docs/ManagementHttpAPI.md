@@ -79,15 +79,15 @@ Responses:
   * 404 if Sprout has no information on this subscriber.
   * 500 if Sprout has been unable to contact its Memcached store.
 
-##
+---
 
     /impu/<public ID>
 
-Make a DELETE request to this URL to perform an administrative de-registration of the the specified subscriber. This triggers an SAR to the HSS indiciating that the subscriber has been de-registered. The specified <public_id> must be the subscriber's primary public identity.
+Make a DELETE request to this URL to perform an administrative de-registration of the the specified subscriber. Sprout tells Homestead that the subscriber has been de-registered, and this also triggers an SAR to the HSS if one has been configured. The specified public ID must be the subscriber's primary public identity.
 
 Responses:
 
   * 200 if successful.
   * 400 if the subscriber is not assigned to this S-CSCF.
   * 500 if Sprout has been unable to contact its Memcached store.
-  * 502 if Sprout has been unable to contact the HSS.
+  * 502 if Sprout has been unable to contact Homestead, or Homestead has reported a failure.
