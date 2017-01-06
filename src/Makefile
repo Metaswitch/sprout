@@ -218,6 +218,7 @@ SPROUT_COMMON_LDFLAGS := -rdynamic \
                          -lzmq \
                          -levhtp \
                          -levent \
+                         -levent_openssl \
                          -levent_pthreads \
                          -lcurl \
                          -lsas \
