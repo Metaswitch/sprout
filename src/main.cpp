@@ -1225,19 +1225,9 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case OPT_LISTEN_PORT:
       {
-        int listen_port;
-        bool rc = validated_atoi(pj_optarg, listen_port);
-
-        if ((rc) && listen_port > 0)
-        {
-          options->listen_port = listen_port;
-          TRC_INFO("Sproutlet listening port set to %d", listen_port);
-        }
-        else
-        {
-          TRC_ERROR("Invalid --listen-port option %s", pj_optarg);
-          return -1;
-        }
+        int listen_port = atoi(pj_optarg);
+        options->sproutlet_ports.insert(listen_port);
+        TRC_INFO("Opening port %d for non-default sproutlets", listen_port);
       }
       break;
 
