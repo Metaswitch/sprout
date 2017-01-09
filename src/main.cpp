@@ -1159,7 +1159,12 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       options->chronos_hostname = std::string(pj_optarg);
 
     case OPT_LISTEN_PORT:
-      options->listen_port = atoi(pj_optarg);
+      {
+        int listen_port = atoi(pj_optarg);
+        options->sproutlet_ports.insert(listen_port);
+        TRC_INFO("Opening port %d for non-default sproutlets", listen_port);
+      }
+
       break;
 
     SPROUTLET_MACRO(SPROUTLET_OPTIONS)
@@ -1464,12 +1469,6 @@ int main(int argc, char* argv[])
 
   std::vector<std::string> sproutlet_uris;
   SPROUTLET_MACRO(SPROUTLET_VERIFY_OPTIONS)
-
-  if (opt.listen_port != 0)
-  {
-    TRC_INFO("Opening port %d for non-default sproutlets", opt.listen_port);
-    opt.sproutlet_ports.insert(opt.listen_port);
-  }
 
   if (opt.sas_server == "0.0.0.0")
   {
