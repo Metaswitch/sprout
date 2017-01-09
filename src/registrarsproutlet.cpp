@@ -79,7 +79,6 @@ RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
                                        SubscriberDataManager* reg_sdm,
                                        std::vector<SubscriberDataManager*> reg_remote_sdms,
                                        HSSConnection* hss_connection,
-                                       AnalyticsLogger* analytics_logger,
                                        ACRFactory* rfacr_factory,
                                        int cfg_max_expires,
                                        bool force_original_register_inclusion,
@@ -89,7 +88,6 @@ RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
   _sdm(reg_sdm),
   _remote_sdms(reg_remote_sdms),
   _hss(hss_connection),
-  _analytics(analytics_logger),
   _acr_factory(rfacr_factory),
   _max_expires(cfg_max_expires),
   _force_original_register_inclusion(force_original_register_inclusion),
@@ -98,7 +96,6 @@ RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
   _next_hop_service(next_hop_service)
 {
 }
-
 
 //RegistrarSproutlet destructor.
 RegistrarSproutlet::~RegistrarSproutlet()
@@ -283,7 +280,6 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
   // Canonicalize the public ID from the URI in the To header.
   std::string public_id = PJUtils::public_id_from_uri(uri);
-
   TRC_DEBUG("Process REGISTER for public ID %s", public_id.c_str());
 
   // Get the call identifier and the cseq number from the respective headers.
@@ -435,6 +431,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   }
 
   // Write to the local store, checking the remote stores if there is no entry locally.
+  bool all_bindings_expired;
   SubscriberDataManager::AoRPair* aor_pair =
                                  write_to_store(_sproutlet->_sdm,
                                                 aor,
@@ -445,7 +442,16 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                                                 is_initial_registration,
                                                 NULL,
                                                 _sproutlet->_remote_sdms,
-                                                private_id_for_binding);
+                                                private_id_for_binding,
+                                                all_bindings_expired);
+  if (all_bindings_expired)
+  {
+    TRC_DEBUG("All bindings have expired - triggering deregistration at the HSS");
+    _sproutlet->_hss->update_registration_state(aor,
+                                                "",
+                                                HSSConnection::DEREG_USER,
+                                                trail());
+  }
 
   if ((aor_pair != NULL) && (aor_pair->get_current() != NULL))
   {
@@ -472,7 +478,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                          ignored,
                          aor_pair,
                          {},
-                         private_id_for_binding);
+                         private_id_for_binding,
+                         ignored);
         delete remote_aor_pair;
       }
     }
@@ -786,7 +793,8 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
                    SubscriberDataManager::AoRPair* backup_aor, ///<backup data if no entry in store
                    std::vector<SubscriberDataManager*> backup_sdms,
                                                                ///<backup stores to read from if no entry in store and no backup data
-                   std::string private_id)                     ///<private id that the binding was registered with
+                   std::string private_id,                     ///<private id that the binding was registered with
+                   bool& out_all_bindings_expired)
 {
   // Get the call identifier and the cseq number from the respective headers.
   std::string cid = PJUtils::pj_str_to_string(&PJSIP_MSG_CID_HDR(req)->id);
@@ -981,12 +989,6 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
           {
             binding->_expires = now + expiry;
           }
-
-          if (_sproutlet->_analytics != NULL)
-          {
-            // Generate an analytics log for this binding update.
-            _sproutlet->_analytics->registration(aor, binding_id, contact_uri, expiry);
-          }
         }
       }
       contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, contact->next);
@@ -1023,16 +1025,8 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
     delete backup_aor; // LCOV_EXCL_LINE
   }
 
-  if (all_bindings_expired)
-  {
-    TRC_DEBUG("All bindings have expired - triggering deregistration at the HSS");
-    _sproutlet->_hss->update_registration_state(aor,
-                                                "",
-                                                HSSConnection::DEREG_USER,
-                                                trail());
-  }
-
   out_is_initial_registration = is_initial_registration;
+  out_all_bindings_expired = all_bindings_expired;
 
   return aor_pair;
 }

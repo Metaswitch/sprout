@@ -46,6 +46,7 @@ using namespace std;
 using testing::InSequence;
 using testing::Return;
 using testing::ReturnNull;
+using testing::_;
 
 /// Fixture for MangelwurzelTest.
 ///
@@ -78,6 +79,7 @@ public:
   {
   public:
     string _requri;
+    string _method;
     string _from;
     string _to;
     string _call_id;
@@ -86,6 +88,7 @@ public:
 
     Message() :
       _requri("sip:6505550001@homedomain"),
+      _method("INVITE"),
       _from("\"6505550000\" <sip:6505550000@homedomain>;tag=12345678"),
       _to("\"6505550001\" <sip:6505550001@homedomain>;tag=87654321"),
       _call_id("0123456789abcdef-10.83.18.38"),
@@ -99,7 +102,7 @@ public:
       char buf[16384];
 
       int n = snprintf(buf, sizeof(buf),
-                       "INVITE %1$s SIP/2.0\r\n"
+                       "%7$s %1$s SIP/2.0\r\n"
                        "Via: SIP/2.0/TCP 10.83.18.38:36530;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY5e9kSPI\r\n"
                        "%5$s"
                        "Max-Forwards: 68\r\n"
@@ -111,12 +114,13 @@ public:
                        "%6$s"
                        "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY, MESSAGE, SUBSCRIBE, INFO\r\n"
                        "User-Agent: Cleaarwater UT\r\n",
-                       _requri.c_str(),    // $1
-                       _to.c_str(),        // $2
-                       _from.c_str(),      // $3
-                       _call_id.c_str(),   // $4
-                       _routes.c_str(),    // $5
-                       _extra_hdrs.c_str() // $6
+                       _requri.c_str(),     // $1
+                       _to.c_str(),         // $2
+                       _from.c_str(),       // $3
+                       _call_id.c_str(),    // $4
+                       _routes.c_str(),     // $5
+                       _extra_hdrs.c_str(), // $6
+                       _method.c_str()      // $7
                       );
 
       EXPECT_LT(n, (int)sizeof(buf));
@@ -324,22 +328,23 @@ TEST_F(MangelwurzelTest, CreateInvalidMangalgorithm)
 }
 
 /// Test creating a mangelwurzel transaction with no mangelwurzel Route header.
-/// We won't create a transaction.
+/// We should pick up information from the Request-URI.
 TEST_F(MangelwurzelTest, CreateNoRouteHdr)
 {
   Mangelwurzel mangelwurzel("mangelwurzel", 5058, "sip:mangelwurzel.homedomain:5058;transport=tcp");
   Message msg;
+  msg._requri = "sip:mangelwurzel.homedomain;mangalgorithm=reverse";
   pjsip_msg* req = parse_msg(msg.get_request());
 
-  // Check that we don't create a mangelwurzel transaction if we can't find the
-  // mangelwurzel Route header.
   EXPECT_CALL(*_helper, route_hdr()).WillOnce(ReturnNull());
 
   MangelwurzelTsx* mangelwurzel_tsx =
     (MangelwurzelTsx*)mangelwurzel.get_tsx(_helper,
                                            "mangelwurzel",
                                            req);
-  EXPECT_TRUE(mangelwurzel_tsx == NULL);
+  EXPECT_TRUE(mangelwurzel_tsx != NULL);
+  EXPECT_EQ(mangelwurzel_tsx->_config.mangalgorithm, MangelwurzelTsx::REVERSE);
+  delete mangelwurzel_tsx; mangelwurzel_tsx = NULL;
 }
 
 TEST_F(MangelwurzelTest, InitialReq)
@@ -488,4 +493,38 @@ TEST_F(MangelwurzelTest, InDialogReq)
             get_headers(req, "Route"));
   EXPECT_EQ("", get_headers(req, "Via"));
   EXPECT_THAT(req, ReqUriEquals("sip:1000555056@homedomain"));
+}
+
+
+TEST_F(MangelwurzelTest, REGISTER)
+{
+  // Create a request with an S-CSCF Route header, a Contact header and a
+  // Record-Route header. The request is addressed to a tel URI.
+  Message msg;
+  msg._method = "REGISTER";
+  pjsip_msg* req = parse_msg(msg.get_request());
+
+  // Save off the original request. We expect mangelwurzel to request it later.
+  pjsip_msg* original_req = parse_msg(msg.get_request());
+  EXPECT_CALL(*_helper, original_request()).WillRepeatedly(Return(original_req));
+
+  // Set up the mangelwurzel transaction's config. This is different to the
+  // mainline case in order to test more code paths.
+  MangelwurzelTsx::Config config;
+  config.dialog = true;
+  config.req_uri = true;
+  config.to = true;
+  config.routes = true;
+  config.change_domain = false;
+  config.orig = false;
+  config.ootb = false;
+  config.mangalgorithm = MangelwurzelTsx::REVERSE;
+  MangelwurzelTsx mangelwurzel_tsx(_helper, config);
+
+  // Trigger in dialog request processing in mangelwurzel and catch the request
+  // again when mangelwurzel sends it on.
+  EXPECT_CALL(*_helper, create_response(_, PJSIP_SC_OK, ""));
+  EXPECT_CALL(*_helper, send_response(_));
+  EXPECT_CALL(*_helper, free_msg(req));
+  mangelwurzel_tsx.on_rx_initial_request(req);
 }

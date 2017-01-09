@@ -1264,6 +1264,9 @@ TEST_F(SCSCFTest, TestSimpleMainline)
   // getting tracked.
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
+
+  // It also shouldn't result in any forked INVITEs
+  EXPECT_EQ(0, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_invite_tbl)->_count);
 }
 
 // Send a request where the URI is for the same port as a Sproutlet,
@@ -1473,7 +1476,6 @@ TEST_F(SCSCFTest, TestTelURIWildcard)
   tpAS1.expect_target(tdata, false);
   EXPECT_THAT(get_headers(out, "Route"),
               testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
-
   string fresp1 = respond_to_txdata(tdata, 404);
   inject_msg(fresp1, &tpAS1);
   ASSERT_EQ(3, txdata_count());
@@ -2080,6 +2082,9 @@ TEST_F(SCSCFTest, TestForkedFlow)
 
   // All done!
   expect_all_tsx_done();
+
+  // Ensure we count the forked INVITEs
+  EXPECT_EQ(2, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_invite_tbl)->_count);
 }
 
 TEST_F(SCSCFTest, TestForkedFlow2)
@@ -2142,6 +2147,9 @@ TEST_F(SCSCFTest, TestForkedFlow2)
 
   // All done!
   expect_all_tsx_done();
+
+  // Ensure we count the forked INVITEs
+  EXPECT_EQ(2, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_invite_tbl)->_count);
 }
 
 TEST_F(SCSCFTest, TestForkedFlow3)
@@ -2192,6 +2200,9 @@ TEST_F(SCSCFTest, TestForkedFlow3)
 
   // All done!
   expect_all_tsx_done();
+
+  // Ensure we count the forked INVITEs
+  EXPECT_EQ(2, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_invite_tbl)->_count);
 }
 
 TEST_F(SCSCFTest, TestForkedFlow4)
@@ -2260,6 +2271,9 @@ TEST_F(SCSCFTest, TestForkedFlow4)
 
   // All done!
   expect_all_tsx_done();
+
+  // Ensure we count the forked INVITEs
+  EXPECT_EQ(2, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_invite_tbl)->_count);
 }
 
 // Test SIP Message flows

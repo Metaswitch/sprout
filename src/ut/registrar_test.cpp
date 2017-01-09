@@ -40,7 +40,6 @@
 
 #include "siptest.hpp"
 #include "utils.h"
-#include "analyticslogger.h"
 #include "stack.h"
 #include "registrarsproutlet.h"
 #include "sproutletproxy.h"
@@ -51,6 +50,7 @@
 #include "mock_store.h"
 #include "fakesnmp.hpp"
 #include "rapidxml/rapidxml.hpp"
+#include "mock_hss_connection.h"
 
 using ::testing::MatchesRegex;
 using ::testing::_;
@@ -187,8 +187,8 @@ public:
     _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
     _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, false);
     _remote_sdms = {_remote_sdm};
-    _analytics = new AnalyticsLogger();
-    _hss_connection = new FakeHSSConnection();
+    _hss_connection_observer = new MockHSSConnection();
+    _hss_connection = new FakeHSSConnection(_hss_connection_observer);
     _acr_factory = new ACRFactory();
   }
 
@@ -199,7 +199,7 @@ public:
     pjsip_tsx_layer_destroy();
     delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
-    delete _analytics;
+    delete _hss_connection_observer; _hss_connection_observer = NULL;
     delete _remote_sdm; _remote_sdm = NULL;
     delete _sdm; _sdm = NULL;
     delete _remote_data_store; _remote_data_store = NULL;
@@ -223,6 +223,7 @@ public:
   {
     _hss_connection->flush_all();
     _chronos_connection->flush_all();
+    ::testing::Mock::VerifyAndClear(_hss_connection_observer);
   }
 
   RegistrarTest()
@@ -237,7 +238,6 @@ public:
                                                   _sdm,
                                                   _remote_sdms,
                                                   _hss_connection,
-                                                  _analytics,
                                                   _acr_factory,
                                                   300,
                                                   false,
@@ -346,9 +346,9 @@ protected:
   static SubscriberDataManager* _sdm;
   static SubscriberDataManager* _remote_sdm;
   static std::vector<SubscriberDataManager*> _remote_sdms;
-  static AnalyticsLogger* _analytics;
   static IfcHandler* _ifc_handler;
   static ACRFactory* _acr_factory;
+  static MockHSSConnection* _hss_connection_observer;
   static FakeHSSConnection* _hss_connection;
   static FakeChronosConnection* _chronos_connection;
   RegistrarSproutlet* _registrar_sproutlet;
@@ -362,6 +362,9 @@ private:
   {
     // First registration OK.
     Message msg;
+
+    EXPECT_CALL(*_hss_connection_observer,
+                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     pjsip_msg* out = current_txdata()->msg;
@@ -376,6 +379,8 @@ private:
     msg._contact = "sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob";
     msg._contact_instance = ";+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"";
     msg._path = "Path: <sip:XxxxxxxXXXXXXAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-119.compute-1.amazonaws.com:5060;lr;ob>";
+    EXPECT_CALL(*_hss_connection_observer,
+                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -399,6 +404,8 @@ private:
     // Reregistration of first binding is OK but doesn't add a new one.
     msg0._unique += 1;
     msg = msg0;
+    EXPECT_CALL(*_hss_connection_observer,
+                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -420,6 +427,8 @@ private:
     msg0._unique += 1;
     msg = msg0;
     msg._contact_instance = "";
+    EXPECT_CALL(*_hss_connection_observer,
+                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -441,6 +450,8 @@ private:
 
     // Reregistering that yields no change.
     msg._unique += 1;
+    EXPECT_CALL(*_hss_connection_observer,
+                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -463,6 +474,8 @@ private:
     string save_contact = msg._contact;
     msg._unique += 1;
     msg._contact = "";
+    EXPECT_CALL(*_hss_connection_observer,
+                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -485,6 +498,8 @@ private:
     // Reregistering again with an updated cseq triggers an update of the binding.
     msg._unique += 1;
     msg._cseq = "16568";
+    EXPECT_CALL(*_hss_connection_observer,
+                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -509,6 +524,8 @@ private:
     msg._contact = "*";
     msg._contact_instance = "";
     msg._contact_params = "";
+    EXPECT_CALL(*_hss_connection_observer,
+                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -525,6 +542,10 @@ private:
     msg._contact = "*";
     msg._contact_instance = "";
     msg._contact_params = "";
+    EXPECT_CALL(*_hss_connection_observer,
+                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::REG, _, _, _, _, _, _)).WillOnce(Return(HTTP_OK));
+    EXPECT_CALL(*_hss_connection_observer,
+                update_registration_state("sip:6505550231@homedomain", _, HSSConnection::DEREG_USER, _)).WillOnce(Return(HTTP_OK));
     inject_msg(msg.get());
     ASSERT_EQ(1, txdata_count());
     out = current_txdata()->msg;
@@ -570,6 +591,7 @@ public:
   }
 };
 
+
 /// Fixture for RegistrarTestRemoteSDM (for REGISTER tests that use the remote
 /// store by artificially causing the local SDM and first remote SDM lookups to
 /// return nothing)
@@ -591,8 +613,8 @@ public:
     _remote_sdm_no_bindings = new SDMNoBindings((Store*)_remote_data_store_no_bindings, _chronos_connection, false);
     _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, false);
     _remote_sdms = {_remote_sdm_no_bindings, _remote_sdm};
-    _analytics = new AnalyticsLogger();
-    _hss_connection = new FakeHSSConnection();
+    _hss_connection_observer = new MockHSSConnection();
+    _hss_connection = new FakeHSSConnection(_hss_connection_observer);
     _acr_factory = new ACRFactory();
   }
 
@@ -609,7 +631,7 @@ public:
     pjsip_tsx_layer_destroy();
     delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
-    delete _analytics;
+    delete _hss_connection_observer; _hss_connection_observer = NULL;
     delete _remote_sdm_no_bindings; _remote_sdm_no_bindings = NULL;
     delete _remote_sdm; _remote_sdm = NULL;
     delete _sdm; _sdm = NULL;
@@ -632,10 +654,10 @@ SubscriberDataManager* RegistrarTest::_sdm;
 SubscriberDataManager* RegistrarTest::_remote_sdm;
 SubscriberDataManager* RegistrarTestRemoteSDM::_remote_sdm_no_bindings;
 std::vector<SubscriberDataManager*> RegistrarTest::_remote_sdms;
-AnalyticsLogger* RegistrarTest::_analytics;
 IfcHandler* RegistrarTest::_ifc_handler;
 ACRFactory* RegistrarTest::_acr_factory;
 FakeHSSConnection* RegistrarTest::_hss_connection;
+MockHSSConnection* RegistrarTest::_hss_connection_observer;
 FakeChronosConnection* RegistrarTest::_chronos_connection;
 
 TEST_F(RegistrarTest, NotRegister)
@@ -2647,7 +2669,6 @@ public:
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new MockStore();
     _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
-    _analytics = new AnalyticsLogger();
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
 
@@ -2664,7 +2685,6 @@ public:
                                                   _sdm,
                                                   {},
                                                   _hss_connection,
-                                                  _analytics,
                                                   _acr_factory,
                                                   300,
                                                   false,
@@ -2699,7 +2719,6 @@ public:
   {
     delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
-    delete _analytics;
     delete _sdm; _sdm = NULL;
     delete _local_data_store; _local_data_store = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
@@ -2726,6 +2745,7 @@ public:
     // transaction timeout, so we go higher than that.
     cwtest_advance_time_ms(33000L);
     poll();
+
     // Stop and restart the transaction layer just in case
     pjsip_tsx_layer_instance()->stop();
     pjsip_tsx_layer_instance()->start();
@@ -2746,7 +2766,6 @@ public:
 protected:
   MockStore* _local_data_store;
   SubscriberDataManager* _sdm;
-  AnalyticsLogger* _analytics;
   IfcHandler* _ifc_handler;
   ACRFactory* _acr_factory;
   FakeHSSConnection* _hss_connection;

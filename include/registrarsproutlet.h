@@ -47,7 +47,6 @@
 #include <unordered_map>
 
 #include "enumservice.h"
-#include "analyticslogger.h"
 #include "subscriber_data_manager.h"
 #include "stack.h"
 #include "ifchandler.h"
@@ -72,7 +71,6 @@ public:
                      SubscriberDataManager* reg_sdm,
                      std::vector<SubscriberDataManager*> reg_remote_sdms,
                      HSSConnection* hss_connection,
-                     AnalyticsLogger* analytics_logger,
                      ACRFactory* rfacr_factory,
                      int cfg_max_expires,
                      bool force_original_register_inclusion,
@@ -97,8 +95,6 @@ private:
 
   // Connection to the HSS service for retrieving associated public URIs.
   HSSConnection* _hss;
-
-  AnalyticsLogger* _analytics;
 
   // Factory for create ACR messages for Rf billing flows.
   ACRFactory* _acr_factory;
@@ -144,7 +140,8 @@ protected:
                      SubscriberDataManager::AoRPair* backup_aor, ///<backup data if no entry in store
                      std::vector<SubscriberDataManager*> backup_sdms,
                                                                  ///<backup stores to read from if no entry in store and no backup data
-                     std::string private_id);                    ///<private id that the binding was registered with
+                     std::string private_id,                     ///<private id that the binding was registered with
+                     bool& out_all_bindings_expired);
 
   bool get_private_id(pjsip_msg* req, std::string& id);
   std::string get_binding_id(pjsip_contact_hdr *contact);

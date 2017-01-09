@@ -224,7 +224,6 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                                   local_sdm,
                                                   {remote_sdm},
                                                   hss_connection,
-                                                  analytics_logger,
                                                   scscf_acr_factory,
                                                   opt.sub_max_expires,
                                                   opt.force_third_party_register_body,
