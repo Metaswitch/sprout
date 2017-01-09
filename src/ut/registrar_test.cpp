@@ -40,7 +40,6 @@
 
 #include "siptest.hpp"
 #include "utils.h"
-#include "analyticslogger.h"
 #include "stack.h"
 #include "registrar.h"
 #include "registration_utils.h"
@@ -177,14 +176,12 @@ public:
     _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
     _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, false);
     _remote_sdms = {_remote_sdm};
-    _analytics = new AnalyticsLogger();
     _hss_connection_observer = new MockHSSConnection();
     _hss_connection = new FakeHSSConnection(_hss_connection_observer);
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_registrar(_sdm,
                                      _remote_sdms,
                                      _hss_connection,
-                                     _analytics,
                                      _acr_factory,
                                      300,
                                      false,
@@ -199,7 +196,6 @@ public:
     delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _hss_connection_observer; _hss_connection_observer = NULL;
-    delete _analytics;
     delete _remote_sdm; _remote_sdm = NULL;
     delete _sdm; _sdm = NULL;
     delete _remote_data_store; _remote_data_store = NULL;
@@ -295,7 +291,6 @@ protected:
   static SubscriberDataManager* _sdm;
   static SubscriberDataManager* _remote_sdm;
   static std::vector<SubscriberDataManager*> _remote_sdms;
-  static AnalyticsLogger* _analytics;
   static IfcHandler* _ifc_handler;
   static ACRFactory* _acr_factory;
   static MockHSSConnection* _hss_connection_observer;
@@ -554,14 +549,12 @@ public:
     _remote_sdm_no_bindings = new SDMNoBindings((Store*)_remote_data_store_no_bindings, _chronos_connection, false);
     _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, false);
     _remote_sdms = {_remote_sdm_no_bindings, _remote_sdm};
-    _analytics = new AnalyticsLogger();
     _hss_connection_observer = new MockHSSConnection();
     _hss_connection = new FakeHSSConnection(_hss_connection_observer);
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_registrar(_sdm,
                                      _remote_sdms,
                                      _hss_connection,
-                                     _analytics,
                                      _acr_factory,
                                      300,
                                      false,
@@ -582,7 +575,6 @@ public:
     delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _hss_connection_observer; _hss_connection_observer = NULL;
-    delete _analytics;
     delete _remote_sdm_no_bindings; _remote_sdm_no_bindings = NULL;
     delete _remote_sdm; _remote_sdm = NULL;
     delete _sdm; _sdm = NULL;
@@ -605,7 +597,6 @@ SubscriberDataManager* RegistrarTest::_sdm;
 SubscriberDataManager* RegistrarTest::_remote_sdm;
 SubscriberDataManager* RegistrarTestRemoteSDM::_remote_sdm_no_bindings;
 std::vector<SubscriberDataManager*> RegistrarTest::_remote_sdms;
-AnalyticsLogger* RegistrarTest::_analytics;
 IfcHandler* RegistrarTest::_ifc_handler;
 ACRFactory* RegistrarTest::_acr_factory;
 FakeHSSConnection* RegistrarTest::_hss_connection;
@@ -2631,13 +2622,11 @@ public:
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new MockStore();
     _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
-    _analytics = new AnalyticsLogger();
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_registrar(_sdm,
                                      {},
                                      _hss_connection,
-                                     _analytics,
                                      _acr_factory,
                                      300,
                                      false,
@@ -2671,7 +2660,6 @@ public:
     destroy_registrar();
     delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
-    delete _analytics;
     delete _sdm; _sdm = NULL;
     delete _local_data_store; _local_data_store = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
@@ -2692,7 +2680,6 @@ public:
 protected:
   MockStore* _local_data_store;
   SubscriberDataManager* _sdm;
-  AnalyticsLogger* _analytics;
   IfcHandler* _ifc_handler;
   ACRFactory* _acr_factory;
   FakeHSSConnection* _hss_connection;

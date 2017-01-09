@@ -1199,10 +1199,17 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       {
         options->sprout_hostname = std::string(pj_optarg);
 
-        if (Utils::parse_ip_address(options->sprout_hostname) !=
-            Utils::IPAddressType::INVALID)
+        if (Utils::parse_ip_address(options->sprout_hostname) ==
+            Utils::IPAddressType::INVALID_WITH_PORT)
         {
-          TRC_ERROR("The sprout hostname (%s) can't be an IP address",
+          TRC_ERROR("The sprout hostname (%s) must not include a port",
+                    options->sprout_hostname.c_str());
+          return -1;
+        }
+        else if (Utils::parse_ip_address(options->sprout_hostname) !=
+                 Utils::IPAddressType::INVALID)
+        {
+          TRC_ERROR("The sprout hostname (%s) must not be an IP address",
                     options->sprout_hostname.c_str());
           return -1;
         }
@@ -2064,6 +2071,7 @@ int main(int argc, char* argv[])
                                         serializer,
                                         deserializers,
                                         chronos_connection,
+                                        analytics_logger,
                                         true);
 
   if (remote_data_store != NULL)
@@ -2075,6 +2083,7 @@ int main(int argc, char* argv[])
                                            serializer,
                                            deserializers,
                                            chronos_connection,
+                                           NULL,
                                            false);
   }
 
@@ -2138,7 +2147,6 @@ int main(int argc, char* argv[])
     status = init_registrar(local_sdm,
                             {remote_sdm},
                             hss_connection,
-                            analytics_logger,
                             scscf_acr_factory,
                             opt.reg_max_expires,
                             opt.force_third_party_register_body,
