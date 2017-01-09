@@ -764,8 +764,8 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case OPT_RALF_THREADS:
       {
         VALIDATE_INT_PARAM(options->ralf_threads,
-                           "ralf_threads",
-                           "Number of ralf threads");
+                           ralf_threads,
+                           Number of ralf threads);
       }
       break;
 
@@ -804,56 +804,56 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case 'e':
       {
         VALIDATE_INT_PARAM_NON_ZERO(options->reg_max_expires,
-                                    "reg_max_expires",
-                                    "Maximum registration period (in seconds)");
+                                    reg_max_expires,
+                                    Maximum registration period (in seconds));
       }
       break;
 
     case OPT_SUB_MAX_EXPIRES:
       {
         VALIDATE_INT_PARAM_NON_ZERO(options->sub_max_expires,
-                                    "sub_max_expires",
-                                    "Maximum subscription period (in seconds)");
+                                    sub_max_expires,
+                                    Maximum subscription period (in seconds));
       }
       break;
 
     case OPT_TARGET_LATENCY_US:
       {
         VALIDATE_INT_PARAM_NON_ZERO(options->target_latency_us,
-                                    "target_latency_us",
-                                    "Target latency (in microseconds)");
+                                    target_latency_us,
+                                    Target latency (in microseconds));
       }
       break;
 
     case OPT_CASS_TARGET_LATENCY_US:
       {
         VALIDATE_INT_PARAM_NON_ZERO(options->cass_target_latency_us,
-                                    "cass_target_latency_us",
-                                    "Target cassandra latency (in microseconds)");
+                                    cass_target_latency_us,
+                                    Target cassandra latency (in microseconds));
       }
       break;
 
     case OPT_MAX_TOKENS:
       {
         VALIDATE_INT_PARAM_NON_ZERO(options->max_tokens,
-                                    "max_tokens",
-                                    "Max tokens");
+                                    max_tokens,
+                                    Max tokens);
       }
       break;
 
     case OPT_INIT_TOKEN_RATE:
       {
         VALIDATE_INT_PARAM_NON_ZERO(options->init_token_rate,
-                                    "init_token_rate",
-                                    "Initial token rate");
+                                    init_token_rate,
+                                    Initial token rate);
       }
       break;
 
     case OPT_MIN_TOKEN_RATE:
       {
         VALIDATE_INT_PARAM_NON_ZERO(options->min_token_rate,
-                                    "min_token_rate",
-                                    "Minimum token rate");
+                                    min_token_rate,
+                                    Minimum token rate);
       }
       break;
 
@@ -881,8 +881,8 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case 'W':
       {
         VALIDATE_INT_PARAM_NON_ZERO(options->worker_threads,
-                                    "worker_threads",
-                                    "Number of worker threads");
+                                    worker_threads,
+                                    Number of worker threads);
       }
       break;
 
@@ -918,8 +918,8 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case 'q':
       {
         VALIDATE_INT_PARAM_NON_ZERO(options->http_threads,
-                                    "http_threads",
-                                    "Number of HTTP threads");
+                                    http_threads,
+                                    Number of HTTP threads);
       }
       break;
 
@@ -981,24 +981,24 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case OPT_MAX_CALL_LIST_LENGTH:
       {
         VALIDATE_INT_PARAM(options->max_call_list_length,
-                           "max_call_list_length",
-                           "Max call list length");
+                           max_call_list_length,
+                           Max call list length);
       }
       break;
 
     case OPT_MEMENTO_THREADS:
       {
         VALIDATE_INT_PARAM(options->memento_threads,
-                           "memento_threads",
-                           "Memento threads");
+                           memento_threads,
+                           Memento threads);
       }
       break;
 
     case OPT_CALL_LIST_TTL:
       {
         VALIDATE_INT_PARAM(options->call_list_ttl,
-                           "call_list_ttl",
-                           "TTL for entries in the call list");
+                           call_list_ttl,
+                           TTL for entries in the call list);
       }
       break;
 
@@ -1017,56 +1017,56 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case OPT_EXCEPTION_MAX_TTL:
       {
         VALIDATE_INT_PARAM(options->exception_max_ttl,
-                           "exception_max_ttl",
-                           "Max TTL after an exception");
+                           exception_max_ttl,
+                           Max TTL after an exception);
       }
       break;
 
     case OPT_SIP_BLACKLIST_DURATION:
       {
         VALIDATE_INT_PARAM(options->sip_blacklist_duration,
-                           "sip_blacklist_duration",
-                           "SIP blacklist duration");
+                           sip_blacklist_duration,
+                           SIP blacklist duration);
       }
       break;
 
     case OPT_HTTP_BLACKLIST_DURATION:
       {
         VALIDATE_INT_PARAM(options->http_blacklist_duration,
-                           "http_blacklist_duration",
-                           "HTTP blacklist duration");
+                           http_blacklist_duration,
+                           HTTP blacklist duration);
       }
       break;
 
     case OPT_SIP_TCP_CONNECT_TIMEOUT:
       {
         VALIDATE_INT_PARAM(options->sip_tcp_connect_timeout,
-                           "sip_tcp_connect_timeout",
-                           "SIP TCP connect timeout");
+                           sip_tcp_connect_timeout,
+                           SIP TCP connect timeout);
       }
       break;
 
     case OPT_SIP_TCP_SEND_TIMEOUT:
       {
         VALIDATE_INT_PARAM(options->sip_tcp_send_timeout,
-                           "sip_tcp_send_timeout",
-                           "SIP TCP send timeout");
+                           sip_tcp_send_timeout,
+                           SIP TCP send timeout);
       }
       break;
 
     case OPT_SESSION_CONTINUED_TIMEOUT_MS:
       {
         VALIDATE_INT_PARAM(options->session_continued_timeout_ms,
-                           "session_continued_timeout_ms",
-                           "Session continue timeout (in ms)");
+                           session_continued_timeout_ms,
+                           Session continue timeout (in ms));
       }
       break;
 
     case OPT_SESSION_TERMINATED_TIMEOUT_MS:
       {
         VALIDATE_INT_PARAM(options->session_terminated_timeout_ms,
-                           "session_terminated_timeout_ms",
-                           "Session terminated timeout (in ms)");
+                           session_terminated_timeout_ms,
+                           Session terminated timeout (in ms));
       }
       break;
 
@@ -1225,9 +1225,19 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case OPT_LISTEN_PORT:
       {
-        int listen_port = atoi(pj_optarg);
-        options->sproutlet_ports.insert(listen_port);
-        TRC_INFO("Opening port %d for non-default sproutlets", listen_port);
+        int listen_port;
+        bool rc = validated_atoi(pj_optarg, listen_port);
+
+        if ((rc) && (listen_port > 0))
+        {
+          options->sproutlet_ports.insert(listen_port);
+          TRC_INFO("Opening port %d for non-default sproutlets", listen_port);
+        }
+        else
+        {
+          TRC_ERROR("Invalid value for listen_port: %s", pj_optarg);
+          return -1;
+        }
       }
       break;
 
