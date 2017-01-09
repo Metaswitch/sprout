@@ -1465,6 +1465,12 @@ int main(int argc, char* argv[])
   std::vector<std::string> sproutlet_uris;
   SPROUTLET_MACRO(SPROUTLET_VERIFY_OPTIONS)
 
+  if (opt.listen_port != 0)
+  {
+    TRC_INFO("Opening port %d for non-default sproutlets", opt.listen_port);
+    opt.sproutlet_ports.insert(opt.listen_port);
+  }
+
   if (opt.sas_server == "0.0.0.0")
   {
     TRC_WARNING("SAS server option was invalid or not configured - SAS is disabled");
