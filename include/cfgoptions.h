@@ -53,13 +53,22 @@
 #include "enumservice.h"
 #include "exception_handler.h"
 #include "ralf_processor.h"
-#include "authentication.h"
 #include "sproutlet_options.h"
 #include "impistore.h"
+#include "analyticslogger.h"
 
 enum struct MemcachedWriteFormat
 {
   BINARY, JSON
+};
+
+enum struct NonRegisterAuthentication
+{
+  // Never challenge a non-REGISTER.
+  NEVER,
+
+  // Only challenge a non-REGISTER if it has a Proxy-Authorization header.
+  IF_PROXY_AUTHORIZATION_PRESENT
 };
 
 struct options
@@ -166,5 +175,8 @@ extern ACRFactory* scscf_acr_factory;
 extern EnumService* enum_service;
 extern ExceptionHandler* exception_handler;
 extern AlarmManager* alarm_manager;
+extern AnalyticsLogger* analytics_logger;
+extern ChronosConnection* chronos_connection;
+extern ImpiStore* impi_store;
 
 #endif

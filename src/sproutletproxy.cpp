@@ -54,7 +54,6 @@ extern "C" {
 #include "sproutsasevent.h"
 #include "sproutletproxy.h"
 #include "snmp_sip_request_types.h"
-#include "subscription.h"
 
 const pj_str_t SproutletProxy::STR_SERVICE = {"service", 7};
 
@@ -66,8 +65,7 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
                                const std::string& root_uri,
                                const std::unordered_set<std::string>& host_aliases,
                                const std::list<Sproutlet*>& sproutlets,
-                               const std::set<std::string>& stateless_proxies,
-                               const std::string scscf_name) :
+                               const std::set<std::string>& stateless_proxies) :
   BasicProxy(endpt,
              "mod-sproutlet-controller",
              priority,
@@ -75,8 +73,7 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
              stateless_proxies),
   _root_uri(NULL),
   _host_aliases(host_aliases),
-  _sproutlets(sproutlets),
-  _scscf_name(scscf_name)
+  _sproutlets(sproutlets)
 {
   /// Store the URI of this SproutletProxy - this is used for Record-Routing.
   TRC_DEBUG("Root Record-Route URI = %s", root_uri.c_str());
@@ -92,7 +89,10 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
                                                        (*it)->uri_as_str(),
                                                        stack_data.pool,
                                                        false);
-    _root_uris.insert(std::make_pair((*it)->service_name(), root_uri));
+    if (root_uri != nullptr)
+    {
+      _root_uris.insert(std::make_pair((*it)->service_name(), root_uri));
+    }
   }
 }
 
@@ -130,11 +130,7 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
   pjsip_sip_uri* uri = NULL;
   if (route == NULL)
   {
-    // TODO: Once the registrar and subscription managers are Sproutlets, this should
-    // consider the ReqURI regardess of the method.
-    if ((pjsip_method_cmp(&req->line.req.method, &pjsip_register_method) != 0) &&
-        (pjsip_method_cmp(&req->line.req.method, pjsip_get_subscribe_method()) != 0) &&
-        (PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri)))
+    if (PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri))
     {
       uri = (pjsip_sip_uri*)req->line.req.uri;
     }
@@ -218,22 +214,7 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
     }
   }
 
-  // Now check whether we've allocated any sproutlets when we really want to
-  // route the message to the Subscription module instead
-  if ((sproutlet) &&
-      (sproutlet->service_name() == _scscf_name) &&
-      (request_acceptable_to_subscription_module(req, 0)))
-  {
-    // This is a subscribe being routed back to the S-CSCF sproutlet but to
-    // get this handled correctly we need to route it externally to make sure it
-    // hits the subscription module.
-    TRC_DEBUG("Force the SUBSCRIBE message to be routed externally");
-    SAS::Event event(trail, SASEvent::FORCE_EXTERNAL_ROUTING_SUBSCRIBE, 0);
-    SAS::report_event(event);
-    force_external_routing = true;
-    sproutlet = NULL;
-  }
-  else if (sproutlet == NULL)
+  if (sproutlet == NULL)
   {
     SAS::Event event(trail, SASEvent::NO_SPROUTLET_SELECTED, 0);
     SAS::report_event(event);
@@ -372,18 +353,55 @@ pjsip_sip_uri* SproutletProxy::create_sproutlet_uri(pj_pool_t* pool,
                                                     Sproutlet* sproutlet) const
 {
   TRC_DEBUG("Creating URI for %s", sproutlet->service_name().c_str());
-  pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, _root_uris.find(sproutlet->service_name())->second);
+  pjsip_sip_uri* uri = nullptr;
+
+  std::map<std::string, pjsip_sip_uri*>::const_iterator it =
+    _root_uris.find(sproutlet->service_name());
+
+  if (it != _root_uris.end())
+  {
+    TRC_DEBUG("Found root URI");
+    uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, it->second);
+    uri->lr_param = 1;
+
+    TRC_DEBUG("Constructed URI %s",
+              PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)uri).c_str());
+  }
+  else
+  {
+    // LCOV_EXCL_START
+    TRC_WARNING("No root URI found - unable to construct URI");
+    // LCOV_EXCL_STOP
+  }
+
+  return uri;
+}
+
+pjsip_sip_uri* SproutletProxy::create_internal_sproutlet_uri(pj_pool_t* pool,
+                                                             const std::string& name,
+                                                             pjsip_sip_uri* existing_uri) const
+{
+  TRC_DEBUG("Creating URI for service %s", name.c_str());
+
+  pjsip_sip_uri* base_uri = ((existing_uri != nullptr) ? existing_uri : _root_uri);
+  pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, base_uri);
+  pj_strdup(pool, &uri->host, &_root_uri->host);
+  uri->port = 0;
   uri->lr_param = 1;
 
-  TRC_DEBUG("Add services parameter");
-  pjsip_param* p = PJ_POOL_ALLOC_T(pool, pjsip_param);
-  pj_strdup(pool, &p->name, &STR_SERVICE);
-  pj_list_insert_before(&uri->other_param, p);
-  std::string services = sproutlet->service_name();
-  pj_strdup2(pool, &p->value, services.c_str());
+  pjsip_param* p = pjsip_param_find(&uri->other_param, &STR_SERVICE);
 
-  TRC_DEBUG(PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                   (pjsip_uri*)uri).c_str());
+  if (p == nullptr)
+  {
+    p = PJ_POOL_ALLOC_T(pool, pjsip_param);
+    pj_strdup(pool, &p->name, &STR_SERVICE);
+    pj_list_insert_before(&uri->other_param, p);
+  }
+
+  pj_strdup2(pool, &p->value, name.c_str());
+
+  TRC_DEBUG("Constructed URI %s",
+              PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)uri).c_str());
 
   return uri;
 }
@@ -1277,11 +1295,16 @@ pjsip_msg* SproutletWrapper::create_request()
 
 pjsip_msg* SproutletWrapper::clone_request(pjsip_msg* req)
 {
+  return clone_msg(req);
+}
+
+pjsip_msg* SproutletWrapper::clone_msg(pjsip_msg* msg)
+{
   // Get the old tdata from the map of clones
-  Packets::iterator it = _packets.find(req);
+  Packets::iterator it = _packets.find(msg);
   if (it == _packets.end())
   {
-    TRC_WARNING("Sproutlet attempted to clone an unrecognised request");
+    TRC_WARNING("Sproutlet attempted to clone an unrecognised message");
     return NULL;
   }
 
@@ -1291,7 +1314,7 @@ pjsip_msg* SproutletWrapper::clone_request(pjsip_msg* req)
   if (new_tdata == NULL)
   {
     //LCOV_EXCL_START
-    TRC_ERROR("Failed to clone request for Sproutlet %s", _service_name.c_str());
+    TRC_ERROR("Failed to clone message for Sproutlet %s", _service_name.c_str());
     return NULL;
     //LCOV_EXCL_STOP
   }
@@ -1542,6 +1565,13 @@ bool SproutletWrapper::is_uri_local(const pjsip_uri* uri) const
 pjsip_sip_uri* SproutletWrapper::get_reflexive_uri(pj_pool_t* pool) const
 {
   return _proxy->create_sproutlet_uri(pool, _sproutlet);
+}
+
+pjsip_sip_uri* SproutletWrapper::get_uri_for_service(const std::string& service,
+                                                     pj_pool_t* pool,
+                                                     pjsip_sip_uri* existing_uri) const
+{
+  return _proxy->create_internal_sproutlet_uri(pool, service, existing_uri);
 }
 
 void SproutletWrapper::rx_request(pjsip_tx_data* req)

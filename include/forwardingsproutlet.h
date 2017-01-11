@@ -1,8 +1,8 @@
 /**
- * @file registrar.h Initialization/termination functions for Sprout's Registrar module
+ * @file forwaringsproutlet.h
  *
  * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Copyright (C) 2016  Metaswitch Networks Ltd
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -34,43 +34,31 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+#ifndef FORWARINGSPROUTLET_H__
+#define FORWARINGSPROUTLET_H__
 
-#ifndef REGISTRAR_H__
-#define REGISTRAR_H__
+#include "sproutlet.h"
 
-extern "C" {
-#include <pjsip.h>
-}
-
-#include "subscriber_data_manager.h"
-#include "hssconnection.h"
-#include "chronosconnection.h"
-#include "acr.h"
-#include "snmp_success_fail_count_table.h"
-
-extern pjsip_module mod_registrar;
-
-void third_party_register_failed(const std::string& public_id,
-                                 SAS::TrailId trail);
-
-extern pj_status_t init_registrar(SubscriberDataManager* sdm,
-                                  std::vector<SubscriberDataManager*> remote_sdms,
-                                  HSSConnection* hss_connection,
-                                  ACRFactory* rfacr_factory,
-                                  int cfg_max_expires,
-                                  bool force_third_party_register_body,
-                                  SNMP::RegistrationStatsTables* reg_stats_tbls,
-                                  SNMP::RegistrationStatsTables* third_party_reg_stats_tbls);
-
-
-/// Calculate the expiry time for a binding.
 ///
-/// @param contact - The binding's contact header.
-/// @param expires - (optional) The expiry header from the request.
+/// A Sproutlet TSX that by default forwards requests to an upstream sproutlet
+/// identified by a service name.
 ///
-/// @return The expiry time in seconds.
-int expiry_for_binding(pjsip_contact_hdr* contact, pjsip_expires_hdr* expires);
 
-extern void destroy_registrar();
+class ForwardingSproutletTsx : public SproutletTsx
+{
+public:
+  ForwardingSproutletTsx(SproutletTsxHelper* helper,
+                         const std::string& upstream_service_name);
+  virtual ~ForwardingSproutletTsx() {}
+
+  void on_rx_initial_request(pjsip_msg* req) { forward_request(req); }
+  void on_rx_in_dialog_request(pjsip_msg* req) { forward_request(req); }
+
+protected:
+  void forward_request(pjsip_msg* req);
+
+  std::string _upstream_service_name;
+};
 
 #endif
+

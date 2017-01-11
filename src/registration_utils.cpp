@@ -48,7 +48,7 @@ extern "C" {
 #include "ifchandler.h"
 #include "pjutils.h"
 #include "stack.h"
-#include "registrar.h"
+#include "registrarsproutlet.h"
 #include "registration_utils.h"
 #include "log.h"
 #include <boost/lexical_cast.hpp>
@@ -67,6 +67,9 @@ static bool force_third_party_register_body;
 /// REGISTER to an application server.
 struct ThirdPartyRegData
 {
+  SubscriberDataManager* sdm;
+  std::vector<SubscriberDataManager*> remote_sdms;
+  HSSConnection* hss;
   std::string public_id;
   DefaultHandling default_handling;
   SAS::TrailId trail;
@@ -74,13 +77,16 @@ struct ThirdPartyRegData
   bool is_initial_registration;
 };
 
-void send_register_to_as(pjsip_rx_data* received_register,
-                         pjsip_tx_data* ok_response,
-                         AsInvocation& as,
-                         int expires,
-                         bool is_initial_registration,
-                         const std::string&,
-                         SAS::TrailId);
+static void send_register_to_as(SubscriberDataManager* sdm,
+                                std::vector<SubscriberDataManager*> remote_sdms,
+                                HSSConnection* hss,
+                                pjsip_msg* received_register_msg,
+                                pjsip_msg* ok_response_msg,
+                                AsInvocation& as,
+                                int expires,
+                                bool is_initial_registration,
+                                const std::string&,
+                                SAS::TrailId);
 
 void RegistrationUtils::init(SNMP::RegistrationStatsTables* third_party_reg_stats_tables_arg,
                              bool force_third_party_register_body_arg)
@@ -91,11 +97,15 @@ void RegistrationUtils::init(SNMP::RegistrationStatsTables* third_party_reg_stat
 
 void RegistrationUtils::deregister_with_application_servers(Ifcs& ifcs,
                                                             SubscriberDataManager* sdm,
+                                                            std::vector<SubscriberDataManager*> remote_sdms,
+                                                            HSSConnection* hss,
                                                             const std::string& served_user,
                                                             SAS::TrailId trail)
 {
   RegistrationUtils::register_with_application_servers(ifcs,
                                                        sdm,
+                                                       remote_sdms,
+                                                       hss,
                                                        NULL,
                                                        NULL,
                                                        0,
@@ -106,23 +116,25 @@ void RegistrationUtils::deregister_with_application_servers(Ifcs& ifcs,
 
 void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
                                                           SubscriberDataManager* sdm,
-                                                          pjsip_rx_data *received_register,
-                                                          pjsip_tx_data *ok_response, // Can only be NULL if received_register is
+                                                          std::vector<SubscriberDataManager*> remote_sdms,
+                                                          HSSConnection* hss,
+                                                          pjsip_msg *received_register_msg,
+                                                          pjsip_msg *ok_response_msg, // Can only be NULL if received_register_msg is
                                                           int expires,
                                                           bool is_initial_registration,
                                                           const std::string& served_user,
                                                           SAS::TrailId trail)
 {
   // Function preconditions
-  if (received_register == NULL)
+  if (received_register_msg == NULL)
   {
     // We should have both messages or neither
-    assert(ok_response == NULL);
+    assert(ok_response_msg == NULL);
   }
   else
   {
     // We should have both messages or neither
-    assert(ok_response != NULL);
+    assert(ok_response_msg != NULL);
   }
 
   std::vector<AsInvocation> as_list;
@@ -131,7 +143,7 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
   // Originating message, otherwise we use the Request-URI. We need to use the From for REGISTERs.
   // See 3GPP TS 23.218 s5.2.1 note 2: "REGISTER is considered part of the UE-originating".
 
-  if (received_register == NULL)
+  if (received_register_msg == NULL)
   {
     pj_status_t status;
     pjsip_method method;
@@ -181,7 +193,7 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
   }
   else
   {
-    ifcs.interpret(SessionCase::Originating, true, is_initial_registration, received_register->msg_info.msg, as_list, trail);
+    ifcs.interpret(SessionCase::Originating, true, is_initial_registration, received_register_msg, as_list, trail);
   }
 
   TRC_INFO("Found %d Application Servers", as_list.size());
@@ -206,7 +218,7 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
         third_party_reg_stats_tables->re_reg_tbl->increment_attempts();
       }
     }
-    send_register_to_as(received_register, ok_response, *as_iter, expires, is_initial_registration, served_user, trail);
+    send_register_to_as(sdm, remote_sdms, hss, received_register_msg, ok_response_msg, *as_iter, expires, is_initial_registration, served_user, trail);
   }
 }
 
@@ -226,7 +238,16 @@ static void send_register_cb(void* token, pjsip_event *event)
     event.add_var_param(error_msg);
     SAS::report_event(event);
 
-    third_party_register_failed(tsxdata->public_id, tsxdata->trail);
+    // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure
+    // where SESSION_TERMINATED is set means that we should deregister "the
+    // currently registered public user identity" - i.e. all bindings
+    RegistrationUtils::remove_bindings(tsxdata->sdm,
+                                       tsxdata->remote_sdms,
+                                       tsxdata->hss,
+                                       tsxdata->public_id,
+                                       "*",
+                                       HSSConnection::DEREG_ADMIN,
+                                       tsxdata->trail);
   }
 
   if (third_party_reg_stats_tables != NULL)
@@ -268,13 +289,16 @@ static void send_register_cb(void* token, pjsip_event *event)
   delete tsxdata; tsxdata = NULL;
 }
 
-void send_register_to_as(pjsip_rx_data *received_register,
-                         pjsip_tx_data *ok_response,
-                         AsInvocation& as,
-                         int expires,
-                         bool is_initial_registration,
-                         const std::string& served_user,
-                         SAS::TrailId trail)
+static void send_register_to_as(SubscriberDataManager* sdm,
+                                std::vector<SubscriberDataManager*> remote_sdms,
+                                HSSConnection* hss,
+                                pjsip_msg *received_register_msg,
+                                pjsip_msg *ok_response_msg,
+                                AsInvocation& as,
+                                int expires,
+                                bool is_initial_registration,
+                                const std::string& served_user,
+                                SAS::TrailId trail)
 {
   pj_status_t status;
   pjsip_tx_data *tdata;
@@ -313,16 +337,16 @@ void send_register_to_as(pjsip_rx_data *received_register,
 
   // TODO: modify orig-ioi of P-Charging-Vector and remove term-ioi
 
-  if (received_register && ok_response)
+  if (received_register_msg && ok_response_msg)
   {
     // Copy P-Access-Network-Info, P-Visited-Network-Id and P-Charging-Vector
     // from original message
-    PJUtils::clone_header(&STR_P_A_N_I, received_register->msg_info.msg, tdata->msg, tdata->pool);
-    PJUtils::clone_header(&STR_P_V_N_I, received_register->msg_info.msg, tdata->msg, tdata->pool);
-    PJUtils::clone_header(&STR_P_C_V, received_register->msg_info.msg, tdata->msg, tdata->pool);
+    PJUtils::clone_header(&STR_P_A_N_I, received_register_msg, tdata->msg, tdata->pool);
+    PJUtils::clone_header(&STR_P_V_N_I, received_register_msg, tdata->msg, tdata->pool);
+    PJUtils::clone_header(&STR_P_C_V, received_register_msg, tdata->msg, tdata->pool);
 
     // Copy P-Charging-Function-Addresses from the OK response.
-    PJUtils::clone_header(&STR_P_C_F_A, ok_response->msg, tdata->msg, tdata->pool);
+    PJUtils::clone_header(&STR_P_C_F_A, ok_response_msg, tdata->msg, tdata->pool);
 
     // Generate a message body based on Filter Criteria values
     char buf[MAX_SIP_MSG_SIZE];
@@ -355,7 +379,7 @@ void send_register_to_as(pjsip_rx_data *received_register,
     if (as.include_register_request || force_third_party_register_body)
     {
       pjsip_multipart_part *request_part = pjsip_multipart_create_part(tdata->pool);
-      pjsip_msg_print(received_register->msg_info.msg, buf, sizeof(buf));
+      pjsip_msg_print(received_register_msg, buf, sizeof(buf));
       pj_str_t request_str = pj_str(buf);
       request_part->body = pjsip_msg_body_create(tdata->pool, &sip_type, &sip_subtype, &request_str),
       possible_final_body = request_part->body;
@@ -368,7 +392,7 @@ void send_register_to_as(pjsip_rx_data *received_register,
     if (as.include_register_response || force_third_party_register_body)
     {
       pjsip_multipart_part *response_part = pjsip_multipart_create_part(tdata->pool);
-      pjsip_msg_print(ok_response->msg, buf, sizeof(buf));
+      pjsip_msg_print(ok_response_msg, buf, sizeof(buf));
       pj_str_t response_str = pj_str(buf);
       response_part->body = pjsip_msg_body_create(tdata->pool, &sip_type, &sip_subtype, &response_str),
       possible_final_body = response_part->body;
@@ -401,6 +425,9 @@ void send_register_to_as(pjsip_rx_data *received_register,
   // Allocate a temporary structure to record the default handling for this
   // REGISTER, and send it statefully.
   ThirdPartyRegData* tsxdata = new ThirdPartyRegData;
+  tsxdata->sdm = sdm;
+  tsxdata->remote_sdms = remote_sdms;
+  tsxdata->hss = hss;
   tsxdata->default_handling = as.default_handling;
   tsxdata->trail = trail;
   tsxdata->public_id = served_user;
@@ -414,7 +441,7 @@ void send_register_to_as(pjsip_rx_data *received_register,
   }
 }
 
-void notify_application_servers()
+static void notify_application_servers()
 {
   TRC_DEBUG("In dummy notify_application_servers function");
   // TODO: implement as part of reg events package
@@ -518,7 +545,7 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
     {
       // Note that 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 doesn't specify that any binding information
       // should be passed on the REGISTER message, so we don't need the binding ID.
-      deregister_with_application_servers(ifc_map[aor], sdm, aor, trail);
+      deregister_with_application_servers(ifc_map[aor], sdm, remote_sdms, hss, aor, trail);
       notify_application_servers();
     }
 
@@ -541,4 +568,4 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
   }
 
   return all_bindings_expired;
-};
+}

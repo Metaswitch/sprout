@@ -425,15 +425,15 @@ std::string PJUtils::extract_username(pjsip_authorization_hdr* auth_hdr, pjsip_u
   return impi;
 }
 
-void PJUtils::get_impi_and_impu(pjsip_rx_data* rdata, std::string& impi_out, std::string& impu_out)
+void PJUtils::get_impi_and_impu(pjsip_msg* req, std::string& impi_out, std::string& impu_out)
 {
   pjsip_authorization_hdr* auth_hdr;
   pjsip_uri* impu_uri;
-  if (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD)
+  if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
   {
-    impu_uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri);
+    impu_uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(req)->uri);
 
-    auth_hdr = (pjsip_authorization_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg,
+    auth_hdr = (pjsip_authorization_hdr*)pjsip_msg_find_hdr(req,
                                                             PJSIP_H_AUTHORIZATION,
                                                             NULL);
   }
@@ -441,9 +441,9 @@ void PJUtils::get_impi_and_impu(pjsip_rx_data* rdata, std::string& impi_out, std
   {
     // Retrieve the IMPU for a non-REGISTER request by determining the originating served user, and
     // the IMPI from the Proxy-Authorization header.
-    impu_uri = orig_served_user(rdata->msg_info.msg);
+    impu_uri = orig_served_user(req);
 
-    auth_hdr = (pjsip_proxy_authorization_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg,
+    auth_hdr = (pjsip_proxy_authorization_hdr*)pjsip_msg_find_hdr(req,
                                                                   PJSIP_H_PROXY_AUTHORIZATION,
                                                                   NULL);
   }

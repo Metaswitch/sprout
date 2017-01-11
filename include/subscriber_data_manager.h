@@ -594,15 +594,11 @@ public:
   /// @param trail                SAS trail
   /// @param all_bindings_expired Whether all bindings have expired
   ///                             as a result of the set
-  /// @param extra_message_rdata  Message to respond to
-  /// @param extra_message_tdata  Message to respond with
   virtual Store::Status set_aor_data(const std::string& aor_id,
                                      std::vector<std::string> irs_impus,
                                      AoRPair* aor_pair,
                                      SAS::TrailId trail,
-                                     bool& all_bindings_expired = unused_bool,
-                                     pjsip_rx_data* extra_message_rdata = NULL,
-                                     pjsip_tx_data* extra_message_tdata = NULL);
+                                     bool& all_bindings_expired = unused_bool);
 
 private:
   // Expire any out of date bindings in the current AoR

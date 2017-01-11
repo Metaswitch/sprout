@@ -65,15 +65,12 @@ public:
   /// @param  sproutlets        - Sproutlets to load in this proxy.
   /// @param  stateless_proxies - A set of next-hops that are considered to be
   ///                             stateless proxies.
-  /// @param  scscf_name        - The name of the S-CSCF sproutlet (so we can
-  //                              prioritise this if possible)
   SproutletProxy(pjsip_endpoint* endpt,
                  int priority,
                  const std::string& root_uri,
                  const std::unordered_set<std::string>& host_aliases,
                  const std::list<Sproutlet*>& sproutlets,
-                 const std::set<std::string>& stateless_proxies,
-                 const std::string scscf_name);
+                 const std::set<std::string>& stateless_proxies);
 
   /// Destructor.
   virtual ~SproutletProxy();
@@ -110,6 +107,18 @@ protected:
   /// Create a URI that routes to a given Sproutlet.
   pjsip_sip_uri* create_sproutlet_uri(pj_pool_t* pool,
                                       Sproutlet* sproutlet) const;
+
+  /// Create a URI that routes to the named sproutlet internally within the
+  /// sproutlet proxy.
+  ///
+  /// @param pool         - Pool to allocate the URI from.
+  /// @param name         - The name of the service to invoke.
+  /// @param existing_uri - An existing URI to base the new URI on. Any user
+  ///                       part and URI parameters are copied over to the new
+  ///                       URI.
+  pjsip_sip_uri* create_internal_sproutlet_uri(pj_pool_t* pool,
+                                               const std::string& name,
+                                               pjsip_sip_uri* existing_uri) const;
 
   Sproutlet* service_from_host(pjsip_sip_uri* uri);
   Sproutlet* service_from_user(pjsip_sip_uri* uri);
@@ -253,8 +262,6 @@ protected:
 
   std::list<Sproutlet*> _sproutlets;
 
-  std::string _scscf_name;
-
   static const pj_str_t STR_SERVICE;
 
   friend class UASTsx;
@@ -288,6 +295,7 @@ public:
   const std::string& dialog_id() const;
   pjsip_msg* create_request();
   pjsip_msg* clone_request(pjsip_msg* req);
+  pjsip_msg* clone_msg(pjsip_msg* msg);
   pjsip_msg* create_response(pjsip_msg* req,
                              pjsip_status_code status_code,
                              const std::string& status_text="");
@@ -304,6 +312,9 @@ public:
   SAS::TrailId trail() const;
   bool is_uri_reflexive(const pjsip_uri*) const;
   pjsip_sip_uri* get_reflexive_uri(pj_pool_t*) const;
+  pjsip_sip_uri* get_uri_for_service(const std::string& service,
+                                     pj_pool_t* pool,
+                                     pjsip_sip_uri* existing_uri) const;
 
 private:
   void rx_request(pjsip_tx_data* req);

@@ -184,9 +184,7 @@ Store::Status SubscriberDataManager::set_aor_data(
                                      std::vector<std::string> irs_impus,
                                      AoRPair* aor_pair,
                                      SAS::TrailId trail,
-                                     bool& all_bindings_expired,
-                                     pjsip_rx_data* extra_message_rdata,
-                                     pjsip_tx_data* extra_message_tdata)
+                                     bool& all_bindings_expired)
 {
   // The ordering of this function is quite important.
   //
@@ -201,7 +199,7 @@ Store::Status SubscriberDataManager::set_aor_data(
   // This ordering is important to ensure that we don't send
   // duplicate NOTIFYs (so we send these after writing to memcached) and
   // so that only one piece of code has responsibility for this. Furthermore,
-  // we want registration logs used for licensing counts to undercount in edge 
+  // we want registration logs used for licensing counts to undercount in edge
   // cases where a Chronos or memcached call fails and we're in an uncertain
   // state. Therefore, we log removed or shortened bindings before any such calls,
   // and we log new or extended bindings afterwards.
@@ -236,7 +234,7 @@ Store::Status SubscriberDataManager::set_aor_data(
             aor_id.c_str(), aor_pair->get_current()->_cas, max_expires);
 
   ClassifiedBindings classified_bindings;
-  
+
   if (_primary_sdm)
   {
     // 2. Log removed or shortened bindings
@@ -246,7 +244,7 @@ Store::Status SubscriberDataManager::set_aor_data(
     {
       log_removed_or_shortened_bindings(classified_bindings);
     }
-   
+
     // 3. Send any Chronos timer requests
     _chronos_timer_request_sender->send_timers(aor_id, aor_pair, now, trail);
   }
@@ -279,20 +277,7 @@ Store::Status SubscriberDataManager::set_aor_data(
       log_new_or_extended_bindings(classified_bindings);
     }
 
-    // 6. Send any messages we were asked to by the caller
-
-    if ((extra_message_rdata != NULL) &&
-        (extra_message_tdata != NULL))
-    {
-      pjsip_endpt_send_response2(stack_data.endpt,
-                                 extra_message_rdata,
-                                 extra_message_tdata,
-                                 NULL,
-                                 NULL);
-    }
-
-    // 7. Send any NOTIFYs
- 
+    // 6. Send any NOTIFYs
     _notify_sender->send_notifys(aor_id, irs_impus, aor_pair, now, trail);
   }
 
@@ -305,12 +290,12 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
                                               SubscriberDataManager::AoRPair* aor_pair,
                                               ClassifiedBindings& classified_bindings)
 {
-  // We should have been given an empty classified_bindings vector, but clear 
-  // it just in case 
+  // We should have been given an empty classified_bindings vector, but clear
+  // it just in case
   delete_bindings(classified_bindings);
 
   // 1/2: Iterate over original bindings and record those not in current AoR
-  for (std::pair<std::string, SubscriberDataManager::AoR::Binding*> aor_orig_b : 
+  for (std::pair<std::string, SubscriberDataManager::AoR::Binding*> aor_orig_b :
          aor_pair->get_orig()->bindings())
   {
     if (aor_pair->get_current()->bindings().find(aor_orig_b.first) ==
@@ -326,7 +311,7 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
   }
 
   // 2/2: Iterate over the bindings in the current AoR.
-  for (std::pair<std::string, SubscriberDataManager::AoR::Binding*> aor_current_b : 
+  for (std::pair<std::string, SubscriberDataManager::AoR::Binding*> aor_current_b :
          aor_pair->get_current()->bindings())
   {
     SubscriberDataManager::AoR::Bindings::const_iterator aor_orig_b_match =
@@ -1596,7 +1581,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
   // may have come from a P-CSCF or AS, which wouldn't match a binding.
   std::vector<std::string> expired_bindings;
 
-  for (std::pair<std::string, SubscriberDataManager::AoR::Binding*> aor_orig_b : 
+  for (std::pair<std::string, SubscriberDataManager::AoR::Binding*> aor_orig_b :
          aor_pair->get_orig()->bindings())
   {
     SubscriberDataManager::AoR::Binding* b = aor_orig_b.second;
@@ -1641,7 +1626,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
       // There are no non-emergency bindings left; the subscription has been
       // terminated.
       bool bindings_remaining = false;
-      for (std::pair<std::string, SubscriberDataManager::AoR::Binding*> aor_current_b : 
+      for (std::pair<std::string, SubscriberDataManager::AoR::Binding*> aor_current_b :
              aor_pair->get_current()->bindings())
       {
         if (!aor_current_b.second->_emergency_registration)
@@ -1664,7 +1649,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
 
       std::vector<NotifyUtils::BindingNotifyInformation*> binding_notify;
 
-      for (std::pair<std::string, SubscriberDataManager::AoR::Binding*> aor_orig_b : 
+      for (std::pair<std::string, SubscriberDataManager::AoR::Binding*> aor_orig_b :
              aor_pair->get_orig()->bindings())
       {
         // Don't include emergency registrations
@@ -1722,7 +1707,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_current_subscriptions
                                SAS::TrailId trail)
 {
   // Iterate over the subscriptions in the current AoR.
-  for (std::pair<std::string, SubscriberDataManager::AoR::Subscription*> aor_current_sub : 
+  for (std::pair<std::string, SubscriberDataManager::AoR::Subscription*> aor_current_sub :
          aor_pair->get_current()->subscriptions())
   {
     TRC_DEBUG("The subscription (%s) is still active", aor_current_sub.first.c_str());
@@ -1730,7 +1715,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_current_subscriptions
 
     // Iterate over the bindings in the original AoR. If they're not present
     // the current AoR, mark them as expired
-    for (std::pair<std::string, SubscriberDataManager::AoR::Binding*> aor_orig_b : 
+    for (std::pair<std::string, SubscriberDataManager::AoR::Binding*> aor_orig_b :
            aor_pair->get_orig()->bindings())
     {
       if (!aor_orig_b.second->_emergency_registration)
@@ -1751,7 +1736,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_current_subscriptions
     }
 
     // Iterate over the bindings in the current AoR.
-    for (std::pair<std::string, SubscriberDataManager::AoR::Binding*> aor_current_b : 
+    for (std::pair<std::string, SubscriberDataManager::AoR::Binding*> aor_current_b :
            aor_pair->get_current()->bindings())
     {
       if (!aor_current_b.second->_emergency_registration)

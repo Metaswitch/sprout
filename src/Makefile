@@ -13,9 +13,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          sipresolver.cpp \
                          bono.cpp \
                          registration_utils.cpp \
-                         registrar.cpp \
                          hss_sip_mapping.cpp \
-                         authentication.cpp \
                          options.cpp \
                          sip_connection_pool.cpp \
                          flowtable.cpp \
@@ -58,7 +56,6 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          acr.cpp \
                          signalhandler.cpp \
                          health_checker.cpp \
-                         subscription.cpp \
                          notify_utils.cpp \
                          unique.cpp \
                          chronosconnection.cpp \
@@ -107,6 +104,8 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        scscfsproutlet.cpp \
                        icscfsproutlet.cpp \
                        bgcfsproutlet.cpp \
+                       subscriptionsproutlet.cpp \
+                       registrarsproutlet.cpp \
                        sproutletappserver.cpp \
                        mmtel.cpp \
                        test_main.cpp \
@@ -179,6 +178,8 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        httpnotifier_test.cpp \
                        bgcf_test.cpp \
                        as_communication_tracker_test.cpp \
+                       authenticationsproutlet.cpp \
+                       forwardingsproutlet.cpp \
                        pthread_cond_var_helper.cpp
 
 COVERAGE_ROOT := ..
@@ -230,7 +231,7 @@ SPROUT_COMMON_LDFLAGS := -rdynamic \
 # (which sprout-base doesn't), and the plugins are dynamically linked at run
 # time, so GCC won't link in the symbols they need unless we explicitly tell
 # it to.
-sprout_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} \-Wl,--whole-archive -lpjmedia-x86_64-unknown-linux-gnu -Wl,--no-whole-archive `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --libs libpjproject`
+sprout_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} \-Wl,--whole-archive -lpjsip-x86_64-unknown-linux-gnu -lpjmedia-x86_64-unknown-linux-gnu -Wl,--no-whole-archive `PKG_CONFIG_PATH=../usr/lib/pkgconfig pkg-config --libs libpjproject`
 sprout_test_LDFLAGS := ${SPROUT_COMMON_LDFLAGS} \
                        -lthrift \
                        -lcassandra \
@@ -270,7 +271,7 @@ sprout_mmtel_as.so_SOURCES := mmtel.cpp sproutletappserver.cpp mmtelasplugin.cpp
 sprout_mmtel_as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -Wno-write-strings
 sprout_mmtel_as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
-sprout_scscf.so_SOURCES := scscfsproutlet.cpp scscfplugin.cpp
+sprout_scscf.so_SOURCES := authenticationsproutlet.cpp registrarsproutlet.cpp subscriptionsproutlet.cpp scscfsproutlet.cpp scscfplugin.cpp forwardingsproutlet.cpp
 sprout_scscf.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS}
 sprout_scscf.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 

@@ -73,9 +73,6 @@ extern "C" {
 #include "websockets.h"
 #include "memcachedstore.h"
 #include "mmtel.h"
-#include "subscription.h"
-#include "registrar.h"
-#include "authentication.h"
 #include "options.h"
 #include "dnsresolver.h"
 #include "enumservice.h"
@@ -1375,6 +1372,9 @@ ACRFactory* scscf_acr_factory = NULL;
 EnumService* enum_service = NULL;
 ExceptionHandler* exception_handler = NULL;
 AlarmManager* alarm_manager = NULL;
+AnalyticsLogger* analytics_logger = NULL;
+ChronosConnection* chronos_connection = NULL;
+ImpiStore* impi_store = NULL;
 
 /*
  * main()
@@ -1384,12 +1384,9 @@ int main(int argc, char* argv[])
   pj_status_t status;
   struct options opt;
 
-  AnalyticsLogger* analytics_logger = NULL;
   SIPResolver* sip_resolver = NULL;
   Store* remote_data_store = NULL;
-  ImpiStore* impi_store = NULL;
   HttpConnection* ralf_connection = NULL;
-  ChronosConnection* chronos_connection = NULL;
   ACRFactory* pcscf_acr_factory = NULL;
   pj_bool_t websockets_enabled = PJ_FALSE;
   AccessLogger* access_logger = NULL;
@@ -1652,10 +1649,6 @@ int main(int argc, char* argv[])
   SNMP::ScalarByScopeTable* penalties_scalar = NULL;
   SNMP::ScalarByScopeTable* token_rate_scalar = NULL;
 
-  SNMP::RegistrationStatsTables reg_stats_tbls;
-  SNMP::RegistrationStatsTables third_party_reg_stats_tbls;
-  SNMP::AuthenticationStatsTables auth_stats_tbls;
-
   if (opt.pcscf_enabled)
   {
     latency_table = SNMP::EventAccumulatorByScopeTable::create("bono_latency",
@@ -1690,29 +1683,6 @@ int main(int argc, char* argv[])
                                                                  ".1.2.826.0.1.1578918.9.3.3.5");
     homestead_lir_latency_table = SNMP::EventAccumulatorTable::create("sprout_homestead_lir_latency",
                                                                  ".1.2.826.0.1.1578918.9.3.3.6");
-
-    reg_stats_tbls.init_reg_tbl = SNMP::SuccessFailCountTable::create("initial_reg_success_fail_count",
-                                                                      ".1.2.826.0.1.1578918.9.3.9");
-    reg_stats_tbls.re_reg_tbl = SNMP::SuccessFailCountTable::create("re_reg_success_fail_count",
-                                                                    ".1.2.826.0.1.1578918.9.3.10");
-    reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("de_reg_success_fail_count",
-                                                                     ".1.2.826.0.1.1578918.9.3.11");
-
-    third_party_reg_stats_tbls.init_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_initial_reg_success_fail_count",
-                                                                                  ".1.2.826.0.1.1578918.9.3.12");
-    third_party_reg_stats_tbls.re_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_re_reg_success_fail_count",
-                                                                                ".1.2.826.0.1.1578918.9.3.13");
-    third_party_reg_stats_tbls.de_reg_tbl = SNMP::SuccessFailCountTable::create("third_party_de_reg_success_fail_count",
-                                                                                ".1.2.826.0.1.1578918.9.3.14");
-
-    auth_stats_tbls.sip_digest_auth_tbl = SNMP::SuccessFailCountTable::create("sip_digest_auth_success_fail_count",
-                                                                              ".1.2.826.0.1.1578918.9.3.15");
-    auth_stats_tbls.ims_aka_auth_tbl = SNMP::SuccessFailCountTable::create("ims_aka_auth_success_fail_count",
-                                                                           ".1.2.826.0.1.1578918.9.3.16");
-
-    auth_stats_tbls.non_register_auth_tbl = SNMP::SuccessFailCountTable::create("non_register_auth_success_fail_count",
-                                                                                ".1.2.826.0.1.1578918.9.3.17");
-
     token_rate_table = SNMP::ContinuousAccumulatorByScopeTable::create("sprout_token_rate",
                                                                        ".1.2.826.0.1.1578918.9.3.27");
     smoothed_latency_scalar = SNMP::ScalarByScopeTable::create("sprout_smoothed_latency",
@@ -2121,60 +2091,11 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  if (opt.enabled_scscf)
-  {
-    if (opt.auth_enabled)
-    {
-      // Create an AV store using the local store and initialise the authentication
-      // module.  We don't create a AV store using the remote data store as
-      // Authentication Vectors are only stored for a short period after the
-      // relevant challenge is sent.
-      TRC_STATUS("Initialise S-CSCF authentication module");
-      impi_store = new ImpiStore(local_data_store, opt.impi_store_mode);
-      status = init_authentication(opt.auth_realm,
-                                   impi_store,
-                                   hss_connection,
-                                   chronos_connection,
-                                   scscf_acr_factory,
-                                   opt.non_register_auth_mode,
-                                   analytics_logger,
-                                   &auth_stats_tbls,
-                                   opt.nonce_count_supported,
-                                   expiry_for_binding);
-    }
-
-    // Launch the registrar.
-    status = init_registrar(local_sdm,
-                            {remote_sdm},
-                            hss_connection,
-                            scscf_acr_factory,
-                            opt.reg_max_expires,
-                            opt.force_third_party_register_body,
-                            &reg_stats_tbls,
-                            &third_party_reg_stats_tbls);
-
-    if (status != PJ_SUCCESS)
-    {
-      CL_SPROUT_INIT_SERVICE_ROUTE_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
-      TRC_ERROR("Failed to enable S-CSCF registrar");
-      return 1;
-    }
-
-    // Launch the subscription module.
-    status = init_subscription(local_sdm,
-                               {remote_sdm},
-                               hss_connection,
-                               scscf_acr_factory,
-                               analytics_logger,
-                               opt.sub_max_expires);
-
-    if (status != PJ_SUCCESS)
-    {
-      CL_SPROUT_REG_SUBSCRIBER_HAND_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
-      TRC_ERROR("Failed to enable subscription module");
-      return 1;
-    }
-  }
+  // Create an AV store using the local store and initialise the authentication
+  // sproutlet.  We don't create a AV store using the remote data store as
+  // Authentication Vectors are only stored for a short period after the
+  // relevant challenge is sent.
+  impi_store = new ImpiStore(local_data_store, opt.impi_store_mode);
 
   // Load the sproutlet plugins.
   PluginLoader* loader = new PluginLoader("/usr/share/clearwater/sprout/plugins",
@@ -2214,8 +2135,7 @@ int main(int argc, char* argv[])
                                          opt.sprout_hostname,
                                          host_aliases,
                                          sproutlets,
-                                         opt.stateless_proxies,
-                                         opt.prefix_scscf);
+                                         opt.stateless_proxies);
     if (sproutlet_proxy == NULL)
     {
       TRC_ERROR("Failed to create SproutletProxy");
@@ -2366,15 +2286,6 @@ int main(int argc, char* argv[])
   loader->unload();
   delete loader;
 
-  if (opt.enabled_scscf)
-  {
-    destroy_subscription();
-    destroy_registrar();
-    if (opt.auth_enabled)
-    {
-      destroy_authentication();
-    }
-  }
   if (opt.pcscf_enabled)
   {
     if (websockets_enabled)
@@ -2441,20 +2352,6 @@ int main(int argc, char* argv[])
   delete penalties_scalar;
   delete token_rate_scalar;
 
-  if (!opt.pcscf_enabled)
-  {
-    delete reg_stats_tbls.init_reg_tbl;
-    delete reg_stats_tbls.re_reg_tbl;
-    delete reg_stats_tbls.de_reg_tbl;
-
-    delete third_party_reg_stats_tbls.init_reg_tbl;
-    delete third_party_reg_stats_tbls.re_reg_tbl;
-    delete third_party_reg_stats_tbls.de_reg_tbl;
-
-    delete auth_stats_tbls.sip_digest_auth_tbl;
-    delete auth_stats_tbls.ims_aka_auth_tbl;
-    delete auth_stats_tbls.non_register_auth_tbl;
-  }
   hc->stop_thread();
   delete hc;
 

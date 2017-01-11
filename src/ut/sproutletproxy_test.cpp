@@ -638,8 +638,7 @@ public:
                                 "proxy1.homedomain",
                                 host_aliases,
                                 _sproutlets,
-                                std::set<std::string>(),
-                                "scscf");
+                                std::set<std::string>());
 
     // Schedule timers.
     SipTest::poll();
@@ -1143,7 +1142,7 @@ TEST_F(SproutletProxyTest, SimpleSproutletForwarderRR)
             get_headers(tdata->msg, "Route"));
 
   // Check a Record-Route header has been added.
-  EXPECT_EQ("Record-Route: <sip:fwdrr.proxy1.homedomain;transport=tcp;lr;service=fwdrr;hello=world>",
+  EXPECT_EQ("Record-Route: <sip:fwdrr.proxy1.homedomain;transport=tcp;lr;hello=world>",
             get_headers(tdata->msg, "Record-Route"));
 
   // Send a 200 OK response.
@@ -2220,52 +2219,6 @@ TEST_F(SproutletProxyTest, DelayAfterForward)
 
   // Send a 200 OK response.
   inject_msg(respond_to_current_txdata(200));
-
-  // All done!
-  ASSERT_EQ(0, txdata_count());
-
-  delete tp;
-}
-
-// Tests standard routing of a local subscription request to ensure it is
-// not routed via the sproutlet interface.
-TEST_F(SproutletProxyTest, LocalSubscription)
-{
-  pjsip_tx_data* tdata;
-
-  // Create a TCP connection to the listening port.
-  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        44444,
-                                        "1.2.3.4",
-                                        49152);
-
-  // Inject a request that's routed to a sproutlet (the forwarder), then
-  // routed to the S-CSCF
-  Message msg1;
-  msg1._method = "SUBSCRIBE";
-  msg1._requri = "sip:bob@homedomain";
-  msg1._from = "sip:alice@homedomain";
-  msg1._to = "sip:bob@homedomain";
-  msg1._via = tp->to_string(false);
-  msg1._route = "Route: <sip:fwd.proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:scscf.proxy1.homedomain;transport=TCP;lr>";
-  msg1._extra = "Event: reg";
-  inject_msg(msg1.get_request(), tp);
-
-  // This should be routed out to scscf.proxy1.homedomain - as the
-  // sproutlet proxy recognises it needs to route this externally
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  expect_target("TCP", "10.10.19.1", 5060, tdata);
-  ReqMatcher("SUBSCRIBE").matches(tdata->msg);
-
-  // Send a 200 OK response.
-  inject_msg(respond_to_current_txdata(200));
-
-  // Check the 200 OK.
-  tdata = current_txdata();
-  RespMatcher(200).matches(tdata->msg);
-  tp->expect_target(tdata);
-  free_txdata();
 
   // All done!
   ASSERT_EQ(0, txdata_count());

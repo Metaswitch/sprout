@@ -66,8 +66,10 @@ bool remove_bindings(SubscriberDataManager* sdm,
 
 void register_with_application_servers(Ifcs& ifcs,
                                        SubscriberDataManager* sdm,
-                                       pjsip_rx_data* received_register,
-                                       pjsip_tx_data* ok_response,
+                                       std::vector<SubscriberDataManager*> remote_sdms,
+                                       HSSConnection* hss,
+                                       pjsip_msg* received_register_msg,
+                                       pjsip_msg* ok_response_msg,
                                        int expires,
                                        bool is_initial_registration,
                                        const std::string& served_user,
@@ -75,9 +77,10 @@ void register_with_application_servers(Ifcs& ifcs,
 
 void deregister_with_application_servers(Ifcs&,
                                          SubscriberDataManager* sdm,
+                                         std::vector<SubscriberDataManager*> remote_sdms,
+                                         HSSConnection* hss,
                                          const std::string&,
                                          SAS::TrailId trail);
-
-} // namespace RegistrationUtils
+}
 
 #endif
