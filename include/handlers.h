@@ -94,6 +94,7 @@ protected:
   SubscriberDataManager::AoRPair* set_aor_data(
                         SubscriberDataManager* current_sdm,
                         std::string aor_id,
+                        std::vector<std::string> irs_impus,
                         SubscriberDataManager::AoRPair* previous_aor_data,
                         std::vector<SubscriberDataManager*> remote_sdms,
                         bool& all_bindings_expired);
@@ -138,6 +139,7 @@ public:
   HTTPCode parse_request(std::string body);
   SubscriberDataManager::AoRPair* deregister_bindings(
                     SubscriberDataManager* current_sdm,
+                    HSSConnection* hss,
                     std::string aor_id,
                     std::string private_id,
                     SubscriberDataManager::AoRPair* previous_aor_data,

@@ -161,10 +161,20 @@ pjsip_msg* SproutletAppServerTsxHelper::create_request()
 /// off to handle late forking.
 ///
 /// @returns             - The cloned request message.
-/// @param  req          - The request message to clone.
+/// @param  req          - The requset message to clone.
 pjsip_msg* SproutletAppServerTsxHelper::clone_request(pjsip_msg* req)
 {
   return _helper->clone_request(req);
+}
+
+/// Clones the message.  This is typically used when we want to keep a
+/// message after calling a destructive method on it.
+///
+/// @returns             - The cloned message.
+/// @param  msg          - The message to clone.
+pjsip_msg* SproutletAppServerTsxHelper::clone_msg(pjsip_msg* msg)
+{
+  return _helper->clone_msg(msg);
 }
 
 /// Create a response from a given request, this response can be passed to

@@ -63,6 +63,7 @@ public:
   MOCK_METHOD1(add_to_dialog, void(const std::string&));
   MOCK_METHOD0(create_request, pjsip_msg*());
   MOCK_METHOD1(clone_request, pjsip_msg*(pjsip_msg*));
+  MOCK_METHOD1(clone_msg, pjsip_msg*(pjsip_msg*));
   MOCK_METHOD3(create_response, pjsip_msg*(pjsip_msg*, pjsip_status_code, const std::string&));
   MOCK_METHOD1(send_request, int(pjsip_msg*&));
   MOCK_METHOD1(send_response, void(pjsip_msg*&));
@@ -75,6 +76,9 @@ public:
   MOCK_METHOD3(schedule_timer, bool(void*, TimerID&, int));
   MOCK_METHOD1(cancel_timer, void(TimerID));
   MOCK_METHOD1(timer_running, bool(TimerID));
+  MOCK_CONST_METHOD3(get_uri_for_service, pjsip_sip_uri*(const std::string& service,
+                                                         pj_pool_t* pool,
+                                                         pjsip_sip_uri* existing_uri));
 };
 
 #endif

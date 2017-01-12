@@ -51,6 +51,7 @@
 #include "fakechronosconnection.hpp"
 #include "mock_chronos_connection.h"
 #include "mock_store.h"
+#include "analyticslogger.h"
 
 using ::testing::_;
 using ::testing::DoAll;
@@ -89,6 +90,7 @@ class BasicSubscriberDataManagerTest : public SipTest
   {
     _chronos_connection = new FakeChronosConnection();
     _datastore = new LocalStore();
+    _analytics_logger = new AnalyticsLogger();
 
     SubscriberDataManager::SerializerDeserializer* serializer = new T();
     std::vector<SubscriberDataManager::SerializerDeserializer*> deserializers = {
@@ -99,6 +101,7 @@ class BasicSubscriberDataManagerTest : public SipTest
                                        serializer,
                                        deserializers,
                                        _chronos_connection,
+                                       _analytics_logger,
                                        true);
   }
 
@@ -120,6 +123,7 @@ class BasicSubscriberDataManagerTest : public SipTest
     delete _store; _store = NULL;
     delete _datastore; _datastore = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
+    delete _analytics_logger; _analytics_logger = NULL;
   }
 
   // Fixture variables.  Note that as the fixture is a C++ template, these must
@@ -128,6 +132,7 @@ class BasicSubscriberDataManagerTest : public SipTest
   FakeChronosConnection* _chronos_connection;
   LocalStore* _datastore;
   SubscriberDataManager* _store;
+  AnalyticsLogger* _analytics_logger;
 };
 
 // BasicSubscriberDataManagerTest is parameterized over these types.
@@ -162,7 +167,9 @@ TYPED_TEST(BasicSubscriberDataManagerTest, BindingTests)
   b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("5102175698@cw-ngv.com");
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -190,7 +197,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, BindingTests)
 
   // Update AoR record in the store and check it.
   b1->_cseq = 17039;
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -208,7 +215,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, BindingTests)
 
   // Update AoR record again in the store and check it, this time using get_binding.
   b1->_cseq = 17040;
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -230,7 +237,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, BindingTests)
   EXPECT_EQ(1u, aor_data1->get_current()->bindings().size());
   aor_data1->get_current()->remove_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -271,7 +278,9 @@ TYPED_TEST(BasicSubscriberDataManagerTest, SubscriptionTests)
   b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("5102175698@cw-ngv.com");
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -301,7 +310,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, SubscriptionTests)
   s1->_timer_id = "shouldbecomeDeprecated";
 
   // Write the record back to the store.
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -475,7 +484,9 @@ TYPED_TEST(BasicSubscriberDataManagerTest, ExpiryTests)
   s2->_timer_id = "shouldbecomeDeprecated";
 
   // Write the record to the store.
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("5102175698@cw-ngv.com");
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -523,6 +534,7 @@ class MultiFormatSubscriberDataManagerTest : public ::testing::Test
   {
     _chronos_connection = new FakeChronosConnection();
     _datastore = new LocalStore();
+    _analytics_logger = new AnalyticsLogger();
 
     {
       SubscriberDataManager::SerializerDeserializer* serializer = new T();
@@ -534,6 +546,7 @@ class MultiFormatSubscriberDataManagerTest : public ::testing::Test
                                                 serializer,
                                                 deserializers,
                                                 _chronos_connection,
+                                                _analytics_logger,
                                                 true);
     }
     {
@@ -548,6 +561,7 @@ class MultiFormatSubscriberDataManagerTest : public ::testing::Test
                                                serializer,
                                                deserializers,
                                                _chronos_connection,
+                                               _analytics_logger,
                                                true);
     }
   }
@@ -558,12 +572,14 @@ class MultiFormatSubscriberDataManagerTest : public ::testing::Test
     delete _single_store; _single_store = NULL;
     delete _datastore; _datastore = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
+    delete _analytics_logger; _analytics_logger = NULL;
   }
 
   FakeChronosConnection* _chronos_connection;
   LocalStore* _datastore;
   SubscriberDataManager* _multi_store;
   SubscriberDataManager* _single_store;
+  AnalyticsLogger* _analytics_logger;
 };
 
 // MultiFormatSubscriberDataManagerTest is parameterized over these types.
@@ -595,7 +611,9 @@ TYPED_TEST(MultiFormatSubscriberDataManagerTest, AllFormatsCanBeRead)
   b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
-  rc = this->_single_store->set_aor_data(std::string("2010000001@cw-ngv.com"), aor_data1, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("2010000001@cw-ngv.com");
+  rc = this->_single_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -621,6 +639,7 @@ class SubscriberDataManagerCorruptDataTest : public ::testing::Test
   {
     _chronos_connection = new FakeChronosConnection();
     _datastore = new MockStore();
+    _analytics_logger = new AnalyticsLogger();
 
     {
       SubscriberDataManager::SerializerDeserializer* serializer =
@@ -634,6 +653,7 @@ class SubscriberDataManagerCorruptDataTest : public ::testing::Test
                                          serializer,
                                          deserializers,
                                          _chronos_connection,
+                                         _analytics_logger,
                                          true);
     }
   }
@@ -643,11 +663,13 @@ class SubscriberDataManagerCorruptDataTest : public ::testing::Test
     delete _store; _store = NULL;
     delete _datastore; _datastore = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
+    delete _analytics_logger; _analytics_logger = NULL;
   }
 
   FakeChronosConnection* _chronos_connection;
   MockStore* _datastore;
   SubscriberDataManager* _store;
+  AnalyticsLogger* _analytics_logger;
 };
 
 
@@ -713,6 +735,7 @@ class SubscriberDataManagerChronosRequestsTest : public SipTest
   {
     _chronos_connection = new MockChronosConnection("chronos");
     _datastore = new LocalStore();
+    _analytics_logger = new AnalyticsLogger();
 
     SubscriberDataManager::SerializerDeserializer* serializer =
       new SubscriberDataManager::JsonSerializerDeserializer();
@@ -724,6 +747,7 @@ class SubscriberDataManagerChronosRequestsTest : public SipTest
                                        serializer,
                                        deserializers,
                                        _chronos_connection,
+                                       _analytics_logger,
                                        true);
   }
 
@@ -732,11 +756,13 @@ class SubscriberDataManagerChronosRequestsTest : public SipTest
     delete _store; _store = NULL;
     delete _datastore; _datastore = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
+    delete _analytics_logger; _analytics_logger = NULL;
   }
 
   MockChronosConnection* _chronos_connection;
   LocalStore* _datastore;
   SubscriberDataManager* _store;
+  AnalyticsLogger* _analytics_logger;
 };
 
 // Test that adding an AoR to the store generates a chronos POST request, and that
@@ -783,7 +809,9 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, BasicAoRTimerTest)
   EXPECT_CALL(*(this->_chronos_connection), send_post(aor_data1->get_current()->_timer_id, _, _, _, _, _)).
                    WillOnce(DoAll(SetArgReferee<0>("TIMER_ID"),
                                   Return(HTTP_OK)));
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("5102175698@cw-ngv.com");
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -802,7 +830,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, BasicAoRTimerTest)
 
   // Write the record back to the store. Check DELETE request is sent.
   EXPECT_CALL(*(this->_chronos_connection), send_delete(aor_data1->get_current()->_timer_id, _)).Times(1);
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 }
@@ -844,7 +872,9 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, UpdateAoRTimerTest)
   EXPECT_CALL(*(this->_chronos_connection), send_post(_, _, _, _, _, expected_tags)).
                    WillOnce(DoAll(SetArgReferee<0>("TIMER_ID"),
                                   Return(HTTP_OK)));
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("5102175698@cw-ngv.com");
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -870,7 +900,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, UpdateAoRTimerTest)
   // Write the record back to the store, expecting a chronos PUT request.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, expected_tags)).
                    WillOnce(Return(HTTP_OK));
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -899,7 +929,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, UpdateAoRTimerTest)
   // Write the record back to the store, expecting a chronos PUT request.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, expected_tags)).
                    WillOnce(Return(HTTP_OK));
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 }
@@ -956,7 +986,9 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRChangeNoUpdateTimerTest)
   EXPECT_CALL(*(this->_chronos_connection), send_post(_, _, _, _, _, expected_tags)).
                    WillOnce(DoAll(SetArgReferee<0>("TIMER_ID"),
                                   Return(HTTP_OK)));
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("5102175698@cw-ngv.com");
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1004,7 +1036,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRChangeNoUpdateTimerTest)
 
   // Write the record back to the store, expecting no chronos PUT request.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _)).Times(0);
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1069,7 +1101,9 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
   EXPECT_CALL(*(this->_chronos_connection), send_post(_, (300), _, _, _, expected_tags)).
                    WillOnce(DoAll(SetArgReferee<0>("TIMER_ID"),
                                   Return(HTTP_OK)));
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("5102175698@cw-ngv.com");
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1084,7 +1118,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
 
   // Write the record back to the store.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, _, _, _, _, _)).Times(0);
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1099,7 +1133,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
   // Write the record back to the store.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, (200), _, _, _, _)).
                    WillOnce(Return(HTTP_OK));
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -1114,7 +1148,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
   // Write the record back to the store.
   EXPECT_CALL(*(this->_chronos_connection), send_put(_, (100), _, _, _, _)).
                    WillOnce(Return(HTTP_OK));
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 }
@@ -1150,7 +1184,9 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRTimerBadRequestNoIDTest)
   EXPECT_CALL(*(this->_chronos_connection), send_post(aor_data1->get_current()->_timer_id, _, _, _, _, _)).
                    WillOnce(DoAll(SetArgReferee<0>("TIMER_ID"),
                                   Return(HTTP_BAD_REQUEST)));
-  rc = this->_store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("5102175698@cw-ngv.com");
+  rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 

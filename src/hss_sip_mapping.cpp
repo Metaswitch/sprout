@@ -40,14 +40,11 @@
 #include "pjutils.h"
 #include "stack.h"
 
-bool process_hss_sip_failure(HTTPCode http_code,
-                             std::string& regstate,
-                             pjsip_rx_data* rdata,
-                             struct stack_data_struct& stack_data,
-                             ACR* acr,
-                             const char* sip_msg_type)
+pjsip_status_code determine_hss_sip_response(HTTPCode http_code,
+                                             std::string& regstate,
+                                             const char* sip_msg_type)
 {
-  int st_code = PJSIP_SC_OK;
+  pjsip_status_code st_code = PJSIP_SC_OK;
 
   if ((http_code != HTTP_OK) || (regstate != HSSConnection::STATE_REGISTERED))
   {
@@ -102,15 +99,7 @@ bool process_hss_sip_failure(HTTPCode http_code,
         st_code = PJSIP_SC_SERVER_TIMEOUT;
         break;
     }
-
-    PJUtils::respond_stateless(stack_data.endpt,
-                               rdata,
-                               st_code,
-                               NULL,
-                               NULL,
-                               NULL,
-                               acr);
   }
 
-  return st_code != PJSIP_SC_OK;
+  return st_code;
 }

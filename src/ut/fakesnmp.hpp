@@ -42,6 +42,7 @@
 #include "snmp_continuous_accumulator_table.h"
 #include "snmp_scalar.h"
 #include "snmp_counter_table.h"
+#include "snmp_counter_by_scope_table.h"
 #include "snmp_ip_count_table.h"
 #include "snmp_success_fail_count_table.h"
 #include "snmp_success_fail_count_by_request_type_table.h"
@@ -68,6 +69,15 @@ class FakeCounterTable: public CounterTable
 public:
   int _count;
   FakeCounterTable() { _count = 0; };
+  void increment() { _count++; };
+  void reset_count() { _count = 0; }
+};
+
+class FakeCounterByScopeTable: public CounterByScopeTable
+{
+public:
+  int _count;
+  FakeCounterByScopeTable() { _count = 0; };
   void increment() { _count++; };
   void reset_count() { _count = 0; }
 };
@@ -140,6 +150,7 @@ public:
 
 extern FakeIPCountTable FAKE_IP_COUNT_TABLE;
 extern FakeCounterTable FAKE_COUNTER_TABLE;
+extern FakeCounterByScopeTable FAKE_COUNTER_BY_SCOPE_TABLE;
 extern FakeEventAccumulatorTable FAKE_EVENT_ACCUMULATOR_TABLE;
 extern FakeContinuousAccumulatorTable FAKE_CONTINUOUS_ACCUMULATOR_TABLE;
 extern FakeSuccessFailCountTable FAKE_INIT_REG_TABLE;

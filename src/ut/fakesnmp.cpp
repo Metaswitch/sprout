@@ -45,6 +45,7 @@ struct in_addr dummy_addr;
 FakeIPCountRow FAKE_IP_COUNT_ROW;
 FakeIPCountTable FAKE_IP_COUNT_TABLE;
 FakeCounterTable FAKE_COUNTER_TABLE;
+FakeCounterByScopeTable FAKE_COUNTER_BY_SCOPE_TABLE;
 FakeEventAccumulatorTable FAKE_EVENT_ACCUMULATOR_TABLE;
 FakeContinuousAccumulatorTable FAKE_CONTINUOUS_ACCUMULATOR_TABLE;
 FakeSuccessFailCountTable FAKE_INIT_REG_TABLE;

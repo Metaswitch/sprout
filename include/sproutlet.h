@@ -138,6 +138,14 @@ public:
   ///
   virtual pjsip_msg* clone_request(pjsip_msg* req) = 0;
 
+  /// Clones the message.  This is typically used when we want to keep a
+  /// message after calling a mutating method on it.
+  ///
+  /// @returns             - The cloned message.
+  /// @param  msg          - The message to clone.
+  ///
+  virtual pjsip_msg* clone_msg(pjsip_msg* msg) = 0;
+
   /// Create a response from a given request, this response can be passed to
   /// send_response or stored for later.  It may be freed again by passing
   /// it to free_message.
@@ -257,6 +265,18 @@ public:
   ///
   virtual SAS::TrailId trail() const = 0;
 
+  /// Get a URI that routes to the given named service.
+  ///
+  /// @returns            - The new URI.
+  ///
+  /// @param service      - Name of the service to route to.
+  /// @param pool         - Pool to allocate the URI in.
+  /// @param existing_uri - An existing URI to use as a base for the new one.
+  ///                       Parameters from this URI will be preserved if
+  ///                       possible.
+  virtual pjsip_sip_uri* get_uri_for_service(const std::string& service,
+                                             pj_pool_t* pool,
+                                             pjsip_sip_uri* existing_uri) const = 0;
 };
 
 
@@ -396,11 +416,23 @@ protected:
   /// Clones the request.  This is typically used when forking a request if
   /// different request modifications are required on each fork.
   ///
+  /// WARNING: This method is DEPRECATED and only exists for backwards
+  ///          compatibilty.
+  ///
   /// @returns             - The cloned request message.
   /// @param  req          - The request message to clone.
   ///
   pjsip_msg* clone_request(pjsip_msg* req)
     {return _helper->clone_request(req);}
+
+  /// Clones the message.  This is typically used when we want to keep a
+  /// message after calling a mutative method on it.
+  ///
+  /// @returns             - The cloned message.
+  /// @param  msg          - The message to clone.
+  ///
+  pjsip_msg* clone_msg(pjsip_msg* msg)
+    {return _helper->clone_msg(msg);}
 
   /// Create a response from a given request, this response can be passed to
   /// send_response or stored for later.  It may be freed again by passing
@@ -535,6 +567,22 @@ protected:
   ///
   SAS::TrailId trail() const
     {return _helper->trail();}
+
+  /// Get a URI that routes to the given named service.
+  ///
+  /// @returns            - The new URI.
+  ///
+  /// @param service      - Name of the service to route to.
+  /// @param pool         - Pool to allocate the URI in.
+  /// @param existing_uri - An existing URI to use as a base for the new one.
+  ///                       Parameters from this URI will be preserved if
+  ///                       possible.
+  pjsip_sip_uri* get_uri_for_service(const std::string& service,
+                                     pj_pool_t* pool,
+                                     pjsip_sip_uri* existing_uri) const
+  {
+    return _helper->get_uri_for_service(service, pool, existing_uri);
+  }
 
 private:
   /// Transaction helper to use for underlying service-related processing.

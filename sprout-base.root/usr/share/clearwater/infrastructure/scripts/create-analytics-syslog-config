@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# @file create-sprout-nginx-config
+# @file create-analytic-syslog-config
 #
 # Project Clearwater - IMS in the Cloud
 # Copyright (C) 2016 Metaswitch Networks Ltd
@@ -34,56 +34,45 @@
 # under which the OpenSSL Project distributes the OpenSSL toolkit software,
 # as those licenses appear in the file LICENSE-OPENSSL.
 
-# This file creates an nginx config file for sprout.
+# This file creates a syslog config file for Sprout's analytics logs.
+
+syslog_conf_file=/etc/rsyslog.d/30-sproutanalytics.conf
+temp_file=$(mktemp sproutanalytics.syslog.XXXXXXXX)
 
 . /etc/clearwater/config
 
-split_domain_and_port()
-{
-  echo $1 | perl -ne '$_ =~ /(.+):([0-9]+)$/ && print "$1 $2\n"'
-}
+if [ -n "$remote_audit_logging_server" ]; then
+  # If a remote syslog server is configured for auditing registrations, we need
+  # an rsyslog config line for directing the correct syslogs to this server. We
+  # use a regex to forward messages that start with the correct tag and are
+  # registrations.
+  remote_syslog_audit_server_str=":msg, regex, \"<analytics>.*Registration:.*\" @@${remote_audit_logging_server}"
+fi
 
-if [ -n "$sprout_hostname_mgmt" ]
-then
-  site_file=/etc/nginx/sites-available/sprout
-  enabled_file=/etc/nginx/sites-enabled/sprout
-  temp_file=$(mktemp sprout.nginx.XXXXXXXX)
-  server_name_and_port=( $( split_domain_and_port $sprout_hostname_mgmt ) )
+cat > $temp_file << EOF
+\$FileCreateMode 0666
+\$umask 0000
 
-  cat > $temp_file << EOF
-upstream http_sprout {
-        server unix:/tmp/sprout-http-mgmt-socket;
+# Define a template that strips the "<analytics>" tag off the front of it.  This
+# actually strips 14 characters off the message because we also strip off the
+# leading whitespace that rsyslog adds in order to conform with RFC3164 syslog
+# format, but that we don't want.
+\$template analytics-format,"%msg:14:$%\r\n"
 
-        # The minimum number of idle connections to keep alive to the upstream.
-        keepalive 2;
-}
+:msg, contains, "<analytics>" /var/log/sprout/analytics.log;analytics-format
+$remote_syslog_audit_server_str
+:msg, contains, "<analytics>" stop
 
-server {
-        listen       [::]:9886 ipv6only=off;
-        server_name  ${server_name_and_port[0]};
-
-        location / {
-                proxy_pass http://http_sprout;
-                proxy_http_version 1.1;
-
-                # The client may have instructed the server to close the
-                # connection - do not forward this upstream.
-                proxy_set_header Connection "";
-        }
-}
+\$FileCreateMode 0644
 EOF
 
-  if ! diff $temp_file $enabled_file > /dev/null 2>&1
-  then
-    # Update the site file
-    mv $temp_file $site_file
+if ! diff $temp_file $syslog_conf_file > /dev/null 2>&1
+then
+  # Update the config file.
+  mv $temp_file $syslog_conf_file
 
-    # Enable the sprout nginx site
-    if ( nginx_ensite sprout > /dev/null )
-    then
-      service nginx stop
-    fi
-  else
-    rm $temp_file
-  fi
+  # Restart rsyslog to pick up the new config file.
+  service rsyslog restart
+else
+  rm $temp_file
 fi

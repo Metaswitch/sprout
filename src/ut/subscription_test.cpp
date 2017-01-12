@@ -35,6 +35,7 @@
  */
 
 #include <string>
+#include <list>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
@@ -42,7 +43,8 @@
 #include "utils.h"
 #include "analyticslogger.h"
 #include "stack.h"
-#include "subscription.h"
+#include "subscriptionsproutlet.h"
+#include "sproutletproxy.h"
 #include "fakehssconnection.hpp"
 #include "test_interposer.hpp"
 #include "fakechronosconnection.hpp"
@@ -62,6 +64,7 @@ public:
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
+    SipTest::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
     add_host_mapping("sprout.example.com", "10.8.8.1");
 
     _chronos_connection = new FakeChronosConnection();
@@ -69,13 +72,9 @@ public:
     _remote_data_store = new LocalStore();
     _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
     _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, false);
-    std::vector<SubscriberDataManager*> remote_sdms = {_remote_sdm};
-    _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
+    _analytics = new AnalyticsLogger();
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
-    pj_status_t ret = init_subscription(_sdm, remote_sdms, _hss_connection, _acr_factory, _analytics, 300);
-    ASSERT_EQ(PJ_SUCCESS, ret);
-    stack_data.scscf_uri = pj_str("sip:all.the.sprout.nodes:5058;transport=TCP");
 
     _hss_connection->set_impu_result("sip:6505550231@homedomain", "", HSSConnection::STATE_REGISTERED, "");
     _hss_connection->set_impu_result("tel:6505550231", "", HSSConnection::STATE_REGISTERED, "");
@@ -83,7 +82,9 @@ public:
 
   static void TearDownTestCase()
   {
-    destroy_subscription();
+    // Shut down the transaction module first, before we destroy the
+    // objects that might handle any callbacks!
+    pjsip_tsx_layer_destroy();
     delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _analytics; _analytics = NULL;
@@ -95,10 +96,32 @@ public:
     SipTest::TearDownTestCase();
   }
 
-  SubscriptionTest() : SipTest(&mod_subscription)
+  SubscriptionTest()
   {
     _local_data_store->flush_all();  // start from a clean slate on each test
     _remote_data_store->flush_all();
+
+    _subscription_sproutlet = new SubscriptionSproutlet("subscription",
+                                                        5058,
+                                                        "sip:subscription.homedomain:5058;transport=tcp",
+                                                        "scscf-proxy",
+                                                        _sdm,
+                                                        {_remote_sdm},
+                                                        _hss_connection,
+                                                        _acr_factory,
+                                                        _analytics,
+                                                        300);
+    EXPECT_TRUE(_subscription_sproutlet->init());
+
+    std::list<Sproutlet*> sproutlets;
+    sproutlets.push_back(_subscription_sproutlet);
+
+    _subscription_proxy = new SproutletProxy(stack_data.endpt,
+                                             PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
+                                             "homedomain",
+                                             std::unordered_set<std::string>(),
+                                             sproutlets,
+                                             std::set<std::string>());
 
     // Get an initial empty AoR record and add a binding.
     int now = time(NULL);
@@ -116,7 +139,9 @@ public:
     b1->_emergency_registration = false;
 
     // Add the AoR record to the store.
-    _sdm->set_aor_data(std::string("sip:6505550231@homedomain"), aor_pair, 0);
+    std::vector<std::string> irs_impus;
+    irs_impus.push_back("sip:6505550231@homedomain");
+    _sdm->set_aor_data(irs_impus[0], irs_impus, aor_pair, 0);
     delete aor_pair; aor_pair = NULL;
 
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
@@ -124,7 +149,41 @@ public:
 
   ~SubscriptionTest()
   {
+    pjsip_tsx_layer_dump(true);
+
+    // Terminate all transactions
+    std::list<pjsip_transaction*> tsxs = get_all_tsxs();
+    for (std::list<pjsip_transaction*>::iterator it2 = tsxs.begin();
+         it2 != tsxs.end();
+         ++it2)
+    {
+      pjsip_tsx_terminate(*it2, PJSIP_SC_SERVICE_UNAVAILABLE);
+    }
+
+    // PJSIP transactions aren't actually destroyed until a zero ms
+    // timer fires (presumably to ensure destruction doesn't hold up
+    // real work), so poll for that to happen. Otherwise we leak!
+    // Allow a good length of time to pass too, in case we have
+    // transactions still open. 32s is the default UAS INVITE
+    // transaction timeout, so we go higher than that.
+    cwtest_advance_time_ms(33000L);
+    poll();
+    // Stop and restart the transaction layer just in case
+    pjsip_tsx_layer_instance()->stop();
+    pjsip_tsx_layer_instance()->start();
+
+    delete _subscription_proxy; _subscription_proxy = NULL;
+    delete _subscription_sproutlet; _subscription_sproutlet = NULL;
   }
+
+void subscription_sproutlet_handle_200()
+{
+  ASSERT_EQ(1, txdata_count());
+  inject_msg(respond_to_current_txdata(200));
+  ASSERT_EQ(1, txdata_count());
+  EXPECT_EQ(200, current_txdata()->msg->line.status.code);
+  free_txdata();
+}
 
 protected:
   static LocalStore* _local_data_store;
@@ -135,10 +194,13 @@ protected:
   static ACRFactory* _acr_factory;
   static FakeHSSConnection* _hss_connection;
   static FakeChronosConnection* _chronos_connection;
+  SubscriptionSproutlet* _subscription_sproutlet;
+  SproutletProxy* _subscription_proxy;
 
   void check_subscriptions(std::string aor, uint32_t expected);
   std::string check_OK_and_NOTIFY(std::string reg_state,
                                   std::pair<std::string, std::string> contact_values,
+                                  std::vector<std::string> irs_impus,
                                   bool terminated = false,
                                   std::string reason = "");
 };
@@ -167,8 +229,10 @@ public:
   string _route;
   string _auth;
   string _record_route;
+  string _branch;
   string _scheme;
   string _to_tag;
+  int _unique; //< unique to this dialog; inserted into Call-ID
 
   SubscribeMessage() :
     _method("SUBSCRIBE"),
@@ -181,9 +245,13 @@ public:
     _route("homedomain"),
     _auth(""),
     _record_route("Record-Route: <sip:sprout.example.com;transport=tcp;lr>"),
+    _branch(""),
     _scheme("sip"),
     _to_tag("")
   {
+    static int unique = 1042;
+    _unique = unique;
+    unique += 10; // leave room for manual increments
   }
 
   string get();
@@ -193,14 +261,16 @@ string SubscribeMessage::get()
 {
   char buf[16384];
 
+  std::string branch = _branch.empty() ? "Pjmo1aimuq33BAI4rjhgQgBr4sY" + std::to_string(_unique) : _branch;
+
   int n = snprintf(buf, sizeof(buf),
                    "%1$s sip:%3$s SIP/2.0\r\n"
-                   "Via: SIP/2.0/TCP 10.83.18.38:36530;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY5e9kSPI\r\n"
+                   "Via: SIP/2.0/TCP 10.83.18.38:36530;rport;branch=z9hG4bK%15$s\r\n"
                    "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n"
                    "From: <%2$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
                    "To: <%2$s>%14$s\r\n"
                    "Max-Forwards: 68\r\n"
-                   "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqsUOO4ohntC@10.114.61.213\r\n"
+                   "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%16$04dohntC@10.114.61.213\r\n"
                    "CSeq: 16567 %1$s\r\n"
                    "User-Agent: Accession 2.0.0.0\r\n"
                    "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
@@ -233,7 +303,9 @@ string SubscribeMessage::get()
                    /* 11 */ _event.empty() ? "" : string(_event).append("\r\n").c_str(),
                    /* 12 */ _accepts.empty() ? "" : string(_accepts).append("\r\n").c_str(),
                    /* 13 */ _record_route.empty() ? "" : string(_record_route).append("\r\n").c_str(),
-                   /* 14 */ _to_tag.empty() ? "": string(";tag=").append(_to_tag).c_str()
+                   /* 14 */ _to_tag.empty() ? "": string(";tag=").append(_to_tag).c_str(),
+                   /* 15 */ branch.c_str(),
+                   /* 16 */ _unique
     );
 
   EXPECT_LT(n, (int)sizeof(buf));
@@ -246,9 +318,9 @@ string SubscribeMessage::get()
 TEST_F(SubscriptionTest, NotSubscribe)
 {
   SubscribeMessage msg;
-  msg._method = "INVITE";
-  pj_bool_t ret = inject_msg_direct(msg.get());
-  EXPECT_EQ(PJ_FALSE, ret);
+  msg._method = "PUBLISH";
+  inject_msg(msg.get());
+  subscription_sproutlet_handle_200();
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
@@ -256,8 +328,8 @@ TEST_F(SubscriptionTest, NotOurs)
 {
   SubscribeMessage msg;
   msg._domain = "not-us.example.org";
-  pj_bool_t ret = inject_msg_direct(msg.get());
-  EXPECT_EQ(PJ_FALSE, ret);
+  inject_msg(msg.get());
+  subscription_sproutlet_handle_200();
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
@@ -265,8 +337,7 @@ TEST_F(SubscriptionTest, RouteHeaderNotMatching)
 {
   SubscribeMessage msg;
   msg._route = "notthehomedomain";
-  pj_bool_t ret = inject_msg_direct(msg.get());
-  EXPECT_EQ(PJ_FALSE, ret);
+  inject_msg(msg.get());
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
@@ -306,15 +377,20 @@ TEST_F(SubscriptionTest, SimpleMainline)
   // a NOTIFY
   SubscribeMessage msg;
   inject_msg(msg.get());
-  std::string to_tag = check_OK_and_NOTIFY("active", std::make_pair("active", "registered"));
+
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("sip:6505550231@homedomain");
+
+  std::string to_tag = check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
   check_subscriptions("sip:6505550231@homedomain", 1u);
 
   // Actively expire the subscription - this generates a 200 OK and a
   // final NOTIFY
   msg._to_tag = to_tag;
+  msg._unique += 1;
   msg._expires = "0";
   inject_msg(msg.get());
-  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), true, "timeout");
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus, true, "timeout");
 
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
@@ -338,7 +414,9 @@ TEST_F(SubscriptionTest, SimpleMainlineWithTelURI)
   b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
-  _sdm->set_aor_data(std::string("tel:6505550231"), aor_pair, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("tel:6505550231");
+  _sdm->set_aor_data(irs_impus[0], irs_impus, aor_pair, 0);
   delete aor_pair; aor_pair = NULL;
 
   check_subscriptions("tel:6505550231", 0u);
@@ -346,15 +424,17 @@ TEST_F(SubscriptionTest, SimpleMainlineWithTelURI)
   SubscribeMessage msg;
   msg._scheme = "tel";
   inject_msg(msg.get());
-  std::string to_tag = check_OK_and_NOTIFY("active", std::make_pair("active", "registered"));
+
+  std::string to_tag = check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
   check_subscriptions("tel:6505550231", 1u);
 
   // Actively expire the subscription - this generates a 200 OK and a
   // final NOTIFY
   msg._to_tag = to_tag;
+  msg._unique += 1;
   msg._expires = "0";
   inject_msg(msg.get());
-  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), true, "timeout");
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus, true, "timeout");
 }
 
 /// Check that a subscription with immediate expiry is treated correctly
@@ -367,7 +447,11 @@ TEST_F(SubscriptionTest, OneShotSubscription)
   SubscribeMessage msg;
   msg._expires = "0";
   inject_msg(msg.get());
-  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), true, "timeout");
+
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("sip:6505550231@homedomain");
+
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus, true, "timeout");
 
   // Check there's no subscriptions stored
   check_subscriptions("sip:6505550231@homedomain", 0u);
@@ -387,14 +471,9 @@ TEST_F(SubscriptionTest, SubscriptionWithNoBindings)
   SubscribeMessage msg;
   inject_msg(msg.get());
 
-  // Get OK
-  EXPECT_EQ(2, txdata_count());
-  pjsip_msg* out = pop_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-
   // Check the NOTIFY
-  out = current_txdata()->msg;
+  EXPECT_EQ(2, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
   EXPECT_EQ("Subscription-State: terminated;reason=deactivated", get_headers(out, "Subscription-State"));
   char buf[16384];
@@ -427,6 +506,11 @@ TEST_F(SubscriptionTest, SubscriptionWithNoBindings)
   EXPECT_EQ("terminated", std::string(registration->first_attribute("state")->value()));
   inject_msg(respond_to_current_txdata(200));
 
+  // Get OK
+  out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+
   // Check there's no subscriptions stored
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
@@ -441,7 +525,11 @@ TEST_F(SubscriptionTest, SubscriptionWithDataContention)
   // a NOTIFY
   SubscribeMessage msg;
   inject_msg(msg.get());
-  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"));
+
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("sip:6505550231@homedomain");
+
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
 
   // Check there's one subscription stored
   check_subscriptions("sip:6505550231@homedomain", 1u);
@@ -455,8 +543,7 @@ TEST_F(SubscriptionTest, MissingEventHeader)
 
   SubscribeMessage msg;
   msg._event = "";
-  pj_bool_t ret = inject_msg_direct(msg.get());
-  EXPECT_EQ(PJ_FALSE, ret);
+  inject_msg(msg.get());
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
@@ -468,14 +555,12 @@ TEST_F(SubscriptionTest, IncorrectEventHeader)
 
   SubscribeMessage msg;
   msg._event = "Event: Not Reg";
-  pj_bool_t ret = inject_msg_direct(msg.get());
-  EXPECT_EQ(PJ_FALSE, ret);
+  inject_msg(msg.get());
   check_subscriptions("sip:6505550231@homedomain", 0u);
 
   SubscribeMessage msg2;
   msg2._event = "Event: Reg";
-  ret = inject_msg_direct(msg2.get());
-  EXPECT_EQ(PJ_FALSE, ret);
+  inject_msg(msg2.get());
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
@@ -487,7 +572,11 @@ TEST_F(SubscriptionTest, EmptyAcceptsHeader)
   SubscribeMessage msg;
   msg._accepts = "";
   inject_msg(msg.get());
-  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"));
+
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("sip:6505550231@homedomain");
+
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
 
   check_subscriptions("sip:6505550231@homedomain", 1u);
 }
@@ -501,8 +590,7 @@ TEST_F(SubscriptionTest, IncorrectAcceptsHeader)
 
   SubscribeMessage msg;
   msg._accepts = "Accept: notappdata";
-  pj_bool_t ret = inject_msg_direct(msg.get());
-  EXPECT_EQ(PJ_FALSE, ret);
+  inject_msg(msg.get());
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
@@ -516,7 +604,11 @@ TEST_F(SubscriptionTest, CorrectAcceptsHeader)
   SubscribeMessage msg;
   msg._accepts = "Accept: otherstuff,application/reginfo+xml";
   inject_msg(msg.get());
-  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"));
+
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("sip:6505550231@homedomain");
+
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
 
   check_subscriptions("sip:6505550231@homedomain", 1u);
 }
@@ -563,7 +655,7 @@ TEST_F(SubscriptionTest, AssociatedUrisTimeOut)
 
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
-  pjsip_msg* out = current_txdata()->msg;
+  pjsip_msg* out = pop_txdata()->msg;
   EXPECT_EQ(504, out->line.status.code);
   EXPECT_EQ("Server Timeout", str_pj(out->line.status.reason));
   check_subscriptions("sip:6505550232@homedomain", 0u);
@@ -590,7 +682,9 @@ TEST_F(SubscriptionTest, NonPrimaryAssociatedUri)
   b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
-  _sdm->set_aor_data(std::string("sip:6505550233@homedomain"), aor_pair, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("sip:6505550233@homedomain");
+  _sdm->set_aor_data(irs_impus[0], irs_impus, aor_pair, 0);
   delete aor_pair; aor_pair = NULL;
 
   SubscribeMessage msg;
@@ -606,7 +700,13 @@ TEST_F(SubscriptionTest, NonPrimaryAssociatedUri)
                                    "</ServiceProfile></IMSSubscription>");
 
   inject_msg(msg.get());
-  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"));
+
+  // We expect one registration element per IMPU in the Implicit Registration Set
+  irs_impus.clear();
+  irs_impus.push_back("sip:6505550233@homedomain");
+  irs_impus.push_back("sip:6505550234@homedomain");
+
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
   check_subscriptions("sip:6505550233@homedomain", 1u);
 }
 
@@ -642,7 +742,9 @@ TEST_F(SubscriptionTest, NoNotificationsForEmergencyRegistrations)
   b2->_emergency_registration = false;
 
   // Add the AoR record to the store.
-  _sdm->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1, 0);
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back("sip:6505550231@homedomain");
+  _sdm->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   delete aor_data1; aor_data1 = NULL;
 
   check_subscriptions("sip:6505550231@homedomain", 0u);
@@ -650,13 +752,9 @@ TEST_F(SubscriptionTest, NoNotificationsForEmergencyRegistrations)
   SubscribeMessage msg;
   inject_msg(msg.get());
 
-  ASSERT_EQ(2, txdata_count());
-  pjsip_msg* out = pop_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-
   // The NOTIFY should only contain the non-emergency binding
-  out = current_txdata()->msg;
+  ASSERT_EQ(2, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
   char buf[16384];
   int n = out->body->print_body(out->body, buf, sizeof(buf));
@@ -664,6 +762,11 @@ TEST_F(SubscriptionTest, NoNotificationsForEmergencyRegistrations)
   EXPECT_THAT(body, HasSubstr("&lt;sip:6505550231@192.91.191.29:59934;transport=tcp;ob&gt;"));
   EXPECT_THAT(body, Not(HasSubstr("sos")));
   inject_msg(respond_to_current_txdata(200));
+
+  // Get OK
+  out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
 
   check_subscriptions("sip:6505550231@homedomain", 1u);
 }
@@ -685,7 +788,15 @@ TEST_F(SubscriptionTest, CheckNotifyCseqs)
 
   // Receive the SUBSCRIBE 200 OK and NOTIFY, then send NOTIFY 200 OK.
   ASSERT_EQ(2, txdata_count());
-  pjsip_msg* out = pop_txdata()->msg;
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
+
+  // Store off CSeq for later checking.
+  std::string first_cseq = get_headers(out, "CSeq");
+  inject_msg(respond_to_current_txdata(200));
+
+  // Receive OK
+  out = pop_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   std::vector<std::string> to_params;
   Utils::split_string(get_headers(out, "To"), ';', to_params, 0, true);
@@ -698,25 +809,19 @@ TEST_F(SubscriptionTest, CheckNotifyCseqs)
     }
   }
 
-  out = current_txdata()->msg;
-  EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-
-  // Store off CSeq for later checking.
-  std::string first_cseq = get_headers(out, "CSeq");
-  inject_msg(respond_to_current_txdata(200));
-
   msg._expires = "0";
+  msg._unique += 1;
   msg._to_tag = to_tag;
   inject_msg(msg.get());
 
   // Receive another SUBSCRIBE 200 OK and NOTIFY, then send NOTIFY 200 OK.
   ASSERT_EQ(2, txdata_count());
-  out = pop_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
   out = current_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
   std::string second_cseq = get_headers(out, "CSeq");
   inject_msg(respond_to_current_txdata(200));
+  out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
 
   // Check the NOTIFY CSeq has increased.
   int first_cseq_val = strtol(&(first_cseq.c_str()[5]), NULL, 0);
@@ -726,31 +831,12 @@ TEST_F(SubscriptionTest, CheckNotifyCseqs)
 
 std::string SubscriptionTest::check_OK_and_NOTIFY(std::string reg_state,
                                                   std::pair<std::string, std::string> contact_values,
+                                                  std::vector<std::string> irs_impus,
                                                   bool terminated,
                                                   std::string reason)
 {
   EXPECT_EQ(2, txdata_count());
-  pjsip_msg* out = pop_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_THAT(get_headers(out, "From"), testing::MatchesRegex("From: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));
-
-  // Pull out the to tag on the OK - check later that this matches the from tag on the Notify
-  std::vector<std::string> to_params;
-  Utils::split_string(get_headers(out, "To"), ';', to_params, 0, true);
-  std::string to_tag = "No to tag in 200 OK";
-
-  for (unsigned ii = 0; ii < to_params.size(); ii++)
-  {
-    if (to_params[ii].find("tag=") != string::npos)
-    {
-      to_tag = to_params[ii].substr(4);
-    }
-  }
-
-  EXPECT_EQ("P-Charging-Vector: icid-value=\"100\"", get_headers(out, "P-Charging-Vector"));
-  EXPECT_EQ("P-Charging-Function-Addresses: ccf=1.2.3.4;ecf=5.6.7.8", get_headers(out, "P-Charging-Function-Addresses"));
-  out = current_txdata()->msg;
+  pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
   EXPECT_EQ("Event: reg", get_headers(out, "Event"));
 
@@ -784,20 +870,55 @@ std::string SubscriptionTest::check_OK_and_NOTIFY(std::string reg_state,
 
   rapidxml::xml_node<> *reg_info = doc.first_node("reginfo");
   EXPECT_TRUE(reg_info);
-  rapidxml::xml_node<> *registration = reg_info->first_node("registration");
-  EXPECT_TRUE(registration);
-  rapidxml::xml_node<> *contact = registration->first_node("contact");
-  EXPECT_TRUE(contact);
 
-  EXPECT_EQ("full", std::string(reg_info->first_attribute("state")->value()));
-  EXPECT_EQ(reg_state, std::string(registration->first_attribute("state")->value()));
-  EXPECT_EQ(contact_values.first, std::string(contact->first_attribute("state")->value()));
-  EXPECT_EQ(contact_values.second, std::string(contact->first_attribute("event")->value()));
+  int num_reg = 0;
+
+  for (rapidxml::xml_node<> *registration = reg_info->first_node("registration");
+       registration;
+       registration = registration->next_sibling("registration"), num_reg++)
+  {
+    EXPECT_EQ(irs_impus.at(num_reg), std::string(registration->first_attribute("aor")->value()));
+    rapidxml::xml_node<> *contact = registration->first_node("contact");
+    EXPECT_TRUE(contact);
+
+    EXPECT_EQ("full", std::string(reg_info->first_attribute("state")->value()));
+    EXPECT_EQ(reg_state, std::string(registration->first_attribute("state")->value()));
+    EXPECT_EQ(contact_values.first, std::string(contact->first_attribute("state")->value()));
+    EXPECT_EQ(contact_values.second, std::string(contact->first_attribute("event")->value()));
+  }
+
+  // We should have found one registration element for each IMPU
+  EXPECT_EQ(irs_impus.size(), num_reg);
 
   EXPECT_THAT(get_headers(out, "To"), testing::MatchesRegex("To: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));
-  EXPECT_THAT(get_headers(out, "From"), testing::MatchesRegex(string(".*tag=").append(to_tag)));
 
+  // Store off From header for later.
+  std::string from_hdr = get_headers(out, "From");
   inject_msg(respond_to_current_txdata(200));
+
+  out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_THAT(get_headers(out, "From"), testing::MatchesRegex("From: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));
+
+  // Pull out the to tag on the OK - check later that this matches the from tag on the Notify
+  std::vector<std::string> to_params;
+  Utils::split_string(get_headers(out, "To"), ';', to_params, 0, true);
+  std::string to_tag = "No to tag in 200 OK";
+
+  for (unsigned ii = 0; ii < to_params.size(); ii++)
+  {
+    if (to_params[ii].find("tag=") != string::npos)
+    {
+      to_tag = to_params[ii].substr(4);
+    }
+  }
+
+  EXPECT_EQ("P-Charging-Vector: icid-value=\"100\"", get_headers(out, "P-Charging-Vector"));
+  EXPECT_EQ("P-Charging-Function-Addresses: ccf=1.2.3.4;ecf=5.6.7.8", get_headers(out, "P-Charging-Function-Addresses"));
+
+  EXPECT_THAT(from_hdr, testing::MatchesRegex(string(".*tag=").append(to_tag)));
+
   return to_tag;
 }
 
@@ -809,6 +930,7 @@ public:
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
+    SipTest::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
     add_host_mapping("sprout.example.com", "10.8.8.1");
   }
 
@@ -817,27 +939,47 @@ public:
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new MockStore();
     _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
-    _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
+    _analytics = new AnalyticsLogger();
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
-    pj_status_t ret = init_subscription(_sdm, {}, _hss_connection, _acr_factory, _analytics, 300);
-    ASSERT_EQ(PJ_SUCCESS, ret);
-    stack_data.scscf_uri = pj_str("sip:all.the.sprout.nodes:5058;transport=TCP");
 
     _hss_connection->set_impu_result("sip:6505550231@homedomain", "", HSSConnection::STATE_REGISTERED, "");
     _hss_connection->set_impu_result("tel:6505550231", "", HSSConnection::STATE_REGISTERED, "");
 
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
+
+    _subscription_sproutlet = new SubscriptionSproutlet("subscription",
+                                                        5058,
+                                                        "sip:subscription.homedomain:5058;transport=tcp",
+                                                        "scscf-proxy",
+                                                        _sdm,
+                                                        {},
+                                                        _hss_connection,
+                                                        _acr_factory,
+                                                        _analytics,
+                                                        300);
+
+    std::list<Sproutlet*> sproutlets;
+    sproutlets.push_back(_subscription_sproutlet);
+
+    _subscription_proxy = new SproutletProxy(stack_data.endpt,
+                                             PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
+                                             "homedomain",
+                                             std::unordered_set<std::string>(),
+                                             sproutlets,
+                                             std::set<std::string>());
   }
 
   static void TearDownTestCase()
   {
+    // Shut down the transaction module first, before we destroy the
+    // objects that might handle any callbacks!
+    pjsip_tsx_layer_destroy();
     SipTest::TearDownTestCase();
   }
 
   void TearDown()
   {
-    destroy_subscription();
     delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _analytics; _analytics = NULL;
@@ -846,8 +988,33 @@ public:
     delete _chronos_connection; _chronos_connection = NULL;
   }
 
-  SubscriptionTestMockStore() : SipTest(&mod_subscription)
+  ~SubscriptionTestMockStore()
   {
+    pjsip_tsx_layer_dump(true);
+
+    // Terminate all transactions
+    std::list<pjsip_transaction*> tsxs = get_all_tsxs();
+    for (std::list<pjsip_transaction*>::iterator it2 = tsxs.begin();
+         it2 != tsxs.end();
+         ++it2)
+    {
+      pjsip_tsx_terminate(*it2, PJSIP_SC_SERVICE_UNAVAILABLE);
+    }
+
+    // PJSIP transactions aren't actually destroyed until a zero ms
+    // timer fires (presumably to ensure destruction doesn't hold up
+    // real work), so poll for that to happen. Otherwise we leak!
+    // Allow a good length of time to pass too, in case we have
+    // transactions still open. 32s is the default UAS INVITE
+    // transaction timeout, so we go higher than that.
+    cwtest_advance_time_ms(33000L);
+    poll();
+    // Stop and restart the transaction layer just in case
+    pjsip_tsx_layer_instance()->stop();
+    pjsip_tsx_layer_instance()->start();
+
+    delete _subscription_proxy; _subscription_proxy = NULL;
+    delete _subscription_sproutlet; _subscription_sproutlet = NULL;
   }
 
 protected:
@@ -857,6 +1024,8 @@ protected:
   ACRFactory* _acr_factory;
   FakeHSSConnection* _hss_connection;
   FakeChronosConnection* _chronos_connection;
+  SubscriptionSproutlet* _subscription_sproutlet;
+  SproutletProxy* _subscription_proxy;
 };
 
 

@@ -57,10 +57,14 @@ then
   exit 2
 fi
 
-# Populate the file with defaults if not already present
+# Check that the file is already present. The config file should either be put
+# in place by the user, or created by the plugin at startup if it finds both
+# the file and etcd key missing. If it does not exist, the disk may have been
+# full, or some other error may have occured.
 if [[ ! -f $CONFPATH/$FILENAME ]]
 then
-  cp $CONFPATH/sample/$FILENAME $CONFPATH/$FILENAME
+  echo "No configuration file at $CONFPATH/$FILENAME, unable to upload"
+  exit 2
 fi
 
 # Upload the file to etcd

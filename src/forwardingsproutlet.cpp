@@ -1,8 +1,8 @@
 /**
- * @file authentication.h Initialization and termination functions for Sprout Authentication module.
+ * @file forwardingsproutlet.h
  *
  * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Copyright (C) 2016  Metaswitch Networks Ltd
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -34,42 +34,23 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+#include "forwardingsproutlet.h"
+#include "pjutils.h"
 
-#ifndef AUTHENTICATION_H__
-#define AUTHENTICATION_H__
+ForwardingSproutletTsx::ForwardingSproutletTsx(SproutletTsxHelper* helper,
+                                               const std::string& upstream_service_name) :
+  SproutletTsx(helper),
+  _upstream_service_name(upstream_service_name)
+{}
 
-#include "impistore.h"
-#include "hssconnection.h"
-#include "chronosconnection.h"
-#include "acr.h"
-#include "analyticslogger.h"
-#include "snmp_success_fail_count_table.h"
-
-extern pjsip_module mod_authentication;
-
-enum struct NonRegisterAuthentication
+void ForwardingSproutletTsx::forward_request(pjsip_msg* req)
 {
-  // Never challenge a non-REGISTER.
-  NEVER,
-
-  // Only challenge a non-REGISTER if it has a Proxy-Authorization header.
-  IF_PROXY_AUTHORIZATION_PRESENT
-};
-
-typedef int(*get_expiry_for_binding_fn)(pjsip_contact_hdr* contact,
-                                        pjsip_expires_hdr* expires);
-
-pj_status_t init_authentication(const std::string& realm_name,
-                                ImpiStore* impi_store,
-                                HSSConnection* hss_connection,
-                                ChronosConnection* chronos_connection,
-                                ACRFactory* rfacr_factory,
-                                NonRegisterAuthentication non_register_auth_mode_param,
-                                AnalyticsLogger* analytics_logger,
-                                SNMP::AuthenticationStatsTables* auth_stats_tables,
-                                bool nonce_count_supported_arg,
-                                get_expiry_for_binding_fn get_expiry_for_binding_arg);
-
-void destroy_authentication();
-
-#endif
+  const pjsip_route_hdr* route = route_hdr();
+  pjsip_sip_uri* base_uri = (pjsip_sip_uri*)(route ? route->name_addr.uri : nullptr);
+  pjsip_sip_uri* uri =
+    (pjsip_sip_uri*)get_uri_for_service(_upstream_service_name,
+                                        get_pool(req),
+                                        base_uri);
+  PJUtils::add_top_route_header(req, uri, get_pool(req));
+  send_request(req);
+}

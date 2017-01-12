@@ -103,7 +103,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
                                                                       "1.2.826.0.1.1578918.9.3.34");
   _video_session_setup_time_tbl = SNMP::EventAccumulatorTable::create("scscf_video_session_setup_time",
                                                                       "1.2.826.0.1.1578918.9.3.35");
-
+  _forked_invite_tbl = SNMP::CounterTable::create("scscf_forked_invites",
+                                                  "1.2.826.0.1.1578918.9.3.38");
 }
 
 
@@ -114,6 +115,7 @@ SCSCFSproutlet::~SCSCFSproutlet()
   delete _routed_by_preloaded_route_tbl;
   delete _invites_cancelled_before_1xx_tbl;
   delete _invites_cancelled_after_1xx_tbl;
+  delete _forked_invite_tbl;
   delete _audio_session_setup_time_tbl;
   delete _video_session_setup_time_tbl;
 }
@@ -1347,12 +1349,6 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     pj_strdup2(get_pool(req), &odi_uri->user, odi_value.c_str());
     odi_uri->transport_param = as_uri->transport_param;  // Use same transport as AS, in case it can only cope with one.
 
-    pjsip_param* services_p = PJ_POOL_ALLOC_T(get_pool(req), pjsip_param);
-    pj_strdup(get_pool(req), &services_p->name, &STR_SERVICE);
-    pj_list_insert_before(&odi_uri->other_param, services_p);
-    std::string services = _scscf->service_name();
-    pj_strdup2(get_pool(req), &services_p->value, services.c_str());
-
     if (_session_case->is_originating())
     {
       pjsip_param *orig_param = PJ_POOL_ALLOC_T(get_pool(req), pjsip_param);
@@ -1662,6 +1658,13 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       // in case we get a 430 Flow Failed response.
       int fork_id = send_request(to_send);
       _target_bindings.insert(std::make_pair(fork_id, targets[ii].binding_id));
+
+      if ((_req_type == PJSIP_INVITE_METHOD) && (ii != 0))
+      {
+        // Increment stat tracking the number of additional INVITEs generated
+        // due to there being multiple registered targets.
+        _scscf->_forked_invite_tbl->increment();
+      }
     }
   }
 }
@@ -1773,7 +1776,10 @@ void SCSCFSproutletTsx::add_to_dialog(pjsip_msg* msg,
   pjsip_route_hdr* rr = NULL;
   if (!_record_routed)
   {
-    pjsip_sip_uri* uri = get_reflexive_uri(pool);
+    // Get the cluster URI. Don't use `get_reflexive_uri` here as we want to
+    // record route the entire S-CSCF service, not just this sproutlet.
+    pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, _scscf->scscf_cluster_uri());
+    uri->lr_param = 1;
 
     rr = pjsip_rr_hdr_create(pool);
     rr->name_addr.uri = (pjsip_uri*)uri;

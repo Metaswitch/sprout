@@ -425,15 +425,15 @@ std::string PJUtils::extract_username(pjsip_authorization_hdr* auth_hdr, pjsip_u
   return impi;
 }
 
-void PJUtils::get_impi_and_impu(pjsip_rx_data* rdata, std::string& impi_out, std::string& impu_out)
+void PJUtils::get_impi_and_impu(pjsip_msg* req, std::string& impi_out, std::string& impu_out)
 {
   pjsip_authorization_hdr* auth_hdr;
   pjsip_uri* impu_uri;
-  if (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD)
+  if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
   {
-    impu_uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri);
+    impu_uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(req)->uri);
 
-    auth_hdr = (pjsip_authorization_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg,
+    auth_hdr = (pjsip_authorization_hdr*)pjsip_msg_find_hdr(req,
                                                             PJSIP_H_AUTHORIZATION,
                                                             NULL);
   }
@@ -441,9 +441,9 @@ void PJUtils::get_impi_and_impu(pjsip_rx_data* rdata, std::string& impi_out, std
   {
     // Retrieve the IMPU for a non-REGISTER request by determining the originating served user, and
     // the IMPI from the Proxy-Authorization header.
-    impu_uri = orig_served_user(rdata->msg_info.msg);
+    impu_uri = orig_served_user(req);
 
-    auth_hdr = (pjsip_proxy_authorization_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg,
+    auth_hdr = (pjsip_proxy_authorization_hdr*)pjsip_msg_find_hdr(req,
                                                                   PJSIP_H_PROXY_AUTHORIZATION,
                                                                   NULL);
   }
@@ -1662,34 +1662,38 @@ std::string PJUtils::get_header_value(pjsip_hdr* header)
   return std::string(buf2, len);
 }
 
-/// Add SAS markers for the specified call ID and branch IDs on the message (either may be omitted).
+/// Add SAS markers for the specified call ID and branch IDs on the message (call ID may be omitted, but not message).
 void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* cid_hdr, pjsip_msg* msg)
 {
-    SAS::Marker::Scope scope;
-    if ((msg->type != PJSIP_REQUEST_MSG) ||
-        (msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
-        (pjsip_method_cmp(&msg->line.req.method, pjsip_get_subscribe_method()) == 0) ||
-        (pjsip_method_cmp(&msg->line.req.method, pjsip_get_notify_method()) == 0))
-  {
-    // Don't correlate flows based on Call-ID for REGISTER/SUBSCRIBE/NOTIFY - you get massive trace
-    // files.
-    scope = SAS::Marker::Scope::None;
-  }
-  else
-  {
-    scope = SAS::Marker::Scope::Trace;
-  }
-
+  // Decide whether this is a message where we want to correlate on Call-ID or branch ID
+  //
+  // - Normally, we want to correlate on Call-ID (so different transactions in
+  //   a dialog get correlated). We don't want to raise branch ID markers in this
+  //   case (anything with the same branch ID must have the same call ID, and
+  //   branch IDs aren't a thing you can search on).
+  // - For REGISTER/SUBSCRIBE/NOTIFY messages, the dialogs can be very
+  //   long-running and we don't want to correlate these into an enormous trace
+  //   file. Here, we correlate on branch ID so that only transactions are
+  //   grouped together, but we also want to raise a non-correlating Call-ID
+  //   marker so that users can search by Call-ID.
+  // - If we're logging a response (which will only happen if we receive a
+  //   response after a transaction ends and statelessly forward it), we'll
+  //   correlate on Call-ID by default.
+  bool branch_id_correlation = ((msg->type == PJSIP_REQUEST_MSG) &&
+                                ((msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
+                                 (pjsip_method_cmp(&msg->line.req.method, pjsip_get_subscribe_method()) == 0) ||
+                                 (pjsip_method_cmp(&msg->line.req.method, pjsip_get_notify_method()) == 0)));
+  
   if (cid_hdr != NULL)
   {
     TRC_DEBUG("Logging SAS Call-ID marker, Call-ID %.*s", cid_hdr->id.slen, cid_hdr->id.ptr);
     SAS::Marker cid_marker(trail, MARKER_ID_SIP_CALL_ID, 1u);
     cid_marker.add_var_param(cid_hdr->id.slen, cid_hdr->id.ptr);
-    SAS::report_marker(cid_marker, scope);
+    SAS::report_marker(cid_marker, branch_id_correlation ? SAS::Marker::Scope::None : SAS::Marker::Scope::Trace);
   }
 
-  // If we have a message, look for branch IDs too.
-  if (msg != NULL)
+  // If we want to do branch ID correlation, raise that marker now.
+  if (branch_id_correlation)
   {
     // First find the top Via header.  This was added by us.
     pjsip_via_hdr* top_via = (pjsip_via_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_VIA, NULL);
@@ -2429,29 +2433,48 @@ bool PJUtils::should_update_np_data(URIClass old_uri_class,
   }
 }
 
-std::string PJUtils::get_next_routing_header(pjsip_msg* msg)
+std::string PJUtils::get_next_routing_header(const pjsip_msg* msg)
+{
+  pjsip_uri_context_e context;
+  pjsip_uri* uri = PJUtils::get_next_routing_uri(msg, &context);
+
+  return PJUtils::uri_to_string(context, uri);
+}
+
+pjsip_uri* PJUtils::get_next_routing_uri(const pjsip_msg* msg, pjsip_uri_context_e* context)
 {
   pjsip_route_hdr* route = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg,
                                                                 PJSIP_H_ROUTE,
                                                                 NULL);
+  pjsip_uri* result;
 
   if (route == NULL)
   {
-    return PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI,
-                                  msg->line.req.uri);
+    if (context)
+    {
+      *context = PJSIP_URI_IN_REQ_URI;
+    }
+
+    result = msg->line.req.uri;
   }
   else
   {
-    return PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                  route->name_addr.uri);
+    if (context)
+    {
+      *context = PJSIP_URI_IN_ROUTING_HDR;
+    }
+
+    result = route->name_addr.uri;
   }
+
+  return result;
 }
 
 // Gets the media types specified in the SDP on the message.  Currently only
 // looks for Audio and Video media types.
 //
 // @returns A set of type pjmedia_type
-std::set<pjmedia_type> PJUtils::get_media_types(pjsip_msg *msg)
+std::set<pjmedia_type> PJUtils::get_media_types(const pjsip_msg *msg)
 {
   std::set<pjmedia_type> media_types;
 
@@ -2489,5 +2512,3 @@ std::set<pjmedia_type> PJUtils::get_media_types(pjsip_msg *msg)
 
   return media_types;
 }
-
-

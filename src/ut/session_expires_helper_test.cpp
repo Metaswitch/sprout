@@ -103,7 +103,7 @@ public:
   /// Set up test case.
   static void SetUpTestCase()
   {
-    SipTest::SetUpTestCase(false);
+    SipTest::SetUpTestCase();
 
     // Set up DNS mappings for destinations.
     add_host_mapping("proxy1.homedomain", "10.10.10.1");
@@ -118,8 +118,7 @@ public:
                                 "proxy1.homedomain",
                                 std::unordered_set<std::string>(),
                                 _sproutlets,
-                                std::set<std::string>(),
-                                "scscf");
+                                std::set<std::string>());
 
     // Schedule timers.
     SipTest::poll();
