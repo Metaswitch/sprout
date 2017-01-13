@@ -177,7 +177,7 @@ const static struct pj_getopt_option long_opt[] =
   { "realm",                        required_argument, 0, 'R'},
   { "local-site-name",              required_argument, 0, OPT_LOCAL_SITE_NAME},
   { "registration-stores",          required_argument, 0, OPT_REGISTRATION_STORES},
-  { "impi-store",                     required_argument, 0, OPT_IMPI_STORE},
+  { "impi-store",                   required_argument, 0, OPT_IMPI_STORE},
   { "sas",                          required_argument, 0, 'S'},
   { "hss",                          required_argument, 0, 'H'},
   { "record-routing-model",         required_argument, 0, 'C'},
@@ -1428,7 +1428,6 @@ int main(int argc, char* argv[])
   AstaireResolver* astaire_resolver = NULL;
   std::vector<Store*> remote_data_stores = {};
   Store* impi_memstore = NULL;
-  ImpiStore* impi_store = NULL;
   HttpConnection* ralf_connection = NULL;
   ACRFactory* pcscf_acr_factory = NULL;
   pj_bool_t websockets_enabled = PJ_FALSE;
