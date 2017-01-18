@@ -1697,6 +1697,13 @@ void BasicProxy::UACTsx::send_request()
       {
         start_timer_c();
       }
+
+      // We do not want to take any action on a failure returned from
+      // pjsip_tsx_send_msg, as it will have also triggered a call into
+      // on_tsx_state. In the event of failure, this will, or already has
+      // cause us to call into retry_request; we do not want to call into
+      // on_client_not_responding below, so always return success.
+      status = PJ_SUCCESS;
     }
   }
 
