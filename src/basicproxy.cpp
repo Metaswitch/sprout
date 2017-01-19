@@ -1703,7 +1703,9 @@ void BasicProxy::UACTsx::send_request()
       // this below, as acting on it can cause failures, but log to track it.
       if (status != PJ_SUCCESS)
       {
+        //LCOV_EXCL_START
         TRC_WARNING("pjsip_tsx_send_msg synchronously returned failure status code");
+        //LCOV_EXCL_STOP
       }
 
       // We do not want to take any action on a failure returned from
