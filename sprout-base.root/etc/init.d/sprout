@@ -508,6 +508,11 @@ case "$1" in
   abort)
         log_daemon_msg "Aborting $DESC" "$NAME"
         do_abort
+        # If the abort failed, it may be because the PID in PIDFILE doesn't match the right process
+        # In this window condition, we may not recover, so remove the PIDFILE to get it running
+        if [ $? != 0 ]; then
+          rm -f $PIDFILE
+        fi
         ;;
   abort-restart)
         log_daemon_msg "Abort-Restarting $DESC" "$NAME"
