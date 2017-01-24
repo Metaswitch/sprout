@@ -225,7 +225,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                                   {remote_sdm},
                                                   hss_connection,
                                                   scscf_acr_factory,
-                                                  opt.sub_max_expires,
+                                                  opt.reg_max_expires,
                                                   opt.force_third_party_register_body,
                                                   &reg_stats_tbls,
                                                   &third_party_reg_stats_tbls);
