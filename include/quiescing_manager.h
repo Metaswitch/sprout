@@ -201,6 +201,9 @@ public:
     _completion_handler = handler;
   }
 
+  /// Used to check if bono/sprout is quiescing
+  bool is_quiescing();
+
 private:
   void process_input(int input);
 
