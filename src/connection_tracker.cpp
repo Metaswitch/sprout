@@ -110,7 +110,8 @@ void ConnectionTracker::connection_state_update(pjsip_transport *tp,
       }
       else
       {
-        TRC_STATUS("Quiescing, %d more connections to destroy", _connection_listeners.size());
+        TRC_STATUS("Quiescing, %d more connections to destroy",
+                   _connection_listeners.size());
       }
     }
 
@@ -121,10 +122,6 @@ void ConnectionTracker::connection_state_update(pjsip_transport *tp,
     if (quiesce_complete) {
       _on_quiesced_handler->connections_quiesced();
     }
-  }
-  else
-  {
-    TRC_STATUS("Connection %p has been updated with state %d", tp, state);
   }
 }
 
