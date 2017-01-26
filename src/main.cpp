@@ -2316,6 +2316,15 @@ int main(int argc, char* argv[])
 
   // Wait here until the quit semaphore is signaled.
   sem_wait(&term_sem);
+
+  // If we received a TERM while we were quiescing, log that as an error.  We
+  // should only receive a TERM when quiescing if something has gone wrong and
+  // we have taken longer than 5 minutes to quiesce.
+  if (quiescing_mgr->is_quiescing())
+  {
+    TRC_ERROR("Sprout received a TERM signal when quiescing");
+  }
+
   snmp_terminate("sprout");
 
   CL_SPROUT_ENDED.log();
