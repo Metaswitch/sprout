@@ -75,8 +75,6 @@ static HSSConnection* hss;
 // Factory for create ACR messages for Rf billing flows.
 static ACRFactory* acr_factory;
 
-static AnalyticsLogger* analytics;
-
 static int max_expires;
 
 // Pre-constructed Service Route header added to REGISTER responses.
@@ -226,6 +224,7 @@ SubscriberDataManager::AoRPair* write_to_store(
                    std::vector<SubscriberDataManager*> backup_sdms,
                                                                ///<backup stores to read from if no entry in store and no backup data
                    std::string private_id,                     ///<private id that the binding was registered with
+                   bool& out_all_bindings_expired,
                    SAS::TrailId trail)
 {
   // Get the call identifier and the cseq number from the respective headers.
@@ -422,12 +421,6 @@ SubscriberDataManager::AoRPair* write_to_store(
           {
             binding->_expires = now + expiry;
           }
-
-          if (analytics != NULL)
-          {
-            // Generate an analytics log for this binding update.
-            analytics->registration(aor, binding_id, contact_uri, expiry);
-          }
         }
       }
       contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, contact->next);
@@ -464,16 +457,8 @@ SubscriberDataManager::AoRPair* write_to_store(
     delete backup_aor; // LCOV_EXCL_LINE
   }
 
-  if (all_bindings_expired)
-  {
-    TRC_DEBUG("All bindings have expired - triggering deregistration at the HSS");
-    hss->update_registration_state(aor,
-                                   "",
-                                   HSSConnection::DEREG_USER,
-                                   trail);
-  }
-
   out_is_initial_registration = is_initial_registration;
+  out_all_bindings_expired = all_bindings_expired;
 
   return aor_pair;
 }
@@ -488,6 +473,7 @@ void process_register_request(pjsip_rx_data* rdata)
   int now = time(NULL);
   int expiry = 0;
   bool is_initial_registration;
+  bool all_bindings_expired;
 
   // Loop through headers as early as possible so that we know the expiry time
   // and which registration statistics to update.
@@ -636,6 +622,7 @@ void process_register_request(pjsip_rx_data* rdata)
   std::string regstate;
   std::deque<std::string> ccfs;
   std::deque<std::string> ecfs;
+
   HTTPCode http_code = hss->update_registration_state(public_id,
                                                       private_id,
                                                       HSSConnection::REG,
@@ -747,7 +734,16 @@ void process_register_request(pjsip_rx_data* rdata)
                                                 NULL,
                                                 remote_sdms,
                                                 private_id_for_binding,
+                                                all_bindings_expired,
                                                 trail);
+  if (all_bindings_expired)
+  {
+    TRC_DEBUG("All bindings have expired - triggering deregistration at the HSS");
+    hss->update_registration_state(aor,
+                                   "",
+                                   HSSConnection::DEREG_USER,
+                                   trail);
+  }
 
   if ((aor_pair != NULL) && (aor_pair->get_current() != NULL))
   {
@@ -775,6 +771,7 @@ void process_register_request(pjsip_rx_data* rdata)
                          aor_pair,
                          {},
                          private_id_for_binding,
+                         ignored,
                          trail);
         delete remote_aor_pair;
       }
@@ -1134,6 +1131,10 @@ void third_party_register_failed(const std::string& public_id,
 
 pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 {
+  // SAS log the start of processing by this module
+  SAS::Event event(get_trail(rdata), SASEvent::BEGIN_REGISTRAR_MODULE, 0);
+  SAS::report_event(event);
+
   URIClass uri_class = URIClassifier::classify_uri(rdata->msg_info.msg->line.req.uri);
   if ((rdata->tp_info.transport->local_name.port == stack_data.scscf_port) &&
       (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD) &&
@@ -1152,7 +1153,6 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 pj_status_t init_registrar(SubscriberDataManager* reg_sdm,
                            std::vector<SubscriberDataManager*> reg_remote_sdms,
                            HSSConnection* hss_connection,
-                           AnalyticsLogger* analytics_logger,
                            ACRFactory* rfacr_factory,
                            int cfg_max_expires,
                            bool force_original_register_inclusion,
@@ -1164,7 +1164,6 @@ pj_status_t init_registrar(SubscriberDataManager* reg_sdm,
   sdm = reg_sdm;
   remote_sdms = reg_remote_sdms;
   hss = hss_connection;
-  analytics = analytics_logger;
   max_expires = cfg_max_expires;
   acr_factory = rfacr_factory;
   reg_stats_tables = reg_stats_tbls;

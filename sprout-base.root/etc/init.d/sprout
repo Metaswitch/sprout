@@ -310,6 +310,7 @@ get_daemon_args()
         [ "$non_register_authentication" = "" ]   || DAEMON_ARGS="$DAEMON_ARGS --non-register-authentication=$non_register_authentication"
         [ "$impi_store_mode" = "" ]               || DAEMON_ARGS="$DAEMON_ARGS --impi-store-mode=$impi_store_mode"
         [ "$nonce_count_supported" != "Y" ]       || DAEMON_ARGS="$DAEMON_ARGS --nonce-count-supported"
+        [ "$listen_port" = "" ]                   || DAEMON_ARGS="$DAEMON_ARGS --listen-port=$listen_port"
 
         for script in /usr/share/clearwater/sprout/plugin_conf.d/*.plugin_conf
         do
@@ -391,6 +392,11 @@ do_abort()
         #   other if a failure occurred
         start-stop-daemon --stop --quiet --retry=ABRT/60/KILL/5 --pidfile $PIDFILE --name $EXECNAME
         RETVAL="$?"
+        # If the abort failed, it may be because the PID in PIDFILE doesn't match the right process
+        # In this window condition, we may not recover, so remove the PIDFILE to get it running
+        if [ $RETVAL != 0 ]; then
+          rm -f $PIDFILE
+        fi
         return "$RETVAL"
 }
 

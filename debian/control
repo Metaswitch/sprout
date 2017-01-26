@@ -51,7 +51,7 @@ Description: Debugging symbols for sprout, the SIP Router
 
 Package: sprout-base
 Architecture: any
-Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-log-cleanup, sprout-libs, libboost-regex1.54.0, libboost-system1.54.0, libboost-thread1.54.0, libzmq3, libevent-pthreads-2.0-5, clearwater-socket-factory, libboost-filesystem1.54.0, libsnmp30 (>= 5.7.2~dfsg-clearwater4), clearwater-monit, clearwater-nginx
+Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-log-cleanup, sprout-libs, libboost-regex1.54.0, libboost-system1.54.0, libboost-thread1.54.0, libzmq3, libevent-pthreads-2.0-5, clearwater-socket-factory, libboost-filesystem1.54.0, libsnmp30 (>= 5.7.2~dfsg-clearwater7), clearwater-monit, clearwater-nginx
 Suggests: sprout-dbg, clearwater-logging
 Replaces: sprout
 Description: sprout-base, the SIP Router basic executable
@@ -183,7 +183,7 @@ Description: Debugging symbols for bono-node, the SIP edge proxy node
 
 Package: bono
 Architecture: any
-Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-log-cleanup, sprout-libs, libboost-regex1.54.0, libboost-system1.54.0, libboost-thread1.54.0, libzmq3, libevent-pthreads-2.0-5, clearwater-socket-factory, libboost-filesystem1.54.0, libsnmp30 (>= 5.7.2~dfsg-clearwater4), clearwater-monit
+Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-log-cleanup, sprout-libs, libboost-regex1.54.0, libboost-system1.54.0, libboost-thread1.54.0, libzmq3, libevent-pthreads-2.0-5, clearwater-socket-factory, libboost-filesystem1.54.0, libsnmp30 (>= 5.7.2~dfsg-clearwater7), clearwater-monit
 Suggests: restund, bono-dbg, clearwater-logging
 Description: bono, the SIP edge proxy
 

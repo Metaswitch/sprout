@@ -77,6 +77,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          exception_handler.cpp \
                          snmp_agent.cpp \
                          snmp_continuous_accumulator_table.cpp \
+                         snmp_continuous_accumulator_by_scope_table.cpp \
                          sip_string_to_request_type.cpp \
                          snmp_row.cpp \
                          snmp_ip_row.cpp \
@@ -91,11 +92,13 @@ SPROUT_COMMON_SOURCES := logger.cpp \
 
 sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_counter_table.cpp \
+                  snmp_counter_by_scope_table.cpp \
                   snmp_ip_count_table.cpp \
                   snmp_success_fail_count_table.cpp \
                   snmp_success_fail_count_by_request_type_table.cpp \
                   snmp_event_accumulator_table.cpp \
-                  pdlog.cpp \
+                  snmp_event_accumulator_by_scope_table.cpp \
+                  snmp_scalar_by_scope_table.cpp \
                   main.cpp
 
 sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \

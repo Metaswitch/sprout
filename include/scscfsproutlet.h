@@ -230,6 +230,7 @@ private:
   SNMP::CounterTable* _invites_cancelled_after_1xx_tbl = NULL;
   SNMP::EventAccumulatorTable* _video_session_setup_time_tbl = NULL;
   SNMP::EventAccumulatorTable* _audio_session_setup_time_tbl = NULL;
+  SNMP::CounterTable* _forked_invite_tbl = NULL;
 
   AsCommunicationTracker* _sess_term_as_tracker;
   AsCommunicationTracker* _sess_cont_as_tracker;

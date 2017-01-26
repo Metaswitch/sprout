@@ -146,8 +146,6 @@ do_abort()
         start-stop-daemon --stop --quiet --retry=ABRT/60/KILL/5 --name $NAME
         RETVAL="$?"
         [ "$RETVAL" = 2 ] && return 2
-        # Many daemons don't delete their pidfiles when they exit.
-        #rm -f $PIDFILE
         return "$RETVAL"
 }
 

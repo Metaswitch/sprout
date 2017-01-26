@@ -692,6 +692,12 @@ public:
     pjsip_tsx_layer_instance()->start();
   }
 
+  std::list<std::string> extract_services(std::string uri)
+  {
+    pjsip_sip_uri* s = (pjsip_sip_uri*)PJUtils::uri_from_string(uri, stack_data.pool, PJ_FALSE);
+    return _proxy->extract_possible_services(s);
+  }
+
   class Message
   {
   public:
@@ -2299,3 +2305,25 @@ TEST_F(SproutletProxyTest, LocalNonSubscribe)
 
   delete tp;
 }
+
+// Tests standard routing of a subscription request to ensure it is
+// routed via the sproutlet interface.
+TEST_F(SproutletProxyTest, ServiceExtraction)
+{
+  std::list<std::string> names;
+
+  names = extract_services("sip:alice@proxy1.homedomain");
+
+  ASSERT_EQ(1, names.size());
+  ASSERT_EQ("alice", names.front());
+
+  names = extract_services("sip:scscf.proxy1.homedomain");
+
+  ASSERT_EQ(1, names.size());
+  ASSERT_EQ("scscf", names.front());
+
+  names = extract_services("sip:alice@otherdomain");
+
+  ASSERT_EQ(0, names.size());
+}
+

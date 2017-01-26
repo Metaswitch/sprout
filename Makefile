@@ -11,7 +11,7 @@ INSTALL_DIR ?= ${PREFIX}
 MODULE_DIR := ${ROOT}/modules
 
 DEB_COMPONENT := sprout
-DEB_MAJOR_VERSION := 1.0${DEB_VERSION_QUALIFIER}
+DEB_MAJOR_VERSION ?= 1.0${DEB_VERSION_QUALIFIER}
 DEB_NAMES := sprout-libs sprout-libs-dbg
 DEB_NAMES += sprout sprout-dbg
 DEB_NAMES += sprout-node sprout-node-dbg

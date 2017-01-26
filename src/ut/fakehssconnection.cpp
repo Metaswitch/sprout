@@ -40,18 +40,27 @@
 
 #include "fakesnmp.hpp"
 
-FakeHSSConnection::FakeHSSConnection() : HSSConnection("localhost",
-                                                       NULL,
-                                                       NULL,
-                                                       &SNMP::FAKE_IP_COUNT_TABLE,
-                                                       &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
-                                                       &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
-                                                       &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
-                                                       &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
-                                                       &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
-                                                       NULL,
-                                                       "sip:scscf.sprout.homedomain:5058;transport=TCP")
+/// HSSConnection that writes to/reads from a local map rather than the HSS.
+/// Optionally accepts a MockHSSConnection object -- if this is provided then
+/// (currently only some) methods call through to the corresponding Mock
+/// methods so method invocation parameters / counts can be policed by test
+/// scripts.  This only enables method invocations to be checked -- it does not
+/// allow control of the behaviour of those functions -- in all cases the
+/// resulting behaviour is dictated by the FakeHSSConnection class.
+FakeHSSConnection::FakeHSSConnection(MockHSSConnection* hss_connection_observer) :
+  HSSConnection("localhost",
+                NULL,
+                NULL,
+                &SNMP::FAKE_IP_COUNT_TABLE,
+                &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+                &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+                &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+                &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+                &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+                NULL,
+                "sip:scscf.sprout.homedomain:5058;transport=TCP")
 {
+  _hss_connection_observer = hss_connection_observer;
 }
 
 
@@ -244,3 +253,57 @@ bool FakeHSSConnection::url_was_requested(const std::string& url, const std::str
 {
   return (_calls.find(UrlBody(url, body)) != _calls.end());
 }
+
+HTTPCode FakeHSSConnection::update_registration_state(const std::string& public_user_identity,
+                                                      const std::string& private_user_identity,
+                                                      const std::string& type,
+                                                      SAS::TrailId trail)
+{
+  if (_hss_connection_observer != NULL)
+  {
+    _hss_connection_observer->update_registration_state(public_user_identity,
+                                                        private_user_identity,
+                                                        type,
+                                                        trail);
+  }
+
+  return HSSConnection::update_registration_state(public_user_identity,
+                                                  private_user_identity,
+                                                  type,
+                                                  trail);
+}
+
+HTTPCode FakeHSSConnection::update_registration_state(const std::string& public_user_identity,
+                                                      const std::string& private_user_identity,
+                                                      const std::string& type,
+                                                      std::string& regstate,
+                                                      std::map<std::string, Ifcs >& ifcs_map,
+                                                      std::vector<std::string>& associated_uris,
+                                                      std::deque<std::string>& ccfs,
+                                                      std::deque<std::string>& ecfs,
+                                                      SAS::TrailId trail)
+{
+  if (_hss_connection_observer != NULL)
+  {
+    _hss_connection_observer->update_registration_state(public_user_identity,
+                                                        private_user_identity,
+                                                        type,
+                                                        regstate,
+                                                        ifcs_map,
+                                                        associated_uris,
+                                                        ccfs,
+                                                        ecfs,
+                                                        trail);
+  }
+
+  return HSSConnection::update_registration_state(public_user_identity,
+                                                  private_user_identity,
+                                                  type,
+                                                  regstate,
+                                                  ifcs_map,
+                                                  associated_uris,
+                                                  ccfs,
+                                                  ecfs,
+                                                  trail);
+}
+

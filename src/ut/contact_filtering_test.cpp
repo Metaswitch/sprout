@@ -971,6 +971,11 @@ TEST_F(ContactFilteringFullStackTest, LotsOfBindings)
     {
       binding->_params["+sip.other2"] = "#5";
     }
+    if (ii % 7 == 0)
+    {
+      binding->_priority += ii;
+    }
+
     binding->_expires = ii * 100;
   }
 

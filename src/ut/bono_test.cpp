@@ -263,7 +263,7 @@ public:
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
     _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
-    _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
+    _analytics = new AnalyticsLogger();
     _hss_connection = new FakeHSSConnection();
     if (ifcs)
     {

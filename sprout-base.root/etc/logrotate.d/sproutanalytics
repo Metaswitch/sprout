@@ -1,0 +1,19 @@
+/var/log/sprout/analytics.log {
+  su sprout sprout
+  daily
+  # Keep 36500 log files (i.e. 100 years worth). The log cleanup scripts will
+  # clean up this directory if the files become too big.
+  rotate 36500
+  # Add a date and timestamp to the rotated log file.
+  dateext
+  dateformat .%Y-%m-%d-%s
+  extension .log
+  missingok
+  # Allow rsyslog to create the new file.
+  nocreate
+  # After rotating, rsyslog still has the rotated file open; reload it so that
+  # it starts writing to the new file.
+  postrotate
+    reload rsyslog >/dev/null 2>&1 || true
+  endscript
+}

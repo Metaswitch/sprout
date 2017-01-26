@@ -69,8 +69,8 @@ extern "C" {
 #include "health_checker.h"
 #include "uri_classifier.h"
 
-static SNMP::CounterTable* requests_counter = NULL;
-static SNMP::CounterTable* overload_counter = NULL;
+static SNMP::CounterByScopeTable* requests_counter = NULL;
+static SNMP::CounterByScopeTable* overload_counter = NULL;
 static LoadMonitor* load_monitor = NULL;
 static HealthChecker* health_checker = NULL;
 
@@ -139,6 +139,7 @@ static void local_log_tx_msg(pjsip_tx_data* tdata)
 // LCOV_EXCL_START - can't meaningfully test SAS in UT
 static void sas_log_rx_msg(pjsip_rx_data* rdata)
 {
+  bool first_message_in_trail = false;
   SAS::TrailId trail = 0;
 
   // Look for the SAS Trail ID for the corresponding transaction object.
@@ -224,15 +225,22 @@ static void sas_log_rx_msg(pjsip_rx_data* rdata)
     {
       trail = SAS::new_trail(1u);
     }
+    first_message_in_trail = true;
   }
 
   // Store the trail in the message as it gets passed up the stack.
   set_trail(rdata, trail);
 
-  PJUtils::report_sas_to_from_markers(trail, rdata->msg_info.msg);
+  // Raise SAS markers on the first message in a trail only - subsequent
+  // messages with the same trail ID don't need additional markers
+  if (first_message_in_trail)
+  {
+    PJUtils::report_sas_to_from_markers(trail, rdata->msg_info.msg);
 
-  pjsip_cid_hdr* cid = (pjsip_cid_hdr*)rdata->msg_info.cid;
-  PJUtils::mark_sas_call_branch_ids(trail, cid, rdata->msg_info.msg);
+    pjsip_cid_hdr* cid = (pjsip_cid_hdr*)rdata->msg_info.cid;
+
+    PJUtils::mark_sas_call_branch_ids(trail, cid, rdata->msg_info.msg);
+  }
 
   // Log the message event.
   SAS::Event event(trail, SASEvent::RX_SIP_MSG, 0);
@@ -256,9 +264,14 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
   }
   else if (trail != 0)
   {
-    PJUtils::report_sas_to_from_markers(trail, tdata->msg);
+    // Raise SAS markers on initial requests only - responses in the same
+    // transaction will have the same trail ID so don't need additional markers
+    if (tdata->msg->type == PJSIP_REQUEST_MSG)
+    {
+      PJUtils::report_sas_to_from_markers(trail, tdata->msg);
 
-    PJUtils::mark_sas_call_branch_ids(trail, NULL, tdata->msg);
+      PJUtils::mark_sas_call_branch_ids(trail, NULL, tdata->msg);
+    }
 
     // Log the message event.
     SAS::Event event(trail, SASEvent::TX_SIP_MSG, 0);
@@ -339,9 +352,6 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
     SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
     SAS::report_marker(start_marker);
 
-    PJUtils::report_sas_to_from_markers(trail, rdata->msg_info.msg);
-    PJUtils::mark_sas_call_branch_ids(trail, rdata->msg_info.cid, rdata->msg_info.msg);
-
     pjsip_parser_err_report *err = rdata->msg_info.parse_err.next;
     while (err != &rdata->msg_info.parse_err)
     {
@@ -402,8 +412,8 @@ static pj_status_t process_on_tx_msg(pjsip_tx_data* tdata)
 
 pj_status_t
 init_common_sip_processing(LoadMonitor* load_monitor_arg,
-                           SNMP::CounterTable* requests_counter_arg,
-                           SNMP::CounterTable* overload_counter_arg,
+                           SNMP::CounterByScopeTable* requests_counter_arg,
+                           SNMP::CounterByScopeTable* overload_counter_arg,
                            HealthChecker* health_checker_arg)
 {
   // Register the stack modules.

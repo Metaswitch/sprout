@@ -35,8 +35,8 @@
  */
 
 
-#ifndef REGSTORE_H__
-#define REGSTORE_H__
+#ifndef SUBSCRIBER_DATA_MANAGER_H__
+#define SUBSCRIBER_DATA_MANAGER_H__
 
 extern "C" {
 #include <pj/pool.h>
@@ -52,9 +52,16 @@ extern "C" {
 #include "store.h"
 #include "chronosconnection.h"
 #include "sas.h"
-
+#include "analyticslogger.h"
 #include "rapidjson/writer.h"
 #include "rapidjson/document.h"
+
+// We need to declare the parts of NotifyUtils needed below to avoid a 
+// circular dependency between this and notify_utils.h
+namespace NotifyUtils { struct BindingNotifyInformation; };
+
+typedef NotifyUtils::BindingNotifyInformation ClassifiedBinding;
+typedef std::vector<ClassifiedBinding*> ClassifiedBindings;
 
 class SubscriberDataManager
 {
@@ -538,12 +545,14 @@ public:
   ///                             the entries in the vector.
   /// @param chronos_connection - Chronos connection used to set timers for
   ///                             expiring registrations and subscriptions.
+  /// @param analytics_logger   - AnalyticsLogger for reporting registration events.
   /// @param is_primary         - Whether the underlying data store is the local
-  ///                             store or remote
+  ///                             store or remote.
   SubscriberDataManager(Store* data_store,
                         SerializerDeserializer*& serializer,
                         std::vector<SerializerDeserializer*>& deserializers,
                         ChronosConnection* chronos_connection,
+                        AnalyticsLogger* analytics_logger,
                         bool is_primary);
 
   /// Alternative SubscriberDataManager constructor that creates a SubscriberDataManager using just the
@@ -598,29 +607,49 @@ public:
 private:
   // Expire any out of date bindings in the current AoR
   //
-  // @param aor_pair  The AoRPair to expir
+  // @param aor_pair  The AoRPair to expire
   // @param now       The current time
   int expire_aor_members(AoRPair* aor_pair,
                          int now);
 
   // Expire any old bindings, and return the maximum expiry
   //
-  // @param aor_pair  The AoRPair to expir
+  // @param aor_pair  The AoRPair to expire
   // @param now       The current time
   int expire_bindings(AoR* aor_data,
                       int now);
 
   // Expire any old subscriptions.
   //
-  // @param aor_pair      The AoRPair to expir
+  // @param aor_pair      The AoRPair to expire
   // @param now           The current time
   // @param force_expires Whether all subscriptions should be expired
   //                      no matter the current time
   void expire_subscriptions(AoRPair* aor_pair,
                             int now,
                             bool force_expire);
+  
+  // Iterate over all original and current bindings in an AoR pair and
+  // classify them as removed ("EXPIRED"), created ("CREATED"), refreshed ("REFRESHED"),
+  // shortened ("SHORTENED") or unchanged ("REGISTERED").
+  //
+  // @param aor_id                The AoR ID
+  // @param aor_pair              The AoR pair to compare and classify bindings for
+  // @param classified_bindings   Output vector of classified bindings
+  void classify_bindings(const std::string& aor_id,
+                         SubscriberDataManager::AoRPair* aor_pair,
+                         ClassifiedBindings& classified_bindings);
+  
+  // Iterate over a list of classified bindings, and emit registration logs for those
+  // that are EXPIRED or SHORTENED.
+  void log_removed_or_shortened_bindings(ClassifiedBindings& classified_bindings);
+
+  // Iterate over a list of classified bindings, and emit registration logs for those
+  // that are CREATED or REFRESHED.
+  void log_new_or_extended_bindings(ClassifiedBindings& classified_bindings);
 
   static bool unused_bool;
+  AnalyticsLogger* _analytics;
   Connector* _connector;
   ChronosTimerRequestSender* _chronos_timer_request_sender;
   NotifySender* _notify_sender;

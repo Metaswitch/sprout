@@ -157,8 +157,8 @@ pjsip_transport* SIPConnectionPool::get_connection()
 
 
 pj_status_t SIPConnectionPool::resolve_host(const pj_str_t* host,
-                                         int port,
-                                         pj_sockaddr* addr)
+                                            int port,
+                                            pj_sockaddr* addr)
 {
   pj_status_t status = PJ_ENOTFOUND;
 

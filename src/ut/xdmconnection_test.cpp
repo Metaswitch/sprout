@@ -86,7 +86,7 @@ TEST_F(XdmConnectionTest, SimServsGet)
   bool ret = _xdm.get_simservs("gand/alf", output, "friend_and_enter", 0);
   EXPECT_TRUE(ret);
   EXPECT_EQ("<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Still</boring>", output);
-  Request& req = fakecurl_requests["http://10.42.42.42:80/org.etsi.ngn.simservs/users/gand%2Falf/simservs.xml"];
+  Request& req = fakecurl_requests["http://cyrus:80/org.etsi.ngn.simservs/users/gand%2Falf/simservs.xml"];
   EXPECT_EQ("GET", req._method);
   EXPECT_FALSE(req._httpauth & CURLAUTH_DIGEST) << req._httpauth;
   EXPECT_EQ("", req._username);

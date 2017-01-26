@@ -315,7 +315,7 @@ pj_status_t user_lookup(pj_pool_t *pool,
       }
 
       cred_info->data_type = PJSIP_CRED_DATA_PLAIN_PASSWD;
-      pj_strdup2(pool, &cred_info->data, xres.c_str());
+      pj_strdup4(pool, &cred_info->data, xres.data(), xres.length());
       TRC_DEBUG("Found AKA XRES = %.*s", cred_info->data.slen, cred_info->data.ptr);
 
       // Use default realm as it isn't specified in the AV.
@@ -440,7 +440,7 @@ void create_challenge(pjsip_digest_credential* credentials,
       // AKA version defaults to 1, for back-compatibility with pre-AKAv2
       // Homestead versions.
       int akaversion = 1;
-      
+
       JSON_SAFE_GET_STRING_MEMBER(aka, "challenge", nonce);
       JSON_SAFE_GET_STRING_MEMBER(aka, "cryptkey", cryptkey);
       JSON_SAFE_GET_STRING_MEMBER(aka, "integritykey", integritykey);
@@ -493,14 +493,16 @@ void create_challenge(pjsip_digest_credential* credentials,
         // - base64-encode that
         std::string joined = unhex(xres + integritykey + cryptkey);
         std::string formality = "http-digest-akav2-password";
+        unsigned int digest_len;
+        unsigned char hmac[EVP_MAX_MD_SIZE];
         unsigned char* digest = HMAC(EVP_md5(),
                                      (unsigned char*)joined.data(),
                                      joined.size(),
                                      (unsigned char*)(formality.data()),
                                      formality.size(),
-                                     NULL,
-                                     NULL);
-        std::string password = base64_encode(std::string(reinterpret_cast<char*>(digest)));
+                                     hmac,
+                                     &digest_len);
+        std::string password = base64_encode(std::string((char*) digest, digest_len));
 
         // We hex-decode this when getting it out of memcached later (for
         // consistency with AKAv1) so hex-encode it now.
@@ -882,6 +884,10 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
   SAS::TrailId trail = get_trail(rdata);
 
+  // SAS log the start of processing by this module
+  SAS::Event event(trail, SASEvent::BEGIN_AUTHENTICATION_MODULE, 0);
+  SAS::report_event(event);
+
   if (!needs_authentication(rdata, trail))
   {
     TRC_DEBUG("Request does not need authentication");
@@ -917,11 +923,12 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     }
     else
     {
-      if (!pj_strcmp2(&credentials->algorithm, "MD5"))
+      if (!pj_strcmp(&credentials->algorithm, &STR_MD5))
       {
         auth_stats_table = auth_stats_tables->sip_digest_auth_tbl;
       }
-      else if (!pj_strcmp2(&credentials->algorithm, "AKAv1-MD5"))
+      else if ((!pj_strcmp(&credentials->algorithm, &STR_AKAV1_MD5)) ||
+               (!pj_strcmp(&credentials->algorithm, &STR_AKAV2_MD5)))
       {
         auth_stats_table = auth_stats_tables->ims_aka_auth_tbl;
       }

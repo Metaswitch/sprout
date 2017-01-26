@@ -41,12 +41,19 @@
 #include "log.h"
 #include "sas.h"
 #include "hssconnection.h"
+#include "mock_hss_connection.h"
 
 /// HSSConnection that writes to/reads from a local map rather than the HSS.
+/// Optionally accepts a MockHSSConnection object -- if this is provided then
+/// (currently only some) methods call through to the corresponding Mock
+/// methods so method invocation parameters / counts can be policed by test
+/// scripts.  This only enables method invocations to be checked -- it does not
+/// allow control of the behaviour of those functions -- in all cases the
+/// resulting behaviour is dictated by the FakeHSSConnection class.
 class FakeHSSConnection : public HSSConnection
 {
 public:
-  FakeHSSConnection();
+  FakeHSSConnection(MockHSSConnection* = NULL);
   ~FakeHSSConnection();
 
   void flush_all();
@@ -63,6 +70,21 @@ public:
   bool url_was_requested(const std::string& url, const std::string& body);
   void allow_fallback_ifcs();
 
+  HTTPCode update_registration_state(const std::string&,
+                                     const std::string&,
+                                     const std::string&,
+                                     SAS::TrailId);
+
+  HTTPCode update_registration_state(const std::string& public_user_identity,
+                                     const std::string& private_user_identity,
+                                     const std::string& type,
+                                     std::string& regstate,
+                                     std::map<std::string, Ifcs >& service_profiles,
+                                     std::vector<std::string>& associated_uris,
+                                     std::deque<std::string>& ccfs,
+                                     std::deque<std::string>& ecfs,
+                                     SAS::TrailId trail);
+
 private:
   long get_json_object(const std::string& path, rapidjson::Document*& object, SAS::TrailId trail);
   long get_xml_object(const std::string& path, rapidxml::xml_document<>*& root, SAS::TrailId trail);
@@ -74,4 +96,8 @@ private:
   std::map<UrlBody, std::string> _results;
   std::map<std::string, long> _rcs;
   std::set<UrlBody> _calls;
+
+  // Optional MockHSSConnection object.  May be NULL if the creator of the
+  // FakeHSSConnection  does not want to explicitly check method invocation.
+  MockHSSConnection* _hss_connection_observer;
 };

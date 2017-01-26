@@ -76,8 +76,11 @@ setup_user() {
 setup_logging() {
     if [ ! -d "$log_directory" ]; then
         mkdir -p $log_directory
-        chown $NAME $log_directory
     fi
+
+    # We use syslog to write analytics logs to the logs directory.
+    chown $NAME:syslog $log_directory
+    chmod 775 $log_directory
 }
 
 case "$1" in

@@ -158,8 +158,8 @@ void QuiescingManager::process_input(int input)
          (_state == STATE_QUIESCED));
   // LCOV_EXCL_STOP
 
-  TRC_DEBUG("The Quiescing Manager received input %s (%d) "
-            "when in state %s (%d)",
+  TRC_STATUS("The Quiescing Manager received input %s (%d) "
+             "when in state %s (%d)",
             INPUT_NAMES[input], input,
             STATE_NAMES[_state], _state);
 
@@ -287,6 +287,7 @@ void QuiescingManager::quiesce_untrusted_interface()
   {
     // Close the untrusted listening port.  This prevents any new clients from
     // connecting.
+    TRC_STATUS("Close untrusted listening port");
     _conns_handler->close_untrusted_port();
   }
 
@@ -294,6 +295,7 @@ void QuiescingManager::quiesce_untrusted_interface()
   {
     // Instruct the FlowTable to quiesce.  This waits until all flows have
     // expired, at which case it calls flows_gone().
+    TRC_STATUS("Quiesce FlowTable");
     _flows_handler->quiesce();
   }
   else
@@ -310,13 +312,13 @@ void QuiescingManager::quiesce_connections()
     // Close the trusted listening port.  This prevents any new connections from
     // being established (note that on an edge proxy we should already have
     // closed the untrusted listening port).
-    TRC_DEBUG("Closing trusted port");
+    TRC_STATUS("Closing trusted port");
     _conns_handler->close_trusted_port();
 
     // Quiesce open connections.  This will close them when they no longer have
     // any outstanding transactions.  When this process has completed the
     // connection tracker will call connections_gone().
-    TRC_DEBUG("Quiescing all connections");
+    TRC_STATUS("Quiescing all connections");
     _conns_handler->quiesce();
   }
 }

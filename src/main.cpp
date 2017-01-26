@@ -100,9 +100,13 @@ extern "C" {
 #include "exception_handler.h"
 #include "scscfsproutlet.h"
 #include "snmp_continuous_accumulator_table.h"
+#include "snmp_continuous_accumulator_by_scope_table.h"
 #include "snmp_event_accumulator_table.h"
+#include "snmp_event_accumulator_by_scope_table.h"
 #include "snmp_scalar.h"
+#include "snmp_scalar_by_scope_table.h"
 #include "snmp_counter_table.h"
+#include "snmp_counter_by_scope_table.h"
 #include "snmp_success_fail_count_table.h"
 #include "snmp_agent.h"
 #include "ralf_processor.h"
@@ -247,7 +251,8 @@ QuiescingManager* quiescing_mgr;
 
 const static int QUIESCE_SIGNAL = SIGQUIT;
 const static int UNQUIESCE_SIGNAL = SIGUSR1;
-// Minimum value allowed by rfc4028, section 4
+
+// The minimum value allowed for session expires is 90 seconds, as per RFC4028, section 4
 const static int MIN_SESSION_EXPIRES = 90;
 
 static const std::string SPROUT_HTTP_MGMT_SOCKET_PATH = "/tmp/sprout-http-mgmt-socket";
@@ -447,14 +452,22 @@ static void usage(void)
       );
 }
 
+/// Validate the result we get when using atoi
+bool validated_atoi(const char* char_to_int,
+                    int& char_as_int)
+{
+  char_as_int = atoi(char_to_int);
+  return (char_to_int == std::to_string(char_as_int));
+}
 
 /// Parse a string representing a port.
 /// @returns The port number as an int, or zero if the port is invalid.
 int parse_port(const std::string& port_str)
 {
-  int port = atoi(port_str.c_str());
+  int port;
+  bool rc = validated_atoi(port_str.c_str(), port);
 
-  if ((port < 0) || (port > 0xFFFF))
+  if ((!rc) || (port < 0) || (port > 0xFFFF))
   {
     port = 0;
   }
@@ -466,15 +479,46 @@ int parse_port(const std::string& port_str)
 /// @returns whether the port is invalid and sets the port
 bool parse_port(const std::string& port_str, int& port)
 {
-  port = atoi(port_str.c_str());
+  bool rc = validated_atoi(port_str.c_str(), port);
 
-  if ((port < 0) || (port > 0xFFFF))
+  if ((!rc) || (port < 0) || (port > 0xFFFF))
   {
     return false;
   }
 
   return true;
 }
+
+// Macros for validating an integer parameter
+#define VALIDATE_INT_PARAM(PARAMETER, PARAMETER_NAME, TRC_STATEMENT)           \
+  int parameter;                                                               \
+  bool rc = validated_atoi(pj_optarg, parameter);                              \
+                                                                               \
+  if (rc)                                                                      \
+  {                                                                            \
+    PARAMETER = parameter;                                                     \
+    TRC_INFO(""#TRC_STATEMENT" set to %d", parameter);                         \
+  }                                                                            \
+  else                                                                         \
+  {                                                                            \
+    TRC_ERROR("Invalid value for "#PARAMETER_NAME": %s", pj_optarg);           \
+    return -1;                                                                 \
+  }
+
+#define VALIDATE_INT_PARAM_NON_ZERO(PARAMETER, PARAMETER_NAME, TRC_STATEMENT)  \
+  int parameter;                                                               \
+  bool rc = validated_atoi(pj_optarg, parameter);                              \
+                                                                               \
+  if ((rc) && (parameter > 0))                                                 \
+  {                                                                            \
+    PARAMETER = parameter;                                                     \
+    TRC_INFO(""#TRC_STATEMENT" set to %d", parameter);                         \
+  }                                                                            \
+  else                                                                         \
+  {                                                                            \
+    TRC_ERROR("Invalid value for "#PARAMETER_NAME": %s", pj_optarg);           \
+    return -1;                                                                 \
+  }
 
 static pj_status_t init_logging_options(int argc, char* argv[], struct options* options)
 {
@@ -487,14 +531,25 @@ static pj_status_t init_logging_options(int argc, char* argv[], struct options* 
     switch (c)
     {
     case 'L':
-      options->log_level = atoi(pj_optarg);
-      fprintf(stdout, "Log level set to %s\n", pj_optarg);
+      {
+        int log_level;
+        bool rc = validated_atoi(pj_optarg, log_level);
+
+        if (rc)
+        {
+          options->log_level = log_level;
+        }
+        else
+        {
+          fprintf(stdout, "Invalid log level value (%s), using log level of %d\n",
+                  pj_optarg, options->log_level);
+        }
+      }
       break;
 
     case 'F':
       options->log_to_file = PJ_TRUE;
       options->log_directory = std::string(pj_optarg);
-      fprintf(stdout, "Log directory set to %s\n", pj_optarg);
       break;
 
     case 'd':
@@ -518,10 +573,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 {
   int c;
   int opt_ind;
-  int reg_max_expires;
-  int sub_max_expires;
-  int default_session_expires;
-  int max_session_expires;
 
   pj_optind = 0;
   while ((c = pj_getopt_long(argc, argv, pj_options_description.c_str(), long_opt, &opt_ind)) != -1)
@@ -711,9 +762,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       break;
 
     case OPT_RALF_THREADS:
-      options->ralf_threads = atoi(pj_optarg);
-      TRC_INFO("Number of ralf threads set to %d",
-               options->ralf_threads);
+      {
+        VALIDATE_INT_PARAM(options->ralf_threads,
+                           ralf_threads,
+                           Number of ralf threads);
+      }
       break;
 
     case 'E':
@@ -749,85 +802,58 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       break;
 
     case 'e':
-      reg_max_expires = atoi(pj_optarg);
-
-      if (reg_max_expires > 0)
       {
-        options->reg_max_expires = reg_max_expires;
-        TRC_INFO("Maximum registration period set to %d seconds\n",
-                 options->reg_max_expires);
-      }
-      else
-      {
-        // The parameter could be invalid either because it's -ve, or it's not
-        // an integer (in which case atoi returns 0). Log, but don't store it.
-        TRC_WARNING("Invalid value for reg_max_expires: '%s'. "
-                    "The default value of %d will be used.",
-                    pj_optarg, options->reg_max_expires);
+        VALIDATE_INT_PARAM_NON_ZERO(options->reg_max_expires,
+                                    reg_max_expires,
+                                    Maximum registration period (in seconds));
       }
       break;
 
     case OPT_SUB_MAX_EXPIRES:
-      sub_max_expires = atoi(pj_optarg);
-
-      if (sub_max_expires > 0)
       {
-        options->sub_max_expires = sub_max_expires;
-        TRC_INFO("Maximum registration period set to %d seconds\n",
-                 options->sub_max_expires);
-      }
-      else
-      {
-        // The parameter could be invalid either because it's -ve, or it's not
-        // an integer (in which case atoi returns 0). Log, but don't store it.
-        TRC_WARNING("Invalid value for sub_max_expires: '%s'. "
-                    "The default value of %d will be used.",
-                    pj_optarg, options->sub_max_expires);
+        VALIDATE_INT_PARAM_NON_ZERO(options->sub_max_expires,
+                                    sub_max_expires,
+                                    Maximum subscription period (in seconds));
       }
       break;
 
     case OPT_TARGET_LATENCY_US:
-      options->target_latency_us = atoi(pj_optarg);
-      if (options->target_latency_us <= 0)
       {
-        TRC_ERROR("Invalid --target-latency-us option %s", pj_optarg);
-        return -1;
+        VALIDATE_INT_PARAM_NON_ZERO(options->target_latency_us,
+                                    target_latency_us,
+                                    Target latency (in microseconds));
       }
       break;
 
     case OPT_CASS_TARGET_LATENCY_US:
-      options->cass_target_latency_us = atoi(pj_optarg);
-      if (options->cass_target_latency_us <= 0)
       {
-        TRC_ERROR("Invalid --cass-target-latency-us option %s", pj_optarg);
-        return -1;
+        VALIDATE_INT_PARAM_NON_ZERO(options->cass_target_latency_us,
+                                    cass_target_latency_us,
+                                    Target cassandra latency (in microseconds));
       }
       break;
 
     case OPT_MAX_TOKENS:
-      options->max_tokens = atoi(pj_optarg);
-      if (options->max_tokens <= 0)
       {
-        TRC_ERROR("Invalid --max-tokens option %s", pj_optarg);
-        return -1;
+        VALIDATE_INT_PARAM_NON_ZERO(options->max_tokens,
+                                    max_tokens,
+                                    Max tokens);
       }
       break;
 
     case OPT_INIT_TOKEN_RATE:
-      options->init_token_rate = atoi(pj_optarg);
-      if (options->init_token_rate <= 0)
       {
-        TRC_ERROR("Invalid --init-token-rate option %s", pj_optarg);
-        return -1;
+        VALIDATE_INT_PARAM_NON_ZERO(options->init_token_rate,
+                                    init_token_rate,
+                                    Initial token rate);
       }
       break;
 
     case OPT_MIN_TOKEN_RATE:
-      options->min_token_rate = atoi(pj_optarg);
-      if (options->min_token_rate <= 0)
       {
-        TRC_ERROR("Invalid --min-token-rate option %s", pj_optarg);
-        return -1;
+        VALIDATE_INT_PARAM_NON_ZERO(options->min_token_rate,
+                                    min_token_rate,
+                                    Minimum token rate);
       }
       break;
 
@@ -853,8 +879,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       break;
 
     case 'W':
-      options->worker_threads = atoi(pj_optarg);
-      TRC_INFO("Use %d worker threads", options->worker_threads);
+      {
+        VALIDATE_INT_PARAM_NON_ZERO(options->worker_threads,
+                                    worker_threads,
+                                    Number of worker threads);
+      }
       break;
 
     case 'a':
@@ -887,8 +916,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       break;
 
     case 'q':
-      options->http_threads = atoi(pj_optarg);
-      TRC_INFO("Use %d HTTP threads", options->http_threads);
+      {
+        VALIDATE_INT_PARAM_NON_ZERO(options->http_threads,
+                                    http_threads,
+                                    Number of HTTP threads);
+      }
       break;
 
     case 'B':
@@ -903,35 +935,42 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       // Ignore L, F, d and t - these are handled by init_logging_options
       break;
 
-    // The minimum value allowed for session expires is 90 seconds, as per RFC4028, section 4
     case OPT_DEFAULT_SESSION_EXPIRES:
-      default_session_expires = atoi(pj_optarg);
-      if (default_session_expires >= MIN_SESSION_EXPIRES)
       {
-        options->default_session_expires = default_session_expires;
+        int default_session_expires;
+        bool rc = validated_atoi(pj_optarg, default_session_expires);
+
+        if ((rc) && default_session_expires >= MIN_SESSION_EXPIRES)
+        {
+          options->default_session_expires = default_session_expires;
+          TRC_INFO("Default session expiry time set to %d", default_session_expires);
+        }
+        else
+        {
+          TRC_WARNING("Invalid value for default session expiry: '%s'. "
+                      "The default value of %d will be used.",
+                      pj_optarg, options->default_session_expires);
+        }
       }
-      else
-      {
-        TRC_INFO("Error, invalid default session expires value %s. Using default value.",
-                 pj_optarg);
-      }
-      TRC_INFO("Default session expiry set to %d",
-               options->default_session_expires);
       break;
 
     case OPT_MAX_SESSION_EXPIRES:
-      max_session_expires = atoi(pj_optarg);
-      if (max_session_expires >= MIN_SESSION_EXPIRES)
       {
-        options->max_session_expires = max_session_expires;
+        int max_session_expires;
+        bool rc = validated_atoi(pj_optarg, max_session_expires);
+
+        if ((rc) && max_session_expires >= MIN_SESSION_EXPIRES)
+        {
+          options->max_session_expires = max_session_expires;
+          TRC_INFO("Max session expiry time set to %d", max_session_expires);
+        }
+        else
+        {
+          TRC_WARNING("Invalid value for max session expiry: '%s'. "
+                      "The default value of %d will be used.",
+                      pj_optarg, options->max_session_expires);
+        }
       }
-      else
-      {
-        TRC_INFO("Error, invalid maximum session expires value %s. Using default value.",
-                 pj_optarg);
-      }
-      TRC_INFO("Max session expiry set to %d",
-               options->max_session_expires);
       break;
 
     case OPT_EMERGENCY_REG_ACCEPTED:
@@ -940,21 +979,27 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       break;
 
     case OPT_MAX_CALL_LIST_LENGTH:
-      options->max_call_list_length = atoi(pj_optarg);
-      TRC_INFO("Max call list length set to %d",
-               options->max_call_list_length);
+      {
+        VALIDATE_INT_PARAM(options->max_call_list_length,
+                           max_call_list_length,
+                           Max call list length);
+      }
       break;
 
     case OPT_MEMENTO_THREADS:
-      options->memento_threads = atoi(pj_optarg);
-      TRC_INFO("Number of memento threads set to %d",
-               options->memento_threads);
+      {
+        VALIDATE_INT_PARAM(options->memento_threads,
+                           memento_threads,
+                           Memento threads);
+      }
       break;
 
     case OPT_CALL_LIST_TTL:
-      options->call_list_ttl = atoi(pj_optarg);
-      TRC_INFO("Call list TTL set to %d",
-               options->call_list_ttl);
+      {
+        VALIDATE_INT_PARAM(options->call_list_ttl,
+                           call_list_ttl,
+                           TTL for entries in the call list);
+      }
       break;
 
     case OPT_DNS_SERVER:
@@ -970,45 +1015,59 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       break;
 
     case OPT_EXCEPTION_MAX_TTL:
-      options->exception_max_ttl = atoi(pj_optarg);
-      TRC_INFO("Max TTL after an exception set to %d",
-               options->exception_max_ttl);
+      {
+        VALIDATE_INT_PARAM(options->exception_max_ttl,
+                           exception_max_ttl,
+                           Max TTL after an exception);
+      }
       break;
 
     case OPT_SIP_BLACKLIST_DURATION:
-      options->sip_blacklist_duration = atoi(pj_optarg);
-      TRC_INFO("SIP blacklist duration set to %d",
-               options->sip_blacklist_duration);
+      {
+        VALIDATE_INT_PARAM(options->sip_blacklist_duration,
+                           sip_blacklist_duration,
+                           SIP blacklist duration);
+      }
       break;
 
     case OPT_HTTP_BLACKLIST_DURATION:
-      options->http_blacklist_duration = atoi(pj_optarg);
-      TRC_INFO("HTTP blacklist duration set to %d",
-               options->http_blacklist_duration);
+      {
+        VALIDATE_INT_PARAM(options->http_blacklist_duration,
+                           http_blacklist_duration,
+                           HTTP blacklist duration);
+      }
       break;
 
     case OPT_SIP_TCP_CONNECT_TIMEOUT:
-      options->sip_tcp_connect_timeout = atoi(pj_optarg);
-      TRC_INFO("SIP TCP connect timeout set to %d",
-               options->sip_tcp_connect_timeout);
+      {
+        VALIDATE_INT_PARAM(options->sip_tcp_connect_timeout,
+                           sip_tcp_connect_timeout,
+                           SIP TCP connect timeout);
+      }
       break;
 
     case OPT_SIP_TCP_SEND_TIMEOUT:
-      options->sip_tcp_send_timeout = atoi(pj_optarg);
-      TRC_INFO("SIP TCP send timeout set to %d",
-               options->sip_tcp_send_timeout);
+      {
+        VALIDATE_INT_PARAM(options->sip_tcp_send_timeout,
+                           sip_tcp_send_timeout,
+                           SIP TCP send timeout);
+      }
       break;
 
     case OPT_SESSION_CONTINUED_TIMEOUT_MS:
-      options->session_continued_timeout_ms = atoi(pj_optarg);
-      TRC_INFO("Session continue timeout set to %dms",
-               options->session_continued_timeout_ms);
+      {
+        VALIDATE_INT_PARAM(options->session_continued_timeout_ms,
+                           session_continued_timeout_ms,
+                           Session continue timeout (in ms));
+      }
       break;
 
     case OPT_SESSION_TERMINATED_TIMEOUT_MS:
-      options->session_terminated_timeout_ms = atoi(pj_optarg);
-      TRC_INFO("Session terminated timeout set to %dms",
-               options->session_terminated_timeout_ms);
+      {
+        VALIDATE_INT_PARAM(options->session_terminated_timeout_ms,
+                           session_terminated_timeout_ms,
+                           Session terminated timeout (in ms));
+      }
       break;
 
     case OPT_STATELESS_PROXIES:
@@ -1069,15 +1128,14 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       break;
 
     case OPT_MEMENTO_NOTIFY_URL:
-      {
-        options->memento_notify_url = std::string(pj_optarg);
-        TRC_INFO("Memento notify URL set to: '%s'",
-                 options->memento_notify_url.c_str());
-      }
+      options->memento_notify_url = std::string(pj_optarg);
+      TRC_INFO("Memento notify URL set to: '%s'",
+               options->memento_notify_url.c_str());
       break;
 
     case OPT_PIDFILE:
       options->pidfile = std::string(pj_optarg);
+      TRC_INFO("Pidfile set to %s", pj_optarg);
       break;
 
     case OPT_IMPI_STORE_MODE:
@@ -1099,14 +1157,17 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case OPT_NONCE_COUNT_SUPPORTED:
       options->nonce_count_supported = true;
+      TRC_INFO("Nonce counts supported");
       break;
 
     case OPT_SAS_USE_SIGNALING_IF:
       options->sas_signaling_if = true;
+      TRC_INFO("SAS connections created in the signaling namespace");
       break;
 
     case OPT_DISABLE_TCP_SWITCH:
       options->disable_tcp_switch = true;
+      TRC_INFO("Switching to TCP is disabled");
       break;
 
     case OPT_ALLOW_FALLBACK_IFCS:
@@ -1131,17 +1192,53 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case OPT_SCSCF_NODE_URI:
       options->scscf_node_uri = std::string(pj_optarg);
+      TRC_INFO("S-CSCF node URI set to %s", pj_optarg);
       break;
 
     case OPT_SPROUT_HOSTNAME:
-      options->sprout_hostname = std::string(pj_optarg);
+      {
+        options->sprout_hostname = std::string(pj_optarg);
+
+        if (Utils::parse_ip_address(options->sprout_hostname) ==
+            Utils::IPAddressType::INVALID_WITH_PORT)
+        {
+          TRC_ERROR("The sprout hostname (%s) must not include a port",
+                    options->sprout_hostname.c_str());
+          return -1;
+        }
+        else if (Utils::parse_ip_address(options->sprout_hostname) !=
+                 Utils::IPAddressType::INVALID)
+        {
+          TRC_ERROR("The sprout hostname (%s) must not be an IP address",
+                    options->sprout_hostname.c_str());
+          return -1;
+        }
+
+        TRC_INFO("Sprout hostname set to %s", pj_optarg);
+      }
       break;
 
     case OPT_CHRONOS_HOSTNAME:
       options->chronos_hostname = std::string(pj_optarg);
+      TRC_INFO("Chronos hostname set to %s", pj_optarg);
+      break;
 
     case OPT_LISTEN_PORT:
-      options->listen_port = atoi(pj_optarg);
+      {
+        int listen_port;
+        bool rc = validated_atoi(pj_optarg, listen_port);
+
+        if ((rc) && (listen_port > 0))
+        {
+          options->sproutlet_ports.insert(listen_port);
+          TRC_INFO("Opening port %d for non-default sproutlets", listen_port);
+        }
+        else
+        {
+          TRC_ERROR("Invalid value for listen_port: %s", pj_optarg);
+          return -1;
+        }
+      }
       break;
 
     SPROUTLET_MACRO(SPROUTLET_OPTIONS)
@@ -1212,6 +1309,7 @@ class QuiesceCompleteHandler : public QuiesceCompletionInterface
 public:
   void quiesce_complete()
   {
+    TRC_STATUS("Quiesce complete");
     sem_post(&term_sem);
   }
 };
@@ -1286,7 +1384,6 @@ int main(int argc, char* argv[])
   pj_status_t status;
   struct options opt;
 
-  Logger* analytics_logger_logger = NULL;
   AnalyticsLogger* analytics_logger = NULL;
   SIPResolver* sip_resolver = NULL;
   Store* remote_data_store = NULL;
@@ -1378,11 +1475,6 @@ int main(int argc, char* argv[])
   opt.disable_tcp_switch = false;
   opt.allow_fallback_ifcs = false;
 
-  // Initialise ENT logging before making "Started" log
-  PDLogStatic::init(argv[0]);
-
-  CL_SPROUT_STARTED.log();
-
   status = init_logging_options(argc, argv, &opt);
 
   if (status != PJ_SUCCESS)
@@ -1402,6 +1494,10 @@ int main(int argc, char* argv[])
                           opt.log_directory,
                           opt.log_level,
                           opt.log_to_file);
+
+  // We should now have a connection to syslog so we can write the started ENT
+  // log.
+  CL_SPROUT_STARTED.log();
 
   if ((opt.log_to_file) && (opt.log_directory != ""))
   {
@@ -1442,9 +1538,7 @@ int main(int argc, char* argv[])
 
   if (opt.analytics_enabled)
   {
-    analytics_logger_logger = new Logger(opt.analytics_directory, std::string("log"));
-    analytics_logger_logger->set_flags(Logger::ADD_TIMESTAMPS|Logger::FLUSH_ON_WRITE);
-    analytics_logger = new AnalyticsLogger(analytics_logger_logger);
+    analytics_logger = new AnalyticsLogger();
   }
 
   std::vector<std::string> sproutlet_uris;
@@ -1495,20 +1589,6 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  if ((opt.auth_enabled) && (opt.hss_server == ""))
-  {
-    CL_SPROUT_AUTH_NO_HOMESTEAD.log();
-    TRC_ERROR("Authentication enabled, but no Homestead server specified");
-    return 1;
-  }
-
-  if ((opt.xdm_server != "") && (opt.hss_server == ""))
-  {
-    CL_SPROUT_XDM_NO_HOMESTEAD.log();
-    TRC_ERROR("XDM server configured for services, but no Homestead server specified");
-    return 1;
-  }
-
   if ((opt.pcscf_enabled) && (opt.hss_server != ""))
   {
     TRC_WARNING("Homestead server configured on P-CSCF, ignoring");
@@ -1553,10 +1633,10 @@ int main(int argc, char* argv[])
     snmp_setup("sprout");
   }
 
-  SNMP::EventAccumulatorTable* latency_table;
-  SNMP::EventAccumulatorTable* queue_size_table;
-  SNMP::CounterTable* requests_counter;
-  SNMP::CounterTable* overload_counter;
+  SNMP::EventAccumulatorByScopeTable* latency_table;
+  SNMP::EventAccumulatorByScopeTable* queue_size_table;
+  SNMP::CounterByScopeTable* requests_counter;
+  SNMP::CounterByScopeTable* overload_counter;
 
   SNMP::IPCountTable* homestead_cxn_count = NULL;
 
@@ -1566,11 +1646,11 @@ int main(int argc, char* argv[])
   SNMP::EventAccumulatorTable* homestead_uar_latency_table = NULL;
   SNMP::EventAccumulatorTable* homestead_lir_latency_table = NULL;
 
-  SNMP::ContinuousAccumulatorTable* token_rate_table = NULL;
-  SNMP::U32Scalar* smoothed_latency_scalar = NULL;
-  SNMP::U32Scalar* target_latency_scalar = NULL;
-  SNMP::U32Scalar* penalties_scalar = NULL;
-  SNMP::U32Scalar* token_rate_scalar = NULL;
+  SNMP::ContinuousAccumulatorByScopeTable* token_rate_table = NULL;
+  SNMP::ScalarByScopeTable* smoothed_latency_scalar = NULL;
+  SNMP::ScalarByScopeTable* target_latency_scalar = NULL;
+  SNMP::ScalarByScopeTable* penalties_scalar = NULL;
+  SNMP::ScalarByScopeTable* token_rate_scalar = NULL;
 
   SNMP::RegistrationStatsTables reg_stats_tbls;
   SNMP::RegistrationStatsTables third_party_reg_stats_tbls;
@@ -1578,25 +1658,25 @@ int main(int argc, char* argv[])
 
   if (opt.pcscf_enabled)
   {
-    latency_table = SNMP::EventAccumulatorTable::create("bono_latency",
-                                                   ".1.2.826.0.1.1578918.9.2.2");
-    queue_size_table = SNMP::EventAccumulatorTable::create("bono_queue_size",
-                                                      ".1.2.826.0.1.1578918.9.2.6");
-    requests_counter = SNMP::CounterTable::create("bono_incoming_requests",
-                                                  ".1.2.826.0.1.1578918.9.2.4");
-    overload_counter = SNMP::CounterTable::create("bono_rejected_overload",
-                                                  ".1.2.826.0.1.1578918.9.2.5");
+    latency_table = SNMP::EventAccumulatorByScopeTable::create("bono_latency",
+                                                               ".1.2.826.0.1.1578918.9.2.2");
+    queue_size_table = SNMP::EventAccumulatorByScopeTable::create("bono_queue_size",
+                                                                  ".1.2.826.0.1.1578918.9.2.6");
+    requests_counter = SNMP::CounterByScopeTable::create("bono_incoming_requests",
+                                                         ".1.2.826.0.1.1578918.9.2.4");
+    overload_counter = SNMP::CounterByScopeTable::create("bono_rejected_overload",
+                                                         ".1.2.826.0.1.1578918.9.2.5");
   }
   else
   {
-    latency_table = SNMP::EventAccumulatorTable::create("sprout_latency",
-                                                   ".1.2.826.0.1.1578918.9.3.1");
-    queue_size_table = SNMP::EventAccumulatorTable::create("sprout_queue_size",
-                                                      ".1.2.826.0.1.1578918.9.3.8");
-    requests_counter = SNMP::CounterTable::create("sprout_incoming_requests",
-                                                  ".1.2.826.0.1.1578918.9.3.6");
-    overload_counter = SNMP::CounterTable::create("sprout_rejected_overload",
-                                                  ".1.2.826.0.1.1578918.9.3.7");
+    latency_table = SNMP::EventAccumulatorByScopeTable::create("sprout_latency",
+                                                               ".1.2.826.0.1.1578918.9.3.1");
+    queue_size_table = SNMP::EventAccumulatorByScopeTable::create("sprout_queue_size",
+                                                                  ".1.2.826.0.1.1578918.9.3.8");
+    requests_counter = SNMP::CounterByScopeTable::create("sprout_incoming_requests",
+                                                         ".1.2.826.0.1.1578918.9.3.6");
+    overload_counter = SNMP::CounterByScopeTable::create("sprout_rejected_overload",
+                                                         ".1.2.826.0.1.1578918.9.3.7");
 
     homestead_cxn_count = SNMP::IPCountTable::create("sprout_homestead_cxn_count",
                                                      ".1.2.826.0.1.1578918.9.3.3.1");
@@ -1633,16 +1713,16 @@ int main(int argc, char* argv[])
     auth_stats_tbls.non_register_auth_tbl = SNMP::SuccessFailCountTable::create("non_register_auth_success_fail_count",
                                                                                 ".1.2.826.0.1.1578918.9.3.17");
 
-    token_rate_table = SNMP::ContinuousAccumulatorTable::create("sprout_token_rate",
-                                                      ".1.2.826.0.1.1578918.9.3.27");
-    smoothed_latency_scalar = new SNMP::U32Scalar("sprout_smoothed_latency",
-                                                      ".1.2.826.0.1.1578918.9.3.28");
-    target_latency_scalar = new SNMP::U32Scalar("sprout_target_latency",
-                                                      ".1.2.826.0.1.1578918.9.3.29");
-    penalties_scalar = new SNMP::U32Scalar("sprout_penalties",
-                                                      ".1.2.826.0.1.1578918.9.3.30");
-    token_rate_scalar = new SNMP::U32Scalar("sprout_current_token_rate",
-                                                      ".1.2.826.0.1.1578918.9.3.31");
+    token_rate_table = SNMP::ContinuousAccumulatorByScopeTable::create("sprout_token_rate",
+                                                                       ".1.2.826.0.1.1578918.9.3.27");
+    smoothed_latency_scalar = SNMP::ScalarByScopeTable::create("sprout_smoothed_latency",
+                                                                ".1.2.826.0.1.1578918.9.3.28");
+    target_latency_scalar = SNMP::ScalarByScopeTable::create("sprout_target_latency",
+                                                             ".1.2.826.0.1.1578918.9.3.29");
+    penalties_scalar = SNMP::ScalarByScopeTable::create("sprout_penalties",
+                                                        ".1.2.826.0.1.1578918.9.3.30");
+    token_rate_scalar = SNMP::ScalarByScopeTable::create("sprout_current_token_rate",
+                                                         ".1.2.826.0.1.1578918.9.3.31");
   }
 
   // Create Sprout's alarm objects.
@@ -1991,6 +2071,7 @@ int main(int argc, char* argv[])
                                         serializer,
                                         deserializers,
                                         chronos_connection,
+                                        analytics_logger,
                                         true);
 
   if (remote_data_store != NULL)
@@ -2002,6 +2083,7 @@ int main(int argc, char* argv[])
                                            serializer,
                                            deserializers,
                                            chronos_connection,
+                                           NULL,
                                            false);
   }
 
@@ -2009,7 +2091,8 @@ int main(int argc, char* argv[])
   // with it.
   HttpStack* http_stack_sig = new HttpStack(opt.http_threads,
                                             exception_handler,
-                                            access_logger);
+                                            access_logger,
+                                            load_monitor);
   try
   {
     http_stack_sig->initialize();
@@ -2024,7 +2107,8 @@ int main(int argc, char* argv[])
 
   HttpStack* http_stack_mgmt = new HttpStack(NUM_HTTP_MGMT_THREADS,
                                              exception_handler,
-                                             access_logger);
+                                             access_logger,
+                                             load_monitor);
   try
   {
     http_stack_mgmt->initialize();
@@ -2063,7 +2147,6 @@ int main(int argc, char* argv[])
     status = init_registrar(local_sdm,
                             {remote_sdm},
                             hss_connection,
-                            analytics_logger,
                             scscf_acr_factory,
                             opt.reg_max_expires,
                             opt.force_third_party_register_body,
@@ -2336,7 +2419,6 @@ int main(int argc, char* argv[])
   delete dns_resolver;
 
   delete analytics_logger;
-  delete analytics_logger_logger;
 
   // Delete Sprout's alarm objects
   delete chronos_comm_monitor;

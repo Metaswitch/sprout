@@ -42,13 +42,13 @@
 
 #include <sstream>
 
-#include "logger.h"
-
 class AnalyticsLogger
 {
 public:
-  AnalyticsLogger(Logger* logger);
+  AnalyticsLogger();
   ~AnalyticsLogger();
+
+  void log_with_tag_and_timestamp(char* log);
 
   void registration(const std::string& aor,
                     const std::string& binding_id,
@@ -77,8 +77,6 @@ public:
 
 private:
   static const int BUFFER_SIZE = 1000;
-
-  Logger* _logger;
 };
 
 #endif

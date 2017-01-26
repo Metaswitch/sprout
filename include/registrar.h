@@ -45,7 +45,6 @@ extern "C" {
 #include "subscriber_data_manager.h"
 #include "hssconnection.h"
 #include "chronosconnection.h"
-#include "analyticslogger.h"
 #include "acr.h"
 #include "snmp_success_fail_count_table.h"
 
@@ -57,7 +56,6 @@ void third_party_register_failed(const std::string& public_id,
 extern pj_status_t init_registrar(SubscriberDataManager* sdm,
                                   std::vector<SubscriberDataManager*> remote_sdms,
                                   HSSConnection* hss_connection,
-                                  AnalyticsLogger* analytics_logger,
                                   ACRFactory* rfacr_factory,
                                   int cfg_max_expires,
                                   bool force_third_party_register_body,

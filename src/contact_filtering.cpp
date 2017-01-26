@@ -675,11 +675,11 @@ void prune_targets(int max_targets,
 bool compare_targets(const Target& t1, const Target& t2)
 {
   // Start by comparing "q-values", higher is better.
-  if (t1.contact_q1000_value > t1.contact_q1000_value)
+  if (t1.contact_q1000_value > t2.contact_q1000_value)
   {
     return true;
   }
-  else if (t1.contact_q1000_value < t1.contact_q1000_value)
+  else if (t1.contact_q1000_value < t2.contact_q1000_value)
   {
     return false;
   }

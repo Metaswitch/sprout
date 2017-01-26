@@ -84,7 +84,7 @@ public:
     _impi_store = new ImpiStore(_local_data_store, ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI);
     _hss_connection = new FakeHSSConnection();
     _chronos_connection = new FakeChronosConnection();
-    _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
+    _analytics = new AnalyticsLogger();
     _acr_factory = new ACRFactory();
   }
 
@@ -205,6 +205,8 @@ class AuthenticationTest : public BaseAuthenticationTest
 
     ASSERT_EQ(PJ_SUCCESS, ret);
   }
+
+  void TestAKAAuthSuccess(char* key);
 
   static void TearDownTestCase()
   {
@@ -1311,20 +1313,10 @@ TEST_F(AuthenticationTest, DigestChallengeExpired)
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
 
-TEST_F(AuthenticationTest, AKAAuthSuccess)
+void AuthenticationTest::TestAKAAuthSuccess(char* key)
 {
   // Test a successful AKA authentication flow.
   pjsip_tx_data* tdata;
-
-  // Set up the HSS response for the AV query using a default private user identity.
-  // The keys in this test case are not consistent, but that won't matter for
-  // the purposes of the test as Clearwater never itself runs the MILENAGE
-  // algorithms to generate or extract keys.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
-                              "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
-                              "\"response\":\"12345678123456781234567812345678\","
-                              "\"cryptkey\":\"0123456789abcdef\","
-                              "\"integritykey\":\"fedcba9876543210\"}}");
 
   // Send in a REGISTER request with an authentication header with
   // integrity-protected=no.  This triggers aka authentication.
@@ -1352,7 +1344,7 @@ TEST_F(AuthenticationTest, AKAAuthSuccess)
   // response.
   AuthenticationMessage msg2("REGISTER");
   msg2._algorithm = "AKAv1-MD5";
-  msg2._key = "12345678123456781234567812345678";
+  msg2._key = key;
   msg2._nonce = auth_params["nonce"];
   msg2._opaque = auth_params["opaque"];
   msg2._nc = "00000001";
@@ -1369,6 +1361,39 @@ TEST_F(AuthenticationTest, AKAAuthSuccess)
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
 }
 
+// Test that a normal AKA authenticated registration succeeds.
+TEST_F(AuthenticationTest, AKAAuthSuccess)
+{
+  // Set up the HSS response for the AV query using a default private user identity.
+  // The keys in this test case are not consistent, but that won't matter for
+  // the purposes of the test as Clearwater never itself runs the MILENAGE
+  // algorithms to generate or extract keys.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
+                              "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
+                              "\"response\":\"12345678123456781234567812345678\","
+                              "\"cryptkey\":\"0123456789abcdef\","
+                              "\"integritykey\":\"fedcba9876543210\"}}");
+
+  AuthenticationTest::TestAKAAuthSuccess("12345678123456781234567812345678");
+}
+
+// Test that a normal AKA authenticated registration succeeds, when the response
+// contains null bytes. This was previously seen to cause incorrect behaviour
+// when the null bytes were hex decoded and placed in a string.
+TEST_F(AuthenticationTest, AKAAuthSuccessWithNullBytes)
+{
+  // Set up the HSS response for the AV query using a default private user identity.
+  // The keys in this test case are not consistent, but that won't matter for
+  // the purposes of the test as Clearwater never itself runs the MILENAGE
+  // algorithms to generate or extract keys.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
+                              "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
+                              "\"response\":\"12345678000000000000000012345678\","
+                              "\"cryptkey\":\"0123456789abcdef\","
+                              "\"integritykey\":\"fedcba9876543210\"}}");
+
+  AuthenticationTest::TestAKAAuthSuccess("12345678000000000000000012345678");
+}
 
 TEST_F(AuthenticationTest, AKAv2AuthSuccess)
 {

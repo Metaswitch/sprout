@@ -145,13 +145,6 @@
       opt.sproutlet_ports.insert(opt.port_##NAME_LOWER);                       \
     }                                                                          \
   }                                                                            \
-  else if (opt.listen_port != 0)                                               \
-  {                                                                            \
-    TRC_INFO("All sproutlets enabled on %d", opt.listen_port);                 \
-    opt.port_##NAME_LOWER = opt.listen_port;                                   \
-    opt.enabled_##NAME_LOWER = true;                                           \
-    opt.sproutlet_ports.insert(opt.port_##NAME_LOWER);                         \
-  }                                                                            \
   else if (opt.port_##NAME_LOWER != 0)                                         \
   {                                                                            \
     TRC_INFO(""#NAME_LOWER" enabled on %d", opt.port_##NAME_LOWER);            \
