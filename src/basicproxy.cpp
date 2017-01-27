@@ -297,9 +297,26 @@ void BasicProxy::on_cancel_request(pjsip_rx_data* rdata)
   pjsip_tsx_create_key(rdata->tp_info.pool, &key, PJSIP_UAS_ROLE,
                        pjsip_get_invite_method(), rdata);
   invite_uas = pjsip_tsx_layer_find_tsx(&key, PJ_TRUE);
+
   if (!invite_uas)
   {
     // Invite transaction not found, respond to CANCEL with 481
+    reject_request(rdata, PJSIP_SC_CALL_TSX_DOES_NOT_EXIST);
+    return;
+  }
+
+  UASTsx *uas_tsx = (UASTsx*)get_from_transaction(invite_uas);
+  if (uas_tsx == NULL)
+  {
+    // The PJSIP transaction exists but there is no UASTsx associated with it.
+    // The only case where this happens is a window condition where
+    // - the PJSIP transaction is already in state destroyed because we have
+    //   sent a final response
+    // - we've been told about this via on_tsx_state and so have unbound the
+    //   UASTsx
+    // - PJSIP just hasn't yet freed up the actual Tsx.
+    // Given that we will already have sent a final response to the INVITE we
+    // should treat this as though the INVITE has already been destroyed.
     reject_request(rdata, PJSIP_SC_CALL_TSX_DOES_NOT_EXIST);
     return;
   }
@@ -327,7 +344,6 @@ void BasicProxy::on_cancel_request(pjsip_rx_data* rdata)
   // Send CANCEL to cancel the UAC transactions.
   // The UAS INVITE transaction will get final response when
   // we receive final response from the UAC INVITE transaction.
-  UASTsx *uas_tsx = (UASTsx*)get_from_transaction(invite_uas);
   uas_tsx->process_cancel_request(rdata);
 
   // Unlock UAS tsx because it is locked in find_tsx()
