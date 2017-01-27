@@ -297,7 +297,6 @@ void BasicProxy::on_cancel_request(pjsip_rx_data* rdata)
   pjsip_tsx_create_key(rdata->tp_info.pool, &key, PJSIP_UAS_ROLE,
                        pjsip_get_invite_method(), rdata);
   invite_uas = pjsip_tsx_layer_find_tsx(&key, PJ_TRUE);
-
   if (!invite_uas)
   {
     // Invite transaction not found, respond to CANCEL with 481
