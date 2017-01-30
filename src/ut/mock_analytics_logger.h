@@ -1,8 +1,8 @@
 /**
- * @file analyticslogger.h Declaration of AnalyticsLogger class.
+ * @file mock_impi_store.h
  *
  * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Copyright (C) 2016  Metaswitch Networks Ltd
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -34,49 +34,43 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///
+#ifndef MOCK_ANALYTICS_LOGGER_H__
+#define MOCK_ANALYTICS_LOGGER_H__
 
-#ifndef ANALYTICSLOGGER_H__
-#define ANALYTICSLOGGER_H__
+#include "gmock/gmock.h"
+#include "analyticslogger.h"
 
-#include <sstream>
-
-class AnalyticsLogger
+class MockAnalyticsLogger : public AnalyticsLogger
 {
 public:
-  AnalyticsLogger();
-  virtual ~AnalyticsLogger();
+  MockAnalyticsLogger() {}
+  virtual ~MockAnalyticsLogger() {}
 
-  void log_with_tag_and_timestamp(char* log);
+  MOCK_METHOD4(registration, void(const std::string& aor,
+                                  const std::string& binding_id,
+                                  const std::string& contact,
+                                  int expires));
 
-  virtual void registration(const std::string& aor,
-                    const std::string& binding_id,
-                    const std::string& contact,
-                    int expires);
+  MOCK_METHOD4(subscription, void(const std::string& aor,
+                                  const std::string& subscription_id,
+                                  const std::string& contact,
+                                  int expires));
 
-  virtual void subscription(const std::string& aor,
-                    const std::string& subscription_id,
-                    const std::string& contact,
-                    int expires);
+  MOCK_METHOD2(auth_failure, void(const std::string& auth,
+                    const std::string& to));
 
-  virtual void auth_failure(const std::string& auth,
-                    const std::string& to);
-
-  virtual void call_connected(const std::string& from,
+  MOCK_METHOD3(call_connected, void(const std::string& from,
                       const std::string& to,
-                      const std::string& call_id);
+                      const std::string& call_id));
 
-  virtual void call_not_connected(const std::string& from,
+  MOCK_METHOD4(call_not_connected, void(const std::string& from,
                           const std::string& to,
                           const std::string& call_id,
-                          int reason);
+                          int reason));
 
-  virtual void call_disconnected(const std::string& call_id,
-                         int reason);
+  MOCK_METHOD2(call_disconnected, void(const std::string& call_id,
+                         int reason));
 
-private:
-  static const int BUFFER_SIZE = 1000;
 };
 
 #endif

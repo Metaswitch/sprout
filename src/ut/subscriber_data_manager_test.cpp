@@ -51,6 +51,7 @@
 #include "fakechronosconnection.hpp"
 #include "mock_chronos_connection.h"
 #include "mock_store.h"
+#include "mock_analytics_logger.h"
 #include "analyticslogger.h"
 
 using ::testing::_;
@@ -90,7 +91,7 @@ class BasicSubscriberDataManagerTest : public SipTest
   {
     _chronos_connection = new FakeChronosConnection();
     _datastore = new LocalStore();
-    _analytics_logger = new AnalyticsLogger();
+    _analytics_logger = new MockAnalyticsLogger();
 
     SubscriberDataManager::SerializerDeserializer* serializer = new T();
     std::vector<SubscriberDataManager::SerializerDeserializer*> deserializers = {
@@ -132,7 +133,7 @@ class BasicSubscriberDataManagerTest : public SipTest
   FakeChronosConnection* _chronos_connection;
   LocalStore* _datastore;
   SubscriberDataManager* _store;
-  AnalyticsLogger* _analytics_logger;
+  MockAnalyticsLogger* _analytics_logger;
 };
 
 // BasicSubscriberDataManagerTest is parameterized over these types.
@@ -169,6 +170,11 @@ TYPED_TEST(BasicSubscriberDataManagerTest, BindingTests)
   // Add the AoR record to the store.
   std::vector<std::string> irs_impus;
   irs_impus.push_back("5102175698@cw-ngv.com");
+  EXPECT_CALL(*(this->_analytics_logger),
+              registration("5102175698@cw-ngv.com",
+                           "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1",
+                           "<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>",
+                           300)).Times(1);
   rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
@@ -237,6 +243,11 @@ TYPED_TEST(BasicSubscriberDataManagerTest, BindingTests)
   EXPECT_EQ(1u, aor_data1->get_current()->bindings().size());
   aor_data1->get_current()->remove_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
+  EXPECT_CALL(*(this->_analytics_logger),
+              registration("5102175698@cw-ngv.com",
+                           "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1",
+                           "<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>",
+                           0)).Times(1);
   rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
@@ -280,6 +291,11 @@ TYPED_TEST(BasicSubscriberDataManagerTest, SubscriptionTests)
   // Add the AoR record to the store.
   std::vector<std::string> irs_impus;
   irs_impus.push_back("5102175698@cw-ngv.com");
+  EXPECT_CALL(*(this->_analytics_logger),
+              registration("5102175698@cw-ngv.com",
+                           "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1",
+                           "<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>",
+                           300)).Times(1);
   rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
@@ -486,6 +502,16 @@ TYPED_TEST(BasicSubscriberDataManagerTest, ExpiryTests)
   // Write the record to the store.
   std::vector<std::string> irs_impus;
   irs_impus.push_back("5102175698@cw-ngv.com");
+  EXPECT_CALL(*(this->_analytics_logger),
+              registration("5102175698@cw-ngv.com",
+                           "urn:uuid:00000000-0000-0000-0000-b4dd32817622:2",
+                           "<sip:5102175698@192.91.191.42:59934;transport=tcp;ob>",
+                           200));
+  EXPECT_CALL(*(this->_analytics_logger),
+              registration("5102175698@cw-ngv.com",
+                           "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1",
+                           "<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>",
+                           100));
   rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
