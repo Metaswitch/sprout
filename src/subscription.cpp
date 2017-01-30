@@ -139,7 +139,7 @@ SubscriberDataManager::AoRPair* write_subscriptions_to_store(
                                                               ///<backup stores to read from if no entry in store and no backup data
                    SAS::TrailId trail,                        ///<SAS trail
                    std::string public_id,                     ///
-                   bool send_ok,                              ///<Should we create an OK
+                   bool is_primary,                           ///Is this the primary SDM we are writing to?
                    ACR* acr,                                  ///
                    std::deque<std::string> ccfs,              ///
                    std::deque<std::string> ecfs)              ///
@@ -310,7 +310,7 @@ SubscriberDataManager::AoRPair* write_subscriptions_to_store(
     // Build and send the reply.
     pjsip_tx_data* tdata = NULL;
 
-    if (send_ok)
+    if (is_primary)
     {
       status = PJUtils::create_response(stack_data.endpt, rdata, PJSIP_SC_OK, NULL, &tdata);
       if (status != PJ_SUCCESS)
@@ -370,7 +370,7 @@ SubscriberDataManager::AoRPair* write_subscriptions_to_store(
   }
   while (set_rc == Store::DATA_CONTENTION);
 
-  if (analytics != NULL)
+  if ((analytics != NULL) && is_primary)
   {
     // Generate an analytics log for this subscription update.
     analytics->subscription(aor,

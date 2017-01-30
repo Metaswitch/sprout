@@ -56,7 +56,7 @@ extern "C" {
 #include "rapidjson/writer.h"
 #include "rapidjson/document.h"
 
-// We need to declare the parts of NotifyUtils needed below to avoid a 
+// We need to declare the parts of NotifyUtils needed below to avoid a
 // circular dependency between this and notify_utils.h
 namespace NotifyUtils { struct BindingNotifyInformation; };
 
@@ -628,7 +628,7 @@ private:
   void expire_subscriptions(AoRPair* aor_pair,
                             int now,
                             bool force_expire);
-  
+
   // Iterate over all original and current bindings in an AoR pair and
   // classify them as removed ("EXPIRED"), created ("CREATED"), refreshed ("REFRESHED"),
   // shortened ("SHORTENED") or unchanged ("REGISTERED").
@@ -639,14 +639,16 @@ private:
   void classify_bindings(const std::string& aor_id,
                          SubscriberDataManager::AoRPair* aor_pair,
                          ClassifiedBindings& classified_bindings);
-  
+
   // Iterate over a list of classified bindings, and emit registration logs for those
   // that are EXPIRED or SHORTENED.
-  void log_removed_or_shortened_bindings(ClassifiedBindings& classified_bindings);
+  void log_removed_or_shortened_bindings(ClassifiedBindings& classified_bindings,
+                                         int now);
 
   // Iterate over a list of classified bindings, and emit registration logs for those
   // that are CREATED or REFRESHED.
-  void log_new_or_extended_bindings(ClassifiedBindings& classified_bindings);
+  void log_new_or_extended_bindings(ClassifiedBindings& classified_bindings,
+                                    int now);
 
   static bool unused_bool;
   AnalyticsLogger* _analytics;

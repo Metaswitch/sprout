@@ -40,7 +40,7 @@
 
 #include "siptest.hpp"
 #include "utils.h"
-#include "analyticslogger.h"
+#include "mock_analytics_logger.h"
 #include "stack.h"
 #include "subscription.h"
 #include "fakehssconnection.hpp"
@@ -71,7 +71,7 @@ public:
     _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
     _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, false);
     std::vector<SubscriberDataManager*> remote_sdms = {_remote_sdm};
-    _analytics = new AnalyticsLogger();
+    _analytics = new MockAnalyticsLogger();
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_subscription(_sdm, remote_sdms, _hss_connection, _acr_factory, _analytics, 300);
@@ -126,6 +126,7 @@ public:
 
   ~SubscriptionTest()
   {
+    ::testing::Mock::VerifyAndClearExpectations(_analytics);
   }
 
 protected:
@@ -133,7 +134,7 @@ protected:
   static LocalStore* _remote_data_store;
   static SubscriberDataManager* _sdm;
   static SubscriberDataManager* _remote_sdm;
-  static AnalyticsLogger* _analytics;
+  static MockAnalyticsLogger* _analytics;
   static ACRFactory* _acr_factory;
   static FakeHSSConnection* _hss_connection;
   static FakeChronosConnection* _chronos_connection;
@@ -150,7 +151,7 @@ LocalStore* SubscriptionTest::_local_data_store;
 LocalStore* SubscriptionTest::_remote_data_store;
 SubscriberDataManager* SubscriptionTest::_sdm;
 SubscriberDataManager* SubscriptionTest::_remote_sdm;
-AnalyticsLogger* SubscriptionTest::_analytics;
+MockAnalyticsLogger* SubscriptionTest::_analytics;
 ACRFactory* SubscriptionTest::_acr_factory;
 FakeHSSConnection* SubscriptionTest::_hss_connection;
 FakeChronosConnection* SubscriptionTest::_chronos_connection;
@@ -307,6 +308,11 @@ TEST_F(SubscriptionTest, SimpleMainline)
 
   // Set up a single subscription - this should generate a 200 OK then
   // a NOTIFY
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
   SubscribeMessage msg;
   inject_msg(msg.get());
 
@@ -318,6 +324,11 @@ TEST_F(SubscriptionTest, SimpleMainline)
 
   // Actively expire the subscription - this generates a 200 OK and a
   // final NOTIFY
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           0)).Times(1);
   msg._to_tag = to_tag;
   msg._expires = "0";
   inject_msg(msg.get());
@@ -865,7 +876,7 @@ public:
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new MockStore();
     _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
-    _analytics = new AnalyticsLogger();
+    _analytics = new MockAnalyticsLogger();
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_subscription(_sdm, {}, _hss_connection, _acr_factory, _analytics, 300);
@@ -900,7 +911,7 @@ public:
 protected:
   MockStore* _local_data_store;
   SubscriberDataManager* _sdm;
-  AnalyticsLogger* _analytics;
+  MockAnalyticsLogger* _analytics;
   ACRFactory* _acr_factory;
   FakeHSSConnection* _hss_connection;
   FakeChronosConnection* _chronos_connection;
