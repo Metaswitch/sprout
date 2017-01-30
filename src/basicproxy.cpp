@@ -1698,16 +1698,6 @@ void BasicProxy::UACTsx::send_request()
         start_timer_c();
       }
 
-      // If we got a failure return code, this indicates the window condition
-      // where we got a synchronous failure in pjsip_tsx_send_msg. We ignore
-      // this below, as acting on it can cause failures, but log to track it.
-      if (status != PJ_SUCCESS)
-      {
-        //LCOV_EXCL_START
-        TRC_WARNING("pjsip_tsx_send_msg synchronously returned failure status code");
-        //LCOV_EXCL_STOP
-      }
-
       // We do not want to take any action on a failure returned from
       // pjsip_tsx_send_msg, as it will have also triggered a call into
       // on_tsx_state. In the event of failure, this will, or already has
