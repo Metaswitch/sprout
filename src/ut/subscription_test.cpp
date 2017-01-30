@@ -365,6 +365,11 @@ TEST_F(SubscriptionTest, SimpleMainlineWithTelURI)
 
   SubscribeMessage msg;
   msg._scheme = "tel";
+  EXPECT_CALL(*(this->_analytics),
+              subscription("tel:6505550231",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
   inject_msg(msg.get());
 
   std::string to_tag = check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
@@ -374,6 +379,11 @@ TEST_F(SubscriptionTest, SimpleMainlineWithTelURI)
   // final NOTIFY
   msg._to_tag = to_tag;
   msg._expires = "0";
+  EXPECT_CALL(*(this->_analytics),
+              subscription("tel:6505550231",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           0)).Times(1);
   inject_msg(msg.get());
   check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus, true, "timeout");
 }
@@ -387,6 +397,11 @@ TEST_F(SubscriptionTest, OneShotSubscription)
   // a NOTIFY
   SubscribeMessage msg;
   msg._expires = "0";
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           0)).Times(1);
   inject_msg(msg.get());
 
   std::vector<std::string> irs_impus;
@@ -410,6 +425,11 @@ TEST_F(SubscriptionTest, SubscriptionWithNoBindings)
   // Set up a single subscription - this should generate a 200 OK then
   // a NOTIFY
   SubscribeMessage msg;
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
   inject_msg(msg.get());
 
   // Get OK
@@ -465,6 +485,11 @@ TEST_F(SubscriptionTest, SubscriptionWithDataContention)
   // Set up a single subscription - this should generate a 200 OK then
   // a NOTIFY
   SubscribeMessage msg;
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
   inject_msg(msg.get());
 
   std::vector<std::string> irs_impus;
@@ -515,6 +540,11 @@ TEST_F(SubscriptionTest, EmptyAcceptsHeader)
 
   SubscribeMessage msg;
   msg._accepts = "";
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
   inject_msg(msg.get());
 
   std::vector<std::string> irs_impus;
@@ -548,6 +578,11 @@ TEST_F(SubscriptionTest, CorrectAcceptsHeader)
 
   SubscribeMessage msg;
   msg._accepts = "Accept: otherstuff,application/reginfo+xml";
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
   inject_msg(msg.get());
 
   std::vector<std::string> irs_impus;
@@ -644,6 +679,11 @@ TEST_F(SubscriptionTest, NonPrimaryAssociatedUri)
                                    "  </InitialFilterCriteria>\n"
                                    "</ServiceProfile></IMSSubscription>");
 
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550233@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
   inject_msg(msg.get());
 
   // We expect one registration element per IMPU in the Implicit Registration Set
@@ -695,6 +735,11 @@ TEST_F(SubscriptionTest, NoNotificationsForEmergencyRegistrations)
   check_subscriptions("sip:6505550231@homedomain", 0u);
 
   SubscribeMessage msg;
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
   inject_msg(msg.get());
 
   ASSERT_EQ(2, txdata_count());
@@ -728,6 +773,11 @@ void SubscriptionTest::check_subscriptions(std::string aor, uint32_t expected)
 TEST_F(SubscriptionTest, CheckNotifyCseqs)
 {
   SubscribeMessage msg;
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
   inject_msg(msg.get());
 
   // Receive the SUBSCRIBE 200 OK and NOTIFY, then send NOTIFY 200 OK.
@@ -754,6 +804,11 @@ TEST_F(SubscriptionTest, CheckNotifyCseqs)
 
   msg._expires = "0";
   msg._to_tag = to_tag;
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           0)).Times(1);
   inject_msg(msg.get());
 
   // Receive another SUBSCRIBE 200 OK and NOTIFY, then send NOTIFY 200 OK.
@@ -933,6 +988,11 @@ TEST_F(SubscriptionTestMockStore, SubscriberDataManagerWritesFail)
     .WillOnce(Return(Store::ERROR));
 
   SubscribeMessage msg;
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
   inject_msg(msg.get());
 
   ASSERT_EQ(1, txdata_count());

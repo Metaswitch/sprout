@@ -52,6 +52,7 @@
 #include "mock_chronos_connection.h"
 #include "mock_store.h"
 #include "mock_analytics_logger.h"
+#include "analyticslogger.h"
 
 using ::testing::_;
 using ::testing::DoAll;
@@ -290,6 +291,11 @@ TYPED_TEST(BasicSubscriberDataManagerTest, SubscriptionTests)
   // Add the AoR record to the store.
   std::vector<std::string> irs_impus;
   irs_impus.push_back("5102175698@cw-ngv.com");
+  EXPECT_CALL(*(this->_analytics_logger),
+              registration("5102175698@cw-ngv.com",
+                           "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1",
+                           "<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>",
+                           300)).Times(1);
   rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
@@ -496,6 +502,16 @@ TYPED_TEST(BasicSubscriberDataManagerTest, ExpiryTests)
   // Write the record to the store.
   std::vector<std::string> irs_impus;
   irs_impus.push_back("5102175698@cw-ngv.com");
+  EXPECT_CALL(*(this->_analytics_logger),
+              registration("5102175698@cw-ngv.com",
+                           "urn:uuid:00000000-0000-0000-0000-b4dd32817622:2",
+                           "<sip:5102175698@192.91.191.42:59934;transport=tcp;ob>",
+                           200));
+  EXPECT_CALL(*(this->_analytics_logger),
+              registration("5102175698@cw-ngv.com",
+                           "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1",
+                           "<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>",
+                           100));
   rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
@@ -544,7 +560,7 @@ class MultiFormatSubscriberDataManagerTest : public ::testing::Test
   {
     _chronos_connection = new FakeChronosConnection();
     _datastore = new LocalStore();
-    _analytics_logger = new MockAnalyticsLogger();
+    _analytics_logger = new AnalyticsLogger();
 
     {
       SubscriberDataManager::SerializerDeserializer* serializer = new T();
@@ -589,7 +605,7 @@ class MultiFormatSubscriberDataManagerTest : public ::testing::Test
   LocalStore* _datastore;
   SubscriberDataManager* _multi_store;
   SubscriberDataManager* _single_store;
-  MockAnalyticsLogger* _analytics_logger;
+  AnalyticsLogger* _analytics_logger;
 };
 
 // MultiFormatSubscriberDataManagerTest is parameterized over these types.
@@ -649,7 +665,7 @@ class SubscriberDataManagerCorruptDataTest : public ::testing::Test
   {
     _chronos_connection = new FakeChronosConnection();
     _datastore = new MockStore();
-    _analytics_logger = new MockAnalyticsLogger();
+    _analytics_logger = new AnalyticsLogger();
 
     {
       SubscriberDataManager::SerializerDeserializer* serializer =
@@ -679,7 +695,7 @@ class SubscriberDataManagerCorruptDataTest : public ::testing::Test
   FakeChronosConnection* _chronos_connection;
   MockStore* _datastore;
   SubscriberDataManager* _store;
-  MockAnalyticsLogger* _analytics_logger;
+  AnalyticsLogger* _analytics_logger;
 };
 
 
@@ -745,7 +761,7 @@ class SubscriberDataManagerChronosRequestsTest : public SipTest
   {
     _chronos_connection = new MockChronosConnection("chronos");
     _datastore = new LocalStore();
-    _analytics_logger = new MockAnalyticsLogger();
+    _analytics_logger = new AnalyticsLogger();
 
     SubscriberDataManager::SerializerDeserializer* serializer =
       new SubscriberDataManager::JsonSerializerDeserializer();
@@ -772,7 +788,7 @@ class SubscriberDataManagerChronosRequestsTest : public SipTest
   MockChronosConnection* _chronos_connection;
   LocalStore* _datastore;
   SubscriberDataManager* _store;
-  MockAnalyticsLogger* _analytics_logger;
+  AnalyticsLogger* _analytics_logger;
 };
 
 // Test that adding an AoR to the store generates a chronos POST request, and that
