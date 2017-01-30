@@ -153,7 +153,9 @@ void ConnectionTracker::connection_active(pjsip_transport *tp)
                                          &key);
       if (rc != PJ_SUCCESS)
       {
+        // LCOV_EXCL_START - Not tested in UT
         TRC_STATUS("Failed to add a listener");
+        // LCOV_EXCL_STOP
       }
 
       // Record the listener.
@@ -215,9 +217,12 @@ void ConnectionTracker::quiesce()
     {
       TRC_STATUS("Shutdown connection %p", it->first);
       pj_status_t rc = pjsip_transport_shutdown(it->first);
+
       if (rc != PJ_SUCCESS)
       {
+        // LCOV_EXCL_START - Not tested in UT
         TRC_STATUS("Failed to shut down the connection");
+        // LCOV_EXCL_STOP
       }
     }
   }
