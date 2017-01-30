@@ -306,6 +306,7 @@ void BasicProxy::on_cancel_request(pjsip_rx_data* rdata)
   }
 
   UASTsx *uas_tsx = (UASTsx*)get_from_transaction(invite_uas);
+
   if (uas_tsx == NULL)
   {
     // The PJSIP transaction exists but there is no UASTsx associated with it.
@@ -318,6 +319,10 @@ void BasicProxy::on_cancel_request(pjsip_rx_data* rdata)
     // Given that we will already have sent a final response to the INVITE we
     // should treat this as though the INVITE has already been destroyed.
     reject_request(rdata, PJSIP_SC_CALL_TSX_DOES_NOT_EXIST);
+
+    // Unlock UAS tsx because it is locked in find_tsx()
+    pj_grp_lock_release(invite_uas->grp_lock);
+
     return;
   }
 
@@ -328,6 +333,10 @@ void BasicProxy::on_cancel_request(pjsip_rx_data* rdata)
   {
     // LCOV_EXCL_START
     reject_request(rdata, PJSIP_SC_INTERNAL_SERVER_ERROR);
+
+    // Unlock UAS tsx because it is locked in find_tsx()
+    pj_grp_lock_release(invite_uas->grp_lock);
+
     return;
     // LCOV_EXCL_STOP
   }
@@ -348,6 +357,7 @@ void BasicProxy::on_cancel_request(pjsip_rx_data* rdata)
 
   // Unlock UAS tsx because it is locked in find_tsx()
   pj_grp_lock_release(invite_uas->grp_lock);
+
 }
 
 
