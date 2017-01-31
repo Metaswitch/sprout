@@ -356,7 +356,6 @@ void BasicProxy::on_cancel_request(pjsip_rx_data* rdata)
 
   // Unlock UAS tsx because it is locked in find_tsx()
   pj_grp_lock_release(invite_uas->grp_lock);
-
 }
 
 
