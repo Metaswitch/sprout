@@ -242,7 +242,7 @@ Store::Status SubscriberDataManager::set_aor_data(
 
     if (_analytics != NULL)
     {
-      log_removed_or_shortened_bindings(classified_bindings);
+      log_removed_or_shortened_bindings(classified_bindings, now);
     }
 
     // 3. Send any Chronos timer requests
@@ -274,7 +274,7 @@ Store::Status SubscriberDataManager::set_aor_data(
     // 5. Log new / extended bindings
     if (_analytics != NULL)
     {
-      log_new_or_extended_bindings(classified_bindings);
+      log_new_or_extended_bindings(classified_bindings, now);
     }
 
     // 6. Send any NOTIFYs
@@ -352,22 +352,30 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
   }
 }
 
-void SubscriberDataManager::log_removed_or_shortened_bindings(ClassifiedBindings& classified_bindings)
+void SubscriberDataManager::log_removed_or_shortened_bindings(ClassifiedBindings& classified_bindings,
+                                                              int now)
 {
   for (ClassifiedBinding* classified_binding : classified_bindings)
   {
-    if (classified_binding->_contact_event == NotifyUtils::ContactEvent::EXPIRED ||
-        classified_binding->_contact_event == NotifyUtils::ContactEvent::SHORTENED)
+    if (classified_binding->_contact_event == NotifyUtils::ContactEvent::EXPIRED)
     {
       _analytics->registration(classified_binding->_b->_address_of_record,
                                classified_binding->_id,
                                classified_binding->_b->_uri,
-                               classified_binding->_b->_expires);
+                               0);
+    }
+    else if (classified_binding->_contact_event == NotifyUtils::ContactEvent::SHORTENED)
+    {
+      _analytics->registration(classified_binding->_b->_address_of_record,
+                               classified_binding->_id,
+                               classified_binding->_b->_uri,
+                               classified_binding->_b->_expires - now);
     }
   }
 }
 
-void SubscriberDataManager::log_new_or_extended_bindings(ClassifiedBindings& classified_bindings)
+void SubscriberDataManager::log_new_or_extended_bindings(ClassifiedBindings& classified_bindings,
+                                                         int now)
 {
   for (ClassifiedBinding* classified_binding : classified_bindings)
   {
@@ -377,7 +385,7 @@ void SubscriberDataManager::log_new_or_extended_bindings(ClassifiedBindings& cla
       _analytics->registration(classified_binding->_b->_address_of_record,
                                classified_binding->_id,
                                classified_binding->_b->_uri,
-                               classified_binding->_b->_expires);
+                               classified_binding->_b->_expires - now);
     }
   }
 }
