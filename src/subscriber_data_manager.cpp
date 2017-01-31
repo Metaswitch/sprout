@@ -334,7 +334,6 @@ void SubscriberDataManager::classify_bindings(const std::string& aor_id,
 
     NotifyUtils::ContactEvent event;
 
-
     if (aor_orig_b_match == aor_pair->get_orig()->bindings().end())
     {
       // Binding is new

@@ -370,7 +370,7 @@ SubscriberDataManager::AoRPair* write_subscriptions_to_store(
   }
   while (set_rc == Store::DATA_CONTENTION);
 
-  if ((analytics != NULL) && is_primary)
+  if ((analytics != NULL) && (is_primary))
   {
     // Generate an analytics log for this subscription update.
     analytics->subscription(aor,

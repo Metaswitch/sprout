@@ -1,8 +1,8 @@
 /**
- * @file mock_impi_store.h
+ * @file mock_analytics_logger.h
  *
  * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2016  Metaswitch Networks Ltd
+ * Copyright (C) 2017  Metaswitch Networks Ltd
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
