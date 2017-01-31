@@ -547,13 +547,24 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
   _record_routed = true;
   _se_helper.process_request(req, get_pool(req), trail());
 
-  // Create an ACR for this request and pass the request to it.
-  _in_dialog_acr = _scscf->get_acr(trail(),
-                         ACR::CALLING_PARTY,
-                         get_billing_role());
+  ACR::NodeRole billing_role;
+  bool bill_request = get_billing_role(billing_role);
 
-  // @TODO - request timestamp???
-  get_acr()->rx_request(req);
+  if (bill_request)
+  {
+    // Create an ACR for this request and pass the request to it.
+    _in_dialog_acr = _scscf->get_acr(
+      trail(),
+      ACR::CALLING_PARTY,
+      billing_role);
+
+    // @TODO - request timestamp???
+    get_acr()->rx_request(req);
+  }
+  else
+  {
+    _in_dialog_acr = NULL;
+  }
 
   send_request(req);
 }
@@ -1799,42 +1810,57 @@ void SCSCFSproutletTsx::add_to_dialog(pjsip_msg* msg,
   }
 
   // Ensure the billing scope flag is set on the RR header.
-  if (billing_rr)
+  // We've records routed before (either earlier in this function or in a
+  // previous call to this function within this transaction).  Therefore the
+  // Record-Route header we added then must be present (and must be the top
+  // such header).
+  assert(rr != NULL);
+
+  pjsip_sip_uri* uri = (pjsip_sip_uri*)rr->name_addr.uri;
+  pjsip_param* param = pjsip_param_find(&uri->other_param,
+                                        &STR_BILLING_ROLE);
+
+  // Work out what our billing-role shoudld be set to for this hop.
+  pj_str_t const* charging_role;
+  if (!billing_rr)
   {
-    // We've records routed before (either earlier in this function or in a
-    // previous call to this function within this transaction).  Therefore the
-    // Record-Route header we added then must be present (and must be the top
-    // such header).
-    assert(rr != NULL);
+    // This isn't a hop that we want to generate a billing record for.
+    charging_role = &STR_CHARGE_NONE;
+  }
+  else if (billing_role == ACR::NODE_ROLE_ORIGINATING)
+  {
+    charging_role = &STR_CHARGE_ORIG;
+  }
+  else
+  {
+    charging_role = &STR_CHARGE_TERM;
+  }
 
-    pjsip_sip_uri* uri = (pjsip_sip_uri*)rr->name_addr.uri;
-    pjsip_param* param = pjsip_param_find(&uri->other_param,
-                                          &STR_BILLING_ROLE);
-    if (!param)
-    {
-      param = PJ_POOL_ALLOC_T(pool, pjsip_param);
-      pj_strdup(pool, &param->name, &STR_BILLING_ROLE);
+  if (!param)
+  {
+    // There wasn't a billing role previously.  Set it now.
+    param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+    pj_strdup(pool, &param->name, &STR_BILLING_ROLE);
 
-      if (billing_role == ACR::NODE_ROLE_ORIGINATING)
-      {
-        pj_strdup(pool, &param->value, &STR_CHARGE_ORIG);
-      }
-      else
-      {
-        pj_strdup(pool, &param->value, &STR_CHARGE_TERM);
-      }
-      pj_list_insert_before(&uri->other_param, param);
-    }
+    pj_strdup(pool, &param->value, charging_role);
+    pj_list_insert_before(&uri->other_param, param);
+  }
+  else if ((billing_rr) && !pj_strcmp(&param->value, &STR_CHARGE_NONE))
+  {
+    // We had previously set the billing-role for this hop to NONE but have now
+    // decided that we should be billing it.   E.g. we first treated this as
+    // just a standard AS hop, but have now decided that it is the final
+    // terminating hop.  Update the billing role.
+    pj_strdup(pool, &param->value, charging_role);
   }
 }
 
 
 /// Retrieve the billing role for an in-dialog message.
-ACR::NodeRole SCSCFSproutletTsx::get_billing_role()
+bool SCSCFSproutletTsx::get_billing_role(ACR::NodeRole &role)
 {
-  ACR::NodeRole role;
-
   const pjsip_route_hdr* route = route_hdr();
+
   if ((route != NULL) &&
       (is_uri_reflexive(route->name_addr.uri)))
   {
@@ -1843,7 +1869,12 @@ ACR::NodeRole SCSCFSproutletTsx::get_billing_role()
                                           &STR_BILLING_ROLE);
     if (param != NULL)
     {
-      if (!pj_strcmp(&param->value, &STR_CHARGE_ORIG))
+      if (!pj_strcmp(&param->value, &STR_CHARGE_NONE))
+      {
+        TRC_INFO("Charging role is none");
+        return false;
+      }
+      else if (!pj_strcmp(&param->value, &STR_CHARGE_ORIG))
       {
         TRC_INFO("Charging role is originating");
         role = ACR::NODE_ROLE_ORIGINATING;
@@ -1872,7 +1903,7 @@ ACR::NodeRole SCSCFSproutletTsx::get_billing_role()
     role = ACR::NODE_ROLE_ORIGINATING;
   }
 
-  return role;
+  return true;
 }
 
 
