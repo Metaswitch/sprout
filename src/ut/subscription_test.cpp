@@ -40,6 +40,7 @@
 
 #include "siptest.hpp"
 #include "utils.h"
+#include "analyticslogger.h"
 #include "mock_analytics_logger.h"
 #include "stack.h"
 #include "subscription.h"
@@ -916,6 +917,7 @@ std::string SubscriptionTest::check_OK_and_NOTIFY(std::string reg_state,
 
 
 /// Fixture for Subscription tests that use a mock store instead of a fake one.
+/// Also use a real analyticslogger to get UT coverage of that.
 class SubscriptionTestMockStore : public SipTest
 {
 public:
@@ -931,7 +933,7 @@ public:
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new MockStore();
     _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
-    _analytics = new MockAnalyticsLogger();
+    _analytics = new AnalyticsLogger();
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_subscription(_sdm, {}, _hss_connection, _acr_factory, _analytics, 300);
@@ -966,7 +968,7 @@ public:
 protected:
   MockStore* _local_data_store;
   SubscriberDataManager* _sdm;
-  MockAnalyticsLogger* _analytics;
+  AnalyticsLogger* _analytics;
   ACRFactory* _acr_factory;
   FakeHSSConnection* _hss_connection;
   FakeChronosConnection* _chronos_connection;
@@ -988,11 +990,6 @@ TEST_F(SubscriptionTestMockStore, SubscriberDataManagerWritesFail)
     .WillOnce(Return(Store::ERROR));
 
   SubscribeMessage msg;
-  EXPECT_CALL(*(this->_analytics),
-              subscription("sip:6505550231@homedomain",
-                           _,
-                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
-                           300)).Times(1);
   inject_msg(msg.get());
 
   ASSERT_EQ(1, txdata_count());

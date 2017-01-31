@@ -201,8 +201,16 @@ TYPED_TEST(BasicSubscriberDataManagerTest, BindingTests)
   EXPECT_EQ(std::string("5102175698@cw-ngv.com"), b1->_private_id);
   EXPECT_EQ(false, b1->_emergency_registration);
 
-  // Update AoR record in the store and check it.
+  // Update AoR record in the store and check it.  Change the expiry time as
+  // part of the update and check that we get an analytics log.
   b1->_cseq = 17039;
+  now = time(NULL);
+  b1->_expires = now + 100;
+  EXPECT_CALL(*(this->_analytics_logger),
+              registration("5102175698@cw-ngv.com",
+                           "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1",
+                           "<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>",
+                           100)).Times(1);
   rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
@@ -216,10 +224,11 @@ TYPED_TEST(BasicSubscriberDataManagerTest, BindingTests)
   EXPECT_EQ(std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>"), b1->_uri);
   EXPECT_EQ(std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq"), b1->_cid);
   EXPECT_EQ(17039, b1->_cseq);
-  EXPECT_EQ(now + 300, b1->_expires);
+  EXPECT_EQ(now + 100, b1->_expires);
   EXPECT_EQ(0, b1->_priority);
 
   // Update AoR record again in the store and check it, this time using get_binding.
+  // Also, don't change the expiry time -- we shouldn't get an analytics log.
   b1->_cseq = 17040;
   rc = this->_store->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
   EXPECT_TRUE(rc);
@@ -233,7 +242,7 @@ TYPED_TEST(BasicSubscriberDataManagerTest, BindingTests)
   EXPECT_EQ(std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>"), b1->_uri);
   EXPECT_EQ(std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq"), b1->_cid);
   EXPECT_EQ(17040, b1->_cseq);
-  EXPECT_EQ(now + 300, b1->_expires);
+  EXPECT_EQ(now + 100, b1->_expires);
   EXPECT_EQ(0, b1->_priority);
   delete aor_data1; aor_data1 = NULL;
 
