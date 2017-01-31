@@ -369,4 +369,3 @@ bool QuiescingManager::is_quiescing()
 
   return false;
 }
-

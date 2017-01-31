@@ -189,7 +189,9 @@ TEST_F(QuiescingManagerTest, MainlineQuiescing)
 {
   register_all();
 
+  EXPECT_FALSE(_qm->is_quiescing());
   _qm->quiesce();
+  EXPECT_TRUE(_qm->is_quiescing());
   EXPECT_FALSE(_conns_handler->untrusted_port_open);
   EXPECT_TRUE(_flows_handler->flows_quiesced);
 
@@ -380,5 +382,3 @@ TEST_F(QuiescingManagerTest, QuiesceWithoutFlowsHandler)
   EXPECT_TRUE(_conns_handler->connections_quiesced);
   EXPECT_TRUE(_completion_handler->complete);
 }
-
-
