@@ -1349,6 +1349,12 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     pj_strdup2(get_pool(req), &odi_uri->user, odi_value.c_str());
     odi_uri->transport_param = as_uri->transport_param;  // Use same transport as AS, in case it can only cope with one.
 
+    pjsip_param* services_p = PJ_POOL_ALLOC_T(get_pool(req), pjsip_param);
+    pj_strdup(get_pool(req), &services_p->name, &STR_SERVICE);
+    pj_list_insert_before(&odi_uri->other_param, services_p);
+    std::string services = _scscf->service_name();
+    pj_strdup2(get_pool(req), &services_p->value, services.c_str());
+
     if (_session_case->is_originating())
     {
       pjsip_param *orig_param = PJ_POOL_ALLOC_T(get_pool(req), pjsip_param);
