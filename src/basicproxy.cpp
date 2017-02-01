@@ -308,6 +308,8 @@ void BasicProxy::on_cancel_request(pjsip_rx_data* rdata)
 
   if (uas_tsx == NULL)
   {
+    // LCOV_EXCL_START
+    //
     // The PJSIP transaction exists but there is no UASTsx associated with it.
     // The only case where this happens is a window condition where
     // - the PJSIP transaction is already in state destroyed because we have
@@ -323,6 +325,7 @@ void BasicProxy::on_cancel_request(pjsip_rx_data* rdata)
     pj_grp_lock_release(invite_uas->grp_lock);
 
     return;
+    // LCOV_EXCL_STOP
   }
 
   // Respond 200 OK to CANCEL.  Must do this statefully.
