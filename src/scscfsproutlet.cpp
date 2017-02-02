@@ -547,6 +547,8 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
   _record_routed = true;
   _se_helper.process_request(req, get_pool(req), trail());
 
+  // Determine whether we should be generating an ACR for this transaction,
+  // and if so what our role should be? (originaing or terminating).
   ACR::NodeRole billing_role;
   bool bill_request = get_billing_role(billing_role);
 
@@ -563,6 +565,8 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
   }
   else
   {
+    // We don't want to bill this transaction. in_dialog_acr should already
+    // be NULL.  NULL it just in case though.
     _in_dialog_acr = NULL;
   }
 
@@ -1780,9 +1784,13 @@ bool SCSCFSproutletTsx::lookup_ifcs(std::string public_id, Ifcs& ifcs)
 }
 
 
-/// Add the S-CSCF sproutlet into a dialog.  The parameter passed will
-/// be attached to the Record-Route and can be used to recover the billing
-/// role that is in use on subsequent in-dialog messages.
+/// Add the S-CSCF sproutlet into a dialog.
+///
+/// Params:
+/// - billing_rr:   set to true if this is a hop where future in-dialog requests
+///                 should generate an ACR
+/// - billing_role: if billing_rr is set to true then this is the ACR::NodeRole
+///                 that should be used when generating said future ACRs
 void SCSCFSproutletTsx::add_to_dialog(pjsip_msg* msg,
                                       bool billing_rr,
                                       ACR::NodeRole billing_role)
@@ -1810,7 +1818,7 @@ void SCSCFSproutletTsx::add_to_dialog(pjsip_msg* msg,
   }
 
   // Ensure the billing scope flag is set on the RR header.
-  // We've records routed before (either earlier in this function or in a
+  // We've record-routed before (either earlier in this function or in a
   // previous call to this function within this transaction).  Therefore the
   // Record-Route header we added then must be present (and must be the top
   // such header).
@@ -1848,7 +1856,7 @@ void SCSCFSproutletTsx::add_to_dialog(pjsip_msg* msg,
   else if ((billing_rr) && !pj_strcmp(&param->value, &STR_CHARGE_NONE))
   {
     // We had previously set the billing-role for this hop to NONE but have now
-    // decided that we should be billing it.   E.g. we first treated this as
+    // decided that we should be billing it. E.g. we first treated this as
     // just a standard AS hop, but have now decided that it is the final
     // terminating hop.  Update the billing role.
     pj_strdup(pool, &param->value, charging_role);
