@@ -1845,10 +1845,18 @@ void SCSCFSproutletTsx::add_to_dialog(pjsip_msg* msg,
   {
     pjsip_billing_role = &STR_CHARGE_ORIG;
   }
+  else if (acr_billing_role == ACR::NODE_ROLE_TERMINATING)
+  {
+    pjsip_billing_role = &STR_CHARGE_TERM;
+  }
   else
   {
-    assert(acr_billing_role == ACR::NODE_ROLE_TERMINATING);
-    pjsip_billing_role = &STR_CHARGE_TERM;
+    // LCOV_EXCL_START
+    // This should never happen.  Log an error and treat as a hop that we won't
+    // generate a billing record for.
+    TRC_ERROR("Unrecognised billing_role: %d", acr_billing_role);
+    pjsip_billing_role = &STR_CHARGE_NONE;
+    // LCOV_EXCL_STOP
   }
 
   if (!param)
