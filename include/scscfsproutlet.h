@@ -339,9 +339,11 @@ private:
                      bool billing_rr,
                      ACR::NodeRole billing_role);
 
-  /// Retrieve the billing role for the incoming message.  This should have been
-  /// set during session initiation.
-  ACR::NodeRole get_billing_role();
+  // Inspects the charging-role in the top route header of the incoming message
+  // to determine whether this is a transaction that we should generate an ACR
+  // for. If it is then it returns true and sets role to one of ACR::NodeRole.
+  // Otherwise it returns false.
+  bool get_billing_role(ACR::NodeRole& role);
 
   /// Adds a second P-Asserted-Identity header to a message when required.
   void add_second_p_a_i_hdr(pjsip_msg* msg);
