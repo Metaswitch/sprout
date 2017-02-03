@@ -555,10 +555,9 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
   if (bill_request)
   {
     // Create an ACR for this request and pass the request to it.
-    _in_dialog_acr = _scscf->get_acr(
-      trail(),
-      ACR::CALLING_PARTY,
-      billing_role);
+    _in_dialog_acr = _scscf->get_acr(trail(),
+                                     ACR::CALLING_PARTY,
+                                     billing_role);
 
     // @TODO - request timestamp???
     get_acr()->rx_request(req);
@@ -1784,16 +1783,26 @@ bool SCSCFSproutletTsx::lookup_ifcs(std::string public_id, Ifcs& ifcs)
 }
 
 
-/// Add the S-CSCF sproutlet into a dialog.
+/// Add the S-CSCF sproutlet into a dialog by adding an appropriate record-route
+/// to the current message (if we haven't already done this previously).  In
+/// order to ensure that we correctly bill or don't bill this hop on subsequent
+/// in-dialog transactions we also add a billing-role parameter to the
+/// record-route indicating either that we shouldn't bill the hop, that we
+/// should bill it (as an originating party) or that we should bill it (as a
+/// terminating party).
 ///
 /// Params:
-/// - billing_rr:   set to true if this is a hop where future in-dialog requests
-///                 should generate an ACR
-/// - billing_role: if billing_rr is set to true then this is the ACR::NodeRole
-///                 that should be used when generating said future ACRs
+/// - msg:         the message that we are currently processing and that we
+///                want to add a record-route header to
+/// - bill_this_hop:
+///                set to true if this is a hop where future in-dialog requests
+///                should generate an ACR
+/// - acr_billing_role:
+///                if billing_rr is set to true then this is the ACR::NodeRole
+///                that should be used when generating said future ACRs
 void SCSCFSproutletTsx::add_to_dialog(pjsip_msg* msg,
-                                      bool billing_rr,
-                                      ACR::NodeRole billing_role)
+                                      bool bill_this_hop,
+                                      ACR::NodeRole acr_billing_role)
 {
   pj_pool_t* pool = get_pool(msg);
   _se_helper.process_request(msg, pool, trail());
@@ -1828,20 +1837,20 @@ void SCSCFSproutletTsx::add_to_dialog(pjsip_msg* msg,
   pjsip_param* param = pjsip_param_find(&uri->other_param,
                                         &STR_BILLING_ROLE);
 
-  // Work out what our billing-role shoudld be set to for this hop.
-  pj_str_t const* charging_role;
-  if (!billing_rr)
+  // Work out what our billing-role should be set to for this hop.
+  pj_str_t const* pjsip_billing_role;
+  if (!bill_this_hop)
   {
     // This isn't a hop that we want to generate a billing record for.
-    charging_role = &STR_CHARGE_NONE;
+    pjsip_billing_role = &STR_CHARGE_NONE;
   }
-  else if (billing_role == ACR::NODE_ROLE_ORIGINATING)
+  else if (acr_billing_role == ACR::NODE_ROLE_ORIGINATING)
   {
-    charging_role = &STR_CHARGE_ORIG;
+    pjsip_billing_role = &STR_CHARGE_ORIG;
   }
   else
   {
-    charging_role = &STR_CHARGE_TERM;
+    pjsip_billing_role = &STR_CHARGE_TERM;
   }
 
   if (!param)
@@ -1850,16 +1859,16 @@ void SCSCFSproutletTsx::add_to_dialog(pjsip_msg* msg,
     param = PJ_POOL_ALLOC_T(pool, pjsip_param);
     pj_strdup(pool, &param->name, &STR_BILLING_ROLE);
 
-    pj_strdup(pool, &param->value, charging_role);
+    pj_strdup(pool, &param->value, pjsip_billing_role);
     pj_list_insert_before(&uri->other_param, param);
   }
-  else if ((billing_rr) && !pj_strcmp(&param->value, &STR_CHARGE_NONE))
+  else if ((bill_this_hop) && !pj_strcmp(&param->value, &STR_CHARGE_NONE))
   {
     // We had previously set the billing-role for this hop to NONE but have now
     // decided that we should be billing it. E.g. we first treated this as
     // just a standard AS hop, but have now decided that it is the final
     // terminating hop.  Update the billing role.
-    pj_strdup(pool, &param->value, charging_role);
+    pj_strdup(pool, &param->value, pjsip_billing_role);
   }
 }
 
