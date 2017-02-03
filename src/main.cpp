@@ -2283,8 +2283,8 @@ int main(int argc, char* argv[])
                                        &auth_timeout_handler);
       http_stack_sig->register_handler("^/registrations?*$",
                                        &deregistration_handler);
-      http_stack_sig->start(&reg_httpthread_with_pjsip);
       http_stack_sig->bind_tcp_socket(opt.http_address, opt.http_port);
+      http_stack_sig->start(&reg_httpthread_with_pjsip);
     }
     catch (HttpStack::Exception& e)
     {
@@ -2303,8 +2303,8 @@ int main(int argc, char* argv[])
                                         &get_subscriptions_handler);
       http_stack_mgmt->register_handler("^/impu/[^/]+$",
                                         &delete_impu_handler);
-      http_stack_mgmt->start(&reg_httpthread_with_pjsip);
       http_stack_mgmt->bind_unix_socket(SPROUT_HTTP_MGMT_SOCKET_PATH);
+      http_stack_mgmt->start(&reg_httpthread_with_pjsip);
     }
     catch (HttpStack::Exception& e)
     {
