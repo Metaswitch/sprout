@@ -44,6 +44,11 @@
 #include "mangelwurzel.h"
 #include "mangelwurzelsasevent.h"
 
+#include <time.h>
+#include <stdlib.h>
+
+static const float REGISTRATION_ERRORS=50.0;
+
 /// Mangelwurzel URI parameter constants.
 static const pj_str_t DIALOG_PARAM = pj_str((char *)"dialog");
 static const pj_str_t REQ_URI_PARAM = pj_str((char *)"req-uri");
@@ -147,6 +152,18 @@ SproutletTsx* Mangelwurzel::get_tsx(SproutletTsxHelper* helper,
 /// - It can mangle the Record-Route headers URIs.
 void MangelwurzelTsx::on_rx_initial_request(pjsip_msg* req)
 {
+  TRC_STATUS("@@@ame2 registration request received");
+  // We reject 50% of registrations
+  srand((unsigned) time(NULL));
+  if (req->line.req.method.id == PJSIP_REGISTER_METHOD && (100 * (float) rand()/RAND_MAX) < REGISTRATION_ERRORS);
+  {
+    TRC_STATUS("@@@ame2 registration error sent");
+    pjsip_msg* rsp = create_response(req, PJSIP_SC_INTERNAL_SERVER_ERROR);
+    send_response(rsp);
+    free_msg(req);
+    return;
+  }
+
   // If Mangelwurzel receives a REGISTER, we need to respond with a 200 OK
   // rather than mangling the request and forwarding it on.
   if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
