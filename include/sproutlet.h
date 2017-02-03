@@ -576,7 +576,7 @@ protected:
   /// @param pool         - Pool to allocate the URI in.
   /// @param existing_uri - An existing URI to use as a base for the new one.
   ///                       Parameters from this URI will be preserved if
-  ///                       possible.
+  ///                       possible, but the user part will be stripped.
   pjsip_sip_uri* get_uri_for_service(const std::string& service,
                                      pj_pool_t* pool,
                                      pjsip_sip_uri* existing_uri) const

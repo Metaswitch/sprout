@@ -47,10 +47,6 @@ void ForwardingSproutletTsx::forward_request(pjsip_msg* req)
 {
   const pjsip_route_hdr* route = route_hdr();
   pjsip_sip_uri* base_uri = (pjsip_sip_uri*)(route ? route->name_addr.uri : nullptr);
-  if (base_uri != NULL)
-  {
-    base_uri->user = pj_str(const_cast<char*>(""));
-  }
   pjsip_sip_uri* uri =
     (pjsip_sip_uri*)get_uri_for_service(_upstream_service_name,
                                         get_pool(req),
