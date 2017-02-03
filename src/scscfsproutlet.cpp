@@ -1850,6 +1850,7 @@ void SCSCFSproutletTsx::add_to_dialog(pjsip_msg* msg,
   }
   else
   {
+    assert(acr_billing_role == ACR::NODE_ROLE_TERMINATING);
     pjsip_billing_role = &STR_CHARGE_TERM;
   }
 
