@@ -611,6 +611,18 @@ TEST_F(AuthenticationTest, NoAuthorizationNonReg)
   auth_sproutlet_allows_request();
 }
 
+TEST_F(AuthenticationTest, NoAuthorizationNonRegUserPart)
+{
+  // Test that the the authentication sproutlet can call forward a request when
+  // the original route contains a user part. See issue 1696.
+  AuthenticationMessage msg("PUBLISH");
+  msg._auth_hdr = false;
+  msg._route = "sip:authentication@sprout.homedomain:5058;transport=TCP";
+  inject_msg(msg.get(), _tp);
+  auth_sproutlet_allows_request();
+}
+
+
 TEST_F(AuthenticationTest, NoAuthorizationNonRegWithPxyAuthHdr)
 {
   // Test that the authentication module lets through non-REGISTER requests
