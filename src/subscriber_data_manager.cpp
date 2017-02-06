@@ -1110,6 +1110,32 @@ void SubscriberDataManager::AoR::copy_subscriptions_and_bindings(SubscriberDataM
   }
 }
 
+/// AoRPair Methods
+
+/// Check whether a binding is expired
+bool SubscriberDataManager::AoRPair::is_binding_expired(const std::string& binding_id)
+{
+  return (_current != NULL &&
+          _current->_bindings.find(binding_id) != _current->_bindings.end() &&
+          _removed_bindings.find(binding_id) == _removed_bindings.end());
+}
+
+/// Removes any binding that had the given ID and marks it as administratively
+/// removed. If there is no such binding, does nothing.
+void SubscriberDataManager::AoRPair::administratively_remove_binding(const std::string& binding_id)
+{
+  if (_current != NULL)
+  {
+    AoR::Bindings::iterator i = _current->_bindings.find(binding_id);
+    if (i != _current->_bindings.end())
+    {
+      delete i->second;
+      _removed_bindings.insert(binding_id);
+      _bindings.erase(i);
+    }
+  }
+}
+
 //
 // (De)serializer for the binary SubscriberDataManager format.
 //
@@ -1610,8 +1636,8 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
     SubscriberDataManager::AoR::Binding* b = aor_orig_b.second;
     std::string b_id = aor_orig_b.first;
 
-    // Compare the original and current lists to see whether this binding has expired.
-    if (aor_pair->get_current()->bindings().find(b_id) == aor_pair->get_current()->bindings().end())
+    // Check whether this binding has since expired
+    if (aor_pair->is_binding_expired(b_id))
     {
       expired_bindings.push_back(b->_uri);
     }

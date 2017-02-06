@@ -322,9 +322,16 @@ public:
   private:
     AoR* _orig_aor;
     AoR* _current_aor;
+    std::vector<std::string> _removed_bindings;
 
     /// Get the original AoR
     AoR* get_orig() { return _orig_aor; }
+
+    /// Check whether a binding is expired (as opposed to existing or removed)
+    bool is_binding_expired(const std::string& binding_id);
+
+    /// Remove a binding as a result of an administrative action.
+    void administratively_remove_binding(const std::string& binding_id);
 
     /// The subscriber data manager is allowed to access the original AoR
     friend class SubscriberDataManager;
