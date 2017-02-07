@@ -160,13 +160,13 @@ static int worker_thread(void* p)
         TRC_ERROR("Exception SAS Trail: %llu (maybe)", get_trail(rdata));
         if (rdata->msg_info.cid != NULL)
         {
-          TRC_ERROR("Exception Call-Id: %.*s",
+          TRC_ERROR("Exception Call-Id: %.*s (maybe)",
                     ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.slen,
                     ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.ptr);
         }
         if (rdata->msg_info.cseq != NULL)
         {
-          TRC_ERROR("Exception CSeq: %ld %.*s",
+          TRC_ERROR("Exception CSeq: %ld %.*s (maybe)",
                     ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->cseq,
                     ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.slen,
                     ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.ptr);
