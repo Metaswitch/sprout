@@ -53,6 +53,18 @@ set -e
 
 case "$1" in
     configure)
+        cat > /etc/clearwater/sample/s-cscf.json << EOF
+{
+   "s-cscfs" : [
+       {   "server" : "sip:${sprout_hostname}:5054;transport=TCP",
+           "priority" : 0,
+           "weight" : 100,
+           "capabilities" : []
+       }
+   ]
+}
+EOF
+
         # Restart sprout to force reload of new plug-in.  Always do this by
         # terminating sprout so monit will restart it more-or-less immediately.
         # (monit restart seems to have significant lag.)
