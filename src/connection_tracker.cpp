@@ -89,7 +89,7 @@ void ConnectionTracker::connection_state_update(pjsip_transport *tp,
 
   if (state == PJSIP_TP_STATE_DESTROYED)
   {
-    TRC_STATUS("Connection %p has been destroyed", tp);
+    TRC_DEBUG("Connection %p has been destroyed", tp);
 
     pthread_mutex_lock(&_lock);
     // We expect to only be called on the PJSIP transport thread, and our data
