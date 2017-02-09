@@ -1985,6 +1985,7 @@ int main(int argc, char* argv[])
 
     local_data_store = (Store*)new MemcachedStore(true,
                                                   opt.store_servers,
+                                                  true,
                                                   memcached_comm_monitor,
                                                   vbucket_alarm);
 
@@ -2002,6 +2003,7 @@ int main(int argc, char* argv[])
 
       remote_data_store = (Store*)new MemcachedStore(true,
                                                      opt.remote_store_servers,
+                                                     false,
                                                      memcached_remote_comm_monitor,
                                                      remote_vbucket_alarm);
 
