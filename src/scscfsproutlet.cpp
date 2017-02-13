@@ -483,7 +483,9 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   ACR* acr = get_acr();
   if (acr)
   {
+    acr->lock();
     acr->rx_request(req);
+    acr->unlock();
   }
 
   if (status_code != PJSIP_SC_OK)
@@ -560,7 +562,13 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
                                      billing_role);
 
     // @TODO - request timestamp???
-    get_acr()->rx_request(req);
+    ACR* acr = get_acr();
+    if (acr != NULL)
+    {
+      acr->lock();
+      acr->rx_request(req);
+      acr->unlock();
+    }
   }
   else
   {
@@ -580,7 +588,9 @@ void SCSCFSproutletTsx::on_tx_request(pjsip_msg* req, int fork_id)
   {
     // Pass the transmitted request to the ACR to update the accounting
     // information.
+    acr->lock();
     acr->tx_request(req);
+    acr->unlock();
   }
 }
 
@@ -599,7 +609,9 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
   ACR* acr = get_acr();
   if (acr != NULL)
   {
+    acr->lock();
     acr->rx_response(rsp);
+    acr->unlock();
   }
 
   if (_liveness_timer != 0)
@@ -722,7 +734,9 @@ void SCSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
   {
     // Pass the transmitted response to the ACR to update the accounting
     // information.
+    acr->lock();
     acr->tx_response(rsp);
+    acr->unlock();
   }
 
   // If this is a transaction where we are supposed to be tracking session
@@ -960,9 +974,12 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         }
 
         // Abandon the `term` ACR we're building up as we're about to perform CDIV.
-        if (_as_chain_link.acr())
+        ACR* acr = _as_chain_link.acr();
+        if (acr != NULL)
         {
-          _as_chain_link.acr()->cancel();
+          acr->lock();
+          acr->cancel();
+          acr->unlock();
         }
 
         Ifcs ifcs;
@@ -1041,7 +1058,9 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         {
           TRC_DEBUG("Single Record-Route - initiation of originating handling");
           add_to_dialog(req, true, ACR::NODE_ROLE_ORIGINATING);
+          acr->lock();
           acr->override_session_id(PJUtils::pj_str_to_string(&PJSIP_MSG_CID_HDR(req)->id));
+          acr->unlock();
         }
 
         // This is an initial originating request -- not a request coming back
@@ -1315,7 +1334,9 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
       ACR* acr = _as_chain_link.acr();
       if (acr != NULL)
       {
+        acr->lock();
         acr->override_session_id(PJUtils::pj_str_to_string(&PJSIP_MSG_CID_HDR(req)->id));
+        acr->unlock();
       }
     }
 
