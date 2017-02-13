@@ -1644,7 +1644,8 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
   }
 
   register_tdata(rsp);
-  if ((PJSIP_IS_STATUS_IN_CLASS(rsp->msg->line.status.code, 100)) &&
+  int status_code = rsp->msg->line.status.code;
+  if ((PJSIP_IS_STATUS_IN_CLASS(status_code, 100)) &&
       (_forks[fork_id].state.tsx_state == PJSIP_TSX_STATE_CALLING))
   {
     // Provisional response on fork still in calling state, so move to
@@ -1654,7 +1655,7 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
                 _id.c_str(), pjsip_tx_data_get_info(rsp),
                 fork_id, pjsip_tsx_state_str(_forks[fork_id].state.tsx_state));
   }
-  else if (rsp->msg->line.status.code >= PJSIP_SC_OK)
+  else if (status_code >= PJSIP_SC_OK)
   {
     // Final response, so mark the fork as completed and decrement the number
     // of pending responses.
@@ -1670,7 +1671,7 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
       (_sproutlet->_outgoing_sip_transactions_tbl != NULL))
     {
       // Update SNMP SIP transactions statistics for the Sproutlet.
-      if (rsp->msg->line.status.code >= 200 && rsp->msg->line.status.code < 300)
+      if (status_code >= 200 && status_code < 300)
       {
         _sproutlet->_outgoing_sip_transactions_tbl->increment_successes(_req_type);
       }
@@ -1680,7 +1681,15 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
       }
     }
   }
-  _sproutlet_tsx->on_rx_response(rsp->msg, fork_id);
+
+  if (status_code == PJSIP_SC_TRYING)
+  {
+    _sproutlet_tsx->on_rx_trying(rsp->msg);
+  }
+  else
+  {
+    _sproutlet_tsx->on_rx_response(rsp->msg, fork_id);
+  }
 
   process_actions(false);
 }

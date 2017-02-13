@@ -330,14 +330,23 @@ public:
   ///                        request was sent.
   virtual void on_tx_request(pjsip_msg* req, int fork_id) { }
 
-  /// Called with all responses received on the transaction.  If a transport
-  /// error or transaction timeout occurs on a downstream leg, this method is
-  /// called with a 408 response.
+  /// Called with all responses, except 100 Trying, received on the transaction.
+  /// If a transport error or transaction timeout occurs on a downstream leg,
+  /// this method is called with a 408 response.
+  ///
+  /// Note: 100 Trying responses are handled by the on_rx_trying method.
   ///
   /// @param  rsp          - The received request.
   /// @param  fork_id      - The identity of the downstream fork on which
   ///                        the response was received.
   virtual void on_rx_response(pjsip_msg* rsp, int fork_id) { send_response(rsp); }
+
+  /// Called if a 100 Trying response is received on the transaction. If the
+  /// These responses are only sent by the wrappers, so we shouldn't call
+  /// ever call send_response on them.
+  ///
+  /// @param  rsp          - The received request.
+  virtual void on_rx_trying(pjsip_msg* rsp) {}
 
   /// Called when a response has been transmitted on the transaction.
   ///

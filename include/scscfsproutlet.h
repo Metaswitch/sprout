@@ -247,6 +247,7 @@ public:
   virtual void on_rx_in_dialog_request(pjsip_msg* req) override;
   virtual void on_tx_request(pjsip_msg* req, int fork_id) override;
   virtual void on_rx_response(pjsip_msg* rsp, int fork_id) override;
+  virtual void on_rx_trying(pjsip_msg* rsp) override;
   virtual void on_tx_response(pjsip_msg* rsp) override;
   virtual void on_rx_cancel(int status_code, pjsip_msg* req) override;
   virtual void on_timer_expiry(void* context) override;
@@ -364,6 +365,10 @@ private:
   /// @param fork_id  - The fork's number.
   /// @param sip_code - The reported SIP return code
   std::string fork_failure_reason_as_string(int fork_id, int sip_code);
+
+  /// Do common processing that we do for all responses.  This is called by
+  /// on_rx_response and on_rx_trying.
+  void common_response_processing(pjsip_msg* rsp);
 
   /// Pointer to the parent SCSCFSproutlet object - used for various operations
   /// that require access to global configuration or services.
