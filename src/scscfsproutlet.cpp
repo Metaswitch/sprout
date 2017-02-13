@@ -573,7 +573,7 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
 }
 
 
-void SCSCFSproutletTsx::on_tx_request(pjsip_msg* req, int fork_id)
+void SCSCFSproutletTsx::obs_tx_request(pjsip_msg* req, int fork_id)
 {
   ACR* acr = get_acr();
   if (acr)
@@ -699,13 +699,13 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 }
 
 
-void SCSCFSproutletTsx::on_rx_trying(pjsip_msg* rsp)
+void SCSCFSproutletTsx::on_rx_trying(pjsip_msg* rsp, int fork_id)
 {
   common_response_processing(rsp);
 }
 
 
-void SCSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
+void SCSCFSproutletTsx::obs_tx_response(pjsip_msg* rsp)
 {
   ACR* acr = get_acr();
   if (acr != NULL)

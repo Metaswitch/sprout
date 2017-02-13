@@ -1589,6 +1589,9 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
     log_inter_sproutlet(req, true);
   }
 
+  // Notify the sproutlet that an a request has been received.
+  _sproutlet_tsx->obs_rx_request(req->msg);
+
   // Keep an immutable reference to the request.
   _req = req;
 
@@ -1643,6 +1646,9 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
     log_inter_sproutlet(rsp, false);
   }
 
+  // Notify the sproutlet that an a response has been received.
+  _sproutlet_tsx->obs_rx_response(rsp->msg, fork_id);
+
   register_tdata(rsp);
   int status_code = rsp->msg->line.status.code;
   if ((PJSIP_IS_STATUS_IN_CLASS(status_code, 100)) &&
@@ -1684,7 +1690,7 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
 
   if (status_code == PJSIP_SC_TRYING)
   {
-    _sproutlet_tsx->on_rx_trying(rsp->msg);
+    _sproutlet_tsx->on_rx_trying(rsp->msg, fork_id);
   }
   else
   {
@@ -1888,6 +1894,8 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
     return;
   }
 
+  // LCOV_EXCL_START - Sproutlets don't forward 100 Trying responses so we
+  // should never hit this code. But let's keep it here just in case.
   if (status_code == 100)
   {
     // We will already have sent a locally generated 100 Trying response, so
@@ -1897,6 +1905,7 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
     pjsip_tx_data_dec_ref(rsp);
     return;
   }
+  // LCOV_EXCL_STOP
 
   if ((status_code > 100) &&
       (status_code < 199))
@@ -1978,7 +1987,7 @@ void SproutletWrapper::tx_request(pjsip_tx_data* req, int fork_id)
   }
 
   // Notify the sproutlet that the request is being sent downstream.
-  _sproutlet_tsx->on_tx_request(req->msg, fork_id);
+  _sproutlet_tsx->obs_tx_request(req->msg, fork_id);
 
   // Forward the request downstream.
   deregister_tdata(req);
@@ -1987,9 +1996,6 @@ void SproutletWrapper::tx_request(pjsip_tx_data* req, int fork_id)
 
 void SproutletWrapper::tx_response(pjsip_tx_data* rsp)
 {
-  // Notify the sproutlet that the response is being sent upstream.
-  _sproutlet_tsx->on_tx_response(rsp->msg);
-
   if (rsp->msg->line.status.code >= PJSIP_SC_OK)
   {
     _complete = true;
@@ -2009,6 +2015,9 @@ void SproutletWrapper::tx_response(pjsip_tx_data* rsp)
       }
     }
   }
+
+  // Notify the sproutlet that the response is being sent upstream.
+  _sproutlet_tsx->obs_tx_response(rsp->msg);
 
   // Forward the response upstream.
   deregister_tdata(rsp);

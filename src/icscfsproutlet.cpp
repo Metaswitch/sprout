@@ -297,7 +297,7 @@ void ICSCFSproutletRegTsx::on_rx_in_dialog_request(pjsip_msg* req)
 }
 
 
-void ICSCFSproutletRegTsx::on_tx_request(pjsip_msg* req, int fork_id)
+void ICSCFSproutletRegTsx::obs_tx_request(pjsip_msg* req, int fork_id)
 {
   if (_acr != NULL)
   {
@@ -393,7 +393,7 @@ void ICSCFSproutletRegTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 }
 
 
-void ICSCFSproutletRegTsx::on_tx_response(pjsip_msg* rsp)
+void ICSCFSproutletRegTsx::obs_tx_response(pjsip_msg* rsp)
 {
   if (_acr != NULL)
   {
@@ -710,7 +710,7 @@ void ICSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
 }
 
 
-void ICSCFSproutletTsx::on_tx_request(pjsip_msg* req, int fork_id)
+void ICSCFSproutletTsx::obs_tx_request(pjsip_msg* req, int fork_id)
 {
   if (_acr != NULL)
   {
@@ -799,7 +799,7 @@ void ICSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 }
 
 
-void ICSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
+void ICSCFSproutletTsx::obs_tx_response(pjsip_msg* rsp)
 {
   if (_acr != NULL)
   {

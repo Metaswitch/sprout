@@ -245,10 +245,10 @@ public:
 
   virtual void on_rx_initial_request(pjsip_msg* req) override;
   virtual void on_rx_in_dialog_request(pjsip_msg* req) override;
-  virtual void on_tx_request(pjsip_msg* req, int fork_id) override;
+  virtual void obs_tx_request(pjsip_msg* req, int fork_id) override;
   virtual void on_rx_response(pjsip_msg* rsp, int fork_id) override;
-  virtual void on_rx_trying(pjsip_msg* rsp) override;
-  virtual void on_tx_response(pjsip_msg* rsp) override;
+  virtual void on_rx_trying(pjsip_msg* rsp, int fork_id) override;
+  virtual void obs_tx_response(pjsip_msg* rsp) override;
   virtual void on_rx_cancel(int status_code, pjsip_msg* req) override;
   virtual void on_timer_expiry(void* context) override;
 

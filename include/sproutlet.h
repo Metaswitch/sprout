@@ -321,22 +321,13 @@ public:
   /// @param req           - The received in-dialog request.
   virtual void on_rx_in_dialog_request(pjsip_msg* req) { send_request(req); }
 
-  /// Called when a request has been transmitted on the transaction (usually
-  /// because the service has previously called forward_request() with the
-  /// request message.
-  ///
-  /// @param req           - The transmitted request
-  /// @param fork_id       - The identity of the downstream fork on which the
-  ///                        request was sent.
-  virtual void on_tx_request(pjsip_msg* req, int fork_id) { }
-
   /// Called with all responses, except 100 Trying, received on the transaction.
   /// If a transport error or transaction timeout occurs on a downstream leg,
   /// this method is called with a 408 response.
   ///
   /// Note: 100 Trying responses are handled by the on_rx_trying method.
   ///
-  /// @param  rsp          - The received request.
+  /// @param  rsp          - The received response.
   /// @param  fork_id      - The identity of the downstream fork on which
   ///                        the response was received.
   virtual void on_rx_response(pjsip_msg* rsp, int fork_id) { send_response(rsp); }
@@ -345,13 +336,8 @@ public:
   /// These responses are only sent by the wrappers, so we shouldn't call
   /// ever call send_response on them.
   ///
-  /// @param  rsp          - The received request.
-  virtual void on_rx_trying(pjsip_msg* rsp) {}
-
-  /// Called when a response has been transmitted on the transaction.
-  ///
-  /// @param  rsp          - The transmitted response.
-  virtual void on_tx_response(pjsip_msg* rsp) { }
+  /// @param  rsp          - The received response.
+  virtual void on_rx_trying(pjsip_msg* rsp, int fork_id) {}
 
   /// Called if the original request is cancelled (either by a received
   /// CANCEL request, an error on the inbound transport or a transaction
@@ -365,6 +351,33 @@ public:
   /// @param  cancel_req   - The received CANCEL request or NULL if cancellation
   ///                        was triggered by an error or timeout.
   virtual void on_rx_cancel(int status_code, pjsip_msg* cancel_req) {}
+
+  /// Called when a request is received by the sproutlet wrapper.
+  ///
+  /// @param  req          - The received request.
+  virtual void obs_rx_request(pjsip_msg* req) {};
+
+  /// Called when a response is received by the sproutlet wrapper.
+  ///
+  /// @param  rsp          - The received response.
+  /// @param fork_id       - The identity of the downstream fork on which the
+  ///                        response was received.
+  virtual void obs_rx_response(pjsip_msg* rsp, int fork_id) {};
+
+  /// Called when a request has been transmitted on the transaction by the
+  /// wrapper.  This is usually because the service has previously called
+  /// forward_request() with the request message.
+  ///
+  /// @param req           - The transmitted request
+  /// @param fork_id       - The identity of the downstream fork on which the
+  ///                        request was sent.
+  virtual void obs_tx_request(pjsip_msg* req, int fork_id) {}
+
+  /// Called when a response has been transmitted on the transaction by the
+  /// wrapper.
+  ///
+  /// @param  rsp          - The transmitted response.
+  virtual void obs_tx_response(pjsip_msg* rsp) {}
 
   /// Called when a timer programmed by the SproutletTsx expires.
   ///

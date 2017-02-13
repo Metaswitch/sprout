@@ -253,7 +253,7 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 }
 
 
-void BGCFSproutletTsx::on_tx_request(pjsip_msg* req, int fork_id)
+void BGCFSproutletTsx::obs_tx_request(pjsip_msg* req, int fork_id)
 {
   if (_acr != NULL)
   {
@@ -279,7 +279,7 @@ void BGCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 }
 
 
-void BGCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
+void BGCFSproutletTsx::obs_tx_response(pjsip_msg* rsp)
 {
   if (_acr != NULL)
   {
