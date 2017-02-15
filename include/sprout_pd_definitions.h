@@ -370,7 +370,7 @@ static const PDLog1<const char*> CL_SPROUT_ENUM_FILE_INVALID
   PDLogBase::CL_SPROUT_ID + 41,
   LOG_ERR,
   "The ENUM file is invalid.",
-  "Sprout is configured to use file-based ENUM, but the configuration file does not exist.",
+  "Sprout is configured to use file-based ENUM, but the configuration file is not correctly formatted.",
   "Sprout will not be able to translate telephone numbers into routable URIs.",
   "Confirm that %s is the correct file to be using. If not, correct /etc/clearwater/shared_config. If so, check that it is a valid and correctly formatted file."
 );
