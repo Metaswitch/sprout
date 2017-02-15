@@ -172,8 +172,17 @@ public:
   /// @param session_id       The session ID to use.
   virtual void override_session_id(const std::string& session_id);
 
-  // Get/release the lock
+  /// Get a lock on the ACR.
+  ///
+  /// An ACR can be accessed from multiple threads (if there are multiple
+  /// SproutletTsx objects that use the same ACR), so those threads must call
+  /// lock() before accessing the ACR.
   virtual void lock();
+
+  /// Release the lock on the ACR.
+  ///
+  /// Should be called after a matching call to lock() once the ACR is no longer
+  /// being accessed.
   virtual void unlock();
 
   /// Called when the ACR message should be sent if it's not yet been

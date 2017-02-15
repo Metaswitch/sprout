@@ -96,6 +96,8 @@ void ACR::override_session_id(const std::string& session_id)
 {
 }
 
+// The lock and unlock functions are no-ops for the Null ACR (no need to lock if
+// there's no work to do)
 void ACR::lock()
 {
 }
