@@ -78,6 +78,43 @@ if [ $rc != 0 ] ; then
   cat /tmp/upload-json-file.stderr.$$                     >&2
   cat /tmp/upload-json-file.stdout.$$                     >&2
 fi
+
 rm -f /tmp/upload-json-file.stderr.$$ /tmp/upload-json-file.stdout.$$
 
-exit $rc
+if [ $rc != 0 ] ; then
+  exit $rc
+fi
+
+# In order to avoid the etcd process size growing too large, we need to upload
+# a set of dummy keys with zero-length values.  This reduces the etcd memory
+# usage in a way that tuning the snapshot count doesn't.
+keypath=${keypath}_dummy
+
+# Work out how many dummy keys to upload.  We do one per 5 kB of file uploaded.
+# Experiment has determined that this keeps the etcd RSS below ~300 MB, even
+# when continuously uploading keys as large as 1 MB (the quoted limit for etcd
+# v2 keys) at a rate of one every five seconds.
+#
+# If the file is under the target size, no dummy keys will be uploaded.
+target_size=5120
+dummy_count=$((`stat -c %s $CONFPATH/$FILENAME` / $target_size))
+
+# Upload the dummy keys
+for ii in `seq 1 $dummy_count`
+do
+  curl -X PUT $keypath "" 2> /tmp/upload-json-dummy.stderr.$$ | tee /tmp/upload-json-dummy.stdout.$$ | egrep -q "\"action\":\"set\""
+  rc=$?
+
+  if [ $rc != 0  ] ; then
+    echo Hit problem uploading dummy key to $keypath  >&2
+    cat /tmp/upload-json-dummy.stderr.$$              >&2
+    cat /tmp/upload-json-dummy.stdout.$$              >&2
+  fi
+
+  rm -f /tmp/upload-json-dummy.stderr.$$ /tmp/upload-json-dummy.stdout.$$
+
+  if [ $rc != 0 ] ; then
+    exit $rc
+  fi
+done
+
