@@ -47,7 +47,7 @@
 #include <time.h>
 #include <stdlib.h>
 
-static const float REGISTRATION_ERRORS=50.0;
+static const float REGISTRATION_ERRORS=27.0;
 
 /// Mangelwurzel URI parameter constants.
 static const pj_str_t DIALOG_PARAM = pj_str((char *)"dialog");
@@ -154,8 +154,8 @@ void MangelwurzelTsx::on_rx_initial_request(pjsip_msg* req)
 {
   TRC_STATUS("@@@ame2 registration request received");
   // We reject 50% of registrations
-  srand((unsigned) time(NULL));
-  if (req->line.req.method.id == PJSIP_REGISTER_METHOD && (100 * (float) rand()/RAND_MAX) < REGISTRATION_ERRORS);
+  //srand((unsigned) time(NULL));
+  if ((100 * (float) rand()/RAND_MAX) < REGISTRATION_ERRORS)
   {
     TRC_STATUS("@@@ame2 registration error sent");
     pjsip_msg* rsp = create_response(req, PJSIP_SC_INTERNAL_SERVER_ERROR);
