@@ -134,10 +134,16 @@ public:
 
   /// Constructor.
   MangelwurzelTsx(SproutletTsxHelper* helper, Config& config) :
-    SproutletTsx(helper), _config(config) {}
+    SproutletTsx(helper),
+    _config(config),
+    _unmodified_request(original_request())
+  {}
 
   /// Destructor.
-  ~MangelwurzelTsx() {}
+  ~MangelwurzelTsx()
+  {
+    free_msg(_unmodified_request);
+  }
 
   /// Implementation of SproutletTsx methods in mangelwurzel.
   virtual void on_rx_initial_request(pjsip_msg* req);
@@ -147,6 +153,7 @@ public:
 private:
   /// The config object for this transaction.
   Config _config;
+  pjsip_msg* _unmodified_request;
 
   /// Helper functions for manipulating SIP messages.
   void mangle_dialog_identifiers(pjsip_msg* req, pj_pool_t* pool);
