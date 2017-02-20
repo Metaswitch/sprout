@@ -153,6 +153,8 @@ public:
 private:
   /// The config object for this transaction.
   Config _config;
+
+  /// The original request that started this transaction.
   pjsip_msg* _unmodified_request;
 
   /// Helper functions for manipulating SIP messages.
