@@ -190,7 +190,8 @@ TEST_F(JSONEnumServiceTest, BadRegex)
   EXPECT_TRUE(log.contains("!(^[a-z*$)!sip:\\1@ut.cw-ngv.com!"));
   // First entry is valid to confirm basic regular expression is valid.
   ET("+15108580271", "sip:+15108580271@ut.cw-ngv.com").test(enum_);
-  // Second entry is technically invalid but it works in the obvious way and it's easier to permit than to add code to reject.
+  // Second entry is technically invalid but it works in the obvious way 
+  // and it's easier to permit than to add code to reject.
   ET("+15108580272", "sip:+15108580272@ut.cw-ngv.com").test(enum_);
   // Remaining are not - they should fail.
   ET("+15108580273", "").test(enum_);
@@ -198,15 +199,35 @@ TEST_F(JSONEnumServiceTest, BadRegex)
   ET("+15108580275", "").test(enum_);
 }
 
+// Test if phone number matches to the most specific prefix in the enum json
+// file, rather than the first prefix that matches
+TEST_F(JSONEnumServiceTest, PrefixMatching)
+{
+  // Test enum file contains matching prefix '2' in the order of two, four, 
+  // and three digits
+  JSONEnumService enum_(string(UT_DIR).append("/test_enum_prefix_matching.json"));
+  // This string is modified by the rule applying to three-digits-prefix, rather
+  // than the two-digits-prefix that comes earlier in the file
+  ET("+22238899", "tel:+22238899;three-digits-prefix-match;npdi").test(enum_);
+  ET("+22338899", "tel:+22338899;two-digits-prefix-match;npdi").test(enum_);
+  // Matches to the most specific four-digits-prefix, rather than any rule
+  // before or after it
+  ET("+22228899", "tel:+22228899;four-digits-prefix-match;npdi").test(enum_);
+}
+
 struct ares_naptr_reply basic_naptr_reply[] = {
-  {NULL, (unsigned char*)"u", (unsigned char*)"e2u+sip", (unsigned char*)"!(^.*$)!sip:\\1@ut.cw-ngv.com!", ".", 1, 1}
+  {NULL, (unsigned char*)"u", (unsigned char*)"e2u+sip", 
+                    (unsigned char*)"!(^.*$)!sip:\\1@ut.cw-ngv.com!", ".", 1, 1}
 };
 
 TEST_F(DNSEnumServiceTest, BasicTest)
 {
   AlarmManager am;
-  CommunicationMonitor cm_(new Alarm(&am, "sprout", AlarmDef::SPROUT_ENUM_COMM_ERROR, AlarmDef::MAJOR), "sprout", "enum");
-  FakeDNSResolver::_database.insert(std::make_pair(std::string("4.3.2.1.e164.arpa"), (struct ares_naptr_reply*)basic_naptr_reply));
+  CommunicationMonitor cm_(new Alarm(&am, "sprout", 
+          AlarmDef::SPROUT_ENUM_COMM_ERROR, AlarmDef::MAJOR), "sprout", "enum");
+  FakeDNSResolver::_database.insert(std::make_pair(
+                               std::string("4.3.2.1.e164.arpa"), 
+                               (struct ares_naptr_reply*)basic_naptr_reply));
   DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory(), &cm_);
   ET("1234", "sip:1234@ut.cw-ngv.com").test(enum_);
 }
