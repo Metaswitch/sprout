@@ -8597,6 +8597,8 @@ TEST_F(SCSCFTest, TestSessionExpiresWhenNoRecordRoute)
 }
 
 
+// Test that getting a 503 error from homestead when looking up IFCs results in
+// sprout sending a 504 error.
 TEST_F(SCSCFTest, HSSTimeoutOnPutRegData)
 {
   // Send originating INVITE
