@@ -60,7 +60,10 @@ public:
               int port);
   virtual ~ICSCFRouter();
 
-  int get_scscf(pj_pool_t* pool, pjsip_sip_uri*& scscf_uri, bool do_billing=false);
+  int get_scscf(pj_pool_t* pool,
+                pjsip_sip_uri*& scscf_uri,
+                std::string& wildcard,
+                bool do_billing=false);
 
 protected:
   /// Do the HSS query.  This must be implemented by the request-type specific

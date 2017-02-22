@@ -82,18 +82,25 @@ ICSCFRouter::~ICSCFRouter()
 ///                      for at least as long as the returned SCSCF URI.
 /// @param scscf_sip_uri Output parameter holding the parsed SCSCF URI.  This
 ///                      is only valid if the function returns PJSIP_SC_OK.
+/// @param wildcard      Output parameter holding TODO
 /// @param do_billing    Flag to determine whether we send an ACR after the HSS
 ///                      query. Defaults to 'false'
-int ICSCFRouter::get_scscf(pj_pool_t* pool, pjsip_sip_uri*& scscf_sip_uri, bool do_billing)
+int ICSCFRouter::get_scscf(pj_pool_t* pool,
+                           pjsip_sip_uri*& scscf_sip_uri,
+                           std::string& wildcard,
+                           bool do_billing)
 {
   int status_code = PJSIP_SC_OK;
   std::string scscf;
+
   scscf_sip_uri = NULL;
+  wildcard = "";
 
   if (!_queried_caps)
   {
     // Do the HSS query.
     status_code = hss_query();
+    wildcard = _hss_rsp.wildcard;
 
     if (do_billing)
     {
@@ -213,6 +220,7 @@ int ICSCFRouter::parse_hss_response(rapidjson::Document*& rsp, bool queried_caps
   _hss_rsp.mandatory_caps.clear();
   _hss_rsp.optional_caps.clear();
   _hss_rsp.scscf = "";
+  _hss_rsp.wildcard = "";
 
   if ((!rsp->HasMember("result-code")) ||
       (!(*rsp)["result-code"].IsInt()))
@@ -258,6 +266,14 @@ int ICSCFRouter::parse_hss_response(rapidjson::Document*& rsp, bool queried_caps
           TRC_INFO("Malformed required capabilities returned by HSS\n");
           status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
         }
+      }
+
+      if ((rsp->HasMember("wildcard")) &&
+          ((*rsp)["wildcard"].IsString()))
+      {
+        // Response included a wildcard, so save this.
+        TRC_DEBUG("HSS returned a wildcarded public user identity %s", (*rsp)["wildcard"].GetString());
+        _hss_rsp.wildcard = (*rsp)["wildcard"].GetString();
       }
     }
     else if (rc == 5003)

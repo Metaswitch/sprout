@@ -617,8 +617,14 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
   // of scope.
 
   rapidxml::xml_document<>* root_underlying_ptr = NULL;
+  std::string wildcard = "";
+  std::string json_wildcard = (wildcard != "") ? ", \"wildcard\": \"" + wildcard + "\"" : "";
+  std::string req_body = "{\"reqtype\": \"" + type + "\"" +
+                          ", \"server_name\": \"" +_scscf_uri + "\"" +
+                          json_wildcard +
+                          "}";
   HTTPCode http_code = put_for_xml_object(path,
-                                          "{\"reqtype\": \""+type+"\", \"server_name\": \""+_scscf_uri+"\"}",
+                                          req_body,
                                           cache_allowed,
                                           root_underlying_ptr,
                                           trail);

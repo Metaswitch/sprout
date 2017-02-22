@@ -1635,6 +1635,10 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSServerName)
   string route = get_headers(tdata->msg, "Route");
   ASSERT_EQ("Route: <sip:scscf1.homedomain:5058;transport=TCP;lr;orig>", route);
 
+  // Check that there's no P-Profile-Key header
+  string ppk = get_headers(tdata->msg, "P-Profile-Key");
+  ASSERT_EQ("", ppk);
+
   // Check that no Record-Route headers have been added.
   string rr = get_headers(tdata->msg, "Record-Route");
   ASSERT_EQ("", rr);
@@ -1670,6 +1674,53 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSServerName)
   delete tp;
 }
 
+// Test that an INVITE that recieves a wildcard in the LIA sends a
+// P-Profile-Key header when routing the INVITE to the S-CSCF
+TEST_F(ICSCFSproutletTest, RouteInviteHSSServerNameWithWildcard)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        ICSCF_PORT,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS response for the originating location query.
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\","
+                              " \"wildcard\": \"sip:scscf!.*!@homedomain\" }");
+
+  // Inject a INVITE request with orig in the Route header and a P-Served-User
+  // header.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  msg1._route = "Route: <sip:homedomain;orig>";
+  msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  free_txdata();
+  tdata = current_txdata();
+  ReqMatcher r1("INVITE");
+  r1.matches(tdata->msg);
+
+  // Check that a P-Profile-Key has been added that uses the wildcard
+  string ppk = get_headers(tdata->msg, "P-Profile-Key");
+  ASSERT_EQ("P-Profile-Key: <sip:scscf!.*!@homedomain>", ppk);
+
+  test_session_establishment_stats(0, 0, 0, 0);
+  _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true");
+  delete tp;
+}
 
 TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSCaps)
 {
