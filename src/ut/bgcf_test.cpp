@@ -410,6 +410,36 @@ TEST_F(BGCFTest, TestSimpleTelURIUnmatched)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*16505551234$"), hdrs);
 }
 
+// Test that Tel URI with a routing number that matches a number route is picked
+// up by that route
+TEST_F(BGCFTest, TestTelURINPMatched)
+{
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  SCOPED_TRACE("");
+  BGCFMessage msg;
+  msg._toscheme = "tel";
+  msg._to = "16505551234;npdi;rn=+16505551234";
+  msg._todomain = "";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Route", ".*10.0.0.1:5060.*"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*16505551234$"), hdrs);
+}
+
+// Test that Tel URI with a routing number that doesn't match  a number route is
+// picked up by the wildcard domain route
+TEST_F(BGCFTest, TestTelURINPNotMatched)
+{
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  SCOPED_TRACE("");
+  BGCFMessage msg;
+  msg._toscheme = "tel";
+  msg._to = "+16505551234;npdi;rn=16505551234";
+  msg._todomain = "";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Route", ".*10.0.0.2:5060.*"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*16505551234$"), hdrs);
+}
+
 TEST_F(BGCFTest, TestValidBGCFRoute)
 {
   SCOPED_TRACE("");

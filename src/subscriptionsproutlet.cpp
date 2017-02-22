@@ -469,7 +469,7 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
                    std::vector<SubscriberDataManager*> backup_sdms,
                                                               ///<backup stores to read from if no entry in store and no backup data
                    std::string public_id,                     ///
-                   bool send_ok,                              ///<Should we create an OK
+                   bool is_primary,                           ///<Should we create an OK
                    ACR* acr,                                  ///
                    std::deque<std::string> ccfs,              ///
                    std::deque<std::string> ecfs)              ///
@@ -642,7 +642,7 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
 
     if (set_rc == Store::OK)
     {
-      if (send_ok)
+      if (is_primary)
       {
         pjsip_msg* rsp = create_response(req, PJSIP_SC_OK);
 
@@ -677,7 +677,7 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
   }
   while (set_rc == Store::DATA_CONTENTION);
 
-  if (_sproutlet->_analytics != NULL)
+  if ((_sproutlet->_analytics != NULL) && (is_primary))
   {
     // Generate an analytics log for this subscription update.
     _sproutlet->_analytics->subscription(aor,

@@ -359,3 +359,13 @@ void QuiescingManager::unquiesce_untrusted_interface()
   }
 }
 
+bool QuiescingManager::is_quiescing()
+{
+  if ((_state == STATE_QUIESCING_FLOWS) ||
+      (_state == STATE_QUIESCING_CONNS))
+  {
+    return true;
+  }
+
+  return false;
+}

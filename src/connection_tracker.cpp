@@ -101,9 +101,18 @@ void ConnectionTracker::connection_state_update(pjsip_transport *tp,
 
     // If we're quiescing and there are no more active connections, then
     // quiescing is complete.
-    if (_quiescing && _connection_listeners.empty()) {
-      TRC_DEBUG("Connection quiescing complete");
-      quiesce_complete = PJ_TRUE;
+    if (_quiescing)
+    {
+      if (_connection_listeners.empty())
+      {
+        TRC_DEBUG("Connection quiescing complete");
+        quiesce_complete = PJ_TRUE;
+      }
+      else
+      {
+        TRC_STATUS("Quiescing, %d more connections to destroy",
+                   _connection_listeners.size());
+      }
     }
 
     pthread_mutex_unlock(&_lock);
@@ -138,10 +147,16 @@ void ConnectionTracker::connection_active(pjsip_transport *tp)
       // New connection. Register a state listener so we know when it gets
       // destroyed.
       pjsip_tp_state_listener_key *key;
-      pjsip_transport_add_state_listener(tp,
+      pj_status_t rc = pjsip_transport_add_state_listener(tp,
                                          &connection_state,
                                          (void *)this,
                                          &key);
+      if (rc != PJ_SUCCESS)
+      {
+        // LCOV_EXCL_START - Not tested in UT
+        TRC_STATUS("Failed to add a listener");
+        // LCOV_EXCL_STOP
+      }
 
       // Record the listener.
       _connection_listeners[tp] = key;
@@ -154,7 +169,9 @@ void ConnectionTracker::connection_active(pjsip_transport *tp)
       // first time the connection tracker heard about it was after quiesing had
       // started).  Trying to establish new connections after quiescing has
       // started should fail as the listening socket will have been closed.
-      if (_quiescing) {
+      if (_quiescing)
+      {
+        TRC_STATUS("Quiescing newly created connection");
         pjsip_transport_shutdown(tp);
       }
     }
@@ -199,7 +216,14 @@ void ConnectionTracker::quiesce()
          ++it)
     {
       TRC_STATUS("Shutdown connection %p", it->first);
-      pjsip_transport_shutdown(it->first);
+      pj_status_t rc = pjsip_transport_shutdown(it->first);
+
+      if (rc != PJ_SUCCESS)
+      {
+        // LCOV_EXCL_START - Not tested in UT
+        TRC_STATUS("Failed to shut down the connection");
+        // LCOV_EXCL_STOP
+      }
     }
   }
 

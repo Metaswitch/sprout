@@ -155,7 +155,18 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   {
     // Find the downstream routes based on the number.
     bgcf_routes = _bgcf->get_route_from_number(routing_value, trail());
-    routing_with_number = true;
+
+    // If there are no matching routes, just route based on the domain - this
+    // only matches any wild card routing set up
+    if (bgcf_routes.empty())
+    {
+      routing_value = "";
+      bgcf_routes = _bgcf->get_route_from_domain(routing_value, trail());
+    }
+    else
+    {
+      routing_with_number = true;
+    }
   }
   else if ((uri_class == LOCAL_PHONE_NUMBER) ||
            (uri_class == GLOBAL_PHONE_NUMBER))

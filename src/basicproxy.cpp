@@ -304,6 +304,30 @@ void BasicProxy::on_cancel_request(pjsip_rx_data* rdata)
     return;
   }
 
+  UASTsx *uas_tsx = (UASTsx*)get_from_transaction(invite_uas);
+
+  if (uas_tsx == NULL)
+  {
+    // LCOV_EXCL_START
+    //
+    // The PJSIP transaction exists but there is no UASTsx associated with it.
+    // The only case where this happens is a window condition where
+    // - the PJSIP transaction is already in state destroyed because we have
+    //   sent a final response
+    // - we've been told about this via on_tsx_state and so have unbound the
+    //   UASTsx
+    // - PJSIP just hasn't yet freed up the actual Tsx.
+    // Given that we will already have sent a final response to the INVITE we
+    // should treat this as though the INVITE has already been destroyed.
+    reject_request(rdata, PJSIP_SC_CALL_TSX_DOES_NOT_EXIST);
+
+    // Unlock UAS tsx because it is locked in find_tsx()
+    pj_grp_lock_release(invite_uas->grp_lock);
+
+    return;
+    // LCOV_EXCL_STOP
+  }
+
   // Respond 200 OK to CANCEL.  Must do this statefully.
   pjsip_transaction* cancel_tsx;
   pj_status_t status = pjsip_tsx_create_uas(NULL, rdata, &cancel_tsx);
@@ -311,6 +335,10 @@ void BasicProxy::on_cancel_request(pjsip_rx_data* rdata)
   {
     // LCOV_EXCL_START
     reject_request(rdata, PJSIP_SC_INTERNAL_SERVER_ERROR);
+
+    // Unlock UAS tsx because it is locked in find_tsx()
+    pj_grp_lock_release(invite_uas->grp_lock);
+
     return;
     // LCOV_EXCL_STOP
   }
@@ -327,7 +355,6 @@ void BasicProxy::on_cancel_request(pjsip_rx_data* rdata)
   // Send CANCEL to cancel the UAC transactions.
   // The UAS INVITE transaction will get final response when
   // we receive final response from the UAC INVITE transaction.
-  UASTsx *uas_tsx = (UASTsx*)get_from_transaction(invite_uas);
   uas_tsx->process_cancel_request(rdata);
 
   // Unlock UAS tsx because it is locked in find_tsx()
@@ -1697,6 +1724,13 @@ void BasicProxy::UACTsx::send_request()
       {
         start_timer_c();
       }
+
+      // We do not want to take any action on a failure returned from
+      // pjsip_tsx_send_msg, as it will have also triggered a call into
+      // on_tsx_state. In the event of failure, this will, or already has
+      // cause us to call into retry_request; we do not want to call into
+      // on_client_not_responding below, so always return success.
+      status = PJ_SUCCESS;
     }
   }
 
