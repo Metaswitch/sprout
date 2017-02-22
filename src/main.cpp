@@ -1698,12 +1698,15 @@ int main(int argc, char* argv[])
   // Create Sprout's alarm objects.
   alarm_manager = new AlarmManager();
 
-  chronos_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
-                                                            "sprout",
-                                                            AlarmDef::SPROUT_CHRONOS_COMM_ERROR,
-                                                            AlarmDef::MAJOR),
-                                                  "Sprout",
-                                                  "Chronos");
+  if (!opt.pcscf_enabled)
+  {
+    chronos_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                              "sprout",
+                                                              AlarmDef::SPROUT_CHRONOS_COMM_ERROR,
+                                                              AlarmDef::MAJOR),
+                                                    "Sprout",
+                                                    "Chronos");
+  }
 
   enum_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
                                                          "sprout",
@@ -1941,38 +1944,42 @@ int main(int argc, char* argv[])
     }
   }
 
-  // Create a connection to Chronos.
-  std::string port_str = std::to_string(opt.http_port);
-
-  std::string chronos_service;
-  std::string chronos_callback_host = "127.0.0.1:" + port_str;
-
-  if (opt.chronos_hostname == "")
+  // Create a connection to Chronos (unless we're running as a P-CSCF in which
+  // case this isn't necessary).
+  if (!opt.pcscf_enabled)
   {
-    chronos_service = "127.0.0.1:7253";
+    std::string port_str = std::to_string(opt.http_port);
 
-    Utils::IPAddressType address_type = Utils::parse_ip_address(opt.http_address);
+    std::string chronos_service;
+    std::string chronos_callback_host = "127.0.0.1:" + port_str;
 
-    if ((address_type == Utils::IPAddressType::IPV6_ADDRESS) ||
-        (address_type == Utils::IPAddressType::IPV6_ADDRESS_WITH_PORT) ||
-        (address_type == Utils::IPAddressType::IPV6_ADDRESS_BRACKETED))
+    if (opt.chronos_hostname == "")
     {
-      chronos_callback_host = "[::1]:" + port_str;
-    }
-  }
-  else
-  {
-    chronos_service = opt.chronos_hostname + ":7253";
-    chronos_callback_host = opt.sprout_hostname + ":" + port_str;
-  }
+      chronos_service = "127.0.0.1:7253";
 
-  TRC_STATUS("Creating connection to Chronos %s using %s as the callback URI",
-             chronos_service.c_str(),
-             chronos_callback_host.c_str());
-  chronos_connection = new ChronosConnection(chronos_service,
-                                             chronos_callback_host,
-                                             http_resolver,
-                                             chronos_comm_monitor);
+      Utils::IPAddressType address_type = Utils::parse_ip_address(opt.http_address);
+
+      if ((address_type == Utils::IPAddressType::IPV6_ADDRESS) ||
+          (address_type == Utils::IPAddressType::IPV6_ADDRESS_WITH_PORT) ||
+          (address_type == Utils::IPAddressType::IPV6_ADDRESS_BRACKETED))
+      {
+        chronos_callback_host = "[::1]:" + port_str;
+      }
+    }
+    else
+    {
+      chronos_service = opt.chronos_hostname + ":7253";
+      chronos_callback_host = opt.sprout_hostname + ":" + port_str;
+    }
+
+    TRC_STATUS("Creating connection to Chronos %s using %s as the callback URI",
+               chronos_service.c_str(),
+               chronos_callback_host.c_str());
+    chronos_connection = new ChronosConnection(chronos_service,
+                                               chronos_callback_host,
+                                               http_resolver,
+                                               chronos_comm_monitor);
+  }
 
   scscf_acr_factory = (ralf_processor != NULL) ?
                     (ACRFactory*)new RalfACRFactory(ralf_processor, ACR::SCSCF) :
