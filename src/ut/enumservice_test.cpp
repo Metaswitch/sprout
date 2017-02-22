@@ -215,6 +215,16 @@ TEST_F(JSONEnumServiceTest, PrefixMatching)
   ET("+22228899", "tel:+22228899;four-digits-prefix-match;npdi").test(enum_);
 }
 
+// Test if prefix matching correctly ignores all visual separators
+TEST_F(JSONEnumServiceTest, StripSeparators)
+{
+  // Test enum file contains prefixes with visual separators
+  JSONEnumService enum_(string(UT_DIR).append("/test_enum_strip_separator.json"));
+  ET("+22338899", "tel:+22338899;two-digits-prefix-match;npdi").test(enum_);
+  ET("+22238899", "tel:+22238899;three-digits-prefix-match;npdi").test(enum_);
+  ET("+22228899", "tel:+22228899;four-digits-prefix-match;npdi").test(enum_);
+}
+
 struct ares_naptr_reply basic_naptr_reply[] = {
   {NULL, (unsigned char*)"u", (unsigned char*)"e2u+sip", 
                     (unsigned char*)"!(^.*$)!sip:\\1@ut.cw-ngv.com!", ".", 1, 1}

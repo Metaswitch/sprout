@@ -1,0 +1,19 @@
+{
+  "number_blocks": [
+   {
+      "regex": "!(^.*$)!tel:\\1;two-digits-prefix-match;npdi!",
+      "prefix": "+2.2",
+      "name": "+22 Numbers"
+    },
+    {
+      "regex": "!(^.*$)!tel:\\1;three-digits-prefix-match;npdi!",
+      "prefix": "+2.2-2",
+      "name": "+222 Numbers"
+    },
+    {
+      "regex": "!(^.*$)!tel:\\1;four-digits-prefix-match;npdi!",
+      "prefix": "+2.2-(22)",
+      "name": "+2222 Numbers"
+    } 
+  ]
+}
