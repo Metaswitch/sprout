@@ -35,6 +35,7 @@
 CONFPATH=/etc/clearwater
 FILENAME=$1
 KEY=$2
+ALLOW_LARGE=false
 
 function usage() {
   echo "Usage: upload_json <filename> <key>"
@@ -44,6 +45,11 @@ if [[ $1 == "" || $2 == "" ]]
 then
   usage
   exit 2
+fi
+
+if [[ $3 == "--allow-large" ]]
+then
+  ALLOW_LARGE=true
 fi
 
 # Check we can contact `etcd`
@@ -67,6 +73,14 @@ then
   exit 2
 fi
 
+# Check that the file isn't too large.  Large values (>10 kB) cause memory
+# issues for etcd.
+if [[ $ALLOW_LARGE == false && `stat -c %s $CONFPATH/$FILENAME` -gt 10240 ]]
+then
+  echo "File is too large to safely store in etcd: $CONFPATH/$FILENAME"
+  exit 2
+fi
+
 # Upload the file to etcd
 keypath=http://${management_local_ip:-$local_ip}:4000/v2/keys/clearwater/$local_site_name/configuration/$KEY
 curl -X PUT $keypath --data-urlencode value@$CONFPATH/$FILENAME 2> /tmp/upload-json-file.stderr.$$ | tee /tmp/upload-json-file.stdout.$$ | egrep -q "\"action\":\"set\""
@@ -78,6 +92,7 @@ if [ $rc != 0 ] ; then
   cat /tmp/upload-json-file.stderr.$$                     >&2
   cat /tmp/upload-json-file.stdout.$$                     >&2
 fi
+
 rm -f /tmp/upload-json-file.stderr.$$ /tmp/upload-json-file.stdout.$$
 
 exit $rc
