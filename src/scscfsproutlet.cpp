@@ -283,6 +283,7 @@ bool SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                    Ifcs& ifcs,
                                    std::deque<std::string>& ccfs,
                                    std::deque<std::string>& ecfs,
+                                   const std::string& wildcard,
                                    SAS::TrailId trail)
 {
   std::string regstate;
@@ -298,6 +299,7 @@ bool SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                                    ccfs,
                                                    ecfs,
                                                    cache_allowed,
+                                                   wildcard,
                                                    trail);
   if (http_code == 200)
   {
@@ -404,6 +406,7 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
   _video_call(false),
   _impi(),
   _auto_reg(false),
+  _wildcard(""),
   _se_helper(stack_data.default_session_expires)
 {
   TRC_DEBUG("S-CSCF Transaction (%p) created", this);
@@ -473,7 +476,24 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     }
   }
 
-  // Determine the session case and the served user.  This will link to
+  // Pull out the P-Profile-Key header if it exists, and we're in originating
+  // processing. We must do this before sending any requests to the HSS.
+  retrieve_odi_and_sesscase(req);
+  if (!_session_case->is_originating())
+  {
+    pjsip_routing_hdr* ppk_hdr = (pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(
+                                                     req,
+                                                     &STR_P_PROFILE_KEY,
+                                                     NULL);
+
+    if (ppk_hdr != NULL)
+    {
+      _wildcard = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                         (pjsip_uri*)(&ppk_hdr->name_addr));
+    }
+  }
+
+  // Determine the served user.  This will link to
   // an AsChain object (creating it if necessary), if we need to provide
   // services.
   status_code = determine_served_user(req);
@@ -923,8 +943,6 @@ bool SCSCFSproutletTsx::is_retarget(std::string new_served_user)
 pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
 {
   pjsip_status_code status_code = PJSIP_SC_OK;
-
-  retrieve_odi_and_sesscase(req);
 
   if (_as_chain_link.is_set())
   {
@@ -1730,6 +1748,7 @@ bool SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
                               _ifcs,
                               _ccfs,
                               _ecfs,
+                              _wildcard,
                               trail()))
     {
       _hss_data_cached = true;

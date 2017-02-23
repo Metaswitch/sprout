@@ -100,6 +100,7 @@ public:
                                      std::deque<std::string>& ccfs,
                                      std::deque<std::string>& ecfs,
                                      bool cache_allowed,
+                                     const std::string& wildcard,
                                      SAS::TrailId trail);
   virtual HTTPCode update_registration_state(const std::string& public_user_identity,
                                              const std::string& private_user_identity,

@@ -509,6 +509,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                    unused_ccfs,
                                    unused_ecfs,
                                    true,
+                                   "",
                                    trail);
 }
 
@@ -533,6 +534,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                    unused_ccfs,
                                    unused_ecfs,
                                    true,
+                                   "",
                                    trail);
 }
 
@@ -557,6 +559,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                    unused_ccfs,
                                    unused_ecfs,
                                    true,
+                                   "",
                                    trail);
 }
 
@@ -581,6 +584,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                    ccfs,
                                    ecfs,
                                    true,
+                                   "",
                                    trail);
 }
 
@@ -594,6 +598,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                                   std::deque<std::string>& ccfs,
                                                   std::deque<std::string>& ecfs,
                                                   bool cache_allowed,
+                                                  const std::string& wildcard,
                                                   SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
@@ -617,7 +622,6 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
   // of scope.
 
   rapidxml::xml_document<>* root_underlying_ptr = NULL;
-  std::string wildcard = "";
   std::string json_wildcard = (wildcard != "") ? ", \"wildcard\": \"" + wildcard + "\"" : "";
   std::string req_body = "{\"reqtype\": \"" + type + "\"" +
                           ", \"server_name\": \"" +_scscf_uri + "\"" +

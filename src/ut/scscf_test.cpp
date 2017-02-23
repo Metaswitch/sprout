@@ -7725,6 +7725,44 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 }
 
+// This tests that a INVITE with a P-Profile-Key header sends
+// a request to Homestead with the correct wildcard entry (for the callee,
+// not the caller)
+TEST_F(SCSCFTest, TestInvitePProfileKey)
+{
+  SCOPED_TRACE("");
+  std::string wildcard = "<sip:650!.*!@homedomain>";
+
+  // The callee should have the wildcard on the HTTP request, the caller should not
+  _hss_connection->set_impu_result("sip:6515551000@homedomain",
+                                   "call",
+                                   HSSConnection::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6515551000@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:6515551000</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>",
+                                   "",
+                                   wildcard);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+  register_uri(_sdm, _hss_connection, "6515551000", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "P-Profile-Key: " + wildcard;
+  msg._to = "6515551000";
+  msg._requri = "sip:6515551000@homedomain";
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+}
+
 TEST_F(SCSCFTest, TestAddSecondTelPAIHdr)
 {
   SCOPED_TRACE("");
