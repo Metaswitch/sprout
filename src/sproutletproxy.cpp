@@ -1605,19 +1605,19 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
     // Keep an immutable reference to the request.
     _req = req;
 
-    // Decrement Max-Forwards if present.
-    pjsip_max_fwd_hdr* mf_hdr = (pjsip_max_fwd_hdr*)
-                        pjsip_msg_find_hdr(req->msg, PJSIP_H_MAX_FORWARDS, NULL);
-    if (mf_hdr != NULL)
-    {
-      --mf_hdr->ivalue;
-    }
-
     // Clone the request to get a mutable copy to pass to the Sproutlet.
     pjsip_msg* clone = original_request();
     if (clone == NULL)
     {
       // @TODO
+    }
+
+    // Decrement Max-Forwards if present.
+    pjsip_max_fwd_hdr* mf_hdr = (pjsip_max_fwd_hdr*)
+                        pjsip_msg_find_hdr(clone, PJSIP_H_MAX_FORWARDS, NULL);
+    if (mf_hdr != NULL)
+    {
+      --mf_hdr->ivalue;
     }
 
     if (PJSIP_MSG_TO_HDR(clone)->tag.slen == 0)
