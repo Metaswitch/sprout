@@ -180,7 +180,7 @@ pjsip_tx_data* create_cancel(pjsip_endpoint* endpt,
                              int reason_code);
 
 pjsip_tx_data* create_ack(pjsip_endpoint* endpt,
-                          pjsip_tx_data* original_request,
+                          pjsip_msg* req,
                           pjsip_msg* rsp);
 
 void resolve(const std::string& name,

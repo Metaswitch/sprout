@@ -907,14 +907,14 @@ pjsip_tx_data* PJUtils::create_cancel(pjsip_endpoint* endpt,
 }
 
 pjsip_tx_data* PJUtils::create_ack(pjsip_endpoint* endpt,
-                                   pjsip_tx_data* original_request,
+                                   pjsip_msg* req,
                                    pjsip_msg* rsp)
 {
   pjsip_tx_data* ack;
-  pj_status_t status = pjsip_create_ack(endpt,
-                                        original_request,
-                                        rsp,
-                                        &ack);
+  pj_status_t status = pjsip_endpt_create_ack_from_msgs(endpt,
+                                                        req,
+                                                        rsp,
+                                                        &ack);
 
   if (status != PJ_SUCCESS)
   {

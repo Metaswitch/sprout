@@ -1665,7 +1665,7 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id, bool client_
   {
     TRC_DEBUG("Send immediate ACK to negative response");
     pjsip_tx_data* ack = PJUtils::create_ack(stack_data.endpt,
-                                             _forks[fork_id].req,
+                                             _forks[fork_id].req->msg,
                                              rsp->msg);
     ++_pending_sends;
     tx_request(ack, fork_id);
