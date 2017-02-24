@@ -254,6 +254,11 @@ protected:
     /// initialised to a 408 Request Timeout response.
     pjsip_tx_data* _final_rsp;
 
+    /// If flag is set, any ACKs generated in the sproutlet wrapper will be
+    /// absorbed. This is so that we do not send ACKs to negative responses off
+    /// the box.
+    bool _absorb_acks;
+
     bool _pending_destroy;
     int _context_count;
 

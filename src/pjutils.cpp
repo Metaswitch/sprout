@@ -906,6 +906,24 @@ pjsip_tx_data* PJUtils::create_cancel(pjsip_endpoint* endpt,
   return cancel;
 }
 
+pjsip_tx_data* PJUtils::create_ack(pjsip_endpoint* endpt,
+                                   pjsip_tx_data* original_request,
+                                   pjsip_msg* rsp)
+{
+  pjsip_tx_data* ack;
+  pj_status_t status = pjsip_create_ack(endpt,
+                                        original_request,
+                                        rsp,
+                                        &ack);
+
+  if (status != PJ_SUCCESS)
+  {
+    return NULL;
+  }
+
+  return ack;
+}
+
 /// Resolves a destination.
 void PJUtils::resolve(const std::string& name,
                       int port,
@@ -1683,7 +1701,7 @@ void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* 
                                 ((msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
                                  (pjsip_method_cmp(&msg->line.req.method, pjsip_get_subscribe_method()) == 0) ||
                                  (pjsip_method_cmp(&msg->line.req.method, pjsip_get_notify_method()) == 0)));
-  
+
   if (cid_hdr != NULL)
   {
     TRC_DEBUG("Logging SAS Call-ID marker, Call-ID %.*s", cid_hdr->id.slen, cid_hdr->id.ptr);
