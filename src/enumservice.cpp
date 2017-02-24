@@ -46,6 +46,7 @@
 #include <sys/types.h>
 #include <netdb.h>
 
+#include "pjutils.h"
 #include "enumservice.h"
 #include "dnsresolver.h"
 #include "utils.h"
@@ -172,6 +173,7 @@ void JSONEnumService::update_enum()
   try
   {
     std::vector<NumberPrefix> new_number_prefixes;
+    std::map<std::string, NumberPrefix> new_prefix_regex_map;
 
     JSON_ASSERT_CONTAINS(doc, "number_blocks");
     JSON_ASSERT_ARRAY(doc["number_blocks"]);
@@ -188,14 +190,19 @@ void JSONEnumService::update_enum()
         std::string regex;
         JSON_GET_STRING_MEMBER(*nb_it, "regex", regex);
 
-        // Entry is well-formed, so add it.
+        // Entry is well-formed, so strip off visual separators and add it.
         TRC_DEBUG("Found valid number prefix block %s", prefix.c_str());
         NumberPrefix pfix;
+        prefix = PJUtils::remove_visual_separators(prefix);
         pfix.prefix = prefix;
 
         if (parse_regex_replace(regex, pfix.match, pfix.replace))
         {
+          // Create an array in order of entries in json file, and a map
+          // (automatically sorted in order of key length) so we can later
+          // match numbers to the most specific prefixes
           new_number_prefixes.push_back(pfix);
+          new_prefix_regex_map.insert(std::make_pair(prefix, pfix));
           TRC_STATUS("  Adding number prefix %s, regex=%s",
                      pfix.prefix.c_str(), regex.c_str());
         }
@@ -217,6 +224,7 @@ void JSONEnumService::update_enum()
     // Take a write lock on the mutex in RAII style
     boost::lock_guard<boost::shared_mutex> write_lock(_number_prefixes_rw_lock);
     _number_prefixes = new_number_prefixes;
+    _prefix_regex_map = new_prefix_regex_map;
   }
   catch (JsonFormatError err)
   {
@@ -293,24 +301,24 @@ std::string JSONEnumService::lookup_uri_from_user(const std::string &user, SAS::
 // the object.
 const JSONEnumService::NumberPrefix* JSONEnumService::prefix_match(const std::string& number) const
 {
-  // For simplicity this uses a linear scan since we don't expect too many
-  // entries.  Should shift to a radix tree at some point.
-  for (std::vector<NumberPrefix>::const_iterator it = _number_prefixes.begin();
-       it != _number_prefixes.end();
+  // Iterate through map in reverse order (already sorted by key length during 
+  // construction) to find the most specific matching prefix
+  for (std::map<std::string, NumberPrefix>::const_reverse_iterator it = 
+                                                     _prefix_regex_map.rbegin();
+       it != _prefix_regex_map.rend();
        it++)
   {
-    int len = std::min(number.size(), it->prefix.size());
+    int len = std::min(number.size(), (*it).first.size());
 
     TRC_DEBUG("Comparing first %d numbers of %s against prefix %s",
-              len, number.c_str(), it->prefix.c_str());
+              len, number.c_str(), (*it).first.c_str());
 
-    if (number.compare(0, len, it->prefix, 0, len) == 0)
+    if (PJUtils::remove_visual_separators(number).
+                                      compare(0, len, (*it).first, 0, len) == 0)
     {
-      // Found a match, so return it (at the moment we assume the entries are
-      // ordered with most specific matches first so we can stop as soon as we
-      // have one match).
+      // Found a match, so return it. 
       TRC_DEBUG("Match found");
-      return &*it;
+      return &((*it).second);
     }
   }
 

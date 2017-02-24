@@ -35,6 +35,7 @@
 CONFPATH=/etc/clearwater
 FILENAME=$1
 KEY=$2
+ALLOW_LARGE_UPLOADS =$3
 
 function usage() {
   echo "Usage: upload_json <filename> <key>"
@@ -64,6 +65,18 @@ fi
 if [[ ! -f $CONFPATH/$FILENAME ]]
 then
   echo "No configuration file at $CONFPATH/$FILENAME, unable to upload"
+  exit 2
+fi
+
+# Reject file that is too large for etcd. But allow larger file if the script is
+# called with --allow-large, so that the wrapper script is backward compatible.
+# All scripts calling this function will pass the optional argument directly to
+# this function to check if it's --allow-large
+uploadsize=10000
+filesize=$(wc -c <"$CONFPATH/$FILENAME")
+if [[ $filesize -ge $uploadsize && $MODE != "--allow-large" ]]
+then
+  echo "File is larger than the recommended size $uploadsize bytes, use --allow-large if you want to upload"
   exit 2
 fi
 
