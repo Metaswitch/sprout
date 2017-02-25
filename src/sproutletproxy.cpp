@@ -1593,12 +1593,13 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
   _sproutlet_tsx->obs_rx_request(req->msg);
 
   // If this is an ACK request and we have already decided to absorb ACK
-  // requests in the sproutlets, then release our reference to this message.
+  // requests in the sproutlets, then just go to process actions which will
+  // destory this wrapper.
   if ((req->msg->line.req.method.id == PJSIP_ACK_METHOD) &&
       (_proxy_tsx->_absorb_acks))
   {
     TRC_DEBUG("Absorb ACK to negative response");
-    pjsip_tx_data_dec_ref(req);
+    process_actions(true);
   }
   else
   {
