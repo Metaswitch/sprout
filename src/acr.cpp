@@ -96,6 +96,16 @@ void ACR::override_session_id(const std::string& session_id)
 {
 }
 
+// The lock and unlock functions are no-ops for the Null ACR (no need to lock if
+// there's no work to do)
+void ACR::lock()
+{
+}
+
+void ACR::unlock()
+{
+}
+
 std::string ACR::node_name(Node node_functionality)
 {
   switch (node_functionality)
@@ -173,12 +183,15 @@ RalfACR::RalfACR(RalfProcessor* ralf,
   _req_timestamp.sec = 0;
   _rsp_timestamp.sec = 0;
 
+  pthread_mutex_init(&_acr_lock, NULL);
+
   TRC_DEBUG("Created %s Ralf ACR",
             ACR::node_name(_node_functionality).c_str(), this);
 }
 
 RalfACR::~RalfACR()
 {
+  pthread_mutex_destroy(&_acr_lock);
 }
 
 void RalfACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
@@ -1303,6 +1316,16 @@ void RalfACR::set_default_ccf(const std::string& default_ccf)
 void RalfACR::override_session_id(const std::string& session_id)
 {
   _user_session_id = session_id;
+}
+
+void RalfACR::lock()
+{
+  pthread_mutex_lock(&_acr_lock);
+}
+
+void RalfACR::unlock()
+{
+  pthread_mutex_unlock(&_acr_lock);
 }
 
 void RalfACR::encode_sdp_description(

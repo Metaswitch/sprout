@@ -35,4 +35,6 @@
 FILENAME=s-cscf.json
 KEY=scscf_json
 
-/usr/share/clearwater/clearwater-config-manager/scripts/upload_json $FILENAME $KEY
+# Pass optional argument directly to upload_json, which checks for --allow-large
+# option that allows file upload larger than advisable
+/usr/share/clearwater/clearwater-config-manager/scripts/upload_json $FILENAME $KEY $1

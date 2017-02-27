@@ -172,6 +172,19 @@ public:
   /// @param session_id       The session ID to use.
   virtual void override_session_id(const std::string& session_id);
 
+  /// Get a lock on the ACR.
+  ///
+  /// An ACR can be accessed from multiple threads (if there are multiple
+  /// SproutletTsx objects that use the same ACR), so those threads must call
+  /// lock() before accessing the ACR.
+  virtual void lock();
+
+  /// Release the lock on the ACR.
+  ///
+  /// Should be called after a matching call to lock() once the ACR is no longer
+  /// being accessed.
+  virtual void unlock();
+
   /// Called when the ACR message should be sent if it's not yet been
   /// cancelled.  In general this will be when the relevant transaction or AS
   /// chain has ended.
@@ -304,6 +317,11 @@ public:
   ///
   /// @param session_id       The session ID to use.
   virtual void override_session_id(const std::string& session_id);
+
+  // Get/release the _acr_lock
+  virtual void lock();
+  virtual void unlock();
+
 private:
 
   /// Called when the Rf message should be triggered.  In general this will
@@ -409,6 +427,8 @@ private:
   void store_instance_id(pjsip_msg* msg);
 
   std::string hdr_contents(pjsip_hdr* hdr);
+
+  pthread_mutex_t _acr_lock;
 
   RalfProcessor* _ralf;
   SAS::TrailId _trail;

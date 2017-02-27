@@ -121,6 +121,7 @@ private:
   };
 
   std::vector<NumberPrefix> _number_prefixes;
+  std::map<std::string, NumberPrefix> _prefix_regex_map;
   std::string _configuration;
   Updater<void, JSONEnumService>* _updater;
 
@@ -139,7 +140,8 @@ class DNSEnumService : public EnumService
 public:
   DNSEnumService(const std::vector<std::string>& dns_server,
                  const std::string& dns_suffix = ".e164.arpa",
-                 const DNSResolverFactory* resolver_factory = new DNSResolverFactory(),
+                 const DNSResolverFactory* resolver_factory = 
+                                                       new DNSResolverFactory(),
                  CommunicationMonitor* comm_monitor = NULL);
   ~DNSEnumService();
 

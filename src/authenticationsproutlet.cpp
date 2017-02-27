@@ -298,7 +298,7 @@ pj_status_t AuthenticationSproutletTsx::user_lookup(pj_pool_t *pool,
 
   if (auth_challenge == NULL)
   {
-    TRC_WARNING("Received an authentication request for %s with nonce %s, but no matching challenge found", impi.c_str(), nonce.c_str());
+    TRC_DEBUG("Received an authentication request for %s with nonce %s, but no matching challenge found", impi.c_str(), nonce.c_str());
   }
 
   if (auth_challenge != NULL)
