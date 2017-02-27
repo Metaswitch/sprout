@@ -461,6 +461,50 @@ TEST_F(CommonProcessingTest, BadResponseDropped)
   ASSERT_EQ(0, txdata_count());
 }
 
+TEST_F(CommonProcessingTest, BadSupportedHeader1)
+{
+  // Tests that a trailing comma on request is accepted.
+  pjsip_tx_data* tdata;
+  pjsip_endpt_register_module(stack_data.endpt, &mod_ok);
+
+  // Inject a request with a trailing comma.
+  Message msg1;
+  msg1._extra = "Supported: timer,";
+  inject_msg(msg1.get_request(), _tp);
+
+  // Expect a response from mod_ok.
+  ASSERT_EQ(1, txdata_count());
+
+  tdata = current_txdata();
+  RespMatcher r1(200);
+  r1.matches(tdata->msg);
+
+  free_txdata();
+  pjsip_endpt_unregister_module(stack_data.endpt, &mod_ok);
+}
+
+TEST_F(CommonProcessingTest, BadSupportedHeader2)
+{
+  // Tests that a trailing comma on request is accepted.
+  pjsip_tx_data* tdata;
+  pjsip_endpt_register_module(stack_data.endpt, &mod_ok);
+
+  // Inject a request with a trailing comma.
+  Message msg1;
+  msg1._extra = "Supported: timer, path, ";
+  inject_msg(msg1.get_request(), _tp);
+
+  // Expect a response from mod_ok.
+  ASSERT_EQ(1, txdata_count());
+
+  tdata = current_txdata();
+  RespMatcher r1(200);
+  r1.matches(tdata->msg);
+
+  free_txdata();
+  pjsip_endpt_unregister_module(stack_data.endpt, &mod_ok);
+}
+
 // If:
 //  - an exception has already been hit
 //  - the health-checker runs a check
