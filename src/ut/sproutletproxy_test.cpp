@@ -154,6 +154,13 @@ public:
   {
     send_response(rsp);
   }
+
+  void on_rx_trying(pjsip_msg* rsp, int fork_id)
+  {
+    // Sproutlets shouldn't call send_response for 100 Trying responses, but
+    // let's check here that the sproutlet proxy handles it if they do.
+    send_response(rsp);
+  }
 };
 
 class FakeSproutletTsxDownstreamRequest : public SproutletTsx

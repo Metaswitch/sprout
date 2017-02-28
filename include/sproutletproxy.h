@@ -191,6 +191,10 @@ protected:
                    int fork_id,
                    pjsip_tx_data* cancel);
 
+    void tx_negative_ack(SproutletWrapper* sproutlet,
+                         int fork_id,
+                         pjsip_tx_data* ack);
+
     /// Gets the next target Sproutlet for the message by analysing the top
     /// Route header.
     Sproutlet* target_sproutlet(pjsip_msg* msg,
@@ -251,6 +255,11 @@ protected:
     /// children of this UASTsx that have not popped or been cancelled yet.
     /// The UASTsx will persist while there are pending timers.
     std::set<pj_timer_entry*> _pending_timers;
+
+    /// If flag is set, any ACKs generated in the sproutlet wrapper will be
+    /// absorbed. This is so that we do not send ACKs to negative responses off
+    /// the box.
+    bool _absorb_acks;
 
     friend class SproutletWrapper;
   };
@@ -331,6 +340,7 @@ private:
   void tx_request(pjsip_tx_data* req, int fork_id);
   void tx_response(pjsip_tx_data* rsp);
   void tx_cancel(int fork_id);
+  void tx_negative_ack(pjsip_tx_data* rsp, int fork_id);
   int compare_sip_sc(int sc1, int sc2);
   bool is_uri_local(const pjsip_uri*) const;
   void log_inter_sproutlet(pjsip_tx_data* tdata, bool downstream);

@@ -366,9 +366,9 @@ private:
   /// @param sip_code - The reported SIP return code
   std::string fork_failure_reason_as_string(int fork_id, int sip_code);
 
-  /// Do common processing that we do for all responses.  This is called by
-  /// on_rx_response and on_rx_trying.
-  void common_response_processing(pjsip_msg* rsp);
+  void acr_handle_response(pjsip_msg* rsp);
+
+  void cancel_liveness_timer();
 
   /// Pointer to the parent SCSCFSproutlet object - used for various operations
   /// that require access to global configuration or services.

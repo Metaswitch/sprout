@@ -72,8 +72,10 @@ public:
 
   MOCK_METHOD1(on_rx_initial_request, void(pjsip_msg*));
   MOCK_METHOD1(on_rx_in_dialog_request, void(pjsip_msg*));
+  MOCK_METHOD2(obs_rx_request, void(pjsip_msg*));
   MOCK_METHOD2(obs_tx_request, void(pjsip_msg*, int));
   MOCK_METHOD2(on_rx_response, void(pjsip_msg*, int));
+  MOCK_METHOD1(obs_rx_response, void(pjsip_msg*, int));
   MOCK_METHOD1(obs_tx_response, void(pjsip_msg*));
   MOCK_METHOD2(on_rx_cancel, void(int, pjsip_msg*));
   MOCK_METHOD1(on_timer_expiry, void(void*));

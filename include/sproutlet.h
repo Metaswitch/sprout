@@ -332,9 +332,9 @@ public:
   ///                        the response was received.
   virtual void on_rx_response(pjsip_msg* rsp, int fork_id) { send_response(rsp); }
 
-  /// Called if a 100 Trying response is received on the transaction. If the
-  /// These responses are only sent by the wrappers, so we shouldn't call
-  /// ever call send_response on them.
+  /// This is a notification that a 100 Trying has been received. The sproutlet
+  /// proxy handles these automatically. The Sproutlet Tsx should not forward
+  /// the response on (i.e. should not call send_request).
   ///
   /// @param  rsp          - The received response.
   virtual void on_rx_trying(pjsip_msg* rsp, int fork_id) {}

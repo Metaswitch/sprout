@@ -813,12 +813,14 @@ void ICSCFSproutletTsx::obs_tx_response(pjsip_msg* rsp)
   // Check if this is a terminating INVITE.  If it is then check whether we need
   // to update our session establishment stats.  We consider the session to be
   // set up as soon as we receive a final response OR a 180 Ringing (per TS
-  // 32.409).
+  // 32.409).  We do not consider responses to CANCEL requests as final
+  // responses.
   if (!_originating &&
       (_req_type == PJSIP_INVITE_METHOD) &&
       !_session_set_up &&
       ((rsp_status == PJSIP_SC_RINGING) ||
-       !PJSIP_IS_STATUS_IN_CLASS(rsp_status, 100)))
+       !PJSIP_IS_STATUS_IN_CLASS(rsp_status, 100)) &&
+      (PJSIP_MSG_CSEQ_HDR(rsp)->method.id != PJSIP_CANCEL_METHOD))
   {
     // Session is now set up.
     _session_set_up = true;

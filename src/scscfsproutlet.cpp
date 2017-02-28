@@ -604,7 +604,8 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     _se_helper.process_response(rsp, get_pool(rsp), trail());
   }
 
-  common_response_processing(rsp);
+  acr_handle_response(rsp);
+  cancel_liveness_timer();
 
   int st_code = rsp->line.status.code;
 
@@ -711,7 +712,8 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
 void SCSCFSproutletTsx::on_rx_trying(pjsip_msg* rsp, int fork_id)
 {
-  common_response_processing(rsp);
+  acr_handle_response(rsp);
+  cancel_liveness_timer();
 }
 
 
@@ -733,7 +735,8 @@ void SCSCFSproutletTsx::obs_tx_response(pjsip_msg* rsp)
   pjsip_status_code st_code = (pjsip_status_code)rsp->line.status.code;
   if (_record_session_setup_time &&
       ((st_code == PJSIP_SC_RINGING) ||
-       PJSIP_IS_STATUS_IN_CLASS(st_code, 200)))
+       ((PJSIP_IS_STATUS_IN_CLASS(st_code, 200)) &&
+        (PJSIP_MSG_CSEQ_HDR(rsp)->method.id != PJSIP_CANCEL_METHOD))))
   {
     _scscf->track_session_setup_time(_tsx_start_time_usec, _video_call);
     _record_session_setup_time = false;
@@ -2169,7 +2172,7 @@ std::string SCSCFSproutletTsx::fork_failure_reason_as_string(int fork_id, int si
   return reason;
 }
 
-void SCSCFSproutletTsx::common_response_processing(pjsip_msg* rsp)
+void SCSCFSproutletTsx::acr_handle_response(pjsip_msg* rsp)
 {
   // Pass the received response to the ACR.
   // @TODO - timestamp from response???
@@ -2180,7 +2183,10 @@ void SCSCFSproutletTsx::common_response_processing(pjsip_msg* rsp)
     acr->rx_response(rsp);
     acr->unlock();
   }
+}
 
+void SCSCFSproutletTsx::cancel_liveness_timer()
+{
   if (_liveness_timer != 0)
   {
     // The liveness timer is running on this request, so cancel it.
