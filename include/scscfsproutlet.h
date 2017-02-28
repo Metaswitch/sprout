@@ -454,6 +454,19 @@ private:
 
   /// Class to handle session-expires processing.
   SessionExpiresHelper _se_helper;
+
+  /// The base request that the S-CSCF should use when retrying a request. This
+  /// is currently only used when invoking default handling for an Application
+  /// Server.
+  ///
+  /// This variable is updated when the S-CSCF record-routes itself into the
+  /// dialog. If the S-CSCF has not record-routed itself, then this pointer will
+  /// be NULL and the original request should be used instead (this is all
+  /// handled by the `get_base_request` utility method below).
+  pjsip_msg* _base_req;
+
+  /// Get the base request that the S-CSCF should use when retrying a request.
+  pjsip_msg* get_base_request();
 };
 
 #endif
