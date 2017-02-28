@@ -4628,6 +4628,347 @@ TEST_F(SCSCFTest, DefaultHandlingMalformed)
   free_txdata();
 }
 
+// Test DefaultHandling=CONTINUE for non-existent AS (where name does not resolve).
+//
+// This test configures an AS for the originating subscriber, and checks that
+// the S-CSCF still record-routes itself correctly.
+TEST_F(SCSCFTest, DefaultHandlingContinueNonExistentRRTest)
+{
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:who@example.net");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:ne-as:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // AS name fails to resolve, so INVITE passed on to final destination
+  SCOPED_TRACE("INVITE (2)");
+  out = current_txdata()->msg;
+  ReqMatcher r2("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r2.matches(out));
+
+  tpBono.expect_target(current_txdata(), false);
+
+  // The S-CSCF should record-route itself for both originating and terminating
+  // billing.
+  EXPECT_THAT(get_headers(out, "Record-Route"),
+              MatchesRegex("Record-Route:.*billing-role=charge-term.*"
+                           "Record-Route:.*billing-role=charge-orig.*"));
+
+  free_txdata();
+}
+
+TEST_F(SCSCFTest, DefaultHandlingContinueTimeoutRRTest)
+{
+  // Register an endpoint to act as the callee.
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+
+  // Set up an application server for the caller. It's default handling is set
+  // to session continue.
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=tcp</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("timeout")));
+
+  TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
+
+  // Caller sends INVITE
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpCaller);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to caller
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  free_txdata();
+
+  // Advance time without receiving a response. The application server is
+  // bypassed.
+  cwtest_advance_time_ms(3000);
+
+  // INVITE is sent to the callee.
+  poll();
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  ReqMatcher r2("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r2.matches(out));
+  tpCallee.expect_target(current_txdata(), true);
+
+  EXPECT_THAT(get_headers(out, "Record-Route"),
+              MatchesRegex("Record-Route:.*billing-role=charge-term.*"
+                           "Record-Route:.*billing-role=charge-orig.*"));
+
+  // Callee sends 200 OK.
+  inject_msg(respond_to_txdata(current_txdata(), 200, "", ""), &tpCallee);
+  free_txdata();
+
+  // 200 OK received at callee.
+  poll();
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(200).matches(out);
+  tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  free_txdata();
+}
+
+TEST_F(SCSCFTest, DefaultHandlingContinueFirstAsFailsRRTest)
+{
+  // Register an endpoint to act as the callee.
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+
+  // Set up an application server for the caller. It's default handling is set
+  // to session continue.
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:ne-as:56789;transport=tcp</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>2</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("Transport error")));
+
+  TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
+
+  // Caller sends INVITE
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpCaller);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to caller
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // The first AS fails to resolve so the INVITE is passed on to AS2
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  free_txdata();
+
+  // The S-CSCF should have record-routed itself at the start of originating
+  // processing, and this should be reflected in the request sent to the second
+  // AS.
+  EXPECT_THAT(get_headers(out, "Record-Route"),
+              MatchesRegex("Record-Route:.*billing-role=charge-orig.*"));
+  free_txdata();
+}
+
+TEST_F(SCSCFTest, DefaultHandlingContinueFirstTermAsFailsRRTest)
+{
+  // Register an endpoint to act as the callee.
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+
+  // Set up an application server for the caller. It's default handling is set
+  // to session continue.
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:ne-as:56789;transport=tcp</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>2</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("Transport error")));
+
+  TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
+
+  stack_data.record_route_on_initiation_of_terminating = true;
+  stack_data.record_route_on_completion_of_originating = true;
+  stack_data.record_route_on_diversion = false;
+  stack_data.record_route_on_every_hop = false;
+
+  // Caller sends INVITE
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpCaller);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to caller
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // The first AS fails to resolve so the INVITE is passed on to AS2
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  free_txdata();
+
+  // The S-CSCF should have record-routed itself at the start of originating
+  // processing, end of originating, and start of terminating. However:
+  // -  We don't bill at the start of terminating processing, so the top route
+  //    header should indicate no billing.
+  // -  There was only one signaling hop on the originating side, so there
+  //    should only be one RR header from originating processing, which should
+  //    indicate originating billing).
+  EXPECT_THAT(get_headers(out, "Record-Route"),
+              MatchesRegex("Record-Route:.*billing-role=charge-none.*"
+                           "Record-Route:.*billing-role=charge-orig.*"));
+  free_txdata();
+
+  stack_data.record_route_on_initiation_of_terminating = false;
+  stack_data.record_route_on_completion_of_originating = false;
+  stack_data.record_route_on_diversion = false;
+  stack_data.record_route_on_every_hop = false;
+}
 
 // Test that when Sprout is configured to Record-Route itself only at
 // the start and end of all processing, it does.
