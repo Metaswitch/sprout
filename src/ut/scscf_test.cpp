@@ -8596,3 +8596,156 @@ TEST_F(SCSCFTest, TestSessionExpiresWhenNoRecordRoute)
   ASSERT_TRUE(get_headers(out, "Session-Expires").empty());
 }
 
+
+// Test that getting a 503 error from homestead when looking up IFCs results in
+// sprout sending a 504 error.
+TEST_F(SCSCFTest, HSSTimeoutOnPutRegData)
+{
+  // Send originating INVITE
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+
+  // HSS will return a 503
+  _hss_connection->set_rc("/impu/sip%3A6505551000%40homedomain/reg-data", 503);
+
+  inject_msg(msg.get_request());
+
+  // 100 Trying goes out
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  free_txdata();
+
+  // Followed by a 504
+  out = current_txdata()->msg;
+  EXPECT_EQ(504, out->line.status.code);
+  EXPECT_EQ("Server Timeout", str_pj(out->line.status.reason));
+
+  _hss_connection->delete_rc("/impu/sip%3A6505551000%40homedomain/reg-data");
+}
+
+
+// Test that a failure to get IFCs due to a 503 error from homestead during Call
+// Diversion results in sprout sending a 504
+TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
+{
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                R"(<IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>2</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <SessionCase>4</SessionCase>  <!-- originating-cdiv -->
+                                      <Extension></Extension>
+                                    </SPT>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                  <InitialFilterCriteria>
+                                    <Priority>0</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <SessionCase>1</SessionCase>  <!-- terminating-registered -->
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._todomain = "";
+  msg._route = "Route: <sip:homedomain>";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS1 (as terminating AS for Bob)
+  SCOPED_TRACE("INVITE (S)");
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS1.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;service=scscf>"));
+  EXPECT_THAT(get_headers(out, "P-Served-User"),
+              testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=term;regstate=reg"));
+
+  // ---------- AS1 sends a 100 Trying to indicate it has received the request.
+  string fresp1 = respond_to_txdata(current_txdata(), 100);
+  inject_msg(fresp1, &tpAS1);
+
+  // The next request to the HSS will get a 503 response
+  _hss_connection->delete_result("sip:6505551234@homedomain");
+  _hss_connection->set_rc("/impu/sip%3A6505551234%40homedomain/reg-data", 503);
+
+  // ---------- AS1 turns it around (acting as routing B2BUA by changing the target)
+  const pj_str_t STR_ROUTE = pj_str("Route");
+  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  ((pjsip_sip_uri*)out->line.req.uri)->user = pj_str("6505555678");
+  inject_msg(out, &tpAS1);
+  free_txdata();
+
+  // 100 Trying goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // Followed by a 504 (since the IFC lookup has got a 503)
+  out = current_txdata()->msg;
+  RespMatcher(504).matches(out);
+  tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  free_txdata();
+
+  _hss_connection->delete_rc("/impu/sip%3A6505551000%40homedomain/reg-data");
+}
+
