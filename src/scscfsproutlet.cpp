@@ -2197,7 +2197,7 @@ std::string SCSCFSproutletTsx::fork_failure_reason_as_string(int fork_id, int si
 
 pjsip_msg* SCSCFSproutletTsx::get_base_request()
 {
-  if (_base_req)
+  if (_base_req != nullptr)
   {
     return clone_msg(_base_req);
   }

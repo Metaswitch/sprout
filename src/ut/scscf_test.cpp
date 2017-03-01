@@ -4631,7 +4631,8 @@ TEST_F(SCSCFTest, DefaultHandlingMalformed)
 // Test DefaultHandling=CONTINUE for non-existent AS (where name does not resolve).
 //
 // This test configures an AS for the originating subscriber, and checks that
-// the S-CSCF still record-routes itself correctly.
+// the S-CSCF still record-routes itself correctly when the AS fails and is
+// bypassed.
 TEST_F(SCSCFTest, DefaultHandlingContinueNonExistentRRTest)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
@@ -4699,6 +4700,11 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistentRRTest)
   free_txdata();
 }
 
+// Test DefaultHandling=CONTINUE for an unresponsive AS.
+//
+// This test configures an AS for the originating subscriber, and checks that
+// the S-CSCF still record-routes itself correctly when the AS times out and is
+// bypassed.
 TEST_F(SCSCFTest, DefaultHandlingContinueTimeoutRRTest)
 {
   // Register an endpoint to act as the callee.
@@ -4787,6 +4793,11 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeoutRRTest)
   free_txdata();
 }
 
+// Test DefaultHandling=CONTINUE for non-existent AS.
+//
+// This test configures two ASs for the originating subscriber, and checks that
+// the S-CSCF still record-routes itself correctly when the first AS fails, is
+// bypassed, and the request is routed to the second AS.
 TEST_F(SCSCFTest, DefaultHandlingContinueFirstAsFailsRRTest)
 {
   // Register an endpoint to act as the callee.
@@ -4870,6 +4881,11 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstAsFailsRRTest)
   free_txdata();
 }
 
+// Test DefaultHandling=CONTINUE for non-existent AS.
+//
+// This test configures two ASs for the terminating subscriber, and checks that
+// the S-CSCF still record-routes itself correctly when the first AS fails, is
+// bypassed, and the request is routed to the second AS.
 TEST_F(SCSCFTest, DefaultHandlingContinueFirstTermAsFailsRRTest)
 {
   // Register an endpoint to act as the callee.
