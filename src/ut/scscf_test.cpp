@@ -4886,6 +4886,10 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstAsFailsRRTest)
 // This test configures two ASs for the terminating subscriber, and checks that
 // the S-CSCF still record-routes itself correctly when the first AS fails, is
 // bypassed, and the request is routed to the second AS.
+//
+// This test configured record routing at the start of terminating processing,
+// so we can check the terminating Record-Route is preserved when bypassing the
+// AS.
 TEST_F(SCSCFTest, DefaultHandlingContinueFirstTermAsFailsRRTest)
 {
   // Register an endpoint to act as the callee.
@@ -4937,10 +4941,10 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstTermAsFailsRRTest)
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
   TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
 
+  bool old_rr_on_comp_of_orig = stack_data.record_route_on_completion_of_originating;
+  bool old_rr_on_init_of_term = stack_data.record_route_on_initiation_of_terminating;
   stack_data.record_route_on_initiation_of_terminating = true;
   stack_data.record_route_on_completion_of_originating = true;
-  stack_data.record_route_on_diversion = false;
-  stack_data.record_route_on_every_hop = false;
 
   // Caller sends INVITE
   Message msg;
@@ -4980,10 +4984,8 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstTermAsFailsRRTest)
                            "Record-Route:.*billing-role=charge-orig.*"));
   free_txdata();
 
-  stack_data.record_route_on_initiation_of_terminating = false;
-  stack_data.record_route_on_completion_of_originating = false;
-  stack_data.record_route_on_diversion = false;
-  stack_data.record_route_on_every_hop = false;
+  stack_data.record_route_on_initiation_of_terminating = old_rr_on_init_of_term;
+  stack_data.record_route_on_completion_of_originating = old_rr_on_comp_of_orig;
 }
 
 // Test that when Sprout is configured to Record-Route itself only at
