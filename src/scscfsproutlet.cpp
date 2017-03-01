@@ -273,7 +273,7 @@ void SCSCFSproutlet::remove_binding(const std::string& aor,
 
 
 /// Read data for a public user identity from the HSS.
-bool SCSCFSproutlet::read_hss_data(const std::string& public_id,
+long SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                    const std::string& private_id,
                                    const std::string& req_type,
                                    bool cache_allowed,
@@ -299,14 +299,14 @@ bool SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                                    ecfs,
                                                    cache_allowed,
                                                    trail);
-  if (http_code == 200)
+  if (http_code == HTTP_OK)
   {
     ifcs = ifc_map[public_id];
   }
 
   registered = (regstate == HSSConnection::STATE_REGISTERED);
 
-  return (http_code == 200);
+  return (http_code);
 }
 
 
@@ -981,7 +981,8 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         }
 
         Ifcs ifcs;
-        if (lookup_ifcs(served_user, ifcs))
+        long http_code = lookup_ifcs(served_user, ifcs);
+        if (http_code == HTTP_OK)
         {
           TRC_DEBUG("Creating originating CDIV AS chain");
 
@@ -1003,7 +1004,17 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         else
         {
           TRC_DEBUG("Failed to retrieve ServiceProfile for %s", served_user.c_str());
-          status_code = PJSIP_SC_NOT_FOUND;
+
+          if ((http_code == HTTP_SERVER_UNAVAILABLE) || (http_code == HTTP_GATEWAY_TIMEOUT))
+          {
+            // Send a SIP 504 response if we got a 500/503 HTTP response.
+            status_code = PJSIP_SC_SERVER_TIMEOUT;
+          }
+          else
+          {
+            status_code = PJSIP_SC_NOT_FOUND;
+          }
+
           SAS::Event no_ifcs(trail(), SASEvent::IFC_GET_FAILURE, 0);
           SAS::report_event(no_ifcs);
         }
@@ -1086,7 +1097,8 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       TRC_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
 
       Ifcs ifcs;
-      if (lookup_ifcs(served_user, ifcs))
+      long http_code = lookup_ifcs(served_user, ifcs);
+      if (http_code == HTTP_OK)
       {
         TRC_DEBUG("Successfully looked up iFCs");
         _as_chain_link = create_as_chain(ifcs, served_user, acr, trail());
@@ -1094,7 +1106,17 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       else
       {
         TRC_DEBUG("Failed to retrieve ServiceProfile for %s", served_user.c_str());
-        status_code = PJSIP_SC_NOT_FOUND;
+
+        if ((http_code == HTTP_SERVER_UNAVAILABLE) || (http_code == HTTP_GATEWAY_TIMEOUT))
+        {
+          // Send a SIP 504 response if we got a 500/503 HTTP response.
+          status_code = PJSIP_SC_SERVER_TIMEOUT;
+        }
+        else
+        {
+          status_code = PJSIP_SC_NOT_FOUND;
+        }
+
         SAS::Event no_ifcs(trail(), SASEvent::IFC_GET_FAILURE, 1);
         SAS::report_event(no_ifcs);
 
@@ -1709,32 +1731,36 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
 }
 
 /// Gets the subscriber's associated URIs and iFCs for each URI from
-/// the HSS and stores cached values. Returns true on success, false on failure.
-bool SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
+/// the HSS and stores cached values. Returns the HTTP result code obtained from
+/// homestead.
+long SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
 {
+  long http_code = HTTP_OK;
   if (!_hss_data_cached)
   {
     std::string req_type = _auto_reg ? HSSConnection::REG : HSSConnection::CALL;
     bool cache_allowed = !_auto_reg;
 
     // We haven't previous read data from the HSS, so read it now.
-    if (_scscf->read_hss_data(public_id,
-                              _impi,
-                              req_type,
-                              cache_allowed,
-                              _registered,
-                              _uris,
-                              _aliases,
-                              _ifcs,
-                              _ccfs,
-                              _ecfs,
-                              trail()))
+    http_code = _scscf->read_hss_data(public_id,
+                                      _impi,
+                                      req_type,
+                                      cache_allowed,
+                                      _registered,
+                                      _uris,
+                                      _aliases,
+                                      _ifcs,
+                                      _ccfs,
+                                      _ecfs,
+                                      trail());
+
+    if (http_code == HTTP_OK)
     {
       _hss_data_cached = true;
     }
   }
 
-  return _hss_data_cached;
+  return http_code;
 }
 
 
@@ -1742,8 +1768,8 @@ bool SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
 /// per-transaction cache if possible (and caching them and the iFC otherwise).
 bool SCSCFSproutletTsx::is_user_registered(std::string public_id)
 {
-  bool success = get_data_from_hss(public_id);
-  if (success)
+  long http_code = get_data_from_hss(public_id);
+  if (http_code == HTTP_OK)
   {
     return _registered;
   }
@@ -1762,12 +1788,12 @@ bool SCSCFSproutletTsx::is_user_registered(std::string public_id)
 bool SCSCFSproutletTsx::get_associated_uris(std::string public_id,
                                             std::vector<std::string>& uris)
 {
-  bool success = get_data_from_hss(public_id);
-  if (success)
+  long http_code = get_data_from_hss(public_id);
+  if (http_code == HTTP_OK)
   {
     uris = _uris;
   }
-  return success;
+  return (http_code == HTTP_OK);
 }
 
 /// Look up the aliases for the given public ID, using the cache if
@@ -1777,28 +1803,29 @@ bool SCSCFSproutletTsx::get_associated_uris(std::string public_id,
 bool SCSCFSproutletTsx::get_aliases(std::string public_id,
                                     std::vector<std::string>& aliases)
 {
-  bool success = get_data_from_hss(public_id);
-  if (success)
+  long http_code = get_data_from_hss(public_id);
+  if (http_code == HTTP_OK)
   {
     aliases = _aliases;
   }
-  return success;
+  return (http_code == HTTP_OK);
 }
 
 
 
 /// Look up the Ifcs for the given public ID, using the cache if possible
 /// (and caching them and the associated URIs otherwise).
+/// Returns the HTTP result code obtained from homestead.
 /// The ifcs parameter is only filled in correctly if this function
-/// returns true,
-bool SCSCFSproutletTsx::lookup_ifcs(std::string public_id, Ifcs& ifcs)
+/// returns HTTP_OK.
+long SCSCFSproutletTsx::lookup_ifcs(std::string public_id, Ifcs& ifcs)
 {
-  bool success = get_data_from_hss(public_id);
-  if (success)
+  long http_code = get_data_from_hss(public_id);
+  if (http_code == HTTP_OK)
   {
     ifcs = _ifcs;
   }
-  return success;
+  return http_code;
 }
 
 

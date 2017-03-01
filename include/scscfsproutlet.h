@@ -142,8 +142,9 @@ private:
                       const std::string& binding_id,
                       SAS::TrailId trail);
 
-  /// Read data for a public user identity from the HSS.
-  bool read_hss_data(const std::string& public_id,
+  /// Read data for a public user identity from the HSS. Returns the HTTP result
+  /// code obtained from homestead.
+  long read_hss_data(const std::string& public_id,
                      const std::string& private_id,
                      const std::string& req_type,
                      bool cache_allowed,
@@ -306,8 +307,8 @@ private:
   void uri_translation(pjsip_msg* req);
 
   /// Gets the subscriber's associated URIs and iFCs for each URI from
-  /// the HSS. Returns true on success, false on failure.
-  bool get_data_from_hss(std::string public_id);
+  /// the HSS. Returns the HTTP result code received from homestead.
+  long get_data_from_hss(std::string public_id);
 
   /// Look up the registration state for the given public ID, using the
   /// per-transaction cache if possible (and caching them and the iFC otherwise).
@@ -323,9 +324,10 @@ private:
   bool get_aliases(std::string public_id,
                    std::vector<std::string>& aliases);
 
-  /// Look up the Ifcs for the given public ID.  The ifcs parameter is only
-  /// filled in correctly if this function returns true.
-  bool lookup_ifcs(std::string public_id,
+  /// Look up the Ifcs for the given public ID, and return the HTTP result code
+  /// from homestead.  The ifcs parameter is only filled in correctly if this
+  /// function returns HTTP_OK.
+  long lookup_ifcs(std::string public_id,
                    Ifcs& ifcs);
 
   /// Add the S-CSCF sproutlet into a dialog.  The third parameter
