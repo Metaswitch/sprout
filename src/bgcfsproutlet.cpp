@@ -253,9 +253,10 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 }
 
 
-void BGCFSproutletTsx::obs_tx_request(pjsip_msg* req, int fork_id)
+void BGCFSproutletTsx::obs_tx_request(pjsip_msg* req, int fork_id, bool tsx_mgmt)
 {
-  if (_acr != NULL)
+  // We don't send ACRs for transaction management messages.
+  if ((!tsx_mgmt) && (_acr != NULL))
   {
     // Pass the transmitted request to the ACR to update the accounting
     // information.
@@ -279,9 +280,10 @@ void BGCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 }
 
 
-void BGCFSproutletTsx::obs_tx_response(pjsip_msg* rsp)
+void BGCFSproutletTsx::obs_tx_response(pjsip_msg* rsp, bool tsx_mgmt)
 {
-  if (_acr != NULL)
+  // We don't send ACRs for transaction management messages.
+  if ((!tsx_mgmt) && (_acr != NULL))
   {
     // Pass the transmitted response to the ACR to update the accounting
     // information.

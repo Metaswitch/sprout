@@ -355,14 +355,20 @@ public:
   /// Called when a request is received by the sproutlet wrapper.
   ///
   /// @param  req          - The received request.
-  virtual void obs_rx_request(pjsip_msg* req) {};
+  /// @param  tsx_mgmt     - Whether this is a transaction management message
+  ///                        e.g. CANCEL, 200 OK to CANCEL, 100 Trying, ACK to
+  ///                        negative response.
+  virtual void obs_rx_request(pjsip_msg* req, bool tsx_mgmt) {};
 
   /// Called when a response is received by the sproutlet wrapper.
   ///
   /// @param  rsp          - The received response.
   /// @param fork_id       - The identity of the downstream fork on which the
   ///                        response was received.
-  virtual void obs_rx_response(pjsip_msg* rsp, int fork_id) {};
+  /// @param  tsx_mgmt     - Whether this is a transaction management message
+  ///                        e.g. CANCEL, 200 OK to CANCEL, 100 Trying, ACK to
+  ///                        negative response.
+  virtual void obs_rx_response(pjsip_msg* rsp, int fork_id, bool tsx_mgmt) {};
 
   /// Called when a request has been transmitted on the transaction by the
   /// wrapper.  This is usually because the service has previously called
@@ -371,13 +377,19 @@ public:
   /// @param req           - The transmitted request
   /// @param fork_id       - The identity of the downstream fork on which the
   ///                        request was sent.
-  virtual void obs_tx_request(pjsip_msg* req, int fork_id) {}
+  /// @param  tsx_mgmt     - Whether this is a transaction management message
+  ///                        e.g. CANCEL, 200 OK to CANCEL, 100 Trying, ACK to
+  ///                        negative response.
+  virtual void obs_tx_request(pjsip_msg* req, int fork_id, bool tsx_mgmt) {}
 
   /// Called when a response has been transmitted on the transaction by the
   /// wrapper.
   ///
   /// @param  rsp          - The transmitted response.
-  virtual void obs_tx_response(pjsip_msg* rsp) {}
+  /// @param  tsx_mgmt     - Whether this is a transaction management message
+  ///                        e.g. CANCEL, 200 OK to CANCEL, 100 Trying, ACK to
+  ///                        negative response.
+  virtual void obs_tx_response(pjsip_msg* rsp, bool tsx_mgmt) {}
 
   /// Called when a timer programmed by the SproutletTsx expires.
   ///

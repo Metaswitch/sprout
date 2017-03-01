@@ -329,6 +329,7 @@ private:
   void rx_request(pjsip_tx_data* req);
   void rx_response(pjsip_tx_data* rsp, int fork_id, bool client_rsp);
   void rx_cancel(pjsip_tx_data* cancel);
+  void rx_negative_ack(pjsip_tx_data* ack);
   void rx_error(int status_code);
   void rx_fork_error(pjsip_event_id_e event, int fork_id);
   void on_timer_pop(TimerID id, void* context);

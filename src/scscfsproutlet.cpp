@@ -581,16 +581,20 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
 }
 
 
-void SCSCFSproutletTsx::obs_tx_request(pjsip_msg* req, int fork_id)
+void SCSCFSproutletTsx::obs_tx_request(pjsip_msg* req, int fork_id, bool tsx_mgmt)
 {
-  ACR* acr = get_acr();
-  if (acr)
+  // We don't send ACRs for transaction management messages.
+  if (!tsx_mgmt)
   {
-    // Pass the transmitted request to the ACR to update the accounting
-    // information.
-    acr->lock();
-    acr->tx_request(req);
-    acr->unlock();
+    ACR* acr = get_acr();
+    if (acr)
+    {
+      // Pass the transmitted request to the ACR to update the accounting
+      // information.
+      acr->lock();
+      acr->tx_request(req);
+      acr->unlock();
+    }
   }
 }
 
@@ -717,29 +721,32 @@ void SCSCFSproutletTsx::on_rx_trying(pjsip_msg* rsp, int fork_id)
 }
 
 
-void SCSCFSproutletTsx::obs_tx_response(pjsip_msg* rsp)
+void SCSCFSproutletTsx::obs_tx_response(pjsip_msg* rsp, bool tsx_mgmt)
 {
-  ACR* acr = get_acr();
-  if (acr != NULL)
+  // We don't do this processing for transaction management messages.
+  if (!tsx_mgmt)
   {
-    // Pass the transmitted response to the ACR to update the accounting
-    // information.
-    acr->lock();
-    acr->tx_response(rsp);
-    acr->unlock();
-  }
+    ACR* acr = get_acr();
+    if (acr != NULL)
+    {
+      // Pass the transmitted response to the ACR to update the accounting
+      // information.
+      acr->lock();
+      acr->tx_response(rsp);
+      acr->unlock();
+    }
 
-  // If this is a transaction where we are supposed to be tracking session
-  // setup stats then check to see if it is now set up.  We consider it to be
-  // setup when we receive either a 180 Ringing or 2xx (per TS 32.409).
-  pjsip_status_code st_code = (pjsip_status_code)rsp->line.status.code;
-  if (_record_session_setup_time &&
-      ((st_code == PJSIP_SC_RINGING) ||
-       ((PJSIP_IS_STATUS_IN_CLASS(st_code, 200)) &&
-        (PJSIP_MSG_CSEQ_HDR(rsp)->method.id != PJSIP_CANCEL_METHOD))))
-  {
-    _scscf->track_session_setup_time(_tsx_start_time_usec, _video_call);
-    _record_session_setup_time = false;
+    // If this is a transaction where we are supposed to be tracking session
+    // setup stats then check to see if it is now set up.  We consider it to be
+    // setup when we receive either a 180 Ringing or 2xx (per TS 32.409).
+    pjsip_status_code st_code = (pjsip_status_code)rsp->line.status.code;
+    if (_record_session_setup_time &&
+        ((st_code == PJSIP_SC_RINGING) ||
+         (PJSIP_IS_STATUS_IN_CLASS(st_code, 200))))
+    {
+      _scscf->track_session_setup_time(_tsx_start_time_usec, _video_call);
+      _record_session_setup_time = false;
+    }
   }
 }
 

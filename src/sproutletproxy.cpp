@@ -869,22 +869,6 @@ void SproutletProxy::UASTsx::schedule_requests()
           _umap[(void*)downstream] = req.upstream;
         }
 
-        if (req.req->msg->line.req.method.id == PJSIP_INVITE_METHOD)
-        {
-          // Send an immediate 100 Trying response to the upstream
-          // Sproutlet.
-          pjsip_tx_data* trying;
-          pj_status_t status = PJUtils::create_response(stack_data.endpt,
-                                                        req.req,
-                                                        PJSIP_SC_TRYING,
-                                                        NULL,
-                                                        &trying);
-          if (status == PJ_SUCCESS)
-          {
-            req.upstream.first->rx_response(trying, req.upstream.second, false);
-          }
-        }
-
         // Pass the request to the downstream sproutlet.
         downstream->rx_request(req.req);
       }
@@ -991,9 +975,10 @@ void SproutletProxy::UASTsx::tx_response(SproutletWrapper* downstream,
 {
   if (downstream == _root)
   {
-    // If this is the root sproutlet in the tree, drop any 200 OK to CANCEL
-    // messages that the sproutlets generated.
-    if (PJSIP_MSG_CSEQ_HDR(rsp->msg)->method.id == PJSIP_CANCEL_METHOD)
+    // If this is the root sproutlet in the tree, drop any 100 Trying or 200 OK
+    // to CANCEL responses that the sproutlets generated.
+    if ((PJSIP_MSG_CSEQ_HDR(rsp->msg)->method.id == PJSIP_CANCEL_METHOD) ||
+        (rsp->msg->line.status.code == PJSIP_SC_TRYING))
     {
       pjsip_tx_data_dec_ref(rsp);
       return;
@@ -1111,7 +1096,7 @@ void SproutletProxy::UASTsx::tx_negative_ack(SproutletWrapper* upstream,
     // Pass the ACK request to the downstream Sproutlet.
     SproutletWrapper* downstream = i->second;
     TRC_DEBUG("Route negative ACK to %s", downstream->service_name().c_str());
-    downstream->rx_request(ack);
+    downstream->rx_negative_ack(ack);
 
     // This is an ACK to a final response so disconnect the sproutlets.
     _dmap_sproutlet.erase(std::make_pair(upstream, fork_id));
@@ -1634,6 +1619,22 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
   event.add_var_param(_service_name);
   SAS::report_event(event);
 
+  if (req->msg->line.req.method.id == PJSIP_INVITE_METHOD)
+  {
+    // Send an immediate 100 Trying response to the upstream
+    // Sproutlet.
+    pjsip_tx_data* trying;
+    pj_status_t status = PJUtils::create_response(stack_data.endpt,
+                                                  req,
+                                                  PJSIP_SC_TRYING,
+                                                  NULL,
+                                                  &trying);
+    if (status == PJ_SUCCESS)
+    {
+      tx_response(trying);
+    }
+  }
+
   // Log the request at VERBOSE level before we send it out to aid in
   // tracking its path through the sproutlets.
   if (Log::enabled(Log::VERBOSE_LEVEL))
@@ -1641,57 +1642,46 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
     log_inter_sproutlet(req, true);
   }
 
-  // Notify the sproutlet that an a request has been received.
-  _sproutlet_tsx->obs_rx_request(req->msg);
+  // Notify the sproutlet that a request has been received.
+  _sproutlet_tsx->obs_rx_request(req->msg, false);
 
-  // If this is an ACK request and we have already decided to absorb ACK
-  // requests in the sproutlets, drop our reference to this request.
-  if ((req->msg->line.req.method.id == PJSIP_ACK_METHOD) &&
-      (_proxy_tsx->_absorb_acks))
+  // Keep an immutable reference to the request.
+  _req = req;
+
+  // Clone the request to get a mutable copy to pass to the Sproutlet.
+  pjsip_msg* clone = original_request();
+  if (clone == NULL)
   {
-    TRC_DEBUG("Absorb ACK to negative response");
-    pjsip_tx_data_dec_ref(req);
+    // @TODO
+  }
+
+  // Decrement Max-Forwards if present.
+  pjsip_max_fwd_hdr* mf_hdr = (pjsip_max_fwd_hdr*)
+                      pjsip_msg_find_hdr(clone, PJSIP_H_MAX_FORWARDS, NULL);
+  if (mf_hdr != NULL)
+  {
+    --mf_hdr->ivalue;
+  }
+
+  if (PJSIP_MSG_TO_HDR(clone)->tag.slen == 0)
+  {
+    TRC_VERBOSE("%s pass initial request %s to Sproutlet",
+                _id.c_str(), msg_info(clone));
+    _sproutlet_tsx->on_rx_initial_request(clone);
   }
   else
   {
-    // Keep an immutable reference to the request.
-    _req = req;
-
-    // Clone the request to get a mutable copy to pass to the Sproutlet.
-    pjsip_msg* clone = original_request();
-    if (clone == NULL)
-    {
-      // @TODO
-    }
-
-    // Decrement Max-Forwards if present.
-    pjsip_max_fwd_hdr* mf_hdr = (pjsip_max_fwd_hdr*)
-                        pjsip_msg_find_hdr(clone, PJSIP_H_MAX_FORWARDS, NULL);
-    if (mf_hdr != NULL)
-    {
-      --mf_hdr->ivalue;
-    }
-
-    if (PJSIP_MSG_TO_HDR(clone)->tag.slen == 0)
-    {
-      TRC_VERBOSE("%s pass initial request %s to Sproutlet",
-                  _id.c_str(), msg_info(clone));
-      _sproutlet_tsx->on_rx_initial_request(clone);
-    }
-    else
-    {
-      TRC_VERBOSE("%s pass in dialog request %s to Sproutlet",
-                  _id.c_str(), msg_info(clone));
-      _sproutlet_tsx->on_rx_in_dialog_request(clone);
-    }
-
-    // We consider an ACK transaction to be complete immediately after the
-    // sproutlet's actions have been processed, regardless of whether the
-    // sproutlet forwarded the ACK (some sproutlets are unable to in certain
-    // situations).
-    bool complete_after_actions = (req->msg->line.req.method.id == PJSIP_ACK_METHOD);
-    process_actions(complete_after_actions);
+    TRC_VERBOSE("%s pass in dialog request %s to Sproutlet",
+                _id.c_str(), msg_info(clone));
+    _sproutlet_tsx->on_rx_in_dialog_request(clone);
   }
+
+  // We consider an ACK transaction to be complete immediately after the
+  // sproutlet's actions have been processed, regardless of whether the
+  // sproutlet forwarded the ACK (some sproutlets are unable to in certain
+  // situations).
+  bool complete_after_actions = (req->msg->line.req.method.id == PJSIP_ACK_METHOD);
+  process_actions(complete_after_actions);
 }
 
 void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id, bool client_rsp)
@@ -1718,13 +1708,12 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id, bool client_
     tx_negative_ack(rsp, fork_id);
   }
 
-  // Notify the sproutlet that an a response has been received.
-  _sproutlet_tsx->obs_rx_response(rsp->msg, fork_id);
-
   // If this is a 200 OK to a CANCEL, we don't want to do anything with it, so
-  // just drop our reference to it.
+  // just notify the sproutlet that it has been received and then drop our
+  // reference to it.
   if (PJSIP_MSG_CSEQ_HDR(rsp->msg)->method.id == PJSIP_CANCEL_METHOD)
   {
+    _sproutlet_tsx->obs_rx_response(rsp->msg, fork_id, true);
     pjsip_tx_data_dec_ref(rsp);
   }
   else
@@ -1770,10 +1759,12 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id, bool client_
 
     if (status_code == PJSIP_SC_TRYING)
     {
+      _sproutlet_tsx->obs_rx_response(rsp->msg, fork_id, true);
       _sproutlet_tsx->on_rx_trying(rsp->msg, fork_id);
     }
     else
     {
+      _sproutlet_tsx->obs_rx_response(rsp->msg, fork_id, false);
       _sproutlet_tsx->on_rx_response(rsp->msg, fork_id);
     }
     process_actions(false);
@@ -1798,13 +1789,24 @@ void SproutletWrapper::rx_cancel(pjsip_tx_data* cancel)
   }
 
   // Notify the sproutlet that a request has been received.
-  _sproutlet_tsx->obs_rx_request(cancel->msg);
+  _sproutlet_tsx->obs_rx_request(cancel->msg, true);
 
   _sproutlet_tsx->on_rx_cancel(PJSIP_SC_REQUEST_TERMINATED,
                                cancel->msg);
   pjsip_tx_data_dec_ref(cancel);
   cancel_pending_forks();
   process_actions(false);
+}
+
+void SproutletWrapper::rx_negative_ack(pjsip_tx_data* ack)
+{
+  TRC_VERBOSE("%s received negative ACK request", _id.c_str());
+
+  // Notify the sproutlet that an a negative ACK has been received and then
+  // drop our reference to this request.
+  _sproutlet_tsx->obs_rx_request(ack->msg, true);
+
+  pjsip_tx_data_dec_ref(ack);
 }
 
 void SproutletWrapper::rx_error(int status_code)
@@ -2083,7 +2085,7 @@ void SproutletWrapper::tx_request(pjsip_tx_data* req, int fork_id)
   }
 
   // Notify the sproutlet that the request is being sent downstream.
-  _sproutlet_tsx->obs_tx_request(req->msg, fork_id);
+  _sproutlet_tsx->obs_tx_request(req->msg, fork_id, false);
 
   // Forward the request downstream.
   deregister_tdata(req);
@@ -2116,7 +2118,15 @@ void SproutletWrapper::tx_response(pjsip_tx_data* rsp)
   }
 
   // Notify the sproutlet that the response is being sent upstream.
-  _sproutlet_tsx->obs_tx_response(rsp->msg);
+  if ((PJSIP_MSG_CSEQ_HDR(rsp->msg)->method.id == PJSIP_CANCEL_METHOD) ||
+      (rsp->msg->line.status.code == PJSIP_SC_TRYING))
+  {
+    _sproutlet_tsx->obs_tx_response(rsp->msg, true);
+  }
+  else
+  {
+    _sproutlet_tsx->obs_tx_response(rsp->msg, false);
+  }
 
   // Forward the response upstream.
   deregister_tdata(rsp);
@@ -2130,7 +2140,7 @@ void SproutletWrapper::tx_cancel(int fork_id)
   pjsip_tx_data* cancel = PJUtils::create_cancel(stack_data.endpt,
                                                  _forks[fork_id].req,
                                                  _forks[fork_id].cancel_reason);
-  _sproutlet_tsx->obs_tx_request(cancel->msg, fork_id);
+  _sproutlet_tsx->obs_tx_request(cancel->msg, fork_id, true);
   _proxy_tsx->tx_cancel(this, fork_id, cancel);
   _forks[fork_id].pending_cancel = false;
 }
@@ -2142,7 +2152,7 @@ void SproutletWrapper::tx_negative_ack(pjsip_tx_data* rsp, int fork_id)
   pjsip_tx_data* ack = PJUtils::create_ack(stack_data.endpt,
                                            _forks[fork_id].req->msg,
                                            rsp->msg);
-  _sproutlet_tsx->obs_tx_request(ack->msg, fork_id);
+  _sproutlet_tsx->obs_tx_request(ack->msg, fork_id, true);
   _proxy_tsx->tx_negative_ack(this, fork_id, ack);
 }
 
