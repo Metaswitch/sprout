@@ -462,8 +462,7 @@ void MangelwurzelTsx::add_via_hdrs(pjsip_msg* rsp, pj_pool_t* pool)
 {
   // Copy all the via headers from the original request back onto the response
   // in the correct order.
-  pjsip_msg* req = original_request();
-  pjsip_via_hdr* via_hdr = (pjsip_via_hdr*)pjsip_msg_find_hdr(req,
+  pjsip_via_hdr* via_hdr = (pjsip_via_hdr*)pjsip_msg_find_hdr(_unmodified_request,
                                                               PJSIP_H_VIA,
                                                               NULL);
   while (via_hdr != NULL)
@@ -472,7 +471,7 @@ void MangelwurzelTsx::add_via_hdrs(pjsip_msg* rsp, pj_pool_t* pool)
                                                                     via_hdr);
     pjsip_msg_add_hdr(rsp, (pjsip_hdr*)cloned_via_hdr);
 
-    via_hdr = (pjsip_via_hdr*)pjsip_msg_find_hdr(req,
+    via_hdr = (pjsip_via_hdr*)pjsip_msg_find_hdr(_unmodified_request,
                                                  PJSIP_H_VIA,
                                                  via_hdr->next);
   }
@@ -524,13 +523,11 @@ void MangelwurzelTsx::edit_scscf_route_hdr(pjsip_msg* req, pj_pool_t* pool)
 /// one.
 void MangelwurzelTsx::mangle_record_routes(pjsip_msg* msg, pj_pool_t* pool)
 {
-  // Get the original request. We use this to calculate which Record-Route
-  // header might be mangelwurzel's.
-  pjsip_msg* original_req = original_request();
+  // Calculate which Record-Route header might be mangelwurzel's.
   int mangelwurzel_rr_index = 1;
 
   pjsip_rr_hdr* rr_hdr =
-    (pjsip_rr_hdr*)pjsip_msg_find_hdr(original_req,
+    (pjsip_rr_hdr*)pjsip_msg_find_hdr(_unmodified_request,
                                       PJSIP_H_RECORD_ROUTE,
                                       NULL);
 
@@ -540,7 +537,7 @@ void MangelwurzelTsx::mangle_record_routes(pjsip_msg* msg, pj_pool_t* pool)
     // mangelwurzel_rr_index. Once we've found all the original Record-Routes
     // we'll have the index of mangelwurzel's Record-Route on our message.
     mangelwurzel_rr_index++;
-    rr_hdr = (pjsip_rr_hdr*)pjsip_msg_find_hdr(original_req,
+    rr_hdr = (pjsip_rr_hdr*)pjsip_msg_find_hdr(_unmodified_request,
                                                PJSIP_H_RECORD_ROUTE,
                                                rr_hdr->next);
   }
