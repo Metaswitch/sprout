@@ -1725,8 +1725,19 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
     log_inter_sproutlet(rsp, false);
   }
 
+
+  int status_code = rsp->msg->line.status.code;
+  if (status_code == PJSIP_SC_TRYING)
+  {
+    _sproutlet_tsx->obs_rx_response(rsp->msg, fork_id, true);
+  }
+  else if (PJSIP_MSG_CSEQ_HDR(rsp->msg)->method.id != PJSIP_CANCEL_METHOD)
+  {
+    _sproutlet_tsx->obs_rx_response(rsp->msg, fork_id, false);
+  }
+
   // If this is a negative response, send an immediate ACK response.
-  if (rsp->msg->line.status.code >= 300)
+  if (status_code >= 300)
   {
     TRC_DEBUG("Send immediate ACK to negative response");
     tx_negative_ack(rsp, fork_id);
@@ -1743,7 +1754,6 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
   else
   {
     register_tdata(rsp);
-    int status_code = rsp->msg->line.status.code;
     if ((PJSIP_IS_STATUS_IN_CLASS(status_code, 100)) &&
         (_forks[fork_id].state.tsx_state == PJSIP_TSX_STATE_CALLING))
     {
@@ -1783,12 +1793,10 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
 
     if (status_code == PJSIP_SC_TRYING)
     {
-      _sproutlet_tsx->obs_rx_response(rsp->msg, fork_id, true);
       _sproutlet_tsx->on_rx_trying(rsp->msg, fork_id);
     }
     else
     {
-      _sproutlet_tsx->obs_rx_response(rsp->msg, fork_id, false);
       _sproutlet_tsx->on_rx_response(rsp->msg, fork_id);
     }
     process_actions(false);
@@ -1798,6 +1806,9 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
 void SproutletWrapper::rx_cancel(pjsip_tx_data* cancel)
 {
   TRC_VERBOSE("%s received CANCEL request", _id.c_str());
+
+  // Notify the sproutlet that a request has been received.
+  _sproutlet_tsx->obs_rx_request(cancel->msg, true);
 
   TRC_DEBUG("Send immediate 200 OK to CANCEL");
   pjsip_tx_data* ok;
@@ -1811,9 +1822,6 @@ void SproutletWrapper::rx_cancel(pjsip_tx_data* cancel)
   {
     tx_response(ok);
   }
-
-  // Notify the sproutlet that a request has been received.
-  _sproutlet_tsx->obs_rx_request(cancel->msg, true);
 
   _sproutlet_tsx->on_rx_cancel(PJSIP_SC_REQUEST_TERMINATED,
                                cancel->msg);
