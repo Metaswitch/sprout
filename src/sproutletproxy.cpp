@@ -1651,6 +1651,9 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
     log_inter_sproutlet(req, true);
   }
 
+  // Keep an immutable reference to the request.
+  _req = req;
+
   // Notify the sproutlet that a request has been received.
   _sproutlet_tsx->obs_rx_request(req->msg, false);
 
@@ -1670,9 +1673,6 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
       tx_response(trying);
     }
   }
-
-  // Keep an immutable reference to the request.
-  _req = req;
 
   // Clone the request to get a mutable copy to pass to the Sproutlet.
   pjsip_msg* clone = original_request();
