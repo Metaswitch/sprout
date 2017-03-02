@@ -136,21 +136,6 @@ get_settings()
             [ -r $file ] && . $file
           done
         fi
-
-        # Set up a default cluster_settings file if it does not exist.  The local
-        # IP address needs to be surrounded by square brackets if it is IPv6.
-        if [ ! -f /etc/clearwater/cluster_settings ]
-        then
-          cluster_ip=$(/usr/share/clearwater/bin/bracket-ipv6-address $local_ip)
-          echo "servers=$cluster_ip:11211" > /etc/clearwater/cluster_settings
-        fi
-
-        # Create /etc/clearwater/remote_cluster_settings if it doesn't exist
-        # This means 'service sprout reload' will pick up changes
-        if [ ! -f /etc/clearwater/remote_cluster_settings ]
-        then
-          echo "servers=" > /etc/clearwater/remote_cluster_settings
-        fi
 }
 
 #
@@ -189,19 +174,24 @@ get_daemon_args()
         [ -z "$min_token_rate" ] || min_token_rate_arg="--min-token-rate=$min_token_rate"
         [ -z "$exception_max_ttl" ] || exception_max_ttl_arg="--exception-max-ttl=$exception_max_ttl"
         [ -z "$max_session_expires" ] || max_session_expires_arg="--max-session-expires=$max_session_expires"
+        [ -z "$local_site_name" ] || local_site_name_arg="--local-site-name=$local_site_name"
+        [ -z "$sprout_impi_store" ] || impi_store_arg="--impi-store=$sprout_impi_store"
         [ -z "$chronos_hostname" ] || chronos_hostname_arg="--chronos-hostname=$chronos_hostname"
+        [ -z "$sprout_chronos_callback_uri" ] || sprout_chronos_callback_uri_arg="--sprout-chronos-callback-uri=$sprout_chronos_callback_uri"
         [ -z "$allow_fallback_ifcs" ] || allow_fallback_ifcs_arg="--allow-fallback-ifcs"
 
         DAEMON_ARGS="
                      --domain=$home_domain
                      --localhost=$local_ip
                      --realm=$home_domain
-                     --memstore=/etc/clearwater/cluster_settings
-                     --remote-memstore=/etc/clearwater/remote_cluster_settings
+                     $local_site_name_arg
+                     --registration-stores=$sprout_registration_store
+                     $impi_store_arg
                      --hss=$hs_hostname
                      --sprout-hostname=$sprout_hostname
                      --scscf-node-uri=$scscf_node_uri
                      $chronos_hostname_arg
+                     $sprout_chronos_callback_uri_arg
                      $xdms_hostname_arg
                      $ralf_arg
                      $enum_server_arg
@@ -301,6 +291,7 @@ get_daemon_args()
         [ "$additional_home_domains" = "" ]       || DAEMON_ARGS="$DAEMON_ARGS --additional-domains=$additional_home_domains"
         [ "$sip_blacklist_duration" = "" ]        || DAEMON_ARGS="$DAEMON_ARGS --sip-blacklist-duration=$sip_blacklist_duration"
         [ "$http_blacklist_duration" = "" ]       || DAEMON_ARGS="$DAEMON_ARGS --http-blacklist-duration=$http_blacklist_duration"
+        [ "$astaire_blacklist_duration" = "" ]    || DAEMON_ARGS="$DAEMON_ARGS --astaire-blacklist-duration=$astaire_blacklist_duration"
         [ "$sip_tcp_connect_timeout" = "" ]       || DAEMON_ARGS="$DAEMON_ARGS --sip-tcp-connect-timeout=$sip_tcp_connect_timeout"
         [ "$sip_tcp_send_timeout" = "" ]          || DAEMON_ARGS="$DAEMON_ARGS --sip-tcp-send-timeout=$sip_tcp_send_timeout"
         [ "$session_continued_timeout_ms" = "" ]  || DAEMON_ARGS="$DAEMON_ARGS --session-continued-timeout=$session_continued_timeout_ms"
