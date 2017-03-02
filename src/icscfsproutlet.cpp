@@ -396,6 +396,7 @@ void ICSCFSproutletRegTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
 void ICSCFSproutletRegTsx::obs_tx_response(pjsip_msg* rsp, bool tsx_mgmt)
 {
+  // We don't send ACRs for transaction management messages.
   if ((!tsx_mgmt) && (_acr != NULL))
   {
     // Pass the transmitted response to the ACR to update the accounting
@@ -803,7 +804,7 @@ void ICSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
 void ICSCFSproutletTsx::obs_tx_response(pjsip_msg* rsp, bool tsx_mgmt)
 {
-  // We don't do this processing for transaction management messages.
+  // We don't send ACRs or update stats for transaction management messages.
   if (!tsx_mgmt)
   {
     if (_acr != NULL)

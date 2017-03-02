@@ -723,7 +723,7 @@ void SCSCFSproutletTsx::on_rx_trying(pjsip_msg* rsp, int fork_id)
 
 void SCSCFSproutletTsx::obs_tx_response(pjsip_msg* rsp, bool tsx_mgmt)
 {
-  // We don't do this processing for transaction management messages.
+  // We don't send ACRs or update stats for transaction management messages.
   if (!tsx_mgmt)
   {
     ACR* acr = get_acr();
