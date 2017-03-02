@@ -171,18 +171,6 @@ static const PDLog CL_SPROUT_NO_RALF_CONFIGURED
   "Correct the /etc/clearwater/config file if the billing feature is desired. "
 );
 
-static const PDLog CL_SPROUT_MEMCACHE_CONN_FAIL
-(
-  PDLogBase::CL_SPROUT_ID + 14,
-  LOG_ERR,
-  "Fatal - Failed to connect to the memcached data store.",
-  "The connection to the local store could not be created.",
-  "The application will exit and restart until the problem is fixed.",
-  "(1). After the restart the problem should clear."
-  "(2). If there is still a failure restart the node to see if the problem "
-  "clears."
-);
-
 static const PDLog1<const char*> CL_SPROUT_INIT_SERVICE_ROUTE_FAIL
 (
   PDLogBase::CL_SPROUT_ID + 15,

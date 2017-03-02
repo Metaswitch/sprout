@@ -35,7 +35,7 @@
 CONFPATH=/etc/clearwater
 FILENAME=$1
 KEY=$2
-ALLOW_LARGE_UPLOADS =$3
+ALLOW_LARGE_UPLOADS=$3
 
 function usage() {
   echo "Usage: upload_json <filename> <key>"
@@ -74,7 +74,7 @@ fi
 # this function to check if it's --allow-large
 uploadsize=10000
 filesize=$(wc -c <"$CONFPATH/$FILENAME")
-if [[ $filesize -ge $uploadsize && $MODE != "--allow-large" ]]
+if [[ $filesize -ge $uploadsize && $ALLOW_LARGE_UPLOADS != "--allow-large" ]]
 then
   echo "File is larger than the recommended size $uploadsize bytes, use --allow-large if you want to upload"
   exit 2

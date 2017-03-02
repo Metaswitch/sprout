@@ -49,46 +49,46 @@
         {
             "index": 1002,
             "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
-            "name": "SPROUT_MEMCACHED_COMM_ERROR",
+            "name": "SPROUT_ASTAIRE_COMM_ERROR",
             "levels": [
                 {
                     "severity": "CLEARED",
-                    "details": "Sprout communication to Memcached has been restored.",
-                    "description": "Sprout: Memcached communication error cleared.",
-                    "cause": "Sprout communication to Memcached has been restored. The previously issued alarm has been cleared.",
+                    "details": "Sprout communication to Astaire has been restored.",
+                    "description": "Sprout: Astaire communication error cleared.",
+                    "cause": "Sprout communication to Astaire has been restored. The previously issued alarm has been cleared.",
                     "effect": "Normal S-CSCF operation has been restored.",
                     "action": "No action."
                 },
                 {
                     "severity": "CRITICAL",
-                    "details": "Sprout is unable to contact any Memcached processes. It will periodically attempt to reconnect. If this alarm does not clear, ensure that at least one Memcached is operational and that network connectivity exists between it and Sprout.",
-                    "description": "Sprout: Memcached communication error.",
-                    "cause": "Sprout is unable to contact any Memcached processes.",
-                    "effect": "If multiple Sprout processes have raised this alarm, then this is potentially a total service affecting failure because the S-CSCF cannot access the Memcached database for authentication vectors and registration data, meaning that all new SIP transactions will fail and existing SIP transactions may not complete normally.",
-                    "action": "Ensure that all Memcached processes are operational and that network connectivity exists between them and Sprout. If the alarm does not clear then contact your support representative."
+                    "details": "Sprout is unable to contact any Astaire processes. It will periodically attempt to reconnect. If this alarm does not clear, ensure that at least one Astaire is operational and that network connectivity exists between it and Sprout.",
+                    "description": "Sprout: Astaire communication error.",
+                    "cause": "Sprout is unable to contact any Astaire processes.",
+                    "effect": "If multiple Sprout processes have raised this alarm, then this is potentially a total service affecting failure because the S-CSCF cannot access the Astaire database for authentication vectors and registration data, meaning that all new SIP transactions will fail and existing SIP transactions may not complete normally.",
+                    "action": "Ensure that all Astaire processes are operational and that network connectivity exists between them and Sprout. If the alarm does not clear then contact your support representative."
                 }
             ]
         },
         {
             "index": 1003,
             "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
-            "name": "SPROUT_REMOTE_MEMCACHED_COMM_ERROR",
+            "name": "SPROUT_REMOTE_ASTAIRE_COMM_ERROR",
             "levels": [
                 {
                     "severity": "CLEARED",
-                    "details": "Sprout communication to the remote Memcached site has been restored.",
-                    "description": "Sprout: Remote Memcached communication error cleared.",
-                    "cause": "Sprout communication to the remote Memcached site has been restored. The previously issued alarm has been cleared.",
+                    "details": "Sprout communication to the remote Astaire site has been restored.",
+                    "description": "Sprout: Remote Astaire communication error cleared.",
+                    "cause": "Sprout communication to the remote Astaire site has been restored. The previously issued alarm has been cleared.",
                     "effect": "Normal S-CSCF remote site synchronization has been restored.",
                     "action": "No action."
                 },
                 {
                     "severity": "CRITICAL",
-                    "details": "Sprout is unable to contact any remote Memcached processes. It will periodically attempt to reconnect. If this alarm does not clear, ensure that at least one remote Memcached is operational and that network connectivity exists between it and Sprout.",
-                    "description": "Sprout: Remote Memcached communication error.",
-                    "cause": "Sprout is unable to contact any remote Memcached processes.",
+                    "details": "Sprout is unable to contact any remote Astaire processes. It will periodically attempt to reconnect. If this alarm does not clear, ensure that at least one remote Astaire is operational and that network connectivity exists between it and Sprout.",
+                    "description": "Sprout: Remote Astaire communication error.",
+                    "cause": "Sprout is unable to contact any remote Astaire processes.",
                     "effect": "The deployment is no longer geographically redundant because the S-CSCF cannot synchronize registration data to the remote site. If subscribers switch to the other geographic site they may have to re-register before becoming operational.",
-                    "action": "Ensure that all remote Memcached processes are operational and that network connectivity exists between them and Sprout. If the alarm does not clear then contact your support representative."
+                    "action": "Ensure that all remote Astaire processes are operational and that network connectivity exists between them and Sprout. If the alarm does not clear then contact your support representative."
                 }
             ]
         },
@@ -168,19 +168,19 @@
             "levels": [
                 {
                     "severity": "CLEARED",
-                    "details": "Sprout communication to Memcached has been restored for all subscribers.",
-                    "description": "Sprout: Memcached vBucket communication error cleared.",
-                    "cause": "Sprout communication to Memcached has been restored for all subscribers. The previously issued alarm has been cleared.",
+                    "details": "Sprout communication to Astaire has been restored for all subscribers.",
+                    "description": "Sprout: Astaire vBucket communication error cleared.",
+                    "cause": "Sprout communication to Astaire has been restored for all subscribers. The previously issued alarm has been cleared.",
                     "effect": "Normal S-CSCF call processing operation has been restored for the affected subscribers.",
                     "action": "No action."
                 },
                 {
                     "severity": "MAJOR",
-                    "details": "Sprout is unable to contact any Memcached processes for a subset of subscribers, and so some subscriber data will be unavailable. Ensure that all Memcached processes are operational and that network connectivity exists between them and Sprout.",
-                    "description": "Sprout: Memcached vBucket communication error.",
-                    "cause": "Sprout is unable to contact any Memcached processes for a subset of subscribers.",
+                    "details": "Sprout is unable to contact any Astaire processes for a subset of subscribers, and so some subscriber data will be unavailable. Ensure that all Astaire processes are operational and that network connectivity exists between them and Sprout.",
+                    "description": "Sprout: Astaire vBucket communication error.",
+                    "cause": "Sprout is unable to contact any Astaire processes for a subset of subscribers.",
                     "effect": "A subset of the subscribers can no longer register or originate and receive calls because the S-CSCF cannot access the vBucket or the replica vBucket for those subscribers.",
-                    "action": "Ensure that all Memcached processes are operational and that network connectivity exists between them and Sprout. If the alarm does not clear then contact your support representative."
+                    "action": "Ensure that all Astaire processes are operational and that network connectivity exists between them and Sprout. If the alarm does not clear then contact your support representative."
                 }
             ]
         },
@@ -191,19 +191,19 @@
             "levels": [
                 {
                     "severity": "CLEARED",
-                    "details": "Sprout communication to the remote Memcached site has been restored for all subscribers.",
-                    "description": "Sprout: Memcached remote vBucket communication error cleared.",
-                    "cause": "Sprout communication to the Memcached site has been restored for all subscribers. The previously issued alarm has been cleared.",
+                    "details": "Sprout communication to the remote Astaire site has been restored for all subscribers.",
+                    "description": "Sprout: Astaire remote vBucket communication error cleared.",
+                    "cause": "Sprout communication to the Astaire site has been restored for all subscribers. The previously issued alarm has been cleared.",
                     "effect": "Normal S-CSCF geographic redundancy operation has been restored for the affected subscribers.",
                     "action": "No action."
                 },
                 {
                     "severity": "MAJOR",
-                    "details": "Sprout is unable to contact any remote Memcached processes for a subset of subscribers, so some subscriber data will be unavailable. Ensure that all remote Memcached processes are operational and that network connectivity exists between them and Sprout.",
-                    "description": "Sprout: Memcached remote vBucket communication error.",
-                    "cause": "Sprout is unable to contact any remote Memcached processes for a subset of subscribers.",
+                    "details": "Sprout is unable to contact any remote Astaire processes for a subset of subscribers, so some subscriber data will be unavailable. Ensure that all remote Astaire processes are operational and that network connectivity exists between them and Sprout.",
+                    "description": "Sprout: Astaire remote vBucket communication error.",
+                    "cause": "Sprout is unable to contact any remote Astaire processes for a subset of subscribers.",
                     "effect": "The deployment is no longer geographically redundant for a subset of subscribers because the S-CSCF cannot synchronize registration data and authentication vectors to the remote site.",
-                    "action": "Ensure that all remote Memcached processes are operational and that network connectivity exists between them and Sprout. If the alarm does not clear then contact your support representative."
+                    "action": "Ensure that all remote Astaire processes are operational and that network connectivity exists between them and Sprout. If the alarm does not clear then contact your support representative."
                 }
             ]
         },
