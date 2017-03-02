@@ -2512,3 +2512,31 @@ std::set<pjmedia_type> PJUtils::get_media_types(const pjsip_msg *msg)
 
   return media_types;
 }
+
+bool PJUtils::is_wildcard_uri(const std::string& wildcard,
+                              pj_pool_t* pool)
+{
+  pjsip_uri* wildcard_uri = PJUtils::uri_from_string(wildcard,
+                                                     pool,
+                                                     false);
+  if (wildcard_uri == NULL)
+  {
+    return false;
+  }
+
+  // We count a URI as being wildcard URI if it's a valid SIP/Tel URI,
+  // and where the userinfo/telephone-subscriber part of the URI
+  // contains at least two ! characters.
+  pj_str_t user = PJUtils::user_from_uri(wildcard_uri);
+  std::string potential_wildcard = PJUtils::pj_str_to_string(&user);
+
+  return (std::count(potential_wildcard.begin(),
+                     potential_wildcard.end(),
+                     '!') >= 2);
+}
+
+bool PJUtils::matches_wildcard(const std::string& wildcard,
+                               const std::string& string_to_match)
+{
+  return false; // TODO actually implement matching
+}

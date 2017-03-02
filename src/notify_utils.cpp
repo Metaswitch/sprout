@@ -145,8 +145,31 @@ pj_xml_node* notify_create_reg_state_xml(
        impu != irs_impus.end();
        ++impu)
   {
+    bool is_wildcard_impu = PJUtils::is_wildcard_uri(*impu, pool);
+
     // Escape the IMPU as an aor
     std::string unescaped_aor = *impu;
+
+    // For each wildcarded identity, the TS specs (24.229) say that the aor
+    // should be set to an arbitrary IMPU that matches the wildcard identity.
+    // The S-CSCF may not know of any IMPUs that definitely match the wildcard
+    // however, so we'd just have to just create one. This is hard (it’s also
+    // potentially impossible as the wildcard regex could be written in such a
+    // way as that there are no valid matches). Also, the created IMPU may not
+    // actually match the wildcard anyway (as it could belong to a different
+    // wildcard range, or be a distinct IMPU in its own right) – the S-CSCF
+    // doesn’t have enough information to determine this, and any single HSS
+    // doesn’t have enough information either. Probably because of this
+    // uncertainty, the TS spec is clear that the receiver of the NOTIFY will
+    // not use the value of the aor attribute. Rather than solve an impossible
+    // problem to populate the aor attribute that then shouldn’t be used by
+    // anything, the aor attribute is always set to sip:wildcardimpu@wildcard
+    // for a wildcard IMPU.
+    if (is_wildcard_impu)
+    {
+      unescaped_aor = "sip:wildcardimpu@wildcard";
+    }
+
     pj_strdup2(pool, &reg_aor, Utils::xml_escape(unescaped_aor).c_str());
     std::string unescaped_reg_id = subscription->_to_tag;
     pj_strdup2(pool, &reg_id, Utils::xml_escape(unescaped_reg_id).c_str());
@@ -224,6 +247,16 @@ pj_xml_node* notify_create_reg_state_xml(
         attr = pj_xml_attr_new(pool, &STR_URI, &gruu);
         pj_xml_add_attr(gruu_node, attr);
         pj_xml_add_node(contact_node, gruu_node);
+      }
+
+      if (is_wildcard_impu)
+      {
+        // Add the wildcard node to the registration node
+        pj_str_t c_wildcard;
+        pj_strdup2(pool, &c_wildcard, Utils::xml_escape(*impu).c_str());
+        pj_xml_node* wildcard_node = pj_xml_node_new(pool, &STR_WILDCARD);
+        pj_strdup(pool, &wildcard_node->content, &c_wildcard);
+        pj_xml_add_node(reg_node, wildcard_node);
       }
 
       // Add the contact node to the registration node

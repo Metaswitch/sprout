@@ -378,7 +378,8 @@ int pjsip_min_se_hdr_print_on(void* h, char* buf, pj_size_t len)
 }
 
 /// Custom create, clone and print functions used for the P-Associated-URI,
-/// P-Asserted-Identity, P-Preferred-Identity, and P-Served-User headers
+/// P-Asserted-Identity, P-Preferred-Identity, P-Served-User, and P-Profile-Key
+/// headers
 pjsip_routing_hdr* identity_hdr_create(pj_pool_t* pool, const pj_str_t name)
 {
   void* mem = pj_pool_alloc(pool, sizeof(pjsip_routing_hdr));

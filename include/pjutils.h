@@ -310,6 +310,16 @@ std::set<pjmedia_type> get_media_types(const pjsip_msg *msg);
 // The URI returned is only valid while the passed in PJSIP message is valid
 pjsip_uri* get_next_routing_uri(const pjsip_msg* msg,
                                 pjsip_uri_context_e* context);
+
+// Returns whether a URI represents a wildcard.
+bool is_wildcard_uri(const std::string& wildcard,
+                     pj_pool_t* pool);
+
+
+// Returns whether a string matches a wildcard
+bool matches_wildcard(const std::string& wildcard,
+                      const std::string& string_to_match);
+
 } // namespace PJUtils
 
 #endif

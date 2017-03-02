@@ -203,7 +203,7 @@ protected:
   void check_subscriptions(std::string aor, uint32_t expected);
   std::string check_OK_and_NOTIFY(std::string reg_state,
                                   std::pair<std::string, std::string> contact_values,
-                                  std::vector<std::string> irs_impus,
+                                  std::vector<std::pair<std::string, bool>> irs_impus,
                                   bool terminated = false,
                                   std::string reason = "");
 };
@@ -386,8 +386,8 @@ TEST_F(SubscriptionTest, SimpleMainline)
   SubscribeMessage msg;
   inject_msg(msg.get());
 
-  std::vector<std::string> irs_impus;
-  irs_impus.push_back("sip:6505550231@homedomain");
+  std::vector<std::pair<std::string, bool>> irs_impus;
+  irs_impus.push_back(std::make_pair("sip:6505550231@homedomain", false));
 
   std::string to_tag = check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
   check_subscriptions("sip:6505550231@homedomain", 1u);
@@ -443,7 +443,10 @@ TEST_F(SubscriptionTest, SimpleMainlineWithTelURI)
                            300)).Times(1);
   inject_msg(msg.get());
 
-  std::string to_tag = check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
+  std::vector<std::pair<std::string, bool>> irs_impus_check;
+  irs_impus_check.push_back(std::make_pair("tel:6505550231", false));
+
+  std::string to_tag = check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus_check);
   check_subscriptions("tel:6505550231", 1u);
 
   // Actively expire the subscription - this generates a 200 OK and a
@@ -457,7 +460,7 @@ TEST_F(SubscriptionTest, SimpleMainlineWithTelURI)
                            "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
                            0)).Times(1);
   inject_msg(msg.get());
-  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus, true, "timeout");
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus_check, true, "timeout");
 }
 
 /// Check that a subscription with immediate expiry is treated correctly
@@ -476,8 +479,8 @@ TEST_F(SubscriptionTest, OneShotSubscription)
                            0)).Times(1);
   inject_msg(msg.get());
 
-  std::vector<std::string> irs_impus;
-  irs_impus.push_back("sip:6505550231@homedomain");
+  std::vector<std::pair<std::string, bool>> irs_impus;
+  irs_impus.push_back(std::make_pair("sip:6505550231@homedomain", false));
 
   check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus, true, "timeout");
 
@@ -564,8 +567,8 @@ TEST_F(SubscriptionTest, SubscriptionWithDataContention)
                            300)).Times(1);
   inject_msg(msg.get());
 
-  std::vector<std::string> irs_impus;
-  irs_impus.push_back("sip:6505550231@homedomain");
+  std::vector<std::pair<std::string, bool>> irs_impus;
+  irs_impus.push_back(std::make_pair("sip:6505550231@homedomain", false));
 
   check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
 
@@ -616,8 +619,8 @@ TEST_F(SubscriptionTest, EmptyAcceptsHeader)
                            300)).Times(1);
   inject_msg(msg.get());
 
-  std::vector<std::string> irs_impus;
-  irs_impus.push_back("sip:6505550231@homedomain");
+  std::vector<std::pair<std::string, bool>> irs_impus;
+  irs_impus.push_back(std::make_pair("sip:6505550231@homedomain", false));
 
   check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
 
@@ -653,8 +656,8 @@ TEST_F(SubscriptionTest, CorrectAcceptsHeader)
                            300)).Times(1);
   inject_msg(msg.get());
 
-  std::vector<std::string> irs_impus;
-  irs_impus.push_back("sip:6505550231@homedomain");
+  std::vector<std::pair<std::string, bool>> irs_impus;
+  irs_impus.push_back(std::make_pair("sip:6505550231@homedomain", false));
 
   check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
 
@@ -755,11 +758,11 @@ TEST_F(SubscriptionTest, NonPrimaryAssociatedUri)
   inject_msg(msg.get());
 
   // We expect one registration element per IMPU in the Implicit Registration Set
-  irs_impus.clear();
-  irs_impus.push_back("sip:6505550233@homedomain");
-  irs_impus.push_back("sip:6505550234@homedomain");
+  std::vector<std::pair<std::string, bool>> irs_impus_check;
+  irs_impus_check.push_back(std::make_pair("sip:6505550233@homedomain", false));
+  irs_impus_check.push_back(std::make_pair("sip:6505550234@homedomain", false));
 
-  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus_check);
   check_subscriptions("sip:6505550233@homedomain", 1u);
 }
 
@@ -829,15 +832,6 @@ TEST_F(SubscriptionTest, NoNotificationsForEmergencyRegistrations)
   check_subscriptions("sip:6505550231@homedomain", 1u);
 }
 
-void SubscriptionTest::check_subscriptions(std::string aor, uint32_t expected)
-{
-  // Check that we registered the correct URI (0233, not 0234).
-  SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data(aor, 0);
-  ASSERT_TRUE(aor_data != NULL);
-  EXPECT_EQ(expected, aor_data->get_current()->_subscriptions.size());
-  delete aor_data; aor_data = NULL;
-}
-
 /// Check that subsequent NOTIFYs have updated CSeqs
 TEST_F(SubscriptionTest, CheckNotifyCseqs)
 {
@@ -897,9 +891,73 @@ TEST_F(SubscriptionTest, CheckNotifyCseqs)
   EXPECT_GT(second_cseq_val, first_cseq_val);
 }
 
+/// Check that a subscription with a wildcard has the correct NOTIFY format
+TEST_F(SubscriptionTest, SubscriptionWithWildcard)
+{
+  // Get an initial empty AoR record and add a binding.
+  int now = time(NULL);
+  SubscriberDataManager::AoRPair* aor_pair = _sdm->get_aor_data(std::string("sip:6505551231@homedomain"), 0);
+  SubscriberDataManager::AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  b1->_uri = std::string("<sip:6505551231@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_priority = 0;
+  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
+  b1->_emergency_registration = false;
+
+  // Add the AoR record to the store.
+  std::vector<std::string> irs_impus_aor;
+  irs_impus_aor.push_back("sip:6505551231@homedomain");
+  _sdm->set_aor_data(irs_impus_aor[0], irs_impus_aor, aor_pair, 0);
+  delete aor_pair; aor_pair = NULL;
+
+  _hss_connection->set_impu_result("sip:6505551231@homedomain", "", HSSConnection::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551231@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>sip:6505551!.*!@homedomain</Identity><Extension><IdentityType>4</IdentityType><WildcardedIMPU>sip:650555!.*!@homedomain</WildcardedIMPU></Extension></PublicIdentity>"
+                                   "<PublicIdentity><Identity>sip:6505551232@homedomain</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  // Set up a single subscription - this should generate a 200 OK then
+  // a NOTIFY
+  SubscribeMessage msg;
+  msg._user = "6505551231";
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505551231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
+  inject_msg(msg.get());
+
+  std::vector<std::pair<std::string, bool>> irs_impus;
+  irs_impus.push_back(std::make_pair("sip:6505551231@homedomain", false));
+  irs_impus.push_back(std::make_pair("sip:6505551!.*!@homedomain", true));
+  irs_impus.push_back(std::make_pair("sip:6505551232@homedomain", false));
+
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
+
+  // Check there's one subscription stored
+  check_subscriptions("sip:6505551231@homedomain", 1u);
+}
+
+void SubscriptionTest::check_subscriptions(std::string aor, uint32_t expected)
+{
+  // Check that we registered the correct URI (0233, not 0234).
+  SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data(aor, 0);
+  ASSERT_TRUE(aor_data != NULL);
+  EXPECT_EQ(expected, aor_data->get_current()->_subscriptions.size());
+  delete aor_data; aor_data = NULL;
+}
+
 std::string SubscriptionTest::check_OK_and_NOTIFY(std::string reg_state,
                                                   std::pair<std::string, std::string> contact_values,
-                                                  std::vector<std::string> irs_impus,
+                                                  std::vector<std::pair<std::string, bool>> irs_impus,
                                                   bool terminated,
                                                   std::string reason)
 {
@@ -945,7 +1003,24 @@ std::string SubscriptionTest::check_OK_and_NOTIFY(std::string reg_state,
        registration;
        registration = registration->next_sibling("registration"), num_reg++)
   {
-    EXPECT_EQ(irs_impus.at(num_reg), std::string(registration->first_attribute("aor")->value()));
+    // Check if the registration element should have a wildcard identity. We pass
+    // this in as a simple bool rather than use is_wildcard_identity, as using
+    // the function in UT and production code will mask any issues with it.
+    if (irs_impus.at(num_reg).second)
+    {
+      // In the wildcard case the aor value should be set to the default value,
+      // and the wildcard identity is in its own element (note that the ere: namespace
+      // has been stripped off already when we parse this in UT).
+      EXPECT_EQ("sip:wildcardimpu@wildcard", std::string(registration->first_attribute("aor")->value()));
+      rapidxml::xml_node<> *wildcard = registration->first_node("wildcardedIdentity");
+      EXPECT_TRUE(wildcard);
+      EXPECT_EQ(irs_impus.at(num_reg).first, std::string(wildcard->value()));
+    }
+    else
+    {
+      EXPECT_EQ(irs_impus.at(num_reg).first, std::string(registration->first_attribute("aor")->value()));
+    }
+
     rapidxml::xml_node<> *contact = registration->first_node("contact");
     EXPECT_TRUE(contact);
 

@@ -476,24 +476,20 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     }
   }
 
-  // Pull out the P-Profile-Key header if it exists, and we're in originating
-  // processing. We must do this before sending any requests to the HSS.
-  retrieve_odi_and_sesscase(req);
-  if (!_session_case->is_originating())
-  {
-    pjsip_routing_hdr* ppk_hdr = (pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(
-                                                     req,
-                                                     &STR_P_PROFILE_KEY,
-                                                     NULL);
+  // Pull out the P-Profile-Key header if it exists. We must do this before
+  // sending any requests to the HSS.
+  pjsip_routing_hdr* ppk_hdr = (pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(
+                                                   req,
+                                                   &STR_P_PROFILE_KEY,
+                                                   NULL);
 
-    if (ppk_hdr != NULL)
-    {
-      _wildcard = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                         (pjsip_uri*)(&ppk_hdr->name_addr));
-    }
+  if (ppk_hdr != NULL)
+  {
+    _wildcard = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                       (pjsip_uri*)(&ppk_hdr->name_addr));
   }
 
-  // Determine the served user.  This will link to
+  // Determine the session case and the served user.  This will link to
   // an AsChain object (creating it if necessary), if we need to provide
   // services.
   status_code = determine_served_user(req);
@@ -943,6 +939,8 @@ bool SCSCFSproutletTsx::is_retarget(std::string new_served_user)
 pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
 {
   pjsip_status_code status_code = PJSIP_SC_OK;
+
+  retrieve_odi_and_sesscase(req);
 
   if (_as_chain_link.is_set())
   {
@@ -1617,14 +1615,19 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
     std::vector<std::string> uris;
     bool success = get_associated_uris(public_id, uris);
 
-    if (success &&
-        (uris.size() > 0) &&
-        (std::find(uris.begin(), uris.end(), public_id) != uris.end()))
+    if ((success) && (uris.size() > 0))
     {
-      // Take the first associated URI as the AOR.
-      aor = uris.front();
+      for (std::string uri : uris)
+      {
+        if ((public_id == uri) || (PJUtils::matches_wildcard(uri, public_id)))
+        {
+          // Take the first associated URI as the AOR.
+          aor = uris.front();
+        }
+      }
     }
-    else
+
+    if (aor == "")
     {
       // Failed to get the associated URIs from Homestead.  We'll try to
       // do the registration look-up with the specified target URI - this may

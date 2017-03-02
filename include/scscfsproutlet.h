@@ -454,8 +454,7 @@ private:
   bool _auto_reg;
 
   /// The wildcarded public identity associated with the requestee. This is
-  /// pulled from the P-Profile-Key header (RFC 5002) and is only meaningful
-  /// on terminating INVITEs.
+  /// pulled from the P-Profile-Key header (RFC 5002).
   std::string _wildcard;
 
   /// Class to handle session-expires processing.
