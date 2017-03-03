@@ -2014,8 +2014,8 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
     return;
   }
 
-  // Sproutlets don't forward 100 Trying responses so we should never hit this
-  // code. But let's keep it here just in case.
+  // Sproutlets shouldn't forward 100 Trying responses but they might do it
+  // anyway, so let's keep this code.
   if (status_code == 100)
   {
     // We will already have sent a locally generated 100 Trying response, so
