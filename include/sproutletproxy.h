@@ -256,11 +256,6 @@ protected:
     /// The UASTsx will persist while there are pending timers.
     std::set<pj_timer_entry*> _pending_timers;
 
-    /// If flag is set, any ACKs generated in the sproutlet wrapper will be
-    /// absorbed. This is so that we do not send ACKs to negative responses off
-    /// the box.
-    bool _absorb_acks;
-
     friend class SproutletWrapper;
   };
 
@@ -298,7 +293,7 @@ public:
   /// functions from SproutletTsxHelper.  See there for function comments for
   /// the following.
   void add_to_dialog(const std::string& dialog_id="");
-  pjsip_msg* original_request();
+  pjsip_msg* get_request_for_sproutlet_tsx();
   const char* msg_info(pjsip_msg*);
   const pjsip_route_hdr* route_hdr() const;
   const std::string& dialog_id() const;

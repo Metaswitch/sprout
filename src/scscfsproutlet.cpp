@@ -2220,7 +2220,6 @@ std::string SCSCFSproutletTsx::fork_failure_reason_as_string(int fork_id, int si
   return reason;
 }
 
-<<<<<<< HEAD
 void SCSCFSproutletTsx::acr_handle_response(pjsip_msg* rsp)
 {
   // Pass the received response to the ACR.

@@ -107,7 +107,7 @@ void SproutletAppServerTsxHelper::store_dialog_id(pjsip_msg* req)
 ///
 pjsip_msg* SproutletAppServerTsxHelper::original_request()
 {
-  return _helper->original_request();
+  return _helper->get_request_for_sproutlet_tsx();
 }
 
 /// Returns the top Route header from the original incoming request.  This

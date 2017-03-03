@@ -179,6 +179,14 @@ pjsip_tx_data* create_cancel(pjsip_endpoint* endpt,
                              pjsip_tx_data* tdata,
                              int reason_code);
 
+/// Creates an ACK to a negative response. This method cannot be used to
+/// generate ACKs for ACK transactions.
+///
+/// @return              - The negative ACK created
+///
+/// @param endpt         - The PJSIP endpoint.
+/// @param req           - The original request that the response was sent to.
+/// @param rsp           - The response to the original request.
 pjsip_tx_data* create_ack(pjsip_endpoint* endpt,
                           pjsip_msg* req,
                           pjsip_msg* rsp);
