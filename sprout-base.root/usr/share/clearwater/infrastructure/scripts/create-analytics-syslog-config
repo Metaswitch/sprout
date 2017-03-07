@@ -51,7 +51,7 @@ fi
 
 # Add tls setup to the top of the config file if the option is specified
 shopt -s nocasematch
-if [[ $remote_audit_logging_use_tls == "true" ]]; then
+if [[ $remote_audit_logging_use_tls == "y" ]]; then
   cat > $temp_file << EOF
 \$ActionSendStreamDriver gtls
 
