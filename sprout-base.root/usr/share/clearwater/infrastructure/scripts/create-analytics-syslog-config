@@ -39,17 +39,6 @@
 syslog_conf_file=/etc/rsyslog.d/30-sproutanalytics.conf
 temp_file=$(mktemp sproutanalytics.syslog.XXXXXXXX)
 
-if [ -f $syslog_conf_file ]; then
-  # If the config file exists, and has been manually modified from
-  # the default set up, we don't want to override it. Users should
-  # have removed this line if they were modifying the file.
-  grep "# Clearwater auto-generated configuration" $syslog_conf_file > /dev/null 2>&1
-  rc=$?
-  if [ $rc != 0 ]; then
-    exit 0
-  fi
-fi
-
 . /etc/clearwater/config
 
 if [ -n "$remote_audit_logging_server" ]; then
@@ -60,10 +49,25 @@ if [ -n "$remote_audit_logging_server" ]; then
   remote_syslog_audit_server_str=":msg, regex, \"<analytics>.*Registration:.*\" @@${remote_audit_logging_server}"
 fi
 
-cat > $temp_file << EOF
-# Clearwater auto-generated configuration
-# Remove these lines if manually editing this file, so that changes are not lost
+# Add tls setup to the top of the config file if the option is specified
+shopt -s nocasematch
+if [[ $remote_audit_logging_use_tls == "true" ]]; then
+  cat > $temp_file << EOF
+\$ActionSendStreamDriver gtls
 
+#certificate files
+\$DefaultNetstreamDriverCAFile /etc/clearwater/ent/rsyslog-ca.crt
+\$DefaultNetstreamDriverCertFile /etc/clearwater/ent/rsyslog-client.crt
+\$DefaultNetstreamDriverKeyFile /etc/clearwater/ent/rsyslog-client.key
+
+\$ActionSendStreamDriverAuthMode x509/certvalid
+\$ActionSendStreamDriverMode 1
+
+EOF
+fi
+shopt -u nocasematch
+
+cat >> $temp_file << EOF
 \$FileCreateMode 0666
 \$umask 0000
 
