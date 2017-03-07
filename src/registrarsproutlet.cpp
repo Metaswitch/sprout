@@ -940,18 +940,25 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
           // rejecting a request with a Path header if there is no corresponding
           // "path" entry in the Supported header but we don't do so on the assumption
           // that the edge proxy knows what it's doing.
+          //
+          // We store the full path header in the _path_headers field. For
+          // backwards compatibility, we also store the URI part of the path
+          // header in the _path_uris field.
           binding->_path_headers.clear();
+          binding->_path_uris.clear();
           pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
                               pjsip_msg_find_hdr_by_name(req, &STR_PATH, NULL);
 
           while (path_hdr)
           {
-            std::string path = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                                      path_hdr->name_addr.uri);
+            std::string path = PJUtils::get_header_value((pjsip_hdr*)path_hdr);
+            std::string path_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                                          path_hdr->name_addr.uri);
             TRC_DEBUG("Path header %s", path.c_str());
 
             // Extract all the paths from this header.
             Utils::split_string(path, ',', binding->_path_headers, 0, true);
+            Utils::split_string(path_uri, ',', binding->_path_uris, 0, true);
 
             // Look for the next header.
             path_hdr = (pjsip_routing_hdr*)

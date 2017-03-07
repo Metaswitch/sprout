@@ -62,7 +62,7 @@ struct Target
   std::string aor;
   std::string binding_id;
   pjsip_uri* uri;
-  std::list<pjsip_uri*> paths;
+  std::list<pjsip_route_hdr*> paths;
   pjsip_transport* transport;
   pj_sockaddr remote_addr;
   int liveness_timeout;

@@ -251,22 +251,54 @@ bool binding_to_target(const std::string& aor,
   }
   else
   {
-    for (std::list<std::string>::const_iterator path = binding._path_headers.begin();
-         path != binding._path_headers.end();
-         ++path)
+    // Fill in the paths parameter for the target. If _path_headers is non-empty
+    // we use that, otherwise we use the _path_uris field.
+    if (!binding._path_headers.empty())
     {
-      pjsip_uri* path_uri = PJUtils::uri_from_string(*path, pool);
-      if (path_uri != NULL)
+      for (std::list<std::string>::const_iterator path = binding._path_headers.begin();
+           path != binding._path_headers.end();
+           ++path)
       {
-        target.paths.push_back(path_uri);
+        pjsip_route_hdr* path_hdr = (pjsip_route_hdr*)pjsip_parse_hdr(pool,
+                                                                      &STR_ROUTE,
+                                                                      const_cast<char*>((*path).c_str()),
+                                                                      strlen((*path).c_str()),
+                                                                      NULL);
+        if (path_hdr != NULL)
+        {
+          target.paths.push_back(path_hdr);
+        }
+        else
+        {
+          TRC_WARNING("Ignoring contact %s for target %s because of badly formed path header %s",
+                      binding._uri.c_str(), aor.c_str(), (*path).c_str());
+          // TODO SAS log
+          valid = false;
+          break;
+        }
       }
-      else
+    }
+    else
+    {
+      for (std::list<std::string>::const_iterator path = binding._path_uris.begin();
+           path != binding._path_uris.end();
+           ++path)
       {
-        TRC_WARNING("Ignoring contact %s for target %s because of badly formed path header %s",
-                    binding._uri.c_str(), aor.c_str(), (*path).c_str());
-        // TODO SAS log
-        valid = false;
-        break;
+        pjsip_uri* path_uri = PJUtils::uri_from_string(*path, pool);
+        if (path_uri != NULL)
+        {
+          pjsip_route_hdr* path_hdr = pjsip_route_hdr_create(pool);
+          path_hdr->name_addr.uri = path_uri;
+          target.paths.push_back(path_hdr);
+        }
+        else
+        {
+          TRC_WARNING("Ignoring contact %s for target %s because of badly formed path URI %s",
+                      binding._uri.c_str(), aor.c_str(), (*path).c_str());
+          // TODO SAS log
+          valid = false;
+          break;
+        }
       }
     }
   }
