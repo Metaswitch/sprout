@@ -55,7 +55,7 @@ if [[ $remote_audit_logging_use_tls == "y" ]]; then
   cat > $temp_file << EOF
 \$ActionSendStreamDriver gtls
 
-#certificate files
+# Certificate files
 \$DefaultNetstreamDriverCAFile /etc/clearwater/ent/rsyslog-ca.crt
 \$DefaultNetstreamDriverCertFile /etc/clearwater/ent/rsyslog-client.crt
 \$DefaultNetstreamDriverKeyFile /etc/clearwater/ent/rsyslog-client.key
