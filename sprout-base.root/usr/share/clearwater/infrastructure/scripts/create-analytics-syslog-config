@@ -39,6 +39,17 @@
 syslog_conf_file=/etc/rsyslog.d/30-sproutanalytics.conf
 temp_file=$(mktemp sproutanalytics.syslog.XXXXXXXX)
 
+if [ -f $syslog_conf_file ]; then
+  # If the config file exists, and has been manually modified from
+  # the default set up, we don't want to override it. Users should
+  # have removed this line if they were modifying the file.
+  grep "# Clearwater auto-generated configuration" $syslog_conf_file > /dev/null 2>&1
+  rc=$?
+  if [ $rc != 0 ]; then
+    exit 0
+  fi
+fi
+
 . /etc/clearwater/config
 
 if [ -n "$remote_audit_logging_server" ]; then
@@ -50,6 +61,9 @@ if [ -n "$remote_audit_logging_server" ]; then
 fi
 
 cat > $temp_file << EOF
+# Clearwater auto-generated configuration
+# Remove these lines if manually editing this file, so that changes are not lost
+
 \$FileCreateMode 0666
 \$umask 0000
 
