@@ -697,13 +697,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     }
 
     // Add the P-Profile-Key header here if we've got a wildcard
-    if (wildcard != "")
-    {
-      pjsip_routing_hdr* ppk = identity_hdr_create(get_pool(req),
-                                                   STR_P_PROFILE_KEY);
-      ppk->name_addr.uri = PJUtils::uri_from_string(wildcard, get_pool(req));
-      pjsip_msg_add_hdr(req, (pjsip_hdr*)ppk);
-    }
+    add_p_profile_header(wildcard, req);
 
     PJUtils::add_route_header(req, scscf_sip_uri, get_pool(req));
     send_request(req);
@@ -805,12 +799,7 @@ void ICSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
       }
 
       // Add the P-Profile-Key header here if we've got a wildcard
-      if (wildcard != "")
-      {
-        pjsip_routing_hdr* ppk = identity_hdr_create(pool, STR_P_PROFILE_KEY);
-        ppk->name_addr.uri = PJUtils::uri_from_string(wildcard, pool);
-        pjsip_msg_add_hdr(req, (pjsip_hdr*)ppk);
-      }
+      add_p_profile_header(wildcard, req);
 
       PJUtils::add_route_header(req, scscf_sip_uri, pool);
       send_request(req);
@@ -936,4 +925,30 @@ void ICSCFSproutletTsx::route_to_bgcf(pjsip_msg* req)
                             get_pool(req));
   send_request(req);
   _routed_to_bgcf = true;
+}
+
+void ICSCFSproutletTsx::add_p_profile_header(const std::string& wildcard,
+                                             pjsip_msg* req)
+{
+  if (wildcard != "")
+  {
+    // The wildcard can contain characters that aren't valid in
+    // URIs (e.g. square brackets) - escape these before attempting to
+    // create a URI.
+    pjsip_routing_hdr* ppk = identity_hdr_create(get_pool(req),
+                                                 STR_P_PROFILE_KEY);
+    pjsip_uri* wildcard_uri = PJUtils::uri_from_string(
+                                     PJUtils::escape_string_for_uri(wildcard),
+                                     get_pool(req));
+
+    if (wildcard_uri)
+    {
+      ppk->name_addr.uri = wildcard_uri;
+      pjsip_msg_add_hdr(req, (pjsip_hdr*)ppk);
+    }
+    else
+    {
+      TRC_ERROR("Invalid wildcard returned on LIA: %s", wildcard.c_str());
+    }
+  }
 }

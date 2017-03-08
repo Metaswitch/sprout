@@ -1674,9 +1674,9 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSServerName)
   delete tp;
 }
 
-// Test that an INVITE that recieves a wildcard in the LIA sends a
+// Test that an originating INVITE that recieves a wildcard in the LIA sends a
 // P-Profile-Key header when routing the INVITE to the S-CSCF
-TEST_F(ICSCFSproutletTest, RouteInviteHSSServerNameWithWildcard)
+TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSServerNameWithWildcard)
 {
   pjsip_tx_data* tdata;
 
@@ -1686,25 +1686,18 @@ TEST_F(ICSCFSproutletTest, RouteInviteHSSServerNameWithWildcard)
                                         "1.2.3.4",
                                         49152);
 
-  // Set up the HSS response for the originating location query.
+  // Set up the HSS response for the originating location query. This uses a SIP
+  // URI wildcard with square brackets (which are only valid in wildcards).
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\","
-                              " \"wildcard\": \"sip:scscf!.*!@homedomain\" }");
+                              " \"wildcard\": \"sip:650![0-9]+!@homedomain\" }");
 
-  // Inject a INVITE request with orig in the Route header and a P-Served-User
-  // header.
+  // Inject a INVITE request, and expect a 100 Trying and forwarded INVITE
   Message msg1;
   msg1._method = "INVITE";
-  msg1._via = tp->to_string(false);
-  msg1._extra = "Contact: sip:6505551000@" +
-                tp->to_string(true) +
-                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
   msg1._route = "Route: <sip:homedomain;orig>";
-  msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
   inject_msg(msg1.get_request(), tp);
-
-  // Expecting 100 Trying and forwarded INVITE
   ASSERT_EQ(2, txdata_count());
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
@@ -1715,10 +1708,54 @@ TEST_F(ICSCFSproutletTest, RouteInviteHSSServerNameWithWildcard)
 
   // Check that a P-Profile-Key has been added that uses the wildcard
   string ppk = get_headers(tdata->msg, "P-Profile-Key");
-  ASSERT_EQ("P-Profile-Key: <sip:scscf!.*!@homedomain>", ppk);
+  ASSERT_EQ("P-Profile-Key: <sip:650![0-9]+!@homedomain>", PJUtils::unescape_string_for_uri(ppk, stack_data.pool));
 
   test_session_establishment_stats(0, 0, 0, 0);
   _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true");
+  delete tp;
+}
+
+// Test that a terminating INVITE that recieves a wildcard in the LIA sends a
+// P-Profile-Key header when routing the INVITE to the S-CSCF
+TEST_F(ICSCFSproutletTest, RouteTermInviteHSSServerNameWithWildcard)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        ICSCF_PORT,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS response for the location query. This uses a Tel URI
+  // wildcard
+  _hss_connection->set_result("/impu/tel%3A%2B16505551234/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\","
+                              " \"wildcard\": \"tel:+16!.*!\" }");
+
+  // Inject a INVITE request, and expect a 100 Trying and forwarded INVITE.
+  // The SIP URI is translated to a Tel URI during I-CSCF processing.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._route = "Route: <sip:homedomain>";
+  msg1._requri = "sip:+16505551234@homedomain";
+  msg1._to = "+16505551234";
+  inject_msg(msg1.get_request(), tp);
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  free_txdata();
+  tdata = current_txdata();
+  ReqMatcher r1("INVITE");
+  r1.matches(tdata->msg);
+
+  // Check that a P-Profile-Key has been added that uses the wildcard
+  string ppk = get_headers(tdata->msg, "P-Profile-Key");
+  ASSERT_EQ("P-Profile-Key: <tel:+16!.*!>", PJUtils::unescape_string_for_uri(ppk, stack_data.pool));
+
+  test_session_establishment_stats(0, 0, 0, 0);
+  _hss_connection->delete_result("/impu/tel%3A%2B16505551234/location");
   delete tp;
 }
 

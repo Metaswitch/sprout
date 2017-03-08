@@ -46,6 +46,8 @@ extern "C" {
 #include <pjlib.h>
 #include <pjsip.h>
 #include "pjsip-simple/evsub.h"
+#include <pjlib-util/string.h>
+#include <pjsip/sip_parser.h>
 }
 
 #include "sprout_pd_definitions.h"
@@ -152,10 +154,33 @@ pjsip_uri* PJUtils::uri_from_string(const std::string& uri_s,
   return pjsip_parse_uri(pool, buf, len, (force_name_addr) ? PJSIP_PARSE_URI_AS_NAMEADDR : 0);
 }
 
+std::string PJUtils::escape_string_for_uri(const std::string& uri_s)
+{
+  // This escapes any chars that aren't allowed in a URI (e.g. [])
+  char buf[PJSIP_MAX_URL_SIZE];
+  const pjsip_parser_const_t *pc = pjsip_parser_const();
+  pj_str_t uri_as_pj_str = pj_str((char*)uri_s.c_str());
+  pj_ssize_t len = pj_strncpy2_escape(buf,
+                                      &uri_as_pj_str,
+                                      PJSIP_MAX_URL_SIZE,
+                                      &(pc->pjsip_OTHER_URI_CONTENT));
+  buf[len] = '\0';
+  return std::string(buf);
+}
+
+std::string PJUtils::unescape_string_for_uri(const std::string& uri_s,
+                                             pj_pool_t* pool)
+{
+  pj_str_t uri_as_pj_str = pj_str((char*)uri_s.c_str());
+  uri_as_pj_str = pj_str_unescape(pool, &uri_as_pj_str);
+  return pj_str_to_string(&uri_as_pj_str);
+}
 
 std::string PJUtils::pj_str_to_string(const pj_str_t* pjstr)
 {
-  return ((pjstr != NULL) && (pj_strlen(pjstr) > 0)) ? std::string(pj_strbuf(pjstr), pj_strlen(pjstr)) : std::string("");
+  return ((pjstr != NULL) && (pj_strlen(pjstr) > 0)) ?
+     std::string(pj_strbuf(pjstr), pj_strlen(pjstr)) :
+     std::string("");
 }
 
 std::string PJUtils::pj_str_to_unquoted_string(const pj_str_t* pjstr)
@@ -2511,32 +2536,4 @@ std::set<pjmedia_type> PJUtils::get_media_types(const pjsip_msg *msg)
   }
 
   return media_types;
-}
-
-bool PJUtils::is_wildcard_uri(const std::string& wildcard,
-                              pj_pool_t* pool)
-{
-  pjsip_uri* wildcard_uri = PJUtils::uri_from_string(wildcard,
-                                                     pool,
-                                                     false);
-  if (wildcard_uri == NULL)
-  {
-    return false;
-  }
-
-  // We count a URI as being wildcard URI if it's a valid SIP/Tel URI,
-  // and where the userinfo/telephone-subscriber part of the URI
-  // contains at least two ! characters.
-  pj_str_t user = PJUtils::user_from_uri(wildcard_uri);
-  std::string potential_wildcard = PJUtils::pj_str_to_string(&user);
-
-  return (std::count(potential_wildcard.begin(),
-                     potential_wildcard.end(),
-                     '!') >= 2);
-}
-
-bool PJUtils::matches_wildcard(const std::string& wildcard,
-                               const std::string& string_to_match)
-{
-  return false; // TODO actually implement matching
 }

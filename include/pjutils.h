@@ -80,6 +80,10 @@ pjsip_uri* uri_from_string(const std::string& uri_s,
                            pj_pool_t* pool,
                            pj_bool_t force_name_addr=false);
 
+std::string escape_string_for_uri(const std::string& uri_s);
+std::string unescape_string_for_uri(const std::string& uri_s,
+                                    pj_pool_t* pool);
+
 std::string pj_str_to_string(const pj_str_t* pjstr);
 
 std::string pj_str_to_unquoted_string(const pj_str_t* pjstr);
@@ -152,15 +156,15 @@ pjsip_tx_data* clone_msg(pjsip_endpoint* endpt,
                          pjsip_tx_data* tdata);
 
 pj_status_t create_response(pjsip_endpoint *endpt,
-                      const pjsip_rx_data *rdata,
-                      int st_code,
-                      const pj_str_t* st_text,
-                      pjsip_tx_data **p_tdata);
+                            const pjsip_rx_data *rdata,
+                            int st_code,
+                            const pj_str_t* st_text,
+                            pjsip_tx_data **p_tdata);
 
 pj_status_t create_response(pjsip_endpoint *endpt,
                             const pjsip_tx_data *tdata,
                             int st_code,
-                      const pj_str_t* st_text,
+                            const pj_str_t* st_text,
                             pjsip_tx_data **p_tdata);
 
 pj_status_t create_request_fwd(pjsip_endpoint *endpt,
@@ -310,15 +314,6 @@ std::set<pjmedia_type> get_media_types(const pjsip_msg *msg);
 // The URI returned is only valid while the passed in PJSIP message is valid
 pjsip_uri* get_next_routing_uri(const pjsip_msg* msg,
                                 pjsip_uri_context_e* context);
-
-// Returns whether a URI represents a wildcard.
-bool is_wildcard_uri(const std::string& wildcard,
-                     pj_pool_t* pool);
-
-
-// Returns whether a string matches a wildcard
-bool matches_wildcard(const std::string& wildcard,
-                      const std::string& string_to_match);
 
 } // namespace PJUtils
 

@@ -485,8 +485,17 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
   if (ppk_hdr != NULL)
   {
-    _wildcard = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                       (pjsip_uri*)(&ppk_hdr->name_addr));
+    std::string escaped_wildcard = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                                          (pjsip_uri*)(&ppk_hdr->name_addr));
+    _wildcard = PJUtils::unescape_string_for_uri(std::string(escaped_wildcard),
+                                                 get_pool(req));
+
+    // If the URI is surrounded with angle brackets remove them.
+    if ((boost::starts_with(_wildcard, "<")) &&
+        (boost::ends_with(_wildcard, ">")))
+    {
+      _wildcard = _wildcard.substr(1, _wildcard.size() - 2);
+    }
   }
 
   // Determine the session case and the served user.  This will link to
@@ -1641,10 +1650,11 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
     {
       for (std::string uri : uris)
       {
-        if ((public_id == uri) || (PJUtils::matches_wildcard(uri, public_id)))
+        if (Utils::uris_user_match(uri, public_id))
         {
           // Take the first associated URI as the AOR.
           aor = uris.front();
+          break;
         }
       }
     }

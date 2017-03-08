@@ -918,8 +918,10 @@ TEST_F(SubscriptionTest, SubscriptionWithWildcard)
   _hss_connection->set_impu_result("sip:6505551231@homedomain", "", HSSConnection::STATE_REGISTERED,
                                    "<IMSSubscription><ServiceProfile>\n"
                                    "<PublicIdentity><Identity>sip:6505551231@homedomain</Identity></PublicIdentity>"
-                                   "<PublicIdentity><Identity>sip:6505551!.*!@homedomain</Identity><Extension><IdentityType>4</IdentityType><WildcardedIMPU>sip:650555!.*!@homedomain</WildcardedIMPU></Extension></PublicIdentity>"
+                                   "<PublicIdentity><Identity>sip:6505551!.*!@homedomain</Identity><Extension><IdentityType>4</IdentityType><WildcardedIMPU>sip:6505551!.*!@homedomain</WildcardedIMPU></Extension></PublicIdentity>"
+                                   "<PublicIdentity><Identity>sip:650555!.*!@homedomain</Identity><Extension><IdentityType>4</IdentityType><WildcardedIMPU>sip:650555!.*!@homedomain</WildcardedIMPU></Extension></PublicIdentity>"
                                    "<PublicIdentity><Identity>sip:6505551232@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>sip:6505551233@homedomain</Identity><Extension><IdentityType>3</IdentityType><WildcardedIMPU>sip:650555!.*!@homedomain</WildcardedIMPU></Extension></PublicIdentity>"
                                    "  <InitialFilterCriteria>\n"
                                    "  </InitialFilterCriteria>\n"
                                    "</ServiceProfile></IMSSubscription>");
@@ -938,6 +940,7 @@ TEST_F(SubscriptionTest, SubscriptionWithWildcard)
   std::vector<std::pair<std::string, bool>> irs_impus;
   irs_impus.push_back(std::make_pair("sip:6505551231@homedomain", false));
   irs_impus.push_back(std::make_pair("sip:6505551!.*!@homedomain", true));
+  irs_impus.push_back(std::make_pair("sip:650555!.*!@homedomain", true));
   irs_impus.push_back(std::make_pair("sip:6505551232@homedomain", false));
 
   check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);

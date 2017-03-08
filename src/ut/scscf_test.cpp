@@ -1397,13 +1397,12 @@ TEST_F(SCSCFTest, TestTerminatingTelURI)
   doSuccessfulFlow(msg, testing::MatchesRegex("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob"), hdrs, false);
 }
 
-// TODO - fix up with updated matching code
-TEST_F(SCSCFTest, DISABLED_TestTelURIWildcard)
+TEST_F(SCSCFTest, TestTelURIWildcard)
 {
   _hss_connection->set_impu_result("tel:6505551235", "call", "REGISTERED",
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>tel:6505552345</Identity></PublicIdentity>"
-                                "<PublicIdentity><Identity>tel:65055512!*!</Identity></PublicIdentity>"
+                                "<PublicIdentity><Identity>tel:65055512!.*!</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
                                 "    <Priority>1</Priority>\n"
                                 "    <TriggerPoint>\n"
@@ -7710,7 +7709,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
 TEST_F(SCSCFTest, TestInvitePProfileKey)
 {
   SCOPED_TRACE("");
-  std::string wildcard = "<sip:650!.*!@homedomain>";
+  std::string wildcard = "sip:650![0-9]+!@homedomain";
 
   // This UT is unrealistic as we're using the same P-Profile-Key header for
   // both the originating and the terminating side; this is OK though for what
@@ -7739,7 +7738,7 @@ TEST_F(SCSCFTest, TestInvitePProfileKey)
 
   Message msg;
   msg._route = "Route: <sip:homedomain;orig>";
-  msg._extra = "P-Profile-Key: " + wildcard;
+  msg._extra = "P-Profile-Key: <" + PJUtils::escape_string_for_uri(wildcard) + ">";
   msg._to = "6515551000";
   msg._requri = "sip:6515551000@homedomain";
   list<HeaderMatcher> hdrs;

@@ -100,13 +100,14 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool,
   {
     // Do the HSS query.
     status_code = hss_query();
-    wildcard = _hss_rsp.wildcard;
 
     if (do_billing)
     {
       _acr->send();
     }
   }
+
+  wildcard = _hss_rsp.wildcard;
 
   if (status_code == PJSIP_SC_OK)
   {

@@ -277,7 +277,9 @@ bool decode_homestead_xml(const std::string public_user_identity,
                           std::vector<std::string>& aliases,
                           std::deque<std::string>& ccfs,
                           std::deque<std::string>& ecfs,
-                          bool allowNoIMS)
+                          bool allowNoIMS,
+                          SAS::TrailId trail)
+
 {
   if (!root.get())
   {
@@ -353,6 +355,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
   // wildcard match to come).
   // found_aliases is a flag used to indicate that we've already found our list
   // of aliases.
+  associated_uris.clear();
   std::vector<std::string> sp_identities;
   std::vector<std::string> temp_aliases;
   bool current_sp_contains_public_id = false;
@@ -390,11 +393,41 @@ bool decode_homestead_xml(const std::string public_user_identity,
       if (identity)
       {
         std::string uri = std::string(identity->value());
+
+        // TODO - This code should be commonised with the code in Homestead
+        // (and will be shortly). It's therefore not fully UT'd; this will be
+        // done when it moves.
+        // LCOV_EXCL_START
+        rapidxml::xml_node<>* extension = public_id->first_node("Extension");
+        if (extension)
+        {
+          rapidxml::xml_node<>* type = extension->first_node("IdentityType");
+          if (type)
+          {
+            if (std::string(type->value()) == "2")
+            {
+              rapidxml::xml_node<>* new_identity = extension->first_node("WildcardedPSI");
+              uri = std::string(new_identity->value());
+            }
+            else if ((std::string(type->value()) == "3") ||
+                     (std::string(type->value()) == "4"))
+            {
+              rapidxml::xml_node<>* new_identity = extension->first_node("WildcardedIMPU");
+              uri = std::string(new_identity->value());
+            }
+          }
+        }
+        // LCOV_EXCL_STOP
+
         TRC_DEBUG("Processing Identity node from HSS XML - %s\n",
                   uri.c_str());
 
-        associated_uris.push_back(uri);
-        ifcs_map[uri] = ifc;
+        if (std::find(associated_uris.begin(), associated_uris.end(), uri) ==
+            associated_uris.end())
+        {
+          associated_uris.push_back(uri);
+          ifcs_map[uri] = ifc;
+        }
 
         if (!found_aliases)
         {
@@ -404,8 +437,9 @@ bool decode_homestead_xml(const std::string public_user_identity,
           {
             current_sp_contains_public_id = true;
           }
-          else if (false) // TODO perform matching
+          else if (Utils::uris_user_match(uri, public_user_identity))
           {
+            ifcs_map[public_user_identity] = ifc;
             found_multiple_matches = maybe_found_aliases;
             current_sp_maybe_contains_public_id = true;
           }
@@ -442,7 +476,9 @@ bool decode_homestead_xml(const std::string public_user_identity,
  
     if (found_multiple_matches)
     {
-      // TODO make log here.
+      SAS::Event event(trail, SASEvent::AMBIGUOUS_WILDCARD_MATCH, 0);
+      event.add_var_param(public_user_identity);
+      SAS::report_event(event);
     }
   }
 
@@ -681,7 +717,8 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                               aliases,
                               ccfs,
                               ecfs,
-                              false) ? HTTP_OK : HTTP_SERVER_ERROR;
+                              false,
+                              trail) ? HTTP_OK : HTTP_SERVER_ERROR;
 }
 
 HTTPCode HSSConnection::get_registration_data(const std::string& public_user_identity,
@@ -759,7 +796,8 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
                               unused_aliases,
                               ccfs,
                               ecfs,
-                              true) ? HTTP_OK : HTTP_SERVER_ERROR;
+                              true,
+                              trail) ? HTTP_OK : HTTP_SERVER_ERROR;
 }
 
 
