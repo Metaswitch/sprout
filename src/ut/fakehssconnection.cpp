@@ -114,7 +114,7 @@ void FakeHSSConnection::set_impu_result(const std::string& impu,
 
   if (wildcard != "")
   {
-    body += ", \"wildcard\": \"" + wildcard + "\"";
+    body += ", \"wildcard-identity\": \"" + wildcard + "\"";
   }
 
   _results[UrlBody(url, (type.empty() ? "" : "{" + body + "}"))] = result;

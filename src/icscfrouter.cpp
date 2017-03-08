@@ -82,7 +82,8 @@ ICSCFRouter::~ICSCFRouter()
 ///                      for at least as long as the returned SCSCF URI.
 /// @param scscf_sip_uri Output parameter holding the parsed SCSCF URI.  This
 ///                      is only valid if the function returns PJSIP_SC_OK.
-/// @param wildcard      Output parameter holding TODO
+/// @param wildcard      Output parameter holding any wildcard identity in the
+///                      response
 /// @param do_billing    Flag to determine whether we send an ACR after the HSS
 ///                      query. Defaults to 'false'
 int ICSCFRouter::get_scscf(pj_pool_t* pool,
@@ -92,9 +93,7 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool,
 {
   int status_code = PJSIP_SC_OK;
   std::string scscf;
-
   scscf_sip_uri = NULL;
-  wildcard = "";
 
   if (!_queried_caps)
   {
@@ -107,10 +106,10 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool,
     }
   }
 
-  wildcard = _hss_rsp.wildcard;
-
   if (status_code == PJSIP_SC_OK)
   {
+    wildcard = _hss_rsp.wildcard;
+
     if ((!_hss_rsp.scscf.empty()) &&
         (std::find(_attempted_scscfs.begin(), _attempted_scscfs.end(),
                    _hss_rsp.scscf) == _attempted_scscfs.end()))
@@ -269,12 +268,13 @@ int ICSCFRouter::parse_hss_response(rapidjson::Document*& rsp, bool queried_caps
         }
       }
 
-      if ((rsp->HasMember("wildcard")) &&
-          ((*rsp)["wildcard"].IsString()))
+      if ((rsp->HasMember("wildcard-identity")) &&
+          ((*rsp)["wildcard-identity"].IsString()))
       {
         // Response included a wildcard, so save this.
-        TRC_DEBUG("HSS returned a wildcarded public user identity %s", (*rsp)["wildcard"].GetString());
-        _hss_rsp.wildcard = (*rsp)["wildcard"].GetString();
+        TRC_DEBUG("HSS returned a wildcarded public user identity %s",
+                  (*rsp)["wildcard-identity"].GetString());
+        _hss_rsp.wildcard = (*rsp)["wildcard-identity"].GetString();
       }
     }
     else if (rc == 5003)

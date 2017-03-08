@@ -279,7 +279,6 @@ bool decode_homestead_xml(const std::string public_user_identity,
                           std::deque<std::string>& ecfs,
                           bool allowNoIMS,
                           SAS::TrailId trail)
-
 {
   if (!root.get())
   {
@@ -354,8 +353,8 @@ bool decode_homestead_xml(const std::string public_user_identity,
   // identity (e.g. it matched on a regex, but there could still be a non
   // wildcard match to come).
   // found_aliases is a flag used to indicate that we've already found our list
-  // of aliases.
-  associated_uris.clear();
+  // of aliases, maybe_found_aliases indicates that we might have found it, but
+  // it could be overridden later.
   std::vector<std::string> sp_identities;
   std::vector<std::string> temp_aliases;
   bool current_sp_contains_public_id = false;
@@ -363,6 +362,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
   bool found_aliases = false;
   bool maybe_found_aliases = false;
   bool found_multiple_matches = false;
+  associated_uris.clear();
   rapidxml::xml_node<>* sp = NULL;
 
   if (!imss->first_node("ServiceProfile"))
@@ -676,7 +676,8 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
   // of scope.
 
   rapidxml::xml_document<>* root_underlying_ptr = NULL;
-  std::string json_wildcard = (wildcard != "") ? ", \"wildcard\": \"" + wildcard + "\"" : "";
+  std::string json_wildcard =
+        (wildcard != "") ? ", \"wildcard-identity\": \"" + wildcard + "\"" : "";
   std::string req_body = "{\"reqtype\": \"" + type + "\"" +
                           ", \"server_name\": \"" +_scscf_uri + "\"" +
                           json_wildcard +
