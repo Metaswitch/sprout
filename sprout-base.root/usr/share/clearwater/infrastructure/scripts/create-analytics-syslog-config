@@ -49,7 +49,25 @@ if [ -n "$remote_audit_logging_server" ]; then
   remote_syslog_audit_server_str=":msg, regex, \"<analytics>.*Registration:.*\" @@${remote_audit_logging_server}"
 fi
 
-cat > $temp_file << EOF
+# Add tls setup to the top of the config file if the option is specified
+shopt -s nocasematch
+if [[ $remote_audit_logging_use_tls == "y" ]]; then
+  cat > $temp_file << EOF
+\$ActionSendStreamDriver gtls
+
+# Certificate files
+\$DefaultNetstreamDriverCAFile /etc/clearwater/ent/rsyslog-ca.crt
+\$DefaultNetstreamDriverCertFile /etc/clearwater/ent/rsyslog-client.crt
+\$DefaultNetstreamDriverKeyFile /etc/clearwater/ent/rsyslog-client.key
+
+\$ActionSendStreamDriverAuthMode x509/certvalid
+\$ActionSendStreamDriverMode 1
+
+EOF
+fi
+shopt -u nocasematch
+
+cat >> $temp_file << EOF
 \$FileCreateMode 0666
 \$umask 0000
 

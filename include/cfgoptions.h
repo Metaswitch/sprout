@@ -100,8 +100,9 @@ struct options
   std::string                          sas_system_name;
   std::string                          hss_server;
   std::string                          xdm_server;
-  std::string                          store_servers;
-  std::string                          remote_store_servers;
+  std::string                          local_site_name;
+  std::vector<std::string>             registration_stores;
+  std::string                          impi_store;
   std::string                          ralf_server;
   int                                  ralf_threads;
   std::vector<std::string>             dns_servers;
@@ -136,6 +137,7 @@ struct options
   int                                  exception_max_ttl;
   int                                  sip_blacklist_duration;
   int                                  http_blacklist_duration;
+  int                                  astaire_blacklist_duration;
   int                                  sip_tcp_connect_timeout;
   int                                  sip_tcp_send_timeout;
   int                                  session_continued_timeout_ms;
@@ -158,6 +160,7 @@ struct options
   bool                                 sas_signaling_if;
   bool                                 disable_tcp_switch;
   std::string                          chronos_hostname;
+  std::string                          sprout_chronos_callback_uri;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
@@ -166,7 +169,7 @@ extern LoadMonitor* load_monitor;
 extern HSSConnection* hss_connection;
 extern Store* local_data_store;
 extern SubscriberDataManager* local_sdm;
-extern SubscriberDataManager* remote_sdm;
+extern std::vector<SubscriberDataManager*> remote_sdms;
 extern RalfProcessor* ralf_processor;
 extern DnsCachedResolver* dns_resolver;
 extern HttpResolver* http_resolver;
