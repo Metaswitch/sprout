@@ -259,6 +259,8 @@ bool binding_to_target(const std::string& aor,
            path != binding._path_headers.end();
            ++path)
       {
+        // We need a char* not a const char* so using c_str() isn't enough and
+        // we need to cpoy the string across.
         std::string const_path_str = (*path).c_str();
         char* path_str = new char[const_path_str.length() + 1];
         std::strcpy(path_str, const_path_str.c_str());
@@ -270,6 +272,9 @@ bool binding_to_target(const std::string& aor,
                                                                       NULL);
         if (path_hdr != NULL)
         {
+          // We need to clone the message here so that we can delete path_str.
+          // If didn't clone the header we would free memory in the header when
+          // deleting path_str.
           pjsip_route_hdr* path_hdr_clone = (pjsip_route_hdr*)pjsip_hdr_clone(pool, path_hdr);
           target.paths.push_back(path_hdr_clone);
           delete[] path_str;

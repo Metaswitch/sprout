@@ -94,7 +94,7 @@ public:
 
       /// Contains any path headers (in order) that were present on the
       /// register.  Empty if there were none. This is the full path header,
-      /// including the disply name, URI and any parameters.
+      /// including the disply name, URI and any header parameters.
       std::list<std::string> _path_headers;
 
       /// Contains the URI part of any path headers (in order) that were

@@ -9104,7 +9104,7 @@ TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
   _hss_connection->delete_rc("/impu/sip%3A6505551000%40homedomain/reg-data");
 }
 
-TEST_F(SCSCFTest, TestAddStoredPath)
+TEST_F(SCSCFTest, TestAddStoredPathHeader)
 {
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   SCOPED_TRACE("");
@@ -9136,7 +9136,7 @@ TEST_F(SCSCFTest, TestAddStoredPath)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
-TEST_F(SCSCFTest, TestAddStoredPathDownlevel)
+TEST_F(SCSCFTest, TestAddStoredPathURI)
 {
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   SCOPED_TRACE("");

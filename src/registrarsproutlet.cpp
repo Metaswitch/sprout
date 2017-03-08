@@ -957,8 +957,8 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
             TRC_DEBUG("Path header %s", path.c_str());
 
             // Extract all the paths from this header.
-            Utils::split_string(path, ',', binding->_path_headers, 0, true);
-            Utils::split_string(path_uri, ',', binding->_path_uris, 0, true);
+            binding->_path_headers.push_back(path);
+            binding->_path_uris.push_back(path_uri);
 
             // Look for the next header.
             path_hdr = (pjsip_routing_hdr*)

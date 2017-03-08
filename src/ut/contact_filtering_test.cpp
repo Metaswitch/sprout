@@ -667,7 +667,7 @@ TEST_F(ContactFilteringBindingToTargetTest, SimpleConversion)
   EXPECT_EQ(300, target.contact_expiry);
   EXPECT_EQ((unsigned)1234, target.contact_q1000_value);
 }
-TEST_F(ContactFilteringBindingToTargetTest, SimpleConversionDownlevel)
+TEST_F(ContactFilteringBindingToTargetTest, SimpleConversionPathUri)
 {
   // This test test that the binding_to_target function will work for downlevel
   // Sprout nodes where only the path URIs field will be filled in on the
