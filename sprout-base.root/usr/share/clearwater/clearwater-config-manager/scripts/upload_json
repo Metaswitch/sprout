@@ -80,6 +80,14 @@ then
   exit 2
 fi
 
+# Ensure that the file is valid JSON
+python -c "import json; json.load(open($CONFPATH/$FILENAME))" 2&>1
+rc=$?
+if [ rc != 0 ]; then
+  echo "File $CONFPATH/$FILENAME contains invalid json, and so will not be uploaded"
+  exit 2
+fi
+
 # Upload the file to etcd
 keypath=http://${management_local_ip:-$local_ip}:4000/v2/keys/clearwater/$local_site_name/configuration/$KEY
 curl -X PUT $keypath --data-urlencode value@$CONFPATH/$FILENAME 2> /tmp/upload-json-file.stderr.$$ | tee /tmp/upload-json-file.stdout.$$ | egrep -q "\"action\":\"set\""
