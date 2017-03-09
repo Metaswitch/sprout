@@ -81,9 +81,9 @@ then
 fi
 
 # Ensure that the file is valid JSON
-python -c "import json; json.load(open($CONFPATH/$FILENAME))" 2&>1
+python -c "import json; json.load(open(\"$CONFPATH/$FILENAME\"))" 2&>1
 rc=$?
-if [ rc != 0 ]; then
+if [ $rc != 0 ]; then
   echo "File $CONFPATH/$FILENAME contains invalid json, and so will not be uploaded"
   exit 2
 fi
