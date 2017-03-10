@@ -47,6 +47,7 @@
 #include "hssconnection.h"
 #include "rapidjson/error/en.h"
 #include "snmp_continuous_accumulator_table.h"
+#include "reg_data_xml_utils.h"
 
 const std::string HSSConnection::REG = "reg";
 const std::string HSSConnection::CALL = "call";
@@ -56,6 +57,7 @@ const std::string HSSConnection::DEREG_TIMEOUT = "dereg-timeout";
 const std::string HSSConnection::AUTH_TIMEOUT = "dereg-auth-timeout";
 const std::string HSSConnection::AUTH_FAIL = "dereg-auth-failed";
 
+// TODO - Can these be deleted (both unused here)
 const std::string HSSConnection::STATE_REGISTERED = "REGISTERED";
 const std::string HSSConnection::STATE_NOT_REGISTERED = "NOT_REGISTERED";
 
@@ -260,8 +262,8 @@ bool compare_charging_addrs(const rapidxml::xml_node<>* ca1,
 {
   // Compare the nodes on the basis of their priority attribute. A lower value is
   // higher priority.
-  if (std::stoi(ca1->first_attribute("priority")->value()) <
-        std::stoi(ca2->first_attribute("priority")->value()))
+  if (std::stoi(ca1->first_attribute(RegDataXmlUtils::PRIORITY)->value()) <
+        std::stoi(ca2->first_attribute(RegDataXmlUtils::PRIORITY)->value()))
   {
     return true;
   }
@@ -290,7 +292,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
     return false;
   }
 
-  rapidxml::xml_node<>* cw = root->first_node("ClearwaterRegData");
+  rapidxml::xml_node<>* cw = root->first_node(RegDataXmlUtils::CLEARWATER_REG_DATA);
 
   if (!cw)
   {
@@ -298,7 +300,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
     return false;
   }
 
-  rapidxml::xml_node<>* reg = cw->first_node("RegistrationState");
+  rapidxml::xml_node<>* reg = cw->first_node(RegDataXmlUtils::REGISTRATION_STATE);
 
   if (!reg)
   {
@@ -308,13 +310,13 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
   regstate = reg->value();
 
-  if ((regstate == HSSConnection::STATE_NOT_REGISTERED) && (allowNoIMS))
+  if ((regstate == RegDataXmlUtils::NOT_REGISTERED) && (allowNoIMS))
   {
     TRC_DEBUG("Subscriber is not registered on a get_registration_state request");
     return true;
   }
 
-  rapidxml::xml_node<>* imss = cw->first_node("IMSSubscription");
+  rapidxml::xml_node<>* imss = cw->first_node(RegDataXmlUtils::IMS_SUBSCRIPTION);
 
   if (!imss)
   {
@@ -340,30 +342,30 @@ bool decode_homestead_xml(const std::string public_user_identity,
   rapidxml::xml_node<>* sp = NULL;
   Ifcs fallback_ifc;
 
-  if (!imss->first_node("ServiceProfile"))
+  if (!imss->first_node(RegDataXmlUtils::SERVICE_PROFILE))
   {
     TRC_WARNING("Malformed HSS XML - no ServiceProfiles");
     return false;
   }
 
-  for (sp = imss->first_node("ServiceProfile");
+  for (sp = imss->first_node(RegDataXmlUtils::SERVICE_PROFILE);
        sp != NULL;
-       sp = sp->next_sibling("ServiceProfile"))
+       sp = sp->next_sibling(RegDataXmlUtils::SERVICE_PROFILE))
   {
     Ifcs ifc(root, sp);
     rapidxml::xml_node<>* public_id = NULL;
 
-    if (!sp->first_node("PublicIdentity"))
+    if (!sp->first_node(RegDataXmlUtils::PUBLIC_IDENTITY))
     {
       TRC_WARNING("Malformed ServiceProfile XML - no Public Identity");
       return false;
     }
 
-    for (public_id = sp->first_node("PublicIdentity");
+    for (public_id = sp->first_node(RegDataXmlUtils::PUBLIC_IDENTITY);
          public_id != NULL;
-         public_id = public_id->next_sibling("PublicIdentity"))
+         public_id = public_id->next_sibling(RegDataXmlUtils::PUBLIC_IDENTITY))
     {
-      rapidxml::xml_node<>* identity = public_id->first_node("Identity");
+      rapidxml::xml_node<>* identity = public_id->first_node(RegDataXmlUtils::IDENTITY);
 
       if (identity)
       {
@@ -373,11 +375,11 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
         associated_uris.push_back(uri);
         ifcs_map[uri] = ifc;
-        
+
         // The first set of IFCs are what we might want to fall back to if
         // the public ID we're looking for isn't found, so we store them off if
         // the PublicIdentity node we're handling is the first one.
-        if (public_id == sp->first_node("PublicIdentity"))
+        if (public_id == sp->first_node(RegDataXmlUtils::PUBLIC_IDENTITY))
         {
           fallback_ifc = ifc;
         }
@@ -427,8 +429,8 @@ bool decode_homestead_xml(const std::string public_user_identity,
     ifcs_map[public_user_identity] = fallback_ifc;
     associated_uris.push_back(public_user_identity);
   }
- 
-  rapidxml::xml_node<>* charging_addrs_node = cw->first_node("ChargingAddresses");
+
+  rapidxml::xml_node<>* charging_addrs_node = cw->first_node(RegDataXmlUtils::CHARGING_ADDRESSES);
 
   if (charging_addrs_node)
   {
@@ -439,9 +441,9 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
     // Save off all of the CCF nodes so that we can sort them based on their
     // priority attribute.
-    for (ccf = charging_addrs_node->first_node("CCF");
+    for (ccf = charging_addrs_node->first_node(RegDataXmlUtils::CCF);
          ccf != NULL;
-         ccf = ccf->next_sibling("CCF"))
+         ccf = ccf->next_sibling(RegDataXmlUtils::CCF))
     {
       xml_ccfs.push_back(ccf);
     }
@@ -459,9 +461,9 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
     // Save off all of the ECF nodes so that we can sort them based on their
     // priority attribute.
-    for (ecf = charging_addrs_node->first_node("ECF");
+    for (ecf = charging_addrs_node->first_node(RegDataXmlUtils::ECF);
          ecf != NULL;
-         ecf = ecf->next_sibling("ECF"))
+         ecf = ecf->next_sibling(RegDataXmlUtils::ECF))
     {
       xml_ecfs.push_back(ecf);
     }
