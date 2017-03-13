@@ -6,4 +6,5 @@ max_log_directory_size=$ONE_GIG
 
 python2.7 /usr/share/clearwater/bin/log_cleanup.py /var/log/sprout --prefix sprout_ --maxsize $max_log_directory_size --count $WEEK_COUNT
 python2.7 /usr/share/clearwater/bin/log_cleanup.py /var/log/sprout --prefix log_ --maxsize $max_log_directory_size --count $WEEK_COUNT
-python2.7 /usr/share/clearwater/bin/log_cleanup.py /var/log/sprout --prefix analytics --maxsize $max_log_directory_size
+python2.7 /usr/share/clearwater/bin/log_cleanup.py /var/log/sprout --prefix access --maxsize $max_log_directory_size --count $WEEK_COUNT
+python2.7 /usr/share/clearwater/bin/log_cleanup.py /var/log/sprout --prefix analytics --maxsize $max_log_directory_size --count $WEEK_COUNT
