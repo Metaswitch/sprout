@@ -60,6 +60,7 @@ extern "C" {
 
 #include "pjutils.h"
 #include "utils.h"
+#include "wildcard_utils.h"
 #include "sproutsasevent.h"
 #include "memcachedstore.h"
 #include "hss_sip_mapping.h"
@@ -722,15 +723,19 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                           pjsip_hdr_shallow_clone(get_pool(rsp), _sproutlet->_service_route);
   pjsip_msg_insert_first_hdr(rsp, clone);
 
-  // Add P-Associated-URI headers for all of the associated URIs.
+  // Add P-Associated-URI headers for all of the associated URIs. Don't include
+  // any URIs that are wildcard identities.
   for (std::vector<std::string>::iterator it = uris.begin();
        it != uris.end();
        it++)
   {
-    pjsip_routing_hdr* pau =
-                        identity_hdr_create(get_pool(rsp), STR_P_ASSOCIATED_URI);
-    pau->name_addr.uri = PJUtils::uri_from_string(*it, get_pool(rsp));
-    pjsip_msg_add_hdr(rsp, (pjsip_hdr*)pau);
+    if (!WildcardUtils::is_wildcard_uri(*it))
+    {
+      pjsip_routing_hdr* pau =
+                       identity_hdr_create(get_pool(rsp), STR_P_ASSOCIATED_URI);
+      pau->name_addr.uri = PJUtils::uri_from_string(*it, get_pool(rsp));
+      pjsip_msg_add_hdr(rsp, (pjsip_hdr*)pau);
+    }
   }
 
   // Add a PCFA header.

@@ -57,6 +57,7 @@ extern "C" {
 #include "constants.h"
 #include "uri_classifier.h"
 #include "snmp_success_fail_count_by_request_type_table.h"
+#include "custom_headers.h"
 
 /// Define a constant for the maximum number of ENUM lookups
 /// we want to do in I-CSCF termination processing.
@@ -271,8 +272,11 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
 
   // We have a router, query it for an S-CSCF to use.
   pjsip_sip_uri* scscf_sip_uri = NULL;
+  std::string dummy_wildcard;
   pjsip_status_code status_code =
-    (pjsip_status_code)_router->get_scscf(get_pool(req), scscf_sip_uri);
+    (pjsip_status_code)_router->get_scscf(get_pool(req),
+                                          scscf_sip_uri,
+                                          dummy_wildcard);
 
   if (status_code == PJSIP_SC_OK)
   {
@@ -343,7 +347,8 @@ void ICSCFSproutletRegTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     // Now we can simply reuse the UA router we made on the initial request.
     pjsip_sip_uri* scscf_sip_uri = NULL;
     pjsip_msg* req = original_request();
-    int status_code = _router->get_scscf(get_pool(req), scscf_sip_uri);
+    std::string wildcard;
+    int status_code = _router->get_scscf(get_pool(req), scscf_sip_uri, wildcard);
 
     if (status_code == PJSIP_SC_OK)
     {
@@ -566,8 +571,12 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   // TS 32.260 Table 5.2.1.1 says an EVENT ACR should be generated on the
   // completion of a Cx query issued in response to a SIP INVITE
   bool do_billing = (req->line.req.method.id == PJSIP_INVITE_METHOD);
+  std::string wildcard;
   pjsip_status_code status_code =
-    (pjsip_status_code)_router->get_scscf(pool, scscf_sip_uri, do_billing);
+    (pjsip_status_code)_router->get_scscf(pool,
+                                          scscf_sip_uri,
+                                          wildcard,
+                                          do_billing);
 
   if ((!_originating) && (scscf_not_found(status_code)))
   {
@@ -595,6 +604,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       ((ICSCFLIRouter *)_router)->change_impu(impu);
       status_code = (pjsip_status_code)_router->get_scscf(pool,
                                                           scscf_sip_uri,
+                                                          wildcard,
                                                           do_billing);
     }
 
@@ -641,7 +651,10 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
               (uri_class == HOME_DOMAIN_SIP_URI))
           {
             // TEL or local SIP URI.  Look up the S-CSCF again.
-            status_code = (pjsip_status_code)_router->get_scscf(pool, scscf_sip_uri, do_billing);
+            status_code = (pjsip_status_code)_router->get_scscf(pool,
+                                                                scscf_sip_uri,
+                                                                wildcard,
+                                                                do_billing);
           }
           else
           {
@@ -681,6 +694,12 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       pj_strdup(get_pool(req), &orig_param->name, &STR_ORIG);
       orig_param->value.slen = 0;
       pj_list_insert_after(&scscf_sip_uri->other_param, orig_param);
+    }
+
+    // Add the P-Profile-Key header here if we've got a wildcard
+    if (wildcard != "")
+    {
+      add_p_profile_header(wildcard, req);
     }
 
     PJUtils::add_route_header(req, scscf_sip_uri, get_pool(req));
@@ -763,7 +782,11 @@ void ICSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     // ambiguous on whether this should be sent on each Cx query completion
     // so we err on the side of over-sending events.
     bool do_billing = (rsp->line.req.method.id == PJSIP_INVITE_METHOD);
-    int status_code = _router->get_scscf(pool, scscf_sip_uri, do_billing);
+    std::string wildcard;
+    int status_code = _router->get_scscf(pool,
+                                         scscf_sip_uri,
+                                         wildcard,
+                                         do_billing);
 
     if (status_code == PJSIP_SC_OK)
     {
@@ -776,6 +799,12 @@ void ICSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
         pj_strdup(pool, &orig_param->name, &STR_ORIG);
         orig_param->value.slen = 0;
         pj_list_insert_after(&scscf_sip_uri->other_param, orig_param);
+      }
+
+      // Add the P-Profile-Key header here if we've got a wildcard
+      if (wildcard != "")
+      {
+        add_p_profile_header(wildcard, req);
       }
 
       PJUtils::add_route_header(req, scscf_sip_uri, pool);
@@ -902,4 +931,28 @@ void ICSCFSproutletTsx::route_to_bgcf(pjsip_msg* req)
                             get_pool(req));
   send_request(req);
   _routed_to_bgcf = true;
+}
+
+void ICSCFSproutletTsx::add_p_profile_header(const std::string& wildcard,
+                                             pjsip_msg* req)
+{
+  // The wildcard can contain characters that aren't valid in
+  // URIs (e.g. square brackets) - escape these before attempting to
+  // create a URI.
+  pjsip_routing_hdr* ppk = identity_hdr_create(get_pool(req),
+                                               STR_P_PROFILE_KEY);
+  pjsip_uri* wildcard_uri = PJUtils::uri_from_string(
+                                   PJUtils::escape_string_for_uri(wildcard),
+                                   get_pool(req));
+
+  if (wildcard_uri)
+  {
+    TRC_DEBUG("Adding a P-Profile-Key header for %s", wildcard.c_str());
+    ppk->name_addr.uri = wildcard_uri;
+    pjsip_msg_add_hdr(req, (pjsip_hdr*)ppk);
+  }
+  else
+  {
+    TRC_ERROR("Invalid wildcard returned on LIA: %s", wildcard.c_str());
+  }
 }

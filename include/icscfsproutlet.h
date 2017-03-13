@@ -177,6 +177,15 @@ private:
   /// @param req                  The request to route.
   void route_to_bgcf(pjsip_msg* req);
 
+  /// Adds a P-Profile-Key header to a request (built from a wildcard returned
+  /// on an LIA).
+  ///
+  /// @param wildcard - The wildcard to add (can be empty, in which case no
+  ///                   header is added)
+  /// @param req      - The request to add a header to
+  void add_p_profile_header(const std::string& wildcard,
+                            pjsip_msg* req);
+
   ICSCFSproutlet* _icscf;
   ACR* _acr;
   ICSCFRouter* _router;

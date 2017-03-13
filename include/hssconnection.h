@@ -68,8 +68,7 @@ public:
                 SNMP::EventAccumulatorTable* homestead_uar_latency_tbl,
                 SNMP::EventAccumulatorTable* homestead_lir_latency_tbl,
                 CommunicationMonitor* comm_monitor,
-                std::string scscf_uri,
-                bool fallback_if_no_matching_ifc = false);
+                std::string scscf_uri);
   virtual ~HSSConnection();
 
   HTTPCode get_auth_vector(const std::string& private_user_id,
@@ -100,6 +99,7 @@ public:
                                      std::deque<std::string>& ccfs,
                                      std::deque<std::string>& ecfs,
                                      bool cache_allowed,
+                                     const std::string& wildcard,
                                      SAS::TrailId trail);
   virtual HTTPCode update_registration_state(const std::string& public_user_identity,
                                              const std::string& private_user_identity,
@@ -173,7 +173,6 @@ private:
   SNMP::EventAccumulatorTable* _uar_latency_tbl;
   SNMP::EventAccumulatorTable* _lir_latency_tbl;
   std::string _scscf_uri;
-  bool _fallback_if_no_matching_ifc;
 };
 
 #endif

@@ -1974,6 +1974,34 @@ TEST_F(RegistrarTest, NonPrimaryAssociatedUri)
   delete aor_data; aor_data = NULL;
 }
 
+/// Register with an IMPU that has wildcarded identities in its IRS - check that
+/// they don't get included in the P-Associated-URI headers.
+TEST_F(RegistrarTest, AssociatedURIWithWildcardedIdentity)
+{
+  Message msg;
+  msg._user = "6505550234";
+
+  _hss_connection->set_impu_result("sip:6505550234@homedomain", "reg", HSSConnection::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "  <PublicIdentity><Identity>sip:6505550234@homedomain</Identity></PublicIdentity>\n"
+                                   "  <PublicIdentity><Identity>sip:650555023!.*!@homedomain</Identity></PublicIdentity>\n"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  // There should only be the one Associated-URI
+  EXPECT_EQ("P-Associated-URI: <sip:6505550234@homedomain>",
+            get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
+  free_txdata();
+}
+
 /// Test for issue 356
 TEST_F(RegistrarTest, AppServersWithNoExtension)
 {

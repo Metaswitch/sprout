@@ -1358,7 +1358,6 @@ TEST_F(SCSCFTest, TestSimpleTelURIVideo)
 
 TEST_F(SCSCFTest, TestTerminatingTelURI)
 {
-  //register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("tel:6505551235", "call", "REGISTERED",
                                 "<IMSSubscription><ServiceProfile>\n"
@@ -1397,30 +1396,13 @@ TEST_F(SCSCFTest, TestTerminatingTelURI)
   doSuccessfulFlow(msg, testing::MatchesRegex("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob"), hdrs, false);
 }
 
-// Test that allowing fallback IFCs (for when we don't have a matching bit of
-// XML) doesn't break mainline flows when we do.
-TEST_F(SCSCFTest, TestSimpleMainlineFallbackIFCs)
-{
-  SCOPED_TRACE("");
-  _hss_connection->allow_fallback_ifcs();
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  Message msg;
-  list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
-
-  // This is a terminating call so should not result in a session setup time
-  // getting tracked.
-  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
-  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
-}
-
-
-
 TEST_F(SCSCFTest, TestTelURIWildcard)
 {
   _hss_connection->set_impu_result("tel:6505551235", "call", "REGISTERED",
                                 "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>tel:65055512!*!</Identity></PublicIdentity>"
+                                "<PublicIdentity><Identity>tel:6505552345</Identity></PublicIdentity>"
+                                "<PublicIdentity><Identity>tel:65055522!.*!</Identity></PublicIdentity>"
+                                "<PublicIdentity><Identity>tel:65055512!.*!</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
                                 "    <Priority>1</Priority>\n"
                                 "    <TriggerPoint>\n"
@@ -1438,7 +1420,6 @@ TEST_F(SCSCFTest, TestTelURIWildcard)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-  _hss_connection->allow_fallback_ifcs();
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -1490,7 +1471,189 @@ TEST_F(SCSCFTest, TestTelURIWildcard)
   ASSERT_EQ(0, txdata_count());
 }
 
+TEST_F(SCSCFTest, TestMultipleServiceProfiles)
+{
+  _hss_connection->set_impu_result("tel:6505551235", "call", "REGISTERED",
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>tel:6505552345</Identity></PublicIdentity>"
+                                "<PublicIdentity><Identity>tel:65055512!.*!</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:5.6.7.8:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>tel:6505551235</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
 
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+
+  // Send a terminating INVITE for a subscriber with a tel: URI
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain>";
+  msg._todomain = "";
+  msg._requri = "tel:6505551235";
+
+  msg._method = "INVITE";
+  list<HeaderMatcher> hdrs;
+
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+  ASSERT_EQ(1, txdata_count());
+
+  // INVITE passed on to AS1
+  SCOPED_TRACE("INVITE (S)");
+  pjsip_tx_data* tdata = current_txdata();
+  out = tdata->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS1.expect_target(tdata, false);
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;service=scscf>"));
+  string fresp1 = respond_to_txdata(tdata, 404);
+  inject_msg(fresp1, &tpAS1);
+  ASSERT_EQ(3, txdata_count());
+  free_txdata();
+  free_txdata();
+  ASSERT_EQ(1, txdata_count());
+
+  // 100 Trying goes back to bono
+  out = current_txdata()->msg;
+  RespMatcher(404).matches(out);
+  free_txdata();
+  ASSERT_EQ(0, txdata_count());
+}
+
+TEST_F(SCSCFTest, TestMultipleAmbiguousServiceProfiles)
+{
+  _hss_connection->set_impu_result("tel:6505551235", "call", "REGISTERED",
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>tel:6505552345</Identity></PublicIdentity>"
+                                "<PublicIdentity><Identity>tel:65055512!.*!</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>tel:650555123!.*!</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:5.6.7.8:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+
+  // Send a terminating INVITE for a subscriber with a tel: URI
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain>";
+  msg._todomain = "";
+  msg._requri = "tel:6505551235";
+
+  msg._method = "INVITE";
+  list<HeaderMatcher> hdrs;
+
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+  ASSERT_EQ(1, txdata_count());
+
+  // INVITE passed on to AS1
+  SCOPED_TRACE("INVITE (S)");
+  pjsip_tx_data* tdata = current_txdata();
+  out = tdata->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS1.expect_target(tdata, false);
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;service=scscf>"));
+  string fresp1 = respond_to_txdata(tdata, 404);
+  inject_msg(fresp1, &tpAS1);
+  ASSERT_EQ(3, txdata_count());
+  free_txdata();
+  free_txdata();
+  ASSERT_EQ(1, txdata_count());
+
+  // 100 Trying goes back to bono
+  out = current_txdata()->msg;
+  RespMatcher(404).matches(out);
+  free_txdata();
+  ASSERT_EQ(0, txdata_count());
+}
 
 TEST_F(SCSCFTest, TestNoMoreForwards)
 {
@@ -8082,6 +8245,47 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   //  We should have tracked the session setup time for just the original session.
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
+}
+
+// This tests that a INVITE with a P-Profile-Key header sends
+// a request to Homestead with the correct wildcard entry
+TEST_F(SCSCFTest, TestInvitePProfileKey)
+{
+  SCOPED_TRACE("");
+  std::string wildcard = "sip:650![0-9]+!@homedomain";
+
+  // This UT is unrealistic as we're using the same P-Profile-Key header for
+  // both the originating and the terminating side; this is OK though for what
+  // we're testing
+  _hss_connection->set_impu_result("sip:6515551000@homedomain",
+                                   "call",
+                                   HSSConnection::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6515551000@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:6515551000</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>",
+                                   "",
+                                   wildcard);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>",
+                                   "",
+                                   wildcard);
+  register_uri(_sdm, _hss_connection, "6515551000", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "P-Profile-Key: <" + PJUtils::escape_string_for_uri(wildcard) + ">";
+  msg._to = "6515551000";
+  msg._requri = "sip:6515551000@homedomain";
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
 }
 
 TEST_F(SCSCFTest, TestAddSecondTelPAIHdr)
