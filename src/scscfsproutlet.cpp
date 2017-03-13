@@ -1742,16 +1742,13 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       to_send->line.req.uri = (pjsip_uri*)
                                         pjsip_uri_clone(pool, targets[ii].uri);
 
-      // Copy across the path URIs in to Route headers.
-      for (std::list<pjsip_uri*>::const_iterator j = targets[ii].paths.begin();
+      // Copy across the path headers into Route headers.
+      for (std::list<pjsip_route_hdr*>::const_iterator j = targets[ii].paths.begin();
            j != targets[ii].paths.end();
            ++j)
       {
-        pjsip_sip_uri* path_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(*j);
-        PJUtils::add_route_header(to_send,
-                                  (pjsip_sip_uri*)pjsip_uri_clone(pool,
-                                                                  path_uri),
-                                  pool);
+        pjsip_msg_add_hdr(to_send,
+                          (pjsip_hdr*)pjsip_hdr_clone(pool, *j));
       }
 
       // Forward the request and remember the binding identifier used for this
