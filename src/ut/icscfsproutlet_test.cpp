@@ -1691,7 +1691,7 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSServerNameWithWildcard)
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\","
-                              " \"wildcard-identity\": \"sip:650![0-9]+!@homedomain\" }");
+                              " \"wildcard-identity\": \"sip:650![0-9]{2}.*!@homedomain\" }");
 
   // Inject a INVITE request, and expect a 100 Trying and forwarded INVITE
   Message msg1;
@@ -1708,7 +1708,7 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSServerNameWithWildcard)
 
   // Check that a P-Profile-Key has been added that uses the wildcard
   string ppk = get_headers(tdata->msg, "P-Profile-Key");
-  ASSERT_EQ("P-Profile-Key: <sip:650![0-9]+!@homedomain>", PJUtils::unescape_string_for_uri(ppk, stack_data.pool));
+  ASSERT_EQ("P-Profile-Key: <sip:650![0-9]{2}.*!@homedomain>", PJUtils::unescape_string_for_uri(ppk, stack_data.pool));
 
   test_session_establishment_stats(0, 0, 0, 0);
   _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true");

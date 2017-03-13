@@ -48,6 +48,7 @@ extern "C" {
 #include "notify_utils.h"
 #include "log.h"
 #include "constants.h"
+#include "wildcard_utils.h"
 
 // Return a XML registration node with the attributes populated
 pj_xml_node* create_reg_node(pj_pool_t *pool,
@@ -145,7 +146,7 @@ pj_xml_node* notify_create_reg_state_xml(
        impu != irs_impus.end();
        ++impu)
   {
-    bool is_wildcard_impu = Utils::is_wildcard_uri(*impu);
+    bool is_wildcard_impu = WildcardUtils::is_wildcard_uri(*impu);
 
     // Escape the IMPU as an aor
     std::string unescaped_aor = *impu;

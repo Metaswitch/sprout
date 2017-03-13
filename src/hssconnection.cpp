@@ -40,6 +40,7 @@
 #include <map>
 
 #include "utils.h"
+#include "wildcard_utils.h"
 #include "log.h"
 #include "sas.h"
 #include "sproutsasevent.h"
@@ -437,11 +438,16 @@ bool decode_homestead_xml(const std::string public_user_identity,
           {
             current_sp_contains_public_id = true;
           }
-          else if (Utils::uris_user_match(uri, public_user_identity))
+          else if (WildcardUtils::check_users_equivalent(
+                                                     uri, public_user_identity))
           {
-            ifcs_map[public_user_identity] = ifc;
             found_multiple_matches = maybe_found_aliases;
             current_sp_maybe_contains_public_id = true;
+
+            if (!maybe_found_aliases)
+            {
+              ifcs_map[public_user_identity] = ifc;
+            }
           }
         }
       }
@@ -677,7 +683,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
 
   rapidxml::xml_document<>* root_underlying_ptr = NULL;
   std::string json_wildcard =
-        (wildcard != "") ? ", \"wildcard-identity\": \"" + wildcard + "\"" : "";
+        (wildcard != "") ? ", \"wildcard_identity\": \"" + wildcard + "\"" : "";
   std::string req_body = "{\"reqtype\": \"" + type + "\"" +
                           ", \"server_name\": \"" +_scscf_uri + "\"" +
                           json_wildcard +

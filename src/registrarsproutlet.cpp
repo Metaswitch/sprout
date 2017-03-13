@@ -60,6 +60,7 @@ extern "C" {
 
 #include "pjutils.h"
 #include "utils.h"
+#include "wildcard_utils.h"
 #include "sproutsasevent.h"
 #include "memcachedstore.h"
 #include "hss_sip_mapping.h"
@@ -728,7 +729,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
        it != uris.end();
        it++)
   {
-    if (!Utils::is_wildcard_uri(*it))
+    if (!WildcardUtils::is_wildcard_uri(*it))
     {
       pjsip_routing_hdr* pau =
                        identity_hdr_create(get_pool(rsp), STR_P_ASSOCIATED_URI);

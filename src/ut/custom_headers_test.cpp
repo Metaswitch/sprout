@@ -843,6 +843,8 @@ TEST_F(CustomHeadersTest, PAssertedIdentity)
   pj_pool_release(clone_pool);
 }
 
+// Test that you can create a P-Profile-Key header, parse it and clone it
+// without any issues
 TEST_F(CustomHeadersTest, PProfileKey)
 {
   pj_pool_t *main_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
@@ -860,7 +862,7 @@ TEST_F(CustomHeadersTest, PProfileKey)
              "Contact: <sip:6505551234@10.0.0.1:5060;transport=TCP;ob>\n"
              "Call-ID: 1-13919@10.151.20.48\n"
              "CSeq: 1 INVITE\n"
-             "P-Profile-Key: <sip:uri!.*!!!@example.com>;test-param;test-param2=value\n"
+             "P-Profile-Key: <sip:uri!%5b0-9%5d%7b2%7d.*!!!@example.com>;test-param;test-param2=value\n"
              "Content-Length: 0\n\n");
 
   pjsip_rx_data* rdata = build_rxdata(str, _tp_default, main_pool);
@@ -888,7 +890,7 @@ TEST_F(CustomHeadersTest, PProfileKey)
     written = generic_hdr->vptr->print_on(sclone, buf, i);
     i++;
   }
-  EXPECT_STREQ("P-Profile-Key: <sip:uri!.*!!!@example.com>;test-param;test-param2=value", buf);
+  EXPECT_STREQ("P-Profile-Key: <sip:uri!%5b0-9%5d%7b2%7d.*!!!@example.com>;test-param;test-param2=value", buf);
 
   pj_pool_release(clone_pool);
 }

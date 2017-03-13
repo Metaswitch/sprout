@@ -630,7 +630,7 @@ pjsip_hdr* parse_hdr_p_profile_key(pjsip_parse_ctx *ctx)
 
   while (*scanner->curptr == ';')
   {
-    pj_scan_get_char(scanner);    // Consume ;
+    pj_scan_get_char(scanner); // Consume the params (split by ;s)
     pjsip_param *p = PJ_POOL_ALLOC_T(ctx->pool, pjsip_param);
     pjsip_parse_param_imp(scanner, ctx->pool, &p->name, &p->value, 0);
     pj_list_insert_before(&hdr->other_param, p);

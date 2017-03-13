@@ -57,6 +57,7 @@ struct ServerCapabilities
   /// The list of optional capabilities returned by the HSS.
   std::vector<int> optional_caps;
 
+  /// The wildcarded identity returned by the HSS.
   std::string wildcard;
 };
 

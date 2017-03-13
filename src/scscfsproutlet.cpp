@@ -49,6 +49,7 @@
 #include "registration_utils.h"
 #include "scscfsproutlet.h"
 #include "uri_classifier.h"
+#include "wildcard_utils.h"
 
 // Constant indicating there is no served user for a request.
 const char* NO_SERVED_USER = "";
@@ -1656,7 +1657,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
     {
       for (std::string uri : uris)
       {
-        if (Utils::uris_user_match(uri, public_id))
+        if (WildcardUtils::check_users_equivalent(uri, public_id))
         {
           // Take the first associated URI as the AOR.
           aor = uris.front();
