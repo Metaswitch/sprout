@@ -75,7 +75,8 @@ static const char* const JSON_CSEQ = "cseq";
 static const char* const JSON_EXPIRES = "expires";
 static const char* const JSON_PRIORITY = "priority";
 static const char* const JSON_PARAMS = "params";
-static const char* const JSON_PATHS = "paths";
+static const char* const JSON_PATHS = "paths"; // Depracated as of PC release 119.
+static const char* const JSON_PATH_HEADERS = "path_headers";
 static const char* const JSON_TIMER_ID = "timer_id";
 static const char* const JSON_PRIVATE_ID = "private_id";
 static const char* const JSON_EMERGENCY_REG = "emergency_reg";
@@ -915,11 +916,23 @@ void SubscriberDataManager::AoR::Binding::
     }
     writer.EndObject();
 
-    writer.String(JSON_PATHS);
+    writer.String(JSON_PATH_HEADERS);
     writer.StartArray();
     {
       for (std::list<std::string>::const_iterator p = _path_headers.begin();
            p != _path_headers.end();
+           ++p)
+      {
+        writer.String(p->c_str());
+      }
+    }
+    writer.EndArray();
+
+    writer.String(JSON_PATHS);
+    writer.StartArray();
+    {
+      for (std::list<std::string>::const_iterator p = _path_uris.begin();
+           p != _path_uris.end();
            ++p)
       {
         writer.String(p->c_str());
@@ -955,16 +968,32 @@ void SubscriberDataManager::AoR::Binding::from_json(const rapidjson::Value& b_ob
     _params[params_it->name.GetString()] = params_it->value.GetString();
   }
 
-  JSON_ASSERT_CONTAINS(b_obj, JSON_PATHS);
-  JSON_ASSERT_ARRAY(b_obj[JSON_PATHS]);
-  const rapidjson::Value& paths_arr = b_obj[JSON_PATHS];
-
-  for (rapidjson::Value::ConstValueIterator paths_it = paths_arr.Begin();
-       paths_it != paths_arr.End();
-       ++paths_it)
+  if (b_obj.HasMember(JSON_PATH_HEADERS))
   {
-    JSON_ASSERT_STRING(*paths_it);
-    _path_headers.push_back(paths_it->GetString());
+    JSON_ASSERT_ARRAY(b_obj[JSON_PATH_HEADERS]);
+    const rapidjson::Value& path_headers_arr = b_obj[JSON_PATH_HEADERS];
+
+    for (rapidjson::Value::ConstValueIterator path_headers_it = path_headers_arr.Begin();
+         path_headers_it != path_headers_arr.End();
+         ++path_headers_it)
+    {
+      JSON_ASSERT_STRING(*path_headers_it);
+      _path_headers.push_back(path_headers_it->GetString());
+    }
+  }
+
+  if (b_obj.HasMember(JSON_PATHS))
+  {
+    JSON_ASSERT_ARRAY(b_obj[JSON_PATHS]);
+    const rapidjson::Value& path_uris_arr = b_obj[JSON_PATHS];
+
+    for (rapidjson::Value::ConstValueIterator path_uris_it = path_uris_arr.Begin();
+         path_uris_it != path_uris_arr.End();
+         ++path_uris_it)
+    {
+      JSON_ASSERT_STRING(*path_uris_it);
+      _path_uris.push_back(path_uris_it->GetString());
+    }
   }
 
   _timer_id =

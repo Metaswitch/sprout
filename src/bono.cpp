@@ -1035,7 +1035,9 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   TRC_INFO("Route request to upstream proxy %s",
            PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)upstream_uri).c_str());
 
-  target_p->paths.push_back((pjsip_uri*)upstream_uri);
+  pjsip_route_hdr* hdr = pjsip_route_hdr_create(tdata->pool);
+  hdr->name_addr.uri = (pjsip_uri*)upstream_uri;
+  target_p->paths.push_back(hdr);
 }
 
 
@@ -2758,14 +2760,14 @@ void set_target_on_tdata(const struct Target& target, pjsip_tx_data* tdata)
   }
 
   // Add all the paths as a sequence of Route headers.
-  for (std::list<pjsip_uri*>::const_iterator pit = target.paths.begin();
+  for (std::list<pjsip_route_hdr*>::const_iterator pit = target.paths.begin();
        pit != target.paths.end();
        ++pit)
   {
     // We may have a nameaddr here rather than a URI - if so,
     // pjsip_uri_get_uri will return the internal URI. Otherwise, it
     // will just return the URI.
-    pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_get_uri(*pit);
+    pjsip_sip_uri* uri = (pjsip_sip_uri*)(*pit)->name_addr.uri;
 
     TRC_DEBUG("Adding a Route header to sip:%.*s%s%.*s:%d;transport=%.*s",
               uri->user.slen, uri->user.ptr,
@@ -2774,9 +2776,11 @@ void set_target_on_tdata(const struct Target& target, pjsip_tx_data* tdata)
               uri->port,
               uri->transport_param.slen,
               uri->transport_param.ptr);
-    pjsip_route_hdr* route_hdr = pjsip_route_hdr_create(tdata->pool);
-    route_hdr->name_addr.uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool, uri);
-    pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)route_hdr);
+
+
+    //pjsip_route_hdr* route_hdr = pjsip_route_hdr_create(tdata->pool);
+    //route_hdr->name_addr.uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool, uri);
+    pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)pjsip_hdr_clone(tdata->pool, *pit));
   }
 }
 

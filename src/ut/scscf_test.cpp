@@ -9104,3 +9104,66 @@ TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
   _hss_connection->delete_rc("/impu/sip%3A6505551000%40homedomain/reg-data");
 }
 
+TEST_F(SCSCFTest, TestAddStoredPathHeader)
+{
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  SCOPED_TRACE("");
+
+  // Add a binding with the _path_headers and _path_uris set.
+  string uri("sip:6505551234@homedomain");
+  string contact("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result(uri, "call", HSSConnection::STATE_REGISTERED, "");
+  SubscriberDataManager::AoRPair* aor = _sdm->get_aor_data(uri, 0);
+  SubscriberDataManager::AoR::Binding* binding = aor->get_current()->get_binding(contact);
+  binding->_uri = contact;
+  binding->_cid = "1";
+  binding->_cseq = 1;
+  binding->_path_uris.push_back(std::string("sip:abcdefgh@ut.cw-ngv.com;lr"));
+  binding->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@ut.cw-ngv.com;lr>;tag=6ht7"));
+  binding->_expires = time(NULL) + 300;
+  binding->_priority = 1000;
+  binding->_emergency_registration = false;
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back(uri);
+  bool ret = _sdm->set_aor_data(uri, irs_impus, aor, 0);
+  delete aor;
+  EXPECT_TRUE(ret);
+
+  // Check that the Route header contains the full path header form the binding.
+  Message msg;
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Route", "Route: \"Bob\" <sip:abcdefgh@ut.cw-ngv.com;lr>;tag=6ht7"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
+}
+
+TEST_F(SCSCFTest, TestAddStoredPathURI)
+{
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  SCOPED_TRACE("");
+
+  // Add a binding with only _path_uris set.
+  string uri("sip:6505551234@homedomain");
+  string contact("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result(uri, "call", HSSConnection::STATE_REGISTERED, "");
+  SubscriberDataManager::AoRPair* aor = _sdm->get_aor_data(uri, 0);
+  SubscriberDataManager::AoR::Binding* binding = aor->get_current()->get_binding(contact);
+  binding->_uri = contact;
+  binding->_cid = "1";
+  binding->_cseq = 1;
+  binding->_path_uris.push_back(std::string("sip:abcdefgh@ut.cw-ngv.com;lr"));
+  binding->_expires = time(NULL) + 300;
+  binding->_priority = 1000;
+  binding->_emergency_registration = false;
+  std::vector<std::string> irs_impus;
+  irs_impus.push_back(uri);
+  bool ret = _sdm->set_aor_data(uri, irs_impus, aor, 0);
+  delete aor;
+  EXPECT_TRUE(ret);
+
+  // Check that the Route header contains the URI part of the path header.
+  Message msg;
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Route", "Route: <sip:abcdefgh@ut.cw-ngv.com;lr>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
+}
+
