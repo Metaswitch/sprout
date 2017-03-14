@@ -452,30 +452,11 @@ bool decode_homestead_xml(const std::string public_user_identity,
       {
         std::string uri = std::string(identity->value());
 
-        // TODO - This code should be commonised with the code in Homestead
-        // (and will be shortly). It's therefore not fully UT'd; this will be
-        // done when it moves.
-        // LCOV_EXCL_START
-        rapidxml::xml_node<>* extension = public_id->first_node("Extension");
+        rapidxml::xml_node<>* extension = public_id->first_node(RegDataXmlUtils::EXTENSION);
         if (extension)
         {
-          rapidxml::xml_node<>* type = extension->first_node("IdentityType");
-          if (type)
-          {
-            if (std::string(type->value()) == "2")
-            {
-              rapidxml::xml_node<>* new_identity = extension->first_node("WildcardedPSI");
-              uri = std::string(new_identity->value());
-            }
-            else if ((std::string(type->value()) == "3") ||
-                     (std::string(type->value()) == "4"))
-            {
-              rapidxml::xml_node<>* new_identity = extension->first_node("WildcardedIMPU");
-              uri = std::string(new_identity->value());
-            }
-          }
+          RegDataXmlUtils::parse_extension(uri, extension);
         }
-        // LCOV_EXCL_STOP
 
         TRC_DEBUG("Processing Identity node from HSS XML - %s\n",
                   uri.c_str());

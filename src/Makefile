@@ -86,6 +86,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          base64.cpp \
                          as_communication_tracker.cpp \
                          astaire_resolver.cpp \
+                         reg_data_xml_utils.cpp \
                          wildcard_utils.cpp
 
 sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
