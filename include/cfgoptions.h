@@ -161,7 +161,6 @@ struct options
   bool                                 disable_tcp_switch;
   std::string                          chronos_hostname;
   std::string                          sprout_chronos_callback_uri;
-  bool                                 allow_fallback_ifcs;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be

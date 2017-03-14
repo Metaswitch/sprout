@@ -40,6 +40,7 @@
 #include <map>
 
 #include "utils.h"
+#include "wildcard_utils.h"
 #include "log.h"
 #include "sas.h"
 #include "sproutsasevent.h"
@@ -73,8 +74,7 @@ HSSConnection::HSSConnection(const std::string& server,
                              SNMP::EventAccumulatorTable* homestead_uar_latency_tbl,
                              SNMP::EventAccumulatorTable* homestead_lir_latency_tbl,
                              CommunicationMonitor* comm_monitor,
-                             std::string scscf_uri,
-                             bool fallback_if_no_matching_ifc) :
+                             std::string scscf_uri) :
   _http(new HttpConnection(server,
                            false,
                            resolver,
@@ -87,8 +87,7 @@ HSSConnection::HSSConnection(const std::string& server,
   _sar_latency_tbl(homestead_sar_latency_tbl),
   _uar_latency_tbl(homestead_uar_latency_tbl),
   _lir_latency_tbl(homestead_lir_latency_tbl),
-  _scscf_uri(scscf_uri),
-  _fallback_if_no_matching_ifc(fallback_if_no_matching_ifc)
+  _scscf_uri(scscf_uri)
 {
 }
 
@@ -336,8 +335,8 @@ bool decode_homestead_xml(const std::string public_user_identity,
                           std::vector<std::string>& aliases,
                           std::deque<std::string>& ccfs,
                           std::deque<std::string>& ecfs,
-                          bool fallback_if_no_matching_ifc,
-                          bool allowNoIMS)
+                          bool allowNoIMS,
+                          SAS::TrailId trail)
 {
   if (!root.get())
   {
@@ -379,22 +378,50 @@ bool decode_homestead_xml(const std::string public_user_identity,
   }
 
   // The set of aliases consists of the set of public identities in the same
-  // Service Profile. It is a subset of the associated URIs. In order to find
-  // the set of aliases we want, we need to find the Service Profile containing
-  // our public identity and then save off all of the public identities in this
-  // Service Profile.
+  // Service Profile. It is a subset of the associated URIs.
+
+  // In order to find the set of aliases we want, we need to find the Service
+  // Profile containing our public identity and then save off all of the public
+  // identities in this Service Profile.
+
+  // There are five types of public identity, and different ways to check if
+  // they match our identity.
+  //   Distinct IMPU, non distinct/specific IMPU, Distinct PSI - If we get a
+  //        match against one of these, then this is definitely the correct
+  //        identity, and we stop looking for a match.
+  //   Wildcarded IMPU - Regex matching the IMPU. If we get a match we might be
+  //        in the correct service profile, but there could be a matching
+  //        distinct/non-distinct IMPU later. It's a misconfiguration to have
+  //        multiple wildcards that match an IMPU without having a distinct/non-
+  //        distinct IMPU as well.
+  //   Wildcarded PSI - Regex matching the IMPU. There's no way to indicate
+  //        what regex is the correct regex to match against the IMPU if there
+  //        are overlapping ranges in the user data (but this makes no sense
+  //        for a HSS to return, unlike for overlapping ranges for wildcard
+  //        IMPUs). We allow distinct PSIs to trump wildcard matches, otherwise
+  //        the first match is the one we take.
   //
   // sp_identities is used to save the public identities in the current Service
   // Profile.
-  // current_sp_contains_public_id is a flag used to indicate that the Service
-  // Profile we're currently cycling through contains our public identity.
+  // current_sp_contains_public_id is a flag used to indicate that the
+  // Service Profile we're currently cycling through definitely contains our
+  // public identity (e.g. it wasn't found by matching a wildcard).
+  // current_sp_maybe_contains_public_id is a flag used to indicate that the
+  // Service Profile we're currently cycling through might contain our public
+  // identity (e.g. it matched on a regex, but there could still be a non
+  // wildcard match to come).
   // found_aliases is a flag used to indicate that we've already found our list
-  // of aliases.
+  // of aliases, maybe_found_aliases indicates that we might have found it, but
+  // it could be overridden later.
   std::vector<std::string> sp_identities;
+  std::vector<std::string> temp_aliases;
   bool current_sp_contains_public_id = false;
+  bool current_sp_maybe_contains_public_id = false;
   bool found_aliases = false;
+  bool maybe_found_aliases = false;
+  bool found_multiple_matches = false;
+  associated_uris.clear();
   rapidxml::xml_node<>* sp = NULL;
-  Ifcs fallback_ifc;
 
   if (!imss->first_node(RegDataXmlUtils::SERVICE_PROFILE))
   {
@@ -424,18 +451,40 @@ bool decode_homestead_xml(const std::string public_user_identity,
       if (identity)
       {
         std::string uri = std::string(identity->value());
+
+        // TODO - This code should be commonised with the code in Homestead
+        // (and will be shortly). It's therefore not fully UT'd; this will be
+        // done when it moves.
+        // LCOV_EXCL_START
+        rapidxml::xml_node<>* extension = public_id->first_node("Extension");
+        if (extension)
+        {
+          rapidxml::xml_node<>* type = extension->first_node("IdentityType");
+          if (type)
+          {
+            if (std::string(type->value()) == "2")
+            {
+              rapidxml::xml_node<>* new_identity = extension->first_node("WildcardedPSI");
+              uri = std::string(new_identity->value());
+            }
+            else if ((std::string(type->value()) == "3") ||
+                     (std::string(type->value()) == "4"))
+            {
+              rapidxml::xml_node<>* new_identity = extension->first_node("WildcardedIMPU");
+              uri = std::string(new_identity->value());
+            }
+          }
+        }
+        // LCOV_EXCL_STOP
+
         TRC_DEBUG("Processing Identity node from HSS XML - %s\n",
                   uri.c_str());
 
-        associated_uris.push_back(uri);
-        ifcs_map[uri] = ifc;
-
-        // The first set of IFCs are what we might want to fall back to if
-        // the public ID we're looking for isn't found, so we store them off if
-        // the PublicIdentity node we're handling is the first one.
-        if (public_id == sp->first_node(RegDataXmlUtils::PUBLIC_IDENTITY))
+        if (std::find(associated_uris.begin(), associated_uris.end(), uri) ==
+            associated_uris.end())
         {
-          fallback_ifc = ifc;
+          associated_uris.push_back(uri);
+          ifcs_map[uri] = ifc;
         }
 
         if (!found_aliases)
@@ -446,6 +495,17 @@ bool decode_homestead_xml(const std::string public_user_identity,
           {
             current_sp_contains_public_id = true;
           }
+          else if (WildcardUtils::check_users_equivalent(
+                                                     uri, public_user_identity))
+          {
+            found_multiple_matches = maybe_found_aliases;
+            current_sp_maybe_contains_public_id = true;
+
+            if (!maybe_found_aliases)
+            {
+              ifcs_map[public_user_identity] = ifc;
+            }
+          }
         }
       }
       else
@@ -455,36 +515,37 @@ bool decode_homestead_xml(const std::string public_user_identity,
       }
     }
 
-    if (!found_aliases)
+    if ((!found_aliases) &&
+        (current_sp_contains_public_id))
     {
-      if (current_sp_contains_public_id)
-      {
-        aliases = sp_identities;
-        found_aliases = true;
-      }
-      else
-      {
-        sp_identities.clear();
-      }
+      aliases = sp_identities;
+      found_aliases = true;
+    }
+    else if ((!maybe_found_aliases) &&
+             (current_sp_maybe_contains_public_id))
+    {
+      temp_aliases = sp_identities;
+      maybe_found_aliases = true;
+    }
+    else
+    {
+      sp_identities.clear();
     }
   }
 
-  // We might get a set of IFCs where there's no Identity node that
-  // matches our URI - the main example is with wildcard identities,
-  // where we don't do wildcard matching yet. In this case, our behaviour
-  // is determined by fallback_if_no_matching_ifc:
-  //
-  // - if it's true, we'll use the first IFC given regardless of the
-  //   identity it specifies
-  // - if it's false, we just won't invoke any application servers
-  if (fallback_if_no_matching_ifc &&
-      (ifcs_map.count(public_user_identity) == 0))
+  if (aliases.empty() && !temp_aliases.empty())
   {
-    ifcs_map[public_user_identity] = fallback_ifc;
-    associated_uris.push_back(public_user_identity);
+    aliases = temp_aliases;
+
+    if (found_multiple_matches)
+    {
+      SAS::Event event(trail, SASEvent::AMBIGUOUS_WILDCARD_MATCH, 0);
+      event.add_var_param(public_user_identity);
+      SAS::report_event(event);
+    }
   }
 
-  rapidxml::xml_node<>* charging_addrs_node = cw->first_node(RegDataXmlUtils::CHARGING_ADDRESSES);
+  rapidxml::xml_node<>* charging_addrs_node = cw->first_node("ChargingAddresses");
 
   if (charging_addrs_node)
   {
@@ -522,6 +583,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                    unused_ccfs,
                                    unused_ecfs,
                                    true,
+                                   "",
                                    trail);
 }
 
@@ -546,6 +608,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                    unused_ccfs,
                                    unused_ecfs,
                                    true,
+                                   "",
                                    trail);
 }
 
@@ -570,6 +633,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                    unused_ccfs,
                                    unused_ecfs,
                                    true,
+                                   "",
                                    trail);
 }
 
@@ -594,6 +658,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                    ccfs,
                                    ecfs,
                                    true,
+                                   "",
                                    trail);
 }
 
@@ -607,6 +672,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                                   std::deque<std::string>& ccfs,
                                                   std::deque<std::string>& ecfs,
                                                   bool cache_allowed,
+                                                  const std::string& wildcard,
                                                   SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
@@ -630,8 +696,14 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
   // of scope.
 
   rapidxml::xml_document<>* root_underlying_ptr = NULL;
+  std::string json_wildcard =
+        (wildcard != "") ? ", \"wildcard_identity\": \"" + wildcard + "\"" : "";
+  std::string req_body = "{\"reqtype\": \"" + type + "\"" +
+                          ", \"server_name\": \"" +_scscf_uri + "\"" +
+                          json_wildcard +
+                          "}";
   HTTPCode http_code = put_for_xml_object(path,
-                                          "{\"reqtype\": \""+type+"\", \"server_name\": \""+_scscf_uri+"\"}",
+                                          req_body,
                                           cache_allowed,
                                           root_underlying_ptr,
                                           trail);
@@ -666,8 +738,8 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                               aliases,
                               ccfs,
                               ecfs,
-                              _fallback_if_no_matching_ifc,
-                              false) ? HTTP_OK : HTTP_SERVER_ERROR;
+                              false,
+                              trail) ? HTTP_OK : HTTP_SERVER_ERROR;
 }
 
 HTTPCode HSSConnection::get_registration_data(const std::string& public_user_identity,
@@ -745,8 +817,8 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
                               unused_aliases,
                               ccfs,
                               ecfs,
-                              _fallback_if_no_matching_ifc,
-                              true) ? HTTP_OK : HTTP_SERVER_ERROR;
+                              true,
+                              trail) ? HTTP_OK : HTTP_SERVER_ERROR;
 }
 
 

@@ -461,6 +461,55 @@ TEST_F(CommonProcessingTest, BadResponseDropped)
   ASSERT_EQ(0, txdata_count());
 }
 
+TEST_F(CommonProcessingTest, SupportedHeaderWithCommas)
+{
+  // Tests that a variety of Supported headers are accepted 
+  // including ones with trailing commas.
+    std::vector<std::string> headers = { 
+      "Supported: ",
+      "Supported: \n ",
+      "Supported: timer",
+      "Supported: timer\n   ",
+      "Supported: \n timer",
+      "Supported: timer, path",
+      "Supported: timer,\n path",
+      "Supported: timer\n ,",
+      "Supported: timer,",
+      "Supported: timer\n ,",
+      "Supported: timer,path, ",
+      "Supported: timer, \n path, ",
+      "Supported: \n timer,\n path, ",
+      "Supported: ,",
+      "Supported: ,,,,,,",
+      "Supported: ,,,\n ,,,",
+  };
+  
+  // Set up a new Load monitor with enough tokens for each test.
+  delete(_lm);
+  _lm = new LoadMonitor(0, headers.size(), 0, 0);
+  init_common_sip_processing(_lm, _requests_counter, _overload_counter, _health_checker);
+
+  pjsip_endpt_register_module(stack_data.endpt, &mod_ok);
+
+  for (std::string h: headers) {
+    SCOPED_TRACE(h);
+    // Inject a request with the latest header.
+    Message msg1;
+    msg1._extra = h;
+    inject_msg(msg1.get_request(), _tp);
+
+    // Expect a response from mod_ok.
+    ASSERT_EQ(1, txdata_count());
+
+    pjsip_tx_data* tdata = current_txdata();
+    RespMatcher r1(200);
+    r1.matches(tdata->msg);
+
+    free_txdata();
+  }
+  pjsip_endpt_unregister_module(stack_data.endpt, &mod_ok);
+}
+
 // If:
 //  - an exception has already been hit
 //  - the health-checker runs a check

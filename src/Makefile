@@ -85,7 +85,8 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          session_expires_helper.cpp \
                          base64.cpp \
                          as_communication_tracker.cpp \
-                         astaire_resolver.cpp
+                         astaire_resolver.cpp \
+                         wildcard_utils.cpp
 
 sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_counter_table.cpp \

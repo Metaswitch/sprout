@@ -226,6 +226,8 @@ namespace SASEvent
   const int BEGIN_SUBSCRIPTION_MODULE = SPROUT_BASE + 0x0127;
   const int BEGIN_THREAD_DISPATCHER = SPROUT_BASE + 0x0128;
 
+  const int AMBIGUOUS_WILDCARD_MATCH = SPROUT_BASE + 0x0130;
+
 } //namespace SASEvent
 
 #endif

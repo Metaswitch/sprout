@@ -93,8 +93,13 @@ public:
       std::string _cid;
 
       /// Contains any path headers (in order) that were present on the
-      /// register.  Empty if there were none.
+      /// register.  Empty if there were none. This is the full path header,
+      /// including the disply name, URI and any header parameters.
       std::list<std::string> _path_headers;
+
+      /// Contains the URI part of any path headers (in order) that were
+      /// present on the register. Empty if there were none.
+      std::list<std::string> _path_uris;
 
       /// The CSeq value of the REGISTER request.
       int _cseq;

@@ -49,6 +49,7 @@
 #include "registration_utils.h"
 #include "scscfsproutlet.h"
 #include "uri_classifier.h"
+#include "wildcard_utils.h"
 
 // Constant indicating there is no served user for a request.
 const char* NO_SERVED_USER = "";
@@ -283,6 +284,7 @@ long SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                    Ifcs& ifcs,
                                    std::deque<std::string>& ccfs,
                                    std::deque<std::string>& ecfs,
+                                   const std::string& wildcard,
                                    SAS::TrailId trail)
 {
   std::string regstate;
@@ -298,6 +300,7 @@ long SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                                    ccfs,
                                                    ecfs,
                                                    cache_allowed,
+                                                   wildcard,
                                                    trail);
   if (http_code == HTTP_OK)
   {
@@ -404,6 +407,7 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
   _video_call(false),
   _impi(),
   _auto_reg(false),
+  _wildcard(""),
   _se_helper(stack_data.default_session_expires),
   _base_req(nullptr)
 {
@@ -476,6 +480,28 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
                                                            NULL);
       _impi = PJUtils::extract_username(proxy_auth_hdr,
                                         PJUtils::orig_served_user(req));
+    }
+  }
+
+  // Pull out the P-Profile-Key header if it exists. We must do this before
+  // sending any requests to the HSS.
+  pjsip_routing_hdr* ppk_hdr = (pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(
+                                                   req,
+                                                   &STR_P_PROFILE_KEY,
+                                                   NULL);
+
+  if (ppk_hdr != NULL)
+  {
+    std::string escaped_wildcard = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                                          (pjsip_uri*)(&ppk_hdr->name_addr));
+    _wildcard = PJUtils::unescape_string_for_uri(std::string(escaped_wildcard),
+                                                 get_pool(req));
+
+    // If the URI is surrounded with angle brackets remove them.
+    if ((boost::starts_with(_wildcard, "<")) &&
+        (boost::ends_with(_wildcard, ">")))
+    {
+      _wildcard = _wildcard.substr(1, _wildcard.size() - 2);
     }
   }
 
@@ -1627,14 +1653,20 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
     std::vector<std::string> uris;
     bool success = get_associated_uris(public_id, uris);
 
-    if (success &&
-        (uris.size() > 0) &&
-        (std::find(uris.begin(), uris.end(), public_id) != uris.end()))
+    if ((success) && (uris.size() > 0))
     {
-      // Take the first associated URI as the AOR.
-      aor = uris.front();
+      for (std::string uri : uris)
+      {
+        if (WildcardUtils::check_users_equivalent(uri, public_id))
+        {
+          // Take the first associated URI as the AOR.
+          aor = uris.front();
+          break;
+        }
+      }
     }
-    else
+
+    if (aor == "")
     {
       // Failed to get the associated URIs from Homestead.  We'll try to
       // do the registration look-up with the specified target URI - this may
@@ -1711,16 +1743,13 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       to_send->line.req.uri = (pjsip_uri*)
                                         pjsip_uri_clone(pool, targets[ii].uri);
 
-      // Copy across the path URIs in to Route headers.
-      for (std::list<pjsip_uri*>::const_iterator j = targets[ii].paths.begin();
+      // Copy across the path headers into Route headers.
+      for (std::list<pjsip_route_hdr*>::const_iterator j = targets[ii].paths.begin();
            j != targets[ii].paths.end();
            ++j)
       {
-        pjsip_sip_uri* path_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(*j);
-        PJUtils::add_route_header(to_send,
-                                  (pjsip_sip_uri*)pjsip_uri_clone(pool,
-                                                                  path_uri),
-                                  pool);
+        pjsip_msg_add_hdr(to_send,
+                          (pjsip_hdr*)pjsip_hdr_clone(pool, *j));
       }
 
       // Forward the request and remember the binding identifier used for this
@@ -1760,6 +1789,7 @@ long SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
                                       _ifcs,
                                       _ccfs,
                                       _ecfs,
+                                      _wildcard,
                                       trail());
 
     if (http_code == HTTP_OK)

@@ -69,11 +69,6 @@ FakeHSSConnection::~FakeHSSConnection()
   flush_all();
 }
 
-void FakeHSSConnection::allow_fallback_ifcs()
-{
-  _fallback_if_no_matching_ifc = true;
-}
-
 void FakeHSSConnection::flush_all()
 {
   _results.clear();
@@ -90,7 +85,8 @@ void FakeHSSConnection::set_impu_result(const std::string& impu,
                                         const std::string& type,
                                         const std::string& state,
                                         std::string subxml,
-                                        std::string extra_params)
+                                        std::string extra_params,
+                                        const std::string& wildcard)
 {
   std::string url = "/impu/" + Utils::url_escape(impu) + "/reg-data" + extra_params;
 
@@ -113,7 +109,15 @@ void FakeHSSConnection::set_impu_result(const std::string& impu,
                         "<ClearwaterRegData><RegistrationState>" + state + "</RegistrationState>"
                         + subxml + chargingaddrsxml + "</ClearwaterRegData>");
 
-  _results[UrlBody(url, (type.empty() ? "" : "{\"reqtype\": \""+type+"\", \"server_name\": \""+_scscf_uri+"\"}"))] = result;
+  std::string body = "\"reqtype\": \"" + type + "\"" +
+                     ", \"server_name\": \"" +_scscf_uri +"\"";
+
+  if (wildcard != "")
+  {
+    body += ", \"wildcard_identity\": \"" + wildcard + "\"";
+  }
+
+  _results[UrlBody(url, (type.empty() ? "" : "{" + body + "}"))] = result;
 }
 
 

@@ -154,6 +154,7 @@ const pj_str_t STR_MIME_SUBTYPE = pj_str((char*)"reginfo+xml");
 const pj_str_t STR_REGISTRATION = pj_str((char*)"registration");
 const pj_str_t STR_CONTACT = pj_str((char*)"contact");
 const pj_str_t STR_URI = pj_str((char*)"uri");
+const pj_str_t STR_WILDCARD = pj_str((char*)"ere:wildcardedIdentity");
 
 /* XML node attribute constants */
 const pj_str_t STR_STATE = pj_str((char*)"state");

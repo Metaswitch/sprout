@@ -585,6 +585,7 @@ TEST_F(HssConnectionTest, SimpleAliases)
                                  unused_deque,
                                  unused_deque,
                                  true,
+                                 "",
                                  0);
   ASSERT_EQ(3u, aliases.size());
   EXPECT_EQ("sip:321@example.com", aliases[0]);
@@ -609,6 +610,7 @@ TEST_F(HssConnectionTest, CacheNotAllowed)
                                                unused_deque,
                                                unused_deque,
                                                false, // Do not allow cached answers.
+                                               "",
                                                0);
   // The request has a cache control header on it to prevent cached responses.
   Request& request = fakecurl_requests[

@@ -245,7 +245,6 @@ const static struct pj_getopt_option long_opt[] =
   { "disable-tcp-switch",           no_argument,       0, OPT_DISABLE_TCP_SWITCH},
   { "chronos-hostname",             required_argument, 0, OPT_CHRONOS_HOSTNAME},
   { "sprout-chronos-callback-uri",  required_argument, 0, OPT_SPROUT_CHRONOS_CALLBACK_URI},
-  { "allow-fallback-ifcs",          no_argument,       0, OPT_ALLOW_FALLBACK_IFCS},
   { NULL,                           0,                 0, 0}
 };
 
@@ -454,8 +453,6 @@ static void usage(void)
        "                            Specify the sprout hostname used for Chronos callbacks. If unset \n"
        "                            the default is to use the sprout-hostname.\n"
        "                            Ignored if chronos-hostname is not set.\n"
-       "     --allow-fallback-ifcs  If no Identity elements match for Initial Filter Criteria, use the\n"
-       "                            first IFC returned as a fallback.\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
        " -F, --log-file <directory>\n"
@@ -1204,11 +1201,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       TRC_INFO("Switching to TCP is disabled");
       break;
 
-    case OPT_ALLOW_FALLBACK_IFCS:
-      TRC_STATUS("IFC fallback enabled");
-      options->allow_fallback_ifcs = true;
-      break;
-
     case 'N':
       {
         std::vector<std::string> fields;
@@ -1511,7 +1503,6 @@ int main(int argc, char* argv[])
   opt.scscf_node_uri = "";
   opt.sas_signaling_if = false;
   opt.disable_tcp_switch = false;
-  opt.allow_fallback_ifcs = false;
 
   status = init_logging_options(argc, argv, &opt);
 
@@ -1953,8 +1944,7 @@ int main(int argc, char* argv[])
                                        homestead_uar_latency_table,
                                        homestead_lir_latency_table,
                                        hss_comm_monitor,
-                                       opt.uri_scscf,
-                                       opt.allow_fallback_ifcs);
+                                       opt.uri_scscf);
   }
 
   // Create ENUM service.

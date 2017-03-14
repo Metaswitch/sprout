@@ -1974,6 +1974,34 @@ TEST_F(RegistrarTest, NonPrimaryAssociatedUri)
   delete aor_data; aor_data = NULL;
 }
 
+/// Register with an IMPU that has wildcarded identities in its IRS - check that
+/// they don't get included in the P-Associated-URI headers.
+TEST_F(RegistrarTest, AssociatedURIWithWildcardedIdentity)
+{
+  Message msg;
+  msg._user = "6505550234";
+
+  _hss_connection->set_impu_result("sip:6505550234@homedomain", "reg", HSSConnection::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "  <PublicIdentity><Identity>sip:6505550234@homedomain</Identity></PublicIdentity>\n"
+                                   "  <PublicIdentity><Identity>sip:650555023!.*!@homedomain</Identity></PublicIdentity>\n"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  // There should only be the one Associated-URI
+  EXPECT_EQ("P-Associated-URI: <sip:6505550234@homedomain>",
+            get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
+  free_txdata();
+}
+
 /// Test for issue 356
 TEST_F(RegistrarTest, AppServersWithNoExtension)
 {
@@ -2650,6 +2678,41 @@ TEST_F(RegistrarTest, MultipleRegistrationsWithSubscription)
   check_notify(out, aor, "active", std::make_pair("terminated", "expired"));
   inject_msg(respond_to_current_txdata(200));
   free_txdata();
+}
+
+/// Sends in a REGISTER with a Path header that contains a display name and
+/// some parameters. Chck that we store the full path header on the binding.
+TEST_F(RegistrarTest, StoreFullPathHeader)
+{
+  // Send in a REGISTER.
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
+
+  Message msg;
+  msg._expires = "Expires: 300";
+  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  msg._path = "Path: \"Bob\" <sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob>;tag=7hf8";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  free_txdata();
+
+  // Get the binding.
+  SubscriberDataManager::AoRPair* aor_data;
+  aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
+  ASSERT_TRUE(aor_data != NULL);
+  EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
+  SubscriberDataManager::AoR::Binding* binding = aor_data->get_current()->bindings().begin()->second;
+
+  // Chck that the path header fields are filled in correctly.
+  EXPECT_EQ(1u, binding->_path_headers.size());
+  EXPECT_EQ(std::string("\"Bob\" <sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob>;tag=7hf8"), binding->_path_headers.front());
+  EXPECT_EQ(1u, binding->_path_uris.size());
+  EXPECT_EQ(std::string("sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob"), binding->_path_uris.front());
+
+  delete aor_data;
 }
 
 

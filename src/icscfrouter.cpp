@@ -82,9 +82,14 @@ ICSCFRouter::~ICSCFRouter()
 ///                      for at least as long as the returned SCSCF URI.
 /// @param scscf_sip_uri Output parameter holding the parsed SCSCF URI.  This
 ///                      is only valid if the function returns PJSIP_SC_OK.
+/// @param wildcard      Output parameter holding any wildcard identity in the
+///                      response
 /// @param do_billing    Flag to determine whether we send an ACR after the HSS
 ///                      query. Defaults to 'false'
-int ICSCFRouter::get_scscf(pj_pool_t* pool, pjsip_sip_uri*& scscf_sip_uri, bool do_billing)
+int ICSCFRouter::get_scscf(pj_pool_t* pool,
+                           pjsip_sip_uri*& scscf_sip_uri,
+                           std::string& wildcard,
+                           bool do_billing)
 {
   int status_code = PJSIP_SC_OK;
   std::string scscf;
@@ -103,6 +108,8 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool, pjsip_sip_uri*& scscf_sip_uri, bool 
 
   if (status_code == PJSIP_SC_OK)
   {
+    wildcard = _hss_rsp.wildcard;
+
     if ((!_hss_rsp.scscf.empty()) &&
         (std::find(_attempted_scscfs.begin(), _attempted_scscfs.end(),
                    _hss_rsp.scscf) == _attempted_scscfs.end()))
@@ -213,6 +220,7 @@ int ICSCFRouter::parse_hss_response(rapidjson::Document*& rsp, bool queried_caps
   _hss_rsp.mandatory_caps.clear();
   _hss_rsp.optional_caps.clear();
   _hss_rsp.scscf = "";
+  _hss_rsp.wildcard = "";
 
   if ((!rsp->HasMember("result-code")) ||
       (!(*rsp)["result-code"].IsInt()))
@@ -258,6 +266,15 @@ int ICSCFRouter::parse_hss_response(rapidjson::Document*& rsp, bool queried_caps
           TRC_INFO("Malformed required capabilities returned by HSS\n");
           status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
         }
+      }
+
+      if ((rsp->HasMember("wildcard-identity")) &&
+          ((*rsp)["wildcard-identity"].IsString()))
+      {
+        // Response included a wildcard, so save this.
+        TRC_DEBUG("HSS returned a wildcarded public user identity %s",
+                  (*rsp)["wildcard-identity"].GetString());
+        _hss_rsp.wildcard = (*rsp)["wildcard-identity"].GetString();
       }
     }
     else if (rc == 5003)

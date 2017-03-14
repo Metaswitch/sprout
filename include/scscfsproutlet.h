@@ -154,6 +154,7 @@ private:
                      Ifcs& ifcs,
                      std::deque<std::string>& ccfs,
                      std::deque<std::string>& ecfs,
+                     const std::string& wildcard,
                      SAS::TrailId trail);
 
   /// Record that communication with an AS failed.
@@ -453,6 +454,10 @@ private:
   ///   the way to the HSS (i.e. Homestead may not answer the response solely
   ///   from its cache).
   bool _auto_reg;
+
+  /// The wildcarded public identity associated with the requestee. This is
+  /// pulled from the P-Profile-Key header (RFC 5002).
+  std::string _wildcard;
 
   /// Class to handle session-expires processing.
   SessionExpiresHelper _se_helper;

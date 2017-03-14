@@ -178,7 +178,6 @@ get_daemon_args()
         [ -z "$sprout_impi_store" ] || impi_store_arg="--impi-store=$sprout_impi_store"
         [ -z "$chronos_hostname" ] || chronos_hostname_arg="--chronos-hostname=$chronos_hostname"
         [ -z "$sprout_chronos_callback_uri" ] || sprout_chronos_callback_uri_arg="--sprout-chronos-callback-uri=$sprout_chronos_callback_uri"
-        [ -z "$allow_fallback_ifcs" ] || allow_fallback_ifcs_arg="--allow-fallback-ifcs"
 
         DAEMON_ARGS="
                      --domain=$home_domain
@@ -218,7 +217,6 @@ get_daemon_args()
                      $override_npdi_arg
                      $exception_max_ttl_arg
                      $force_3pr_body_arg
-                     $allow_fallback_ifcs_arg
                      --http-address=$local_ip
                      --http-port=9888
                      --analytics=$log_directory

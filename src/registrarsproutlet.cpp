@@ -60,6 +60,7 @@ extern "C" {
 
 #include "pjutils.h"
 #include "utils.h"
+#include "wildcard_utils.h"
 #include "sproutsasevent.h"
 #include "memcachedstore.h"
 #include "hss_sip_mapping.h"
@@ -722,15 +723,19 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                           pjsip_hdr_shallow_clone(get_pool(rsp), _sproutlet->_service_route);
   pjsip_msg_insert_first_hdr(rsp, clone);
 
-  // Add P-Associated-URI headers for all of the associated URIs.
+  // Add P-Associated-URI headers for all of the associated URIs. Don't include
+  // any URIs that are wildcard identities.
   for (std::vector<std::string>::iterator it = uris.begin();
        it != uris.end();
        it++)
   {
-    pjsip_routing_hdr* pau =
-                        identity_hdr_create(get_pool(rsp), STR_P_ASSOCIATED_URI);
-    pau->name_addr.uri = PJUtils::uri_from_string(*it, get_pool(rsp));
-    pjsip_msg_add_hdr(rsp, (pjsip_hdr*)pau);
+    if (!WildcardUtils::is_wildcard_uri(*it))
+    {
+      pjsip_routing_hdr* pau =
+                       identity_hdr_create(get_pool(rsp), STR_P_ASSOCIATED_URI);
+      pau->name_addr.uri = PJUtils::uri_from_string(*it, get_pool(rsp));
+      pjsip_msg_add_hdr(rsp, (pjsip_hdr*)pau);
+    }
   }
 
   // Add a PCFA header.
@@ -940,18 +945,25 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
           // rejecting a request with a Path header if there is no corresponding
           // "path" entry in the Supported header but we don't do so on the assumption
           // that the edge proxy knows what it's doing.
+          //
+          // We store the full path header in the _path_headers field. For
+          // backwards compatibility, we also store the URI part of the path
+          // header in the _path_uris field.
           binding->_path_headers.clear();
+          binding->_path_uris.clear();
           pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
                               pjsip_msg_find_hdr_by_name(req, &STR_PATH, NULL);
 
           while (path_hdr)
           {
-            std::string path = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                                      path_hdr->name_addr.uri);
+            std::string path = PJUtils::get_header_value((pjsip_hdr*)path_hdr);
+            std::string path_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                                          path_hdr->name_addr.uri);
             TRC_DEBUG("Path header %s", path.c_str());
 
             // Extract all the paths from this header.
-            Utils::split_string(path, ',', binding->_path_headers, 0, true);
+            binding->_path_headers.push_back(path);
+            binding->_path_uris.push_back(path_uri);
 
             // Look for the next header.
             path_hdr = (pjsip_routing_hdr*)
