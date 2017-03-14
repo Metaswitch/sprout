@@ -1488,6 +1488,12 @@ void SproutletWrapper::send_response(pjsip_msg*& rsp)
     return;
   }
 
+  if (rsp->line.status.code == PJSIP_SC_TRYING)
+  {
+    TRC_ERROR("Sproutlet attempted to forward a 100 Trying response");
+    return;
+  }
+
   TRC_VERBOSE("%s sending %s", _id.c_str(), pjsip_tx_data_get_info(it->second));
 
   // We've found the tdata, move it to _send_responses.
@@ -1786,6 +1792,8 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
     if (status_code == PJSIP_SC_TRYING)
     {
       _sproutlet_tsx->on_rx_trying(rsp->msg, fork_id);
+      deregister_tdata(rsp);
+      pjsip_tx_data_dec_ref(rsp);
     }
     else
     {
@@ -2012,18 +2020,6 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
     // this response.
     TRC_DEBUG("Discard stale response %s (%s)",
               pjsip_tx_data_get_info(rsp), rsp->obj_name);
-    deregister_tdata(rsp);
-    pjsip_tx_data_dec_ref(rsp);
-    return;
-  }
-
-  // Sproutlets shouldn't forward 100 Trying responses but they might do it
-  // anyway, so let's keep this code.
-  if (status_code == 100)
-  {
-    // We will already have sent a locally generated 100 Trying response, so
-    // don't forward this one.
-    TRC_DEBUG("Discard 100/INVITE response (%s)", rsp->obj_name);
     deregister_tdata(rsp);
     pjsip_tx_data_dec_ref(rsp);
     return;
