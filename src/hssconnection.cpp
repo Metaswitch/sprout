@@ -49,6 +49,9 @@
 #include "snmp_continuous_accumulator_table.h"
 #include "reg_data_xml_utils.h"
 
+// TODO - Can these be deleted (55-64)? (All unused here!) - For where they are
+// initialised look in hssconnection.h.
+
 const std::string HSSConnection::REG = "reg";
 const std::string HSSConnection::CALL = "call";
 const std::string HSSConnection::DEREG_USER = "dereg-user";
@@ -57,7 +60,6 @@ const std::string HSSConnection::DEREG_TIMEOUT = "dereg-timeout";
 const std::string HSSConnection::AUTH_TIMEOUT = "dereg-auth-timeout";
 const std::string HSSConnection::AUTH_FAIL = "dereg-auth-failed";
 
-// TODO - Can these be deleted (both unused here)
 const std::string HSSConnection::STATE_REGISTERED = "REGISTERED";
 const std::string HSSConnection::STATE_NOT_REGISTERED = "NOT_REGISTERED";
 
@@ -274,6 +276,58 @@ bool compare_charging_addrs(const rapidxml::xml_node<>* ca1,
 }
 
 
+// Decode the charging addresses node of the xml send from Homestead.
+void parse_charging_addrs_node(rapidxml::xml_node<>* charging_addrs_node,
+                               std::deque<std::string>& ccfs,
+                               std::deque<std::string>& ecfs)
+{
+  rapidxml::xml_node<>* ccf = NULL;
+  std::vector<rapidxml::xml_node<>*> xml_ccfs;
+  rapidxml::xml_node<>* ecf = NULL;
+  std::vector<rapidxml::xml_node<>*> xml_ecfs;
+
+  // Save off all of the CCF nodes so that we can sort them based on their
+  // priority attribute.
+  for (ccf = charging_addrs_node->first_node(RegDataXmlUtils::CCF);
+       ccf != NULL;
+       ccf = ccf->next_sibling(RegDataXmlUtils::CCF))
+  {
+    xml_ccfs.push_back(ccf);
+  }
+
+  // Sort them and add them to ccfs in order.
+  std::sort(xml_ccfs.begin(), xml_ccfs.end(), compare_charging_addrs);
+
+  for (std::vector<rapidxml::xml_node<>*>::iterator it = xml_ccfs.begin();
+       it != xml_ccfs.end();
+       ++it)
+  {
+    TRC_DEBUG("Found CCF: %s", (*it)->value());
+    ccfs.push_back((*it)->value());
+  }
+
+  // Save off all of the ECF nodes so that we can sort them based on their
+  // priority attribute.
+  for (ecf = charging_addrs_node->first_node(RegDataXmlUtils::ECF);
+       ecf != NULL;
+       ecf = ecf->next_sibling(RegDataXmlUtils::ECF))
+  {
+    xml_ecfs.push_back(ecf);
+  }
+
+  // Sort them and add them to ecfs in order.
+  std::sort(xml_ecfs.begin(), xml_ecfs.end(), compare_charging_addrs);
+
+  for (std::vector<rapidxml::xml_node<>*>::iterator it = xml_ecfs.begin();
+       it != xml_ecfs.end();
+       ++it)
+  {
+    TRC_DEBUG("Found ECF: %s", (*it)->value());
+    ecfs.push_back((*it)->value());
+  }
+}
+
+
 bool decode_homestead_xml(const std::string public_user_identity,
                           std::shared_ptr<rapidxml::xml_document<> > root,
                           std::string& regstate,
@@ -434,50 +488,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
   if (charging_addrs_node)
   {
-    rapidxml::xml_node<>* ccf = NULL;
-    std::vector<rapidxml::xml_node<>*> xml_ccfs;
-    rapidxml::xml_node<>* ecf = NULL;
-    std::vector<rapidxml::xml_node<>*> xml_ecfs;
-
-    // Save off all of the CCF nodes so that we can sort them based on their
-    // priority attribute.
-    for (ccf = charging_addrs_node->first_node(RegDataXmlUtils::CCF);
-         ccf != NULL;
-         ccf = ccf->next_sibling(RegDataXmlUtils::CCF))
-    {
-      xml_ccfs.push_back(ccf);
-    }
-
-    // Sort them and add them to ccfs in order.
-    std::sort(xml_ccfs.begin(), xml_ccfs.end(), compare_charging_addrs);
-
-    for (std::vector<rapidxml::xml_node<>*>::iterator it = xml_ccfs.begin();
-         it != xml_ccfs.end();
-         ++it)
-    {
-      TRC_DEBUG("Found CCF: %s", (*it)->value());
-      ccfs.push_back((*it)->value());
-    }
-
-    // Save off all of the ECF nodes so that we can sort them based on their
-    // priority attribute.
-    for (ecf = charging_addrs_node->first_node(RegDataXmlUtils::ECF);
-         ecf != NULL;
-         ecf = ecf->next_sibling(RegDataXmlUtils::ECF))
-    {
-      xml_ecfs.push_back(ecf);
-    }
-
-    // Sort them and add them to ecfs in order.
-    std::sort(xml_ecfs.begin(), xml_ecfs.end(), compare_charging_addrs);
-
-    for (std::vector<rapidxml::xml_node<>*>::iterator it = xml_ecfs.begin();
-         it != xml_ecfs.end();
-         ++it)
-    {
-      TRC_DEBUG("Found ECF: %s", (*it)->value());
-      ecfs.push_back((*it)->value());
-    }
+    parse_charging_addrs_node(charging_addrs_node, ccfs, ecfs);
   }
   return true;
 }
