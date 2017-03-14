@@ -389,6 +389,21 @@ TEST_F(HssConnectionTest, SimpleIfc)
   EXPECT_FALSE(ifcs_map.empty());
 }
 
+// Check that some iFCs are returned when a shared iFC set is encountered.
+TEST_F(HssConectionTest, SimpleSiFC)
+{
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+  _hss.update_registration_state("pubid42", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  EXPECT_FALSE(ifcs_map.empty());
+}
+
+// Other SiFC tests:
+// With sifc - check returned ifcs, not just that some are present
+// With ifcs and sifc set - both present
+// With more than one sifc set - both presnt
+
 TEST_F(HssConnectionTest, SimpleChargingAddrs)
 {
   std::vector<std::string> uris;
