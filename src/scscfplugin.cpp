@@ -70,7 +70,6 @@ private:
   SCSCFSproutlet* _scscf_sproutlet;
   SubscriptionSproutlet* _subscription_sproutlet;
   RegistrarSproutlet* _registrar_sproutlet;
-  ImpiStore* _impi_store;
   AuthenticationSproutlet* _auth_sproutlet;
   Alarm* _sess_cont_as_alarm;
   Alarm* _sess_term_as_alarm;
@@ -280,7 +279,6 @@ void SCSCFPlugin::unload()
   delete _subscription_sproutlet;
   delete _registrar_sproutlet;
   delete _auth_sproutlet; _auth_sproutlet = NULL;
-  delete _impi_store; _impi_store = NULL;
   delete _sess_term_as_alarm; _sess_term_as_alarm = NULL;
   delete _sess_cont_as_alarm; _sess_cont_as_alarm = NULL;
   delete reg_stats_tbls.init_reg_tbl;
