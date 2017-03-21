@@ -601,7 +601,7 @@ void SipTest::register_uri(SubscriberDataManager* sdm,
   uri.append(user).append("@").append(domain);
   if (hss)
   {
-    hss->set_impu_result(uri, "call", HSSConnection::STATE_REGISTERED, "");
+    hss->set_impu_result(uri, "call", RegDataXMLUtils::STATE_REGISTERED, "");
   }
   SubscriberDataManager::AoRPair* aor = sdm->get_aor_data(uri, 0);
   SubscriberDataManager::AoR::Binding* binding = aor->get_current()->get_binding(contact);

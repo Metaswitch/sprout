@@ -1,5 +1,5 @@
 /**
- * @file ifchandler.h The iFC handler data type.
+ * @file ifc.h The iFC handler data type.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -50,53 +50,55 @@ extern "C" {
 #include "sessioncase.h"
 
 #include "sas.h"
-#include "ifc.h"
+#include "xml_utils.h"
 
-/// A set of iFCs.
+typedef enum {SESSION_CONTINUED=0, SESSION_TERMINATED=1} DefaultHandling;
+
+/// An invocation of an AS - the result of a matching iFC.
 //
-// Owns the iFCs document, and provides access to each iFC within it.
-class Ifcs
+// Has no dependency on the iFCs used to create it.
+struct AsInvocation
 {
-public:
-  Ifcs();
-  Ifcs(std::shared_ptr<rapidxml::xml_document<>> ifc_doc,
-       rapidxml::xml_node<>* sp);
-  ~Ifcs();
-
-  size_t size() const
-  {
-    return _ifcs.size();
-  }
-
-  const Ifc& operator[](size_t index) const
-  {
-    return _ifcs[index];
-  }
-
-  void interpret(const SessionCase& session_case,
-                 bool is_registered,
-                 bool is_initial_registration,
-                 pjsip_msg *msg,
-                 std::vector<AsInvocation>& application_servers,
-                 SAS::TrailId trail) const;
-
-private:
-  std::shared_ptr<rapidxml::xml_document<> > _ifc_doc;
-  std::vector<Ifc> _ifcs;
+  std::string server_name;
+  DefaultHandling default_handling;
+  std::string service_info;
+  bool include_register_request;
+  bool include_register_response;
 };
 
-
-/// iFC handler.
-class IfcHandler
+/// A single Initial Filter Criterion (iFC).
+class Ifc
 {
 public:
-  IfcHandler();
-  ~IfcHandler();
+  Ifc(rapidxml::xml_node<>* ifc) :
+    _ifc(ifc)
+  {
+  }
 
-  static std::string served_user_from_msg(const SessionCase& session_case,
-                                          pjsip_msg* msg,
-                                          pj_pool_t* pool);
+  bool filter_matches(const SessionCase& session_case,
+                      bool is_registered,
+                      bool is_initial_registration,
+                      pjsip_msg* msg,
+                      SAS::TrailId trail) const;
+
+  AsInvocation as_invocation() const;
 
 private:
-  static std::string user_from_uri(pjsip_uri *uri);
+  static bool spt_matches(const SessionCase& session_case,
+                          bool is_registered,
+                          bool is_initial_registration,
+                          pjsip_msg *msg,
+                          rapidxml::xml_node<>* spt,
+                          std::string ifc_str,
+                          std::string server_name,
+                          SAS::TrailId trail);
+
+  static void invalid_ifc(std::string error,
+                          std::string server_name,
+                          int sas_event_id,
+                          int instance_id,
+                          SAS::TrailId trail);
+
+  rapidxml::xml_node<>* _ifc;
+  std::string _server_name;
 };

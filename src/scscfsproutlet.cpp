@@ -307,7 +307,7 @@ long SCSCFSproutlet::read_hss_data(const std::string& public_id,
     ifcs = ifc_map[public_id];
   }
 
-  registered = (regstate == HSSConnection::STATE_REGISTERED);
+  registered = (regstate == RegDataXMLUtils::STATE_REGISTERED);
 
   return (http_code);
 }
