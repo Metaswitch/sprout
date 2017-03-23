@@ -1228,16 +1228,20 @@ void SproutletWrapper::copy_original_transport(pjsip_msg* req)
   // Get the original transport.
   if (_original_transport == NULL)
   {
+    // LCOV_EXCL_START - defensive code not hit in UT
     TRC_WARNING("Sproutlet tried to copy transport from unknown original");
     return;
+    // LCOV_EXCL_STOP
   }
 
   // Get this request's tdata from the map of clones.
   Packets::iterator it = _packets.find(req);
   if (it == _packets.end())
   {
+    // LCOV_EXCL_START - defensive code not hit in UT
     TRC_WARNING("Sproutlet tried to copy transport on an unknown request");
     return;
+    // LCOV_EXCL_STOP
   }
   pjsip_tx_data* tdata = it->second;
 
