@@ -9,7 +9,7 @@ ${THRIFT_CONFIGURE}:
 	cd ${THRIFT_DIR} && ./bootstrap.sh
 
 ${THRIFT_MAKEFILE}: ${THRIFT_CONFIGURE}
-	cd ${THRIFT_DIR} && ${THRIFT_CONFIGURE}  --prefix=${INSTALL_DIR} --without-csharp --without-java --without-erlang --without-python --without-perl --without-php --without-ruby --without-haskell --without-go --without-d
+	cd ${THRIFT_DIR} && ${THRIFT_CONFIGURE}  --prefix=${INSTALL_DIR} --without-csharp --without-java --without-erlang --without-python --without-perl --without-php --without-ruby --without-haskell --without-go --without-d --without-nodejs --without-lua
 
 thrift: ${INSTALL_DIR}/bin/thrift
 
