@@ -48,6 +48,7 @@
 #include "hssconnection.h"
 #include "rapidjson/error/en.h"
 #include "snmp_continuous_accumulator_table.h"
+#include "xml_utils.h"
 
 const std::string HSSConnection::REG = "reg";
 const std::string HSSConnection::CALL = "call";
@@ -56,9 +57,6 @@ const std::string HSSConnection::DEREG_ADMIN = "dereg-admin";
 const std::string HSSConnection::DEREG_TIMEOUT = "dereg-timeout";
 const std::string HSSConnection::AUTH_TIMEOUT = "dereg-auth-timeout";
 const std::string HSSConnection::AUTH_FAIL = "dereg-auth-failed";
-
-const std::string HSSConnection::STATE_REGISTERED = "REGISTERED";
-const std::string HSSConnection::STATE_NOT_REGISTERED = "NOT_REGISTERED";
 
 HSSConnection::HSSConnection(const std::string& server,
                              HttpResolver* resolver,
@@ -259,8 +257,8 @@ bool compare_charging_addrs(const rapidxml::xml_node<>* ca1,
 {
   // Compare the nodes on the basis of their priority attribute. A lower value is
   // higher priority.
-  if (std::stoi(ca1->first_attribute("priority")->value()) <
-        std::stoi(ca2->first_attribute("priority")->value()))
+  if (std::stoi(ca1->first_attribute(RegDataXMLUtils::CCF_ECF_PRIORITY)->value()) <
+        std::stoi(ca2->first_attribute(RegDataXMLUtils::CCF_ECF_PRIORITY)->value()))
   {
     return true;
   }
@@ -269,6 +267,59 @@ bool compare_charging_addrs(const rapidxml::xml_node<>* ca1,
     return false;
   }
 }
+
+
+// Decode the charging addresses node of the xml send from Homestead.
+void parse_charging_addrs_node(rapidxml::xml_node<>* charging_addrs_node,
+                               std::deque<std::string>& ccfs,
+                               std::deque<std::string>& ecfs)
+{
+  rapidxml::xml_node<>* ccf = NULL;
+  std::vector<rapidxml::xml_node<>*> xml_ccfs;
+  rapidxml::xml_node<>* ecf = NULL;
+  std::vector<rapidxml::xml_node<>*> xml_ecfs;
+
+  // Save off all of the CCF nodes so that we can sort them based on their
+  // priority attribute.
+  for (ccf = charging_addrs_node->first_node(RegDataXMLUtils::CCF);
+       ccf != NULL;
+       ccf = ccf->next_sibling(RegDataXMLUtils::CCF))
+  {
+    xml_ccfs.push_back(ccf);
+  }
+
+  // Sort them and add them to ccfs in order.
+  std::sort(xml_ccfs.begin(), xml_ccfs.end(), compare_charging_addrs);
+
+  for (std::vector<rapidxml::xml_node<>*>::iterator it = xml_ccfs.begin();
+       it != xml_ccfs.end();
+       ++it)
+  {
+    TRC_DEBUG("Found CCF: %s", (*it)->value());
+    ccfs.push_back((*it)->value());
+  }
+
+  // Save off all of the ECF nodes so that we can sort them based on their
+  // priority attribute.
+  for (ecf = charging_addrs_node->first_node(RegDataXMLUtils::ECF);
+       ecf != NULL;
+       ecf = ecf->next_sibling(RegDataXMLUtils::ECF))
+  {
+    xml_ecfs.push_back(ecf);
+  }
+
+  // Sort them and add them to ecfs in order.
+  std::sort(xml_ecfs.begin(), xml_ecfs.end(), compare_charging_addrs);
+
+  for (std::vector<rapidxml::xml_node<>*>::iterator it = xml_ecfs.begin();
+       it != xml_ecfs.end();
+       ++it)
+  {
+    TRC_DEBUG("Found ECF: %s", (*it)->value());
+    ecfs.push_back((*it)->value());
+  }
+}
+
 
 bool decode_homestead_xml(const std::string public_user_identity,
                           std::shared_ptr<rapidxml::xml_document<> > root,
@@ -288,7 +339,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
     return false;
   }
 
-  rapidxml::xml_node<>* cw = root->first_node("ClearwaterRegData");
+  rapidxml::xml_node<>* cw = root->first_node(RegDataXMLUtils::CLEARWATER_REG_DATA);
 
   if (!cw)
   {
@@ -296,7 +347,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
     return false;
   }
 
-  rapidxml::xml_node<>* reg = cw->first_node("RegistrationState");
+  rapidxml::xml_node<>* reg = cw->first_node(RegDataXMLUtils::REGISTRATION_STATE);
 
   if (!reg)
   {
@@ -306,13 +357,13 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
   regstate = reg->value();
 
-  if ((regstate == HSSConnection::STATE_NOT_REGISTERED) && (allowNoIMS))
+  if ((regstate == RegDataXMLUtils::STATE_NOT_REGISTERED) && (allowNoIMS))
   {
     TRC_DEBUG("Subscriber is not registered on a get_registration_state request");
     return true;
   }
 
-  rapidxml::xml_node<>* imss = cw->first_node("IMSSubscription");
+  rapidxml::xml_node<>* imss = cw->first_node(RegDataXMLUtils::IMS_SUBSCRIPTION);
 
   if (!imss)
   {
@@ -366,59 +417,40 @@ bool decode_homestead_xml(const std::string public_user_identity,
   associated_uris.clear();
   rapidxml::xml_node<>* sp = NULL;
 
-  if (!imss->first_node("ServiceProfile"))
+  if (!imss->first_node(RegDataXMLUtils::SERVICE_PROFILE))
   {
     TRC_WARNING("Malformed HSS XML - no ServiceProfiles");
     return false;
   }
 
-  for (sp = imss->first_node("ServiceProfile");
+  for (sp = imss->first_node(RegDataXMLUtils::SERVICE_PROFILE);
        sp != NULL;
-       sp = sp->next_sibling("ServiceProfile"))
+       sp = sp->next_sibling(RegDataXMLUtils::SERVICE_PROFILE))
   {
     Ifcs ifc(root, sp);
     rapidxml::xml_node<>* public_id = NULL;
 
-    if (!sp->first_node("PublicIdentity"))
+    if (!sp->first_node(RegDataXMLUtils::PUBLIC_IDENTITY))
     {
       TRC_WARNING("Malformed ServiceProfile XML - no Public Identity");
       return false;
     }
 
-    for (public_id = sp->first_node("PublicIdentity");
+    for (public_id = sp->first_node(RegDataXMLUtils::PUBLIC_IDENTITY);
          public_id != NULL;
-         public_id = public_id->next_sibling("PublicIdentity"))
+         public_id = public_id->next_sibling(RegDataXMLUtils::PUBLIC_IDENTITY))
     {
-      rapidxml::xml_node<>* identity = public_id->first_node("Identity");
+      rapidxml::xml_node<>* identity = public_id->first_node(RegDataXMLUtils::IDENTITY);
 
       if (identity)
       {
         std::string uri = std::string(identity->value());
 
-        // TODO - This code should be commonised with the code in Homestead
-        // (and will be shortly). It's therefore not fully UT'd; this will be
-        // done when it moves.
-        // LCOV_EXCL_START
-        rapidxml::xml_node<>* extension = public_id->first_node("Extension");
+        rapidxml::xml_node<>* extension = public_id->first_node(RegDataXMLUtils::EXTENSION);
         if (extension)
         {
-          rapidxml::xml_node<>* type = extension->first_node("IdentityType");
-          if (type)
-          {
-            if (std::string(type->value()) == "2")
-            {
-              rapidxml::xml_node<>* new_identity = extension->first_node("WildcardedPSI");
-              uri = std::string(new_identity->value());
-            }
-            else if ((std::string(type->value()) == "3") ||
-                     (std::string(type->value()) == "4"))
-            {
-              rapidxml::xml_node<>* new_identity = extension->first_node("WildcardedIMPU");
-              uri = std::string(new_identity->value());
-            }
-          }
+          RegDataXMLUtils::parse_extension_identity(uri, extension);
         }
-        // LCOV_EXCL_STOP
 
         TRC_DEBUG("Processing Identity node from HSS XML - %s\n",
                   uri.c_str());
@@ -479,7 +511,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
   if (aliases.empty() && !temp_aliases.empty())
   {
     aliases = temp_aliases;
- 
+
     if (found_multiple_matches)
     {
       SAS::Event event(trail, SASEvent::AMBIGUOUS_WILDCARD_MATCH, 0);
@@ -492,50 +524,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
   if (charging_addrs_node)
   {
-    rapidxml::xml_node<>* ccf = NULL;
-    std::vector<rapidxml::xml_node<>*> xml_ccfs;
-    rapidxml::xml_node<>* ecf = NULL;
-    std::vector<rapidxml::xml_node<>*> xml_ecfs;
-
-    // Save off all of the CCF nodes so that we can sort them based on their
-    // priority attribute.
-    for (ccf = charging_addrs_node->first_node("CCF");
-         ccf != NULL;
-         ccf = ccf->next_sibling("CCF"))
-    {
-      xml_ccfs.push_back(ccf);
-    }
-
-    // Sort them and add them to ccfs in order.
-    std::sort(xml_ccfs.begin(), xml_ccfs.end(), compare_charging_addrs);
-
-    for (std::vector<rapidxml::xml_node<>*>::iterator it = xml_ccfs.begin();
-         it != xml_ccfs.end();
-         ++it)
-    {
-      TRC_DEBUG("Found CCF: %s", (*it)->value());
-      ccfs.push_back((*it)->value());
-    }
-
-    // Save off all of the ECF nodes so that we can sort them based on their
-    // priority attribute.
-    for (ecf = charging_addrs_node->first_node("ECF");
-         ecf != NULL;
-         ecf = ecf->next_sibling("ECF"))
-    {
-      xml_ecfs.push_back(ecf);
-    }
-
-    // Sort them and add them to ecfs in order.
-    std::sort(xml_ecfs.begin(), xml_ecfs.end(), compare_charging_addrs);
-
-    for (std::vector<rapidxml::xml_node<>*>::iterator it = xml_ecfs.begin();
-         it != xml_ecfs.end();
-         ++it)
-    {
-      TRC_DEBUG("Found ECF: %s", (*it)->value());
-      ecfs.push_back((*it)->value());
-    }
+    parse_charging_addrs_node(charging_addrs_node, ccfs, ecfs);
   }
   return true;
 }

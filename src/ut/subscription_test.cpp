@@ -77,8 +77,8 @@ public:
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
 
-    _hss_connection->set_impu_result("sip:6505550231@homedomain", "", HSSConnection::STATE_REGISTERED, "");
-    _hss_connection->set_impu_result("tel:6505550231", "", HSSConnection::STATE_REGISTERED, "");
+    _hss_connection->set_impu_result("sip:6505550231@homedomain", "", RegDataXMLUtils::STATE_REGISTERED, "");
+    _hss_connection->set_impu_result("tel:6505550231", "", RegDataXMLUtils::STATE_REGISTERED, "");
   }
 
   static void TearDownTestCase()
@@ -742,7 +742,7 @@ TEST_F(SubscriptionTest, NonPrimaryAssociatedUri)
   msg._user = "6505550234";
   _hss_connection->set_impu_result("sip:6505550234@homedomain",
                                    "",
-                                   HSSConnection::STATE_REGISTERED,
+                                   RegDataXMLUtils::STATE_REGISTERED,
                                    "<IMSSubscription><ServiceProfile>\n"
                                    "  <PublicIdentity><Identity>sip:6505550233@homedomain</Identity></PublicIdentity>\n"
                                    "  <PublicIdentity><Identity>sip:6505550234@homedomain</Identity></PublicIdentity>\n"
@@ -915,13 +915,13 @@ TEST_F(SubscriptionTest, SubscriptionWithWildcard)
   _sdm->set_aor_data(irs_impus_aor[0], irs_impus_aor, aor_pair, 0);
   delete aor_pair; aor_pair = NULL;
 
-  _hss_connection->set_impu_result("sip:6505551231@homedomain", "", HSSConnection::STATE_REGISTERED,
+  _hss_connection->set_impu_result("sip:6505551231@homedomain", "", RegDataXMLUtils::STATE_REGISTERED,
                                    "<IMSSubscription><ServiceProfile>\n"
                                    "<PublicIdentity><Identity>sip:6505551231@homedomain</Identity></PublicIdentity>"
                                    "<PublicIdentity><Identity>sip:6505551!.*!@homedomain</Identity><Extension><IdentityType>4</IdentityType><WildcardedIMPU>sip:6505551!.*!@homedomain</WildcardedIMPU></Extension></PublicIdentity>"
                                    "<PublicIdentity><Identity>sip:650555!.*!@homedomain</Identity><Extension><IdentityType>4</IdentityType><WildcardedIMPU>sip:650555!.*!@homedomain</WildcardedIMPU></Extension></PublicIdentity>"
                                    "<PublicIdentity><Identity>sip:6505551232@homedomain</Identity></PublicIdentity>"
-                                   "<PublicIdentity><Identity>sip:6505551233@homedomain</Identity><Extension><IdentityType>3</IdentityType><WildcardedIMPU>sip:650555!.*!@homedomain</WildcardedIMPU></Extension></PublicIdentity>"
+                                   "<PublicIdentity><Identity>sip:6505551233@homedomain</Identity><Extension><IdentityType>3</IdentityType><Extension><Extension><WildcardedIMPU>sip:650555!.*!@homedomain</WildcardedIMPU></Extension></Extension></Extension></PublicIdentity>"
                                    "  <InitialFilterCriteria>\n"
                                    "  </InitialFilterCriteria>\n"
                                    "</ServiceProfile></IMSSubscription>");
@@ -1090,8 +1090,8 @@ public:
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
 
-    _hss_connection->set_impu_result("sip:6505550231@homedomain", "", HSSConnection::STATE_REGISTERED, "");
-    _hss_connection->set_impu_result("tel:6505550231", "", HSSConnection::STATE_REGISTERED, "");
+    _hss_connection->set_impu_result("sip:6505550231@homedomain", "", RegDataXMLUtils::STATE_REGISTERED, "");
+    _hss_connection->set_impu_result("tel:6505550231", "", RegDataXMLUtils::STATE_REGISTERED, "");
 
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
 

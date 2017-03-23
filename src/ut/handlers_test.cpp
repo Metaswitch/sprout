@@ -578,7 +578,7 @@ class DeregistrationTaskTest : public SipTest
 TEST_F(DeregistrationTaskTest, MainlineTest)
 {
   // Set HSS result
-  _hss->set_impu_result("sip:6505550231@homedomain", "", HSSConnection::STATE_REGISTERED,
+  _hss->set_impu_result("sip:6505550231@homedomain", "", RegDataXMLUtils::STATE_REGISTERED,
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
@@ -848,7 +848,7 @@ TEST_F(DeregistrationTaskTest, ImpiClearedWhenBindingUnconditionallyDeregistered
 TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
 {
   // Set HSS result
-  _hss->set_impu_result("sip:6505550231@homedomain", "", HSSConnection::STATE_REGISTERED,
+  _hss->set_impu_result("sip:6505550231@homedomain", "", RegDataXMLUtils::STATE_REGISTERED,
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
@@ -1083,7 +1083,7 @@ class AuthTimeoutTest : public SipTest
 // The subscriber's registration state is updated, and the record is deleted from the AV store.
 TEST_F(AuthTimeoutTest, NonceTimedOut)
 {
-  fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", HSSConnection::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
+  fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", RegDataXMLUtils::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
   ImpiStore::Impi* impi = new ImpiStore::Impi("6505550231@homedomain");
   ImpiStore::DigestAuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge("abcdef", "example.com", "auth", "ha1", time(NULL) + 30);
   auth_challenge->correlator = "abcde";
@@ -1101,7 +1101,7 @@ TEST_F(AuthTimeoutTest, NonceTimedOut)
 
 TEST_F(AuthTimeoutTest, NonceTimedOutWithEmptyCorrelator)
 {
-  fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", HSSConnection::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
+  fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", RegDataXMLUtils::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
   ImpiStore::Impi* impi = new ImpiStore::Impi("6505550231@homedomain");
   ImpiStore::DigestAuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge("abcdef", "example.com", "auth", "ha1", time(NULL) + 30);
   impi->auth_challenges.push_back(auth_challenge);

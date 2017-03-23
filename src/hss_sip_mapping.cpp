@@ -46,7 +46,7 @@ pjsip_status_code determine_hss_sip_response(HTTPCode http_code,
 {
   pjsip_status_code st_code = PJSIP_SC_OK;
 
-  if ((http_code != HTTP_OK) || (regstate != HSSConnection::STATE_REGISTERED))
+  if ((http_code != HTTP_OK) || (regstate != RegDataXMLUtils::STATE_REGISTERED))
   {
     // We failed to register this subscriber at the HSS. This may be because
     // the HSS is unavilable, the public identity doesn't exist, the public
