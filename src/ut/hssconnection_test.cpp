@@ -49,8 +49,11 @@
 #include "fakecurl.hpp"
 #include "fakesnmp.hpp"
 #include "sprout_alarmdefinition.h"
+#include "mock_sifc_parser.h"
 
 using namespace std;
+using testing::Return;
+using testing::_;
 
 /// Fixture for HssConnectionTest.
 class HssConnectionTest : public BaseTest
@@ -333,8 +336,28 @@ class HssConnectionTest : public BaseTest
           "<ECF priority=\"1\">ecf1</ECF>"
         "</ChargingAddresses>"
       "</ClearwaterRegData>";
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid60/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
+     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+     "<ClearwaterRegData>"
+       "<RegistrationState>REGISTERED</RegistrationState>"
+       "<IMSSubscription>"
+         "<ServiceProfile>"
+           "<PublicIdentity>"
+             "<Identity>sip:123@example.com</Identity>"
+           "</PublicIdentity>"
+           "<Extension>"
+             "<SharedIFCSetID>1</SharedIFCSetID>"
+           "</Extension>"
+         "</ServiceProfile>"
+       "</IMSSubscription>"
+       "<ChargingAddresses>"
+         "<CCF priority=\"1\">ccf1</CCF>"
+         "<CCF priority=\"2\">ccf2</CCF>"
+         "<ECF priority=\"2\">ecf2</ECF>"
+         "<ECF priority=\"1\">ecf1</ECF>"
+       "</ChargingAddresses>"
+     "</ClearwaterRegData>";
  }
-
   virtual ~HssConnectionTest()
   {
   }
@@ -390,19 +413,36 @@ TEST_F(HssConnectionTest, SimpleIfc)
 }
 
 // Check that some iFCs are returned when a shared iFC set is encountered.
-TEST_F(HssConectionTest, SimpleSiFC)
+TEST_F(HssConnectionTest, SimpleSiFC)
 {
+  // Set up necessary variables, and check iFC map is empty.
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("pubid42", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_FALSE(ifcs_map.empty());
+  EXPECT_TRUE(ifcs_map.empty());
+
+  // Mock out function that converts list of shared iFC set ids into a list of
+  // iFCs - this function is tested elsewhere.
+  static MockSIFCService* mock_sifc_parser;
+  rapidxml::xml_node<>* xml_thing = "<Ifc>example_ifc</Ifc>";
+  Ifc* ifc_one = new Ifc(xml_thing);
+  Ifc* ifc_two = new Ifc(xml_thing);
+  std::vector<Ifc*> ifc_list = {ifc_one, ifc_two};
+  EXPECT_CALL(*mock_sifc_parser, get_ifcs_from_id(_, _)).WillOnce(Return(ifc_list));
+
+  // Send in a message, and check that iFCs are now present in the map for each
+  // public id.
+  _hss.update_registration_state("pubid60", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  for(auto elem : ifcs_map)
+  {
+    EXPECT_FALSE(elem.second.size() == 0);
+  }
 }
 
 // Other SiFC tests:
-// With sifc - check returned ifcs, not just that some are present
-// With ifcs and sifc set - both present
-// With more than one sifc set - both presnt
+// With sifc - check the values of the returned ifcs, not just that some are present
+// With ifcs and sifc set - check both are present
+// With more than one sifc set - both are present
 
 TEST_F(HssConnectionTest, SimpleChargingAddrs)
 {
