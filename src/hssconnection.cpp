@@ -257,8 +257,8 @@ bool compare_charging_addrs(const rapidxml::xml_node<>* ca1,
 {
   // Compare the nodes on the basis of their priority attribute. A lower value is
   // higher priority.
-  if (std::stoi(ca1->first_attribute(RegDataXMLUtils::CCF_PRIORITY)->value()) <
-        std::stoi(ca2->first_attribute(RegDataXMLUtils::CCF_PRIORITY)->value()))
+  if (std::stoi(ca1->first_attribute(RegDataXMLUtils::CCF_ECF_PRIORITY)->value()) <
+        std::stoi(ca2->first_attribute(RegDataXMLUtils::CCF_ECF_PRIORITY)->value()))
   {
     return true;
   }
