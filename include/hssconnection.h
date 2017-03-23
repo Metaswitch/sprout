@@ -46,6 +46,7 @@
 #include "sas.h"
 #include "snmp_event_accumulator_table.h"
 #include "load_monitor.h"
+#include "sifcservice.h"
 
 /// @class HSSConnection
 ///
@@ -65,7 +66,8 @@ public:
                 SNMP::EventAccumulatorTable* homestead_uar_latency_tbl,
                 SNMP::EventAccumulatorTable* homestead_lir_latency_tbl,
                 CommunicationMonitor* comm_monitor,
-                std::string scscf_uri);
+                std::string scscf_uri,
+                SIFCService* sifc_service);
   virtual ~HSSConnection();
 
   HTTPCode get_auth_vector(const std::string& private_user_id,
@@ -167,6 +169,7 @@ private:
   SNMP::EventAccumulatorTable* _uar_latency_tbl;
   SNMP::EventAccumulatorTable* _lir_latency_tbl;
   std::string _scscf_uri;
+  SIFCService* _sifc_service;
 };
 
 #endif

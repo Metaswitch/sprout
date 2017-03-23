@@ -1,0 +1,56 @@
+<?xml version=1.0 encoding=UTF-8?>
+<Set>
+  <SetId>
+    1
+  </SetId>
+  <InitialFilterCriteria>
+    <TriggerPoint>
+      <ConditionTypeCNF>0</ConditionTypeCNF>
+      <SPT>
+        <ConditionNegated>0</ConditionNegated>
+        <Group>0</Group>
+        <Method>INVITE</Method>
+        <Extension></Extension>
+      </SPT>
+    </TriggerPoint>
+    <ApplicationServer>
+      <ServerName>invite.example.com</ServerName>
+      <DefaultHandling>0</DefaultHandling>
+    </ApplicationServer>
+  </InitialFilterCriteria>
+  <InitialFilterCriteria>
+    <TriggerPoint>
+      <ConditionTypeCNF>0</ConditionTypeCNF>
+      <SPT>
+        <ConditionNegated>0</ConditionNegated>
+        <Group>0</Group>
+        <Method>REGISTER</Method>
+        <Extension></Extension>
+      </SPT>
+    </TriggerPoint>
+    <ApplicationServer>
+      <ServerName>register.example.com</ServerName>
+      <DefaultHandling>0</DefaultHandling>
+    </ApplicationServer>
+  </InitialFilterCriteria>
+</Set>
+<Set>
+  <SetId>
+    2
+  </SetId>
+  <InitialFilterCriteria>
+    <TriggerPoint>
+      <ConditionTypeCNF>0</ConditionTypeCNF>
+      <SPT>
+        <ConditionNegated>0</ConditionNegated>
+        <Group>0</Group>
+        <Method>PUBLISH</Method>
+        <Extension></Extension>
+      </SPT>
+    </TriggerPoint>
+    <ApplicationServer>
+      <ServerName>publish.example.com</ServerName>
+      <DefaultHandling>0</DefaultHandling>
+    </ApplicationServer>
+  </InitialFilterCriteria>
+</Set>

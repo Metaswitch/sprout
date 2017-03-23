@@ -73,7 +73,8 @@ class HssConnectionTest : public BaseTest
          &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
          &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
          &_cm,
-         "server_name")
+         "server_name",
+         NULL)
     {
     fakecurl_responses.clear();
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid42/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =

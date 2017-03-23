@@ -228,6 +228,8 @@ namespace SASEvent
 
   const int AMBIGUOUS_WILDCARD_MATCH = SPROUT_BASE + 0x0130;
 
+  const int SIFC_NO_SET_FOR_ID = SPROUT_BASE + 0x0140;
+
 } //namespace SASEvent
 
 #endif
