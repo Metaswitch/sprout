@@ -56,7 +56,7 @@ public:
   SAS::TrailId trail() const {return _trail;}
   SAS::TrailId _trail;
 
-  MOCK_METHOD0(original_request, pjsip_msg*());
+  MOCK_METHOD0(get_request_for_sproutlet_tsx, pjsip_msg*());
   MOCK_CONST_METHOD0(route_hdr, const pjsip_route_hdr*());
   MOCK_CONST_METHOD1(get_reflexive_uri, pjsip_sip_uri*(pj_pool_t*));
   MOCK_CONST_METHOD1(is_uri_reflexive, bool(const pjsip_uri*));

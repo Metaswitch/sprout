@@ -191,6 +191,10 @@ protected:
                    int fork_id,
                    pjsip_tx_data* cancel);
 
+    void tx_negative_ack(SproutletWrapper* sproutlet,
+                         int fork_id,
+                         pjsip_tx_data* ack);
+
     /// Gets the next target Sproutlet for the message by analysing the top
     /// Route header.
     Sproutlet* target_sproutlet(pjsip_msg* msg,
@@ -289,7 +293,7 @@ public:
   /// functions from SproutletTsxHelper.  See there for function comments for
   /// the following.
   void add_to_dialog(const std::string& dialog_id="");
-  pjsip_msg* original_request();
+  pjsip_msg* get_request_for_sproutlet_tsx();
   const char* msg_info(pjsip_msg*);
   const pjsip_route_hdr* route_hdr() const;
   const std::string& dialog_id() const;
@@ -320,6 +324,7 @@ private:
   void rx_request(pjsip_tx_data* req);
   void rx_response(pjsip_tx_data* rsp, int fork_id);
   void rx_cancel(pjsip_tx_data* cancel);
+  void rx_negative_ack(pjsip_tx_data* ack);
   void rx_error(int status_code);
   void rx_fork_error(pjsip_event_id_e event, int fork_id);
   void on_timer_pop(TimerID id, void* context);
@@ -331,6 +336,7 @@ private:
   void tx_request(pjsip_tx_data* req, int fork_id);
   void tx_response(pjsip_tx_data* rsp);
   void tx_cancel(int fork_id);
+  void tx_negative_ack(pjsip_tx_data* rsp, int fork_id);
   int compare_sip_sc(int sc1, int sc2);
   bool is_uri_local(const pjsip_uri*) const;
   void log_inter_sproutlet(pjsip_tx_data* tdata, bool downstream);

@@ -858,22 +858,6 @@ void SproutletProxy::UASTsx::schedule_requests()
           _umap[(void*)downstream] = req.upstream;
         }
 
-        if (req.req->msg->line.req.method.id == PJSIP_INVITE_METHOD)
-        {
-          // Send an immediate 100 Trying response to the upstream
-          // Sproutlet.
-          pjsip_tx_data* trying;
-          pj_status_t status = PJUtils::create_response(stack_data.endpt,
-                                                        req.req,
-                                                        PJSIP_SC_TRYING,
-                                                        NULL,
-                                                        &trying);
-          if (status == PJ_SUCCESS)
-          {
-            req.upstream.first->rx_response(trying, req.upstream.second);
-          }
-        }
-
         // Pass the request to the downstream sproutlet.
         downstream->rx_request(req.req);
       }
@@ -980,6 +964,29 @@ void SproutletProxy::UASTsx::tx_response(SproutletWrapper* downstream,
 {
   if (downstream == _root)
   {
+    // If this is the root sproutlet in the tree, drop any 100 Trying or 200 OK
+    // to CANCEL responses that the sproutlets generated. These responses have
+    // already been sent by the basic proxy.
+    if ((PJSIP_MSG_CSEQ_HDR(rsp->msg)->method.id == PJSIP_CANCEL_METHOD) ||
+        (rsp->msg->line.status.code == PJSIP_SC_TRYING))
+    {
+      pjsip_tx_data_dec_ref(rsp);
+      return;
+    }
+
+    // If this is a negative response to an INVITE, send an ACK downstream to
+    // the root sproutlet.
+    if ((PJSIP_MSG_CSEQ_HDR(rsp->msg)->method.id == PJSIP_INVITE_METHOD) &&
+        (rsp->msg->line.status.code >= 300))
+    {
+      // Build an ACK request from the original request sent on this fork and the
+      // negative response received.
+      pjsip_tx_data* ack = PJUtils::create_ack(stack_data.endpt,
+                                               downstream->_req->msg,
+                                               rsp->msg);
+      downstream->rx_negative_ack(ack);
+    }
+
     // This is the root sproutlet in the tree, so send the response on the
     // UAS transaction.
     if (_tsx != NULL)
@@ -1017,9 +1024,17 @@ void SproutletProxy::UASTsx::tx_response(SproutletWrapper* downstream,
       SproutletWrapper* upstream = i->second.first;
       int fork_id = i->second.second;
 
-      if (rsp->msg->line.status.code >= PJSIP_SC_OK)
+      // We break the linkage between the sproutlets if:
+      // - We receive a 2xx response for an INVITE. For 3xx-6xx responses
+      //   we will break the linkage after sending an ACK to the negative
+      //   response.
+      // - We receive a final response for other transaction types (excluding
+      //   CANCEL).
+      if ((rsp->msg->line.status.code >= PJSIP_SC_OK) &&
+          ((PJSIP_MSG_CSEQ_HDR(rsp->msg)->method.id != PJSIP_INVITE_METHOD) ||
+           (rsp->msg->line.status.code < 300)) &&
+          (PJSIP_MSG_CSEQ_HDR(rsp->msg)->method.id != PJSIP_CANCEL_METHOD))
       {
-        // Final response, so break the linkage between the Sproutlets.
         _dmap_sproutlet.erase(i->second);
         _umap.erase(i);
       }
@@ -1058,6 +1073,19 @@ void SproutletProxy::UASTsx::tx_cancel(SproutletWrapper* upstream,
   }
   else
   {
+    TRC_DEBUG("Send immediate 200 OK to CANCEL");
+    pjsip_tx_data* ok;
+    pj_status_t status = PJUtils::create_response(stack_data.endpt,
+                                                  cancel,
+                                                  PJSIP_SC_OK,
+                                                  NULL,
+                                                  &ok);
+
+    if (status == PJ_SUCCESS)
+    {
+      upstream->rx_response(ok, fork_id);
+    }
+
     DMap<UACTsx*>::iterator j = _dmap_uac.find(std::make_pair(upstream, fork_id));
     if (j != _dmap_uac.end())
     {
@@ -1070,6 +1098,34 @@ void SproutletProxy::UASTsx::tx_cancel(SproutletWrapper* upstream,
     // Free the CANCEL request.
     TRC_DEBUG("Free CANCEL request (%s)", cancel->obj_name);
     pjsip_tx_data_dec_ref(cancel);
+  }
+}
+
+
+void SproutletProxy::UASTsx::tx_negative_ack(SproutletWrapper* upstream,
+                                             int fork_id,
+                                             pjsip_tx_data* ack)
+{
+  TRC_DEBUG("Process negative ACK from %s on fork %d",
+            upstream->service_name().c_str(), fork_id);
+  DMap<SproutletWrapper*>::iterator i =
+                       _dmap_sproutlet.find(std::make_pair(upstream, fork_id));
+  if (i != _dmap_sproutlet.end())
+  {
+    // Pass the ACK request to the downstream Sproutlet.
+    SproutletWrapper* downstream = i->second;
+    TRC_DEBUG("Route negative ACK to %s", downstream->service_name().c_str());
+    downstream->rx_negative_ack(ack);
+
+    // This is an ACK to a final response so disconnect the sproutlets.
+    _dmap_sproutlet.erase(std::make_pair(upstream, fork_id));
+    UMap::iterator j = _umap.find((void*)downstream);
+    _umap.erase(j);
+  }
+  else
+  {
+    // We don't want to route this externally, so drop our reference to it.
+    pjsip_tx_data_dec_ref(ack);
   }
 }
 
@@ -1201,7 +1257,7 @@ const std::string& SproutletWrapper::service_name() const
 
 /// Returns a mutable clone of the original request suitable for forwarding
 /// or as the basis for constructing a response.
-pjsip_msg* SproutletWrapper::original_request()
+pjsip_msg* SproutletWrapper::get_request_for_sproutlet_tsx()
 {
   pjsip_tx_data* clone = PJUtils::clone_msg(stack_data.endpt, _req);
 
@@ -1223,6 +1279,14 @@ pjsip_msg* SproutletWrapper::original_request()
   {
     TRC_DEBUG("Remove top Route header %s", PJUtils::hdr_to_string(hr).c_str());
     pj_list_erase(hr);
+  }
+
+  // Decrement Max-Forwards if present.
+  pjsip_max_fwd_hdr* mf_hdr = (pjsip_max_fwd_hdr*)
+                      pjsip_msg_find_hdr(clone->msg, PJSIP_H_MAX_FORWARDS, NULL);
+  if (mf_hdr != NULL)
+  {
+    --mf_hdr->ivalue;
   }
 
   register_tdata(clone);
@@ -1424,6 +1488,12 @@ void SproutletWrapper::send_response(pjsip_msg*& rsp)
     return;
   }
 
+  if (rsp->line.status.code == PJSIP_SC_TRYING)
+  {
+    TRC_ERROR("Sproutlet attempted to forward a 100 Trying response");
+    return;
+  }
+
   TRC_VERBOSE("%s sending %s", _id.c_str(), pjsip_tx_data_get_info(it->second));
 
   // We've found the tdata, move it to _send_responses.
@@ -1592,16 +1662,28 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
   // Keep an immutable reference to the request.
   _req = req;
 
-  // Decrement Max-Forwards if present.
-  pjsip_max_fwd_hdr* mf_hdr = (pjsip_max_fwd_hdr*)
-                      pjsip_msg_find_hdr(req->msg, PJSIP_H_MAX_FORWARDS, NULL);
-  if (mf_hdr != NULL)
+  // Notify the sproutlet that a request has been received.
+  _sproutlet_tsx->obs_rx_request(req->msg, false);
+
+  if (req->msg->line.req.method.id == PJSIP_INVITE_METHOD)
   {
-    --mf_hdr->ivalue;
+    // Send an immediate 100 Trying response to the upstream
+    // Sproutlet.
+    pjsip_tx_data* trying;
+    pj_status_t status = PJUtils::create_response(stack_data.endpt,
+                                                  req,
+                                                  PJSIP_SC_TRYING,
+                                                  NULL,
+                                                  &trying);
+    if (status == PJ_SUCCESS)
+    {
+      log_inter_sproutlet(trying, false);
+      tx_response(trying);
+    }
   }
 
   // Clone the request to get a mutable copy to pass to the Sproutlet.
-  pjsip_msg* clone = original_request();
+  pjsip_msg* clone = get_request_for_sproutlet_tsx();
   if (clone == NULL)
   {
     // @TODO
@@ -1643,56 +1725,120 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
     log_inter_sproutlet(rsp, false);
   }
 
-  register_tdata(rsp);
-  if ((PJSIP_IS_STATUS_IN_CLASS(rsp->msg->line.status.code, 100)) &&
-      (_forks[fork_id].state.tsx_state == PJSIP_TSX_STATE_CALLING))
+  int status_code = rsp->msg->line.status.code;
+  if ((status_code == PJSIP_SC_TRYING) ||
+      (PJSIP_MSG_CSEQ_HDR(rsp->msg)->method.id == PJSIP_CANCEL_METHOD))
   {
-    // Provisional response on fork still in calling state, so move to
-    // proceeding state.
-    _forks[fork_id].state.tsx_state = PJSIP_TSX_STATE_PROCEEDING;
-    TRC_VERBOSE("%s received provisional response %s on fork %d, state = %s",
-                _id.c_str(), pjsip_tx_data_get_info(rsp),
-                fork_id, pjsip_tsx_state_str(_forks[fork_id].state.tsx_state));
+    _sproutlet_tsx->obs_rx_response(rsp->msg, fork_id, true);
   }
-  else if (rsp->msg->line.status.code >= PJSIP_SC_OK)
+  else
   {
-    // Final response, so mark the fork as completed and decrement the number
-    // of pending responses.
-    _forks[fork_id].state.tsx_state = PJSIP_TSX_STATE_TERMINATED;
-    pjsip_tx_data_dec_ref(_forks[fork_id].req);
-    _forks[fork_id].req = NULL;
-    TRC_VERBOSE("%s received final response %s on fork %d, state = %s",
-                _id.c_str(), pjsip_tx_data_get_info(rsp),
-                fork_id, pjsip_tsx_state_str(_forks[fork_id].state.tsx_state));
-    --_pending_responses;
+    _sproutlet_tsx->obs_rx_response(rsp->msg, fork_id, false);
+  }
 
-    if ((_sproutlet != NULL) &&
-      (_sproutlet->_outgoing_sip_transactions_tbl != NULL))
+  // If this is a negative response to an INVITE, send an immediate ACK
+  // to the downstream sproutlet.
+  if ((status_code >= 300) &&
+      (PJSIP_MSG_CSEQ_HDR(rsp->msg)->method.id == PJSIP_INVITE_METHOD))
+  {
+    TRC_DEBUG("Send immediate ACK to negative response");
+    tx_negative_ack(rsp, fork_id);
+  }
+
+  if (PJSIP_MSG_CSEQ_HDR(rsp->msg)->method.id == PJSIP_CANCEL_METHOD)
+  {
+    pjsip_tx_data_dec_ref(rsp);
+  }
+  else
+  {
+    register_tdata(rsp);
+    if ((PJSIP_IS_STATUS_IN_CLASS(status_code, 100)) &&
+        (_forks[fork_id].state.tsx_state == PJSIP_TSX_STATE_CALLING))
     {
-      // Update SNMP SIP transactions statistics for the Sproutlet.
-      if (rsp->msg->line.status.code >= 200 && rsp->msg->line.status.code < 300)
+      // Provisional response on fork still in calling state, so move to
+      // proceeding state.
+      _forks[fork_id].state.tsx_state = PJSIP_TSX_STATE_PROCEEDING;
+      TRC_VERBOSE("%s received provisional response %s on fork %d, state = %s",
+                  _id.c_str(), pjsip_tx_data_get_info(rsp),
+                  fork_id, pjsip_tsx_state_str(_forks[fork_id].state.tsx_state));
+    }
+    else if (status_code >= PJSIP_SC_OK)
+    {
+      // Final response, so mark the fork as completed and decrement the number
+      // of pending responses.
+      _forks[fork_id].state.tsx_state = PJSIP_TSX_STATE_TERMINATED;
+      pjsip_tx_data_dec_ref(_forks[fork_id].req);
+      _forks[fork_id].req = NULL;
+      TRC_VERBOSE("%s received final response %s on fork %d, state = %s",
+                  _id.c_str(), pjsip_tx_data_get_info(rsp),
+                  fork_id, pjsip_tsx_state_str(_forks[fork_id].state.tsx_state));
+      --_pending_responses;
+
+      if ((_sproutlet != NULL) &&
+        (_sproutlet->_outgoing_sip_transactions_tbl != NULL))
       {
-        _sproutlet->_outgoing_sip_transactions_tbl->increment_successes(_req_type);
-      }
-      else
-      {
-        _sproutlet->_outgoing_sip_transactions_tbl->increment_failures(_req_type);
+        // Update SNMP SIP transactions statistics for the Sproutlet.
+        if (status_code >= 200 && status_code < 300)
+        {
+          _sproutlet->_outgoing_sip_transactions_tbl->increment_successes(_req_type);
+        }
+        else
+        {
+          _sproutlet->_outgoing_sip_transactions_tbl->increment_failures(_req_type);
+        }
       }
     }
-  }
-  _sproutlet_tsx->on_rx_response(rsp->msg, fork_id);
 
-  process_actions(false);
+    if (status_code == PJSIP_SC_TRYING)
+    {
+      _sproutlet_tsx->on_rx_trying(rsp->msg, fork_id);
+      deregister_tdata(rsp);
+      pjsip_tx_data_dec_ref(rsp);
+    }
+    else
+    {
+      _sproutlet_tsx->on_rx_response(rsp->msg, fork_id);
+    }
+    process_actions(false);
+  }
 }
 
 void SproutletWrapper::rx_cancel(pjsip_tx_data* cancel)
 {
   TRC_VERBOSE("%s received CANCEL request", _id.c_str());
+
+  // Notify the sproutlet that a request has been received.
+  _sproutlet_tsx->obs_rx_request(cancel->msg, true);
+
+  TRC_DEBUG("Send immediate 200 OK to CANCEL");
+  pjsip_tx_data* ok;
+  pj_status_t status = PJUtils::create_response(stack_data.endpt,
+                                                cancel,
+                                                PJSIP_SC_OK,
+                                                NULL,
+                                                &ok);
+
+  if (status == PJ_SUCCESS)
+  {
+    tx_response(ok);
+  }
+
   _sproutlet_tsx->on_rx_cancel(PJSIP_SC_REQUEST_TERMINATED,
-                           cancel->msg);
+                               cancel->msg);
   pjsip_tx_data_dec_ref(cancel);
   cancel_pending_forks();
   process_actions(false);
+}
+
+void SproutletWrapper::rx_negative_ack(pjsip_tx_data* ack)
+{
+  TRC_VERBOSE("%s received negative ACK request", _id.c_str());
+
+  // Notify the sproutlet that an a negative ACK has been received and then
+  // drop our reference to this request.
+  _sproutlet_tsx->obs_rx_request(ack->msg, true);
+
+  pjsip_tx_data_dec_ref(ack);
 }
 
 void SproutletWrapper::rx_error(int status_code)
@@ -1879,16 +2025,6 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
     return;
   }
 
-  if (status_code == 100)
-  {
-    // We will already have sent a locally generated 100 Trying response, so
-    // don't forward this one.
-    TRC_DEBUG("Discard 100/INVITE response (%s)", rsp->obj_name);
-    deregister_tdata(rsp);
-    pjsip_tx_data_dec_ref(rsp);
-    return;
-  }
-
   if ((status_code > 100) &&
       (status_code < 199))
   {
@@ -1969,7 +2105,7 @@ void SproutletWrapper::tx_request(pjsip_tx_data* req, int fork_id)
   }
 
   // Notify the sproutlet that the request is being sent downstream.
-  _sproutlet_tsx->on_tx_request(req->msg, fork_id);
+  _sproutlet_tsx->obs_tx_request(req->msg, fork_id, false);
 
   // Forward the request downstream.
   deregister_tdata(req);
@@ -1978,10 +2114,10 @@ void SproutletWrapper::tx_request(pjsip_tx_data* req, int fork_id)
 
 void SproutletWrapper::tx_response(pjsip_tx_data* rsp)
 {
-  // Notify the sproutlet that the response is being sent upstream.
-  _sproutlet_tsx->on_tx_response(rsp->msg);
-
-  if (rsp->msg->line.status.code >= PJSIP_SC_OK)
+  // We only treat this as a final response if the status code is >= 200 and
+  // this is not a 200 OK to a CANCEL.
+  if ((rsp->msg->line.status.code >= PJSIP_SC_OK) &&
+      (PJSIP_MSG_CSEQ_HDR(rsp->msg)->method.id != PJSIP_CANCEL_METHOD))
   {
     _complete = true;
     cancel_pending_forks();
@@ -2001,6 +2137,17 @@ void SproutletWrapper::tx_response(pjsip_tx_data* rsp)
     }
   }
 
+  // Notify the sproutlet that the response is being sent upstream.
+  if ((PJSIP_MSG_CSEQ_HDR(rsp->msg)->method.id == PJSIP_CANCEL_METHOD) ||
+      (rsp->msg->line.status.code == PJSIP_SC_TRYING))
+  {
+    _sproutlet_tsx->obs_tx_response(rsp->msg, true);
+  }
+  else
+  {
+    _sproutlet_tsx->obs_tx_response(rsp->msg, false);
+  }
+
   // Forward the response upstream.
   deregister_tdata(rsp);
   _proxy_tsx->tx_response(this, rsp);
@@ -2013,8 +2160,20 @@ void SproutletWrapper::tx_cancel(int fork_id)
   pjsip_tx_data* cancel = PJUtils::create_cancel(stack_data.endpt,
                                                  _forks[fork_id].req,
                                                  _forks[fork_id].cancel_reason);
+  _sproutlet_tsx->obs_tx_request(cancel->msg, fork_id, true);
   _proxy_tsx->tx_cancel(this, fork_id, cancel);
   _forks[fork_id].pending_cancel = false;
+}
+
+void SproutletWrapper::tx_negative_ack(pjsip_tx_data* rsp, int fork_id)
+{
+  // Build an ACK request from the original request sent on this fork and the
+  // negative response received.
+  pjsip_tx_data* ack = PJUtils::create_ack(stack_data.endpt,
+                                           _forks[fork_id].req->msg,
+                                           rsp->msg);
+  _sproutlet_tsx->obs_tx_request(ack->msg, fork_id, true);
+  _proxy_tsx->tx_negative_ack(this, fork_id, ack);
 }
 
 /// Compare two status codes from the perspective of which is the best to

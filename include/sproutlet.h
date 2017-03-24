@@ -91,7 +91,7 @@ public:
   ///
   /// @returns             - A clone of the original request message.
   ///
-  virtual pjsip_msg* original_request() = 0;
+  virtual pjsip_msg* get_request_for_sproutlet_tsx() = 0;
 
   /// Returns the top Route header from the original incoming request.  This
   /// can be inpsected by the Sproutlet, but should not be modified.  Note that
@@ -321,28 +321,23 @@ public:
   /// @param req           - The received in-dialog request.
   virtual void on_rx_in_dialog_request(pjsip_msg* req) { send_request(req); }
 
-  /// Called when a request has been transmitted on the transaction (usually
-  /// because the service has previously called forward_request() with the
-  /// request message.
+  /// Called with all responses, except 100 Trying, received on the transaction.
+  /// If a transport error or transaction timeout occurs on a downstream leg,
+  /// this method is called with a 408 response.
   ///
-  /// @param req           - The transmitted request
-  /// @param fork_id       - The identity of the downstream fork on which the
-  ///                        request was sent.
-  virtual void on_tx_request(pjsip_msg* req, int fork_id) { }
-
-  /// Called with all responses received on the transaction.  If a transport
-  /// error or transaction timeout occurs on a downstream leg, this method is
-  /// called with a 408 response.
+  /// Note: 100 Trying responses are handled by the on_rx_trying method.
   ///
-  /// @param  rsp          - The received request.
+  /// @param  rsp          - The received response.
   /// @param  fork_id      - The identity of the downstream fork on which
   ///                        the response was received.
   virtual void on_rx_response(pjsip_msg* rsp, int fork_id) { send_response(rsp); }
 
-  /// Called when a response has been transmitted on the transaction.
+  /// This is a notification that a 100 Trying has been received. The sproutlet
+  /// proxy handles these automatically. The Sproutlet Tsx should not forward
+  /// the response on (i.e. should not call send_request).
   ///
-  /// @param  rsp          - The transmitted response.
-  virtual void on_tx_response(pjsip_msg* rsp) { }
+  /// @param  rsp          - The received response.
+  virtual void on_rx_trying(pjsip_msg* rsp, int fork_id) {}
 
   /// Called if the original request is cancelled (either by a received
   /// CANCEL request, an error on the inbound transport or a transaction
@@ -356,6 +351,47 @@ public:
   /// @param  cancel_req   - The received CANCEL request or NULL if cancellation
   ///                        was triggered by an error or timeout.
   virtual void on_rx_cancel(int status_code, pjsip_msg* cancel_req) {}
+
+  /// The next four methods make up the observation API. The purpose of this API
+  /// is to view transaction management messages that are not seen by
+  /// on_rx_request and on_rx_response. This includes CANCEL, 200 OK to CANCEL,
+  /// 100 Trying and ACK to negative response. This API also sees all the
+  /// messages that are passed to on_rx_request and on_rx_response.
+
+  /// Called when a request is received by this sproutlet Tsx.
+  ///
+  /// @param  req          - The received request.
+  /// @param  tsx_mgmt     - True when the received request will not be passed
+  ///                        to on_rx_request.
+  virtual void obs_rx_request(pjsip_msg* req, bool tsx_mgmt) {};
+
+  /// Called when a response is received by this sproutlet Tsx.
+  ///
+  /// @param  rsp          - The received response.
+  /// @param fork_id       - The identity of the downstream fork on which the
+  ///                        response was received.
+  /// @param  tsx_mgmt     - True when the received respone will not be passed
+  ///                        to on_rx_response.
+  virtual void obs_rx_response(pjsip_msg* rsp, int fork_id, bool tsx_mgmt) {};
+
+  /// Called when a request has been transmitted on the transaction by this
+  /// sproutlet Tsx.  This is usually because the service has previously called
+  /// forward_request() with the request message.
+  ///
+  /// @param req           - The transmitted request
+  /// @param fork_id       - The identity of the downstream fork on which the
+  ///                        request was sent.
+  /// @param  tsx_mgmt     - True when the transmitted request was not generated
+  ///                        by the sproutlet Tsx calling send_request().
+  virtual void obs_tx_request(pjsip_msg* req, int fork_id, bool tsx_mgmt) {}
+
+  /// Called when a response has been transmitted on the transaction by the
+  /// sproutlet Tsx.
+  ///
+  /// @param  rsp          - The transmitted response.
+  /// @param  tsx_mgmt     - True when the transmitted response was not generated
+  ///                        by the sproutlet Tsx calling send_response().
+  virtual void obs_tx_response(pjsip_msg* rsp, bool tsx_mgmt) {}
 
   /// Called when a timer programmed by the SproutletTsx expires.
   ///
@@ -371,7 +407,7 @@ protected:
   /// @returns             - A clone of the original request message.
   ///
   pjsip_msg* original_request()
-    {return _helper->original_request();}
+    {return _helper->get_request_for_sproutlet_tsx();}
 
   /// Returns a URI that could be used to route back to the current Sproutlet.
   /// This URI may contain pre-loaded parameters that should not be modified

@@ -613,16 +613,20 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
 }
 
 
-void SCSCFSproutletTsx::on_tx_request(pjsip_msg* req, int fork_id)
+void SCSCFSproutletTsx::obs_tx_request(pjsip_msg* req, int fork_id, bool tsx_mgmt)
 {
-  ACR* acr = get_acr();
-  if (acr)
+  // We don't send ACRs for transaction management messages.
+  if (!tsx_mgmt)
   {
-    // Pass the transmitted request to the ACR to update the accounting
-    // information.
-    acr->lock();
-    acr->tx_request(req);
-    acr->unlock();
+    ACR* acr = get_acr();
+    if (acr)
+    {
+      // Pass the transmitted request to the ACR to update the accounting
+      // information.
+      acr->lock();
+      acr->tx_request(req);
+      acr->unlock();
+    }
   }
 }
 
@@ -636,22 +640,8 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     _se_helper.process_response(rsp, get_pool(rsp), trail());
   }
 
-  // Pass the received response to the ACR.
-  // @TODO - timestamp from response???
-  ACR* acr = get_acr();
-  if (acr != NULL)
-  {
-    acr->lock();
-    acr->rx_response(rsp);
-    acr->unlock();
-  }
-
-  if (_liveness_timer != 0)
-  {
-    // The liveness timer is running on this request, so cancel it.
-    cancel_timer(_liveness_timer);
-    _liveness_timer = 0;
-  }
+  acr_handle_response(rsp);
+  cancel_liveness_timer();
 
   int st_code = rsp->line.status.code;
 
@@ -736,7 +726,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
         // response we've seen from an AS track it as a successful
         // communication. This means that no matter how many 1xx responses we
         // receive we only track one success.
-        if ((st_code > PJSIP_SC_TRYING) && (!_seen_1xx))
+        if (!_seen_1xx)
         {
           _scscf->track_app_serv_comm_success(_as_chain_link.uri(),
                                               _as_chain_link.default_handling());
@@ -745,10 +735,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     }
   }
 
-  if (st_code > PJSIP_SC_TRYING)
-  {
-    _seen_1xx = true;
-  }
+  _seen_1xx = true;
 
   if (rsp != NULL)
   {
@@ -759,28 +746,39 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 }
 
 
-void SCSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
+void SCSCFSproutletTsx::on_rx_trying(pjsip_msg* rsp, int fork_id)
 {
-  ACR* acr = get_acr();
-  if (acr != NULL)
-  {
-    // Pass the transmitted response to the ACR to update the accounting
-    // information.
-    acr->lock();
-    acr->tx_response(rsp);
-    acr->unlock();
-  }
+  acr_handle_response(rsp);
+  cancel_liveness_timer();
+}
 
-  // If this is a transaction where we are supposed to be tracking session
-  // setup stats then check to see if it is now set up.  We consider it to be
-  // setup when we receive either a 180 Ringing or 2xx (per TS 32.409).
-  pjsip_status_code st_code = (pjsip_status_code)rsp->line.status.code;
-  if (_record_session_setup_time &&
-      ((st_code == PJSIP_SC_RINGING) ||
-       PJSIP_IS_STATUS_IN_CLASS(st_code, 200)))
+
+void SCSCFSproutletTsx::obs_tx_response(pjsip_msg* rsp, bool tsx_mgmt)
+{
+  // We don't send ACRs or update stats for transaction management messages.
+  if (!tsx_mgmt)
   {
-    _scscf->track_session_setup_time(_tsx_start_time_usec, _video_call);
-    _record_session_setup_time = false;
+    ACR* acr = get_acr();
+    if (acr != NULL)
+    {
+      // Pass the transmitted response to the ACR to update the accounting
+      // information.
+      acr->lock();
+      acr->tx_response(rsp);
+      acr->unlock();
+    }
+
+    // If this is a transaction where we are supposed to be tracking session
+    // setup stats then check to see if it is now set up.  We consider it to be
+    // setup when we receive either a 180 Ringing or 2xx (per TS 32.409).
+    pjsip_status_code st_code = (pjsip_status_code)rsp->line.status.code;
+    if (_record_session_setup_time &&
+        ((st_code == PJSIP_SC_RINGING) ||
+         (PJSIP_IS_STATUS_IN_CLASS(st_code, 200))))
+    {
+      _scscf->track_session_setup_time(_tsx_start_time_usec, _video_call);
+      _record_session_setup_time = false;
+    }
   }
 }
 
@@ -2250,6 +2248,29 @@ std::string SCSCFSproutletTsx::fork_failure_reason_as_string(int fork_id, int si
   }
 
   return reason;
+}
+
+void SCSCFSproutletTsx::acr_handle_response(pjsip_msg* rsp)
+{
+  // Pass the received response to the ACR.
+  // @TODO - timestamp from response???
+  ACR* acr = get_acr();
+  if (acr != NULL)
+  {
+    acr->lock();
+    acr->rx_response(rsp);
+    acr->unlock();
+  }
+}
+
+void SCSCFSproutletTsx::cancel_liveness_timer()
+{
+  if (_liveness_timer != 0)
+  {
+    // The liveness timer is running on this request, so cancel it.
+    cancel_timer(_liveness_timer);
+    _liveness_timer = 0;
+  }
 }
 
 pjsip_msg* SCSCFSproutletTsx::get_base_request()
