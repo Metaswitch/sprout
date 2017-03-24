@@ -93,6 +93,13 @@ public:
   ///
   virtual pjsip_msg* original_request() = 0;
 
+  /// Sets the transport on the given message to be the same as on the
+  /// original incoming request.
+  ///
+  /// @param  req          - The request message on which to set the
+  //                         transport.
+  virtual void copy_original_transport(pjsip_msg* req) = 0;
+
   /// Returns the top Route header from the original incoming request.  This
   /// can be inpsected by the Sproutlet, but should not be modified.  Note that
   /// this Route header is removed from the request passed to the Sproutlet on
@@ -372,6 +379,13 @@ protected:
   ///
   pjsip_msg* original_request()
     {return _helper->original_request();}
+
+  /// Sets the transport on this request to be the same as on the original.
+  ///
+  /// @param  req          - The request message on which to set the
+  ///                        transport.
+  void copy_original_transport(pjsip_msg* req)
+    {_helper->copy_original_transport(req);}
 
   /// Returns a URI that could be used to route back to the current Sproutlet.
   /// This URI may contain pre-loaded parameters that should not be modified

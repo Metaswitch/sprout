@@ -595,6 +595,7 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
                                    sproutlet,
                                    alias,
                                    _req,
+                                   _original_transport,
                                    trail());
     }
   }
@@ -849,6 +850,7 @@ void SproutletProxy::UASTsx::schedule_requests()
                                                             sproutlet,
                                                             alias,
                                                             req.req,
+                                                            _original_transport,
                                                             trail());
 
         // Set up the mappings.
@@ -1102,6 +1104,7 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
                                    Sproutlet* sproutlet,
                                    const std::string& sproutlet_alias,
                                    pjsip_tx_data* req,
+                                   pjsip_transport* original_transport,
                                    SAS::TrailId trail_id) :
   _proxy(proxy),
   _proxy_tsx(proxy_tsx),
@@ -1111,6 +1114,7 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _id(""),
   _req(req),
   _req_type(),
+  _original_transport(original_transport),
   _packets(),
   _send_requests(),
   _send_responses(),
@@ -1123,6 +1127,11 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _pending_timers(),
   _trail_id(trail_id)
 {
+  if (_original_transport != NULL)
+  {
+    pjsip_transport_add_ref(_original_transport);
+  }
+
   _req_type = SNMP::string_to_request_type(_req->msg->line.req.method.name.ptr,
                                            _req->msg->line.req.method.name.slen);
   if (sproutlet != NULL)
@@ -1188,6 +1197,11 @@ SproutletWrapper::~SproutletWrapper()
       pjsip_tx_data_dec_ref(it->second);
     }
   }
+
+  if (_original_transport != NULL)
+  {
+    pjsip_transport_dec_ref(_original_transport);
+  }
 }
 
 const std::string& SproutletWrapper::service_name() const
@@ -1228,6 +1242,37 @@ pjsip_msg* SproutletWrapper::original_request()
   register_tdata(clone);
 
   return clone->msg;
+}
+
+// Sets the transport on this request to be the same as on the original.
+void SproutletWrapper::copy_original_transport(pjsip_msg* req)
+{
+  // Get the original transport.
+  if (_original_transport == NULL)
+  {
+    // LCOV_EXCL_START - defensive code not hit in UT
+    TRC_WARNING("Sproutlet tried to copy transport from unknown original");
+    return;
+    // LCOV_EXCL_STOP
+  }
+
+  // Get this request's tdata from the map of clones.
+  Packets::iterator it = _packets.find(req);
+  if (it == _packets.end())
+  {
+    // LCOV_EXCL_START - defensive code not hit in UT
+    TRC_WARNING("Sproutlet tried to copy transport on an unknown request");
+    return;
+    // LCOV_EXCL_STOP
+  }
+  pjsip_tx_data* tdata = it->second;
+
+  // Set the transport.
+  pjsip_tpselector tpsel;
+  pj_bzero(&tpsel, sizeof(tpsel));
+  tpsel.type = PJSIP_TPSELECTOR_TRANSPORT;
+  tpsel.u.transport = _original_transport;
+  pjsip_tx_data_set_transport(tdata, &tpsel);
 }
 
 /// Returns a brief message summary.

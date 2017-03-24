@@ -228,6 +228,9 @@ protected:
     /// to additional targets if required.
     pjsip_tx_data* _req;
 
+    /// Pointer to the transport associated with the original request.
+    pjsip_transport* _original_transport;
+
     /// Pointer to the underlying PJSIP UAS transaction.
     pjsip_transaction* _tsx;
 
