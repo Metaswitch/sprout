@@ -8,7 +8,7 @@ ${CURL_CONFIGURE}:
 	cd ${CURL_DIR} && ./buildconf
 
 ${CURL_MAKEFILE}: ${CURL_CONFIGURE}
-	cd ${CURL_DIR} && ./configure --prefix=${INSTALL_DIR} --enable-ares=${INSTALL_DIR} --without-librtmp --disable-ldap --disable-ldaps
+	cd ${CURL_DIR} && LDFLAGS=-ldl ./configure --prefix=${INSTALL_DIR} --enable-ares=${INSTALL_DIR} --without-librtmp --disable-ldap --disable-ldaps
 
 curl: ${CURL_MAKEFILE}
 	${MAKE} -C ${CURL_DIR}
