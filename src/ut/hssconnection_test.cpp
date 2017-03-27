@@ -398,6 +398,27 @@ class HssConnectionTest : public BaseTest
          "<ECF priority=\"1\">ecf1</ECF>"
        "</ChargingAddresses>"
      "</ClearwaterRegData>";
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid62/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
+     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+     "<ClearwaterRegData>"
+       "<RegistrationState>REGISTERED</RegistrationState>"
+       "<IMSSubscription>"
+         "<ServiceProfile>"
+           "<PublicIdentity>"
+             "<Identity>sip:123@example.com</Identity>"
+           "</PublicIdentity>"
+           "<Extension>"
+             "<SharedIFCSetID>one</SharedIFCSetID>"
+           "</Extension>"
+         "</ServiceProfile>"
+       "</IMSSubscription>"
+       "<ChargingAddresses>"
+         "<CCF priority=\"1\">ccf1</CCF>"
+         "<CCF priority=\"2\">ccf2</CCF>"
+         "<ECF priority=\"2\">ecf2</ECF>"
+         "<ECF priority=\"1\">ecf1</ECF>"
+       "</ChargingAddresses>"
+     "</ClearwaterRegData>";
   }
   virtual ~HssConnectionTest()
   {
@@ -517,6 +538,23 @@ TEST_F(HssConnectionTest, SifcWithIfc)
   // Clean up.
   delete fake_ifc;
   fake_ifc = NULL;
+}
+
+// Check a SiFC that is not an integer is not accepted.
+TEST_F(HssConnectionTest, NonIntegerSifc)
+{
+  // Set up necessary variables, and check iFC map is empty.
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+  EXPECT_TRUE(ifcs_map.empty());
+
+  // Send in a message, and check that the iFC map is still empty.
+  _sifc_hss.update_registration_state("pubid62", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  for(auto elem : ifcs_map)
+  {
+    EXPECT_TRUE(elem.second.size() == 0);
+  }
 }
 
 TEST_F(HssConnectionTest, SimpleChargingAddrs)
