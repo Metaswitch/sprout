@@ -483,8 +483,8 @@ TEST_F(HssConnectionTest, SimpleSiFC)
   std::string regstate;
   EXPECT_TRUE(ifcs_map.empty());
 
-  // Mock out function that converts list of shared iFC set ids into a list of
-  // iFCs - this function is tested elsewhere.
+  // Mock out the function that converts the list of shared iFC set ids into a
+  // list of iFCs - this function is tested elsewhere.
   Ifc* fake_ifc = new Ifc(NULL);
   int32_t priority_one = 1;
   int32_t priority_two = 2;
@@ -516,8 +516,8 @@ TEST_F(HssConnectionTest, SifcWithIfc)
   std::string regstate;
   EXPECT_TRUE(ifcs_map.empty());
 
-  // Mock out function that converts list of shared iFC set ids into a list of
-  // iFCs - this function is tested elsewhere.
+  // Mock out the function that converts the list of shared iFC set ids into a
+  // list of iFCs - this function is tested elsewhere.
   Ifc* fake_ifc = new Ifc(NULL);
   int32_t priority_one = 1;
   int32_t priority_two = 2;
@@ -528,7 +528,7 @@ TEST_F(HssConnectionTest, SifcWithIfc)
     .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifcs_from_id)));
 
   // Send in a message, and check that three iFCs are now present in the map for
-  // each public id (two from SiFC set, and one iFC).
+  // each public id (two from the SiFC set, and one iFC).
   _sifc_hss.update_registration_state("pubid61", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   for(auto elem : ifcs_map)
   {
@@ -540,7 +540,7 @@ TEST_F(HssConnectionTest, SifcWithIfc)
   fake_ifc = NULL;
 }
 
-// Check a SiFC that is not an integer is not accepted.
+// Check that an invalid SiFC, that is not an integer, is not accepted.
 TEST_F(HssConnectionTest, NonIntegerSifc)
 {
   // Set up necessary variables, and check iFC map is empty.
