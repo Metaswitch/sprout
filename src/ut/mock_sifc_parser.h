@@ -45,9 +45,11 @@
 class MockSIFCService : public SIFCService
 {
 public:
-  MockSIFCService() {}
+  MockSIFCService() : SIFCService() {}
 
-  MOCK_CONST_METHOD2(get_ifcs_from_id, std::vector<Ifc*>(const std::set<int>&, SAS::TrailId));
+  MOCK_CONST_METHOD3(get_ifcs_from_id, void(std::multimap<int32_t, Ifc>&,
+                                            const std::set<int32_t>&,
+                                            SAS::TrailId));
 
 };
 

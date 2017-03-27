@@ -54,14 +54,14 @@ class SIFCService
 {
 public:
   SIFCService(std::string configuration = "./sifc.xml");
-  ~SIFCService();
+  virtual ~SIFCService();
 
   /// Updates the shared IFC sets
   void update_sets();
 
-  void get_ifcs_from_id(std::multimap<int32_t, Ifc>& ifc_map,
-                        const std::set<int32_t>& id,
-                        SAS::TrailId trail) const;
+  virtual void get_ifcs_from_id(std::multimap<int32_t, Ifc>& ifc_map,
+                                const std::set<int32_t>& id,
+                                SAS::TrailId trail) const;
 
 private:
   std::map<int32_t, std::vector<std::pair<int32_t, Ifc>>> _shared_ifc_sets;

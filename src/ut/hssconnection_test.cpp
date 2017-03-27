@@ -52,7 +52,7 @@
 #include "mock_sifc_parser.h"
 
 using namespace std;
-using testing::Return;
+using testing::SetArgReferee;
 using testing::_;
 
 /// Fixture for HssConnectionTest.
@@ -62,6 +62,8 @@ class HssConnectionTest : public BaseTest
   AlarmManager _am;
   CommunicationMonitor _cm;
   HSSConnection _hss;
+  HSSConnection _sifc_hss;
+  MockSIFCService _sifc_service;
 
   HssConnectionTest() :
     _resolver("10.42.42.42"),
@@ -77,7 +79,19 @@ class HssConnectionTest : public BaseTest
          &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
          &_cm,
          "server_name",
-         NULL)
+         NULL),
+    _sifc_hss("narcissus",
+              &_resolver,
+              NULL,
+              &SNMP::FAKE_IP_COUNT_TABLE,
+              &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+              &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+              &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+              &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+              &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+              &_cm,
+              "server_name",
+              &_sifc_service)
     {
     fakecurl_responses.clear();
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid42/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
@@ -357,7 +371,34 @@ class HssConnectionTest : public BaseTest
          "<ECF priority=\"1\">ecf1</ECF>"
        "</ChargingAddresses>"
      "</ClearwaterRegData>";
- }
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid61/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
+     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+     "<ClearwaterRegData>"
+       "<RegistrationState>REGISTERED</RegistrationState>"
+       "<IMSSubscription>"
+         "<ServiceProfile>"
+           "<PublicIdentity>"
+             "<Identity>sip:123@example.com</Identity>"
+           "</PublicIdentity>"
+           "<InitialFilterCriteria>"
+             "<ApplicationServer>"
+               "<ServerName>mmtel.narcissi.example.com</ServerName>"
+               "<DefaultHandling>0</DefaultHandling>"
+             "</ApplicationServer>"
+           "</InitialFilterCriteria>"
+           "<Extension>"
+             "<SharedIFCSetID>1</SharedIFCSetID>"
+           "</Extension>"
+         "</ServiceProfile>"
+       "</IMSSubscription>"
+       "<ChargingAddresses>"
+         "<CCF priority=\"1\">ccf1</CCF>"
+         "<CCF priority=\"2\">ccf2</CCF>"
+         "<ECF priority=\"2\">ecf2</ECF>"
+         "<ECF priority=\"1\">ecf1</ECF>"
+       "</ChargingAddresses>"
+     "</ClearwaterRegData>";
+  }
   virtual ~HssConnectionTest()
   {
   }
@@ -423,26 +464,60 @@ TEST_F(HssConnectionTest, SimpleSiFC)
 
   // Mock out function that converts list of shared iFC set ids into a list of
   // iFCs - this function is tested elsewhere.
-  static MockSIFCService* mock_sifc_parser;
-  rapidxml::xml_node<>* xml_thing = "<Ifc>example_ifc</Ifc>";
-  Ifc* ifc_one = new Ifc(xml_thing);
-  Ifc* ifc_two = new Ifc(xml_thing);
-  std::vector<Ifc*> ifc_list = {ifc_one, ifc_two};
-  EXPECT_CALL(*mock_sifc_parser, get_ifcs_from_id(_, _)).WillOnce(Return(ifc_list));
+  Ifc* fake_ifc = new Ifc(NULL);
+  int32_t priority_one = 1;
+  int32_t priority_two = 2;
+  std::multimap<int32_t, Ifc> ifcs_from_id;
+  ifcs_from_id.insert(pair<int32_t, Ifc>(priority_one, *fake_ifc));
+  ifcs_from_id.insert(pair<int32_t, Ifc>(priority_two, *fake_ifc));
+  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, _, _))
+    .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifcs_from_id)));
 
   // Send in a message, and check that iFCs are now present in the map for each
   // public id.
-  _hss.update_registration_state("pubid60", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  _sifc_hss.update_registration_state("pubid60", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   for(auto elem : ifcs_map)
   {
     EXPECT_FALSE(elem.second.size() == 0);
   }
+
+  // Clean up.
+  delete fake_ifc;
+  fake_ifc = NULL;
 }
 
-// Other SiFC tests:
-// With sifc - check the values of the returned ifcs, not just that some are present
-// With ifcs and sifc set - check both are present
-// With more than one sifc set - both are present
+// Check that SiFCs are compatible with iFCs.
+TEST_F(HssConnectionTest, SifcWithIfc)
+{
+  // Set up necessary variables, and check iFC map is empty.
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+  EXPECT_TRUE(ifcs_map.empty());
+
+  // Mock out function that converts list of shared iFC set ids into a list of
+  // iFCs - this function is tested elsewhere.
+  Ifc* fake_ifc = new Ifc(NULL);
+  int32_t priority_one = 1;
+  int32_t priority_two = 2;
+  std::multimap<int32_t, Ifc> ifcs_from_id;
+  ifcs_from_id.insert(pair<int32_t, Ifc>(priority_one, *fake_ifc));
+  ifcs_from_id.insert(pair<int32_t, Ifc>(priority_two, *fake_ifc));
+  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, _, _))
+    .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifcs_from_id)));
+
+  // Send in a message, and check that three iFCs are now present in the map for
+  // each public id (two from SiFC set, and one iFC).
+  _sifc_hss.update_registration_state("pubid61", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  for(auto elem : ifcs_map)
+  {
+    EXPECT_TRUE(elem.second.size() == 3);
+  }
+
+  // Clean up.
+  delete fake_ifc;
+  fake_ifc = NULL;
+}
 
 TEST_F(HssConnectionTest, SimpleChargingAddrs)
 {
