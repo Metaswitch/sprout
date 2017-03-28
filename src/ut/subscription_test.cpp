@@ -1000,6 +1000,12 @@ std::string SubscriptionTest::check_OK_and_NOTIFY(std::string reg_state,
   rapidxml::xml_node<> *reg_info = doc.first_node("reginfo");
   EXPECT_TRUE(reg_info);
 
+  EXPECT_EQ("urn:ietf:params:xml:ns:reginfo", std::string(reg_info->first_attribute("xmlns")->value()));
+  EXPECT_EQ("urn:ietf:params:xml:ns:gruuinfo", std::string(reg_info->first_attribute("gr")->value()));
+  EXPECT_EQ("http://www.w3.org/2001/XMLSchema-instance", std::string(reg_info->first_attribute("xsi")->value()));
+  EXPECT_EQ("urn:3gpp:ns:extRegExp:1.0", std::string(reg_info->first_attribute("ere")->value()));
+  EXPECT_EQ("0", std::string(reg_info->first_attribute("version")->value()));
+
   int num_reg = 0;
 
   for (rapidxml::xml_node<> *registration = reg_info->first_node("registration");

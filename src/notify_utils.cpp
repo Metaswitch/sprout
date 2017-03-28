@@ -122,6 +122,8 @@ pj_xml_node* notify_create_reg_state_xml(
   pj_xml_add_attr(doc, attr);
   attr = pj_xml_attr_new(pool, &STR_XMLNS_XSI_NAME, &STR_XMLNS_XSI_VAL);
   pj_xml_add_attr(doc, attr);
+  attr = pj_xml_attr_new(pool, &STR_XMLNS_ERE_NAME, &STR_XMLNS_ERE_VAL);
+  pj_xml_add_attr(doc, attr);
   attr = pj_xml_attr_new(pool, &STR_VERSION, &STR_VERSION_VAL);
   pj_xml_add_attr(doc, attr);
 
