@@ -190,6 +190,8 @@ const pj_str_t STR_VERSION = pj_str((char*)"version");
 const pj_str_t STR_VERSION_VAL = pj_str((char*)"0");
 const pj_str_t STR_XMLNS_XSI_NAME = pj_str((char*)"xmlns:xsi");
 const pj_str_t STR_XMLNS_XSI_VAL = pj_str((char*)"http://www.w3.org/2001/XMLSchema-instance");
+const pj_str_t STR_XMLNS_ERE_NAME  = pj_str((char*)"xmlns:ere");
+const pj_str_t STR_XMLNS_ERE_VAL = pj_str((char*)"urn:3gpp:ns:extRegExp:1.0");
 
 // XML schema location
 const pj_str_t STR_XSI_SLOC_NAME = pj_str((char*)"xsi:schemaLocation");
