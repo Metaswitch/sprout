@@ -145,35 +145,42 @@ TEST_F(SIFCServiceTest, SIFCReload)
 
   // Reload the file, then repeat the check. Nothing should have changed,
   // and there should be no memory issues
+  sifc.update_sets();
   std::multimap<int32_t, Ifc> ifc_map_reload;
   sifc.get_ifcs_from_id(ifc_map_reload, id, 0);
   EXPECT_EQ(ifc_map_reload.size(), 1);
   EXPECT_EQ(get_server_name(ifc_map_reload.find(0)->second), "publish.example.com");
 }
 
-// Test that the priorities are parsed correctly
-TEST_F(SIFCServiceTest, SIFCPriorities)
+// Test that reloading a shared IFC file with an invalid file doesn't cause the
+// valid entries to be lost
+TEST_F(SIFCServiceTest, SIFCReloadInvalidFile)
 {
-  // The test file 3 IFCs under ID 1. One IFC doesn't have the priority set,
-  // one has it set to 200, and one has an invalid value.
-  CapturingTestLogger log;
-  SIFCService sifc(string(UT_DIR).append("/test_sifc_priorities.xml"));
-  EXPECT_TRUE(log.contains("Invalid shared IFC set block - Priority (NaN) isn't an int. Skipping this entry"));
+  SIFCService sifc(string(UT_DIR).append("/test_sifc.xml"));
 
-  // Get the IFCs for ID. There should be two (as one was invalid)
-  std::set<int> id; id.insert(1);
+  // Load the IFC file, and check that it's been parsed correctly
+  std::set<int> id; id.insert(2);
   std::multimap<int32_t, Ifc> ifc_map;
   sifc.get_ifcs_from_id(ifc_map, id, 0);
-  EXPECT_EQ(ifc_map.size(), 2);
-  EXPECT_EQ(get_server_name(ifc_map.find(0)->second), "invite.example.com");
-  EXPECT_EQ(get_server_name(ifc_map.find(200)->second), "register.example.com");
+  EXPECT_EQ(ifc_map.size(), 1);
+  EXPECT_EQ(get_server_name(ifc_map.find(0)->second), "publish.example.com");
+
+  // Change the file the sifc service is using (to mimic the file being changed),
+  // then reload the file, and repeat the check. Nothing should have changed,
+  // and there should be no memory issues
+  sifc._configuration = "/test_sifc_parse_error.xml";
+  sifc.update_sets();
+  std::multimap<int32_t, Ifc> ifc_map_reload;
+  sifc.get_ifcs_from_id(ifc_map_reload, id, 0);
+  EXPECT_EQ(ifc_map_reload.size(), 1);
+  EXPECT_EQ(get_server_name(ifc_map_reload.find(0)->second), "publish.example.com");
 }
 
 // In the following tests we have various invalid/unexpected SIFC xml files.
 // These tests check that the correct logs are made in each case; this isn't
 // ideal as it means the tests are quite fragile, but it's the best we can do.
 // They also check that the internal shared IFC map is empty; again this isn't
-// ideal/ as its not using a public interface, but it's the only way to be sure
+// ideal as its not using a public interface, but it's the only way to be sure
 // that no entries made it into the map.
 
 // Test that we log appropriately if the shared IFC file is missing
@@ -275,4 +282,22 @@ TEST_F(SIFCServiceTest, RepeatedSetID)
   sifc.get_ifcs_from_id(single_ifc_map, single_ifc, 0);
   EXPECT_EQ(single_ifc_map.size(), 1);
   EXPECT_EQ(get_server_name(single_ifc_map.find(0)->second), "publish.example.com");
+}
+
+// Test that the priorities are parsed correctly
+TEST_F(SIFCServiceTest, SIFCPriorities)
+{
+  // The test file has 3 IFCs under ID 1. One IFC doesn't have the priority set,
+  // one has it set to 200, and one has an invalid value.
+  CapturingTestLogger log;
+  SIFCService sifc(string(UT_DIR).append("/test_sifc_priorities.xml"));
+  EXPECT_TRUE(log.contains("Invalid shared IFC set block - Priority (NaN) isn't an int. Skipping this entry"));
+
+  // Get the IFCs for ID. There should be two (as one was invalid)
+  std::set<int> id; id.insert(1);
+  std::multimap<int32_t, Ifc> ifc_map;
+  sifc.get_ifcs_from_id(ifc_map, id, 0);
+  EXPECT_EQ(ifc_map.size(), 2);
+  EXPECT_EQ(get_server_name(ifc_map.find(0)->second), "invite.example.com");
+  EXPECT_EQ(get_server_name(ifc_map.find(200)->second), "register.example.com");
 }

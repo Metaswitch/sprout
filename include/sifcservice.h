@@ -34,9 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///
-
 #ifndef SIFCSERVICE_H__
 #define SIFCSERVICE_H__
 
@@ -59,6 +56,7 @@ public:
   /// Updates the shared IFC sets
   void update_sets();
 
+  /// Get the IFCs that belong to a set of IDs
   void get_ifcs_from_id(std::multimap<int32_t, Ifc>& ifc_map,
                         const std::set<int32_t>& id,
                         SAS::TrailId trail) const;
