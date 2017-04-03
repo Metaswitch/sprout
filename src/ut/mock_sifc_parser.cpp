@@ -1,5 +1,5 @@
 /**
- * @file mock_sifc_parser.h
+ * @file mock_sifc_parser.cpp
  * Mocks out parsing shared iFC set id into list of iFCs.
  *
  * Project Clearwater - IMS in the Cloud
@@ -35,24 +35,12 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#ifndef MOCK_SIFC_PARSER_H__
-#define MOCK_SIFC_PARSER_H__
+#include "mock_sifc_parser.h"
 
-#include <vector>
+MockSIFCService::MockSIFCService() :
+  SIFCService()
+{}
 
-#include "gmock/gmock.h"
-#include "sifcservice.h"
+MockSIFCService::~MockSIFCService()
+{}
 
-class MockSIFCService : public SIFCService
-{
-public:
-  MockSIFCService();
-  virtual ~MockSIFCService();
-
-  MOCK_CONST_METHOD3(get_ifcs_from_id, void(std::multimap<int32_t, Ifc>&,
-                                            const std::set<int32_t>&,
-                                            SAS::TrailId));
-
-};
-
-#endif
