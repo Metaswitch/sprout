@@ -1559,7 +1559,7 @@ int main(int argc, char* argv[])
   if (opt.sub_max_expires == 0)
   {
     opt.sub_max_expires = opt.reg_max_expires + 161;
-    TRC_INFO("Subscription max expiry defaulted to %d based on registration max expiry %d",
+    TRC_INFO("Maximum subscription period defaulted to %d seconds, based maximum registration expiry %d seconds",
              opt.sub_max_expires, opt.reg_max_expires);
   }
 
