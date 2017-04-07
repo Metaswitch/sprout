@@ -249,7 +249,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                     opt.port_scscf,
                                     "",
                                     REGISTRAR_SERVICE_NAME,
-                                    {"scscf"},
+                                    {opt.prefix_scscf},
                                     opt.auth_realm,
                                     impi_store,
                                     hss_connection,
