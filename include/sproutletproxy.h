@@ -85,6 +85,14 @@ protected:
   /// Create Sproutlet UAS transaction objects.
   BasicProxy::UASTsx* create_uas_tsx();
 
+  // Checks if a sproutlet service name is taken
+  bool is_service_taken(std::string service_name,
+                        Sproutlet* sproutlet);
+
+  // Checks if a sproutlet port is taken
+  bool is_port_taken(int port,
+                     Sproutlet* sproutlet);
+
   /// Gets the next target Sproutlet for the message by analysing the top
   /// Route header.
   Sproutlet* target_sproutlet(pjsip_msg* req,
@@ -93,16 +101,10 @@ protected:
                               bool& force_external_routing,
                               SAS::TrailId trail);
 
-  /// Compare a SIP URI to a Sproutlet to see if they are a match (e.g.
-  /// a message targeted at that URI would arrive at the given Sproutlet).
-  bool does_uri_match_sproutlet(const pjsip_uri* uri,
-                                Sproutlet* sproutlet,
-                                std::string& alias,
-                                SAS::TrailId trail);
-
-  /// Given a SIP URI, check for possible Sproutlet names it could be targeted
-  /// at.
-  std::list<std::string> extract_possible_services(const pjsip_sip_uri* sip_uri);
+  /// Return the sproutlet that matches the URI supplied.
+  Sproutlet* match_sproutlet_from_uri(const pjsip_uri* uri,
+                                      std::string& alias,
+                                      SAS::TrailId trail);
 
   /// Create a URI that routes to a given Sproutlet.
   pjsip_sip_uri* create_sproutlet_uri(pj_pool_t* pool,
@@ -259,6 +261,10 @@ protected:
   std::map<std::string, pjsip_sip_uri*> _root_uris;
 
   std::unordered_set<std::string> _host_aliases;
+
+  std::map<std::string, Sproutlet*> _services;
+
+  std::map<int, Sproutlet*> _ports;
 
   std::list<Sproutlet*> _sproutlets;
 

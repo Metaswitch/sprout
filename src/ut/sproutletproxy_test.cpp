@@ -65,10 +65,14 @@ template <class T>
 class FakeSproutlet : public Sproutlet
 {
 public:
-  FakeSproutlet(const std::string& service_name, int port, const std::string& uri, const std::string& service_host) :
+  FakeSproutlet(const std::string& service_name, int port, const std::string& uri, const std::string& service_host, bool alias = false) :
     Sproutlet(service_name, port, uri, service_host)
   {
-    _aliases.push_back("alias");
+    // Only one sproutlet loaded can own this alias.
+    if (alias)
+    {
+      _aliases.push_back("alias");
+    }
   }
 
   SproutletTsx* get_tsx(SproutletTsxHelper* helper, const std::string& alias, pjsip_msg* req)
@@ -633,7 +637,7 @@ public:
 
     // Create the Test Sproutlets.
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForwarder<false> >("fwd", 0, "sip:fwd.homedomain;transport=tcp", ""));
-    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForwarder<true> >("fwdrr", 0, "sip:fwdrr.proxy1.homedomain;transport=tcp", ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForwarder<true> >("fwdrr", 0, "sip:fwdrr.proxy1.homedomain;transport=tcp", "", true));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDownstreamRequest>("dsreq", 0, "sip:dsreq.homedomain;transport=tcp", ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForker<NUM_FORKS> >("forker", 0, "sip:forker.homedomain;transport=tcp", ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDelayRedirect<1> >("delayredirect", 0, "sip:delayredirect.homedomain;transport=tcp", ""));
@@ -647,6 +651,7 @@ public:
     // Create a host alias.
     std::unordered_set<std::string> host_aliases;
     host_aliases.insert("proxy1.homedomain-alias");
+    host_aliases.insert("scscf.proxy1.homedomain");
 
     // Create the Sproutlet proxy.
     _proxy = new SproutletProxy(stack_data.endpt,
@@ -707,10 +712,19 @@ public:
     pjsip_tsx_layer_instance()->start();
   }
 
-  std::list<std::string> extract_services(std::string uri)
+  std::string match_sproutlet_from_uri(pjsip_uri* uri)
   {
-    pjsip_sip_uri* s = (pjsip_sip_uri*)PJUtils::uri_from_string(uri, stack_data.pool, PJ_FALSE);
-    return _proxy->extract_possible_services(s);
+    std::string service_name;
+    std::string unused_alias;
+    Sproutlet* sproutlet = _proxy->match_sproutlet_from_uri(uri,
+                                                            unused_alias,
+                                                            0);
+    if (sproutlet != NULL)
+    {
+      service_name = sproutlet->service_name();
+    }
+
+    return service_name;
   }
 
   class Message
@@ -2275,25 +2289,55 @@ TEST_F(SproutletProxyTest, LocalNonSubscribe)
   delete tp;
 }
 
-// Tests standard routing of a subscription request to ensure it is
-// routed via the sproutlet interface.
-TEST_F(SproutletProxyTest, ServiceExtraction)
+// Tests that sproutlet target selection works.
+TEST_F(SproutletProxyTest, SproutletSelection)
 {
-  std::list<std::string> names;
+  // The order of precedence for matching is:
+  // - service parameter
+  // - domain part
+  // - user part
+  //
+  // Check that this holds when we have conflicting information in the three
+  // parts.
+  std::string service_name;
+  std::string uri_str = "sip:b2bua@scscf.proxy1.homedomain";
+  pjsip_sip_uri* uri = (pjsip_sip_uri*)PJUtils::uri_from_string(uri_str, stack_data.pool, PJ_FALSE);
+  pjsip_param* param = PJ_POOL_ALLOC_T(stack_data.pool, pjsip_param);
+  pj_strdup(stack_data.pool, &param->name, &STR_SERVICE);
+  pj_strdup2(stack_data.pool, &param->value, "fwd");
+  pj_list_insert_after(&uri->other_param, param);
 
-  names = extract_services("sip:alice@proxy1.homedomain");
+  // Shoud match fwd.
+  service_name = match_sproutlet_from_uri((pjsip_uri*)uri);
+  ASSERT_EQ("fwd", service_name);
 
-  ASSERT_EQ(1, names.size());
-  ASSERT_EQ("alice", names.front());
+  uri_str = "sip:b2bua@scscf.proxy1.homedomain";
+  uri = (pjsip_sip_uri*)PJUtils::uri_from_string(uri_str, stack_data.pool, PJ_FALSE);
 
-  names = extract_services("sip:scscf.proxy1.homedomain");
+  // Should match scscf.
+  service_name = match_sproutlet_from_uri((pjsip_uri*)uri);
+  ASSERT_EQ("scscf", service_name);
 
-  ASSERT_EQ(1, names.size());
-  ASSERT_EQ("scscf", names.front());
+  uri_str = "sip:b2bua@proxy1.homedomain";
+  uri = (pjsip_sip_uri*)PJUtils::uri_from_string(uri_str, stack_data.pool, PJ_FALSE);
 
-  names = extract_services("sip:alice@otherdomain");
+  // Should match b2bua.
+  service_name = match_sproutlet_from_uri((pjsip_uri*)uri);
+  ASSERT_EQ("b2bua", service_name);
+}
 
-  ASSERT_EQ(0, names.size());
+// Tests that it's not possible to register more than one Sproutlet for the
+// same service name or port.
+TEST_F(SproutletProxyTest, ConflictingSproutlets)
+{
+  Sproutlet* sproutlet = new FakeSproutlet<FakeSproutletTsxForwarder<false> >("dummy", 0, "sip:dummy.homedomain;transport=tcp", "");
+
+  // The service name fwd and the port 44444 are taken. Check that this is
+  // actually true.
+  ASSERT_EQ(_proxy->is_service_taken("fwd", sproutlet), true);
+  ASSERT_EQ(_proxy->is_port_taken(44444, sproutlet), true);
+
+  delete sproutlet;
 }
 
 TEST_F(SproutletProxyTest, SproutletCopiesOriginalTransport)
