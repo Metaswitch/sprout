@@ -478,7 +478,7 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
   Store::Status set_rc;
   SubscriberDataManager::AoRPair* aor_pair = NULL;
   std::string subscription_contact;
-  std::string subscription_id;
+  std::string subscription_id;  
 
   do
   {
@@ -574,7 +574,7 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
       if (subscription_id == "")
       {
         // If there's no to tag, generate an unique one
-        // TODO: Should use unique depolyment and instance IDs here.
+        // TODO: Should use unique deployment and instance IDs here.
         subscription_id = std::to_string(Utils::generate_unique_integer(0, 0));
       }
 
@@ -587,6 +587,9 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
 
       // Update/create the subscription.
       subscription->_req_uri = contact_uri;
+
+      pjsip_cseq_hdr* cseq_hdr = (pjsip_cseq_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_CSEQ, NULL);
+      subscription->_last_cseq = cseq_hdr->cseq;
 
       subscription->_route_uris.clear();
       pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(req,

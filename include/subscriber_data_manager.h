@@ -146,6 +146,10 @@ public:
       /// The call ID for the subscription dialog.
       std::string _cid;
 
+      /// The CSeq number of the last received SUBSCRIBE for this subscription.
+      /// A value of -1 means that no CSeq has yet been received.
+      int _last_cseq;
+
       /// The list of Record Route URIs from the subscription dialog.
       std::list<std::string> _route_uris;
 
@@ -485,29 +489,19 @@ public:
     // @param associated_uris
     //                     The IMPUs associated with this IRS
     // @param aor_pair     The AoR pair to send NOTIFYs for
+    // @param all_bnis     The list of bindings to include on the NOTIFY
+    // @param expired_binding_uris
+    //                     A list of URIs of expired bindings    
     // @param now          The current time
     // @param trail        SAS trail
     void send_notifys_for_expired_subscriptions(
                                    const std::string& aor_id,
                                    AssociatedURIs* associated_uris,
                                    SubscriberDataManager::AoRPair* aor_pair,
+                                   std::vector<NotifyUtils::BindingNotifyInformation*> all_bnis,
+                                   std::vector<std::string> expired_binding_uris,                                  
                                    int now,
                                    SAS::TrailId trail);
-
-    // Create and send any appropriate NOTIFYs for any current subscriptions
-    //
-    // @param aor_id       The AoR ID
-    // @param associated_uris
-    //                     The IMPUs associated with this IRS
-    // @param aor_pair     The AoR pair to send NOTIFYs for
-    // @param now          The current time
-    // @param trail        SAS trail
-    void send_notifys_for_current_subscriptions(
-                                      const std::string& aor_id,
-                                      AssociatedURIs* associated_uris,
-                                      SubscriberDataManager::AoRPair* aor_pair,
-                                      int now,
-                                      SAS::TrailId trail);
   };
 
   /// Tags to use when setting timers for nothing, for registration and for subscription.
