@@ -478,7 +478,7 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
   Store::Status set_rc;
   SubscriberDataManager::AoRPair* aor_pair = NULL;
   std::string subscription_contact;
-  std::string subscription_id;  
+  std::string subscription_id;
 
   do
   {

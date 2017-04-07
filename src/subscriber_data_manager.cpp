@@ -1619,13 +1619,14 @@ void SubscriberDataManager::NotifySender::send_notifys(
     std::string b_id = aor_orig_b.first;
 
     // Compare the original and current lists to see whether this binding has expired.
-    if ((!aor_orig_b.second->_emergency_registration) &&
+    if ((!b->_emergency_registration) &&
         (aor_pair->get_current()->bindings().find(b_id) == aor_pair->get_current()->bindings().end()))
     {
+      TRC_DEBUG("Binding %s has expired", b_id);
       expired_binding_uris.push_back(b->_uri);
       NotifyUtils::BindingNotifyInformation* bni =
-               new NotifyUtils::BindingNotifyInformation(aor_orig_b.first,
-                                                         aor_orig_b.second,
+               new NotifyUtils::BindingNotifyInformation(b_id,
+                                                         b,
                                                          NotifyUtils::ContactEvent::EXPIRED);      
       all_bnis.push_back(bni);
       bindings_changed = true;
