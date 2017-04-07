@@ -59,9 +59,12 @@ const pj_str_t SproutletProxy::STR_SERVICE = {"service", 7};
 
 const ForkState NULL_FORK_STATE = {PJSIP_TSX_STATE_NULL, NONE};
 
-const int SERVICE_NAME = 0;
-const int DOMAIN_PART = 1;
-const int USER_PART = 2;
+enum SPROUTLET_SELECTION_TYPES
+{
+  SERVICE_NAME=0,
+  DOMAIN_PART,
+  USER_PART,
+};
 
 /// Constructor.
 SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
@@ -98,32 +101,7 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
       _root_uris.insert(std::make_pair((*it)->service_name(), root_uri));
     }
 
-    // For each sproutlet, add the service name and any aliases into a map of
-    // service names to sproutlets.
-    if (!is_service_taken((*it)->service_name(), *it))
-    {
-      _services.insert(std::make_pair((*it)->service_name(), *it));
-    }
-
-    std::list<std::string> aliases = (*it)->aliases();
-    for (std::list<std::string>::const_iterator i = aliases.begin();
-         i != aliases.end();
-         ++i)
-    {
-      if (!is_service_taken(*i, *it))
-      {
-        _services.insert(std::make_pair(*i, *it));
-      }
-    }
-
-    // If the sproutlet owns a port, add that to the map of ports to
-    // sproutlets.
-    int port = (*it)->port();
-    if ((port != 0) &&
-        (!is_port_taken(port, *it)))
-    {
-      _ports.insert(std::make_pair(port, *it));
-    }
+    register_sproutlet(*it);
   }
 }
 
@@ -140,40 +118,76 @@ BasicProxy::UASTsx* SproutletProxy::create_uas_tsx()
   return (BasicProxy::UASTsx*)new SproutletProxy::UASTsx(this);
 }
 
-// Utility method to check if a sproutlet service name is taken.
-bool SproutletProxy::is_service_taken(std::string service_name,
-                                      Sproutlet* sproutlet)
+// Registers sproutlet and returns whether this was successful or not.
+bool SproutletProxy::register_sproutlet(Sproutlet* sproutlet)
 {
-  std::map<std::string, Sproutlet*>::const_iterator it;
-  it = _services.find(service_name);
-  if (it != _services.end())
+  bool ok = true;
+  std::string service_name = sproutlet->service_name();
+
+  // Add the service name and any aliases into a map of
+  // service names to sproutlets.
+  std::map<std::string, Sproutlet*>::const_iterator i;
+  i = _services.find(service_name);
+  if (i != _services.end())
   {
+    std::string sproutlet_name = i->second->service_name();
     TRC_ERROR("Can't assign service name \"%s\" to sproutlet \"%s\" because it is taken by sproutlet \"%s\"",
               service_name.c_str(),
-              sproutlet->service_name().c_str(),
-              it->second->service_name().c_str());
-    return true;
+              service_name.c_str(),
+              sproutlet_name.c_str());
+    ok = false;
   }
-
-  return false;
-}
-
-// Utility method to check if a sproutlet port is taken.
-bool SproutletProxy::is_port_taken(int port,
-                                   Sproutlet* sproutlet)
-{
-  std::map<int, Sproutlet*>::const_iterator it;
-  it = _ports.find(port);
-  if (it != _ports.end())
+  else
   {
-    TRC_ERROR("Can't assign port %d to sproutlet \"%s\" because it is taken by sproutlet \"%s\"",
-              port,
-              sproutlet->service_name().c_str(),
-              it->second->service_name().c_str());
-    return true;
+    _services.insert(std::make_pair(sproutlet->service_name(), sproutlet));
   }
 
-  return false;
+  std::list<std::string> aliases = sproutlet->aliases();
+  for (std::list<std::string>::const_iterator j = aliases.begin();
+       j != aliases.end();
+       ++j)
+  {
+    std::map<std::string, Sproutlet*>::const_iterator k;
+    k = _services.find(*j);
+    if (k != _services.end())
+    {
+      std::string alias = *j;
+      std::string sproutlet_name = k->second->service_name();
+      TRC_ERROR("Can't assign alias \"%s\" to sproutlet \"%s\" because it is taken by sproutlet \"%s\"",
+                alias.c_str(),
+                service_name.c_str(),
+                sproutlet_name.c_str());
+      ok = false;
+    }
+    else
+    {
+      _services.insert(std::make_pair(*j, sproutlet));
+    }
+  }
+
+  // If the sproutlet owns a port, add that to the map of ports to
+  // sproutlets.
+  int port = sproutlet->port();
+  if (port != 0)
+  {
+    std::map<int, Sproutlet*>::const_iterator i;
+    i = _ports.find(port);
+    if (i != _ports.end())
+    {
+      std::string sproutlet_name = i->second->service_name();
+      TRC_ERROR("Can't assign port %d to sproutlet \"%s\" because it is taken by sproutlet \"%s\"",
+                port,
+                service_name.c_str(),
+                sproutlet_name.c_str());
+      ok = false;
+    }
+    else
+    {
+      _ports.insert(std::make_pair(port, sproutlet));
+    }
+  }
+
+  return ok;
 }
 
 
@@ -290,7 +304,7 @@ Sproutlet* SproutletProxy::match_sproutlet_from_uri(const pjsip_uri* uri,
   {
     // LCOV_EXCL_START
     TRC_DEBUG("Sproutlets cannot match non-SIP URIs");
-    return false;
+    return nullptr;
     // LCOV_EXCL_STOP
   }
 
@@ -320,12 +334,11 @@ Sproutlet* SproutletProxy::match_sproutlet_from_uri(const pjsip_uri* uri,
         sproutlet = it->second;
         alias = service_name;
         std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri);
-        SAS::Event event(trail, SASEvent::SPROUTLET_SELECTION_SERVICE_NAME, 0);
-        event.add_var_param(sproutlet->service_name());
-        event.add_static_param(SERVICE_NAME);
-        event.add_var_param(alias);
-        event.add_var_param(uri_str);
-        SAS::report_event(event);
+        report_sproutlet_selection_event(SERVICE_NAME,
+                                         sproutlet->service_name(),
+                                         alias,
+                                         uri_str,
+                                         trail);
       }
     }
   }
@@ -365,12 +378,12 @@ Sproutlet* SproutletProxy::match_sproutlet_from_uri(const pjsip_uri* uri,
           sproutlet = it->second;
           alias = service_name;
           std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri);
-          SAS::Event event(trail, SASEvent::SPROUTLET_SELECTION_SERVICE_NAME, 0);
-          event.add_var_param(sproutlet->service_name());
-          event.add_static_param(DOMAIN_PART);
-          event.add_var_param(alias);
-          event.add_var_param(uri_str);
-          SAS::report_event(event);
+
+          report_sproutlet_selection_event(DOMAIN_PART,
+                                           sproutlet->service_name(),
+                                           alias,
+                                           uri_str,
+                                           trail);
         }
       }
     }
@@ -393,12 +406,12 @@ Sproutlet* SproutletProxy::match_sproutlet_from_uri(const pjsip_uri* uri,
         sproutlet = it->second;
         alias = service_name;
         std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri);
-        SAS::Event event(trail, SASEvent::SPROUTLET_SELECTION_SERVICE_NAME, 0);
-        event.add_var_param(sproutlet->service_name());
-        event.add_static_param(USER_PART);
-        event.add_var_param(alias);
-        event.add_var_param(uri_str);
-        SAS::report_event(event);
+
+        report_sproutlet_selection_event(USER_PART,
+                                         sproutlet->service_name(),
+                                         alias,
+                                         uri_str,
+                                         trail);
       }
     }
   }
@@ -465,6 +478,19 @@ pjsip_sip_uri* SproutletProxy::create_internal_sproutlet_uri(pj_pool_t* pool,
   return uri;
 }
 
+void SproutletProxy::report_sproutlet_selection_event(int selection_type,
+                                                      std::string service_name,
+                                                      std::string value,
+                                                      std::string uri_str,
+                                                      SAS::TrailId trail)
+{
+  SAS::Event event(trail, SASEvent::SPROUTLET_SELECTION_URI, 0);
+  event.add_static_param(selection_type);
+  event.add_var_param(service_name);
+  event.add_var_param(value);
+  event.add_var_param(uri_str);
+  SAS::report_event(event);
+}
 
 bool SproutletProxy::is_uri_local(const pjsip_uri* uri)
 {

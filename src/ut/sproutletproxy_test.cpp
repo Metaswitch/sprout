@@ -65,13 +65,13 @@ template <class T>
 class FakeSproutlet : public Sproutlet
 {
 public:
-  FakeSproutlet(const std::string& service_name, int port, const std::string& uri, const std::string& service_host, bool alias = false) :
+  FakeSproutlet(const std::string& service_name, int port, const std::string& uri, const std::string& service_host, std::string alias = "") :
     Sproutlet(service_name, port, uri, service_host)
   {
     // Only one sproutlet loaded can own this alias.
-    if (alias)
+    if (alias != "")
     {
-      _aliases.push_back("alias");
+      _aliases.push_back(alias);
     }
   }
 
@@ -637,7 +637,7 @@ public:
 
     // Create the Test Sproutlets.
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForwarder<false> >("fwd", 0, "sip:fwd.homedomain;transport=tcp", ""));
-    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForwarder<true> >("fwdrr", 0, "sip:fwdrr.proxy1.homedomain;transport=tcp", "", true));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForwarder<true> >("fwdrr", 0, "sip:fwdrr.proxy1.homedomain;transport=tcp", "", "alias"));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDownstreamRequest>("dsreq", 0, "sip:dsreq.homedomain;transport=tcp", ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForker<NUM_FORKS> >("forker", 0, "sip:forker.homedomain;transport=tcp", ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDelayRedirect<1> >("delayredirect", 0, "sip:delayredirect.homedomain;transport=tcp", ""));
@@ -651,6 +651,8 @@ public:
     // Create a host alias.
     std::unordered_set<std::string> host_aliases;
     host_aliases.insert("proxy1.homedomain-alias");
+
+    // We need to add this one for a UT.
     host_aliases.insert("scscf.proxy1.homedomain");
 
     // Create the Sproutlet proxy.
@@ -2296,29 +2298,26 @@ TEST_F(SproutletProxyTest, SproutletSelection)
   // - service parameter
   // - domain part
   // - user part
+  // - port
   //
   // Check that this holds when we have conflicting information in the three
   // parts.
   std::string service_name;
-  std::string uri_str = "sip:b2bua@scscf.proxy1.homedomain";
+  std::string uri_str = "sip:b2bua@scscf.proxy1.homedomain:44444;service=fwd";
   pjsip_sip_uri* uri = (pjsip_sip_uri*)PJUtils::uri_from_string(uri_str, stack_data.pool, PJ_FALSE);
-  pjsip_param* param = PJ_POOL_ALLOC_T(stack_data.pool, pjsip_param);
-  pj_strdup(stack_data.pool, &param->name, &STR_SERVICE);
-  pj_strdup2(stack_data.pool, &param->value, "fwd");
-  pj_list_insert_after(&uri->other_param, param);
 
   // Shoud match fwd.
   service_name = match_sproutlet_from_uri((pjsip_uri*)uri);
   ASSERT_EQ("fwd", service_name);
 
-  uri_str = "sip:b2bua@scscf.proxy1.homedomain";
+  uri_str = "sip:b2bua@scscf.proxy1.homedomain:44444";
   uri = (pjsip_sip_uri*)PJUtils::uri_from_string(uri_str, stack_data.pool, PJ_FALSE);
 
   // Should match scscf.
   service_name = match_sproutlet_from_uri((pjsip_uri*)uri);
   ASSERT_EQ("scscf", service_name);
 
-  uri_str = "sip:b2bua@proxy1.homedomain";
+  uri_str = "sip:b2bua@proxy1.homedomain:44444";
   uri = (pjsip_sip_uri*)PJUtils::uri_from_string(uri_str, stack_data.pool, PJ_FALSE);
 
   // Should match b2bua.
@@ -2330,12 +2329,10 @@ TEST_F(SproutletProxyTest, SproutletSelection)
 // same service name or port.
 TEST_F(SproutletProxyTest, ConflictingSproutlets)
 {
-  Sproutlet* sproutlet = new FakeSproutlet<FakeSproutletTsxForwarder<false> >("dummy", 0, "sip:dummy.homedomain;transport=tcp", "");
-
-  // The service name fwd and the port 44444 are taken. Check that this is
-  // actually true.
-  ASSERT_EQ(_proxy->is_service_taken("fwd", sproutlet), true);
-  ASSERT_EQ(_proxy->is_port_taken(44444, sproutlet), true);
+  // Check that we fail to register a sproutlet that already exists.
+  // This is because the service name, alias and port are already taken.
+  Sproutlet* sproutlet = new FakeSproutlet<FakeSproutletTsxDummySCSCF>("scscf", 44444, "sip:scscf.homedomain:44444;transport=tcp", "scscf", "alias");
+  ASSERT_EQ(_proxy->register_sproutlet(sproutlet), false);
 
   delete sproutlet;
 }

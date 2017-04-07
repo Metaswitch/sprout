@@ -85,13 +85,8 @@ protected:
   /// Create Sproutlet UAS transaction objects.
   BasicProxy::UASTsx* create_uas_tsx();
 
-  // Checks if a sproutlet service name is taken
-  bool is_service_taken(std::string service_name,
-                        Sproutlet* sproutlet);
-
-  // Checks if a sproutlet port is taken
-  bool is_port_taken(int port,
-                     Sproutlet* sproutlet);
+  /// Registers a sproutlet.
+  bool register_sproutlet(Sproutlet* sproutlet);
 
   /// Gets the next target Sproutlet for the message by analysing the top
   /// Route header.
@@ -125,6 +120,12 @@ protected:
   Sproutlet* service_from_host(pjsip_sip_uri* uri);
   Sproutlet* service_from_user(pjsip_sip_uri* uri);
   Sproutlet* service_from_params(pjsip_sip_uri* uri);
+
+  void report_sproutlet_selection_event(int selection_type,
+                                        std::string service_name,
+                                        std::string value,
+                                        std::string uri_str,
+                                        SAS::TrailId trail);
 
   bool is_uri_local(const pjsip_uri* uri);
   bool is_host_local(const pj_str_t* host);
