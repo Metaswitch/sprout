@@ -85,6 +85,9 @@ protected:
   /// Create Sproutlet UAS transaction objects.
   BasicProxy::UASTsx* create_uas_tsx();
 
+  /// Registers a sproutlet.
+  bool register_sproutlet(Sproutlet* sproutlet);
+
   /// Gets the next target Sproutlet for the message by analysing the top
   /// Route header.
   Sproutlet* target_sproutlet(pjsip_msg* req,
@@ -93,16 +96,10 @@ protected:
                               bool& force_external_routing,
                               SAS::TrailId trail);
 
-  /// Compare a SIP URI to a Sproutlet to see if they are a match (e.g.
-  /// a message targeted at that URI would arrive at the given Sproutlet).
-  bool does_uri_match_sproutlet(const pjsip_uri* uri,
-                                Sproutlet* sproutlet,
-                                std::string& alias,
-                                SAS::TrailId trail);
-
-  /// Given a SIP URI, check for possible Sproutlet names it could be targeted
-  /// at.
-  std::list<std::string> extract_possible_services(const pjsip_sip_uri* sip_uri);
+  /// Return the sproutlet that matches the URI supplied.
+  Sproutlet* match_sproutlet_from_uri(const pjsip_uri* uri,
+                                      std::string& alias,
+                                      SAS::TrailId trail);
 
   /// Create a URI that routes to a given Sproutlet.
   pjsip_sip_uri* create_sproutlet_uri(pj_pool_t* pool,
@@ -123,6 +120,12 @@ protected:
   Sproutlet* service_from_host(pjsip_sip_uri* uri);
   Sproutlet* service_from_user(pjsip_sip_uri* uri);
   Sproutlet* service_from_params(pjsip_sip_uri* uri);
+
+  void report_sproutlet_selection_event(int selection_type,
+                                        std::string service_name,
+                                        std::string value,
+                                        std::string uri_str,
+                                        SAS::TrailId trail);
 
   bool is_uri_local(const pjsip_uri* uri);
   bool is_host_local(const pj_str_t* host);
@@ -259,6 +262,10 @@ protected:
   std::map<std::string, pjsip_sip_uri*> _root_uris;
 
   std::unordered_set<std::string> _host_aliases;
+
+  std::map<std::string, Sproutlet*> _services;
+
+  std::map<int, Sproutlet*> _ports;
 
   std::list<Sproutlet*> _sproutlets;
 

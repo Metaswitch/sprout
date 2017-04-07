@@ -340,7 +340,7 @@ public:
     // Create the MMTEL AppServer.
     _mmtel = new Mmtel("mmtel", _xdm_connection);
     _mmtel_sproutlet = new SproutletAppServerShim(_mmtel,
-                                                  5058,
+                                                  5055,
                                                   "sip:mmtel.homedomain:5058;transport=tcp",
                                                   &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
                                                   &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
