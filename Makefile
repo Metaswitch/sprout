@@ -83,7 +83,7 @@ include build-infra/cw-deb.mk
 deb-only: plugins-deb-only
 
 .PHONY: deb
-deb: build deb-only plugins-deb
+deb: build plugins-deb deb-only
 
 .PHONY: all build test clean distclean
 
