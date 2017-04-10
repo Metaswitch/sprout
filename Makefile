@@ -60,23 +60,23 @@ distclean: $(patsubst %, %_distclean, ${SUBMODULES}) sprout_distclean
 
 .PHONY: plugins-build
 plugins-build:
-	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} \;
+	find plugins -mindepth 1 -maxdepth 1 -type d -print0 | xargs -n 1 -0 -I {} ${MAKE} -C {}
 
 .PHONY: plugins-test
 plugins-test:
-	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} test \;
+	find plugins -mindepth 1 -maxdepth 1 -type d -print0 | xargs -n 1 -0 -I {} ${MAKE} -C {} test
 
 .PHONY: plugins-clean
 plugins-clean:
-	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} clean \;
+	find plugins -mindepth 1 -maxdepth 1 -type d -print0 | xargs -n 1 -0 -I {} ${MAKE} -C {} clean
 
 .PHONY: plugins-deb
 plugins-deb:
-	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} deb \;
+	find plugins -mindepth 1 -maxdepth 1 -type d -print0 | xargs -n 1 -0 -I {} ${MAKE} -C {} deb
 
 .PHONY: plugins-deb-only
 plugins-deb-only:
-	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} deb-only \;
+	find plugins -mindepth 1 -maxdepth 1 -type d -print0 | xargs -n 1 -0 -I {} ${MAKE} -C {} deb-only
 
 include build-infra/cw-deb.mk
 
