@@ -463,4 +463,59 @@ static const PDLog1<const char *> CL_SPROUT_SESS_CONT_AS_COMM_SUCCESS
   "No action"
 );
 
+//Need to add these to a list elsewhere??
+//NEED TO ADD THESE TO SPEC!
+//Also change some of these logs! If new file has invalid xml, but old file was
+//already there, then we CAN apply default iFCs, just not the new ones!
+
+static const PDLog CL_SPROUT_DIFC_FILE_MISSING
+(
+  PDLogBase::CL_SPROUT_ID + 52,
+  LOG_ERR,
+  "The default IFC configuration file is not present.",
+  "The S-CSCF supports default IFCs, but the configuration file for them does not exist.",
+  "The S-CSCF will not be able to apply any default IFCs.",
+  "The default IFCs should be defined in /etc/clearwater/default_ifc.xml. Create this file according to the documentation. If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd."
+);
+
+static const PDLog CL_SPROUT_DIFC_FILE_EMPTY
+(
+  PDLogBase::CL_SPROUT_ID + 53,
+  LOG_ERR,
+  "The default IFC configuration file is empty.",
+  "The S-CSCF supports default IFCs, but the configuration file for this is empty.",
+  "The S-CSCF will not be able to apply any default IFCs.",
+  "The default IFCs should be defined in /etc/clearwater/default_ifc.xml. Populate this file according to the documentation."
+);
+
+static const PDLog CL_SPROUT_DIFC_FILE_INVALID_XML
+(
+  PDLogBase::CL_SPROUT_ID + 54,
+  LOG_ERR,
+  "The default IFC configuration file contains invalid XML.",
+  "The S-CSCF support default IFCs, but the configuration file for this is invalid.",
+  "The S-CSCF will not be able to apply any default IFCs.",
+  "The default IFCs should be defined in /etc/clearwater/default_ifc.xml. Populate this file according to the documentation."
+);
+
+static const PDLog CL_SPROUT_DIFC_FILE_MISSING_DEFAULTIFCSET
+(
+ PDLogBase::CL_SPROUT_ID + 55,
+ LOG_ERR,
+ "The default IFC configuration file doesn't have the correct syntax.",
+ "The S-CSCF supports default IFCs, but the configuration file for this doesn't match the expected syntax (no DefaultIfcSet block).",
+ "The S-CSCF will not be able to apply any default IFCs.",
+ "The shared IFC sets should be defined in /etc/clearwater/default_ifc.xml. Populate this file according to the documentation."
+ );
+
+static const PDLog1<const char *> CL_SPROUT_DIFC_FILE_INVALID_PRIORITY
+(
+  PDLogBase::CL_SPROUT_ID + 56,
+  LOG_ERR,
+  "An IFC in the defult IFC configuration file doesn't have the correct syntax; its Priority (%s) isn't an integer.",
+  "The S-CSCF supports default IFCs, but one of the default IFCs doesn't match the expected syntax (invalid Priority).",
+  "The S-CSCF will not be able to apply the correct default IFCs.",
+  "The default IFCs should be defined in /etc/clearwater/default_ifc.xml. Populate this file according to the documentation."
+);
+
 #endif

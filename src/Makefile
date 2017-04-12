@@ -88,7 +88,8 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          astaire_resolver.cpp \
                          xml_utils.cpp \
                          wildcard_utils.cpp \
-                         ifc.cpp
+                         ifc.cpp \
+                         difcservice.cpp
 
 sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_counter_table.cpp \
@@ -183,7 +184,8 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        as_communication_tracker_test.cpp \
                        authenticationsproutlet.cpp \
                        forwardingsproutlet.cpp \
-                       pthread_cond_var_helper.cpp
+                       pthread_cond_var_helper.cpp \
+                       difcservice_test.cpp
 
 COVERAGE_ROOT := ..
 sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include|^modules/memento-as/modules|^modules/memento-as/src/ut|^modules/memento-as/include
