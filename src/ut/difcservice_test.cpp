@@ -34,11 +34,7 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-// DO I NEED ALL OF THESE??
-#include "gtest/gtest.h"
 #include "gmock/gmock.h"
-#include "utils.h"
-#include "sas.h"
 #include "fakelogger.h"
 
 #include <string>
@@ -110,8 +106,6 @@ TEST_F(DIFCServiceTest, ValidDIFCFile)
   expected_server_names.push_back("example_two.com");
   EXPECT_THAT(expected_server_names, UnorderedElementsAreArray(server_names));
 
-
-  // CHECK PRIORITY CORRESPONDS TO CORRECT IFC!!
   // Check the priorities of the iFCs are as expected.
   std::vector<int32_t> expected_priorities = {1, 2};
   EXPECT_THAT(expected_priorities, UnorderedElementsAreArray(priorities));
@@ -157,7 +151,7 @@ TEST_F(DIFCServiceTest, ReloadDIFCFile)
 
 // Test that reloading a Default iFC file with an invalid file doesn't cause the
 // valid entries to be lost.
-TEST_F(DIFCServiceTest, DIFCReloadInvalidFile)
+TEST_F(DIFCServiceTest, ReloadInvalidDIFCFile)
 {
   // Load the test file "test_difc.xml"
   DIFCService difc(string(UT_DIR).append("/test_difc.xml"));
@@ -166,10 +160,10 @@ TEST_F(DIFCServiceTest, DIFCReloadInvalidFile)
   std::vector<std::pair<int32_t, Ifc>> difc_list = difc._default_ifcs;
   EXPECT_EQ(difc_list.size(), 2);
 
-  // Change the file the difc service is using (to mimic the file being
-  // changed), then reload the file, and recheck the parsed list.
+  // Change the file the difc service is using to an invalid file (to mimic the
+  // file being changed), then reload the file, and recheck the parsed list.
   // Nothing should have changed and this should cause no memory issues.
-  difc._configuration = "/test_invalid_difc.xml";
+  difc._configuration = string(UT_DIR).append("/test_invalid_difc.xml");
   difc.update_difcs();
   difc_list = difc._default_ifcs;
   EXPECT_EQ(difc_list.size(), 2);
@@ -240,13 +234,14 @@ TEST_F(DIFCServiceTest, IncorrectSyntax)
   EXPECT_TRUE(difc._default_ifcs.empty());
 }
 
-// Test that we cope with the case that the Dhared iFC file is valid but empty.
+// Test that we cope with the case that the Default iFC file is valid but empty.
 // (Use case - customer wishes to remove their Default iFCs.)
 TEST_F(DIFCServiceTest, EmptyValidFile)
 {
   CapturingTestLogger log;
   DIFCService difc(string(UT_DIR).append("/test_valid_empty_difc.xml"));
   EXPECT_FALSE(log.contains("Failed"));
+  EXPECT_FALSE(log.contains("failed"));
   EXPECT_TRUE(difc._default_ifcs.empty());
 }
 
@@ -258,8 +253,8 @@ TEST_F(DIFCServiceTest, EmptyValidFile)
 // interface for this check).
 
 // Test that the Default iFC file is parsed correctly even if one of the iFCs
-// within it is invalid (the other correct ones should be present).
-TEST_F(DIFCServiceTest, DIFCSingleInvalidIfc)
+// within it is invalid (the other correct iFCs should be parsed).
+TEST_F(DIFCServiceTest, SingleInvalidIfc)
 {
   CapturingTestLogger log;
 
