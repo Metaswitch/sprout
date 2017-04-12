@@ -57,8 +57,6 @@ public:
 
   /// Updates the default iFCs.
   void update_difcs();
-  bool check_difc_file(rapidxml::xml_document<>*);
-  std::vector<std::pair<int32_t, Ifc>> create_difc_list();
 
 private:
   std::vector<std::pair<int32_t, Ifc>> _default_ifcs;

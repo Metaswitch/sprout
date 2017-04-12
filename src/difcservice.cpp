@@ -60,29 +60,6 @@ DIFCService::~DIFCService()
 
 void DIFCService::update_difcs()
 {
-  rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
-  bool file_valid = check_difc_file(root);
-
-  if (file_valid)
-  {
-    // Now we are going to update the current default ifc list.
-    // Take a lock while we do so.
-    boost::lock_guard<boost::shared_mutex> write_lock(_sets_rw_lock);
-    _default_ifcs.clear();
-    delete _root; _root = root;
-
-    std::vector<std::pair<int32_t, Ifc>> ifc_list;
-    ifc_list = create_difc_list();
-
-    TRC_DEBUG("Adding %lu default IFC(s)", ifc_list.size());
-    _default_ifcs = ifc_list;
-  }
-
-  return;
-}
-
-bool DIFCService::check_difc_file(rapidxml::xml_document<>* root)
-{
   // Check whether the file exists.
   struct stat s;
   TRC_DEBUG("stat (%s) returns %d", _configuration.c_str(),
@@ -93,8 +70,7 @@ bool DIFCService::check_difc_file(rapidxml::xml_document<>* root)
     TRC_STATUS("No default IFC configuration found (file %s does not exist)",
                _configuration.c_str());
     CL_SPROUT_DIFC_FILE_MISSING.log();
-    delete root; root = NULL;
-    return false;
+    return;
   }
 
   TRC_STATUS("Loading default IFC configuration from %s",
@@ -109,9 +85,11 @@ bool DIFCService::check_difc_file(rapidxml::xml_document<>* root)
     TRC_ERROR("Failed to read default IFC configuration data from %s",
               _configuration.c_str());
     CL_SPROUT_DIFC_FILE_EMPTY.log();
-    delete root; root = NULL;
-    return false;
+    return;
   }
+
+  // Now parse the document.
+  rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
 
   // Check the file contains valid xml.
   try
@@ -125,7 +103,7 @@ bool DIFCService::check_difc_file(rapidxml::xml_document<>* root)
               err.what());
     CL_SPROUT_DIFC_FILE_INVALID_XML.log();
     delete root; root = NULL;
-    return false;
+    return;
   }
 
   // Finally, check the "DefaultIfcSet" node is present.
@@ -134,19 +112,19 @@ bool DIFCService::check_difc_file(rapidxml::xml_document<>* root)
     TRC_ERROR("Invalid default IFC configuration file - missing DefaultIfcSet block");
     CL_SPROUT_DIFC_FILE_MISSING_DEFAULTIFCSET.log();
     delete root; root = NULL;
-    return false;
+    return;
   }
 
-  // If we've reached this point, the DiFC config file is valid.
-  return true;
-}
-
-std::vector<std::pair<int32_t, Ifc>> DIFCService::create_difc_list()
-{
-  rapidxml::xml_node<>* difc_set = _root->first_node(DIFCService::DEFAULT_IFC_SET);
+  // If we have reached this point, we are definitely going to update the current
+  // default ifc list.
+  // Take a lock while we do so.
+  boost::lock_guard<boost::shared_mutex> write_lock(_sets_rw_lock);
+  _default_ifcs.clear();
+  delete _root; _root = root;
 
   // Parse any iFCs that are present.
-  std::vector<std::pair<int32_t, Ifc>> ifc_set;
+  std::vector<std::pair<int32_t, Ifc>> ifc_list;
+  rapidxml::xml_node<>* difc_set = _root->first_node(DIFCService::DEFAULT_IFC_SET);
   rapidxml::xml_node<>* ifc = NULL;
   for (ifc = difc_set->first_node(DIFCService::INITIAL_FILTER_CRITERIA);
        ifc != NULL;
@@ -172,10 +150,13 @@ std::vector<std::pair<int32_t, Ifc>> DIFCService::create_difc_list()
     }
     // Creating the iFC always passes, and the iFC isn't validated any
     // further at this stage.
-    ifc_set.push_back(std::make_pair(priority, Ifc(ifc)));
+    ifc_list.push_back(std::make_pair(priority, Ifc(ifc)));
   }
 
-  return ifc_set;
+  TRC_DEBUG("Adding %lu default IFC(s)", ifc_list.size());
+  _default_ifcs = ifc_list;
+
+  return;
 }
 
 
