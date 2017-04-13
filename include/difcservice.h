@@ -1,8 +1,8 @@
 /**
- * @file difcservice.h The iFC handler data type.
+ * @file difcservice.h Support for Default iFCs.
  *
  * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Copyright (C) 2017  Metaswitch Networks Ltd
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -52,8 +52,6 @@ public:
 
   // Node names within the Default iFC configuration file.
   const char* const DEFAULT_IFC_SET = "DefaultIfcSet";
-  const char* const INITIAL_FILTER_CRITERIA = "InitialFilterCriteria";
-  const char* const PRIORITY = "Priority";
 
   /// Updates the default iFCs.
   void update_difcs();

@@ -1,8 +1,8 @@
 /**
- * @file difcservice.cpp The iFC handler data type.
+ * @file difcservice.cpp The Default iFC handler.
  *
  * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Copyright (C) 2017  Metaswitch Networks Ltd
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -40,13 +40,14 @@
 #include "difcservice.h"
 #include "sprout_pd_definitions.h"
 #include "utils.h"
+#include "xml_utils.h"
 
 DIFCService::DIFCService(std::string configuration):
   _configuration(configuration),
   _updater(NULL),
   _root(NULL)
 {
-  // Create an updater to keep the defuault iFCs configured correctly.
+  // Create an updater to keep the default iFCs configured correctly.
   _updater = new Updater<void, DIFCService>
                                (this, std::mem_fun(&DIFCService::update_difcs));
 }
@@ -109,7 +110,8 @@ void DIFCService::update_difcs()
   // Finally, check the "DefaultIfcSet" node is present.
   if (!root->first_node(DIFCService::DEFAULT_IFC_SET))
   {
-    TRC_ERROR("Invalid default IFC configuration file - missing DefaultIfcSet block");
+    TRC_ERROR("Failed to parse the default IFC configuration file as it is "
+              "invalid (missing DefaultIfcSet block)");
     CL_SPROUT_DIFC_FILE_MISSING_DEFAULTIFCSET.log();
     delete root; root = NULL;
     return;
@@ -126,13 +128,13 @@ void DIFCService::update_difcs()
   std::vector<std::pair<int32_t, Ifc>> ifc_list;
   rapidxml::xml_node<>* difc_set = _root->first_node(DIFCService::DEFAULT_IFC_SET);
   rapidxml::xml_node<>* ifc = NULL;
-  for (ifc = difc_set->first_node(DIFCService::INITIAL_FILTER_CRITERIA);
+  for (ifc = difc_set->first_node(RegDataXMLUtils::IFC);
        ifc != NULL;
-       ifc = ifc->next_sibling(DIFCService::INITIAL_FILTER_CRITERIA))
+       ifc = ifc->next_sibling(RegDataXMLUtils::IFC))
   {
     // Parse the priority.
     int32_t priority = 0;
-    rapidxml::xml_node<>* priority_node = ifc->first_node(DIFCService::PRIORITY);
+    rapidxml::xml_node<>* priority_node = ifc->first_node(RegDataXMLUtils::PRIORITY);
     if (priority_node)
     {
       std::string priority_str = priority_node->value();
@@ -141,8 +143,8 @@ void DIFCService::update_difcs()
 
       if (priority_str != std::to_string(priority))
       {
-        TRC_ERROR("Invalid default iFC - Priority (%s) isn't an int. This iFC "
-                  "will not be included in the default iFC list.",
+        TRC_ERROR("Failed to parse one default IFC, as its Priority (%s) isn't an "
+                  "int. This IFC will not be included in the default iFC list",
                   priority_str.c_str());
         CL_SPROUT_DIFC_FILE_INVALID_PRIORITY.log(priority_str.c_str());
         continue;

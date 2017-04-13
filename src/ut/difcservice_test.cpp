@@ -1,8 +1,8 @@
 /**
- * @file difcservice_test.cpp The iFC handler data type.
+ * @file difcservice_test.cpp Tests support of Default iFCs.
  *
  * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Copyright (C) 2017  Metaswitch Networks Ltd
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -77,36 +77,42 @@ int32_t get_priority(Ifc ifc)
   }
 }
 
+void get_ifc_properties(std::vector<std::pair<int32_t, Ifc>> *difc_list,
+                               std::vector<std::string> *server_names,
+                               std::vector<int32_t> *priorities)
+{
+  for (std::vector<std::pair<int32_t, Ifc>>::iterator it = difc_list->begin();
+       it != difc_list->end();
+       ++it)
+  {
+    server_names->push_back(get_server_name(it->second));
+    priorities->push_back(get_priority(it->second));
+  }
+  return;
+}
+
+// TODO - In the below tests when the parsed default iFCs are examined, the
+// class variable needs to be looked at. In the future this should be changed so
+// that the function that will be used in the codebase is called instead.
+
 // Test a valid Default iFC configuration file is parsed correctly.
 TEST_F(DIFCServiceTest, ValidDIFCFile)
 {
-  // Load the test file "test_difc.xml".
+  // Load a configuration file containing two iFCs.
   DIFCService difc(string(UT_DIR).append("/test_difc.xml"));
 
-  // Pull out the set of parsed iFCs to examine.
   std::vector<std::pair<int32_t, Ifc>> difc_list = difc._default_ifcs;
-
-  // Expect two iFCs to be present in the list.
   EXPECT_EQ(difc_list.size(), 2);
 
-  // Pull out info about each iFC.
   std::vector<std::string> server_names;
   std::vector<int32_t> priorities;
-  for (std::vector<std::pair<int32_t, Ifc>>::iterator it = difc_list.begin();
-       it != difc_list.end();
-       ++it)
-  {
-    server_names.push_back(get_server_name(it->second));
-    priorities.push_back(get_priority(it->second));
-  }
+  get_ifc_properties(&difc_list, &server_names, &priorities);
 
-  // Check that the server names of the iFCs are as expected.
   std::vector<std::string> expected_server_names;
   expected_server_names.push_back("example.com");
   expected_server_names.push_back("example_two.com");
   EXPECT_THAT(expected_server_names, UnorderedElementsAreArray(server_names));
 
-  // Check the priorities of the iFCs are as expected.
   std::vector<int32_t> expected_priorities = {1, 2};
   EXPECT_THAT(expected_priorities, UnorderedElementsAreArray(priorities));
 }
@@ -114,10 +120,9 @@ TEST_F(DIFCServiceTest, ValidDIFCFile)
 // Test that reloading the Default iFC config file works correctly.
 TEST_F(DIFCServiceTest, ReloadDIFCFile)
 {
-  // Load the test file "test_difc.xml"
+  // Load a configuration file containing two iFCs.
   DIFCService difc(string(UT_DIR).append("/test_difc.xml"));
 
-  // Brief check that the parsed info is correct.
   std::vector<std::pair<int32_t, Ifc>> difc_list = difc._default_ifcs;
   EXPECT_EQ(difc_list.size(), 2);
 
@@ -127,24 +132,15 @@ TEST_F(DIFCServiceTest, ReloadDIFCFile)
   difc_list = difc._default_ifcs;
   EXPECT_EQ(difc_list.size(), 2);
 
- // Pull out info about each iFC.
  std::vector<std::string> server_names;
  std::vector<int32_t> priorities;
- for (std::vector<std::pair<int32_t, Ifc>>::iterator it = difc_list.begin();
-      it != difc_list.end();
-      ++it)
- {
-   server_names.push_back(get_server_name(it->second));
-   priorities.push_back(get_priority(it->second));
- }
+ get_ifc_properties(&difc_list, &server_names, &priorities);
 
- // Check that the server names of the iFCs are as expected.
  std::vector<std::string> expected_server_names;
  expected_server_names.push_back("example.com");
  expected_server_names.push_back("example_two.com");
  EXPECT_THAT(expected_server_names, UnorderedElementsAreArray(server_names));
 
- // Check the priorities of the iFCs are as expected.
  std::vector<int32_t> expected_priorities = {1, 2};
  EXPECT_THAT(expected_priorities, UnorderedElementsAreArray(priorities));
 }
@@ -153,39 +149,29 @@ TEST_F(DIFCServiceTest, ReloadDIFCFile)
 // valid entries to be lost.
 TEST_F(DIFCServiceTest, ReloadInvalidDIFCFile)
 {
-  // Load the test file "test_difc.xml"
+  // Load a configuration file containing two iFCs.
   DIFCService difc(string(UT_DIR).append("/test_difc.xml"));
 
-  // Brief check that the parsed info is correct.
   std::vector<std::pair<int32_t, Ifc>> difc_list = difc._default_ifcs;
   EXPECT_EQ(difc_list.size(), 2);
 
   // Change the file the difc service is using to an invalid file (to mimic the
   // file being changed), then reload the file, and recheck the parsed list.
   // Nothing should have changed and this should cause no memory issues.
-  difc._configuration = string(UT_DIR).append("/test_invalid_difc.xml");
+  difc._configuration = string(UT_DIR).append("/test_difc_invalid.xml");
   difc.update_difcs();
   difc_list = difc._default_ifcs;
   EXPECT_EQ(difc_list.size(), 2);
 
-  // Pull out info about each iFC.
   std::vector<std::string> server_names;
   std::vector<int32_t> priorities;
-  for (std::vector<std::pair<int32_t, Ifc>>::iterator it = difc_list.begin();
-       it != difc_list.end();
-       ++it)
-  {
-    server_names.push_back(get_server_name(it->second));
-    priorities.push_back(get_priority(it->second));
-  }
+  get_ifc_properties(&difc_list, &server_names, &priorities);
 
-  // Check that the server names of the iFCs are as expected.
   std::vector<std::string> expected_server_names;
   expected_server_names.push_back("example.com");
   expected_server_names.push_back("example_two.com");
   EXPECT_THAT(expected_server_names, UnorderedElementsAreArray(server_names));
 
-  // Check the priorities of the iFCs are as expected.
   std::vector<int32_t> expected_priorities = {1, 2};
   EXPECT_THAT(expected_priorities, UnorderedElementsAreArray(priorities));
 }
@@ -211,7 +197,7 @@ TEST_F(DIFCServiceTest, MissingFile)
 TEST_F(DIFCServiceTest, EmptyFile)
 {
   CapturingTestLogger log;
-  DIFCService difc(string(UT_DIR).append("/test_empty_file_difc.xml"));
+  DIFCService difc(string(UT_DIR).append("/test_difc_empty_file.xml"));
   EXPECT_TRUE(log.contains("Failed to read default IFC configuration data"));
   EXPECT_TRUE(difc._default_ifcs.empty());
 }
@@ -220,7 +206,7 @@ TEST_F(DIFCServiceTest, EmptyFile)
 TEST_F(DIFCServiceTest, ParseError)
 {
   CapturingTestLogger log;
-  DIFCService difc(string(UT_DIR).append("/test_invalid_difc.xml"));
+  DIFCService difc(string(UT_DIR).append("/test_difc_invalid.xml"));
   EXPECT_TRUE(log.contains("Failed to parse the default IFC configuration data"));
   EXPECT_TRUE(difc._default_ifcs.empty());
 }
@@ -229,8 +215,8 @@ TEST_F(DIFCServiceTest, ParseError)
 TEST_F(DIFCServiceTest, IncorrectSyntax)
 {
   CapturingTestLogger log;
-  DIFCService difc(string(UT_DIR).append("/test_missing_node_difc.xml"));
-  EXPECT_TRUE(log.contains("Invalid default IFC configuration file - missing DefaultIfcSet block"));
+  DIFCService difc(string(UT_DIR).append("/test_difc_missing_node.xml"));
+  EXPECT_TRUE(log.contains("Failed to parse the default IFC configuration file as it is invalid (missing DefaultIfcSet block)"));
   EXPECT_TRUE(difc._default_ifcs.empty());
 }
 
@@ -239,9 +225,8 @@ TEST_F(DIFCServiceTest, IncorrectSyntax)
 TEST_F(DIFCServiceTest, EmptyValidFile)
 {
   CapturingTestLogger log;
-  DIFCService difc(string(UT_DIR).append("/test_valid_empty_difc.xml"));
+  DIFCService difc(string(UT_DIR).append("/test_difc_valid_empty.xml"));
   EXPECT_FALSE(log.contains("Failed"));
-  EXPECT_FALSE(log.contains("failed"));
   EXPECT_TRUE(difc._default_ifcs.empty());
 }
 
@@ -258,18 +243,14 @@ TEST_F(DIFCServiceTest, SingleInvalidIfc)
 {
   CapturingTestLogger log;
 
-  // Load the test file "test_one_invalid_difc.xml"
-  DIFCService difc(string(UT_DIR).append("/test_one_invalid_difc.xml"));
+  // Load a configuration file which contains one valid, and one invalid, iFC.
+  DIFCService difc(string(UT_DIR).append("/test_difc_one_invalid.xml"));
 
-  EXPECT_TRUE(log.contains("Invalid default iFC"));
+  EXPECT_TRUE(log.contains("Failed to parse one default IFC"));
 
- // Pull out the set of parsed iFCs to examine.
  std::vector<std::pair<int32_t, Ifc>> difc_list = difc._default_ifcs;
-
- // Expect one iFC to be present in the list.
  EXPECT_EQ(difc_list.size(), 1);
 
- // Check this iFC.
  std::string server_name = get_server_name(difc_list.begin()->second);
  int32_t priority = get_priority(difc_list.begin()->second);
  EXPECT_EQ(server_name, "example_two.com");

@@ -500,7 +500,7 @@ static const PDLog CL_SPROUT_DIFC_FILE_MISSING_DEFAULTIFCSET
  "The default IFC configuration file doesn't have the correct syntax.",
  "The S-CSCF supports default IFCs, but the configuration file for this doesn't match the expected syntax (no DefaultIfcSet block).",
  "The S-CSCF will not be able to correctly apply any default IFCs.",
- "The shared IFC sets should be defined in /etc/clearwater/default_ifc.xml. Populate this file according to the documentation."
+ "The default IFC sets should be defined in /etc/clearwater/default_ifc.xml. Populate this file according to the documentation."
  );
 
 static const PDLog1<const char *> CL_SPROUT_DIFC_FILE_INVALID_PRIORITY
