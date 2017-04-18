@@ -338,6 +338,7 @@ class HssConnectionTest : public BaseTest
         "</ChargingAddresses>"
       "</ClearwaterRegData>";
   }
+
   virtual ~HssConnectionTest()
   {
   }
@@ -628,12 +629,32 @@ TEST_F(HssConnectionTest, CacheNotAllowed)
   EXPECT_EQ(rc, 200);
 }
 
+/// Fake iFCs to use to test Shared iFCs.
+std::string ifc_priority_one = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                               "<InitialFilterCriteria>\n"
+                               "  <Priority>1</Priority>\n"
+                               "  <ApplicationServer>\n"
+                               "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                               "  </ApplicationServer>\n"
+                               "</InitialFilterCriteria>";
+std::string ifc_priority_two = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                               "<InitialFilterCriteria>\n"
+                               "  <Priority>2</Priority>\n"
+                               "  <ApplicationServer>\n"
+                               "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                               "  </ApplicationServer>\n"
+                               "</InitialFilterCriteria>";
+
 /// Fixture for HssWithSifcTest.
 class HssWithSifcTest : public BaseTest
 {
   FakeHttpResolver _resolver;
   HSSConnection _sifc_hss;
   MockSIFCService _sifc_service;
+  rapidxml::xml_document<>* _root_one;
+  rapidxml::xml_document<>* _root_two;
+  Ifc* _ifc_one;
+  Ifc* _ifc_two;
 
   HssWithSifcTest() :
     _resolver("10.42.42.42"),
@@ -917,11 +938,29 @@ class HssWithSifcTest : public BaseTest
          "<ECF priority=\"1\">ecf1</ECF>"
        "</ChargingAddresses>"
      "</ClearwaterRegData>";
+
+    _root_one = new rapidxml::xml_document<>;
+    _root_one->parse<0>(_root_one->allocate_string(ifc_priority_one.c_str()));
+    _ifc_one = new Ifc(_root_one->first_node("InitialFilterCriteria"));
+    _root_two = new rapidxml::xml_document<>;
+    _root_two->parse<0>(_root_two->allocate_string(ifc_priority_two.c_str()));
+    _ifc_two = new Ifc(_root_two->first_node("InitialFilterCriteria"));
   }
+
   virtual ~HssWithSifcTest()
   {
+    delete _root_one;
+    delete _ifc_one;
+    delete _root_two;
+    delete _ifc_two;
   }
 };
+
+// In the following tests, the parsing of Shared iFCs from the User-Data AVP is
+// teested. It is checked that the correct Shared iFC sets are determined from
+// the AVP, however the conversion of these set ids into lists of distinct iFCs
+// is not tested here, it is tested in sifcservice_test.cpp. In these tests,
+// this functionality is mocked out.
 
 // Check that some iFCs are returned when a shared iFC set is encountered.
 TEST_F(HssWithSifcTest, SimpleSiFC)
@@ -930,12 +969,9 @@ TEST_F(HssWithSifcTest, SimpleSiFC)
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
 
-  // Mock out the function that converts the list of shared iFC set ids into a
-  // list of iFCs - this function is tested elsewhere.
-  Ifc* fake_ifc = new Ifc(NULL);
   std::multimap<int32_t, Ifc> ifcs_from_id;
-  ifcs_from_id.insert(std::pair<int32_t, Ifc>(1, *fake_ifc));
-  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *fake_ifc));
+  ifcs_from_id.insert(std::pair<int32_t, Ifc>(1, *_ifc_one));
+  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
   // Expect input of one shared iFC set, with set id 10.
   const std::set<int32_t> ids = {10};
   EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, ids, _))
@@ -944,9 +980,6 @@ TEST_F(HssWithSifcTest, SimpleSiFC)
   // Send in a message, and check that two iFCs are now present in the map.
   _sifc_hss.update_registration_state("onesifc", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(ifcs_map.begin()->second.size() == 2);
-
-  // Clean up.
-  delete fake_ifc; fake_ifc = NULL;
 }
 
 // Check that SiFCs are compatible with iFCs.
@@ -956,12 +989,9 @@ TEST_F(HssWithSifcTest, SifcWithIfc)
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
 
-  // Mock out the function that converts the list of shared iFC set ids into a
-  // list of iFCs - this function is tested elsewhere.
-  Ifc* fake_ifc = new Ifc(NULL);
   std::multimap<int32_t, Ifc> ifcs_from_id;
-  ifcs_from_id.insert(std::pair<int32_t, Ifc>(1, *fake_ifc));
-  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *fake_ifc));
+  ifcs_from_id.insert(std::pair<int32_t, Ifc>(1, *_ifc_one));
+  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
   // Expect input of one shared iFC set with set id of 0.
   const std::set<int32_t> ids = {0};
   EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, ids, _))
@@ -971,9 +1001,6 @@ TEST_F(HssWithSifcTest, SifcWithIfc)
   // two from the SiFC set, and one regular iFC.
   _sifc_hss.update_registration_state("sifcandifc", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(ifcs_map.begin()->second.size() == 3);
-
-  // Clean up.
-  delete fake_ifc; fake_ifc = NULL;
 }
 
 // Check that an invalid SiFC, that is not an integer, is not accepted.
@@ -995,33 +1022,28 @@ TEST_F(HssWithSifcTest, MultipleExtensions)
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
 
-  // Mock out the function that converts the list of shared iFC set ids into a
-  // list of iFCs - this function is tested elsewhere.
-  // Expect two calls, one for each "Extension" present.
-  Ifc* fake_ifc = new Ifc(NULL);
-
+  // The list returned here will be passed back into the function when the
+  // second Extension is encountered. For this reason, don't bother returning
+  // anything at this point.
   std::multimap<int32_t, Ifc> ifc_list_one;
-  ifc_list_one.insert(std::pair<int32_t, Ifc>(1, *fake_ifc));
-  ifc_list_one.insert(std::pair<int32_t, Ifc>(2, *fake_ifc));
   const std::set<int32_t> set_list_one = {1, 2};
   EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, set_list_one, _))
     .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifc_list_one)));
 
+  // Any iFCs from the first Shared iFC sets will be passed into this function.
+  // More iFCs will then be added to this list and returned.
+  // So the list returned here represents the iFC from sets 1, 2 and 10.
   std::multimap<int32_t, Ifc> ifc_list_two;
-  ifc_list_two.insert(std::pair<int32_t, Ifc>(1, *fake_ifc));
-  ifc_list_two.insert(std::pair<int32_t, Ifc>(2, *fake_ifc));
-  ifc_list_two.insert(std::pair<int32_t, Ifc>(2, *fake_ifc));
+  ifc_list_two.insert(std::pair<int32_t, Ifc>(1, *_ifc_one));
+  ifc_list_two.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
+  ifc_list_two.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
   const std::set<int32_t> set_list_two = {10};
   EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, set_list_two, _))
     .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifc_list_two)));
 
-  // Send in a message, and check that three iFCs are now in the iFC map, two
-  // from the first set list, and an additional third from the second set list.
+  // Send in a message, and check that three iFCs are now in the iFC map.
   _sifc_hss.update_registration_state("multipleextensions", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(ifcs_map.begin()->second.size() == 3);
-
-  // Clean up.
-  delete fake_ifc; fake_ifc = NULL;
 }
 
 // Check that multiple shared iFCs are parsed correctly.
@@ -1031,12 +1053,9 @@ TEST_F(HssWithSifcTest, MultipleSifcs)
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
 
-  // Mock out the function that converts the list of shared iFC set ids into a
-  // list of iFCs - this function is tested elsewhere.
-  Ifc* fake_ifc = new Ifc(NULL);
   std::multimap<int32_t, Ifc> ifcs_from_id;
-  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *fake_ifc));
-  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *fake_ifc));
+  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
+  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
   // Expect input of two shared iFC sets, with set ids 1 and 2.
   const std::set<int32_t> ids = {1, 2};
   EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, ids, _))
@@ -1045,9 +1064,6 @@ TEST_F(HssWithSifcTest, MultipleSifcs)
   // Send in a message, and check that two iFCs are now in the iFC map.
   _sifc_hss.update_registration_state("multiplesifc", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(ifcs_map.begin()->second.size() == 2);
-
-  // Clean up.
-  delete fake_ifc; fake_ifc = NULL;
 }
 
 // Check that shared iFCs are parsed correctly when multiple public ids are
@@ -1059,12 +1075,9 @@ TEST_F(HssWithSifcTest, MultiplePubIdsWithSifcs)
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
 
-  // Mock out the function that converts the list of shared iFC set ids into a
-  // list of iFCs - this function is tested elsewhere.
-  Ifc* fake_ifc = new Ifc(NULL);
   std::multimap<int32_t, Ifc> ifcs_from_id;
-  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *fake_ifc));
-  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *fake_ifc));
+  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
+  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
   // Expect input of one shared iFC set; with an id of 1 for one service
   // profile, and 2 for the other.
   const std::set<int32_t> id_set_one = {1};
@@ -1083,9 +1096,6 @@ TEST_F(HssWithSifcTest, MultiplePubIdsWithSifcs)
   {
     EXPECT_TRUE(elem.second.size() == 2);
   }
-
-  // Clean up.
-  delete fake_ifc; fake_ifc = NULL;
 }
 
 // Check that shared iFCs are parsed correctly when mixed with a complex set of
@@ -1096,31 +1106,10 @@ TEST_F(HssWithSifcTest, ComplexSifcIfcMix)
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
 
-  // Create an XML with two mock iFCs in it, one with priority one, the other
-  // with priority two.
-  rapidxml::xml_document<> doc;
-
-  rapidxml::xml_node<>* ifc_priority_one = doc.allocate_node(
-                           rapidxml::node_type::node_element, "IFCPriorityOne");
-  rapidxml::xml_node<>* priority_one = doc.allocate_node(
-                            rapidxml::node_type::node_element, "Priority", "1");
-  ifc_priority_one->append_node(priority_one);
-  doc.append_node(ifc_priority_one);
-
-  rapidxml::xml_node<>* ifc_priority_two = doc.allocate_node(
-                           rapidxml::node_type::node_element, "IFCPriorityTwo");
-  rapidxml::xml_node<>* priority_two = doc.allocate_node(
-                            rapidxml::node_type::node_element, "Priority", "2");
-  ifc_priority_two->append_node(priority_two);
-  doc.append_node(ifc_priority_two);
-
-  // Mock out the function (which is tested elsewhere), that converts the list
-  // of shared iFC set ids into a list of iFCs, to return the iFCs created
-  // above.
   std::multimap<int32_t, Ifc> ifcs_from_id;
-  ifcs_from_id.insert(std::pair<int32_t, Ifc>(1, Ifc(ifc_priority_one)));
-  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, Ifc(ifc_priority_two)));
-  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, Ifc(ifc_priority_two)));
+  ifcs_from_id.insert(std::pair<int32_t, Ifc>(1, *_ifc_one));
+  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
+  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
   // Expect input of two shared iFC sets, with ids 3 and 4.
   const std::set<int32_t> id_set_one = {3, 4};
   EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, id_set_one, _))
@@ -1128,23 +1117,23 @@ TEST_F(HssWithSifcTest, ComplexSifcIfcMix)
 
   // Send in a message, and check the expected number of iFCs are present, as
   // well as checking that the expected number with each priority are present.
+  // 6 distinct iFCs with priorities 1, 1, 2, 3, 3 and 4 should be returned.
+  // Additionally 3 iFCs from shared iFCs with priorities 1, 2 and 2 should be
+  // returned.
   _sifc_hss.update_registration_state("sifcifcmix", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   int32_t map_size = ifcs_map.begin()->second.size();
   EXPECT_TRUE(map_size == 9);
-  std::vector<int32_t> expected_priorities = {1, 1, 1, 2, 2, 2, 3, 3, 4};
   std::vector<int32_t> priorities;
-  int32_t ii;
-  int32_t priority;
-  for (ii = 0; ii < map_size; ii++)
+  for (int32_t ii = 0; ii < map_size; ii++)
   {
     const Ifc& ifc = ifcs_map.begin()->second[ii];
     if (ifc._ifc->first_node("Priority"))
     {
-      priority = std::atoi(ifc._ifc->first_node("Priority")->value());
+      int32_t priority = std::atoi(ifc._ifc->first_node("Priority")->value());
       priorities.push_back(priority);
     }
   }
+  std::vector<int32_t> expected_priorities = {1, 1, 1, 2, 2, 2, 3, 3, 4};
   EXPECT_THAT(expected_priorities, UnorderedElementsAreArray(priorities));
 }
-
 
