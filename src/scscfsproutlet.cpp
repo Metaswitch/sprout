@@ -177,12 +177,15 @@ bool SCSCFSproutlet::init()
 
 /// Creates a SCSCFSproutletTsx instance for performing S-CSCF service processing
 /// on a request.
-SproutletTsx* SCSCFSproutlet::get_tsx(SproutletTsxHelper* helper,
+SproutletTsx* SCSCFSproutlet::get_tsx(SproutletProxy* proxy,
                                       const std::string& alias,
-                                      pjsip_msg* req)
+                                      pjsip_msg* req,
+                                      pjsip_sip_uri*& next_hop,
+                                      pj_pool_t* pool,
+                                      SAS::TrailId trail)
 {
   pjsip_method_e req_type = req->line.req.method.id;
-  return (SproutletTsx*)new SCSCFSproutletTsx(helper, this, req_type);
+  return (SproutletTsx*)new SCSCFSproutletTsx(this, req_type);
 }
 
 
@@ -382,10 +385,9 @@ void SCSCFSproutlet::track_session_setup_time(uint64_t tsx_start_time_usec,
   }
 }
 
-SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
-                                     SCSCFSproutlet* scscf,
+SCSCFSproutletTsx::SCSCFSproutletTsx(SCSCFSproutlet* scscf,
                                      pjsip_method_e req_type) :
-  SproutletTsx(helper),
+  SproutletTsx(),
   _scscf(scscf),
   _cancelled(false),
   _session_case(NULL),

@@ -80,9 +80,12 @@ public:
 
   bool init();
 
-  SproutletTsx* get_tsx(SproutletTsxHelper* helper,
+  SproutletTsx* get_tsx(SproutletProxy* proxy,
                         const std::string& alias,
-                        pjsip_msg* req) override;
+                        pjsip_msg* req,
+                        pjsip_sip_uri*& next_hop,
+                        pj_pool_t* pool,
+                        SAS::TrailId trail) override;
 
   int expiry_for_binding(pjsip_contact_hdr* contact,
                          pjsip_expires_hdr* expires);
@@ -119,8 +122,7 @@ private:
 class RegistrarSproutletTsx : public ForwardingSproutletTsx
 {
 public:
-  RegistrarSproutletTsx(SproutletTsxHelper* helper,
-                        const std::string& next_hop_service,
+  RegistrarSproutletTsx(const std::string& next_hop_service,
                         RegistrarSproutlet* sproutlet);
   ~RegistrarSproutletTsx();
 

@@ -63,6 +63,7 @@ extern "C" {
 #include "subscriptionsproutlet.h"
 #include "uri_classifier.h"
 #include "hss_sip_mapping.h"
+#include "sproutletproxy.h"
 
 /// SubscriptionSproutlet constructor
 SubscriptionSproutlet::SubscriptionSproutlet(const std::string& name,
@@ -75,7 +76,7 @@ SubscriptionSproutlet::SubscriptionSproutlet(const std::string& name,
                                              ACRFactory* acr_factory,
                                              AnalyticsLogger* analytics_logger,
                                              int cfg_max_expires) :
-  Sproutlet(name, port, uri, ""),
+  Sproutlet(name, port, uri),
   _sdm(sdm),
   _remote_sdms(remote_sdms),
   _hss(hss_connection),
@@ -96,53 +97,33 @@ bool SubscriptionSproutlet::init()
   return true;
 }
 
-SproutletTsx* SubscriptionSproutlet::get_tsx(SproutletTsxHelper* helper,
+SproutletTsx* SubscriptionSproutlet::get_tsx(SproutletProxy* proxy,
                                              const std::string& alias,
-                                             pjsip_msg* req)
+                                             pjsip_msg* req,
+                                             pjsip_sip_uri*& next_hop,
+                                             pj_pool_t* pool,
+                                             SAS::TrailId trail)
 {
-  return (SproutletTsx*)new SubscriptionSproutletTsx(helper, _next_hop_service, this);
-}
-
-SubscriptionSproutletTsx::SubscriptionSproutletTsx(SproutletTsxHelper* helper,
-                                                   const std::string& next_hop_service,
-                                                   SubscriptionSproutlet* sproutlet):
-  ForwardingSproutletTsx(helper, next_hop_service),
-  _sproutlet(sproutlet)
-{
-  TRC_DEBUG("Subscription Transaction (%p) created", this);
-}
-
-SubscriptionSproutletTsx::~SubscriptionSproutletTsx()
-{
-  TRC_DEBUG("Subscription Transaction (%p) destroyed", this);
-}
-
-void SubscriptionSproutletTsx::on_rx_initial_request(pjsip_msg* req)
-{
-  TRC_INFO("Subscription sproutlet received intitial request");
-  return on_rx_request(req);
-}
-
-void SubscriptionSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
-{
-  TRC_INFO("Subscription sproutlet received in dialog request");
-  return on_rx_request(req);
-}
-
-void SubscriptionSproutletTsx::on_rx_request(pjsip_msg* req)
-{
-  if (handle_request(req))
+  if (handle_request(req, trail))
   {
-    process_subscription_request(req);
+    return (SproutletTsx*)new SubscriptionSproutletTsx(_next_hop_service, this);
   }
-  else
-  {
-    forward_request(req);
-  }
+
+  // We're not interested in the message so create a next hop URI.
+  pjsip_route_hdr* route = (pjsip_route_hdr*)
+                              pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
+
+  pjsip_sip_uri* base_uri = (pjsip_sip_uri*)(route ? route->name_addr.uri : nullptr);
+  next_hop = proxy->create_internal_sproutlet_uri(pool,
+                                                  _next_hop_service,
+                                                  base_uri);
+
+  return NULL;
 }
 
 // Check whether this request should be absorbed by the subscription module
-bool SubscriptionSproutletTsx::handle_request(pjsip_msg* req)
+bool SubscriptionSproutlet::handle_request(pjsip_msg* req,
+                                           SAS::TrailId trail)
 {
   if (pjsip_method_cmp(&req->line.req.method, pjsip_get_subscribe_method()))
   {
@@ -158,7 +139,7 @@ bool SubscriptionSproutletTsx::handle_request(pjsip_msg* req)
   {
     TRC_DEBUG("Not processing subscription request not targeted at this domain or node");
     // LCOV_EXCL_START - No SAS events in UT
-    SAS::Event event(trail(), SASEvent::SUBSCRIBE_FAILED_EARLY_DOMAIN, 0);
+    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_DOMAIN, 0);
     SAS::report_event(event);
     // LCOV_EXCL_STOP
     return false;
@@ -178,7 +159,7 @@ bool SubscriptionSproutletTsx::handle_request(pjsip_msg* req)
     TRC_DEBUG("Not processing subscription request that's not for the 'reg' package");
 
     // LCOV_EXCL_START - No SAS events in UT
-    SAS::Event sas_event(trail(), SASEvent::SUBSCRIBE_FAILED_EARLY_EVENT, 0);
+    SAS::Event sas_event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_EVENT, 0);
     if (event)
     {
       char event_hdr_str[256];
@@ -216,7 +197,7 @@ bool SubscriptionSproutletTsx::handle_request(pjsip_msg* req)
       pjsip_hdr_print_on(accept, accept_hdr_str, 255);
 
       // LCOV_EXCL_START - No SAS events in UT
-      SAS::Event event(trail(), SASEvent::SUBSCRIBE_FAILED_EARLY_ACCEPT, 0);
+      SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_ACCEPT, 0);
       event.add_var_param(accept_hdr_str);
       SAS::report_event(event);
       // LCOV_EXCL_STOP
@@ -227,6 +208,37 @@ bool SubscriptionSproutletTsx::handle_request(pjsip_msg* req)
 
   return true;
 }
+
+SubscriptionSproutletTsx::SubscriptionSproutletTsx(const std::string& next_hop_service,
+                                                   SubscriptionSproutlet* sproutlet):
+  ForwardingSproutletTsx(next_hop_service),
+  _sproutlet(sproutlet)
+{
+  TRC_DEBUG("Subscription Transaction (%p) created", this);
+}
+
+SubscriptionSproutletTsx::~SubscriptionSproutletTsx()
+{
+  TRC_DEBUG("Subscription Transaction (%p) destroyed", this);
+}
+
+void SubscriptionSproutletTsx::on_rx_initial_request(pjsip_msg* req)
+{
+  TRC_INFO("Subscription sproutlet received intitial request");
+  return on_rx_request(req);
+}
+
+void SubscriptionSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
+{
+  TRC_INFO("Subscription sproutlet received in dialog request");
+  return on_rx_request(req);
+}
+
+void SubscriptionSproutletTsx::on_rx_request(pjsip_msg* req)
+{
+  process_subscription_request(req);
+}
+
 
 void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
 {

@@ -37,6 +37,7 @@
 #include "constants.h"
 #include "sproutsasevent.h"
 #include "authenticationsproutlet.h"
+#include "sproutletproxy.h"
 #include "json_parse_utils.h"
 #include <openssl/hmac.h>
 #include "base64.h"
@@ -126,11 +127,28 @@ bool AuthenticationSproutlet::init()
   return (status == PJ_SUCCESS);
 }
 
-SproutletTsx* AuthenticationSproutlet::get_tsx(SproutletTsxHelper* helper,
+SproutletTsx* AuthenticationSproutlet::get_tsx(SproutletProxy* proxy,
                                                const std::string& alias,
-                                               pjsip_msg* req)
+                                               pjsip_msg* req,
+                                               pjsip_sip_uri*& next_hop,
+                                               pj_pool_t* pool,
+                                               SAS::TrailId trail)
 {
-  return new AuthenticationSproutletTsx(helper, _next_hop_service, this);
+  if (needs_authentication(req, trail))
+  {
+    return new AuthenticationSproutletTsx(_next_hop_service, this);
+  }
+
+  // We're not interested in the message so create a next hop URI.
+  pjsip_route_hdr* route = (pjsip_route_hdr*)
+                              pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
+
+  pjsip_sip_uri* base_uri = (pjsip_sip_uri*)(route ? route->name_addr.uri : nullptr);
+  next_hop = proxy->create_internal_sproutlet_uri(pool,
+                                                  _next_hop_service,
+                                                  base_uri);
+
+  return NULL;
 }
 
 
@@ -139,14 +157,136 @@ const std::list<std::string> AuthenticationSproutlet::aliases() const
   return { _aliases };
 }
 
+// Determine whether this request should be challenged (and SAS log appropriately).
+bool AuthenticationSproutlet::needs_authentication(pjsip_msg* req,
+                                                   SAS::TrailId trail)
+{
+  if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
+  {
+    // Authentication isn't required for emergency registrations. An emergency
+    // registration is one where each Contact header contains 'sos' as the SIP
+    // URI parameter.
+    //
+    // Note that a REGISTER with NO contact headers does not count as an
+    // emergency registration.
+    pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
+      pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, NULL);
+
+    if (contact_hdr != NULL)
+    {
+      bool all_bindings_emergency = true;
+
+      while ((contact_hdr != NULL) && (all_bindings_emergency))
+      {
+        all_bindings_emergency = PJUtils::is_emergency_registration(contact_hdr);
+        contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(req,
+                                                              PJSIP_H_CONTACT,
+                                                              contact_hdr->next);
+      }
+
+      if (all_bindings_emergency)
+      {
+        SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_EMERGENCY_REGISTER, 0);
+        SAS::report_event(event);
+
+        return PJ_FALSE;
+      }
+    }
+
+    // Check to see if the request has already been integrity protected?
+    pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
+      pjsip_msg_find_hdr(req, PJSIP_H_AUTHORIZATION, NULL);
+
+    if (auth_hdr != NULL)
+    {
+      // There is an authorization header, so check for the integrity-protected
+      // indication.
+      TRC_DEBUG("Authorization header in request");
+      pjsip_param* integrity =
+        pjsip_param_find(&auth_hdr->credential.digest.other_param,
+                         &STR_INTEGRITY_PROTECTED);
+
+      if (integrity != NULL)
+      {
+        TRC_DEBUG("Integrity protected with %.*s",
+                  integrity->value.slen, integrity->value.ptr);
+
+        if ((pj_stricmp(&integrity->value, &STR_TLS_YES) == 0) ||
+            (pj_stricmp(&integrity->value, &STR_IP_ASSOC_YES) == 0))
+        {
+          // The integrity protected indicator is included and set to tls-yes or
+          // ip-assoc-yes.  This indicates the client has already been authenticated
+          // so we will accept this REGISTER even if there is a challenge response.
+          // Values of tls-pending or ip-assoc-pending indicate the challenge
+          // should be checked.
+          return PJ_FALSE;
+        }
+        else if ((integrity != NULL) &&
+                 (pj_stricmp(&integrity->value, &STR_YES) == 0) &&
+                 (auth_hdr->credential.digest.response.slen == 0))
+        {
+          // The integrity protected indicator is include and set to yes.  This
+          // indicates that AKA authentication is in use and the REGISTER was
+          // received on an integrity protected channel, so we will let the
+          // request through if there is no challenge response, but must check
+          // the challenge response if included.
+          return PJ_FALSE;
+        }
+      }
+    }
+
+    return PJ_TRUE;
+  }
+  else
+  {
+    // Check to see if we should authenticate this non-REGISTER message - this
+    if (_non_register_auth_mode == NonRegisterAuthentication::NEVER)
+    {
+      // Configured to never authenticate non-REGISTER requests.
+      SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_NEVER_AUTH_NON_REG, 0);
+      SAS::report_event(event);
+      return PJ_FALSE;
+    }
+    else if (_non_register_auth_mode == NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT)
+    {
+      // Only authenticate the request if it has a Proxy-Authorization header.
+      pjsip_proxy_authorization_hdr* auth_hdr = (pjsip_proxy_authorization_hdr*)
+        pjsip_msg_find_hdr(req, PJSIP_H_PROXY_AUTHORIZATION, NULL);
+
+      if (auth_hdr != NULL)
+      {
+        // Edge proxy has explicitly asked us to authenticate this non-REGISTER
+        // message
+        SAS::Event event(trail, SASEvent::AUTHENTICATION_NEEDED_PROXY_AUTHORIZATION, 0);
+        SAS::report_event(event);
+        return PJ_TRUE;
+      }
+      else
+      {
+        // No Proxy-Authorization header - this indicates the P-CSCF trusts this
+        // message so we don't need to perform further authentication.
+        SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_PROXY_AUTHORIZATION, 0);
+        SAS::report_event(event);
+        return PJ_FALSE;
+      }
+    }
+    else
+    {
+      // Unrecognized authentication mode - should never happen. LCOV_EXCL_START
+      assert(!"Unrecognized authentication mode");
+      return PJ_FALSE;
+      // LCOV_EXCL_STOP
+    }
+  }
+}
+
 //
 // Authentication Sproutlet Tsx methods.
 //
 
-AuthenticationSproutletTsx::AuthenticationSproutletTsx(SproutletTsxHelper* helper,
-                                                       const std::string& next_hop_service,
+AuthenticationSproutletTsx::AuthenticationSproutletTsx(const std::string& next_hop_service,
                                                        AuthenticationSproutlet* auth_sproutlet) :
-  ForwardingSproutletTsx(helper, next_hop_service),
+  ForwardingSproutletTsx(next_hop_service),
   _sproutlet(auth_sproutlet)
 {
 }
@@ -702,127 +842,6 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
   }
 }
 
-// Determine whether this request should be challenged (and SAS log appropriately).
-bool AuthenticationSproutletTsx::needs_authentication(pjsip_msg* req)
-{
-  if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
-  {
-    // Authentication isn't required for emergency registrations. An emergency
-    // registration is one where each Contact header contains 'sos' as the SIP
-    // URI parameter.
-    //
-    // Note that a REGISTER with NO contact headers does not count as an
-    // emergency registration.
-    pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
-      pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, NULL);
-
-    if (contact_hdr != NULL)
-    {
-      bool all_bindings_emergency = true;
-
-      while ((contact_hdr != NULL) && (all_bindings_emergency))
-      {
-        all_bindings_emergency = PJUtils::is_emergency_registration(contact_hdr);
-        contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(req,
-                                                              PJSIP_H_CONTACT,
-                                                              contact_hdr->next);
-      }
-
-      if (all_bindings_emergency)
-      {
-        SAS::Event event(trail(), SASEvent::AUTHENTICATION_NOT_NEEDED_EMERGENCY_REGISTER, 0);
-        SAS::report_event(event);
-
-        return PJ_FALSE;
-      }
-    }
-
-    // Check to see if the request has already been integrity protected?
-    pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
-      pjsip_msg_find_hdr(req, PJSIP_H_AUTHORIZATION, NULL);
-
-    if (auth_hdr != NULL)
-    {
-      // There is an authorization header, so check for the integrity-protected
-      // indication.
-      TRC_DEBUG("Authorization header in request");
-      pjsip_param* integrity =
-        pjsip_param_find(&auth_hdr->credential.digest.other_param,
-                         &STR_INTEGRITY_PROTECTED);
-
-      if (integrity != NULL)
-      {
-        TRC_DEBUG("Integrity protected with %.*s",
-                  integrity->value.slen, integrity->value.ptr);
-
-        if ((pj_stricmp(&integrity->value, &STR_TLS_YES) == 0) ||
-            (pj_stricmp(&integrity->value, &STR_IP_ASSOC_YES) == 0))
-        {
-          // The integrity protected indicator is included and set to tls-yes or
-          // ip-assoc-yes.  This indicates the client has already been authenticated
-          // so we will accept this REGISTER even if there is a challenge response.
-          // Values of tls-pending or ip-assoc-pending indicate the challenge
-          // should be checked.
-          return PJ_FALSE;
-        }
-        else if ((integrity != NULL) &&
-                 (pj_stricmp(&integrity->value, &STR_YES) == 0) &&
-                 (auth_hdr->credential.digest.response.slen == 0))
-        {
-          // The integrity protected indicator is include and set to yes.  This
-          // indicates that AKA authentication is in use and the REGISTER was
-          // received on an integrity protected channel, so we will let the
-          // request through if there is no challenge response, but must check
-          // the challenge response if included.
-          return PJ_FALSE;
-        }
-      }
-    }
-
-    return PJ_TRUE;
-  }
-  else
-  {
-    // Check to see if we should authenticate this non-REGISTER message - this
-    if (_sproutlet->_non_register_auth_mode == NonRegisterAuthentication::NEVER)
-    {
-      // Configured to never authenticate non-REGISTER requests.
-      SAS::Event event(trail(), SASEvent::AUTHENTICATION_NOT_NEEDED_NEVER_AUTH_NON_REG, 0);
-      SAS::report_event(event);
-      return PJ_FALSE;
-    }
-    else if (_sproutlet->_non_register_auth_mode == NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT)
-    {
-      // Only authenticate the request if it has a Proxy-Authorization header.
-      pjsip_proxy_authorization_hdr* auth_hdr = (pjsip_proxy_authorization_hdr*)
-        pjsip_msg_find_hdr(req, PJSIP_H_PROXY_AUTHORIZATION, NULL);
-
-      if (auth_hdr != NULL)
-      {
-        // Edge proxy has explicitly asked us to authenticate this non-REGISTER
-        // message
-        SAS::Event event(trail(), SASEvent::AUTHENTICATION_NEEDED_PROXY_AUTHORIZATION, 0);
-        SAS::report_event(event);
-        return PJ_TRUE;
-      }
-      else
-      {
-        // No Proxy-Authorization header - this indicates the P-CSCF trusts this
-        // message so we don't need to perform further authentication.
-        SAS::Event event(trail(), SASEvent::AUTHENTICATION_NOT_NEEDED_PROXY_AUTHORIZATION, 0);
-        SAS::report_event(event);
-        return PJ_FALSE;
-      }
-    }
-    else
-    {
-      // Unrecognized authentication mode - should never happen. LCOV_EXCL_START
-      assert(!"Unrecognized authentication mode");
-      return PJ_FALSE;
-      // LCOV_EXCL_STOP
-    }
-  }
-}
 
 void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 {
@@ -831,14 +850,6 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   bool is_register = (req->line.req.method.id == PJSIP_REGISTER_METHOD);
   SNMP::SuccessFailCountTable* auth_stats_table = NULL;
   std::string resync;
-
-  if (!needs_authentication(req))
-  {
-    TRC_DEBUG("Request does not need authentication");
-    forward_request(req); return;
-  }
-
-  TRC_DEBUG("Request needs authentication");
 
   const int unauth_sc = is_register ? PJSIP_SC_UNAUTHORIZED : PJSIP_SC_PROXY_AUTHENTICATION_REQUIRED;
   int sc = unauth_sc;

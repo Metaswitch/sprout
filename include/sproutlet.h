@@ -58,6 +58,7 @@ extern "C" {
 class SproutletTsxHelper;
 class Sproutlet;
 class SproutletTsx;
+class SproutletProxy;
 
 
 /// Typedefs for Sproutlet-specific types
@@ -296,10 +297,16 @@ class SproutletTsx
 {
 public:
   /// Constructor.
-  SproutletTsx(SproutletTsxHelper* helper) : _helper(helper) {}
+  SproutletTsx() : _helper(NULL) {}
 
   /// Virtual destructor.
   virtual ~SproutletTsx() {}
+
+  /// Initialize the SproutletTsx by passsing it a helper.
+  ///
+  /// @param  helper       - The sproutlet helper.
+  /// @param  req          - The received request message.
+  virtual void init_tsx(SproutletTsxHelper* helper, pjsip_msg* req) { _helper = helper; }
 
   /// Called when an initial request (dialog-initiating or out-of-dialog) is
   /// received for the transaction.
@@ -634,14 +641,20 @@ public:
   /// does not want to process the request, or create a suitable object
   /// derived from the SproutletTsx class to process the request.
   ///
-  /// @param  helper        - The service helper to use to perform
-  ///                         the underlying service-related processing.
+  /// @param  proxy         - The Sproutlet proxy.
   /// @param  alias         - The alias of this Sproutlet that matched the
   ///                         incoming request.
   /// @param  req           - The received request message.
-  virtual SproutletTsx* get_tsx(SproutletTsxHelper* helper,
-                                const std::string& service_name,
-                                pjsip_msg* req) = 0;
+  /// @param  next_hop      - The Sproutlet can use this field to specify a
+  ///                         next hop URI when it returns a NULL Tsx.
+  /// @param  pool          - The pool for creating the next_hop uri.
+  /// @param  trail         - The SAS trail id for the message.
+  virtual SproutletTsx* get_tsx(SproutletProxy* proxy,
+                                const std::string& alias,
+                                pjsip_msg* req,
+                                pjsip_sip_uri*& next_hop,
+                                pj_pool_t* pool,
+                                SAS::TrailId trail) = 0;
 
   /// Returns the name of this service.
   const std::string service_name() const { return _service_name; }

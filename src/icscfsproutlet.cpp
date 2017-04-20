@@ -118,18 +118,20 @@ bool ICSCFSproutlet::init()
 
 /// Creates a ICSCFSproutletTsx instance for performing I-CSCF service processing
 /// on a request.
-SproutletTsx* ICSCFSproutlet::get_tsx(SproutletTsxHelper* helper,
+SproutletTsx* ICSCFSproutlet::get_tsx(SproutletProxy* proxy,
                                       const std::string& alias,
-                                      pjsip_msg* req)
+                                      pjsip_msg* req,
+                                      pjsip_sip_uri*& next_hop,
+                                      pj_pool_t* pool,
+                                      SAS::TrailId trail)
 {
   if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
   {
-    return (SproutletTsx*)new ICSCFSproutletRegTsx(helper, this);
+    return (SproutletTsx*)new ICSCFSproutletRegTsx(this);
   }
   else
   {
-    return (SproutletTsx*)new ICSCFSproutletTsx(helper,
-                                                this,
+    return (SproutletTsx*)new ICSCFSproutletTsx(this,
                                                 req->line.req.method.id);
   }
 }
@@ -161,9 +163,8 @@ void ICSCFSproutlet::translate_request_uri(pjsip_msg* req,
 /*****************************************************************************/
 
 /// Individual Tsx constructor for REGISTER requests.
-ICSCFSproutletRegTsx::ICSCFSproutletRegTsx(SproutletTsxHelper* helper,
-                                           ICSCFSproutlet* icscf) :
-  SproutletTsx(helper),
+ICSCFSproutletRegTsx::ICSCFSproutletRegTsx(ICSCFSproutlet* icscf) :
+  SproutletTsx(),
   _icscf(icscf),
   _acr(NULL),
   _router(NULL)
@@ -430,10 +431,9 @@ void ICSCFSproutletRegTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
 /*****************************************************************************/
 
 /// Individual Tsx constructor for non-REGISTER requests.
-ICSCFSproutletTsx::ICSCFSproutletTsx(SproutletTsxHelper* helper,
-                                     ICSCFSproutlet* icscf,
+ICSCFSproutletTsx::ICSCFSproutletTsx(ICSCFSproutlet* icscf,
                                      pjsip_method_e req_type) :
-  SproutletTsx(helper),
+  SproutletTsx(),
   _icscf(icscf),
   _acr(NULL),
   _router(NULL),

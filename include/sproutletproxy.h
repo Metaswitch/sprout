@@ -78,6 +78,18 @@ public:
   /// Static callback for timers
   static void on_timer_pop(pj_timer_heap_t* th, pj_timer_entry* tentry);
 
+  /// Create a URI that routes to the named sproutlet internally within the
+  /// sproutlet proxy.
+  ///
+  /// @param pool         - Pool to allocate the URI from.
+  /// @param name         - The name of the service to invoke.
+  /// @param existing_uri - An existing URI to base the new URI on. Any URI
+  ///                       parameters are copied over to the new URI but the
+  ///                       user part is stripped off.
+  pjsip_sip_uri* create_internal_sproutlet_uri(pj_pool_t* pool,
+                                               const std::string& name,
+                                               pjsip_sip_uri* existing_uri) const;
+
 protected:
   /// Pre-declaration
   class UASTsx;
@@ -93,7 +105,6 @@ protected:
   Sproutlet* target_sproutlet(pjsip_msg* req,
                               int port,
                               std::string& alias,
-                              bool& force_external_routing,
                               SAS::TrailId trail);
 
   /// Return the sproutlet that matches the URI supplied.
@@ -104,18 +115,6 @@ protected:
   /// Create a URI that routes to a given Sproutlet.
   pjsip_sip_uri* create_sproutlet_uri(pj_pool_t* pool,
                                       Sproutlet* sproutlet) const;
-
-  /// Create a URI that routes to the named sproutlet internally within the
-  /// sproutlet proxy.
-  ///
-  /// @param pool         - Pool to allocate the URI from.
-  /// @param name         - The name of the service to invoke.
-  /// @param existing_uri - An existing URI to base the new URI on. Any URI
-  ///                       parameters are copied over to the new URI but the
-  ///                       user part is stripped off.
-  pjsip_sip_uri* create_internal_sproutlet_uri(pj_pool_t* pool,
-                                               const std::string& name,
-                                               pjsip_sip_uri* existing_uri) const;
 
   Sproutlet* service_from_host(pjsip_sip_uri* uri);
   Sproutlet* service_from_user(pjsip_sip_uri* uri);
@@ -200,14 +199,14 @@ protected:
                                 int port,
                                 std::string& alias,
                                 SAS::TrailId trail);
-    Sproutlet* target_sproutlet(pjsip_msg* msg,
-                                int port,
-                                std::string& alias,
-                                bool& force_external_routing,
-                                SAS::TrailId trail);
 
     /// Checks to see if it is safe to destroy the UASTsx.
     void check_destroy();
+
+    /// Finds a sproutlet tsx willing to handle a request
+    SproutletTsx* get_sproutlet_tsx(Sproutlet*& sproutlet,
+                                    pjsip_tx_data* req,
+                                    std::string& alias);
 
     /// The root Sproutlet for this transaction.
     SproutletWrapper* _root;
@@ -283,6 +282,7 @@ public:
   SproutletWrapper(SproutletProxy* proxy,
                    SproutletProxy::UASTsx* proxy_tsx,
                    Sproutlet* sproutlet,
+                   SproutletTsx* sproutlet_tsx,
                    const std::string& sproutlet_alias,
                    pjsip_tx_data* req,
                    pjsip_transport* original_transport,

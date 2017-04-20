@@ -71,6 +71,7 @@ extern "C" {
 #include "log.h"
 #include "notify_utils.h"
 #include "uri_classifier.h"
+#include "sproutletproxy.h"
 
 // RegistrarSproutlet constructor.
 RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
@@ -85,7 +86,7 @@ RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
                                        bool force_original_register_inclusion,
                                        SNMP::RegistrationStatsTables* reg_stats_tbls,
                                        SNMP::RegistrationStatsTables* third_party_reg_stats_tbls):
-  Sproutlet(name, port, uri, ""),
+  Sproutlet(name, port, uri),
   _sdm(reg_sdm),
   _remote_sdms(reg_remote_sdms),
   _hss(hss_connection),
@@ -146,17 +147,37 @@ bool RegistrarSproutlet::init()
   return init_success;
 }
 
-SproutletTsx* RegistrarSproutlet::get_tsx(SproutletTsxHelper* helper,
+SproutletTsx* RegistrarSproutlet::get_tsx(SproutletProxy* proxy,
                                           const std::string& alias,
-                                          pjsip_msg* req)
+                                          pjsip_msg* req,
+                                          pjsip_sip_uri*& next_hop,
+                                          pj_pool_t* pool,
+                                          SAS::TrailId trail)
 {
-  return (SproutletTsx*)new RegistrarSproutletTsx(helper, _next_hop_service, this);
+  URIClass uri_class = URIClassifier::classify_uri(req->line.req.uri);
+  if ((req->line.req.method.id == PJSIP_REGISTER_METHOD) &&
+      ((uri_class == NODE_LOCAL_SIP_URI) ||
+       (uri_class == HOME_DOMAIN_SIP_URI)) &&
+      (PJUtils::check_route_headers(req)))
+  {
+    return (SproutletTsx*)new RegistrarSproutletTsx(_next_hop_service, this);
+  }
+
+  // We're not interested in the message so create a next hop URI.
+  pjsip_route_hdr* route = (pjsip_route_hdr*)
+                              pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
+
+  pjsip_sip_uri* base_uri = (pjsip_sip_uri*)(route ? route->name_addr.uri : nullptr);
+  next_hop = proxy->create_internal_sproutlet_uri(pool,
+                                                  _next_hop_service,
+                                                  base_uri);
+
+  return NULL;
 }
 
-RegistrarSproutletTsx::RegistrarSproutletTsx(SproutletTsxHelper* helper,
-                                             const std::string& next_hop_service,
+RegistrarSproutletTsx::RegistrarSproutletTsx(const std::string& next_hop_service,
                                              RegistrarSproutlet* sproutlet):
-  ForwardingSproutletTsx(helper, next_hop_service),
+  ForwardingSproutletTsx(next_hop_service),
   _sproutlet(sproutlet)
 {
   TRC_DEBUG("Registrar Transaction (%p) created", this);
@@ -171,19 +192,7 @@ void RegistrarSproutletTsx::on_rx_initial_request(pjsip_msg *req)
 {
   TRC_INFO("Registrar sproutlet received initial request");
 
-  URIClass uri_class = URIClassifier::classify_uri(req->line.req.uri);
-  if ((req->line.req.method.id == PJSIP_REGISTER_METHOD) &&
-      ((uri_class == NODE_LOCAL_SIP_URI) ||
-       (uri_class == HOME_DOMAIN_SIP_URI)) &&
-      (PJUtils::check_route_headers(req)))
-  {
-    // REGISTER request targeted at the home domain or specifically at this node.
-    process_register_request(req);
-  }
-  else
-  {
-    forward_request(req);
-  }
+  process_register_request(req);
 }
 
 void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)

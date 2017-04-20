@@ -88,13 +88,19 @@ public:
 
   bool init();
 
-  SproutletTsx* get_tsx(SproutletTsxHelper* helper,
+  SproutletTsx* get_tsx(SproutletProxy* proxy,
                         const std::string& alias,
-                        pjsip_msg* req) override;
+                        pjsip_msg* req,
+                        pjsip_sip_uri*& next_hop,
+                        pj_pool_t* pool,
+                        SAS::TrailId trail) override;
 
   const std::list<std::string> aliases() const override;
 
 private:
+  bool needs_authentication(pjsip_msg* req,
+                            SAS::TrailId trail);
+
   friend class AuthenticationSproutletTsx;
 
   // Realm to use on AKA challenges.
@@ -145,8 +151,7 @@ private:
 class AuthenticationSproutletTsx : public ForwardingSproutletTsx
 {
 public:
-  AuthenticationSproutletTsx(SproutletTsxHelper* helper,
-                             const std::string& next_hop_service,
+  AuthenticationSproutletTsx(const std::string& next_hop_service,
                              AuthenticationSproutlet* sproutlet);
   ~AuthenticationSproutletTsx();
 
@@ -155,7 +160,6 @@ public:
 protected:
   friend class AuthenticationSproutlet;
 
-  bool needs_authentication(pjsip_msg* req);
   void create_challenge(pjsip_digest_credential* credentials,
                         pj_bool_t stale,
                         std::string resync,

@@ -68,16 +68,16 @@ public:
   FakeSproutlet(const std::string& service_name, int port, const std::string& uri, const std::string& service_host, std::string alias = "") :
     Sproutlet(service_name, port, uri, service_host)
   {
-    // Only one sproutlet loaded can own this alias.
+    // Only one sproutlet loaded can own each alias.
     if (alias != "")
     {
       _aliases.push_back(alias);
     }
   }
 
-  SproutletTsx* get_tsx(SproutletTsxHelper* helper, const std::string& alias, pjsip_msg* req)
+  SproutletTsx* get_tsx(SproutletProxy* proxy, const std::string& alias, pjsip_msg* req, pjsip_sip_uri*& next_hop, pj_pool_t* pool, SAS::TrailId trail)
   {
-    return (SproutletTsx*)new T(helper);
+    return (SproutletTsx*)new T();
   }
 
   const std::list<std::string> aliases() const
@@ -94,8 +94,8 @@ template <int S>
 class FakeSproutletTsxReject : public SproutletTsx
 {
 public:
-  FakeSproutletTsxReject(SproutletTsxHelper* helper) :
-    SproutletTsx(helper)
+  FakeSproutletTsxReject() :
+    SproutletTsx()
   {
   }
 
@@ -111,8 +111,8 @@ template <bool RR>
 class FakeSproutletTsxForwarder : public SproutletTsx
 {
 public:
-  FakeSproutletTsxForwarder(SproutletTsxHelper* helper) :
-    SproutletTsx(helper)
+  FakeSproutletTsxForwarder() :
+    SproutletTsx()
   {
   }
 
@@ -163,8 +163,8 @@ public:
 class FakeSproutletTsxDownstreamRequest : public SproutletTsx
 {
 public:
-  FakeSproutletTsxDownstreamRequest(SproutletTsxHelper* helper) :
-    SproutletTsx(helper)
+  FakeSproutletTsxDownstreamRequest() :
+    SproutletTsx()
   {
   }
 
@@ -189,8 +189,8 @@ template <int N>
 class FakeSproutletTsxForker : public SproutletTsx
 {
 public:
-  FakeSproutletTsxForker(SproutletTsxHelper* helper) :
-    SproutletTsx(helper)
+  FakeSproutletTsxForker() :
+    SproutletTsx()
   {
   }
 
@@ -229,8 +229,8 @@ public:
 template <int T>
 class FakeSproutletTsxDelayRedirect : public SproutletTsx
 {
-  FakeSproutletTsxDelayRedirect(SproutletTsxHelper* helper) :
-    SproutletTsx(helper),
+  FakeSproutletTsxDelayRedirect() :
+    SproutletTsx(),
     _tid(0),
     _fork_id(-1)
   {
@@ -282,8 +282,8 @@ class FakeSproutletTsxDelayRedirect : public SproutletTsx
 
 class FakeSproutletTsxBad : public SproutletTsx
 {
-  FakeSproutletTsxBad(SproutletTsxHelper* helper) :
-    SproutletTsx(helper)
+  FakeSproutletTsxBad() :
+    SproutletTsx()
   {
   }
 
@@ -339,8 +339,8 @@ class FakeSproutletTsxBad : public SproutletTsx
 class FakeSproutletTsxB2BUA : public SproutletTsx
 {
 public:
-  FakeSproutletTsxB2BUA(SproutletTsxHelper* helper) :
-    SproutletTsx(helper)
+  FakeSproutletTsxB2BUA() :
+    SproutletTsx()
   {
   }
 
@@ -441,8 +441,8 @@ private:
 template <int T>
 class FakeSproutletTsxDelayAfterRsp : public SproutletTsx
 {
-  FakeSproutletTsxDelayAfterRsp(SproutletTsxHelper* helper) :
-    SproutletTsx(helper),
+  FakeSproutletTsxDelayAfterRsp() :
+    SproutletTsx(),
     _tsx_from_tag(),
     _tid(0)
   {
@@ -530,8 +530,8 @@ template<int T> std::mutex FakeSproutletTsxDelayAfterRsp<T>::_live_tsxs_mutex;
 template <int T>
 class FakeSproutletTsxDelayAfterFwd : public SproutletTsx
 {
-  FakeSproutletTsxDelayAfterFwd(SproutletTsxHelper* helper) :
-    SproutletTsx(helper),
+  FakeSproutletTsxDelayAfterFwd() :
+    SproutletTsx(),
     _tid(0),
     _response(0)
   {
@@ -586,8 +586,8 @@ class FakeSproutletTsxDelayAfterFwd : public SproutletTsx
 class FakeSproutletTsxDummySCSCF : public SproutletTsx
 {
 public:
-  FakeSproutletTsxDummySCSCF(SproutletTsxHelper* helper) :
-    SproutletTsx(helper)
+  FakeSproutletTsxDummySCSCF() :
+    SproutletTsx()
   {
   }
 
@@ -602,8 +602,8 @@ public:
 class FakeSproutletReusesTransport : public SproutletTsx
 {
 public:
-  FakeSproutletReusesTransport(SproutletTsxHelper* helper) :
-    SproutletTsx(helper)
+  FakeSproutletReusesTransport() :
+    SproutletTsx()
   {
   }
 

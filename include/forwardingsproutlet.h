@@ -47,8 +47,7 @@
 class ForwardingSproutletTsx : public SproutletTsx
 {
 public:
-  ForwardingSproutletTsx(SproutletTsxHelper* helper,
-                         const std::string& upstream_service_name);
+  ForwardingSproutletTsx(const std::string& upstream_service_name);
   virtual ~ForwardingSproutletTsx() {}
 
   void on_rx_initial_request(pjsip_msg* req) { forward_request(req); }

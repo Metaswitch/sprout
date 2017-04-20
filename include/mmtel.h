@@ -70,8 +70,11 @@ public:
     AppServer(service_name),
     _xdmc(xdm_client) {};
 
-  AppServerTsx* get_app_tsx(AppServerTsxHelper* helper,
-                            pjsip_msg* req);
+  AppServerTsx* get_app_tsx(SproutletProxy* proxy,
+                            pjsip_msg* req,
+                            pjsip_sip_uri*& next_hop,
+                            pj_pool_t* pool,
+                            SAS::TrailId trail);
 
 private:
   XDMConnection* _xdmc;
@@ -87,8 +90,11 @@ public:
   CallDiversionAS(const std::string& service_name);
   virtual ~CallDiversionAS();
 
-  AppServerTsx* get_app_tsx(AppServerTsxHelper* helper,
-                            pjsip_msg* req);
+  AppServerTsx* get_app_tsx(SproutletProxy* proxy,
+                            pjsip_msg* req,
+                            pjsip_sip_uri*& next_hop,
+                            pj_pool_t* pool,
+                            SAS::TrailId trail);
   virtual void cdiv_callback(std::string target,
                              unsigned int conditions);
 
@@ -104,9 +110,9 @@ private:
 class MmtelTsx : public AppServerTsx
 {
 public:
-  MmtelTsx(AppServerTsxHelper* helper,
-           pjsip_msg* req,
+  MmtelTsx(pjsip_msg* req,
            simservs* user_services,
+           SAS::TrailId trail,
            CDivCallback* cdiv_callback = NULL);
   ~MmtelTsx();
 

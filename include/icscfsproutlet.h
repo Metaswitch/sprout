@@ -85,9 +85,12 @@ public:
 
   bool init();
 
-  SproutletTsx* get_tsx(SproutletTsxHelper* helper,
+  SproutletTsx* get_tsx(SproutletProxy* proxy,
                         const std::string& alias,
-                        pjsip_msg* req);
+                        pjsip_msg* req,
+                        pjsip_sip_uri*& next_hop,
+                        pj_pool_t* pool,
+                        SAS::TrailId trail);
 
 private:
 
@@ -147,8 +150,7 @@ private:
 class ICSCFSproutletTsx : public SproutletTsx
 {
 public:
-  ICSCFSproutletTsx(SproutletTsxHelper* helper,
-                    ICSCFSproutlet* icscf,
+  ICSCFSproutletTsx(ICSCFSproutlet* icscf,
                     pjsip_method_e req_type);
   ~ICSCFSproutletTsx();
 
@@ -204,7 +206,7 @@ private:
 class ICSCFSproutletRegTsx : public SproutletTsx
 {
 public:
-  ICSCFSproutletRegTsx(SproutletTsxHelper* helper, ICSCFSproutlet* icscf);
+  ICSCFSproutletRegTsx(ICSCFSproutlet* icscf);
   ~ICSCFSproutletRegTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req) override;

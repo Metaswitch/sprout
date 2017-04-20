@@ -79,9 +79,12 @@ public:
                 bool override_npdi);
   ~BGCFSproutlet();
 
-  SproutletTsx* get_tsx(SproutletTsxHelper* helper,
+  SproutletTsx* get_tsx(SproutletProxy* proxy,
                         const std::string& alias,
-                        pjsip_msg* req);
+                        pjsip_msg* req,
+                        pjsip_sip_uri*& next_hop,
+                        pj_pool_t* pool,
+                        SAS::TrailId trail);
 
   inline bool should_override_npdi() const
   {
@@ -129,8 +132,7 @@ private:
 class BGCFSproutletTsx : public SproutletTsx
 {
 public:
-  BGCFSproutletTsx(SproutletTsxHelper* helper,
-                   BGCFSproutlet* bgcf);
+  BGCFSproutletTsx(BGCFSproutlet* bgcf);
   ~BGCFSproutletTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req) override;

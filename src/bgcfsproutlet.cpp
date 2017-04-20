@@ -73,11 +73,14 @@ BGCFSproutlet::~BGCFSproutlet()
 
 /// Creates a BGCFSproutletTsx instance for performing BGCF service processing
 /// on a request.
-SproutletTsx* BGCFSproutlet::get_tsx(SproutletTsxHelper* helper,
+SproutletTsx* BGCFSproutlet::get_tsx(SproutletProxy* proxy,
                                      const std::string& alias,
-                                     pjsip_msg* req)
+                                     pjsip_msg* req,
+                                     pjsip_sip_uri*& next_hop,
+                                     pj_pool_t* pool,
+                                     SAS::TrailId trail)
 {
-  return (SproutletTsx*)new BGCFSproutletTsx(helper, this);
+  return (SproutletTsx*)new BGCFSproutletTsx(this);
 }
 
 
@@ -114,9 +117,8 @@ ACR* BGCFSproutlet::get_acr(SAS::TrailId trail)
 }
 
 /// Individual Tsx constructor.
-BGCFSproutletTsx::BGCFSproutletTsx(SproutletTsxHelper* helper,
-                                   BGCFSproutlet* bgcf) :
-  SproutletTsx(helper),
+BGCFSproutletTsx::BGCFSproutletTsx(BGCFSproutlet* bgcf) :
+  SproutletTsx(),
   _bgcf(bgcf),
   _acr(NULL)
 {

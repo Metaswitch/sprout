@@ -37,9 +37,8 @@
 #include "forwardingsproutlet.h"
 #include "pjutils.h"
 
-ForwardingSproutletTsx::ForwardingSproutletTsx(SproutletTsxHelper* helper,
-                                               const std::string& upstream_service_name) :
-  SproutletTsx(helper),
+ForwardingSproutletTsx::ForwardingSproutletTsx(const std::string& upstream_service_name) :
+  SproutletTsx(),
   _upstream_service_name(upstream_service_name)
 {}
 

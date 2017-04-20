@@ -57,15 +57,19 @@ static const char* REVERSE_MANGALGORITHM = "reverse";
 static const char* ROT_13_MANGALGORITHM = "rot13";
 
 /// Creates a MangelwurzelTsx instance.
-SproutletTsx* Mangelwurzel::get_tsx(SproutletTsxHelper* helper,
+SproutletTsx* Mangelwurzel::get_tsx(SproutletProxy* proxy,
                                     const std::string& alias,
-                                    pjsip_msg* req)
+                                    pjsip_msg* req,
+                                    pjsip_sip_uri*& next_hop,
+                                    pj_pool_t* pool,
+                                    SAS::TrailId trail)
 {
   MangelwurzelTsx::Config config;
 
   // Find the mangewurzel Route header, parse the parameters and use them to
   // build a Config object. Then construct the MangelwurzelTsx.
-  pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)helper->route_hdr();
+  pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)
+                                 pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
   pjsip_sip_uri* mangelwurzel_uri;
 
   if (route_hdr != NULL)
@@ -124,13 +128,13 @@ SproutletTsx* Mangelwurzel::get_tsx(SproutletTsxHelper* helper,
     {
       TRC_ERROR("Invalid mangalgorithm specified: %s",
                 mangalgorithm.c_str());
-      SAS::Event event(helper->trail(), SASEvent::INVALID_MANGALGORITHM, 0);
+      SAS::Event event(trail, SASEvent::INVALID_MANGALGORITHM, 0);
       event.add_var_param(mangalgorithm);
       SAS::report_event(event);
     }
   }
 
-  return new MangelwurzelTsx(helper, config);
+  return new MangelwurzelTsx(config, req);
 }
 
 /// Mangelwurzel receives an initial request. It will Record-Route itself,

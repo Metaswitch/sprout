@@ -235,9 +235,12 @@ public:
   ///                         the underlying service-related processing.
   /// @param  alias         - Ignored.
   /// @param  req           - The received request message.
-  virtual SproutletTsx* get_tsx(SproutletTsxHelper* helper,
+  virtual SproutletTsx* get_tsx(SproutletProxy* proxy,
                                 const std::string& alias,
-                                pjsip_msg* req);
+                                pjsip_msg* req,
+                                pjsip_sip_uri*& next_hop,
+                                pj_pool_t* pool,
+                                SAS::TrailId trail);
 
   /// Constructor.
   SproutletAppServerShim(AppServer* app,
@@ -255,12 +258,13 @@ class SproutletAppServerShimTsx : public SproutletTsx
 {
 public:
   /// Constructor
-  SproutletAppServerShimTsx(SproutletTsxHelper* sproutlet_helper,
-                            SproutletAppServerTsxHelper*& app_server_helper,
-                            AppServerTsx* app_tsx);
+  SproutletAppServerShimTsx(AppServerTsx* app_tsx);
 
   /// Destructor
   virtual ~SproutletAppServerShimTsx();
+
+  void init_tsx(SproutletTsxHelper* sproutlet_helper,
+                pjsip_msg* req);
 
   /// Called for an initial request (dialog-initiating or out-of-dialog) with
   /// the original received request for the transaction.
