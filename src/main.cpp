@@ -1251,6 +1251,8 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case OPT_SPROUT_CHRONOS_CALLBACK_URI:
       options->sprout_chronos_callback_uri = std::string(pj_optarg);
+      TRC_INFO("Sprout Chronos callback uri set to %s", pj_optarg);
+      break;
 
     case OPT_LISTEN_PORT:
       {
