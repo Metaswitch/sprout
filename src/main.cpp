@@ -1131,22 +1131,29 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case OPT_NON_REGISTER_AUTHENTICATION:
       {
         std::string this_arg = pj_optarg;
+        TRC_INFO("Non-REGISTER authentication set to %s", this_arg.c_str());
 
-        if (this_arg == "never")
+        std::vector<std::string> tokens;
+        Utils::split_string(this_arg, ',', tokens);
+
+        for (const std::string& tok: tokens)
         {
-          TRC_INFO("Non-REGISTER authentication set to 'never'");
-          options->non_register_auth_mode = NonRegisterAuthentication::NEVER;
-        }
-        else if (this_arg == "if_proxy_authorization_present")
-        {
-          TRC_INFO("Non-REGISTER authentication set to 'if_proxy_authorization_present'");
-          options->non_register_auth_mode =
-            NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT;
-        }
-        else
-        {
-          TRC_ERROR("Invalid value for non-REGISTER authentication: %s", pj_optarg);
-          return -1;
+          if (tok == "if_proxy_authorization_present")
+          {
+            options->non_register_auth_mode |=
+              NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT;
+          }
+          else if (tok == "inital_req_from_reg_digest_endpoint")
+          {
+            options->non_register_auth_mode |=
+              NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT;
+          }
+          else
+          {
+            TRC_ERROR("Invalid token in non-REGISTER authentication field: %s",
+                      tok.c_str());
+            return -1;
+          }
         }
       }
       break;

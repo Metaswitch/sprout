@@ -79,7 +79,7 @@ public:
                           HSSConnection* hss_connection,
                           ChronosConnection* chronos_connection,
                           ACRFactory* rfacr_factory,
-                          NonRegisterAuthentication non_register_auth_mode_param,
+                          uint32_t non_register_auth_mode_param,
                           AnalyticsLogger* analytics_logger,
                           SNMP::AuthenticationStatsTables* auth_stats_tbls,
                           bool nonce_count_supported_arg,
@@ -136,8 +136,9 @@ private:
   pjsip_auth_srv _auth_srv;
   pjsip_auth_srv _auth_srv_proxy;
 
-  // Controls when to challenge non-REGISTER messages.
-  NonRegisterAuthentication _non_register_auth_mode;
+  // Controls when to challenge non-REGISTER messages.  This is a bitmask with
+  // values taken from NonRegisterAuthentication.
+  uint32_t _non_register_auth_mode;
 
   // The next service to route requests onto if the sproutlet does not handle them
   // itself.
