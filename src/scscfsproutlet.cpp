@@ -55,7 +55,8 @@
 const char* NO_SERVED_USER = "";
 
 /// SCSCFSproutlet constructor.
-SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
+SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
+                               const std::string& scscf_name,
                                const std::string& scscf_cluster_uri,
                                const std::string& scscf_node_uri,
                                const std::string& icscf_uri,
@@ -74,7 +75,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
                                int session_terminated_timeout_ms,
                                AsCommunicationTracker* sess_term_as_tracker,
                                AsCommunicationTracker* sess_cont_as_tracker) :
-  Sproutlet(scscf_name, port, uri, "", incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl),
+  Sproutlet(name, port, uri, "", incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl),
+  _scscf_name(scscf_name),
   _scscf_cluster_uri(NULL),
   _scscf_node_uri(NULL),
   _icscf_uri(NULL),
@@ -183,6 +185,13 @@ SproutletTsx* SCSCFSproutlet::get_tsx(SproutletTsxHelper* helper,
 {
   pjsip_method_e req_type = req->line.req.method.id;
   return (SproutletTsx*)new SCSCFSproutletTsx(helper, this, req_type);
+}
+
+
+/// Returns the service name of the entire S-CSCF.
+const std::string SCSCFSproutlet::scscf_service_name() const
+{
+  return _scscf_name;
 }
 
 
@@ -1441,7 +1450,7 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     pjsip_param* services_p = PJ_POOL_ALLOC_T(get_pool(req), pjsip_param);
     pj_strdup(get_pool(req), &services_p->name, &STR_SERVICE);
     pj_list_insert_before(&odi_uri->other_param, services_p);
-    std::string services = _scscf->service_name();
+    std::string services = _scscf->scscf_service_name();
     pj_strdup2(get_pool(req), &services_p->value, services.c_str());
 
     if (_session_case->is_originating())
