@@ -186,7 +186,8 @@ protected:
                     const string& domain,
                     const string& contact,
                     int lifetime = 3600,
-                    string instance_id="");
+                    string instance_id="",
+                    bool emergency=false);
 
   /// Build an incoming SIP packet.
   pjsip_rx_data* build_rxdata(const string& msg, TransportFlow* tp = _tp_default, pj_pool_t* rdata_pool = NULL);

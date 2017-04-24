@@ -279,6 +279,7 @@ long SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                    const std::string& req_type,
                                    bool cache_allowed,
                                    bool& registered,
+                                   bool& barred,
                                    std::vector<std::string>& uris,
                                    std::vector<std::string>& aliases,
                                    Ifcs& ifcs,
@@ -288,12 +289,14 @@ long SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                    SAS::TrailId trail)
 {
   std::string regstate;
+  std::map<std::string, std::string> barred_map;
   std::map<std::string, Ifcs> ifc_map;
 
   long http_code = _hss->update_registration_state(public_id,
                                                    private_id,
                                                    req_type,
                                                    regstate,
+                                                   barred_map,
                                                    ifc_map,
                                                    uris,
                                                    aliases,
@@ -308,6 +311,7 @@ long SCSCFSproutlet::read_hss_data(const std::string& public_id,
   }
 
   registered = (regstate == RegDataXMLUtils::STATE_REGISTERED);
+  barred = (barred_map[public_id] == RegDataXMLUtils::STATE_BARRED);
 
   return (http_code);
 }
@@ -392,6 +396,7 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
   _as_chain_link(),
   _hss_data_cached(false),
   _registered(false),
+  _barred(false),
   _uris(),
   _ifcs(),
   _in_dialog_acr(NULL),
@@ -533,6 +538,50 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   }
   else
   {
+    // Check if the served user is barred. If it is barred, we reject the request
+    // unless it is a terminating request to a binding that is using an
+    // emergency registration in which case we let it through.
+    if (_barred)
+    {
+      bool emergency = false;
+
+      if (_session_case->is_terminating())
+      {
+        // The bindings are keyed off the primary IMPU which is stored first in
+        // the list of associated URIs.
+        std::string aor = _uris.front();
+        SubscriberDataManager::AoRPair* aor_pair = NULL;
+        _scscf->get_bindings(aor, &aor_pair, trail());
+        const SubscriberDataManager::AoR::Bindings bindings = aor_pair->get_current()->bindings();
+
+        // Loop over the bindings. If any binding has an emergency registration,
+        // let the request through. Later on we will make sure we only route the
+        // request to the bindings that have an emergency registration.
+        for (SubscriberDataManager::AoR::Bindings::const_iterator binding = bindings.begin();
+             binding != bindings.end();
+             ++binding)
+        {
+          if (binding->second->_emergency_registration)
+          {
+            emergency = true;
+            break;
+          }
+        }
+
+        delete aor_pair; aor_pair = NULL;
+      }
+
+      if (!emergency)
+      {
+        TRC_INFO("Served user is barred so reject the request");
+        status_code = _session_case->is_originating() ? PJSIP_SC_FORBIDDEN : PJSIP_SC_NOT_FOUND;
+        pjsip_msg* rsp = create_response(req, status_code);
+        send_response(rsp);
+        free_msg(req);
+        return;
+      }
+    }
+
     // Add a P-Charging-Function-Addresses header if one is not already present
     // for some reason. We only do this if we have the charging addresses cached
     // (which we should do).
@@ -1692,6 +1741,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
                                  pool,
                                  MAX_FORKING,
                                  targets,
+                                 _barred,
                                  trail());
       delete aor_pair; aor_pair = NULL;
     }
@@ -1784,6 +1834,7 @@ long SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
                                       req_type,
                                       cache_allowed,
                                       _registered,
+                                      _barred,
                                       _uris,
                                       _aliases,
                                       _ifcs,
