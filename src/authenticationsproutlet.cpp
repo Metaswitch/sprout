@@ -677,11 +677,9 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
 {
   // Get the public and private identities from the request.
   std::string impi;
-  std::string impu;
+  std::string impu_for_hss;
   bool av_source_unavailable = false;
   ImpiStore::Impi* impi_obj = nullptr;
-
-  PJUtils::get_impi_and_impu(req, impi, impu);
 
   // Set up the authorization type, following Annex P.4 of TS 33.203.  Currently
   // only support AKA and SIP Digest, so only implement the subset of steps
@@ -718,9 +716,11 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     // This is either a REGISTER, or a request that Sprout should authenticate
     // by treating it like a REGISTER. Get the Authentication Vector from the
     // HSS.
+    PJUtils::get_impi_and_impu(req, impi, impu_for_hss);
+
     rapidjson::Document* doc = NULL;
     HTTPCode http_code = _authentication->_hss->get_auth_vector(impi,
-                                                                impu,
+                                                                impu_for_hss,
                                                                 auth_type,
                                                                 resync,
                                                                 doc,
@@ -739,10 +739,9 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     // This is a non-REGISTER, so get an AV by finding the challenge that the
     // endpoint authenticated with when it registered. The information we need
     // to look up the challenge will be in the top route header.
-    std::string username;
     std::string nonce;
 
-    if (AuthenticationSproutlet::get_top_route_param(route_hdr(), &STR_USERNAME, username) &&
+    if (AuthenticationSproutlet::get_top_route_param(route_hdr(), &STR_USERNAME, impi) &&
         AuthenticationSproutlet::get_top_route_param(route_hdr(), &STR_NONCE, nonce))
     {
       // Store of the IMPI object we got back from the store so that we don't
@@ -973,17 +972,25 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
 
     if (status == Store::OK)
     {
-      // We've written the challenge into the store, so need to set a Chronos
-      // timer so that an AUTHENTICATION_TIMEOUT SAR is sent to the
-      // HSS when it expires.
-      std::string timer_id;
-      std::string chronos_body = "{\"impi\": \"" + impi + "\", \"impu\": \"" + impu +"\", \"nonce\": \"" + nonce +"\"}";
-      TRC_DEBUG("Sending %s to Chronos to set AV timer", chronos_body.c_str());
-      _authentication->_chronos->send_post(timer_id,
-                                      30,
-                                      "/authentication-timeout",
-                                      chronos_body,
-                                      trail());
+      if (!impu_for_hss.empty())
+      {
+        TRC_DEBUG("Set chronos timer for AUTHENTICATION_TIMEOUT SAR");
+
+        // We've written the challenge into the store, so need to set a Chronos
+        // timer so that an AUTHENTICATION_TIMEOUT SAR is sent to the
+        // HSS when it expires.
+        std::string timer_id;
+        std::string chronos_body = "{\"impi\": \"" + impi +
+                                "\", \"impu\": \"" + impu_for_hss +
+                                "\", \"nonce\": \"" + nonce +
+                                "\"}";
+        TRC_DEBUG("Sending %s to Chronos to set AV timer", chronos_body.c_str());
+        _authentication->_chronos->send_post(timer_id,
+                                             30,
+                                             "/authentication-timeout",
+                                             chronos_body,
+                                             trail());
+      }
     }
     else
     {
