@@ -556,6 +556,8 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
   std::string impi;
   std::string impu;
   std::string nonce;
+  bool av_source_unavailable = false;
+
   PJUtils::get_impi_and_impu(req, impi, impu);
 
   // Set up the authorization type, following Annex P.4 of TS 33.203.  Currently
@@ -584,16 +586,32 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     }
   }
 
-  // Get the Authentication Vector from the HSS.
+  // Get an authentication vector to challenge this request.
   rapidjson::Document* av = NULL;
-  HTTPCode http_code = _authentication->_hss->get_auth_vector(impi, impu, auth_type, resync, av, trail());
 
-  if ((av != NULL) &&
-      (!verify_auth_vector(av, impi)))
+  if ((req->line.req.method.id == PJSIP_REGISTER_METHOD) ||
+      (AuthenticationSproutlet::top_route_has_param(req, &STR_AUTO_REG)))
   {
-    // Authentication Vector is badly formed.
-    delete av;
-    av = NULL;
+    // This is either a REGISTER, or a request that Sprout should authenticate
+    // by treating it like a REGISTER. Get the Authentication Vector from the
+    // HSS.
+    HTTPCode http_code = _authentication->_hss->get_auth_vector(impi, impu, auth_type, resync, av, trail());
+    av_source_unavailable = ((http_code == HTTP_SERVER_UNAVAILABLE) ||
+                             (http_code == HTTP_GATEWAY_TIMEOUT));
+
+    if ((av != NULL) && (!verify_auth_vector(av, impi)))
+    {
+      // Authentication Vector is badly formed.
+      delete av;
+      av = NULL;
+    }
+  }
+  else
+  {
+    // This is a non-REGISTER, so get an AV by finding the challenge that the
+    // endpoint authenticated with when it registered.
+
+    // TODO.
   }
 
   if (av != NULL)
@@ -874,7 +892,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
   {
     // If we couldn't get the AV because a downstream node is overloaded then don't return
     // a 4xx error to the client.
-    if ((http_code == HTTP_SERVER_UNAVAILABLE) || (http_code == HTTP_GATEWAY_TIMEOUT))
+    if (av_source_unavailable)
     {
       TRC_DEBUG("Downstream node is overloaded or unresponsive, unable to get Authentication vector");
       rsp->line.status.code = PJSIP_SC_SERVER_TIMEOUT;
