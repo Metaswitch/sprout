@@ -101,8 +101,16 @@ public:
 private:
   bool needs_authentication(pjsip_msg* req,
                             SAS::TrailId trail);
-  static bool top_route_has_param(const pjsip_msg* req,
+  static bool get_top_route_param(const pjsip_msg* req,
                                   const pj_str_t* param_name);
+  static bool get_top_route_param(const pjsip_msg* req,
+                                  const pj_str_t* param_name,
+                                  std::string& value);
+  static bool get_top_route_param(const pjsip_route_hdr* hdr,
+                                  const pj_str_t* param_name);
+  static bool get_top_route_param(const pjsip_route_hdr* hdr,
+                                  const pj_str_t* param_name,
+                                  std::string& value);
 
   friend class AuthenticationSproutletTsx;
 
@@ -177,6 +185,10 @@ protected:
                                  pjsip_cred_info *cred_info,
                                  void* auth_challenge_param);
   static pjsip_digest_credential* get_credentials(const pjsip_msg* req);
+  AuthenticationVector* get_av_from_store(const std::string& impi,
+                                          const std::string& nonce,
+                                          ImpiStore::Impi** out_impi_obj,
+                                          SAS::TrailId trail);
 
   AuthenticationSproutlet* _authentication;
 };

@@ -280,7 +280,7 @@ bool AuthenticationSproutlet::needs_authentication(pjsip_msg* req,
       return PJ_FALSE;
     }
 
-    if (!top_route_has_param(req, &STR_ORIG))
+    if (!get_top_route_param(req, &STR_ORIG))
     {
       // This is not an originating request so do not get authenticated.
       return PJ_FALSE;
@@ -322,7 +322,7 @@ bool AuthenticationSproutlet::needs_authentication(pjsip_msg* req,
       // Only authenticate the request if the endpoint authenticates with digest
       // authentication. If this is the case the top route header will contain
       // a username parameter.
-      if (top_route_has_param(req, &STR_USERNAME))
+      if (get_top_route_param(req, &STR_USERNAME))
       {
         // The username parameter is present so we need to authenticate.
         // TODO SAS
@@ -348,28 +348,56 @@ bool AuthenticationSproutlet::needs_authentication(pjsip_msg* req,
 
 // Utility function to determine if the top route header on a request contains a
 // particular parameter.
-bool AuthenticationSproutlet::top_route_has_param(const pjsip_msg* req,
+bool AuthenticationSproutlet::get_top_route_param(const pjsip_route_hdr* route,
+                                                  const pj_str_t* param_name,
+                                                  std::string& value)
+{
+  pjsip_uri* route_uri = (pjsip_uri*)pjsip_uri_get_uri(&route->name_addr);
+
+  if ((route_uri != nullptr) && (PJSIP_URI_SCHEME_IS_SIP(route_uri)))
+  {
+    pjsip_sip_uri* route_sip_uri = (pjsip_sip_uri*)route_uri;
+    pjsip_param* p = pjsip_param_find(&route_sip_uri->other_param, param_name);
+    if (p != nullptr)
+    {
+      value.assign(p->value.ptr, p->value.slen);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool AuthenticationSproutlet::get_top_route_param(const pjsip_route_hdr* route,
                                                   const pj_str_t* param_name)
+{
+  std::string ignored;
+  return get_top_route_param(route, param_name, ignored);
+}
+
+bool AuthenticationSproutlet::get_top_route_param(const pjsip_msg* req,
+                                                  const pj_str_t* param_name,
+                                                  std::string& value)
 {
   pjsip_route_hdr* route = (pjsip_route_hdr*)pjsip_msg_find_hdr(req,
                                                                 PJSIP_H_ROUTE,
                                                                 NULL);
   if (route != nullptr)
   {
-    pjsip_uri* route_uri = (pjsip_uri*)pjsip_uri_get_uri(&route->name_addr);
-
-    if ((route_uri != nullptr) && (PJSIP_URI_SCHEME_IS_SIP(route_uri)))
-    {
-      pjsip_sip_uri* route_sip_uri = (pjsip_sip_uri*)route_uri;
-      if (pjsip_param_find(&route_sip_uri->other_param, param_name) == nullptr)
-      {
-        return true;
-      }
-    }
+    return get_top_route_param(route, param_name, value);
   }
 
   return false;
 }
+
+
+bool AuthenticationSproutlet::get_top_route_param(const pjsip_msg* req,
+                                                  const pj_str_t* param_name)
+{
+  std::string ignored;
+  return get_top_route_param(req, param_name, ignored);
+}
+
 
 //
 // Authentication Sproutlet Tsx methods.
@@ -603,6 +631,44 @@ pj_status_t AuthenticationSproutletTsx::user_lookup(pj_pool_t *pool,
   return status;
 }
 
+
+AuthenticationVector* AuthenticationSproutletTsx::get_av_from_store(const std::string& impi,
+                                                                    const std::string& nonce,
+                                                                    ImpiStore::Impi** out_impi_obj,
+                                                                    SAS::TrailId trail)
+{
+  AuthenticationVector* av = nullptr;
+
+  ImpiStore::Impi* impi_obj =
+    _authentication->_impi_store->get_impi_with_nonce(impi, nonce, trail);
+
+  if (impi_obj != nullptr)
+  {
+    ImpiStore::AuthChallenge* auth_challenge = impi_obj->get_auth_challenge(nonce);
+
+    if ((auth_challenge != nullptr) &&
+        (auth_challenge->type == ImpiStore::AuthChallenge::Type::DIGEST))
+    {
+      ImpiStore::DigestAuthChallenge* digest_challenge =
+        dynamic_cast<ImpiStore::DigestAuthChallenge*>(auth_challenge);
+
+      av = new AuthenticationVector(AuthenticationVector::DIGEST);
+      AuthenticationVector::DigestAv* digest_av = av->get_digest();
+
+      digest_av->qop = digest_challenge->qop;
+      digest_av->realm = digest_challenge->realm;
+      digest_av->ha1 = digest_challenge->ha1;
+    }
+  }
+
+  if (out_impi_obj != nullptr)
+  {
+    *out_impi_obj = impi_obj;
+  }
+
+  return av;
+}
+
 void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* credentials,
                                                   pj_bool_t stale,
                                                   std::string resync,
@@ -613,6 +679,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
   std::string impi;
   std::string impu;
   bool av_source_unavailable = false;
+  ImpiStore::Impi* impi_obj = nullptr;
 
   PJUtils::get_impi_and_impu(req, impi, impu);
 
@@ -646,7 +713,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
   AuthenticationVector* av = NULL;
 
   if ((req->line.req.method.id == PJSIP_REGISTER_METHOD) ||
-      (AuthenticationSproutlet::top_route_has_param(req, &STR_AUTO_REG)))
+      (AuthenticationSproutlet::get_top_route_param(route_hdr(), &STR_AUTO_REG)))
   {
     // This is either a REGISTER, or a request that Sprout should authenticate
     // by treating it like a REGISTER. Get the Authentication Vector from the
@@ -670,9 +737,25 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
   else
   {
     // This is a non-REGISTER, so get an AV by finding the challenge that the
-    // endpoint authenticated with when it registered.
+    // endpoint authenticated with when it registered. The information we need
+    // to look up the challenge will be in the top route header.
+    std::string username;
+    std::string nonce;
 
-    // TODO.
+    if (AuthenticationSproutlet::get_top_route_param(route_hdr(), &STR_USERNAME, username) &&
+        AuthenticationSproutlet::get_top_route_param(route_hdr(), &STR_NONCE, nonce))
+    {
+      // Store of the IMPI object we got back from the store so that we don't
+      // have to do another read when writing the new challenge back.
+      av = get_av_from_store(impi, nonce, &impi_obj, trail());
+
+      if (av == nullptr)
+      {
+        // We failed to get an AV so discard the impi store object we got when
+        // reading from the store.
+        delete impi_obj; impi_obj = NULL;
+      }
+    }
   }
 
   if (av != NULL)
@@ -831,14 +914,15 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
 
     do
     {
-      ImpiStore::Impi* impi_obj =
-        _authentication->_impi_store->get_impi_with_nonce(impi,
-                                                     nonce,
-                                                     trail());
-
       if (impi_obj == NULL)
       {
-        impi_obj = new ImpiStore::Impi(impi);
+        impi_obj = _authentication->_impi_store->get_impi_with_nonce(impi,
+                                                                     nonce,
+                                                                     trail());
+        if (impi_obj == NULL)
+        {
+          impi_obj = new ImpiStore::Impi(impi);
+        }
       }
 
       // Check whether the IMPI has an existing auth challenge.
