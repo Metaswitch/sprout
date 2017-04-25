@@ -235,15 +235,27 @@ bool AuthenticationSproutlet::needs_authentication(pjsip_msg* req,
   }
   else
   {
+    if (PJSIP_MSG_TO_HDR(req)->tag.slen != 0)
+    {
+      // This is an in-dialog request which needs no authentication.
+      return PJ_FALSE;
+    }
+
+    if (!top_route_has_param(req, &STR_ORIG))
+    {
+      // This is not an originating request so do not get authenticated.
+      return PJ_FALSE;
+    }
+
     // Check to see if we should authenticate this non-REGISTER message - this
-    if (_non_register_auth_mode == NonRegisterAuthentication::NEVER)
+    if (_non_register_auth_mode == 0)
     {
       // Configured to never authenticate non-REGISTER requests.
       SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_NEVER_AUTH_NON_REG, 0);
       SAS::report_event(event);
       return PJ_FALSE;
     }
-    else if (_non_register_auth_mode == NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT)
+    else if (_non_register_auth_mode & NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT)
     {
       // Only authenticate the request if it has a Proxy-Authorization header.
       pjsip_proxy_authorization_hdr* auth_hdr = (pjsip_proxy_authorization_hdr*)
@@ -266,6 +278,24 @@ bool AuthenticationSproutlet::needs_authentication(pjsip_msg* req,
         return PJ_FALSE;
       }
     }
+    else if (_non_register_auth_mode & NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT)
+    {
+      // Only authenticate the request if the endpoint authenticates with digest
+      // authentication. If this is the case the top route header will contain
+      // a username parameter.
+      if (top_route_has_param(req, &STR_USERNAME))
+      {
+        // The username parameter is present so we need to authenticate.
+        // TODO SAS
+        return PJ_TRUE;
+      }
+      else
+      {
+        // No username so don't authenticate.
+        // TODO SAS
+        return PJ_FALSE;
+      }
+    }
     else
     {
       // Unrecognized authentication mode - should never happen. LCOV_EXCL_START
@@ -274,6 +304,31 @@ bool AuthenticationSproutlet::needs_authentication(pjsip_msg* req,
       // LCOV_EXCL_STOP
     }
   }
+}
+
+// Utility function to determine if the top route header on a request contains a
+// particular parameter.
+bool AuthenticationSproutlet::top_route_has_param(const pjsip_msg* req,
+                                                  const pj_str_t* param_name)
+{
+  pjsip_route_hdr* route = (pjsip_route_hdr*)pjsip_msg_find_hdr(req,
+                                                                PJSIP_H_ROUTE,
+                                                                NULL);
+  if (route != nullptr)
+  {
+    pjsip_uri* route_uri = (pjsip_uri*)pjsip_uri_get_uri(&route->name_addr);
+
+    if ((route_uri != nullptr) && (PJSIP_URI_SCHEME_IS_SIP(route_uri)))
+    {
+      pjsip_sip_uri* route_sip_uri = (pjsip_sip_uri*)route_uri;
+      if (pjsip_param_find(&route_sip_uri->other_param, param_name) == nullptr)
+      {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 //
@@ -837,7 +892,6 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     }
   }
 }
-
 
 void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 {

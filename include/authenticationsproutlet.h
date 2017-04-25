@@ -100,6 +100,8 @@ public:
 private:
   bool needs_authentication(pjsip_msg* req,
                             SAS::TrailId trail);
+  static bool top_route_has_param(const pjsip_msg* req,
+                                  const pj_str_t* param_name);
 
   friend class AuthenticationSproutletTsx;
 
