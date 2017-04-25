@@ -63,43 +63,52 @@ std::string unhex(std::string hexstr)
   return ret;
 }
 
-// Class representing an authentication vector. This allows most of the
+// Classes representing authentication vectors. This allows most of the
 // authentication module to be agnostic with respect to where the AV came from
-// (the HSS or the IMPI store).
+// (the HSS which returns AVs as JSON objects, or the IMPI store which returns
+// them as deserialized objects).
 class AuthenticationVector
 {
 public:
-  enum AvType { DIGEST, AKA };
-
-  struct DigestAv
-  {
-    std::string ha1;
-    std::string qop;
-    std::string realm;
-  };
-
-  struct AkaAv
-  {
-    std::string nonce;
-    std::string cryptkey;
-    std::string integritykey;
-    std::string xres;
-    int akaversion;
-  };
-
-  AuthenticationVector(AvType type) : _type(type) {}
   virtual ~AuthenticationVector() {}
 
   bool is_aka() { return (_type == AKA); }
   bool is_digest() { return (_type == DIGEST); }
 
-  DigestAv* get_digest() { return (is_digest() ? &_digest : nullptr); }
-  AkaAv* get_aka() { return (is_aka() ? &_aka : nullptr); }
+protected:
+  enum AvType { DIGEST, AKA };
 
-private:
+  AuthenticationVector(AvType type) : _type(type) {}
+
   AvType _type;
-  DigestAv _digest;
-  AkaAv _aka;
+};
+
+class DigestAv : public AuthenticationVector
+{
+public:
+  DigestAv() : AuthenticationVector(DIGEST) {}
+  virtual ~DigestAv() {}
+
+  std::string ha1;
+  std::string qop;
+  std::string realm;
+};
+
+class AkaAv : public AuthenticationVector
+{
+public:
+  AkaAv() :
+    AuthenticationVector(AKA),
+    // Defaults to 1, for back-compatibility with pre-AKAv2 Homestead versions.
+    akaversion(1)
+  {}
+  virtual ~AkaAv() {}
+
+  std::string nonce;
+  std::string cryptkey;
+  std::string integritykey;
+  std::string xres;
+  int akaversion;
 };
 
 //
@@ -498,18 +507,14 @@ AuthenticationVector* AuthenticationSproutletTsx::verify_auth_vector(rapidjson::
     }
     else
     {
-      av = new AuthenticationVector(AuthenticationVector::AKA);
-      AuthenticationVector::AkaAv* aka = av->get_aka();
-
-      // AKA version defaults to 1, for back-compatibility with pre-AKAv2
-      // Homestead versions.
-      aka->akaversion = 1;
-
+      AkaAv* aka = new AkaAv();
       JSON_SAFE_GET_STRING_MEMBER(aka_obj, "challenge", aka->nonce);
       JSON_SAFE_GET_STRING_MEMBER(aka_obj, "cryptkey", aka->cryptkey);
       JSON_SAFE_GET_STRING_MEMBER(aka_obj, "integritykey", aka->integritykey);
       JSON_SAFE_GET_STRING_MEMBER(aka_obj, "response", aka->xres);
       JSON_SAFE_GET_INT_MEMBER(aka_obj, "version", aka->akaversion);
+
+      av = aka;
     }
   }
   else if (doc->HasMember("digest"))
@@ -531,11 +536,12 @@ AuthenticationVector* AuthenticationSproutletTsx::verify_auth_vector(rapidjson::
     }
     else
     {
-      av = new AuthenticationVector(AuthenticationVector::DIGEST);
-      AuthenticationVector::DigestAv* digest = av->get_digest();
+      DigestAv* digest = new DigestAv();
       JSON_SAFE_GET_STRING_MEMBER(digest_obj, "realm", digest->realm);
       JSON_SAFE_GET_STRING_MEMBER(digest_obj, "qop", digest->qop);
       JSON_SAFE_GET_STRING_MEMBER(digest_obj, "ha1", digest->ha1);
+
+      av = digest;
     }
   }
   else
@@ -632,6 +638,17 @@ pj_status_t AuthenticationSproutletTsx::user_lookup(pj_pool_t *pool,
 }
 
 
+/// Get an AV from a previous challenge in the IMPI store.
+///
+/// @param impi         - The IMPI of the previous challenge.
+/// @param nonce        - The nonce of the previous challenge.
+/// @param out_impi_obj - An optional pointer that can receive the IMPI object
+///                       the challenge was retrieved from lookups. Returning
+///                       this may allow the caller to avoid unnecessary further
+///                       lookups.
+/// @param trail        - SAS trail ID.
+///
+/// @return             - The retrieved authentication vector, or NULL.
 AuthenticationVector* AuthenticationSproutletTsx::get_av_from_store(const std::string& impi,
                                                                     const std::string& nonce,
                                                                     ImpiStore::Impi** out_impi_obj,
@@ -652,12 +669,12 @@ AuthenticationVector* AuthenticationSproutletTsx::get_av_from_store(const std::s
       ImpiStore::DigestAuthChallenge* digest_challenge =
         dynamic_cast<ImpiStore::DigestAuthChallenge*>(auth_challenge);
 
-      av = new AuthenticationVector(AuthenticationVector::DIGEST);
-      AuthenticationVector::DigestAv* digest_av = av->get_digest();
-
+      DigestAv* digest_av = new DigestAv();
       digest_av->qop = digest_challenge->qop;
       digest_av->realm = digest_challenge->realm;
       digest_av->ha1 = digest_challenge->ha1;
+
+      av = digest_av;
     }
   }
 
@@ -795,7 +812,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     {
       // AKA authentication.
       TRC_DEBUG("Add AKA information");
-      AuthenticationVector::AkaAv* aka = av->get_aka();
+      AkaAv* aka = dynamic_cast<AkaAv*>(av);
 
       SAS::Event event(trail(), SASEvent::AUTHENTICATION_CHALLENGE_AKA, 0);
       SAS::report_event(event);
@@ -879,7 +896,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
       // Digest authentication.
       TRC_DEBUG("Add Digest information");
       std::string nonce;
-      AuthenticationVector::DigestAv* digest = av->get_digest();
+      DigestAv* digest = dynamic_cast<DigestAv*>(av);
 
       SAS::Event event(trail(), SASEvent::AUTHENTICATION_CHALLENGE_DIGEST, 0);
       SAS::report_event(event);
