@@ -134,6 +134,8 @@ const pj_str_t STR_ROUTE = pj_str((char*)"Route");
 const pj_str_t STR_CONTENT_TYPE = pj_str((char*)"Content-Type");
 const pj_str_t STR_CONTENT_LENGTH = pj_str((char*)"Content-Length");
 const pj_str_t STR_SERVICE = pj_str((char*)"service");
+const pj_str_t STR_USERNAME = pj_str((char*)"username");
+const pj_str_t STR_NONCE = pj_str((char*)"nonce");
 
 /// Prefix of ODI tokens we generate.
 const pj_str_t STR_ODI_PREFIX = pj_str((char*)"odi_");
