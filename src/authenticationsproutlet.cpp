@@ -63,6 +63,45 @@ std::string unhex(std::string hexstr)
   return ret;
 }
 
+// Class representing an authentication vector. This allows most of the
+// authentication module to be agnostic with respect to where the AV came from
+// (the HSS or the IMPI store).
+class AuthenticationVector
+{
+public:
+  enum AvType { DIGEST, AKA };
+
+  struct DigestAv
+  {
+    std::string ha1;
+    std::string qop;
+    std::string realm;
+  };
+
+  struct AkaAv
+  {
+    std::string nonce;
+    std::string cryptkey;
+    std::string integritykey;
+    std::string xres;
+    int akaversion;
+  };
+
+  AuthenticationVector(AvType type) : _type(type) {}
+  virtual ~AuthenticationVector() {}
+
+  bool is_aka() { return (_type == AKA); }
+  bool is_digest() { return (_type == DIGEST); }
+
+  DigestAv* get_digest() { return (is_digest() ? &_digest : nullptr); }
+  AkaAv* get_aka() { return (is_aka() ? &_aka : nullptr); }
+
+private:
+  AvType _type;
+  DigestAv _digest;
+  AkaAv _aka;
+};
+
 //
 // Authentication Sproutlet methods.
 //
@@ -306,6 +345,7 @@ bool AuthenticationSproutlet::needs_authentication(pjsip_msg* req,
   }
 }
 
+
 // Utility function to determine if the top route header on a request contains a
 // particular parameter.
 bool AuthenticationSproutlet::top_route_has_param(const pjsip_msg* req,
@@ -398,57 +438,76 @@ int AuthenticationSproutletTsx::calculate_challenge_expiration_time(pjsip_msg* r
 }
 
 /// Verifies that the supplied authentication vector is valid.
-bool AuthenticationSproutletTsx::verify_auth_vector(rapidjson::Document* av,
-                                                    const std::string& impi)
+AuthenticationVector* AuthenticationSproutletTsx::verify_auth_vector(rapidjson::Document* doc,
+                                                                     const std::string& impi)
 {
-  bool rc = true;
+  AuthenticationVector *av = nullptr;
 
   rapidjson::StringBuffer buffer;
   rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-  av->Accept(writer);
+  doc->Accept(writer);
   std::string av_str = buffer.GetString();
   TRC_DEBUG("Verifying AV: %s", av_str.c_str());
 
   // Check the AV is well formed.
-  if (av->HasMember("aka"))
+  if (doc->HasMember("aka"))
   {
     // AKA is specified, check all the expected parameters are present.
     TRC_DEBUG("AKA specified");
-    rapidjson::Value& aka = (*av)["aka"];
-    if (!(((aka.HasMember("challenge")) && (aka["challenge"].IsString())) &&
-          ((aka.HasMember("response")) && (aka["response"].IsString())) &&
-          ((aka.HasMember("cryptkey")) && (aka["cryptkey"].IsString())) &&
-          ((aka.HasMember("integritykey")) && (aka["integritykey"].IsString()))))
+    rapidjson::Value& aka_obj = (*doc)["aka"];
+    if (!(((aka_obj.HasMember("challenge")) && (aka_obj["challenge"].IsString())) &&
+          ((aka_obj.HasMember("response")) && (aka_obj["response"].IsString())) &&
+          ((aka_obj.HasMember("cryptkey")) && (aka_obj["cryptkey"].IsString())) &&
+          ((aka_obj.HasMember("integritykey")) && (aka_obj["integritykey"].IsString()))))
     {
       // Malformed AKA entry
       TRC_INFO("Badly formed AKA authentication vector for %s",
                impi.c_str());
-      rc = false;
-
       SAS::Event event(trail(), SASEvent::AUTHENTICATION_FAILED_MALFORMED, 0);
       std::string error_msg = std::string("AKA authentication vector is malformed: ") + av_str.c_str();
       event.add_var_param(error_msg);
       SAS::report_event(event);
     }
+    else
+    {
+      av = new AuthenticationVector(AuthenticationVector::AKA);
+      AuthenticationVector::AkaAv* aka = av->get_aka();
+
+      // AKA version defaults to 1, for back-compatibility with pre-AKAv2
+      // Homestead versions.
+      aka->akaversion = 1;
+
+      JSON_SAFE_GET_STRING_MEMBER(aka_obj, "challenge", aka->nonce);
+      JSON_SAFE_GET_STRING_MEMBER(aka_obj, "cryptkey", aka->cryptkey);
+      JSON_SAFE_GET_STRING_MEMBER(aka_obj, "integritykey", aka->integritykey);
+      JSON_SAFE_GET_STRING_MEMBER(aka_obj, "response", aka->xres);
+      JSON_SAFE_GET_INT_MEMBER(aka_obj, "version", aka->akaversion);
+    }
   }
-  else if (av->HasMember("digest"))
+  else if (doc->HasMember("digest"))
   {
     // Digest is specified, check all the expected parameters are present.
     TRC_DEBUG("Digest specified");
-    rapidjson::Value& digest = (*av)["digest"];
-    if (!(((digest.HasMember("realm")) && (digest["realm"].IsString())) &&
-          ((digest.HasMember("qop")) && (digest["qop"].IsString())) &&
-          ((digest.HasMember("ha1")) && (digest["ha1"].IsString()))))
+    rapidjson::Value& digest_obj = (*doc)["digest"];
+    if (!(((digest_obj.HasMember("realm")) && (digest_obj["realm"].IsString())) &&
+          ((digest_obj.HasMember("qop")) && (digest_obj["qop"].IsString())) &&
+          ((digest_obj.HasMember("ha1")) && (digest_obj["ha1"].IsString()))))
     {
       // Malformed digest entry
       TRC_INFO("Badly formed Digest authentication vector for %s",
                impi.c_str());
-      rc = false;
-
       SAS::Event event(trail(), SASEvent::AUTHENTICATION_FAILED_MALFORMED, 0);
       std::string error_msg = std::string("Digest authentication vector is malformed: ") + av_str.c_str();;
       event.add_var_param(error_msg);
       SAS::report_event(event);
+    }
+    else
+    {
+      av = new AuthenticationVector(AuthenticationVector::DIGEST);
+      AuthenticationVector::DigestAv* digest = av->get_digest();
+      JSON_SAFE_GET_STRING_MEMBER(digest_obj, "realm", digest->realm);
+      JSON_SAFE_GET_STRING_MEMBER(digest_obj, "qop", digest->qop);
+      JSON_SAFE_GET_STRING_MEMBER(digest_obj, "ha1", digest->ha1);
     }
   }
   else
@@ -456,15 +515,13 @@ bool AuthenticationSproutletTsx::verify_auth_vector(rapidjson::Document* av,
     // Neither AKA nor Digest information present.
     TRC_INFO("No AKA or Digest object in authentication vector for %s",
              impi.c_str());
-    rc = false;
-
     SAS::Event event(trail(), SASEvent::AUTHENTICATION_FAILED_MALFORMED, 0);
     std::string error_msg = std::string("Authentication vector is malformed: ") + av_str.c_str();
     event.add_var_param(error_msg);
     SAS::report_event(event);
   }
 
-  return rc;
+  return av;
 }
 
 pj_status_t AuthenticationSproutletTsx::user_lookup(pj_pool_t *pool,
@@ -555,7 +612,6 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
   // Get the public and private identities from the request.
   std::string impi;
   std::string impu;
-  std::string nonce;
   bool av_source_unavailable = false;
 
   PJUtils::get_impi_and_impu(req, impi, impu);
@@ -587,7 +643,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
   }
 
   // Get an authentication vector to challenge this request.
-  rapidjson::Document* av = NULL;
+  AuthenticationVector* av = NULL;
 
   if ((req->line.req.method.id == PJSIP_REGISTER_METHOD) ||
       (AuthenticationSproutlet::top_route_has_param(req, &STR_AUTO_REG)))
@@ -595,16 +651,21 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     // This is either a REGISTER, or a request that Sprout should authenticate
     // by treating it like a REGISTER. Get the Authentication Vector from the
     // HSS.
-    HTTPCode http_code = _authentication->_hss->get_auth_vector(impi, impu, auth_type, resync, av, trail());
+    rapidjson::Document* doc = NULL;
+    HTTPCode http_code = _authentication->_hss->get_auth_vector(impi,
+                                                                impu,
+                                                                auth_type,
+                                                                resync,
+                                                                doc,
+                                                                trail());
     av_source_unavailable = ((http_code == HTTP_SERVER_UNAVAILABLE) ||
                              (http_code == HTTP_GATEWAY_TIMEOUT));
 
-    if ((av != NULL) && (!verify_auth_vector(av, impi)))
+    if (doc != NULL)
     {
-      // Authentication Vector is badly formed.
-      delete av;
-      av = NULL;
+      av = verify_auth_vector(doc, impi);
     }
+    delete doc; doc = NULL;
   }
   else
   {
@@ -641,35 +702,20 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     pj_pool_t* rsp_pool = get_pool(rsp);
 
     ImpiStore::AuthChallenge* auth_challenge;
-    if (av->HasMember("aka"))
+    if (av->is_aka())
     {
       // AKA authentication.
       TRC_DEBUG("Add AKA information");
+      AuthenticationVector::AkaAv* aka = av->get_aka();
 
       SAS::Event event(trail(), SASEvent::AUTHENTICATION_CHALLENGE_AKA, 0);
       SAS::report_event(event);
 
-      rapidjson::Value& aka = (*av)["aka"];
-
-      std::string cryptkey = "";
-      std::string integritykey = "";
-      std::string xres = "";
-
-      // AKA version defaults to 1, for back-compatibility with pre-AKAv2
-      // Homestead versions.
-      int akaversion = 1;
-
-      JSON_SAFE_GET_STRING_MEMBER(aka, "challenge", nonce);
-      JSON_SAFE_GET_STRING_MEMBER(aka, "cryptkey", cryptkey);
-      JSON_SAFE_GET_STRING_MEMBER(aka, "integritykey", integritykey);
-      JSON_SAFE_GET_STRING_MEMBER(aka, "response", xres);
-      JSON_SAFE_GET_INT_MEMBER(aka, "version", akaversion);
-
       // Use default realm for AKA as not specified in the AV.
       pj_strdup(rsp_pool, &hdr->challenge.digest.realm, &_authentication->_aka_realm);
-      hdr->challenge.digest.algorithm = ((akaversion == 2) ? STR_AKAV2_MD5 : STR_AKAV1_MD5);
+      hdr->challenge.digest.algorithm = ((aka->akaversion == 2) ? STR_AKAV2_MD5 : STR_AKAV1_MD5);
 
-      pj_strdup2(rsp_pool, &hdr->challenge.digest.nonce, nonce.c_str());
+      pj_strdup2(rsp_pool, &hdr->challenge.digest.nonce, aka->nonce.c_str());
       pj_create_random_string(buf, sizeof(buf));
       pj_strdup(rsp_pool, &hdr->challenge.digest.opaque, &random);
       hdr->challenge.digest.qop = STR_AUTH;
@@ -678,14 +724,14 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
       // Add the cryptography key parameter.
       pjsip_param* ck_param = (pjsip_param*)pj_pool_alloc(rsp_pool, sizeof(pjsip_param));
       ck_param->name = STR_CK;
-      std::string ck = "\"" + cryptkey + "\"";
+      std::string ck = "\"" + aka->cryptkey + "\"";
       pj_strdup2(rsp_pool, &ck_param->value, ck.c_str());
       pj_list_insert_before(&hdr->challenge.digest.other_param, ck_param);
 
       // Add the integrity key parameter.
       pjsip_param* ik_param = (pjsip_param*)pj_pool_alloc(rsp_pool, sizeof(pjsip_param));
       ik_param->name = STR_IK;
-      std::string ik = "\"" + integritykey + "\"";
+      std::string ik = "\"" + aka->integritykey + "\"";
       pj_strdup2(rsp_pool, &ik_param->value, ik.c_str());
       pj_list_insert_before(&hdr->challenge.digest.other_param, ik_param);
 
@@ -693,7 +739,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
       // but we will put it in the store.
       std::string response;
 
-      if (akaversion == 2)
+      if (aka->akaversion == 2)
       {
         // In AKAv2, the password for the SIP Digest calculation should be the
         // base64 encoding of:
@@ -709,7 +755,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
         //   "http-digest-akav2-password", using that binary concatenation as
         //   the key
         // - base64-encode that
-        std::string joined = unhex(xres + integritykey + cryptkey);
+        std::string joined = unhex(aka->xres + aka->integritykey + aka->cryptkey);
         std::string formality = "http-digest-akav2-password";
         unsigned int digest_len;
         unsigned char hmac[EVP_MAX_MD_SIZE];
@@ -731,11 +777,11 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
         // In AKAv1, the XRES is used directly as the password in the SIP
         // Digest calculation. We want it hex-encoded for storing in memcached,
         // but it's already been hex-encoded by Homestead, so nothing to do.
-        response = xres;
+        response = aka->xres;
       }
 
       // Now build the AuthChallenge so that we can store it in the ImpiStore.
-      auth_challenge = new ImpiStore::AKAAuthChallenge(nonce,
+      auth_challenge = new ImpiStore::AKAAuthChallenge(aka->nonce,
                                                        response,
                                                        time(NULL) + AUTH_CHALLENGE_INIT_EXPIRES);
     }
@@ -743,48 +789,27 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     {
       // Digest authentication.
       TRC_DEBUG("Add Digest information");
+      std::string nonce;
+      AuthenticationVector::DigestAv* digest = av->get_digest();
 
       SAS::Event event(trail(), SASEvent::AUTHENTICATION_CHALLENGE_DIGEST, 0);
       SAS::report_event(event);
 
-      rapidjson::Value& digest = (*av)["digest"];
-      std::string realm = "";
-      if ((digest.HasMember("realm")) &&
-          (digest["realm"].IsString()))
-      {
-        realm = digest["realm"].GetString();
-      }
-
-      std::string qop = "";
-      if ((digest.HasMember("qop")) &&
-          (digest["qop"].IsString()))
-      {
-        qop = digest["qop"].GetString();
-      }
-      pj_strdup2(rsp_pool, &hdr->challenge.digest.realm, realm.c_str());
+      pj_strdup2(rsp_pool, &hdr->challenge.digest.realm, digest->realm.c_str());
       hdr->challenge.digest.algorithm = STR_MD5;
       pj_create_random_string(buf, sizeof(buf));
       nonce.assign(buf, sizeof(buf));
       pj_strdup(rsp_pool, &hdr->challenge.digest.nonce, &random);
       pj_create_random_string(buf, sizeof(buf));
       pj_strdup(rsp_pool, &hdr->challenge.digest.opaque, &random);
-      pj_strdup2(rsp_pool, &hdr->challenge.digest.qop, qop.c_str());
+      pj_strdup2(rsp_pool, &hdr->challenge.digest.qop, digest->qop.c_str());
       hdr->challenge.digest.stale = stale;
-
-      // Get the HA1 digest.  We must not provide this on the SIP message, but
-      // we will put it in the store.
-      std::string ha1 = "";
-      if ((digest.HasMember("ha1")) &&
-          (digest["ha1"].IsString()))
-      {
-        ha1 = digest["ha1"].GetString();
-      }
 
       // Now build the AuthChallenge so that we can store it in the ImpiStore.
       auth_challenge = new ImpiStore::DigestAuthChallenge(nonce,
-                                                          realm,
-                                                          qop,
-                                                          ha1,
+                                                          digest->realm,
+                                                          digest->qop,
+                                                          digest->ha1,
                                                           time(NULL) + AUTH_CHALLENGE_INIT_EXPIRES);
     }
 
@@ -800,12 +825,12 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     TRC_DEBUG("Write authentication challenge to IMPI store");
     Store::Status status;
 
+    // Save off the nonce. We will need it to reclaim the auth challenge from
+    // the IMPI at the end of the loop.
+    std::string nonce = auth_challenge->nonce;
+
     do
     {
-      // Save off the nonce. We will need it to reclaim the auth challenge from
-      // the IMPI at the end of the loop.
-      std::string nonce = auth_challenge->nonce;
-
       ImpiStore::Impi* impi_obj =
         _authentication->_impi_store->get_impi_with_nonce(impi,
                                                      nonce,

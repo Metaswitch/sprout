@@ -65,6 +65,7 @@ extern "C" {
 typedef std::function<int(pjsip_contact_hdr*, pjsip_expires_hdr*)> get_expiry_for_binding_fn;
 
 class AuthenticationSproutletTsx;
+class AuthenticationVector;
 
 class AuthenticationSproutlet : public Sproutlet
 {
@@ -169,8 +170,8 @@ protected:
                         pjsip_msg* req,
                         pjsip_msg* rsp);
   int calculate_challenge_expiration_time(pjsip_msg* req);
-  bool verify_auth_vector(rapidjson::Document* av,
-                          const std::string& impi);
+  AuthenticationVector* verify_auth_vector(rapidjson::Document* av,
+                                           const std::string& impi);
   static pj_status_t user_lookup(pj_pool_t *pool,
                                  const pjsip_auth_lookup_cred_param *param,
                                  pjsip_cred_info *cred_info,
