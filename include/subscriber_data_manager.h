@@ -611,14 +611,16 @@ private:
   // @param aor_pair  The AoRPair to expire
   // @param now       The current time
   int expire_aor_members(AoRPair* aor_pair,
-                         int now);
+                         int now,
+                         SAS::TrailId trail);
 
   // Expire any old bindings, and return the maximum expiry
   //
   // @param aor_pair  The AoRPair to expire
   // @param now       The current time
   int expire_bindings(AoR* aor_data,
-                      int now);
+                      int now,
+                      SAS::TrailId trail);
 
   // Expire any old subscriptions.
   //
