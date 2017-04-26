@@ -744,27 +744,30 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     // algorithm is one of the AKA algorithms).
     bool is_digest =
       ((pj_stricmp2(&auth_hdr->scheme, "digest") == 0) &&
-       ((pj_strlen(&auth_hdr->credential.digest.response) == 0) ||
+       ((pj_strlen(&auth_hdr->credential.digest.algorithm) == 0) ||
         (pj_stricmp2(&auth_hdr->credential.digest.algorithm, "md5") == 0)));
+    TRC_DEBUG("Authorization header present, is_digest=%s", is_digest ? "true" : "false");
 
     if (is_digest && (pj_strlen(&auth_hdr->credential.digest.response) != 0))
     {
+      TRC_DEBUG("Auth header contains a digest response");
+
       if ((pj_strlen(&auth_hdr->credential.digest.username) != 0) &&
           (pj_strlen(&auth_hdr->credential.digest.nonce) != 0))
       {
-        pj_pool_t* pool = get_pool(rsp);
-        pjsip_sip_uri* sr_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(&sr_hdr->name_addr);
-
         std::string username =
           Utils::url_escape(PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username));
+        std::string nonce =
+          Utils::url_escape(PJUtils::pj_str_to_string(&auth_hdr->credential.digest.nonce));
+        TRC_DEBUG("Auth header username=%s, nonce=%s", username.c_str(), nonce.c_str());
+
+        pj_pool_t* pool = get_pool(rsp);
+        pjsip_sip_uri* sr_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(&sr_hdr->name_addr);
 
         pjsip_param *username_param = PJ_POOL_ALLOC_T(pool, pjsip_param);
         pj_strdup(pool, &username_param->name, &STR_USERNAME);
         pj_strdup2(pool, &username_param->value, username.c_str());
         pj_list_insert_before(&sr_uri->other_param, username_param);
-
-        std::string nonce =
-          Utils::url_escape(PJUtils::pj_str_to_string(&auth_hdr->credential.digest.nonce));
 
         pjsip_param *nonce_param = PJ_POOL_ALLOC_T(pool, pjsip_param);
         pj_strdup(pool, &nonce_param->name, &STR_NONCE);
