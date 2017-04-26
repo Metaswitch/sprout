@@ -453,6 +453,7 @@ void SubscriberDataManager::expire_subscriptions(AoRPair* aor_pair,
 /// @returns             The latest expiry time from all unexpired bindings.
 /// @param aor_data      The registration data record.
 /// @param now           The current time in seconds since the epoch.
+/// @param trail         SAS trail
 int SubscriberDataManager::expire_bindings(AoR* aor_data,
                                            int now,
                                            SAS::TrailId trail)
