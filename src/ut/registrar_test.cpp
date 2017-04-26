@@ -1915,10 +1915,14 @@ TEST_F(RegistrarTest, MultipleAssociatedUrisWithTelURI)
   Message msg;
   msg._user = "6505550233";
   msg._scheme = "tel";
+
+  // Add a bad tel URI (the one with the domain) to the set of Identities.  This
+  // should be ignored in the constructions of the P-Associated-URI headers.
   _hss_connection->set_impu_result("tel:6505550233", "reg", RegDataXMLUtils::STATE_REGISTERED,
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>tel:6505550233</Identity></PublicIdentity>\n"
                               "  <PublicIdentity><Identity>tel:6505550234</Identity></PublicIdentity>\n"
+                              "  <PublicIdentity><Identity>tel:6505550235@baddomain.com</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
                               "  </InitialFilterCriteria>\n"
                               "</ServiceProfile></IMSSubscription>");
