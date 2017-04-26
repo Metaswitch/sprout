@@ -694,6 +694,26 @@ TEST_F(AuthenticationTest, IntegrityProtected)
   EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
 }
 
+TEST_F(AuthenticationTest, IntegrityProtectedIpAssocYes)
+{
+  // Test that the authentication module challenges requests with an integrity
+  // protected value of ip-assoc-yes.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  AuthenticationMessage msg("REGISTER");
+  msg._auth_hdr = true;
+  msg._integ_prot = "ip-assoc-yes";
+  inject_msg(msg.get());
+
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, txdata_count());
+  pjsip_tx_data* tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+}
 
 // Tests that authentication is needed on registers that have at least one non
 // emergency contact
