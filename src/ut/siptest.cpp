@@ -595,7 +595,8 @@ void SipTest::register_uri(SubscriberDataManager* sdm,
                            const std::string& domain,
                            const std::string& contact,
                            int lifetime,
-                           std::string instance_id)
+                           std::string instance_id,
+                           bool emergency)
 {
   string uri("sip:");
   uri.append(user).append("@").append(domain);
@@ -610,7 +611,7 @@ void SipTest::register_uri(SubscriberDataManager* sdm,
   binding->_cseq = 1;
   binding->_expires = time(NULL) + lifetime;
   binding->_priority = 1000;
-  binding->_emergency_registration = false;
+  binding->_emergency_registration = emergency;
   if (!instance_id.empty())
   {
     binding->_params["+sip.instance"] = instance_id;

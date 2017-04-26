@@ -84,9 +84,11 @@ class HssConnectionTest : public BaseTest
           "<ServiceProfile>"
             "<PublicIdentity>"
               "<Identity>sip:123@example.com</Identity>"
+              "<BarringIndication>0</BarringIndication>"
             "</PublicIdentity>"
             "<PublicIdentity>"
               "<Identity>sip:456@example.com</Identity>"
+              "<BarringIndication>1</BarringIndication>"
             "</PublicIdentity>"
             "<InitialFilterCriteria>"
               "<TriggerPoint>"
@@ -402,6 +404,21 @@ TEST_F(HssConnectionTest, SimpleChargingAddrs)
   EXPECT_EQ(actual_ecfs, ecfs);
 }
 
+TEST_F(HssConnectionTest, Barring)
+{
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+  std::map<std::string, std::string> barred_map;
+  _hss.update_registration_state("pubid42", "", HSSConnection::REG, regstate, barred_map, ifcs_map, uris, 0);
+  EXPECT_EQ("REGISTERED", regstate);
+  ASSERT_EQ(2u, uris.size());
+  EXPECT_EQ("sip:123@example.com", uris[0]);
+  EXPECT_EQ("sip:456@example.com", uris[1]);
+  EXPECT_EQ("0", barred_map[uris[0]]);
+  EXPECT_EQ("1", barred_map[uris[1]]);
+}
+
 TEST_F(HssConnectionTest, BadXML)
 {
   CapturingTestLogger log;
@@ -573,12 +590,14 @@ TEST_F(HssConnectionTest, SimpleAliases)
   std::vector<std::string> aliases;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
+  std::map<std::string, std::string> unused_barred_map;
   std::vector<std::string> unused_vector;
   std::deque<std::string> unused_deque;
   _hss.update_registration_state("pubid46",
                                  "",
                                  HSSConnection::CALL,
                                  regstate,
+                                 unused_barred_map,
                                  ifcs_map,
                                  unused_vector,
                                  aliases,
@@ -598,12 +617,14 @@ TEST_F(HssConnectionTest, CacheNotAllowed)
   std::vector<std::string> aliases;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
+  std::map<std::string, std::string> unused_barred_map;
   std::vector<std::string> unused_vector;
   std::deque<std::string> unused_deque;
   HTTPCode rc = _hss.update_registration_state("public-needs-private",
                                                "a-private-id",
                                                HSSConnection::REG,
                                                regstate,
+                                               unused_barred_map,
                                                ifcs_map,
                                                unused_vector,
                                                aliases,
