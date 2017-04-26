@@ -610,6 +610,7 @@ private:
   //
   // @param aor_pair  The AoRPair to expire
   // @param now       The current time
+  // @param trail     SAS trail
   int expire_aor_members(AoRPair* aor_pair,
                          int now,
                          SAS::TrailId trail);
@@ -618,6 +619,7 @@ private:
   //
   // @param aor_pair  The AoRPair to expire
   // @param now       The current time
+  // @param trail     SAS trail
   int expire_bindings(AoR* aor_data,
                       int now,
                       SAS::TrailId trail);
