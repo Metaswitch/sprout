@@ -1322,6 +1322,71 @@ TEST_F(RegistrarTest, AppServersPassthrough)
   free_txdata();
 }
 
+/// Verify that third-party REGISTERs have appropriate headers passed through
+/// when the first IMPU is barred.
+TEST_F(RegistrarTest, AppServersBarredIMPU)
+{
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED,
+                              "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity><BarringIndication>1</BarringIndication></PublicIdentity>\n"
+                              "  <PublicIdentity><Identity>sip:6505550232@homedomain</Identity></PublicIdentity>\n"
+                              "  <InitialFilterCriteria>\n"
+                              "    <Priority>1</Priority>\n"
+                              "    <TriggerPoint>\n"
+                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                              "      <SPT>\n"
+                              "        <ConditionNegated>0</ConditionNegated>\n"
+                              "        <Group>0</Group>\n"
+                              "        <Method>REGISTER</Method>\n"
+                              "        <Extension></Extension>\n"
+                              "      </SPT>\n"
+                              "    </TriggerPoint>\n"
+                              "    <ApplicationServer>\n"
+                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                              "      <DefaultHandling>0</DefaultHandling>\n"
+                              "    </ApplicationServer>\n"
+                              "  </InitialFilterCriteria>\n"
+                              "</ServiceProfile></IMSSubscription>");
+
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+
+  SCOPED_TRACE("REGISTER (1)");
+  Message msg;
+  msg._expires = "Expires: 800";
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  SCOPED_TRACE("REGISTER (about to inject)");
+  inject_msg(msg.get());
+  SCOPED_TRACE("REGISTER (injected)");
+  ASSERT_EQ(2, txdata_count());
+  SCOPED_TRACE("REGISTER (forwarded)");
+  // REGISTER passed on to AS
+  pjsip_msg* out = current_txdata()->msg;
+  ReqMatcher r1("REGISTER");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  // Test the To header identifies the fisrt unbarred IMPU.
+  EXPECT_EQ("To: <sip:6505550232@homedomain>", get_headers(out, "To"));
+
+  tpAS.expect_target(current_txdata(), false);
+  inject_msg(respond_to_current_txdata(200));
+
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
+
+  // Test that the pub gruu identifies the first unbarred IMPU.
+  SCOPED_TRACE("REGISTER (200 OK)");
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550232@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
+  free_txdata();
+}
 
 /// Check that the network-initiated deregistration code works as expected
 TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
