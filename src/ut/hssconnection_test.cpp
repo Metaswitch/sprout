@@ -445,8 +445,7 @@ TEST_F(HssConnectionTest, Barring)
   AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  std::map<std::string, std::string> barred_map;
-  _hss.update_registration_state("pubid47", "", HSSConnection::REG, regstate, barred_map, ifcs_map, uris, 0);
+  _hss.update_registration_state("pubid47", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_EQ("REGISTERED", regstate);
   ASSERT_EQ(1u, uris.unbarred_uris().size());
   EXPECT_FALSE(uris.is_barred("sip:123@example.com"));
@@ -624,14 +623,12 @@ TEST_F(HssConnectionTest, SimpleAliases)
   std::vector<std::string> aliases;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  std::map<std::string, std::string> unused_barred_map;
   AssociatedURIs unused_uris;
   std::deque<std::string> unused_deque;
   _hss.update_registration_state("pubid46",
                                  "",
                                  HSSConnection::CALL,
                                  regstate,
-                                 unused_barred_map,
                                  ifcs_map,
                                  unused_uris,
                                  aliases,
@@ -651,14 +648,12 @@ TEST_F(HssConnectionTest, CacheNotAllowed)
   std::vector<std::string> aliases;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  std::map<std::string, std::string> unused_barred_map;
   AssociatedURIs unused_uris;
   std::deque<std::string> unused_deque;
   HTTPCode rc = _hss.update_registration_state("public-needs-private",
                                                "a-private-id",
                                                HSSConnection::REG,
                                                regstate,
-                                               unused_barred_map,
                                                ifcs_map,
                                                unused_uris,
                                                aliases,
