@@ -9465,8 +9465,8 @@ TEST_F(SCSCFTest, TestCalleeNotBarred)
 {
   SCOPED_TRACE("");
 
-  // Need to use the primary IMPU since that is the key used in memcached.
-  register_uri(_sdm, _hss_connection, "6505551235", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  // Need to use the first unbarred identity since that is the key used in memcached.
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
   // The primary IMPU is barred, but this shouldn't stop us making a call since
   // we are calling one of the other IMPUs.

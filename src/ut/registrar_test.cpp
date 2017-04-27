@@ -2715,6 +2715,75 @@ TEST_F(RegistrarTest, StoreFullPathHeader)
   delete aor_data;
 }
 
+// Test that an emergency registration is successful, and creates an emergency binding,
+// even if all IMPUs in the IRS are barred.
+TEST_F(RegistrarTest, BarredEmergencyRegistration)
+{
+  // We have a private ID in this test, so set up the expect response
+  // to the query.
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity><BarringIndication>1</BarringIndicaton></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>",
+                                   "?private_id=Alice");
+
+  // Make a emergency registration
+  Message msg;
+  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+  msg._contact = "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob";
+  inject_msg(msg.get());
+
+  // Check the 200 OK
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
+            get_headers(out, "Contact"));
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
+  free_txdata();
+
+  // There should be one binding, and it is an emergency registration. The emergency binding should have 'sos' prepended to its key.
+  SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
+  ASSERT_TRUE(aor_data != NULL);
+  EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
+  EXPECT_TRUE(aor_data->get_current()->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
+  delete aor_data; aor_data = NULL;
+}
+
+// Test that if all IMPUs are barred, and this is not an emergency registration
+// that the REGISTER will fail.
+TEST_F(RegistrarTest, AllIMPUsBarred)
+{
+  // We have a private ID in this test, so set up the expect response
+  // to the query.
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity><BarringIndication>1</BarringIndicaton></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>",
+                                   "?private_id=Alice");
+
+  // Make a registration
+  Message msg;
+  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+  msg._contact = "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob";
+  inject_msg(msg.get());
+
+  // Check the error
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(500, out->line.status.code);
+}
 
 /// Fixture for RegistrarTest.
 class RegistrarTestMockStore : public SipTest

@@ -46,6 +46,7 @@
 #include "sas.h"
 #include "snmp_event_accumulator_table.h"
 #include "load_monitor.h"
+#include "associated_uris.h"
 
 /// @class HSSConnection
 ///
@@ -92,7 +93,7 @@ public:
                                      std::string& regstate,
                                      std::map<std::string, std::string>& barred_map,
                                      std::map<std::string, Ifcs >& service_profiles,
-                                     std::vector<std::string>& associated_uris,
+                                     AssociatedURIs& associated_uris,
                                      std::vector<std::string>& aliases,
                                      std::deque<std::string>& ccfs,
                                      std::deque<std::string>& ecfs,
@@ -104,7 +105,7 @@ public:
                                              const std::string& type,
                                              std::string& regstate,
                                              std::map<std::string, Ifcs >& service_profiles,
-                                             std::vector<std::string>& associated_uris,
+                                             AssociatedURIs& associated_uris,
                                              std::deque<std::string>& ccfs,
                                              std::deque<std::string>& ecfs,
                                              SAS::TrailId trail);
@@ -113,7 +114,7 @@ public:
                                      const std::string& type,
                                      std::string& regstate,
                                      std::map<std::string, Ifcs >& service_profiles,
-                                     std::vector<std::string>& associated_uris,
+                                     AssociatedURIs& associated_uris,
                                      SAS::TrailId trail);
   HTTPCode update_registration_state(const std::string& public_user_identity,
                                      const std::string& private_user_identity,
@@ -121,7 +122,7 @@ public:
                                      std::string& regstate,
                                      std::map<std::string, std::string>& barred_map,
                                      std::map<std::string, Ifcs >& service_profiles,
-                                     std::vector<std::string>& associated_uris,
+                                     AssociatedURIs& associated_uris,
                                      SAS::TrailId trail);
   virtual HTTPCode update_registration_state(const std::string& public_user_identity,
                                              const std::string& private_user_identity,
@@ -131,20 +132,20 @@ public:
                                              const std::string& private_user_identity,
                                              const std::string& type,
                                              std::map<std::string, Ifcs >& service_profiles,
-                                             std::vector<std::string>& associated_uris,
+                                             AssociatedURIs& associated_uris,
                                              SAS::TrailId trail);
 
   HTTPCode get_registration_data(const std::string& public_user_identity,
                                  std::string& regstate,
                                  std::map<std::string, Ifcs >& service_profiles,
-                                 std::vector<std::string>& associated_uris,
+                                 AssociatedURIs& associated_uris,
                                  std::deque<std::string>& ccfs,
                                  std::deque<std::string>& ecfs,
                                  SAS::TrailId trail);
   virtual HTTPCode get_registration_data(const std::string& public_user_identity,
                                          std::string& regstate,
                                          std::map<std::string, Ifcs >& service_profiles,
-                                         std::vector<std::string>& associated_uris,
+                                         AssociatedURIs& associated_uris,
                                          SAS::TrailId trail);
   rapidxml::xml_document<>* parse_xml(std::string raw, const std::string& url);
 

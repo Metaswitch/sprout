@@ -50,6 +50,7 @@
 #include "scscfsproutlet.h"
 #include "uri_classifier.h"
 #include "wildcard_utils.h"
+#include "associated_uris.h"
 
 // Constant indicating there is no served user for a request.
 const char* NO_SERVED_USER = "";
@@ -280,6 +281,7 @@ long SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                    bool cache_allowed,
                                    bool& registered,
                                    bool& barred,
+                                   std::string& default_uri,
                                    std::vector<std::string>& uris,
                                    std::vector<std::string>& aliases,
                                    Ifcs& ifcs,
@@ -288,6 +290,7 @@ long SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                    const std::string& wildcard,
                                    SAS::TrailId trail)
 {
+  AssociatedURIs associated_uris = {};
   std::string regstate;
   std::map<std::string, std::string> barred_map;
   std::map<std::string, Ifcs> ifc_map;
@@ -298,7 +301,7 @@ long SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                                    regstate,
                                                    barred_map,
                                                    ifc_map,
-                                                   uris,
+                                                   associated_uris,
                                                    aliases,
                                                    ccfs,
                                                    ecfs,
@@ -308,10 +311,16 @@ long SCSCFSproutlet::read_hss_data(const std::string& public_id,
   if (http_code == HTTP_OK)
   {
     ifcs = ifc_map[public_id];
-  }
 
-  registered = (regstate == RegDataXMLUtils::STATE_REGISTERED);
-  barred = (barred_map[public_id] == RegDataXMLUtils::STATE_BARRED);
+    // Get the default URI. This should always succeed.
+    associated_uris.get_default(default_uri, true);
+
+    // We may want to route to bindings that are barred (in case of an emergency),
+    // so get all the URIs.
+    uris = associated_uris.all_uris();
+    registered = (regstate == RegDataXMLUtils::STATE_REGISTERED);
+    barred = associated_uris.is_barred(public_id);
+  }
 
   return (http_code);
 }
@@ -397,6 +406,7 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
   _hss_data_cached(false),
   _registered(false),
   _barred(false),
+  _default_uri(""),
   _uris(),
   _ifcs(),
   _in_dialog_acr(NULL),
@@ -549,7 +559,7 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       {
         // The bindings are keyed off the primary IMPU which is stored first in
         // the list of associated URIs.
-        std::string aor = _uris.front();
+        std::string aor = _default_uri;
         SubscriberDataManager::AoRPair* aor_pair = NULL;
         _scscf->get_bindings(aor, &aor_pair, trail());
         const SubscriberDataManager::AoR::Bindings bindings = aor_pair->get_current()->bindings();
@@ -1708,8 +1718,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       {
         if (WildcardUtils::check_users_equivalent(uri, public_id))
         {
-          // Take the first associated URI as the AOR.
-          aor = uris.front();
+          aor = _default_uri;
           break;
         }
       }
@@ -1835,6 +1844,7 @@ long SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
                                       cache_allowed,
                                       _registered,
                                       _barred,
+                                      _default_uri,
                                       _uris,
                                       _aliases,
                                       _ifcs,

@@ -507,22 +507,29 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
 
   // Determine the set of IMPUs in the Implicit Registration Set
   std::vector<std::string> irs_impus;
+  AssociatedURIs associated_uris = {};
   std::string state;
   std::map<std::string, Ifcs> ifc_map;
   HTTPCode http_code = hss->get_registration_data(aor,
                                                   state,
                                                   ifc_map,
-                                                  irs_impus,
+                                                  associated_uris,
                                                   trail);
+
+  // We only want to send NOTIFYs for unbarred IMPUs.
+  irs_impus = associated_uris.unbarred_uris();
 
   if ((http_code != HTTP_OK) || irs_impus.empty())
   {
     // We were unable to determine the set of IMPUs for this AoR.  Push the AoR
     // we have into the IRS list so that we have at least one IMPU we can issue
-    // NOTIFYs for.
+    // NOTIFYs for. We should only do this if that IMPU is not barred.
     TRC_WARNING("Unable to get Implicit Registration Set for %s: %d", aor.c_str(), http_code);
     irs_impus.clear();
-    irs_impus.push_back(aor);
+    if (!associated_uris.is_barred(aor))
+    {
+      irs_impus.push_back(aor);
+    }
   }
 
   if (expire_bindings(sdm, aor, irs_impus, binding_id, trail))
@@ -534,11 +541,12 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
 
     std::vector<std::string> uris;
     std::map<std::string, Ifcs> ifc_map;
+
     HTTPCode http_code = hss->update_registration_state(aor,
                                                         "",
                                                         dereg_type,
                                                         ifc_map,
-                                                        irs_impus,
+                                                        associated_uris,
                                                         trail);
 
     if (http_code == HTTP_OK)

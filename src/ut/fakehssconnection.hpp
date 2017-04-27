@@ -42,6 +42,7 @@
 #include "sas.h"
 #include "hssconnection.h"
 #include "mock_hss_connection.h"
+#include "associated_uris.h"
 
 /// HSSConnection that writes to/reads from a local map rather than the HSS.
 /// Optionally accepts a MockHSSConnection object -- if this is provided then
@@ -80,7 +81,7 @@ public:
                                      const std::string& type,
                                      std::string& regstate,
                                      std::map<std::string, Ifcs >& service_profiles,
-                                     std::vector<std::string>& associated_uris,
+                                     AssociatedURIs& associated_uris,
                                      std::deque<std::string>& ccfs,
                                      std::deque<std::string>& ecfs,
                                      SAS::TrailId trail);
