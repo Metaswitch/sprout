@@ -105,7 +105,12 @@ bool PluginLoader::load(std::list<Sproutlet*>& sproutlets)
         break;
       }
 
-      // Clear any dynamic load errors
+      // Clear any dynamic load errors. It's safest to simply call dlerror
+      // prior to any dl*() call. In theory, we could have succesfully
+      // loaded a shared object, which itself had an optional dependency on
+      // another shared object that failed to load. In order to prevent us
+      // seeing any spurious errors unrelated to the dsym call, clear out
+      // any dynamic load errors which have been stored off.
       dlerror();
 
       p.plugin = static_cast<SproutletPlugin*>(dlsym(p.handle, "sproutlet_plugin"));
