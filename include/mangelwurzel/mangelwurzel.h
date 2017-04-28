@@ -136,16 +136,19 @@ public:
   };
 
   /// Constructor.
-  MangelwurzelTsx(Mangelwurzel* mangelwurzel, Config& config, pjsip_msg* req) :
+  MangelwurzelTsx(Mangelwurzel* mangelwurzel, Config& config) :
     SproutletTsx(mangelwurzel),
     _config(config),
-    _unmodified_request(req)
+    _unmodified_request(NULL)
   {}
 
   /// Destructor.
   ~MangelwurzelTsx()
   {
-    free_msg(_unmodified_request);
+    if (_unmodified_request != NULL)
+    {
+      free_msg(_unmodified_request);
+    }
   }
 
   /// Implementation of SproutletTsx methods in mangelwurzel.

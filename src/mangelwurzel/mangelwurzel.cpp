@@ -134,7 +134,7 @@ SproutletTsx* Mangelwurzel::get_tsx(SproutletHelper* helper,
     }
   }
 
-  return new MangelwurzelTsx(this, config, req);
+  return new MangelwurzelTsx(this, config);
 }
 
 /// Mangelwurzel receives an initial request. It will Record-Route itself,
@@ -151,6 +151,9 @@ SproutletTsx* Mangelwurzel::get_tsx(SproutletHelper* helper,
 /// - It can mangle the Record-Route headers URIs.
 void MangelwurzelTsx::on_rx_initial_request(pjsip_msg* req)
 {
+  // Store off the unmodified request.
+  _unmodified_request = original_request();
+
   // If Mangelwurzel receives a REGISTER, we need to respond with a 200 OK
   // rather than mangling the request and forwarding it on.
   if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
