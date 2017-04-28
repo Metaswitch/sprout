@@ -57,7 +57,7 @@ static const char* REVERSE_MANGALGORITHM = "reverse";
 static const char* ROT_13_MANGALGORITHM = "rot13";
 
 /// Creates a MangelwurzelTsx instance.
-SproutletTsx* Mangelwurzel::get_tsx(SproutletProxy* proxy,
+SproutletTsx* Mangelwurzel::get_tsx(SproutletHelper* helper,
                                     const std::string& alias,
                                     pjsip_msg* req,
                                     pjsip_sip_uri*& next_hop,
@@ -134,7 +134,7 @@ SproutletTsx* Mangelwurzel::get_tsx(SproutletProxy* proxy,
     }
   }
 
-  return new MangelwurzelTsx(config, req);
+  return new MangelwurzelTsx(this, config, req);
 }
 
 /// Mangelwurzel receives an initial request. It will Record-Route itself,

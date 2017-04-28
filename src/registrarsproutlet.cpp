@@ -71,7 +71,6 @@ extern "C" {
 #include "log.h"
 #include "notify_utils.h"
 #include "uri_classifier.h"
-#include "sproutletproxy.h"
 
 // RegistrarSproutlet constructor.
 RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
@@ -147,7 +146,7 @@ bool RegistrarSproutlet::init()
   return init_success;
 }
 
-SproutletTsx* RegistrarSproutlet::get_tsx(SproutletProxy* proxy,
+SproutletTsx* RegistrarSproutlet::get_tsx(SproutletHelper* helper,
                                           const std::string& alias,
                                           pjsip_msg* req,
                                           pjsip_sip_uri*& next_hop,
@@ -160,25 +159,23 @@ SproutletTsx* RegistrarSproutlet::get_tsx(SproutletProxy* proxy,
        (uri_class == HOME_DOMAIN_SIP_URI)) &&
       (PJUtils::check_route_headers(req)))
   {
-    return (SproutletTsx*)new RegistrarSproutletTsx(_next_hop_service, this);
+    return (SproutletTsx*)new RegistrarSproutletTsx(this, _next_hop_service);
   }
 
   // We're not interested in the message so create a next hop URI.
   pjsip_route_hdr* route = (pjsip_route_hdr*)
                               pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
 
-  pjsip_sip_uri* base_uri = (pjsip_sip_uri*)(route ? route->name_addr.uri : nullptr);
-  next_hop = proxy->create_internal_sproutlet_uri(pool,
-                                                  _next_hop_service,
-                                                  base_uri);
-
+  next_hop = helper->next_hop_uri(_next_hop_service,
+                                  route,
+                                  pool);
   return NULL;
 }
 
-RegistrarSproutletTsx::RegistrarSproutletTsx(const std::string& next_hop_service,
-                                             RegistrarSproutlet* sproutlet):
-  ForwardingSproutletTsx(next_hop_service),
-  _sproutlet(sproutlet)
+RegistrarSproutletTsx::RegistrarSproutletTsx(RegistrarSproutlet* registrar,
+                                             const std::string& next_hop_service) :
+  ForwardingSproutletTsx(registrar, next_hop_service),
+  _registrar(registrar)
 {
   TRC_DEBUG("Registrar Transaction (%p) created", this);
 }
@@ -220,7 +217,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   {
     num_contacts++;
     pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_EXPIRES, NULL);
-    expiry = _sproutlet->expiry_for_binding(contact_hdr, expires);
+    expiry = _registrar->expiry_for_binding(contact_hdr, expires);
 
     if ((contact_hdr->star) && (expiry != 0))
     {
@@ -267,15 +264,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     {
       if (expiry == 0)
       {
-        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_attempts();
-        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
+        _registrar->_reg_stats_tbls->de_reg_tbl->increment_attempts();
+        _registrar->_reg_stats_tbls->de_reg_tbl->increment_failures();
       }
       else
       // Invalid URI means this cannot be a re-register request, so if not
       // a de-register request, then treat as an initial register request.
       {
-        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_attempts();
-        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_failures();
+        _registrar->_reg_stats_tbls->init_reg_tbl->increment_attempts();
+        _registrar->_reg_stats_tbls->init_reg_tbl->increment_failures();
       }
     }
     return;
@@ -283,7 +280,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
   // Allocate an ACR for this transaction and pass the request to it.  Node
   // role is always considered originating for REGISTER requests.
-  ACR* acr = _sproutlet->_acr_factory->get_acr(trail(),
+  ACR* acr = _registrar->_acr_factory->get_acr(trail(),
                                                ACR::CALLING_PARTY,
                                                ACR::NODE_ROLE_ORIGINATING);
   acr->rx_request(req);
@@ -346,7 +343,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   std::string regstate;
   std::deque<std::string> ccfs;
   std::deque<std::string> ecfs;
-  HTTPCode http_code = _sproutlet->_hss->update_registration_state(public_id,
+  HTTPCode http_code = _registrar->_hss->update_registration_state(public_id,
                                                                    private_id,
                                                                    HSSConnection::REG,
                                                                    regstate,
@@ -376,15 +373,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     {
       if (expiry == 0)
       {
-        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_attempts();
-        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
+        _registrar->_reg_stats_tbls->de_reg_tbl->increment_attempts();
+        _registrar->_reg_stats_tbls->de_reg_tbl->increment_failures();
       }
       else
       // Invalid public/private identity means this cannot be a re-register request,
       // so if not a de-register request, then treat as an initial register request.
       {
-        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_attempts();
-        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_failures();
+        _registrar->_reg_stats_tbls->init_reg_tbl->increment_attempts();
+        _registrar->_reg_stats_tbls->init_reg_tbl->increment_failures();
       }
     }
     return;
@@ -409,8 +406,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
     if (num_contacts > 0)
     {
-      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_attempts();
-      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
+      _registrar->_reg_stats_tbls->de_reg_tbl->increment_attempts();
+      _registrar->_reg_stats_tbls->de_reg_tbl->increment_failures();
     }
 
     return;
@@ -433,8 +430,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
     if (num_contacts > 0)
     {
-      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_attempts();
-      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
+      _registrar->_reg_stats_tbls->de_reg_tbl->increment_attempts();
+      _registrar->_reg_stats_tbls->de_reg_tbl->increment_failures();
     }
 
     return;
@@ -443,7 +440,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // Write to the local store, checking the remote stores if there is no entry locally.
   bool all_bindings_expired;
   SubscriberDataManager::AoRPair* aor_pair =
-                                 write_to_store(_sproutlet->_sdm,
+                                 write_to_store(_registrar->_sdm,
                                                 aor,
                                                 uris,
                                                 req,
@@ -451,13 +448,13 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                                                 expiry,
                                                 is_initial_registration,
                                                 NULL,
-                                                _sproutlet->_remote_sdms,
+                                                _registrar->_remote_sdms,
                                                 private_id_for_binding,
                                                 all_bindings_expired);
   if (all_bindings_expired)
   {
     TRC_DEBUG("All bindings have expired - triggering deregistration at the HSS");
-    _sproutlet->_hss->update_registration_state(aor,
+    _registrar->_hss->update_registration_state(aor,
                                                 "",
                                                 HSSConnection::DEREG_USER,
                                                 trail());
@@ -470,8 +467,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
     // If we have any remote stores, try to store this in them too.  We don't worry
     // about failures in this case.
-    for (std::vector<SubscriberDataManager*>::iterator it = _sproutlet->_remote_sdms.begin();
-         it != _sproutlet->_remote_sdms.end();
+    for (std::vector<SubscriberDataManager*>::iterator it = _registrar->_remote_sdms.begin();
+         it != _registrar->_remote_sdms.end();
          ++it)
     {
       if ((*it)->has_servers())
@@ -512,15 +509,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   {
     if (expiry == 0)
     {
-      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_attempts();
+      _registrar->_reg_stats_tbls->de_reg_tbl->increment_attempts();
     }
     else if (is_initial_registration)
     {
-      _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_attempts();
+      _registrar->_reg_stats_tbls->init_reg_tbl->increment_attempts();
     }
     else
     {
-      _sproutlet->_reg_stats_tbls->re_reg_tbl->increment_attempts();
+      _registrar->_reg_stats_tbls->re_reg_tbl->increment_attempts();
     }
   }
 
@@ -550,15 +547,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     {
       if (is_initial_registration)
       {
-        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_failures();
+        _registrar->_reg_stats_tbls->init_reg_tbl->increment_failures();
       }
       else if (expiry == 0)
       {
-        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
+        _registrar->_reg_stats_tbls->de_reg_tbl->increment_failures();
       }
       else
       {
-        _sproutlet->_reg_stats_tbls->re_reg_tbl->increment_failures();
+        _registrar->_reg_stats_tbls->re_reg_tbl->increment_failures();
       }
     }
 
@@ -595,15 +592,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     {
       if (is_initial_registration)
       {
-        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_failures();
+        _registrar->_reg_stats_tbls->init_reg_tbl->increment_failures();
       }
       else if (expiry == 0)
       {
-        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
+        _registrar->_reg_stats_tbls->de_reg_tbl->increment_failures();
       }
       else
       {
-        _sproutlet->_reg_stats_tbls->re_reg_tbl->increment_failures();
+        _registrar->_reg_stats_tbls->re_reg_tbl->increment_failures();
       }
     }
 
@@ -688,15 +685,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   {
     if (expiry == 0)
     {
-      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_successes();
+      _registrar->_reg_stats_tbls->de_reg_tbl->increment_successes();
     }
     else if (is_initial_registration)
     {
-      _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_successes();
+      _registrar->_reg_stats_tbls->init_reg_tbl->increment_successes();
     }
     else
     {
-      _sproutlet->_reg_stats_tbls->re_reg_tbl->increment_successes();
+      _registrar->_reg_stats_tbls->re_reg_tbl->increment_successes();
     }
   }
 
@@ -729,7 +726,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // structures in the header may get overwritten, but it is safe to do a
   // shallow clone.
   pjsip_hdr* clone = (pjsip_hdr*)
-                          pjsip_hdr_shallow_clone(get_pool(rsp), _sproutlet->_service_route);
+                          pjsip_hdr_shallow_clone(get_pool(rsp), _registrar->_service_route);
   pjsip_msg_insert_first_hdr(rsp, clone);
 
   // Add P-Associated-URI headers for all of the associated URIs. Don't include
@@ -771,9 +768,9 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   if (num_emergency_bindings == 0)
   {
     RegistrationUtils::register_with_application_servers(ifc_map[public_id],
-                                                         _sproutlet->_sdm,
-                                                         _sproutlet->_remote_sdms,
-                                                         _sproutlet->_hss,
+                                                         _registrar->_sdm,
+                                                         _registrar->_remote_sdms,
+                                                         _registrar->_hss,
                                                          req,
                                                          clone_rsp,
                                                          expiry,
@@ -907,7 +904,7 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
     while (contact != NULL)
     {
       changed_bindings++;
-      expiry = _sproutlet->expiry_for_binding(contact, expires);
+      expiry = _registrar->expiry_for_binding(contact, expires);
 
       if (contact->star)
       {

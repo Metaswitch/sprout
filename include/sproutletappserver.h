@@ -229,13 +229,18 @@ class SproutletAppServerShim : public Sproutlet
 {
 public:
   /// Called when the system determines the app-server should be invoked for a
-  /// received request.
+  /// received request. The Sproutlet can either return NULL indicating it does
+  /// not want to process the request, or create a suitable objext derived from
+  /// the SproutletTsx to process the request.
   ///
-  /// @param  helper        - The service helper to use to perform
-  ///                         the underlying service-related processing.
+  /// @param  proxy         - The Sproutlet helper.
   /// @param  alias         - Ignored.
   /// @param  req           - The received request message.
-  virtual SproutletTsx* get_tsx(SproutletProxy* proxy,
+  /// @param  next_hop      - The Sproutlet can use this field to specify a
+  ///                         next hop URI when it returns a NULL Tsx.
+  /// @param  pool          - The pool for creating the next_hop uri.
+  /// @param  trail         - The SAS trail id for the message.
+  virtual SproutletTsx* get_tsx(SproutletHelper* helper,
                                 const std::string& alias,
                                 pjsip_msg* req,
                                 pjsip_sip_uri*& next_hop,
@@ -258,13 +263,14 @@ class SproutletAppServerShimTsx : public SproutletTsx
 {
 public:
   /// Constructor
-  SproutletAppServerShimTsx(AppServerTsx* app_tsx);
+  SproutletAppServerShimTsx(SproutletAppServerShim* sproutlet,
+                            AppServerTsx* app_tsx);
 
   /// Destructor
   virtual ~SproutletAppServerShimTsx();
 
-  void init_tsx(SproutletTsxHelper* sproutlet_helper,
-                pjsip_msg* req);
+  /// Set the SproutletTsxHelper on the SproutletTsx.
+  void set_helper(SproutletTsxHelper* sproutlet_helper);
 
   /// Called for an initial request (dialog-initiating or out-of-dialog) with
   /// the original received request for the transaction.

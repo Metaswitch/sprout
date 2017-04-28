@@ -332,7 +332,7 @@ SproutletAppServerShim::SproutletAppServerShim(AppServer* app,
 ///                         the underlying service-related processing.
 /// @param  alias         - Ignored.
 /// @param  req           - The received request message.
-SproutletTsx* SproutletAppServerShim::get_tsx(SproutletProxy* proxy,
+SproutletTsx* SproutletAppServerShim::get_tsx(SproutletHelper* helper,
                                               const std::string& alias,
                                               pjsip_msg* req,
                                               pjsip_sip_uri*& next_hop,
@@ -340,19 +340,20 @@ SproutletTsx* SproutletAppServerShim::get_tsx(SproutletProxy* proxy,
                                               SAS::TrailId trail)
 {
   SproutletTsx* tsx = NULL;
-  AppServerTsx* app_tsx = _app->get_app_tsx(proxy, req, next_hop, pool, trail);
+  AppServerTsx* app_tsx = _app->get_app_tsx(helper, req, next_hop, pool, trail);
 
   if (app_tsx != NULL)
   {
-    tsx = new SproutletAppServerShimTsx(app_tsx);
+    tsx = new SproutletAppServerShimTsx(this, app_tsx);
   }
 
   return tsx;
 }
 
 /// Constructor.
-SproutletAppServerShimTsx::SproutletAppServerShimTsx(AppServerTsx* app_tsx) :
-  SproutletTsx(),
+SproutletAppServerShimTsx::SproutletAppServerShimTsx(SproutletAppServerShim* sproutlet,
+                                                     AppServerTsx* app_tsx) :
+  SproutletTsx(sproutlet),
   _app_server_helper(NULL),
   _app_tsx(app_tsx)
 {
@@ -366,15 +367,14 @@ SproutletAppServerShimTsx::~SproutletAppServerShimTsx()
 }
 
 /// Initializes the Sproutlet Tsx
-void SproutletAppServerShimTsx::init_tsx(SproutletTsxHelper* sproutlet_helper,
-                                         pjsip_msg* req)
+void SproutletAppServerShimTsx::set_helper(SproutletTsxHelper* sproutlet_helper)
 {
-  SproutletTsx::init_tsx(sproutlet_helper, req);
+  SproutletTsx::set_helper(sproutlet_helper);
 
   // Create the helper for the AppServer layer.
   _app_server_helper = new SproutletAppServerTsxHelper(sproutlet_helper);
 
-  _app_tsx->init_tsx(_app_server_helper);
+  _app_tsx->set_helper(_app_server_helper);
 }
 
 /// Called for an initial request (dialog-initiating or out-of-dialog) with

@@ -60,7 +60,7 @@ using namespace rapidxml;
 
 
 /// Get a new MmtelTsx from the Mmtel AS.
-AppServerTsx* Mmtel::get_app_tsx(SproutletProxy* proxy,
+AppServerTsx* Mmtel::get_app_tsx(SproutletHelper* helper,
                                  pjsip_msg* req,
                                  pjsip_sip_uri*& next_hop,
                                  pj_pool_t* pool,
@@ -158,7 +158,7 @@ void CallDiversionAS::cdiv_callback(std::string target, unsigned int conditions)
 }
 
 /// Get a new MmtelTsx from the CallDiversionAS.
-AppServerTsx* CallDiversionAS::get_app_tsx(SproutletProxy* proxy,
+AppServerTsx* CallDiversionAS::get_app_tsx(SproutletHelper* helper,
                                            pjsip_msg* req,
                                            pjsip_sip_uri*& next_hop,
                                            pj_pool_t* pool,

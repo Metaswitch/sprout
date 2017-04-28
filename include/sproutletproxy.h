@@ -54,7 +54,7 @@
 
 class SproutletWrapper;
 
-class SproutletProxy : public BasicProxy
+class SproutletProxy : public BasicProxy, SproutletHelper
 {
 public:
   /// Constructor.
@@ -78,17 +78,11 @@ public:
   /// Static callback for timers
   static void on_timer_pop(pj_timer_heap_t* th, pj_timer_entry* tentry);
 
-  /// Create a URI that routes to the named sproutlet internally within the
-  /// sproutlet proxy.
-  ///
-  /// @param pool         - Pool to allocate the URI from.
-  /// @param name         - The name of the service to invoke.
-  /// @param existing_uri - An existing URI to base the new URI on. Any URI
-  ///                       parameters are copied over to the new URI but the
-  ///                       user part is stripped off.
-  pjsip_sip_uri* create_internal_sproutlet_uri(pj_pool_t* pool,
-                                               const std::string& name,
-                                               pjsip_sip_uri* existing_uri) const;
+  /// Constructs the next hop URI if a Sproutlet doesn't want to handle a
+  /// request.
+  pjsip_sip_uri* next_hop_uri(const std::string& service,
+                              const pjsip_route_hdr* route,
+                              pj_pool_t* pool) const;
 
 protected:
   /// Pre-declaration
@@ -115,6 +109,16 @@ protected:
   /// Create a URI that routes to a given Sproutlet.
   pjsip_sip_uri* create_sproutlet_uri(pj_pool_t* pool,
                                       Sproutlet* sproutlet) const;
+
+  /// Create a URI that routes to the named sproutlet internally within the
+  /// sproutlet proxy.
+  ///
+  /// @param pool         - Pool to allocate the URI from.
+  /// @param name         - The name of the service to invoke.
+  /// @param existing_uri - An existing URI to base the new URI on.
+  pjsip_sip_uri* create_internal_sproutlet_uri(pj_pool_t* pool,
+                                               const std::string& name,
+                                               pjsip_sip_uri* existing_uri) const;
 
   Sproutlet* service_from_host(pjsip_sip_uri* uri);
   Sproutlet* service_from_user(pjsip_sip_uri* uri);
@@ -193,19 +197,12 @@ protected:
                    int fork_id,
                    pjsip_tx_data* cancel);
 
-    /// Gets the next target Sproutlet for the message by analysing the top
-    /// Route header.
-    Sproutlet* target_sproutlet(pjsip_msg* msg,
-                                int port,
-                                std::string& alias,
-                                SAS::TrailId trail);
-
     /// Checks to see if it is safe to destroy the UASTsx.
     void check_destroy();
 
-    /// Finds a sproutlet tsx willing to handle a request
-    SproutletTsx* get_sproutlet_tsx(Sproutlet*& sproutlet,
-                                    pjsip_tx_data* req,
+    /// Finds a SproutletTsx willing to handle a request
+    SproutletTsx* get_sproutlet_tsx(pjsip_tx_data* req,
+                                    int port,
                                     std::string& alias);
 
     /// The root Sproutlet for this transaction.
@@ -321,9 +318,9 @@ public:
   SAS::TrailId trail() const;
   bool is_uri_reflexive(const pjsip_uri*) const;
   pjsip_sip_uri* get_reflexive_uri(pj_pool_t*) const;
-  pjsip_sip_uri* get_uri_for_service(const std::string& service,
-                                     pj_pool_t* pool,
-                                     pjsip_sip_uri* existing_uri) const;
+  pjsip_sip_uri* next_hop_uri(const std::string& service,
+                              const pjsip_route_hdr* route,
+                              pj_pool_t* pool) const;
 
 private:
   void rx_request(pjsip_tx_data* req);
@@ -359,8 +356,9 @@ private:
   /// of the service name and the address of the object.
   std::string _id;
 
-  /// Immutable reference to the original request.  A mutable clone of this
-  /// is passed to the Sproutlet.
+  /// Reference to the original request. This can been modified by the Sproutlet
+  /// Proxy depending on where it sends this message. A clone of this is passed
+  /// to the root Sproutlet.
   pjsip_tx_data* _req;
   SNMP::SIPRequestTypes _req_type;
 

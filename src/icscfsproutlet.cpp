@@ -118,7 +118,7 @@ bool ICSCFSproutlet::init()
 
 /// Creates a ICSCFSproutletTsx instance for performing I-CSCF service processing
 /// on a request.
-SproutletTsx* ICSCFSproutlet::get_tsx(SproutletProxy* proxy,
+SproutletTsx* ICSCFSproutlet::get_tsx(SproutletHelper* helper,
                                       const std::string& alias,
                                       pjsip_msg* req,
                                       pjsip_sip_uri*& next_hop,
@@ -164,7 +164,7 @@ void ICSCFSproutlet::translate_request_uri(pjsip_msg* req,
 
 /// Individual Tsx constructor for REGISTER requests.
 ICSCFSproutletRegTsx::ICSCFSproutletRegTsx(ICSCFSproutlet* icscf) :
-  SproutletTsx(),
+  SproutletTsx(icscf),
   _icscf(icscf),
   _acr(NULL),
   _router(NULL)
@@ -433,7 +433,7 @@ void ICSCFSproutletRegTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
 /// Individual Tsx constructor for non-REGISTER requests.
 ICSCFSproutletTsx::ICSCFSproutletTsx(ICSCFSproutlet* icscf,
                                      pjsip_method_e req_type) :
-  SproutletTsx(),
+  SproutletTsx(icscf),
   _icscf(icscf),
   _acr(NULL),
   _router(NULL),

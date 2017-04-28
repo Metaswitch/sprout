@@ -182,8 +182,8 @@ TEST_F(MangelwurzelTest, Rot13)
   Message msg;
   pjsip_msg* req = parse_msg(msg.get_request());
   EXPECT_CALL(*_helper, free_msg(_));
-  MangelwurzelTsx mangelwurzel_tsx(config, req);
-  mangelwurzel_tsx.init_tsx(_helper, req);
+  MangelwurzelTsx mangelwurzel_tsx(NULL, config, req);
+  mangelwurzel_tsx.set_helper(_helper);
 
   std::string test_str = "pogo123";
   mangelwurzel_tsx.rot13(test_str);
@@ -205,8 +205,8 @@ TEST_F(MangelwurzelTest, Reverse)
   Message msg;
   pjsip_msg* req = parse_msg(msg.get_request());
   EXPECT_CALL(*_helper, free_msg(_));
-  MangelwurzelTsx mangelwurzel_tsx(config, req);
-  mangelwurzel_tsx.init_tsx(_helper, req);
+  MangelwurzelTsx mangelwurzel_tsx(NULL, config, req);
+  mangelwurzel_tsx.set_helper(_helper);
 
   std::string test_str = "pogo123";
   mangelwurzel_tsx.reverse(test_str);
@@ -245,7 +245,7 @@ TEST_F(MangelwurzelTest, CreateDefaults)
   EXPECT_FALSE(mangelwurzel_tsx->_config.orig);
   EXPECT_FALSE(mangelwurzel_tsx->_config.ootb);
   EXPECT_EQ(mangelwurzel_tsx->_config.mangalgorithm, MangelwurzelTsx::ROT_13);
-  mangelwurzel_tsx->init_tsx(_helper, req);
+  mangelwurzel_tsx->set_helper(_helper);
 
   delete mangelwurzel_tsx; mangelwurzel_tsx = NULL;
 }
@@ -278,7 +278,7 @@ TEST_F(MangelwurzelTest, CreateFullConfig)
   EXPECT_TRUE(mangelwurzel_tsx->_config.orig);
   EXPECT_TRUE(mangelwurzel_tsx->_config.ootb);
   EXPECT_EQ(mangelwurzel_tsx->_config.mangalgorithm, MangelwurzelTsx::REVERSE);
-  mangelwurzel_tsx->init_tsx(_helper, req);
+  mangelwurzel_tsx->set_helper(_helper);
 
   delete mangelwurzel_tsx; mangelwurzel_tsx = NULL;
 }
@@ -304,7 +304,7 @@ TEST_F(MangelwurzelTest, CreateRot13)
                                            0);
   EXPECT_TRUE(mangelwurzel_tsx != NULL);
   EXPECT_EQ(mangelwurzel_tsx->_config.mangalgorithm, MangelwurzelTsx::ROT_13);
-  mangelwurzel_tsx->init_tsx(_helper, req);
+  mangelwurzel_tsx->set_helper(_helper);
 
   delete mangelwurzel_tsx; mangelwurzel_tsx = NULL;
 }
@@ -332,7 +332,7 @@ TEST_F(MangelwurzelTest, CreateInvalidMangalgorithm)
   EXPECT_TRUE(mangelwurzel_tsx != NULL);
   EXPECT_TRUE(log.contains("Invalid mangalgorithm specified"));
   EXPECT_EQ(mangelwurzel_tsx->_config.mangalgorithm, MangelwurzelTsx::ROT_13);
-  mangelwurzel_tsx->init_tsx(_helper, req);
+  mangelwurzel_tsx->set_helper(_helper);
 
   delete mangelwurzel_tsx; mangelwurzel_tsx = NULL;
 }
@@ -357,7 +357,7 @@ TEST_F(MangelwurzelTest, CreateNoRouteHdr)
                                            0);
   EXPECT_TRUE(mangelwurzel_tsx != NULL);
   EXPECT_EQ(mangelwurzel_tsx->_config.mangalgorithm, MangelwurzelTsx::REVERSE);
-  mangelwurzel_tsx->init_tsx(_helper, req);
+  mangelwurzel_tsx->set_helper(_helper);
   delete mangelwurzel_tsx; mangelwurzel_tsx = NULL;
 }
 
@@ -383,8 +383,8 @@ TEST_F(MangelwurzelTest, InitialReq)
   config.change_domain = true;
   config.orig = true;
   config.ootb = true;
-  MangelwurzelTsx mangelwurzel_tsx(config, original_req);
-  mangelwurzel_tsx.init_tsx(_helper, original_req);
+  MangelwurzelTsx mangelwurzel_tsx(NULL, config, original_req);
+  mangelwurzel_tsx.set_helper(_helper);
 
   // Create the corresponding Route header for this config set. We expect
   // mangelwurzel to request it when it Record-Routes itself.
@@ -442,8 +442,8 @@ TEST_F(MangelwurzelTest, Response)
   config.change_domain = true;
   config.orig = true;
   config.ootb = true;
-  MangelwurzelTsx mangelwurzel_tsx(config, original_req);
-  mangelwurzel_tsx.init_tsx(_helper, original_req);
+  MangelwurzelTsx mangelwurzel_tsx(NULL, config, original_req);
+  mangelwurzel_tsx.set_helper(_helper);
 
   // Create the response and trigger response processing on mangelwurzel. Catch
   // the response again when mangelwurzel sends it on.
@@ -492,8 +492,8 @@ TEST_F(MangelwurzelTest, InDialogReq)
   config.orig = false;
   config.ootb = false;
   config.mangalgorithm = MangelwurzelTsx::REVERSE;
-  MangelwurzelTsx mangelwurzel_tsx(config, original_req);
-  mangelwurzel_tsx.init_tsx(_helper, original_req);
+  MangelwurzelTsx mangelwurzel_tsx(NULL, config, original_req);
+  mangelwurzel_tsx.set_helper(_helper);
 
   // Trigger in dialog request processing in mangelwurzel and catch the request
   // again when mangelwurzel sends it on.
@@ -540,8 +540,8 @@ TEST_F(MangelwurzelTest, REGISTER)
   config.orig = false;
   config.ootb = false;
   config.mangalgorithm = MangelwurzelTsx::REVERSE;
-  MangelwurzelTsx mangelwurzel_tsx(config, original_req);
-  mangelwurzel_tsx.init_tsx(_helper, original_req);
+  MangelwurzelTsx mangelwurzel_tsx(NULL, config, original_req);
+  mangelwurzel_tsx.set_helper(_helper);
 
   // Trigger in dialog request processing in mangelwurzel and catch the request
   // again when mangelwurzel sends it on.

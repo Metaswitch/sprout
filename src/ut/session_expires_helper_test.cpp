@@ -49,8 +49,8 @@ using testing::MatchesRegex;
 class SessionExpiresHelperTsx : public SproutletTsx
 {
 public:
-  SessionExpiresHelperTsx() :
-    SproutletTsx(),
+  SessionExpiresHelperTsx(Sproutlet* sproutlet) :
+    SproutletTsx(sproutlet),
     _se_helper(600)
   {
   }
@@ -88,14 +88,14 @@ public:
     Sproutlet(service_name, port, service_host)
   {}
 
-  SproutletTsx* get_tsx(SproutletProxy* proxy,
+  SproutletTsx* get_tsx(SproutletHelper* helper,
                         const std::string& alias,
                         pjsip_msg* req,
                         pjsip_sip_uri*& next_hop,
                         pj_pool_t* pool,
                         SAS::TrailId trail)
   {
-    return (SessionExpiresHelperTsx*)new SessionExpiresHelperTsx();
+    return (SessionExpiresHelperTsx*)new SessionExpiresHelperTsx(this);
   }
 };
 

@@ -63,7 +63,6 @@ extern "C" {
 #include "subscriptionsproutlet.h"
 #include "uri_classifier.h"
 #include "hss_sip_mapping.h"
-#include "sproutletproxy.h"
 
 /// SubscriptionSproutlet constructor
 SubscriptionSproutlet::SubscriptionSproutlet(const std::string& name,
@@ -97,7 +96,7 @@ bool SubscriptionSproutlet::init()
   return true;
 }
 
-SproutletTsx* SubscriptionSproutlet::get_tsx(SproutletProxy* proxy,
+SproutletTsx* SubscriptionSproutlet::get_tsx(SproutletHelper* helper,
                                              const std::string& alias,
                                              pjsip_msg* req,
                                              pjsip_sip_uri*& next_hop,
@@ -106,18 +105,16 @@ SproutletTsx* SubscriptionSproutlet::get_tsx(SproutletProxy* proxy,
 {
   if (handle_request(req, trail))
   {
-    return (SproutletTsx*)new SubscriptionSproutletTsx(_next_hop_service, this);
+    return (SproutletTsx*)new SubscriptionSproutletTsx(this, _next_hop_service);
   }
 
   // We're not interested in the message so create a next hop URI.
   pjsip_route_hdr* route = (pjsip_route_hdr*)
                               pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
 
-  pjsip_sip_uri* base_uri = (pjsip_sip_uri*)(route ? route->name_addr.uri : nullptr);
-  next_hop = proxy->create_internal_sproutlet_uri(pool,
-                                                  _next_hop_service,
-                                                  base_uri);
-
+  next_hop = helper->next_hop_uri(_next_hop_service,
+                                  route,
+                                  pool);
   return NULL;
 }
 
@@ -209,10 +206,10 @@ bool SubscriptionSproutlet::handle_request(pjsip_msg* req,
   return true;
 }
 
-SubscriptionSproutletTsx::SubscriptionSproutletTsx(const std::string& next_hop_service,
-                                                   SubscriptionSproutlet* sproutlet):
-  ForwardingSproutletTsx(next_hop_service),
-  _sproutlet(sproutlet)
+SubscriptionSproutletTsx::SubscriptionSproutletTsx(SubscriptionSproutlet* subscription,
+                                                   const std::string& next_hop_service) :
+  ForwardingSproutletTsx(subscription, next_hop_service),
+  _subscription(subscription)
 {
   TRC_DEBUG("Subscription Transaction (%p) created", this);
 }
@@ -251,10 +248,10 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_EXPIRES, NULL);
   int expiry = (expires != NULL) ? expires->ivalue : SubscriptionSproutlet::DEFAULT_SUBSCRIPTION_EXPIRES;
 
-  if (expiry > _sproutlet->_max_expires)
+  if (expiry > _subscription->_max_expires)
   {
     // Expiry is too long, set it to the maximum.
-    expiry = _sproutlet->_max_expires;
+    expiry = _subscription->_max_expires;
   }
 
   if ((!PJSIP_URI_SCHEME_IS_SIP(uri)) && (!PJSIP_URI_SCHEME_IS_TEL(uri)))
@@ -313,7 +310,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
 
   // Create an ACR for the request.  The node role is always considered
   // originating for SUBSCRIBE requests.
-  ACR* acr = _sproutlet->_acr_factory->get_acr(trail_id,
+  ACR* acr = _subscription->_acr_factory->get_acr(trail_id,
                                                ACR::CALLING_PARTY,
                                                ACR::NODE_ROLE_ORIGINATING);
   acr->rx_request(req);
@@ -344,7 +341,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   std::string state;
   std::deque<std::string> ccfs;
   std::deque<std::string> ecfs;
-  HTTPCode http_code = _sproutlet->_hss->get_registration_data(public_id,
+  HTTPCode http_code = _subscription->_hss->get_registration_data(public_id,
                                                                state,
                                                                ifc_map,
                                                                uris,
@@ -374,13 +371,13 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   // Write to the local store, checking the remote stores if there is no entry locally.
   // If the write to the local store succeeds, then write to the remote stores.
   SubscriberDataManager::AoRPair* aor_pair =
-                              write_subscriptions_to_store(_sproutlet->_sdm,
+                              write_subscriptions_to_store(_subscription->_sdm,
                                                            aor,
                                                            uris,
                                                            req,
                                                            now,
                                                            NULL,
-                                                           _sproutlet->_remote_sdms,
+                                                           _subscription->_remote_sdms,
                                                            public_id,
                                                            true,
                                                            acr,
@@ -394,8 +391,8 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
 
     // If we have any remote stores, try to store this there too.  We don't worry
     // about failures in this case.
-    for (std::vector<SubscriberDataManager*>::iterator it = _sproutlet->_remote_sdms.begin();
-         it != _sproutlet->_remote_sdms.end();
+    for (std::vector<SubscriberDataManager*>::iterator it = _subscription->_remote_sdms.begin();
+         it != _subscription->_remote_sdms.end();
          ++it)
     {
       if ((*it)->has_servers())
@@ -638,10 +635,10 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
       expiry = (expires != NULL) ?
         expires->ivalue : SubscriptionSproutlet::DEFAULT_SUBSCRIPTION_EXPIRES;
 
-      if (expiry > _sproutlet->_max_expires)
+      if (expiry > _subscription->_max_expires)
       {
         // Expiry is too long, set it to the maximum.
-        expiry = _sproutlet->_max_expires;
+        expiry = _subscription->_max_expires;
       }
 
       subscription->_expires = now + expiry;
@@ -689,10 +686,10 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
   }
   while (set_rc == Store::DATA_CONTENTION);
 
-  if ((_sproutlet->_analytics != NULL) && (is_primary))
+  if ((_subscription->_analytics != NULL) && (is_primary))
   {
     // Generate an analytics log for this subscription update.
-    _sproutlet->_analytics->subscription(aor,
+    _subscription->_analytics->subscription(aor,
                                          subscription_id,
                                          subscription_contact,
                                          expiry);

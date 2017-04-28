@@ -98,7 +98,7 @@ public:
   ~SCSCFSproutlet();
 
   bool init();
-  SproutletTsx* get_tsx(SproutletProxy* proxy,
+  SproutletTsx* get_tsx(SproutletHelper* helper,
                         const std::string& alias,
                         pjsip_msg* req,
                         pjsip_sip_uri*& next_hop,

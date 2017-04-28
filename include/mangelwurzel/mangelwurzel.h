@@ -69,7 +69,7 @@ public:
   ~Mangelwurzel() {}
 
   /// Create a MangelwurzelTsx.
-  SproutletTsx* get_tsx(SproutletProxy* proxy,
+  SproutletTsx* get_tsx(SproutletHelper* helper,
                         const std::string& alias,
                         pjsip_msg* req,
                         pjsip_sip_uri*& next_hop,
@@ -136,8 +136,8 @@ public:
   };
 
   /// Constructor.
-  MangelwurzelTsx(Config& config, pjsip_msg* req) :
-    SproutletTsx(),
+  MangelwurzelTsx(Mangelwurzel* mangelwurzel, Config& config, pjsip_msg* req) :
+    SproutletTsx(mangelwurzel),
     _config(config),
     _unmodified_request(req)
   {}

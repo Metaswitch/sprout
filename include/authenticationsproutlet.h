@@ -88,7 +88,7 @@ public:
 
   bool init();
 
-  SproutletTsx* get_tsx(SproutletProxy* proxy,
+  SproutletTsx* get_tsx(SproutletHelper* helper,
                         const std::string& alias,
                         pjsip_msg* req,
                         pjsip_sip_uri*& next_hop,
@@ -151,8 +151,8 @@ private:
 class AuthenticationSproutletTsx : public ForwardingSproutletTsx
 {
 public:
-  AuthenticationSproutletTsx(const std::string& next_hop_service,
-                             AuthenticationSproutlet* sproutlet);
+  AuthenticationSproutletTsx(AuthenticationSproutlet* authentication,
+                             const std::string& next_hop_service);
   ~AuthenticationSproutletTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req) override;
@@ -174,7 +174,7 @@ protected:
                                  void* auth_challenge_param);
   static pjsip_digest_credential* get_credentials(const pjsip_msg* req);
 
-  AuthenticationSproutlet* _sproutlet;
+  AuthenticationSproutlet* _authentication;
 };
 
 #endif

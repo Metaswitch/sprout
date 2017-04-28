@@ -177,7 +177,7 @@ bool SCSCFSproutlet::init()
 
 /// Creates a SCSCFSproutletTsx instance for performing S-CSCF service processing
 /// on a request.
-SproutletTsx* SCSCFSproutlet::get_tsx(SproutletProxy* proxy,
+SproutletTsx* SCSCFSproutlet::get_tsx(SproutletHelper* helper,
                                       const std::string& alias,
                                       pjsip_msg* req,
                                       pjsip_sip_uri*& next_hop,
@@ -387,7 +387,7 @@ void SCSCFSproutlet::track_session_setup_time(uint64_t tsx_start_time_usec,
 
 SCSCFSproutletTsx::SCSCFSproutletTsx(SCSCFSproutlet* scscf,
                                      pjsip_method_e req_type) :
-  SproutletTsx(),
+  SproutletTsx(scscf),
   _scscf(scscf),
   _cancelled(false),
   _session_case(NULL),

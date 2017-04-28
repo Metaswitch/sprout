@@ -70,7 +70,7 @@ public:
     AppServer(service_name),
     _xdmc(xdm_client) {};
 
-  AppServerTsx* get_app_tsx(SproutletProxy* proxy,
+  AppServerTsx* get_app_tsx(SproutletHelper* helper,
                             pjsip_msg* req,
                             pjsip_sip_uri*& next_hop,
                             pj_pool_t* pool,
@@ -90,7 +90,7 @@ public:
   CallDiversionAS(const std::string& service_name);
   virtual ~CallDiversionAS();
 
-  AppServerTsx* get_app_tsx(SproutletProxy* proxy,
+  AppServerTsx* get_app_tsx(SproutletHelper* helper,
                             pjsip_msg* req,
                             pjsip_sip_uri*& next_hop,
                             pj_pool_t* pool,

@@ -37,7 +37,6 @@
 #include "constants.h"
 #include "sproutsasevent.h"
 #include "authenticationsproutlet.h"
-#include "sproutletproxy.h"
 #include "json_parse_utils.h"
 #include <openssl/hmac.h>
 #include "base64.h"
@@ -127,7 +126,7 @@ bool AuthenticationSproutlet::init()
   return (status == PJ_SUCCESS);
 }
 
-SproutletTsx* AuthenticationSproutlet::get_tsx(SproutletProxy* proxy,
+SproutletTsx* AuthenticationSproutlet::get_tsx(SproutletHelper* helper,
                                                const std::string& alias,
                                                pjsip_msg* req,
                                                pjsip_sip_uri*& next_hop,
@@ -136,18 +135,16 @@ SproutletTsx* AuthenticationSproutlet::get_tsx(SproutletProxy* proxy,
 {
   if (needs_authentication(req, trail))
   {
-    return new AuthenticationSproutletTsx(_next_hop_service, this);
+    return new AuthenticationSproutletTsx(this, _next_hop_service);
   }
 
   // We're not interested in the message so create a next hop URI.
   pjsip_route_hdr* route = (pjsip_route_hdr*)
                               pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
 
-  pjsip_sip_uri* base_uri = (pjsip_sip_uri*)(route ? route->name_addr.uri : nullptr);
-  next_hop = proxy->create_internal_sproutlet_uri(pool,
-                                                  _next_hop_service,
-                                                  base_uri);
-
+  next_hop = helper->next_hop_uri(_next_hop_service,
+                                  route,
+                                  pool);
   return NULL;
 }
 
@@ -284,10 +281,10 @@ bool AuthenticationSproutlet::needs_authentication(pjsip_msg* req,
 // Authentication Sproutlet Tsx methods.
 //
 
-AuthenticationSproutletTsx::AuthenticationSproutletTsx(const std::string& next_hop_service,
-                                                       AuthenticationSproutlet* auth_sproutlet) :
-  ForwardingSproutletTsx(next_hop_service),
-  _sproutlet(auth_sproutlet)
+AuthenticationSproutletTsx::AuthenticationSproutletTsx(AuthenticationSproutlet* authentication,
+                                                       const std::string& next_hop_service) :
+  ForwardingSproutletTsx(authentication, next_hop_service),
+  _authentication(authentication)
 {
 }
 
@@ -340,7 +337,7 @@ int AuthenticationSproutletTsx::calculate_challenge_expiration_time(pjsip_msg* r
        contact_hdr = (pjsip_contact_hdr*)
           pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, contact_hdr->next))
   {
-    expires = std::max(expires, _sproutlet->_get_expiry_for_binding(contact_hdr, expires_hdr));
+    expires = std::max(expires, _authentication->_get_expiry_for_binding(contact_hdr, expires_hdr));
   }
 
   return expires + time(NULL);
@@ -535,7 +532,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
 
   // Get the Authentication Vector from the HSS.
   rapidjson::Document* av = NULL;
-  HTTPCode http_code = _sproutlet->_hss->get_auth_vector(impi, impu, auth_type, resync, av, trail());
+  HTTPCode http_code = _authentication->_hss->get_auth_vector(impi, impu, auth_type, resync, av, trail());
 
   if ((av != NULL) &&
       (!verify_auth_vector(av, impi)))
@@ -597,7 +594,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
       JSON_SAFE_GET_INT_MEMBER(aka, "version", akaversion);
 
       // Use default realm for AKA as not specified in the AV.
-      pj_strdup(rsp_pool, &hdr->challenge.digest.realm, &_sproutlet->_aka_realm);
+      pj_strdup(rsp_pool, &hdr->challenge.digest.realm, &_authentication->_aka_realm);
       hdr->challenge.digest.algorithm = ((akaversion == 2) ? STR_AKAV2_MD5 : STR_AKAV1_MD5);
 
       pj_strdup2(rsp_pool, &hdr->challenge.digest.nonce, nonce.c_str());
@@ -738,7 +735,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
       std::string nonce = auth_challenge->nonce;
 
       ImpiStore::Impi* impi_obj =
-        _sproutlet->_impi_store->get_impi_with_nonce(impi,
+        _authentication->_impi_store->get_impi_with_nonce(impi,
                                                      nonce,
                                                      trail());
 
@@ -774,7 +771,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
         auth_challenge = NULL;
       }
 
-      status = _sproutlet->_impi_store->set_impi(impi_obj, trail());
+      status = _authentication->_impi_store->set_impi(impi_obj, trail());
 
       // Regardless of what happened take the challenge back. If everything
       // went well we will delete it below. If we hit data contention we will
@@ -801,7 +798,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
       std::string timer_id;
       std::string chronos_body = "{\"impi\": \"" + impi + "\", \"impu\": \"" + impu +"\", \"nonce\": \"" + nonce +"\"}";
       TRC_DEBUG("Sending %s to Chronos to set AV timer", chronos_body.c_str());
-      _sproutlet->_chronos->send_post(timer_id,
+      _authentication->_chronos->send_post(timer_id,
                                       30,
                                       "/authentication-timeout",
                                       chronos_body,
@@ -863,7 +860,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   {
     std::string impi = PJUtils::pj_str_to_string(&credentials->username);
     std::string nonce = PJUtils::pj_str_to_string(&credentials->nonce);
-    impi_obj = _sproutlet->_impi_store->get_impi_with_nonce(impi, nonce, trail());
+    impi_obj = _authentication->_impi_store->get_impi_with_nonce(impi, nonce, trail());
     ImpiStore::AuthChallenge* auth_challenge = NULL;
     if (impi_obj != NULL)
     {
@@ -874,18 +871,18 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     {
       // Challenged non-register requests must be SIP digest, so only one table
       // needed for this case.
-      auth_stats_table = _sproutlet->_auth_stats_tables->non_register_auth_tbl;
+      auth_stats_table = _authentication->_auth_stats_tables->non_register_auth_tbl;
     }
     else
     {
       if (!pj_strcmp(&credentials->algorithm, &STR_MD5))
       {
-        auth_stats_table = _sproutlet->_auth_stats_tables->sip_digest_auth_tbl;
+        auth_stats_table = _authentication->_auth_stats_tables->sip_digest_auth_tbl;
       }
       else if ((!pj_strcmp(&credentials->algorithm, &STR_AKAV1_MD5)) ||
                (!pj_strcmp(&credentials->algorithm, &STR_AKAV2_MD5)))
       {
-        auth_stats_table = _sproutlet->_auth_stats_tables->ims_aka_auth_tbl;
+        auth_stats_table = _authentication->_auth_stats_tables->ims_aka_auth_tbl;
       }
       else
       {
@@ -893,12 +890,12 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
         // this information instead.
         if ((auth_challenge != NULL) && (auth_challenge->type == ImpiStore::AuthChallenge::Type::AKA))
         {
-          auth_stats_table = _sproutlet->_auth_stats_tables->ims_aka_auth_tbl;
+          auth_stats_table = _authentication->_auth_stats_tables->ims_aka_auth_tbl;
         }
         else
         {
           // Use the digest table if the AV specified digest, or as a fallback if there was no AV
-          auth_stats_table = _sproutlet->_auth_stats_tables->sip_digest_auth_tbl;
+          auth_stats_table = _authentication->_auth_stats_tables->sip_digest_auth_tbl;
         }
       }
     }
@@ -918,7 +915,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       // A nonce count > 1 is supplied. Check that it is acceptable. If it is
       // not, pretend that we didn't find the challenge to check against as
       // this will force the code below to re-challenge.
-      if (!_sproutlet->_nonce_count_supported)
+      if (!_authentication->_nonce_count_supported)
       {
         TRC_INFO("Nonce count %d supplied but nonce counts are not enabled - ignore it",
                  nonce_count);
@@ -971,8 +968,8 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       // the authentication module to verify.
       TRC_DEBUG("Verify authentication information in request");
       status = pjsip_auth_srv_verify3((is_register ?
-                                         &_sproutlet->_auth_srv :
-                                         &_sproutlet->_auth_srv_proxy),
+                                         &_authentication->_auth_srv :
+                                         &_authentication->_auth_srv_proxy),
                                       req,
                                       get_pool(req),
                                       &sc,
@@ -1000,7 +997,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
         // around if nonce counts are supported and the UE authenticates by
         // registering.
         int new_expiry = auth_challenge->expires;
-        if (_sproutlet->_nonce_count_supported && is_register)
+        if (_authentication->_nonce_count_supported && is_register)
         {
           new_expiry = calculate_challenge_expiration_time(req);
         }
@@ -1026,14 +1023,14 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
                                              auth_challenge->expires);
 
           // Store it.  If this fails due to contention, read the updated JSON.
-          store_status = _sproutlet->_impi_store->set_impi(impi_obj, trail());
+          store_status = _authentication->_impi_store->set_impi(impi_obj, trail());
 
           if (store_status == Store::DATA_CONTENTION)
           {
             // LCOV_EXCL_START - No support for contention in UT
             TRC_DEBUG("Data contention writing tombstone - retry");
             delete impi_obj;
-            impi_obj = _sproutlet->_impi_store->get_impi_with_nonce(impi, nonce, trail());
+            impi_obj = _authentication->_impi_store->get_impi_with_nonce(impi, nonce, trail());
             auth_challenge = NULL;
 
             if (impi_obj != NULL)
@@ -1143,7 +1140,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
   // Create an ACR for the message and pass the request to it.  Role is always
   // considered originating for a REGISTER request.
-  ACR* acr = _sproutlet->_acr_factory->get_acr(trail(),
+  ACR* acr = _authentication->_acr_factory->get_acr(trail(),
                                   ACR::CALLING_PARTY,
                                   ACR::NODE_ROLE_ORIGINATING);
 
@@ -1193,15 +1190,15 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       std::string impu;
 
       PJUtils::get_impi_and_impu(req, impi, impu);
-      _sproutlet->_hss->update_registration_state(impu,
+      _authentication->_hss->update_registration_state(impu,
                                                   impi,
                                                   HSSConnection::AUTH_FAIL,
                                                   trail());
     }
 
-    if (_sproutlet->_analytics != NULL)
+    if (_authentication->_analytics != NULL)
     {
-      _sproutlet->_analytics->auth_failure(PJUtils::pj_str_to_string(&credentials->username),
+      _authentication->_analytics->auth_failure(PJUtils::pj_str_to_string(&credentials->username),
       PJUtils::public_id_from_uri((pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(req)->uri)));
     }
 

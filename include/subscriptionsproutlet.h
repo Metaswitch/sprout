@@ -77,7 +77,7 @@ public:
 
   bool init();
 
-  SproutletTsx* get_tsx(SproutletProxy* proxy,
+  SproutletTsx* get_tsx(SproutletHelper* helper,
                         const std::string& alias,
                         pjsip_msg* req,
                         pjsip_sip_uri*& next_hop,
@@ -116,8 +116,8 @@ private:
 class SubscriptionSproutletTsx : public ForwardingSproutletTsx
 {
 public:
-  SubscriptionSproutletTsx(const std::string& next_hop_service,
-                           SubscriptionSproutlet* sproutlet);
+  SubscriptionSproutletTsx(SubscriptionSproutlet* subscription,
+                           const std::string& next_hop_service);
   ~SubscriptionSproutletTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req) override;
@@ -145,7 +145,7 @@ protected:
   void log_subscriptions(const std::string& aor_name,
                          SubscriberDataManager::AoR* aor_data);
 
-  SubscriptionSproutlet* _sproutlet;
+  SubscriptionSproutlet* _subscription;
 };
 
 #endif
