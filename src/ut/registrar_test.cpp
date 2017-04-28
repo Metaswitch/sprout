@@ -187,9 +187,8 @@ public:
     _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
     _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, false);
     _remote_sdms = {_remote_sdm};
-    _hss_connection_observer = new MockHSSConnection();
-    _hss_connection = new FakeHSSConnection(_hss_connection_observer);
     _acr_factory = new ACRFactory();
+    _hss_connection = new FakeHSSConnection();
   }
 
   static void TearDownTestCase()
@@ -199,7 +198,6 @@ public:
     pjsip_tsx_layer_destroy();
     delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
-    delete _hss_connection_observer; _hss_connection_observer = NULL;
     delete _remote_sdm; _remote_sdm = NULL;
     delete _sdm; _sdm = NULL;
     delete _remote_data_store; _remote_data_store = NULL;
@@ -210,11 +208,11 @@ public:
 
   void SetUp()
   {
-    _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, "");
-    _hss_connection->set_impu_result("tel:6505550231", "reg", RegDataXMLUtils::STATE_REGISTERED, "");
-    _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, "");
-    _hss_connection->set_impu_result("sip:6505550231@homedomain", "", RegDataXMLUtils::STATE_REGISTERED, "");
-    _hss_connection->set_rc("/impu/sip%3A6505550231%40homedomain/reg-data", HTTP_OK);
+    hss_connection()->set_impu_result("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, "");
+    hss_connection()->set_impu_result("tel:6505550231", "reg", RegDataXMLUtils::STATE_REGISTERED, "");
+    hss_connection()->set_impu_result("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, "");
+    hss_connection()->set_impu_result("sip:6505550231@homedomain", "", RegDataXMLUtils::STATE_REGISTERED, "");
+    hss_connection()->set_rc("/impu/sip%3A6505550231%40homedomain/reg-data", HTTP_OK);
     _chronos_connection->set_result("", HTTP_OK);
     _chronos_connection->set_result("post_identity", HTTP_OK);
   }
@@ -223,10 +221,18 @@ public:
   {
     _hss_connection->flush_all();
     _chronos_connection->flush_all();
-    ::testing::Mock::VerifyAndClear(_hss_connection_observer);
   }
 
-  RegistrarTest()
+  RegistrarTest() : RegistrarTest(_hss_connection)
+  {
+  }
+
+  virtual FakeHSSConnection* hss_connection()
+  {
+    return _hss_connection;
+  }
+
+  RegistrarTest(FakeHSSConnection* hss_connection)
   {
     _local_data_store->flush_all();  // start from a clean slate on each test
     _remote_data_store->flush_all();
@@ -237,7 +243,7 @@ public:
                                                   "subscription",
                                                   _sdm,
                                                   _remote_sdms,
-                                                  _hss_connection,
+                                                  hss_connection,
                                                   _acr_factory,
                                                   300,
                                                   false,
@@ -331,14 +337,14 @@ public:
     ASSERT_EQ(contact_values.second, std::string(contact->first_attribute("event")->value()));
   }
 
-void registrar_sproutlet_handle_200()
-{
-  ASSERT_EQ(1, txdata_count());
-  inject_msg(respond_to_current_txdata(200));
-  ASSERT_EQ(1, txdata_count());
-  EXPECT_EQ(200, current_txdata()->msg->line.status.code);
-  free_txdata();
-}
+  void registrar_sproutlet_handle_200()
+  {
+    ASSERT_EQ(1, txdata_count());
+    inject_msg(respond_to_current_txdata(200));
+    ASSERT_EQ(1, txdata_count());
+    EXPECT_EQ(200, current_txdata()->msg->line.status.code);
+    free_txdata();
+  }
 
 protected:
   static LocalStore* _local_data_store;
@@ -348,11 +354,49 @@ protected:
   static std::vector<SubscriberDataManager*> _remote_sdms;
   static IfcHandler* _ifc_handler;
   static ACRFactory* _acr_factory;
-  static MockHSSConnection* _hss_connection_observer;
   static FakeHSSConnection* _hss_connection;
   static FakeChronosConnection* _chronos_connection;
   RegistrarSproutlet* _registrar_sproutlet;
   SproutletProxy* _registrar_proxy;
+};
+
+/// Fixture for RegistrarTest, which observes a HSS Connection
+class RegistrarObservedHssTest : public RegistrarTest
+{
+public:
+
+  static void SetUpTestCase()
+  {
+    RegistrarTest::SetUpTestCase();
+    _hss_connection_observer = new MockHSSConnection();
+    _observed_hss_connection = new FakeHSSConnection(_hss_connection_observer);
+  }
+
+  static void TearDownTestCase()
+  {
+    RegistrarTest::TearDownTestCase();
+    delete _observed_hss_connection; _observed_hss_connection = NULL;
+    delete _hss_connection_observer; _hss_connection_observer = NULL;
+  }
+
+  RegistrarObservedHssTest() : RegistrarTest(_observed_hss_connection)
+  {
+  }
+
+  virtual FakeHSSConnection* hss_connection()
+  {
+    return _observed_hss_connection;
+  }
+
+  void TearDown()
+  {
+    RegistrarTest::TearDown();
+    ::testing::Mock::VerifyAndClear(_hss_connection_observer);
+  }
+
+protected:
+  static MockHSSConnection* _hss_connection_observer;
+  static FakeHSSConnection* _observed_hss_connection;
 
 private:
 
@@ -595,51 +639,40 @@ public:
 /// Fixture for RegistrarTestRemoteSDM (for REGISTER tests that use the remote
 /// store by artificially causing the local SDM and first remote SDM lookups to
 /// return nothing)
-class RegistrarTestRemoteSDM : public RegistrarTest
+class RegistrarTestRemoteSDM : public RegistrarObservedHssTest
 {
 public:
   // Similar to RegistrarTest, but we deliberately give it a dummy local sdm
   // and first remote sdm that never return bindings.
   static void SetUpTestCase()
   {
-    SipTest::SetUpTestCase();
-    SipTest::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
+    RegistrarObservedHssTest::SetUpTestCase();
 
-    _chronos_connection = new FakeChronosConnection();
-    _local_data_store = new LocalStore();
     _remote_data_store_no_bindings = new LocalStore();
-    _remote_data_store = new LocalStore();
-    _sdm = new SDMNoBindings((Store*)_local_data_store, _chronos_connection, true);
     _remote_sdm_no_bindings = new SDMNoBindings((Store*)_remote_data_store_no_bindings, _chronos_connection, false);
-    _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, false);
     _remote_sdms = {_remote_sdm_no_bindings, _remote_sdm};
-    _hss_connection_observer = new MockHSSConnection();
-    _hss_connection = new FakeHSSConnection(_hss_connection_observer);
-    _acr_factory = new ACRFactory();
+
+    if (_sdm)
+    {
+      delete _sdm;
+      _sdm = NULL;
+    }
+
+    _sdm = new SDMNoBindings((Store*)_local_data_store, _chronos_connection, true);
   }
 
-  RegistrarTestRemoteSDM() : RegistrarTest()
+  RegistrarTestRemoteSDM() : RegistrarObservedHssTest()
   {
+    // Start from a clean slate on each test
     _remote_data_store_no_bindings->flush_all();
-                                 // start from a clean slate on each test
   }
 
   static void TearDownTestCase()
   {
-    // Shut down the transaction module first, before we destroy the
-    // objects that might handle any callbacks!
-    pjsip_tsx_layer_destroy();
-    delete _acr_factory; _acr_factory = NULL;
-    delete _hss_connection; _hss_connection = NULL;
-    delete _hss_connection_observer; _hss_connection_observer = NULL;
+    RegistrarObservedHssTest::TearDownTestCase();
+
     delete _remote_sdm_no_bindings; _remote_sdm_no_bindings = NULL;
-    delete _remote_sdm; _remote_sdm = NULL;
-    delete _sdm; _sdm = NULL;
-    delete _remote_data_store; _remote_data_store = NULL;
     delete _remote_data_store_no_bindings; _remote_data_store_no_bindings = NULL;
-    delete _local_data_store; _local_data_store = NULL;
-    delete _chronos_connection; _chronos_connection = NULL;
-    SipTest::TearDownTestCase();
   }
 
 protected:
@@ -657,7 +690,8 @@ std::vector<SubscriberDataManager*> RegistrarTest::_remote_sdms;
 IfcHandler* RegistrarTest::_ifc_handler;
 ACRFactory* RegistrarTest::_acr_factory;
 FakeHSSConnection* RegistrarTest::_hss_connection;
-MockHSSConnection* RegistrarTest::_hss_connection_observer;
+FakeHSSConnection* RegistrarObservedHssTest::_observed_hss_connection;
+MockHSSConnection* RegistrarObservedHssTest::_hss_connection_observer;
 FakeChronosConnection* RegistrarTest::_chronos_connection;
 
 TEST_F(RegistrarTest, NotRegister)
@@ -941,7 +975,7 @@ TEST_F(RegistrarTest, GRUUNotSupported)
   free_txdata();
 }
 
-TEST_F(RegistrarTest, MultipleRegistrations)
+TEST_F(RegistrarObservedHssTest, MultipleRegistrations)
 {
   MultipleRegistrationTest();
 }
