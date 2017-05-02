@@ -7,3 +7,9 @@ modules/clearwater-etcd-plugins/sprout/sprout_json_plugin.py /usr/share/clearwat
 modules/clearwater-etcd-plugins/sprout/sprout_scscf_json_plugin.py /usr/share/clearwater/clearwater-config-manager/plugins/
 modules/clearwater-etcd-plugins/sprout/sprout_bgcf_json_plugin.py /usr/share/clearwater/clearwater-config-manager/plugins/
 modules/clearwater-etcd-plugins/sprout/sprout_enum_json_plugin.py /usr/share/clearwater/clearwater-config-manager/plugins/
+
+# Install the IFCs plugins and scripts
+modules/clearwater-etcd-plugins/clearwater-config-manager/shared_ifcs_config_plugin.py /usr/share/clearwater/clearwater-config-manager/plugins/
+modules/clearwater-etcd-plugins/clearwater-config-manager/default_ifcs_config_plugin.py /usr/share/clearwater/clearwater-config-manager/plugins/
+modules/clearwater-etcd-plugins/clearwater-config-managers/scripts/upload_shared_ifcs_config /usr/share/clearwater/clearwater-config-manager/scripts
+modules/clearwater-etcd-plugins/clearwater-config-managers/scripts/upload_default_ifcs_config /usr/share/clearwater/clearwater-config-manager/scripts

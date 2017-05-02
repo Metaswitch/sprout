@@ -1,3 +1,5 @@
 /usr/share/clearwater/clearwater-config-manager/scripts/upload_scscf_json /usr/bin/cw-upload_scscf_json
 /usr/share/clearwater/clearwater-config-manager/scripts/upload_bgcf_json /usr/bin/cw-upload_bgcf_json
 /usr/share/clearwater/clearwater-config-manager/scripts/upload_enum_json /usr/bin/cw-upload_enum_json
+/usr/share/clearwater/clearwater-config-manager/scripts/upload_shared_ifcs_config /usr/bin/cw-upload_shared_ifcs_config
+/usr/share/clearwater/clearwater-config-manager/scripts/upload_default_ifcs_config /usr/bin/cw-upload_default_ifcs_config
