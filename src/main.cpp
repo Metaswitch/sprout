@@ -2182,6 +2182,23 @@ int main(int argc, char* argv[])
     return 1;
   }
 
+  // Add all of the sproutlets to the list of sproutlet ports and URIs
+  for (Sproutlet* sproutlet : sproutlets)
+  {
+    int port = sproutlet->port();
+    std::string uri = sproutlet->uri_as_str();
+
+    if (port != 0)
+    {
+      opt.sproutlet_ports.insert(port);
+    }
+
+    if (uri != "")
+    {
+      sproutlet_uris.push_back(uri);
+    }
+  }
+
   // Start the PJSIP stack and it's transports. These needs to
   // happen after we have loaded the sproutlets so they can adjust the
   // listening ports.

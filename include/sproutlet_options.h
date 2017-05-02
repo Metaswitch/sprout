@@ -142,14 +142,12 @@
     {                                                                          \
       TRC_INFO(""#NAME_LOWER" enabled on %d", opt.port_##NAME_LOWER);          \
       opt.enabled_##NAME_LOWER = true;                                         \
-      opt.sproutlet_ports.insert(opt.port_##NAME_LOWER);                       \
     }                                                                          \
   }                                                                            \
   else if (opt.port_##NAME_LOWER != 0)                                         \
   {                                                                            \
     TRC_INFO(""#NAME_LOWER" enabled on %d", opt.port_##NAME_LOWER);            \
     opt.enabled_##NAME_LOWER = true;                                           \
-    opt.sproutlet_ports.insert(opt.port_##NAME_LOWER);                         \
   }                                                                            \
                                                                                \
   if (!opt.set_prefix_##NAME_LOWER)                                            \
@@ -177,10 +175,6 @@
     {                                                                          \
       TRC_ERROR(""#NAME_LOWER" enabled, but no "#NAME_LOWER" URI specified");  \
       return 1;                                                                \
-    }                                                                          \
-    else                                                                       \
-    {                                                                          \
-      sproutlet_uris.push_back(opt.uri_##NAME_LOWER);                          \
     }                                                                          \
   }
 
