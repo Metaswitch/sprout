@@ -1908,51 +1908,6 @@ int main(int argc, char* argv[])
     addr_family = AF_INET6;
   }
 
-  // Initialize the PJSIP stack and associated subsystems.
-  status = init_stack(opt.sas_system_name,
-                      opt.sas_server,
-                      opt.pcscf_trusted_port,
-                      opt.pcscf_untrusted_port,
-                      opt.port_scscf,
-                      opt.sas_signaling_if,
-                      opt.sproutlet_ports,
-                      addr_family,
-                      opt.local_host,
-                      opt.public_host,
-                      opt.home_domain,
-                      opt.additional_home_domains,
-                      opt.uri_scscf,
-                      opt.sprout_hostname,
-                      opt.alias_hosts,
-                      sip_resolver,
-                      opt.record_routing_model,
-                      opt.default_session_expires,
-                      opt.max_session_expires,
-                      opt.sip_tcp_connect_timeout,
-                      opt.sip_tcp_send_timeout,
-                      quiescing_mgr,
-                      opt.billing_cdf,
-                      sproutlet_uris);
-
-  if (status != PJ_SUCCESS)
-  {
-    CL_SPROUT_SIP_INIT_INTERFACE_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
-    TRC_ERROR("Error initializing stack %s", PJUtils::pj_status_to_string(status).c_str());
-    return 1;
-  }
-
-  //If the flag is set, disable UDP-to-TCP uplift.
-  if (opt.disable_tcp_switch)
-  {
-    TRC_STATUS("Disabling UDP-to-TCP uplift");
-    pjsip_cfg_t* pjsip_config = pjsip_cfg();
-    pjsip_config->endpt.disable_tcp_switch = true;
-  }
-
-  // Set up our signal handler for (un)quiesce signals.
-  signal(QUIESCE_SIGNAL, quiesce_unquiesce_handler);
-  signal(UNQUIESCE_SIGNAL, quiesce_unquiesce_handler);
-
   // Now that we know the address family, create an HttpResolver too.
   http_resolver = new HttpResolver(dns_resolver,
                                    addr_family,
@@ -1976,9 +1931,6 @@ int main(int argc, char* argv[])
   {
     CL_SPROUT_NO_RALF_CONFIGURED.log();
   }
-
-  // Initialise the OPTIONS handling module.
-  status = init_options();
 
   if (opt.hss_server != "")
   {
@@ -2015,58 +1967,6 @@ int main(int argc, char* argv[])
   {
     TRC_STATUS("Setting up ENUM service to do default TEL->SIP URI translation");
     enum_service = new DummyEnumService(opt.home_domain);
-  }
-
-  if (opt.pcscf_enabled)
-  {
-    // Create an ACR factory for the P-CSCF.
-    pcscf_acr_factory = (ralf_processor != NULL) ?
-                (ACRFactory*)new RalfACRFactory(ralf_processor, ACR::PCSCF) :
-                new ACRFactory();
-
-    // Launch stateful proxy as P-CSCF.
-    status = init_stateful_proxy(NULL,
-                                 NULL,
-                                 NULL,
-                                 true,
-                                 opt.upstream_proxy,
-                                 opt.upstream_proxy_port,
-                                 opt.upstream_proxy_connections,
-                                 opt.upstream_proxy_recycle,
-                                 opt.ibcf,
-                                 opt.trusted_hosts,
-                                 opt.pbxes,
-                                 opt.pbx_service_route,
-                                 analytics_logger,
-                                 NULL,
-                                 NULL,
-                                 NULL,
-                                 pcscf_acr_factory,
-                                 NULL,
-                                 NULL,
-                                 "",
-                                 quiescing_mgr,
-                                 opt.enabled_icscf,
-                                 opt.enabled_scscf,
-                                 opt.emerg_reg_accepted);
-    if (status != PJ_SUCCESS)
-    {
-      TRC_ERROR("Failed to enable P-CSCF edge proxy");
-      return 1;
-    }
-
-    pj_bool_t websockets_enabled = (opt.webrtc_port != 0);
-    if (websockets_enabled)
-    {
-      status = init_websockets((unsigned short)opt.webrtc_port);
-      if (status != PJ_SUCCESS)
-      {
-        TRC_ERROR("Error initializing websockets, %s",
-                  PJUtils::pj_status_to_string(status).c_str());
-
-        return 1;
-      }
-    }
   }
 
   // Create a connection to Chronos.
@@ -2250,6 +2150,106 @@ int main(int argc, char* argv[])
     CL_SPROUT_PLUGIN_FAILURE.log();
     TRC_ERROR("Failed to successfully load plug-ins");
     return 1;
+  }
+
+  // Initialize the PJSIP stack and associated subsystems.
+  status = init_stack(opt.sas_system_name,
+                      opt.sas_server,
+                      opt.pcscf_trusted_port,
+                      opt.pcscf_untrusted_port,
+                      opt.port_scscf,
+                      opt.sas_signaling_if,
+                      opt.sproutlet_ports,
+                      addr_family,
+                      opt.local_host,
+                      opt.public_host,
+                      opt.home_domain,
+                      opt.additional_home_domains,
+                      opt.uri_scscf,
+                      opt.sprout_hostname,
+                      opt.alias_hosts,
+                      sip_resolver,
+                      opt.record_routing_model,
+                      opt.default_session_expires,
+                      opt.max_session_expires,
+                      opt.sip_tcp_connect_timeout,
+                      opt.sip_tcp_send_timeout,
+                      quiescing_mgr,
+                      opt.billing_cdf,
+                      sproutlet_uris);
+
+  if (status != PJ_SUCCESS)
+  {
+    CL_SPROUT_SIP_INIT_INTERFACE_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
+    TRC_ERROR("Error initializing stack %s", PJUtils::pj_status_to_string(status).c_str());
+    return 1;
+  }
+
+  // If the flag is set, disable UDP-to-TCP uplift.
+  if (opt.disable_tcp_switch)
+  {
+    TRC_STATUS("Disabling UDP-to-TCP uplift");
+    pjsip_cfg_t* pjsip_config = pjsip_cfg();
+    pjsip_config->endpt.disable_tcp_switch = true;
+  }
+
+  // Set up our signal handler for (un)quiesce signals.
+  signal(QUIESCE_SIGNAL, quiesce_unquiesce_handler);
+  signal(UNQUIESCE_SIGNAL, quiesce_unquiesce_handler);
+
+  // Initialise the OPTIONS handling module.
+  status = init_options();
+
+  if (opt.pcscf_enabled)
+  {
+    // Create an ACR factory for the P-CSCF.
+    pcscf_acr_factory = (ralf_processor != NULL) ?
+                (ACRFactory*)new RalfACRFactory(ralf_processor, ACR::PCSCF) :
+                new ACRFactory();
+
+    // Launch stateful proxy as P-CSCF.
+    status = init_stateful_proxy(NULL,
+                                 NULL,
+                                 NULL,
+                                 true,
+                                 opt.upstream_proxy,
+                                 opt.upstream_proxy_port,
+                                 opt.upstream_proxy_connections,
+                                 opt.upstream_proxy_recycle,
+                                 opt.ibcf,
+                                 opt.trusted_hosts,
+                                 opt.pbxes,
+                                 opt.pbx_service_route,
+                                 analytics_logger,
+                                 NULL,
+                                 NULL,
+                                 NULL,
+                                 pcscf_acr_factory,
+                                 NULL,
+                                 NULL,
+                                 "",
+                                 quiescing_mgr,
+                                 opt.enabled_icscf,
+                                 opt.enabled_scscf,
+                                 opt.emerg_reg_accepted);
+    if (status != PJ_SUCCESS)
+    {
+      TRC_ERROR("Failed to enable P-CSCF edge proxy");
+      return 1;
+    }
+
+    pj_bool_t websockets_enabled = (opt.webrtc_port != 0);
+    if (websockets_enabled)
+    {
+      status = init_websockets((unsigned short)opt.webrtc_port);
+      if (status != PJ_SUCCESS)
+      {
+        TRC_ERROR("Error initializing websockets, %s",
+                  PJUtils::pj_status_to_string(status).c_str());
+
+        return 1;
+      }
+    }
   }
 
   // Must happen after all SNMP tables have been registered.
