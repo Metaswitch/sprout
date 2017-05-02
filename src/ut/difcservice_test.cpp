@@ -42,6 +42,7 @@
 
 #include "test_utils.hpp"
 #include "difcservice.h"
+#include "ifc_parsing_utils.h"
 
 using ::testing::UnorderedElementsAreArray;
 
@@ -58,24 +59,6 @@ class DIFCServiceTest : public ::testing::Test
   {
   }
 };
-
-std::string get_server_name(Ifc ifc)
-{
-  return std::string(ifc._ifc->first_node("ApplicationServer")->
-                                             first_node("ServerName")->value());
-}
-
-int32_t get_priority(Ifc ifc)
-{
-  if (ifc._ifc->first_node("Priority"))
-  {
-    return std::atoi(ifc._ifc->first_node("Priority")->value());
-  }
-  else
-  {
-    return 0;
-  }
-}
 
 void get_ifc_properties(std::vector<std::pair<int32_t, Ifc>> *difc_list,
                                std::vector<std::string> *server_names,

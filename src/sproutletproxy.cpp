@@ -1876,6 +1876,13 @@ void SproutletWrapper::rx_fork_error(pjsip_event_id_e event, int fork_id)
 
     if (status == PJ_SUCCESS)
     {
+      if ((_sproutlet != NULL) &&
+          (_sproutlet->_outgoing_sip_transactions_tbl != NULL))
+      {
+        // Update SNMP SIP transaction failure statistic for the Sproutlet.
+        _sproutlet->_outgoing_sip_transactions_tbl->increment_failures(_req_type);
+      }
+
       // Pass the response to the application.
       register_tdata(rsp);
       _sproutlet_tsx->on_rx_response(rsp->msg, fork_id);

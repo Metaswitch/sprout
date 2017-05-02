@@ -463,9 +463,89 @@ static const PDLog1<const char *> CL_SPROUT_SESS_CONT_AS_COMM_SUCCESS
   "No action"
 );
 
-static const PDLog CL_SPROUT_DIFC_FILE_MISSING
+static const PDLog CL_SPROUT_SIFC_FILE_MISSING
 (
   PDLogBase::CL_SPROUT_ID + 52,
+  LOG_ERR,
+  "The shared IFC sets file is not present.",
+  "The S-CSCF supports shared IFC sets, but the configuration file for this does not exist.",
+  "The S-CSCF will not be able to correctly translate IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
+  "The shared IFC sets should be defined in /etc/clearwater/sifc.xml. Create this file according to the documentation. If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd."
+);
+
+static const PDLog CL_SPROUT_SIFC_FILE_EMPTY
+(
+  PDLogBase::CL_SPROUT_ID + 53,
+  LOG_ERR,
+  "The shared IFC sets file is empty.",
+  "The S-CSCF supports shared IFC sets, but the configuration file for this is empty.",
+  "The S-CSCF will not be able to correctly translate IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
+  "The shared IFC sets should be defined in /etc/clearwater/sifc.xml. Populate this file according to the documentation."
+);
+
+static const PDLog CL_SPROUT_SIFC_FILE_INVALID_XML
+(
+  PDLogBase::CL_SPROUT_ID + 54,
+  LOG_ERR,
+  "The shared IFC sets file contains invalid XML.",
+  "The S-CSCF supports shared IFC sets, but the configuration file for this is invalid.",
+  "The S-CSCF will not be able to correctly translate IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
+  "The shared IFC sets should be defined in /etc/clearwater/sifc.xml. Populate this file according to the documentation."
+);
+
+static const PDLog CL_SPROUT_SIFC_FILE_MISSING_SETS
+(
+  PDLogBase::CL_SPROUT_ID + 55,
+  LOG_ERR,
+  "The shared IFC sets file doesn't have the correct syntax.",
+  "The S-CSCF supports shared IFC sets, but the configuration file for this doesn't match the expected syntax (no Sets block).",
+  "The S-CSCF will not be able to correctly translate IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
+  "The shared IFC sets should be defined in /etc/clearwater/sifc.xml. Populate this file according to the documentation."
+);
+
+static const PDLog CL_SPROUT_SIFC_FILE_MISSING_SET_ID
+(
+  PDLogBase::CL_SPROUT_ID + 56,
+  LOG_ERR,
+  "An entry in the shared IFC sets file doesn't have the correct syntax; it's missing the SetId.",
+  "The S-CSCF supports shared IFC sets, but one of the shared IFC sets in the configuration file for this doesn't match the expected syntax (no SetId).",
+  "The S-CSCF will not be able to correctly translate some IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
+  "The shared IFC sets should be defined in /etc/clearwater/sifc.xml. Populate this file according to the documentation."
+);
+
+static const PDLog1<const char *> CL_SPROUT_SIFC_FILE_INVALID_SET_ID
+(
+  PDLogBase::CL_SPROUT_ID + 57,
+  LOG_ERR,
+  "An entry in the shared IFC sets file doesn't have the correct syntax; its SetId (%s) isn't an integer.",
+  "The S-CSCF supports shared IFC sets, but one of the shared IFC sets in the configuration file for this doesn't match the expected syntax (invalid SetID).",
+  "The S-CSCF will not be able to correctly translate some IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
+  "The shared IFC sets should be defined in /etc/clearwater/sifc.xml. Populate this file according to the documentation."
+);
+
+static const PDLog1<const char *> CL_SPROUT_SIFC_FILE_REPEATED_SET_ID
+(
+  PDLogBase::CL_SPROUT_ID + 58,
+  LOG_ERR,
+  "Multiple entries in the shared IFC sets file use the same SetId (%s)(",
+  "The S-CSCF supports shared IFC sets, but the configuration file for this has multiple entries for one ID.",
+  "The S-CSCF will not be able to correctly translate some IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
+  "The shared IFC sets should be defined in /etc/clearwater/sifc.xml. Populate this file according to the documentation."
+);
+
+static const PDLog1<const char *> CL_SPROUT_SIFC_FILE_INVALID_PRIORITY
+(
+  PDLogBase::CL_SPROUT_ID + 59,
+  LOG_ERR,
+  "An entry in the shared IFC sets file doesn't have the correct syntax; its Priority (%s) isn't an integer.",
+  "The S-CSCF supports shared IFC sets, but one of the shared IFC sets in the configuration file for this doesn't match the expected syntax (invalid Priority).",
+  "The S-CSCF will not be able to correctly translate some IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
+  "The shared IFC sets should be defined in /etc/clearwater/sifc.xml. Populate this file according to the documentation."
+);
+
+static const PDLog CL_SPROUT_DIFC_FILE_MISSING
+(
+  PDLogBase::CL_SPROUT_ID + 60,
   LOG_ERR,
   "The default IFC configuration file is not present.",
   "The S-CSCF supports default IFCs, but the configuration file for them does not exist.",
@@ -475,7 +555,7 @@ static const PDLog CL_SPROUT_DIFC_FILE_MISSING
 
 static const PDLog CL_SPROUT_DIFC_FILE_EMPTY
 (
-  PDLogBase::CL_SPROUT_ID + 53,
+  PDLogBase::CL_SPROUT_ID + 61,
   LOG_ERR,
   "The default IFC configuration file is empty.",
   "The S-CSCF supports default IFCs, but the configuration file for this is empty.",
@@ -485,7 +565,7 @@ static const PDLog CL_SPROUT_DIFC_FILE_EMPTY
 
 static const PDLog CL_SPROUT_DIFC_FILE_INVALID_XML
 (
-  PDLogBase::CL_SPROUT_ID + 54,
+  PDLogBase::CL_SPROUT_ID + 62,
   LOG_ERR,
   "The default IFC configuration file contains invalid XML.",
   "The S-CSCF supports default IFCs, but the configuration file for this is invalid.",
@@ -495,7 +575,7 @@ static const PDLog CL_SPROUT_DIFC_FILE_INVALID_XML
 
 static const PDLog CL_SPROUT_DIFC_FILE_MISSING_DEFAULTIFCSET
 (
- PDLogBase::CL_SPROUT_ID + 55,
+ PDLogBase::CL_SPROUT_ID + 63,
  LOG_ERR,
  "The default IFC configuration file doesn't have the correct syntax.",
  "The S-CSCF supports default IFCs, but the configuration file for this doesn't match the expected syntax (no DefaultIfcSet block).",
@@ -505,7 +585,7 @@ static const PDLog CL_SPROUT_DIFC_FILE_MISSING_DEFAULTIFCSET
 
 static const PDLog1<const char *> CL_SPROUT_DIFC_FILE_INVALID_PRIORITY
 (
-  PDLogBase::CL_SPROUT_ID + 56,
+  PDLogBase::CL_SPROUT_ID + 64,
   LOG_ERR,
   "An IFC in the defult IFC configuration file doesn't have the correct syntax; its Priority (%s) isn't an integer.",
   "The S-CSCF supports default IFCs, but one of the default IFCs doesn't match the expected syntax (invalid Priority).",

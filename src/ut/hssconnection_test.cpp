@@ -49,8 +49,12 @@
 #include "fakecurl.hpp"
 #include "fakesnmp.hpp"
 #include "sprout_alarmdefinition.h"
+#include "mock_sifc_parser.h"
 
 using namespace std;
+using testing::SetArgReferee;
+using testing::_;
+using testing::UnorderedElementsAreArray;
 
 /// Fixture for HssConnectionTest.
 class HssConnectionTest : public BaseTest
@@ -73,7 +77,8 @@ class HssConnectionTest : public BaseTest
          &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
          &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
          &_cm,
-         "server_name")
+         "server_name",
+         NULL)
     {
     fakecurl_responses.clear();
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid42/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
@@ -332,7 +337,7 @@ class HssConnectionTest : public BaseTest
           "<ECF priority=\"1\">ecf1</ECF>"
         "</ChargingAddresses>"
       "</ClearwaterRegData>";
- }
+  }
 
   virtual ~HssConnectionTest()
   {
@@ -622,5 +627,513 @@ TEST_F(HssConnectionTest, CacheNotAllowed)
 
   // The request worked.
   EXPECT_EQ(rc, 200);
+}
+
+/// Fake iFCs to use to test Shared iFCs.
+std::string ifc_priority_one = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                               "<InitialFilterCriteria>\n"
+                               "  <Priority>1</Priority>\n"
+                               "  <ApplicationServer>\n"
+                               "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                               "  </ApplicationServer>\n"
+                               "</InitialFilterCriteria>";
+std::string ifc_priority_two = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                               "<InitialFilterCriteria>\n"
+                               "  <Priority>2</Priority>\n"
+                               "  <ApplicationServer>\n"
+                               "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                               "  </ApplicationServer>\n"
+                               "</InitialFilterCriteria>";
+
+/// Fixture for HssWithSifcTest.
+class HssWithSifcTest : public BaseTest
+{
+  FakeHttpResolver _resolver;
+  HSSConnection _sifc_hss;
+  MockSIFCService _sifc_service;
+  rapidxml::xml_document<>* _root_one;
+  rapidxml::xml_document<>* _root_two;
+  Ifc* _ifc_one;
+  Ifc* _ifc_two;
+
+  HssWithSifcTest() :
+    _resolver("10.42.42.42"),
+    _sifc_hss("narcissus",
+              &_resolver,
+              NULL,
+              NULL,
+              &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+              &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+              &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+              &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+              &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
+              NULL,
+              "server_name",
+              &_sifc_service)
+  {
+    fakecurl_responses.clear();
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/onesifc/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
+     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+     "<ClearwaterRegData>"
+       "<RegistrationState>REGISTERED</RegistrationState>"
+       "<IMSSubscription>"
+         "<ServiceProfile>"
+           "<PublicIdentity>"
+             "<Identity>sip:123@example.com</Identity>"
+           "</PublicIdentity>"
+           "<Extension>"
+             "<SharedIFCSetID>10</SharedIFCSetID>"
+           "</Extension>"
+         "</ServiceProfile>"
+       "</IMSSubscription>"
+       "<ChargingAddresses>"
+         "<CCF priority=\"1\">ccf1</CCF>"
+         "<CCF priority=\"2\">ccf2</CCF>"
+         "<ECF priority=\"2\">ecf2</ECF>"
+         "<ECF priority=\"1\">ecf1</ECF>"
+       "</ChargingAddresses>"
+     "</ClearwaterRegData>";
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/sifcandifc/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
+     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+     "<ClearwaterRegData>"
+       "<RegistrationState>REGISTERED</RegistrationState>"
+       "<IMSSubscription>"
+         "<ServiceProfile>"
+           "<PublicIdentity>"
+             "<Identity>sip:123@example.com</Identity>"
+           "</PublicIdentity>"
+           "<InitialFilterCriteria>"
+             "<ApplicationServer>"
+               "<ServerName>mmtel.narcissi.example.com</ServerName>"
+               "<DefaultHandling>0</DefaultHandling>"
+             "</ApplicationServer>"
+           "</InitialFilterCriteria>"
+           "<Extension>"
+             "<SharedIFCSetID>0</SharedIFCSetID>"
+           "</Extension>"
+         "</ServiceProfile>"
+       "</IMSSubscription>"
+       "<ChargingAddresses>"
+         "<CCF priority=\"1\">ccf1</CCF>"
+         "<CCF priority=\"2\">ccf2</CCF>"
+         "<ECF priority=\"2\">ecf2</ECF>"
+         "<ECF priority=\"1\">ecf1</ECF>"
+       "</ChargingAddresses>"
+     "</ClearwaterRegData>";
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/invalidsifc/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
+     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+     "<ClearwaterRegData>"
+       "<RegistrationState>REGISTERED</RegistrationState>"
+       "<IMSSubscription>"
+         "<ServiceProfile>"
+           "<PublicIdentity>"
+             "<Identity>sip:123@example.com</Identity>"
+           "</PublicIdentity>"
+           "<Extension>"
+             "<SharedIFCSetID>one</SharedIFCSetID>"
+           "</Extension>"
+         "</ServiceProfile>"
+       "</IMSSubscription>"
+       "<ChargingAddresses>"
+         "<CCF priority=\"1\">ccf1</CCF>"
+         "<CCF priority=\"2\">ccf2</CCF>"
+         "<ECF priority=\"2\">ecf2</ECF>"
+         "<ECF priority=\"1\">ecf1</ECF>"
+       "</ChargingAddresses>"
+     "</ClearwaterRegData>";
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/multipleextensions/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
+     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+     "<ClearwaterRegData>"
+       "<RegistrationState>REGISTERED</RegistrationState>"
+       "<IMSSubscription>"
+         "<ServiceProfile>"
+           "<PublicIdentity>"
+             "<Identity>sip:123@example.com</Identity>"
+           "</PublicIdentity>"
+           "<Extension>"
+             "<SharedIFCSetID>1</SharedIFCSetID>"
+             "<SharedIFCSetID>2</SharedIFCSetID>"
+           "</Extension>"
+           "<Extension>"
+             "<SharedIFCSetID>10</SharedIFCSetID>"
+           "</Extension>"
+         "</ServiceProfile>"
+       "</IMSSubscription>"
+       "<ChargingAddresses>"
+         "<CCF priority=\"1\">ccf1</CCF>"
+         "<CCF priority=\"2\">ccf2</CCF>"
+         "<ECF priority=\"2\">ecf2</ECF>"
+         "<ECF priority=\"1\">ecf1</ECF>"
+       "</ChargingAddresses>"
+     "</ClearwaterRegData>";
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/multiplesifc/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
+     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+     "<ClearwaterRegData>"
+       "<RegistrationState>REGISTERED</RegistrationState>"
+       "<IMSSubscription>"
+         "<ServiceProfile>"
+           "<PublicIdentity>"
+             "<Identity>sip:123@example.com</Identity>"
+           "</PublicIdentity>"
+           "<Extension>"
+             "<SharedIFCSetID>1</SharedIFCSetID>"
+             "<SharedIFCSetID>2</SharedIFCSetID>"
+           "</Extension>"
+         "</ServiceProfile>"
+       "</IMSSubscription>"
+       "<ChargingAddresses>"
+         "<CCF priority=\"1\">ccf1</CCF>"
+         "<CCF priority=\"2\">ccf2</CCF>"
+         "<ECF priority=\"2\">ecf2</ECF>"
+         "<ECF priority=\"1\">ecf1</ECF>"
+       "</ChargingAddresses>"
+     "</ClearwaterRegData>";
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/multiplepubids/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
+     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+     "<ClearwaterRegData>"
+       "<RegistrationState>REGISTERED</RegistrationState>"
+       "<IMSSubscription>"
+         "<ServiceProfile>"
+           "<PublicIdentity>"
+             "<Identity>sip:123@example.com</Identity>"
+           "</PublicIdentity>"
+           "<PublicIdentity>"
+             "<Identity>sip:456@example.com</Identity>"
+           "</PublicIdentity>"
+           "<Extension>"
+             "<SharedIFCSetID>1</SharedIFCSetID>"
+           "</Extension>"
+         "</ServiceProfile>"
+         "<ServiceProfile>"
+           "<PublicIdentity>"
+             "<Identity>sip:789@example.com</Identity>"
+           "</PublicIdentity>"
+           "<Extension>"
+             "<SharedIFCSetID>2</SharedIFCSetID>"
+           "</Extension>"
+         "</ServiceProfile>"
+       "</IMSSubscription>"
+       "<ChargingAddresses>"
+         "<CCF priority=\"1\">ccf1</CCF>"
+         "<CCF priority=\"2\">ccf2</CCF>"
+         "<ECF priority=\"2\">ecf2</ECF>"
+         "<ECF priority=\"1\">ecf1</ECF>"
+       "</ChargingAddresses>"
+     "</ClearwaterRegData>";
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/sifcifcmix/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
+     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+     "<ClearwaterRegData>"
+       "<RegistrationState>REGISTERED</RegistrationState>"
+       "<IMSSubscription>"
+         "<ServiceProfile>"
+           "<PublicIdentity>"
+              "<Identity>sip:123@example.com</Identity>"
+           "</PublicIdentity>"
+           "<InitialFilterCriteria>"
+             "<Priority>1</Priority>"
+             "<TriggerPoint>"
+               "<ConditionTypeCNF>0</ConditionTypeCNF>"
+               "<SPT>"
+                 "<ConditionNegated>0</ConditionNegated>"
+                 "<Group>0</Group>"
+                 "<Method>INVITE</Method>"
+                 "<Extension></Extension>"
+               "</SPT>"
+             "</TriggerPoint>"
+             "<ApplicationServer>"
+               "<ServerName>mmtel.narcissi.example.com</ServerName>"
+               "<DefaultHandling>0</DefaultHandling>"
+             "</ApplicationServer>"
+           "</InitialFilterCriteria>"
+           "<InitialFilterCriteria>"
+             "<Priority>1</Priority>"
+             "<TriggerPoint>"
+               "<ConditionTypeCNF>0</ConditionTypeCNF>"
+               "<SPT>"
+                 "<ConditionNegated>0</ConditionNegated>"
+                 "<Group>0</Group>"
+                 "<Method>INVITE</Method>"
+                 "<Extension></Extension>"
+               "</SPT>"
+             "</TriggerPoint>"
+             "<ApplicationServer>"
+               "<ServerName>mmtel.narcissi.example2.com</ServerName>"
+               "<DefaultHandling>0</DefaultHandling>"
+             "</ApplicationServer>"
+           "</InitialFilterCriteria>"
+           "<InitialFilterCriteria>"
+             "<Priority>2</Priority>"
+             "<TriggerPoint>"
+               "<ConditionTypeCNF>0</ConditionTypeCNF>"
+               "<SPT>"
+                 "<ConditionNegated>0</ConditionNegated>"
+                 "<Group>0</Group>"
+                 "<Method>INVITE</Method>"
+                 "<Extension></Extension>"
+               "</SPT>"
+             "</TriggerPoint>"
+             "<ApplicationServer>"
+               "<ServerName>mmtel.narcissi.example3.com</ServerName>"
+               "<DefaultHandling>0</DefaultHandling>"
+             "</ApplicationServer>"
+           "</InitialFilterCriteria>"
+           "<InitialFilterCriteria>"
+             "<Priority>3</Priority>"
+             "<TriggerPoint>"
+               "<ConditionTypeCNF>0</ConditionTypeCNF>"
+               "<SPT>"
+                 "<ConditionNegated>0</ConditionNegated>"
+                 "<Group>0</Group>"
+                 "<Method>INVITE</Method>"
+                 "<Extension></Extension>"
+               "</SPT>"
+             "</TriggerPoint>"
+             "<ApplicationServer>"
+               "<ServerName>mmtel.narcissi.example4.com</ServerName>"
+               "<DefaultHandling>0</DefaultHandling>"
+             "</ApplicationServer>"
+           "</InitialFilterCriteria>"
+           "<InitialFilterCriteria>"
+             "<Priority>3</Priority>"
+             "<TriggerPoint>"
+               "<ConditionTypeCNF>0</ConditionTypeCNF>"
+               "<SPT>"
+                 "<ConditionNegated>0</ConditionNegated>"
+                 "<Group>0</Group>"
+                 "<Method>INVITE</Method>"
+                 "<Extension></Extension>"
+               "</SPT>"
+             "</TriggerPoint>"
+             "<ApplicationServer>"
+               "<ServerName>mmtel.narcissi.example5.com</ServerName>"
+               "<DefaultHandling>0</DefaultHandling>"
+             "</ApplicationServer>"
+           "</InitialFilterCriteria>"
+           "<InitialFilterCriteria>"
+             "<Priority>4</Priority>"
+             "<TriggerPoint>"
+               "<ConditionTypeCNF>0</ConditionTypeCNF>"
+               "<SPT>"
+                 "<ConditionNegated>0</ConditionNegated>"
+                 "<Group>0</Group>"
+                 "<Method>INVITE</Method>"
+                 "<Extension></Extension>"
+               "</SPT>"
+             "</TriggerPoint>"
+             "<ApplicationServer>"
+               "<ServerName>mmtel.narcissi.example6.com</ServerName>"
+               "<DefaultHandling>0</DefaultHandling>"
+             "</ApplicationServer>"
+           "</InitialFilterCriteria>"
+           "<Extension>"
+             "<SharedIFCSetID>3</SharedIFCSetID>"
+             "<SharedIFCSetID>4</SharedIFCSetID>"
+           "</Extension>"
+         "</ServiceProfile>"
+       "</IMSSubscription>"
+       "<ChargingAddresses>"
+         "<CCF priority=\"1\">ccf1</CCF>"
+         "<CCF priority=\"2\">ccf2</CCF>"
+         "<ECF priority=\"2\">ecf2</ECF>"
+         "<ECF priority=\"1\">ecf1</ECF>"
+       "</ChargingAddresses>"
+     "</ClearwaterRegData>";
+
+    _root_one = new rapidxml::xml_document<>;
+    _root_one->parse<0>(_root_one->allocate_string(ifc_priority_one.c_str()));
+    _ifc_one = new Ifc(_root_one->first_node("InitialFilterCriteria"));
+    _root_two = new rapidxml::xml_document<>;
+    _root_two->parse<0>(_root_two->allocate_string(ifc_priority_two.c_str()));
+    _ifc_two = new Ifc(_root_two->first_node("InitialFilterCriteria"));
+  }
+
+  virtual ~HssWithSifcTest()
+  {
+    delete _root_one;
+    delete _ifc_one;
+    delete _root_two;
+    delete _ifc_two;
+  }
+};
+
+// In the following tests, the parsing of Shared iFCs from the User-Data AVP is
+// teested. It is checked that the correct Shared iFC sets are determined from
+// the AVP, however the conversion of these set ids into lists of distinct iFCs
+// is not tested here, it is tested in sifcservice_test.cpp. In these tests,
+// this functionality is mocked out.
+
+// Check that some iFCs are returned when a shared iFC set is encountered.
+TEST_F(HssWithSifcTest, SimpleSiFC)
+{
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+
+  std::multimap<int32_t, Ifc> ifcs_from_id;
+  ifcs_from_id.insert(std::pair<int32_t, Ifc>(1, *_ifc_one));
+  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
+  // Expect input of one shared iFC set, with set id 10.
+  const std::set<int32_t> ids = {10};
+  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, ids, _))
+    .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifcs_from_id)));
+
+  // Send in a message, and check that two iFCs are now present in the map.
+  _sifc_hss.update_registration_state("onesifc", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  EXPECT_TRUE(ifcs_map.begin()->second.size() == 2);
+}
+
+// Check that SiFCs are compatible with iFCs.
+TEST_F(HssWithSifcTest, SifcWithIfc)
+{
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+
+  std::multimap<int32_t, Ifc> ifcs_from_id;
+  ifcs_from_id.insert(std::pair<int32_t, Ifc>(1, *_ifc_one));
+  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
+  // Expect input of one shared iFC set with set id of 0.
+  const std::set<int32_t> ids = {0};
+  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, ids, _))
+    .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifcs_from_id)));
+
+  // Send in a message, and check that three iFCs are now present in the map,
+  // two from the SiFC set, and one regular iFC.
+  _sifc_hss.update_registration_state("sifcandifc", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  EXPECT_TRUE(ifcs_map.begin()->second.size() == 3);
+}
+
+// Check that an invalid SiFC, that is not an integer, is not accepted.
+TEST_F(HssWithSifcTest, NonIntegerSifc)
+{
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+
+  // Send in a message, and check that the iFC map is still empty.
+  _sifc_hss.update_registration_state("invalidsifc", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  EXPECT_TRUE(ifcs_map.begin()->second.size() == 0);
+}
+
+// Check that shared IFCs are read out from all Extensions present in the XML.
+TEST_F(HssWithSifcTest, MultipleExtensions)
+{
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+
+  // The list returned here will be passed back into the function when the
+  // second Extension is encountered. For this reason, don't bother returning
+  // anything at this point.
+  std::multimap<int32_t, Ifc> ifc_list_one;
+  const std::set<int32_t> set_list_one = {1, 2};
+  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, set_list_one, _))
+    .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifc_list_one)));
+
+  // Any iFCs from the first Shared iFC sets will be passed into this function.
+  // More iFCs will then be added to this list and returned.
+  // So the list returned here represents the iFC from sets 1, 2 and 10.
+  std::multimap<int32_t, Ifc> ifc_list_two;
+  ifc_list_two.insert(std::pair<int32_t, Ifc>(1, *_ifc_one));
+  ifc_list_two.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
+  ifc_list_two.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
+  const std::set<int32_t> set_list_two = {10};
+  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, set_list_two, _))
+    .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifc_list_two)));
+
+  // Send in a message, and check that three iFCs are now in the iFC map.
+  _sifc_hss.update_registration_state("multipleextensions", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  EXPECT_TRUE(ifcs_map.begin()->second.size() == 3);
+}
+
+// Check that multiple shared iFCs are parsed correctly.
+TEST_F(HssWithSifcTest, MultipleSifcs)
+{
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+
+  std::multimap<int32_t, Ifc> ifcs_from_id;
+  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
+  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
+  // Expect input of two shared iFC sets, with set ids 1 and 2.
+  const std::set<int32_t> ids = {1, 2};
+  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, ids, _))
+    .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifcs_from_id)));
+
+  // Send in a message, and check that two iFCs are now in the iFC map.
+  _sifc_hss.update_registration_state("multiplesifc", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  EXPECT_TRUE(ifcs_map.begin()->second.size() == 2);
+}
+
+// Check that shared iFCs are parsed correctly when multiple public ids are
+// present, both within the same ServiceProfile, and within seperate
+// ServiceProfiles.
+TEST_F(HssWithSifcTest, MultiplePubIdsWithSifcs)
+{
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+
+  std::multimap<int32_t, Ifc> ifcs_from_id;
+  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
+  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
+  // Expect input of one shared iFC set; with an id of 1 for one service
+  // profile, and 2 for the other.
+  const std::set<int32_t> id_set_one = {1};
+  const std::set<int32_t> id_set_two = {2};
+  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, id_set_one, _))
+    .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifcs_from_id)));
+  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, id_set_two, _))
+    .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifcs_from_id)));
+
+  // The iFC map composes of keys, which are public ids, and their values, which
+  // are the lists of iFCs that correspond to that public id.
+  // Send in a message, and loop through the map checking that the correct
+  // number of iFCs are present for each public id.
+  _sifc_hss.update_registration_state("multiplepubids", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  for(std::pair<std::string, Ifcs> elem : ifcs_map)
+  {
+    EXPECT_TRUE(elem.second.size() == 2);
+  }
+}
+
+// Check that shared iFCs are parsed correctly when mixed with a complex set of
+// iFCs.
+TEST_F(HssWithSifcTest, ComplexSifcIfcMix)
+{
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+
+  std::multimap<int32_t, Ifc> ifcs_from_id;
+  ifcs_from_id.insert(std::pair<int32_t, Ifc>(1, *_ifc_one));
+  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
+  ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
+  // Expect input of two shared iFC sets, with ids 3 and 4.
+  const std::set<int32_t> id_set_one = {3, 4};
+  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, id_set_one, _))
+    .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifcs_from_id)));
+
+  // Send in a message, and check the expected number of iFCs are present, as
+  // well as checking that the expected number with each priority are present.
+  // 6 distinct iFCs with priorities 1, 1, 2, 3, 3 and 4 should be returned.
+  // Additionally 3 iFCs from shared iFCs with priorities 1, 2 and 2 should be
+  // returned.
+  _sifc_hss.update_registration_state("sifcifcmix", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  int32_t map_size = ifcs_map.begin()->second.size();
+  EXPECT_TRUE(map_size == 9);
+  std::vector<int32_t> priorities;
+  for (int32_t ii = 0; ii < map_size; ii++)
+  {
+    const Ifc& ifc = ifcs_map.begin()->second[ii];
+    if (ifc._ifc->first_node("Priority"))
+    {
+      int32_t priority = std::atoi(ifc._ifc->first_node("Priority")->value());
+      priorities.push_back(priority);
+    }
+  }
+  std::vector<int32_t> expected_priorities = {1, 1, 1, 2, 2, 2, 3, 3, 4};
+  EXPECT_THAT(expected_priorities, UnorderedElementsAreArray(priorities));
 }
 

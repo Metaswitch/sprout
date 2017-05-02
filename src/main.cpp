@@ -1251,6 +1251,8 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case OPT_SPROUT_CHRONOS_CALLBACK_URI:
       options->sprout_chronos_callback_uri = std::string(pj_optarg);
+      TRC_INFO("Sprout Chronos callback uri set to %s", pj_optarg);
+      break;
 
     case OPT_LISTEN_PORT:
       {
@@ -1407,6 +1409,7 @@ AlarmManager* alarm_manager = NULL;
 AnalyticsLogger* analytics_logger = NULL;
 ChronosConnection* chronos_connection = NULL;
 ImpiStore* impi_store = NULL;
+SIFCService* sifc_service = NULL;
 
 /*
  * main()
@@ -1945,6 +1948,7 @@ int main(int argc, char* argv[])
   {
     // Create a connection to the HSS.
     TRC_STATUS("Creating connection to HSS %s", opt.hss_server.c_str());
+    sifc_service = new SIFCService();
     hss_connection = new HSSConnection(opt.hss_server,
                                        http_resolver,
                                        load_monitor,
@@ -1955,7 +1959,8 @@ int main(int argc, char* argv[])
                                        homestead_uar_latency_table,
                                        homestead_lir_latency_table,
                                        hss_comm_monitor,
-                                       opt.uri_scscf);
+                                       opt.uri_scscf,
+                                       sifc_service);
   }
 
   // Create ENUM service.
@@ -2417,6 +2422,7 @@ int main(int argc, char* argv[])
   delete http_stack_mgmt; http_stack_mgmt = NULL;
   delete chronos_connection;
   delete hss_connection;
+  delete sifc_service;
   delete quiescing_mgr;
   delete exception_handler;
   delete load_monitor;

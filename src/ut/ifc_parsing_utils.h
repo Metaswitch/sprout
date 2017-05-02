@@ -1,8 +1,8 @@
 /**
- * @file ifchandler.h The iFC handler data type.
+ * @file ifc_parsing_utils.h
  *
  * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Copyright (C) 2017  Metaswitch Networks Ltd
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -36,70 +36,22 @@
 
 #pragma once
 
-extern "C" {
-#include <pjsip.h>
-#include <pjlib-util.h>
-#include <pjlib.h>
-}
-
 #include <string>
 #include <vector>
-#include <memory>
-
-#include "rapidxml/rapidxml.hpp"
-#include "sessioncase.h"
-
-#include "sas.h"
 #include "ifc.h"
-#include "sifcservice.h"
 
-/// A set of iFCs.
-//
-// Owns the iFCs document, and provides access to each iFC within it.
-class Ifcs
+inline std::string get_server_name(Ifc ifc)
 {
-public:
-  Ifcs();
-  Ifcs(std::shared_ptr<rapidxml::xml_document<>> ifc_doc,
-       rapidxml::xml_node<>* sp,
-       SIFCService* sifc_service,
-       SAS::TrailId trail);
-  ~Ifcs();
+  return std::string(ifc._ifc->first_node("ApplicationServer")->
+                                             first_node("ServerName")->value());
+}
 
-  size_t size() const
+inline int32_t get_priority(Ifc ifc)
+{
+  if (ifc._ifc->first_node("Priority"))
   {
-    return _ifcs.size();
+    return std::atoi(ifc._ifc->first_node("Priority")->value());
   }
 
-  const Ifc& operator[](size_t index) const
-  {
-    return _ifcs[index];
-  }
-
-  void interpret(const SessionCase& session_case,
-                 bool is_registered,
-                 bool is_initial_registration,
-                 pjsip_msg *msg,
-                 std::vector<AsInvocation>& application_servers,
-                 SAS::TrailId trail) const;
-
-private:
-  std::shared_ptr<rapidxml::xml_document<> > _ifc_doc;
-  std::vector<Ifc> _ifcs;
-};
-
-
-/// iFC handler.
-class IfcHandler
-{
-public:
-  IfcHandler();
-  ~IfcHandler();
-
-  static std::string served_user_from_msg(const SessionCase& session_case,
-                                          pjsip_msg* msg,
-                                          pj_pool_t* pool);
-
-private:
-  static std::string user_from_uri(pjsip_uri *uri);
-};
+  return 0;
+}
