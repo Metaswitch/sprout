@@ -65,8 +65,14 @@ template <class T>
 class FakeSproutlet : public Sproutlet
 {
 public:
-  FakeSproutlet(const std::string& service_name, int port, const std::string& uri, const std::string& service_host, std::string alias = "") :
-    Sproutlet(service_name, port, uri, service_host)
+  FakeSproutlet(const std::string& service_name,
+                int port,
+                const std::string& uri,
+                const std::string& service_host,
+                std::string alias = "",
+                SNMP::FakeSuccessFailCountByRequestTypeTable* fake_inc_tbl = NULL,
+                SNMP::FakeSuccessFailCountByRequestTypeTable* fake_out_tbl = NULL) :
+    Sproutlet(service_name, port, uri, service_host, fake_inc_tbl, fake_out_tbl)
   {
     // Only one sproutlet loaded can own this alias.
     if (alias != "")
@@ -647,6 +653,7 @@ public:
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDelayAfterFwd<1> >("delayafterfwd", 0, "sip:delayafterfwd.homedomain;transport=tcp", ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDummySCSCF>("scscf", 44444, "sip:scscf.homedomain:44444;transport=tcp", "scscf"));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletReusesTransport>("transport", 0, "sip:transport.homedomain;transport=tcp", ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForwarder<false> >("fwdwithstats", 0, "sip:fwdwithstats.homedomain;transport=tcp", "", "", &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE, &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE));
 
     // Create a host alias.
     std::unordered_set<std::string> host_aliases;
@@ -1537,6 +1544,64 @@ TEST_F(SproutletProxyTest, CancelForking)
 
   // All done!
   req.clear();
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+TEST_F(SproutletProxyTest, ForkErrorTimeout)
+{
+  // Tests handling of a request timeout.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with two Route headers - the first referencing the
+  // forwarder Sproutlet and the second referencing an external node.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@awaydomain";
+  msg1._from = "sip:alice@homedomain";
+  msg1._to = "sip:bob@awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:fwdwithstats.proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
+  free_txdata();
+
+  // Request is forwarded to the node in the second Route header.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // We won't be responding to this one, so free the data.
+  free_txdata();
+
+  // Advance time to trigger a timeout.
+  cwtest_advance_time_ms(33000L);
+  poll();
+
+  // Expect a 408 response to be sent by the sproutlet.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(408).matches(tdata->msg);
+  free_txdata();
+
+  // All done!
   ASSERT_EQ(0, txdata_count());
 
   delete tp;
