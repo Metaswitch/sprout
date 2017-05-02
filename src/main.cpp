@@ -1679,6 +1679,13 @@ int main(int argc, char* argv[])
     return status;
   }
 
+  // If local host was not specified, use the host name returned by
+  // pj_gethostname.
+  if (opt.local_host == "")
+  {
+    opt.local_host = PJUtils::pj_str_to_string(pj_gethostname());
+  }
+
   // Parse the registration-stores argument.
   std::string registration_store_location;
   std::vector<std::string> remote_registration_stores_locations;
@@ -1892,6 +1899,15 @@ int main(int argc, char* argv[])
   quiescing_mgr = new QuiescingManager();
   quiescing_mgr->register_completion_handler(new QuiesceCompleteHandler());
 
+  // Set up the default address family.  This is IPv4 unless our local host is an IPv6 address.
+  int addr_family = AF_INET;
+  struct in6_addr dummy_addr;
+  if (inet_pton(AF_INET6, opt.local_host.c_str(), &dummy_addr) == 1)
+  {
+    TRC_DEBUG("Local host is an IPv6 address - enabling IPv6 mode");
+    addr_family = AF_INET6;
+  }
+
   // Initialize the PJSIP stack and associated subsystems.
   status = init_stack(opt.sas_system_name,
                       opt.sas_server,
@@ -1900,6 +1916,7 @@ int main(int argc, char* argv[])
                       opt.port_scscf,
                       opt.sas_signaling_if,
                       opt.sproutlet_ports,
+                      addr_family,
                       opt.local_host,
                       opt.public_host,
                       opt.home_domain,
@@ -1938,7 +1955,7 @@ int main(int argc, char* argv[])
 
   // Now that we know the address family, create an HttpResolver too.
   http_resolver = new HttpResolver(dns_resolver,
-                                   stack_data.addr_family,
+                                   addr_family,
                                    opt.http_blacklist_duration);
 
   if (opt.ralf_server != "")
@@ -2102,7 +2119,7 @@ int main(int argc, char* argv[])
     TRC_STATUS("Using memcached compatible store with binary protocol");
 
     astaire_resolver = new AstaireResolver(dns_resolver,
-                                           stack_data.addr_family,
+                                           addr_family,
                                            opt.astaire_blacklist_duration);
 
     local_data_store = (Store*)new TopologyNeutralMemcachedStore(registration_store_location,

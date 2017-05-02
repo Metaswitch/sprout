@@ -582,6 +582,7 @@ pj_status_t init_stack(const std::string& system_name,
                        int scscf_port,
                        bool sas_signaling_if,
                        std::set<int> sproutlet_ports,
+                       int address_family,
                        const std::string& local_host,
                        const std::string& public_host,
                        const std::string& home_domain,
@@ -605,8 +606,7 @@ pj_status_t init_stack(const std::string& system_name,
   unsigned addr_cnt = PJ_ARRAY_SIZE(addr_list);
   unsigned i;
 
-  // Get ports and host names specified on options.  If local host was not
-  // specified, use the host name returned by pj_gethostname.
+  // Get ports and host names specified on options.
   char* local_host_cstr = strdup(local_host.c_str());
   char* public_host_cstr = strdup(public_host.c_str());
   char* home_domain_cstr = strdup(home_domain.c_str());
@@ -620,6 +620,7 @@ pj_status_t init_stack(const std::string& system_name,
   stack_data.pcscf_untrusted_port = pcscf_untrusted_port;
   stack_data.scscf_port = scscf_port;
 
+  stack_data.addr_family = address_family;
   stack_data.sipresolver = sipresolver;
 
   // Copy other functional options to stack data.
@@ -629,7 +630,7 @@ pj_status_t init_stack(const std::string& system_name,
   stack_data.sip_tcp_send_timeout = sip_tcp_send_timeout;
 
   // Work out local and public hostnames and cluster domain names.
-  stack_data.local_host = (local_host != "") ? pj_str(local_host_cstr) : *pj_gethostname();
+  stack_data.local_host = pj_str(local_host_cstr);
   stack_data.public_host = (public_host != "") ? pj_str(public_host_cstr) : stack_data.local_host;
   stack_data.default_home_domain = (home_domain != "") ? pj_str(home_domain_cstr) : stack_data.local_host;
   stack_data.scscf_uri_str = pj_str(scscf_uri_cstr);
@@ -655,15 +656,6 @@ pj_status_t init_stack(const std::string& system_name,
       *domain = pj_str(strdup(ii->c_str()));
       URIClassifier::home_domains.push_back(domain);
     }
-  }
-
-  // Set up the default address family.  This is IPv4 unless our local host is an IPv6 address.
-  stack_data.addr_family = AF_INET;
-  struct in6_addr dummy_addr;
-  if (inet_pton(AF_INET6, local_host_cstr, &dummy_addr) == 1)
-  {
-    TRC_DEBUG("Local host is an IPv6 address - enabling IPv6 mode");
-    stack_data.addr_family = AF_INET6;
   }
 
   stack_data.record_route_on_every_hop = false;
