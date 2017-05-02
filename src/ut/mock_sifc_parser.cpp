@@ -1,5 +1,6 @@
 /**
- * @file sifcservice.h
+ * @file mock_sifc_parser.cpp
+ * Mocks out parsing shared iFC set id into list of iFCs.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2017  Metaswitch Networks Ltd
@@ -34,42 +35,12 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#ifndef SIFCSERVICE_H__
-#define SIFCSERVICE_H__
+#include "mock_sifc_parser.h"
 
-#include <map>
-#include <string>
-#include <boost/thread.hpp>
-#include "rapidxml/rapidxml.hpp"
-#include <functional>
+MockSIFCService::MockSIFCService() :
+  SIFCService()
+{}
 
-#include "updater.h"
-#include "sas.h"
-#include "ifc.h"
+MockSIFCService::~MockSIFCService()
+{}
 
-class SIFCService
-{
-public:
-  SIFCService(std::string configuration = "./sifc.xml");
-  virtual ~SIFCService();
-
-  /// Updates the shared IFC sets
-  void update_sets();
-
-  /// Get the IFCs that belong to a set of IDs
-  virtual void get_ifcs_from_id(std::multimap<int32_t, Ifc>& ifc_map,
-                                const std::set<int32_t>& id,
-                                SAS::TrailId trail) const;
-
-private:
-  std::map<int32_t, std::vector<std::pair<int32_t, Ifc>>> _shared_ifc_sets;
-  std::string _configuration;
-  Updater<void, SIFCService>* _updater;
-  rapidxml::xml_document<>* _root;
-
-  // Mark as mutable to flag that this can be modified without affecting the
-  // external behaviour of the class, allowing for locking in 'const' methods.
-  mutable boost::shared_mutex _sets_rw_lock;
-};
-
-#endif

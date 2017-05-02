@@ -58,7 +58,7 @@ class HSSConnection
 public:
   HSSConnection(const std::string& server,
                 HttpResolver* resolver,
-                LoadMonitor *load_monitor,
+                LoadMonitor* load_monitor,
                 SNMP::IPCountTable* homestead_count_tbl,
                 SNMP::EventAccumulatorTable* homestead_overall_latency_tbl,
                 SNMP::EventAccumulatorTable* homestead_mar_latency_tbl,
