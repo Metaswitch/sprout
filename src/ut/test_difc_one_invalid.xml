@@ -1,5 +1,5 @@
 <?l version=1.0 encoding=UTF-8?>
-<DefaultIfcSet>
+<DefaultIFCsSet>
   <InitialFilterCriteria>
     <Priority>one</Priority>
     <TriggerPoint>
@@ -32,4 +32,4 @@
       <DefaultHandling>0</DefaultHandling>
     </ApplicationServer>
   </InitialFilterCriteria>
-</DefaultIfcSet>
+</DefaultIFCsSet>

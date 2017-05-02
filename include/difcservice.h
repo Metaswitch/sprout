@@ -47,11 +47,11 @@
 class DIFCService
 {
 public:
-  DIFCService(std::string configuration = "/etc/clearwater/default_ifc.xml");
+  DIFCService(std::string configuration = "/etc/clearwater/default_ifcs.xml");
   ~DIFCService();
 
   // Node names within the Default iFC configuration file.
-  const char* const DEFAULT_IFC_SET = "DefaultIfcSet";
+  const char* const DEFAULT_IFCS_SET = "DefaultIFCsSet";
 
   /// Updates the default iFCs.
   void update_difcs();

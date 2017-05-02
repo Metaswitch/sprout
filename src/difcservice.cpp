@@ -107,12 +107,12 @@ void DIFCService::update_difcs()
     return;
   }
 
-  // Finally, check the "DefaultIfcSet" node is present.
-  if (!root->first_node(DIFCService::DEFAULT_IFC_SET))
+  // Finally, check the "DefaultIFCsSet" node is present.
+  if (!root->first_node(DIFCService::DEFAULT_IFCS_SET))
   {
     TRC_ERROR("Failed to parse the default IFC configuration file as it is "
-              "invalid (missing DefaultIfcSet block)");
-    CL_SPROUT_DIFC_FILE_MISSING_DEFAULTIFCSET.log();
+              "invalid (missing DefaultIFCsSet block)");
+    CL_SPROUT_DIFC_FILE_MISSING_DEFAULT_IFCS_SET.log();
     delete root; root = NULL;
     return;
   }
@@ -126,7 +126,7 @@ void DIFCService::update_difcs()
 
   // Parse any iFCs that are present.
   std::vector<std::pair<int32_t, Ifc>> ifc_list;
-  rapidxml::xml_node<>* difc_set = _root->first_node(DIFCService::DEFAULT_IFC_SET);
+  rapidxml::xml_node<>* difc_set = _root->first_node(DIFCService::DEFAULT_IFCS_SET);
   rapidxml::xml_node<>* ifc = NULL;
   for (ifc = difc_set->first_node(RegDataXMLUtils::IFC);
        ifc != NULL;
@@ -144,7 +144,7 @@ void DIFCService::update_difcs()
       if (priority_str != std::to_string(priority))
       {
         TRC_ERROR("Failed to parse one default IFC, as its Priority (%s) isn't an "
-                  "int. This IFC will not be included in the default iFC list",
+                  "int. This IFC will not be included in the default IFC list",
                   priority_str.c_str());
         CL_SPROUT_DIFC_FILE_INVALID_PRIORITY.log(priority_str.c_str());
         continue;

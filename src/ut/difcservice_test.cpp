@@ -199,7 +199,7 @@ TEST_F(DIFCServiceTest, IncorrectSyntax)
 {
   CapturingTestLogger log;
   DIFCService difc(string(UT_DIR).append("/test_difc_missing_node.xml"));
-  EXPECT_TRUE(log.contains("Failed to parse the default IFC configuration file as it is invalid (missing DefaultIfcSet block)"));
+  EXPECT_TRUE(log.contains("Failed to parse the default IFC configuration file as it is invalid (missing DefaultIFCsSet block)"));
   EXPECT_TRUE(difc._default_ifcs.empty());
 }
 
@@ -231,13 +231,13 @@ TEST_F(DIFCServiceTest, SingleInvalidIfc)
 
   EXPECT_TRUE(log.contains("Failed to parse one default IFC"));
 
- std::vector<std::pair<int32_t, Ifc>> difc_list = difc._default_ifcs;
- EXPECT_EQ(difc_list.size(), 1);
+  std::vector<std::pair<int32_t, Ifc>> difc_list = difc._default_ifcs;
+  EXPECT_EQ(difc_list.size(), 1);
 
- std::string server_name = get_server_name(difc_list.begin()->second);
- int32_t priority = get_priority(difc_list.begin()->second);
- EXPECT_EQ(server_name, "example_two.com");
- EXPECT_EQ(priority, 2);
+  std::string server_name = get_server_name(difc_list.begin()->second);
+  int32_t priority = get_priority(difc_list.begin()->second);
+  EXPECT_EQ(server_name, "example_two.com");
+  EXPECT_EQ(priority, 2);
 }
 
 

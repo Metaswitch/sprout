@@ -63,13 +63,13 @@ void SIFCService::update_sets()
   if ((stat(_configuration.c_str(), &s) != 0) &&
       (errno == ENOENT))
   {
-    TRC_STATUS("No shared IFC sets configuration (file %s does not exist)",
+    TRC_STATUS("No shared IFCs configuration (file %s does not exist)",
                _configuration.c_str());
     CL_SPROUT_SIFC_FILE_MISSING.log();
     return;
   }
 
-  TRC_STATUS("Loading shared IFC sets configuration from %s", _configuration.c_str());
+  TRC_STATUS("Loading shared IFCs configuration from %s", _configuration.c_str());
 
   // Read from the file
   std::ifstream fs(_configuration.c_str());
@@ -78,7 +78,7 @@ void SIFCService::update_sets()
 
   if (sifc_str == "")
   {
-    TRC_ERROR("Failed to read shared IFC set configuration data from %s",
+    TRC_ERROR("Failed to read shared IFCs configuration data from %s",
               _configuration.c_str());
     CL_SPROUT_SIFC_FILE_EMPTY.log();
     return;
@@ -93,7 +93,7 @@ void SIFCService::update_sets()
   }
   catch (rapidxml::parse_error& err)
   {
-    TRC_ERROR("Failed to parse the shared IFC set configuration data:\n %s\n %s",
+    TRC_ERROR("Failed to parse the shared IFCs configuration data:\n %s\n %s",
               sifc_str.c_str(),
               err.what());
     CL_SPROUT_SIFC_FILE_INVALID_XML.log();
@@ -101,10 +101,10 @@ void SIFCService::update_sets()
     return;
   }
 
-  if (!root->first_node("Sets"))
+  if (!root->first_node(SIFCService::SHARED_IFCS_SETS))
   {
-    TRC_ERROR("Invalid shared IFC set configuration file - missing Sets block");
-    CL_SPROUT_SIFC_FILE_MISSING_SETS.log();
+    TRC_ERROR("Invalid shared IFCs configuration file - missing SharedIFCsSets block");
+    CL_SPROUT_SIFC_FILE_MISSING_SHARED_IFCS_SETS.log();
     delete root; root = NULL;
     return;
   }
@@ -115,18 +115,18 @@ void SIFCService::update_sets()
   _shared_ifc_sets.clear();
   delete _root; _root = root;
 
-  rapidxml::xml_node<>* sets = _root->first_node("Sets");
+  rapidxml::xml_node<>* sets = _root->first_node(SIFCService::SHARED_IFCS_SETS);
   rapidxml::xml_node<>* set = NULL;
 
-  for (set = sets->first_node("Set");
+  for (set = sets->first_node(SIFCService::SHARED_IFCS_SET);
        set != NULL;
-       set = set->next_sibling("Set"))
+       set = set->next_sibling(SIFCService::SHARED_IFCS_SET))
   {
-    rapidxml::xml_node<>* set_id_node = set->first_node("SetId");
+    rapidxml::xml_node<>* set_id_node = set->first_node(SIFCService::SET_ID);
 
     if (!set_id_node)
     {
-      TRC_ERROR("Invalid shared IFC set block - missing SetId. Skipping this entry");
+      TRC_ERROR("Invalid shared IFC block - missing SetID. Skipping this entry");
       CL_SPROUT_SIFC_FILE_MISSING_SET_ID.log();
       continue;
     }
@@ -137,7 +137,7 @@ void SIFCService::update_sets()
 
     if (set_id_str != std::to_string(set_id))
     {
-      TRC_ERROR("Invalid shared IFC set block - SetId (%s) isn't an int. Skipping this entry",
+      TRC_ERROR("Invalid shared IFC block - SetID (%s) isn't an int. Skipping this entry",
                 set_id_str.c_str());
       CL_SPROUT_SIFC_FILE_INVALID_SET_ID.log(set_id_str.c_str());
       continue;
@@ -145,7 +145,7 @@ void SIFCService::update_sets()
 
     if (_shared_ifc_sets.count(set_id) != 0)
     {
-      TRC_ERROR("Invalid shared IFC set block - SetId (%d) is repeated. Skipping this entry",
+      TRC_ERROR("Invalid shared IFC block - SetID (%d) is repeated. Skipping this entry",
                 set_id);
       CL_SPROUT_SIFC_FILE_REPEATED_SET_ID.log(set_id_str.c_str());
       continue;
@@ -153,12 +153,12 @@ void SIFCService::update_sets()
 
     std::vector<std::pair<int32_t, Ifc>> ifc_set;
 
-    for (rapidxml::xml_node<>* ifc = set->first_node("InitialFilterCriteria");
+    for (rapidxml::xml_node<>* ifc = set->first_node(RegDataXMLUtils::IFC);
          ifc != NULL;
-         ifc = ifc->next_sibling("InitialFilterCriteria"))
+         ifc = ifc->next_sibling(RegDataXMLUtils::IFC))
     {
       int32_t priority = 0;
-      rapidxml::xml_node<>* priority_node = ifc->first_node("Priority");
+      rapidxml::xml_node<>* priority_node = ifc->first_node(RegDataXMLUtils::PRIORITY);
 
       if (priority_node)
       {
@@ -168,9 +168,9 @@ void SIFCService::update_sets()
 
         if (priority_str != std::to_string(priority))
         {
-          TRC_ERROR("Invalid shared IFC set block - Priority (%s) isn't an int. Skipping this entry",
+          TRC_ERROR("Invalid shared IFC block - Priority (%s) isn't an int. Skipping this entry",
                     priority_str.c_str());
-          CL_SPROUT_SIFC_FILE_INVALID_PRIORITY.log(set_id_str.c_str());
+          CL_SPROUT_SIFC_FILE_INVALID_PRIORITY.log(priority_str.c_str());
           continue;
         }
       }
