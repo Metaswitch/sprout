@@ -53,6 +53,11 @@ public:
   SIFCService(std::string configuration = "./sifc.xml");
   virtual ~SIFCService();
 
+  // Node names within the Shared IFC configuration file.
+  const char* const SHARED_IFCS_SETS = "SharedIFCsSets";
+  const char* const SHARED_IFCS_SET = "SharedIFCsSet";
+  const char* const SET_ID = "SetID";
+
   /// Updates the shared IFC sets
   void update_sets();
 
