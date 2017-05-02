@@ -723,18 +723,30 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                           pjsip_hdr_shallow_clone(get_pool(rsp), _sproutlet->_service_route);
   pjsip_msg_insert_first_hdr(rsp, clone);
 
-  // Add P-Associated-URI headers for all of the associated URIs. Don't include
-  // any URIs that are wildcard identities.
+  // Add P-Associated-URI headers for all of the associated URIs that are real
+  // URIs, ignoring wildcard URIs and logging any URIs that aren't wildcards
+  // but are still unparseable as URIs.
   for (std::vector<std::string>::iterator it = uris.begin();
        it != uris.end();
        it++)
   {
     if (!WildcardUtils::is_wildcard_uri(*it))
     {
-      pjsip_routing_hdr* pau =
-                       identity_hdr_create(get_pool(rsp), STR_P_ASSOCIATED_URI);
-      pau->name_addr.uri = PJUtils::uri_from_string(*it, get_pool(rsp));
-      pjsip_msg_add_hdr(rsp, (pjsip_hdr*)pau);
+      pjsip_uri* this_uri = PJUtils::uri_from_string(*it, get_pool(rsp));
+      if (this_uri != NULL)
+      {
+        pjsip_routing_hdr* pau =
+                        identity_hdr_create(get_pool(rsp), STR_P_ASSOCIATED_URI);
+        pau->name_addr.uri = this_uri;
+        pjsip_msg_add_hdr(rsp, (pjsip_hdr*)pau);
+      }
+      else
+      {
+        TRC_DEBUG("Bad associated URI %s", it->c_str());
+        SAS::Event event(trail(), SASEvent::HTTP_HOMESTEAD_BAD_IDENTITY, 0);
+        event.add_var_param(*it);
+        SAS::report_event(event);
+      }
     }
   }
 

@@ -1251,6 +1251,8 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case OPT_SPROUT_CHRONOS_CALLBACK_URI:
       options->sprout_chronos_callback_uri = std::string(pj_optarg);
+      TRC_INFO("Sprout Chronos callback uri set to %s", pj_optarg);
+      break;
 
     case OPT_LISTEN_PORT:
       {
@@ -1458,7 +1460,7 @@ int main(int argc, char* argv[])
   // also.
   opt.reg_max_expires = 300;
 
-  opt.sub_max_expires = 300;
+  opt.sub_max_expires = 0;
   opt.sas_server = "0.0.0.0";
   opt.record_routing_model = 1;
   opt.default_session_expires = 10 * 60;
@@ -1551,6 +1553,17 @@ int main(int argc, char* argv[])
   if (status != PJ_SUCCESS)
   {
     return 1;
+  }
+
+  // If sub_max_expires is unset, then allow a higher number than the
+  // maximum registration expiry, as required by TS 24.229 5.2.3.
+  // RFC 3680 suggests 3761 seconds for an expiry of 3600. We thus add
+  // 161 seconds for the maximum subscription expiry by default.
+  if (opt.sub_max_expires == 0)
+  {
+    opt.sub_max_expires = opt.reg_max_expires + 161;
+    TRC_INFO("Maximum subscription period defaulted to %d seconds, based maximum registration expiry %d seconds",
+             opt.sub_max_expires, opt.reg_max_expires);
   }
 
   if (opt.pidfile != "")
