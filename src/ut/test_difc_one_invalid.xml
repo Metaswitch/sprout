@@ -1,0 +1,35 @@
+<?l version=1.0 encoding=UTF-8?>
+<DefaultIfcSet>
+  <InitialFilterCriteria>
+    <Priority>one</Priority>
+    <TriggerPoint>
+      <ConditionTypeCNF>0</ConditionTypeCNF>
+      <SPT>
+        <ConditionNegated>0</ConditionNegated>
+        <Group>0</Group>
+        <Method>INVITE</Method>
+        <Extension></Extension>
+      </SPT>
+    </TriggerPoint>
+    <ApplicationServer>
+      <ServerName>example.com</ServerName>
+      <DefaultHandling>0</DefaultHandling>
+    </ApplicationServer>
+  </InitialFilterCriteria>
+  <InitialFilterCriteria>
+    <Priority>2</Priority>
+    <TriggerPoint>
+      <ConditionTypeCNF>0</ConditionTypeCNF>
+      <SPT>
+        <ConditionNegated>0</ConditionNegated>
+        <Group>0</Group>
+        <Method>INVITE</Method>
+        <Extension></Extension>
+      </SPT>
+    </TriggerPoint>
+    <ApplicationServer>
+      <ServerName>example_two.com</ServerName>
+      <DefaultHandling>0</DefaultHandling>
+    </ApplicationServer>
+  </InitialFilterCriteria>
+</DefaultIfcSet>

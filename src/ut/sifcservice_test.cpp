@@ -44,6 +44,7 @@
 #include "sifcservice.h"
 #include "fakelogger.h"
 #include "test_utils.hpp"
+#include "ifc_parsing_utils.h"
 
 using ::testing::UnorderedElementsAreArray;
 
@@ -60,22 +61,6 @@ class SIFCServiceTest : public ::testing::Test
   {
   }
 };
-
-std::string get_server_name(Ifc ifc)
-{
-  return std::string(ifc._ifc->first_node("ApplicationServer")->
-                                             first_node("ServerName")->value());
-}
-
-int32_t get_priority(Ifc ifc)
-{
-  if (ifc._ifc->first_node("Priority"))
-  {
-    return std::atoi(ifc._ifc->first_node("Priority")->value());
-  }
-
-  return 0;
-}
 
 // Test a valid shared IFC file is parsed correctly
 TEST_F(SIFCServiceTest, ValidSIFCFile)
