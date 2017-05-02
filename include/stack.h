@@ -165,24 +165,26 @@ extern pj_status_t init_stack(const std::string& sas_system_name,
                               int pcscf_untrusted_port,
                               int scscf_port,
                               bool sas_signaling_if,
-                              std::set<int> sproutlet_ports,
                               int address_family,
                               const std::string& local_host,
                               const std::string& public_host,
                               const std::string& home_domain,
                               const std::string& additional_home_domains,
-                              const std::string& sproutlet_uri,
-                              const std::string& sprout_hostname,
-                              const std::string& alias_hosts,
+                              const std::string& scscf_uri,
                               SIPResolver* sipresolver,
                               int record_routing_model,
                               const int default_session_expires,
                               const int max_session_expires,
                               const int sip_tcp_connect_timeout,
                               const int sip_tcp_send_timeout,
-                              QuiescingManager *quiescing_mgr,
-                              const std::string& cdf_domain,
-                              std::vector<std::string> sproutlet_uris);
+                              const std::string& cdf_domain);
+
+pj_status_t start_stack(std::set<int> sproutlet_ports,
+                       const std::string& sprout_hostname,
+                       const std::string& alias_hosts,
+                       QuiescingManager *quiescing_mgr_arg,
+                       std::vector<std::string> sproutlet_uris);
+
 extern pj_status_t start_pjsip_thread();
 extern pj_status_t stop_pjsip_thread();
 extern void stop_stack();

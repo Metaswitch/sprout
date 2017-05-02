@@ -1908,6 +1908,36 @@ int main(int argc, char* argv[])
     addr_family = AF_INET6;
   }
 
+  // Initialize the PJSIP stack and associated subsystems.
+  // We need to do this early so that components which use PJSIP
+  // can create data on stack_data.pool.
+  status = init_stack(opt.sas_system_name,
+                      opt.sas_server,
+                      opt.pcscf_trusted_port,
+                      opt.pcscf_untrusted_port,
+                      opt.port_scscf,
+                      opt.sas_signaling_if,
+                      addr_family,
+                      opt.local_host,
+                      opt.public_host,
+                      opt.home_domain,
+                      opt.additional_home_domains,
+                      opt.uri_scscf,
+                      sip_resolver,
+                      opt.record_routing_model,
+                      opt.default_session_expires,
+                      opt.max_session_expires,
+                      opt.sip_tcp_connect_timeout,
+                      opt.sip_tcp_send_timeout,
+                      opt.billing_cdf);
+
+  if (status != PJ_SUCCESS)
+  {
+    CL_SPROUT_SIP_INIT_INTERFACE_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
+    TRC_ERROR("Error initializing stack %s", PJUtils::pj_status_to_string(status).c_str());
+    return 1;
+  }
+
   // Now that we know the address family, create an HttpResolver too.
   http_resolver = new HttpResolver(dns_resolver,
                                    addr_family,
@@ -2152,36 +2182,19 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  // Initialize the PJSIP stack and associated subsystems.
-  status = init_stack(opt.sas_system_name,
-                      opt.sas_server,
-                      opt.pcscf_trusted_port,
-                      opt.pcscf_untrusted_port,
-                      opt.port_scscf,
-                      opt.sas_signaling_if,
-                      opt.sproutlet_ports,
-                      addr_family,
-                      opt.local_host,
-                      opt.public_host,
-                      opt.home_domain,
-                      opt.additional_home_domains,
-                      opt.uri_scscf,
-                      opt.sprout_hostname,
-                      opt.alias_hosts,
-                      sip_resolver,
-                      opt.record_routing_model,
-                      opt.default_session_expires,
-                      opt.max_session_expires,
-                      opt.sip_tcp_connect_timeout,
-                      opt.sip_tcp_send_timeout,
-                      quiescing_mgr,
-                      opt.billing_cdf,
-                      sproutlet_uris);
+  // Start the PJSIP stack and it's transports. These needs to
+  // happen after we have loaded the sproutlets so they can adjust the
+  // listening ports.
+  status = start_stack(opt.sproutlet_ports,
+                       opt.sprout_hostname,
+                       opt.alias_hosts,
+                       quiescing_mgr,
+                       sproutlet_uris);
 
   if (status != PJ_SUCCESS)
   {
     CL_SPROUT_SIP_INIT_INTERFACE_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
-    TRC_ERROR("Error initializing stack %s", PJUtils::pj_status_to_string(status).c_str());
+    TRC_ERROR("Error starting stack %s", PJUtils::pj_status_to_string(status).c_str());
     return 1;
   }
 

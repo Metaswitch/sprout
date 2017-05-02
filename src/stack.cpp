@@ -581,30 +581,21 @@ pj_status_t init_stack(const std::string& system_name,
                        int pcscf_untrusted_port,
                        int scscf_port,
                        bool sas_signaling_if,
-                       std::set<int> sproutlet_ports,
                        int address_family,
                        const std::string& local_host,
                        const std::string& public_host,
                        const std::string& home_domain,
                        const std::string& additional_home_domains,
                        const std::string& scscf_uri,
-                       const std::string& sprout_hostname,
-                       const std::string& alias_hosts,
                        SIPResolver* sipresolver,
                        int record_routing_model,
                        const int default_session_expires,
                        const int max_session_expires,
                        const int sip_tcp_connect_timeout,
                        const int sip_tcp_send_timeout,
-                       QuiescingManager *quiescing_mgr_arg,
-                       const std::string& cdf_domain,
-                       std::vector<std::string> sproutlet_uris)
+                       const std::string& cdf_domain)
 {
   pj_status_t status;
-  pj_sockaddr pri_addr;
-  pj_sockaddr addr_list[16];
-  unsigned addr_cnt = PJ_ARRAY_SIZE(addr_list);
-  unsigned i;
 
   // Get ports and host names specified on options.
   char* local_host_cstr = strdup(local_host.c_str());
@@ -718,6 +709,21 @@ pj_status_t init_stack(const std::string& system_name,
   stack_data.scscf_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(scscf_uri,
                                                                   stack_data.pool);
 
+  return status;
+}
+
+pj_status_t start_stack(std::set<int> sproutlet_ports,
+                       const std::string& sprout_hostname,
+                       const std::string& alias_hosts,
+                       QuiescingManager *quiescing_mgr_arg,
+                       std::vector<std::string> sproutlet_uris)
+{
+  pj_status_t status;
+  pj_sockaddr pri_addr;
+  pj_sockaddr addr_list[16];
+  unsigned addr_cnt = PJ_ARRAY_SIZE(addr_list);
+  unsigned i;
+
   // Create listening transports for the ports whichtrusted and untrusted ports.
   stack_data.pcscf_trusted_tcp_factory = NULL;
   if (stack_data.pcscf_trusted_port != 0)
@@ -769,13 +775,13 @@ pj_status_t init_stack(const std::string& system_name,
   // to be added in Record-Route.
   stack_data.name.push_back(stack_data.local_host);
 
-  if (strcmp(local_host_cstr, public_host_cstr))
+  if (pj_strcmp(&stack_data.local_host, &stack_data.public_host))
   {
     stack_data.name.push_back(stack_data.public_host);
   }
 
   // S-CSCF enabled with a specified URI, so add host name from the URI to hostnames.
-  if ((scscf_port != 0) && (stack_data.scscf_uri != NULL))
+  if ((stack_data.scscf_port != 0) && (stack_data.scscf_uri != NULL))
   {
     stack_data.name.push_back(stack_data.scscf_uri->host);
   }
