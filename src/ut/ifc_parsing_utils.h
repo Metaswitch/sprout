@@ -1,5 +1,5 @@
 /**
- * @file sifcservice.h
+ * @file ifc_parsing_utils.h
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2017  Metaswitch Networks Ltd
@@ -34,47 +34,24 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#ifndef SIFCSERVICE_H__
-#define SIFCSERVICE_H__
+#pragma once
 
-#include <map>
 #include <string>
-#include <boost/thread.hpp>
-#include "rapidxml/rapidxml.hpp"
-#include <functional>
-
-#include "updater.h"
-#include "sas.h"
+#include <vector>
 #include "ifc.h"
 
-class SIFCService
+inline std::string get_server_name(Ifc ifc)
 {
-public:
-  SIFCService(std::string configuration = "./sifc.xml");
-  virtual ~SIFCService();
+  return std::string(ifc._ifc->first_node("ApplicationServer")->
+                                             first_node("ServerName")->value());
+}
 
-  // Node names within the Shared IFC configuration file.
-  const char* const SHARED_IFCS_SETS = "SharedIFCsSets";
-  const char* const SHARED_IFCS_SET = "SharedIFCsSet";
-  const char* const SET_ID = "SetID";
+inline int32_t get_priority(Ifc ifc)
+{
+  if (ifc._ifc->first_node("Priority"))
+  {
+    return std::atoi(ifc._ifc->first_node("Priority")->value());
+  }
 
-  /// Updates the shared IFC sets
-  void update_sets();
-
-  /// Get the IFCs that belong to a set of IDs
-  virtual void get_ifcs_from_id(std::multimap<int32_t, Ifc>& ifc_map,
-                                const std::set<int32_t>& id,
-                                SAS::TrailId trail) const;
-
-private:
-  std::map<int32_t, std::vector<std::pair<int32_t, Ifc>>> _shared_ifc_sets;
-  std::string _configuration;
-  Updater<void, SIFCService>* _updater;
-  rapidxml::xml_document<>* _root;
-
-  // Mark as mutable to flag that this can be modified without affecting the
-  // external behaviour of the class, allowing for locking in 'const' methods.
-  mutable boost::shared_mutex _sets_rw_lock;
-};
-
-#endif
+  return 0;
+}

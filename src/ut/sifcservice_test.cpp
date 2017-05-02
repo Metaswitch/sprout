@@ -44,6 +44,7 @@
 #include "sifcservice.h"
 #include "fakelogger.h"
 #include "test_utils.hpp"
+#include "ifc_parsing_utils.h"
 
 using ::testing::UnorderedElementsAreArray;
 
@@ -60,22 +61,6 @@ class SIFCServiceTest : public ::testing::Test
   {
   }
 };
-
-std::string get_server_name(Ifc ifc)
-{
-  return std::string(ifc._ifc->first_node("ApplicationServer")->
-                                             first_node("ServerName")->value());
-}
-
-int32_t get_priority(Ifc ifc)
-{
-  if (ifc._ifc->first_node("Priority"))
-  {
-    return std::atoi(ifc._ifc->first_node("Priority")->value());
-  }
-
-  return 0;
-}
 
 // Test a valid shared IFC file is parsed correctly
 TEST_F(SIFCServiceTest, ValidSIFCFile)
@@ -168,7 +153,7 @@ TEST_F(SIFCServiceTest, SIFCReloadInvalidFile)
   // Change the file the sifc service is using (to mimic the file being changed),
   // then reload the file, and repeat the check. Nothing should have changed,
   // and there should be no memory issues
-  sifc._configuration = "/test_sifc_parse_error.xml";
+  sifc._configuration = string(UT_DIR).append("/test_sifc_parse_error.xml");
   sifc.update_sets();
   std::multimap<int32_t, Ifc> ifc_map_reload;
   sifc.get_ifcs_from_id(ifc_map_reload, id, 0);
@@ -188,7 +173,7 @@ TEST_F(SIFCServiceTest, MissingFile)
 {
   CapturingTestLogger log;
   SIFCService sifc(string(UT_DIR).append("/non_existent_file.xml"));
-  EXPECT_TRUE(log.contains("No shared IFC sets configuration"));
+  EXPECT_TRUE(log.contains("No shared IFCs configuration"));
   EXPECT_TRUE(sifc._shared_ifc_sets.empty());
 }
 
@@ -197,7 +182,7 @@ TEST_F(SIFCServiceTest, EmptyFile)
 {
   CapturingTestLogger log;
   SIFCService sifc(string(UT_DIR).append("/test_sifc_empty_file.xml"));
-  EXPECT_TRUE(log.contains("Failed to read shared IFC set configuration"));
+  EXPECT_TRUE(log.contains("Failed to read shared IFCs configuration"));
   EXPECT_TRUE(sifc._shared_ifc_sets.empty());
 }
 
@@ -206,7 +191,7 @@ TEST_F(SIFCServiceTest, ParseError)
 {
   CapturingTestLogger log;
   SIFCService sifc(string(UT_DIR).append("/test_sifc_parse_error.xml"));
-  EXPECT_TRUE(log.contains("Failed to parse the shared IFC set configuration data"));
+  EXPECT_TRUE(log.contains("Failed to parse the shared IFCs configuration data"));
   EXPECT_TRUE(sifc._shared_ifc_sets.empty());
 }
 
@@ -215,7 +200,7 @@ TEST_F(SIFCServiceTest, MissingSetBlock)
 {
   CapturingTestLogger log;
   SIFCService sifc(string(UT_DIR).append("/test_sifc_missing_set.xml"));
-  EXPECT_TRUE(log.contains("Invalid shared IFC set configuration file - missing Sets block"));
+  EXPECT_TRUE(log.contains("Invalid shared IFCs configuration file - missing SharedIFCsSets block"));
   EXPECT_TRUE(sifc._shared_ifc_sets.empty());
 }
 
@@ -240,7 +225,7 @@ TEST_F(SIFCServiceTest, MissingSetID)
 {
   CapturingTestLogger log;
   SIFCService sifc(string(UT_DIR).append("/test_sifc_missing_set_id.xml"));
-  EXPECT_TRUE(log.contains("Invalid shared IFC set block - missing SetId. Skipping this entry"));
+  EXPECT_TRUE(log.contains("Invalid shared IFC block - missing SetID. Skipping this entry"));
 
   // The test file has an invalid entry, and an entry for ID 2. Check that this
   // was added to the map.
@@ -256,7 +241,7 @@ TEST_F(SIFCServiceTest, InvalidSetID)
 {
   CapturingTestLogger log;
   SIFCService sifc(string(UT_DIR).append("/test_sifc_invalid_set_id.xml"));
-  EXPECT_TRUE(log.contains("Invalid shared IFC set block - SetId (NaN) isn't an int. Skipping this entry"));
+  EXPECT_TRUE(log.contains("Invalid shared IFC block - SetID (NaN) isn't an int. Skipping this entry"));
 
   // The test file has an invalid entry, and an entry for ID 2. Check that this
   // was added to the map.
@@ -273,7 +258,7 @@ TEST_F(SIFCServiceTest, RepeatedSetID)
 {
   CapturingTestLogger log;
   SIFCService sifc(string(UT_DIR).append("/test_sifc_repeated_id.xml"));
-  EXPECT_TRUE(log.contains("Invalid shared IFC set block - SetId (1) is repeated. Skipping this entry"));
+  EXPECT_TRUE(log.contains("Invalid shared IFC block - SetID (1) is repeated. Skipping this entry"));
 
   // The test file has two entries for ID 1 (with different server names).
   // Check that the map entry has the correct server name.
@@ -291,7 +276,7 @@ TEST_F(SIFCServiceTest, SIFCPriorities)
   // one has it set to 200, and one has an invalid value.
   CapturingTestLogger log;
   SIFCService sifc(string(UT_DIR).append("/test_sifc_priorities.xml"));
-  EXPECT_TRUE(log.contains("Invalid shared IFC set block - Priority (NaN) isn't an int. Skipping this entry"));
+  EXPECT_TRUE(log.contains("Invalid shared IFC block - Priority (NaN) isn't an int. Skipping this entry"));
 
   // Get the IFCs for ID. There should be two (as one was invalid)
   std::set<int> id; id.insert(1);

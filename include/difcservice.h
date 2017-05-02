@@ -1,5 +1,5 @@
 /**
- * @file sifcservice.h
+ * @file difcservice.h Support for Default iFCs.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2017  Metaswitch Networks Ltd
@@ -34,47 +34,38 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#ifndef SIFCSERVICE_H__
-#define SIFCSERVICE_H__
-
-#include <map>
 #include <string>
 #include <boost/thread.hpp>
 #include "rapidxml/rapidxml.hpp"
-#include <functional>
 
 #include "updater.h"
-#include "sas.h"
 #include "ifc.h"
 
-class SIFCService
+#ifndef DIFCSERVICE_H__
+#define DIFCSERVICE_H__
+
+class DIFCService
 {
 public:
-  SIFCService(std::string configuration = "./sifc.xml");
-  virtual ~SIFCService();
+  DIFCService(std::string configuration = "/etc/clearwater/default_ifcs.xml");
+  ~DIFCService();
 
-  // Node names within the Shared IFC configuration file.
-  const char* const SHARED_IFCS_SETS = "SharedIFCsSets";
-  const char* const SHARED_IFCS_SET = "SharedIFCsSet";
-  const char* const SET_ID = "SetID";
+  // Node names within the Default iFC configuration file.
+  const char* const DEFAULT_IFCS_SET = "DefaultIFCsSet";
 
-  /// Updates the shared IFC sets
-  void update_sets();
-
-  /// Get the IFCs that belong to a set of IDs
-  virtual void get_ifcs_from_id(std::multimap<int32_t, Ifc>& ifc_map,
-                                const std::set<int32_t>& id,
-                                SAS::TrailId trail) const;
+  /// Updates the default iFCs.
+  void update_difcs();
 
 private:
-  std::map<int32_t, std::vector<std::pair<int32_t, Ifc>>> _shared_ifc_sets;
+  std::vector<std::pair<int32_t, Ifc>> _default_ifcs;
   std::string _configuration;
-  Updater<void, SIFCService>* _updater;
+  Updater<void, DIFCService>* _updater;
   rapidxml::xml_document<>* _root;
 
   // Mark as mutable to flag that this can be modified without affecting the
-  // external behaviour of the class, allowing for locking in 'const' methods.
+  // external behaviour of the calss, allowing for locking in 'const' methods.
   mutable boost::shared_mutex _sets_rw_lock;
 };
 
 #endif
+

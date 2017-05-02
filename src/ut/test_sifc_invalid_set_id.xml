@@ -1,9 +1,9 @@
 <?xml version=1.0 encoding=UTF-8?>
-<Sets>
-  <Set>
-    <SetId>
+<SharedIFCsSets>
+  <SharedIFCsSet>
+    <SetID>
       NaN
-    </SetId>
+    </SetID>
     <InitialFilterCriteria>
       <TriggerPoint>
         <ConditionTypeCNF>0</ConditionTypeCNF>
@@ -19,11 +19,11 @@
         <DefaultHandling>0</DefaultHandling>
       </ApplicationServer>
     </InitialFilterCriteria>
-  </Set>
-  <Set>
-    <SetId>
+  </SharedIFCsSet>
+  <SharedIFCsSet>
+    <SetID>
       2
-    </SetId>
+    </SetID>
     <InitialFilterCriteria>
       <TriggerPoint>
         <ConditionTypeCNF>0</ConditionTypeCNF>
@@ -39,5 +39,5 @@
         <DefaultHandling>0</DefaultHandling>
       </ApplicationServer>
     </InitialFilterCriteria>
-  </Set>
-</Sets>
+  </SharedIFCsSet>
+</SharedIFCsSets>
