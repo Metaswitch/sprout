@@ -450,6 +450,7 @@ BasicProxy::UASTsx* BasicProxy::create_uas_tsx()
 BasicProxy::UASTsx::UASTsx(BasicProxy* proxy) :
   _proxy(proxy),
   _req(NULL),
+  _original_transport(NULL),
   _tsx(NULL),
   _lock(NULL),
   _trail(0),
@@ -520,6 +521,13 @@ BasicProxy::UASTsx::~UASTsx()
     }
   }
 
+  if (_original_transport != NULL)
+  {
+    TRC_DEBUG("Free original transport");
+    pjsip_transport_dec_ref(_original_transport);
+    _original_transport = NULL;
+  }
+
   if (_req != NULL)
   {
     TRC_DEBUG("Free original request");
@@ -577,6 +585,12 @@ pj_status_t BasicProxy::UASTsx::init(pjsip_rx_data* rdata)
     _pending_destroy = true;
     return PJ_ENOMEM;
     // LCOV_EXCL_STOP
+  }
+
+  _original_transport = rdata->tp_info.transport;
+  if (_original_transport != NULL)
+  {
+    pjsip_transport_add_ref(_original_transport);
   }
 
   if (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD)
@@ -1810,7 +1824,21 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
           status = pjsip_tsx_send_msg(_cancel_tsx, cancel);
         }
 
-        if (status != PJ_SUCCESS)
+        // There are some known but hard-to-hit ways for this to fail - we
+        // only WARN for these:
+        //
+        // - EEXISTS can be hit if we've already sent out the CANCEL and then
+        //   see a transport failure on the incoming side of the call - that
+        //   brings us through this path for a second time.
+        //
+        // - EINVALIDOP can be hit if the transport on which we're trying to
+        //   send the CANCEL is unavailable.
+        if ((status == PJ_EEXISTS) || (status == PJ_EINVALIDOP))
+        {
+          TRC_WARNING("Error sending CANCEL, %s",
+                      PJUtils::pj_status_to_string(status).c_str());
+        }
+        else if (status != PJ_SUCCESS)
         {
           //LCOV_EXCL_START
           TRC_ERROR("Error sending CANCEL, %s",

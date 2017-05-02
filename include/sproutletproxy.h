@@ -85,6 +85,9 @@ protected:
   /// Create Sproutlet UAS transaction objects.
   BasicProxy::UASTsx* create_uas_tsx();
 
+  /// Registers a sproutlet.
+  bool register_sproutlet(Sproutlet* sproutlet);
+
   /// Gets the next target Sproutlet for the message by analysing the top
   /// Route header.
   Sproutlet* target_sproutlet(pjsip_msg* req,
@@ -93,16 +96,10 @@ protected:
                               bool& force_external_routing,
                               SAS::TrailId trail);
 
-  /// Compare a SIP URI to a Sproutlet to see if they are a match (e.g.
-  /// a message targeted at that URI would arrive at the given Sproutlet).
-  bool does_uri_match_sproutlet(const pjsip_uri* uri,
-                                Sproutlet* sproutlet,
-                                std::string& alias,
-                                SAS::TrailId trail);
-
-  /// Given a SIP URI, check for possible Sproutlet names it could be targeted
-  /// at.
-  std::list<std::string> extract_possible_services(const pjsip_sip_uri* sip_uri);
+  /// Return the sproutlet that matches the URI supplied.
+  Sproutlet* match_sproutlet_from_uri(const pjsip_uri* uri,
+                                      std::string& alias,
+                                      SAS::TrailId trail);
 
   /// Create a URI that routes to a given Sproutlet.
   pjsip_sip_uri* create_sproutlet_uri(pj_pool_t* pool,
@@ -123,6 +120,12 @@ protected:
   Sproutlet* service_from_host(pjsip_sip_uri* uri);
   Sproutlet* service_from_user(pjsip_sip_uri* uri);
   Sproutlet* service_from_params(pjsip_sip_uri* uri);
+
+  void report_sproutlet_selection_event(int selection_type,
+                                        std::string service_name,
+                                        std::string value,
+                                        std::string uri_str,
+                                        SAS::TrailId trail);
 
   bool is_uri_local(const pjsip_uri* uri);
   bool is_host_local(const pj_str_t* host);
@@ -260,6 +263,10 @@ protected:
 
   std::unordered_set<std::string> _host_aliases;
 
+  std::map<std::string, Sproutlet*> _services;
+
+  std::map<int, Sproutlet*> _ports;
+
   std::list<Sproutlet*> _sproutlets;
 
   static const pj_str_t STR_SERVICE;
@@ -278,6 +285,7 @@ public:
                    Sproutlet* sproutlet,
                    const std::string& sproutlet_alias,
                    pjsip_tx_data* req,
+                   pjsip_transport* original_transport,
                    SAS::TrailId trail_id);
 
   /// Virtual destructor.
@@ -290,6 +298,7 @@ public:
   /// the following.
   void add_to_dialog(const std::string& dialog_id="");
   pjsip_msg* original_request();
+  void copy_original_transport(pjsip_msg*);
   const char* msg_info(pjsip_msg*);
   const pjsip_route_hdr* route_hdr() const;
   const std::string& dialog_id() const;
@@ -354,6 +363,9 @@ private:
   /// is passed to the Sproutlet.
   pjsip_tx_data* _req;
   SNMP::SIPRequestTypes _req_type;
+
+  // Immutable reference to the transport used by the original request.
+  pjsip_transport* _original_transport;
 
   typedef std::unordered_map<const pjsip_msg*, pjsip_tx_data*> Packets;
   Packets _packets;
