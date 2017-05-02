@@ -63,4 +63,6 @@ void unregister_thread_dispatcher(void);
 pj_status_t start_worker_threads();
 pj_status_t stop_worker_threads();
 
+void add_callback_to_queue(PJUtils::Callback*);
+
 #endif

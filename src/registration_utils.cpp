@@ -77,6 +77,88 @@ struct ThirdPartyRegData
   bool is_initial_registration;
 };
 
+class RegisterCallback : public PJUtils::Callback
+{
+  int _status_code;
+  ThirdPartyRegData* _reg_data;
+  std::function<void(ThirdPartyRegData*, int)> _send_register_callback;
+
+public:
+  ~RegisterCallback() override
+  {
+    delete _reg_data; _reg_data = NULL;
+  }
+
+  void run() override
+  {
+    if ((_reg_data->default_handling == SESSION_TERMINATED) &&
+        ((_status_code == 408) ||
+         (PJSIP_IS_STATUS_IN_CLASS(_status_code, 500))))
+    {
+      std::string error_msg = "Third-party REGISTER transaction failed with code " + std::to_string(_status_code);
+      TRC_INFO(error_msg.c_str());
+
+      SAS::Event event(_reg_data->trail, SASEvent::REGISTER_AS_FAILED, 0);
+      event.add_var_param(error_msg);
+      SAS::report_event(event);
+
+      // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure
+      // where SESSION_TERMINATED is set means that we should deregister "the
+      // currently registered public user identity" - i.e. all bindings
+      RegistrationUtils::remove_bindings(_reg_data->sdm,
+                                         _reg_data->remote_sdms,
+                                         _reg_data->hss,
+                                         _reg_data->public_id,
+                                         "*",
+                                         HSSConnection::DEREG_ADMIN,
+                                         _reg_data->trail);
+    }
+
+    if (third_party_reg_stats_tables != NULL)
+    {
+      if (_status_code == 200)
+      {
+        if (_reg_data->expires == 0)
+        {
+          third_party_reg_stats_tables->de_reg_tbl->increment_successes();
+        }
+        else if (_reg_data->is_initial_registration)
+        {
+          third_party_reg_stats_tables->init_reg_tbl->increment_successes();
+        }
+        else
+        {
+          third_party_reg_stats_tables->re_reg_tbl->increment_successes();
+        }
+      }
+      else
+      // Count all failed registration attempts, not just ones that result in user
+      // being unsubscribed.
+      {
+        if (_reg_data->expires == 0)
+        {
+          third_party_reg_stats_tables->de_reg_tbl->increment_failures();
+        }
+        else if (_reg_data->is_initial_registration)
+        {
+          third_party_reg_stats_tables->init_reg_tbl->increment_failures();
+        }
+        else
+        {
+          third_party_reg_stats_tables->re_reg_tbl->increment_failures();
+        }
+      }
+    }
+  }
+
+  RegisterCallback(void* token, pjsip_event* event)
+  {
+    // Save the regdata from the token, and the status code from the event
+    _reg_data = (ThirdPartyRegData*)token;
+    _status_code = event->body.tsx_state.tsx->status_code;
+  }
+};
+
 static void send_register_to_as(SubscriberDataManager* sdm,
                                 std::vector<SubscriberDataManager*> remote_sdms,
                                 HSSConnection* hss,
@@ -222,71 +304,10 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
   }
 }
 
-static void send_register_cb(void* token, pjsip_event *event)
+static PJUtils::Callback* build_register_cb(void* token, pjsip_event* event)
 {
-  ThirdPartyRegData* tsxdata = (ThirdPartyRegData*)token;
-  pjsip_transaction* tsx = event->body.tsx_state.tsx;
-
-  if ((tsxdata->default_handling == SESSION_TERMINATED) &&
-      ((tsx->status_code == 408) ||
-       (PJSIP_IS_STATUS_IN_CLASS(tsx->status_code, 500))))
-  {
-    std::string error_msg = "Third-party REGISTER transaction failed with code " + std::to_string(tsx->status_code);
-    TRC_INFO(error_msg.c_str());
-
-    SAS::Event event(tsxdata->trail, SASEvent::REGISTER_AS_FAILED, 0);
-    event.add_var_param(error_msg);
-    SAS::report_event(event);
-
-    // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure
-    // where SESSION_TERMINATED is set means that we should deregister "the
-    // currently registered public user identity" - i.e. all bindings
-    RegistrationUtils::remove_bindings(tsxdata->sdm,
-                                       tsxdata->remote_sdms,
-                                       tsxdata->hss,
-                                       tsxdata->public_id,
-                                       "*",
-                                       HSSConnection::DEREG_ADMIN,
-                                       tsxdata->trail);
-  }
-
-  if (third_party_reg_stats_tables != NULL)
-  {
-    if (tsx->status_code == 200)
-    {
-      if (tsxdata->expires == 0)
-      {
-        third_party_reg_stats_tables->de_reg_tbl->increment_successes();
-      }
-      else if (tsxdata->is_initial_registration)
-      {
-        third_party_reg_stats_tables->init_reg_tbl->increment_successes();
-      }
-      else
-      {
-        third_party_reg_stats_tables->re_reg_tbl->increment_successes();
-      }
-    }
-    else
-    // Count all failed registration attempts, not just ones that result in user
-    // being unsubscribed.
-    {
-      if (tsxdata->expires == 0)
-      {
-        third_party_reg_stats_tables->de_reg_tbl->increment_failures();
-      }
-      else if (tsxdata->is_initial_registration)
-      {
-        third_party_reg_stats_tables->init_reg_tbl->increment_failures();
-      }
-      else
-      {
-        third_party_reg_stats_tables->re_reg_tbl->increment_failures();
-      }
-    }
-  }
-
-  delete tsxdata; tsxdata = NULL;
+  RegisterCallback* cb = new RegisterCallback(token, event);
+  return (PJUtils::Callback*)cb;
 }
 
 static void send_register_to_as(SubscriberDataManager* sdm,
@@ -433,7 +454,7 @@ static void send_register_to_as(SubscriberDataManager* sdm,
   tsxdata->public_id = served_user;
   tsxdata->expires = expires;
   tsxdata->is_initial_registration = is_initial_registration;
-  pj_status_t resolv_status = PJUtils::send_request(tdata, 0, tsxdata, &send_register_cb);
+  pj_status_t resolv_status = PJUtils::send_request(tdata, 0, tsxdata, &build_register_cb);
 
   if (resolv_status != PJ_SUCCESS)
   {
