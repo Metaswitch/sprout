@@ -98,9 +98,12 @@ public:
   ~SCSCFSproutlet();
 
   bool init();
-  SproutletTsx* get_tsx(SproutletTsxHelper* helper,
+  SproutletTsx* get_tsx(SproutletHelper* helper,
                         const std::string& alias,
-                        pjsip_msg* req);
+                        pjsip_msg* req,
+                        pjsip_sip_uri*& next_hop,
+                        pj_pool_t* pool,
+                        SAS::TrailId trail);
 
   // Methods used to change the values of internal configuration during unit
   // test.
@@ -242,7 +245,7 @@ private:
 class SCSCFSproutletTsx : public SproutletTsx
 {
 public:
-  SCSCFSproutletTsx(SproutletTsxHelper* helper, SCSCFSproutlet* scscf, pjsip_method_e req_type);
+  SCSCFSproutletTsx(SCSCFSproutlet* scscf, pjsip_method_e req_type);
   ~SCSCFSproutletTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req) override;

@@ -50,9 +50,9 @@ public:
       const std::string& service_host="") :
     Sproutlet(service_name, port, service_host) {}
 
-  MOCK_METHOD3(
+  MOCK_METHOD6(
       get_tsx,
-      SproutletTsx*(SproutletTsxHelper*, const std::string&, pjsip_msg*));
+      SproutletTsx*(SproutletProxy*, const std::string&, pjsip_msg*, pjsip_sip_uri*&, pj_pool_t*, SAS::TrailId));
 };
 
 
