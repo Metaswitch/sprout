@@ -147,20 +147,27 @@ static bool get_reg_data(HSSConnection* hss,
                          SAS::TrailId trail)
 {
   std::string state;
+  AssociatedURIs associated_uris = {};
   HTTPCode http_code = hss->get_registration_data(aor_id,
                                                   state,
                                                   ifc_map,
-                                                  irs_impus,
+                                                  associated_uris,
                                                   trail);
+
+  // Use only the unbarred URIs for when we send NOTIFYs.
+  irs_impus = associated_uris.unbarred_uris();
 
   if ((http_code != HTTP_OK) || irs_impus.empty())
   {
     // We were unable to determine the set of IMPUs for this AoR.  Push the AoR
     // we have into the IRS list so that we have at least one IMPU we can issue
-    // NOTIFYs for.
+    // NOTIFYs for. We should only do this if the IMPU is not barred.
     TRC_WARNING("Unable to get Implicit Registration Set for %s: %d", aor_id.c_str(), http_code);
     irs_impus.clear();
-    irs_impus.push_back(aor_id);
+    if (!associated_uris.is_barred(aor_id))
+    {
+      irs_impus.push_back(aor_id);
+    }
   }
 
   return (http_code == HTTP_OK);

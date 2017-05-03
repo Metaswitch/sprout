@@ -282,7 +282,7 @@ HTTPCode FakeHSSConnection::update_registration_state(const std::string& public_
                                                       const std::string& type,
                                                       std::string& regstate,
                                                       std::map<std::string, Ifcs >& ifcs_map,
-                                                      std::vector<std::string>& associated_uris,
+                                                      AssociatedURIs& associated_uris,
                                                       std::deque<std::string>& ccfs,
                                                       std::deque<std::string>& ecfs,
                                                       SAS::TrailId trail)

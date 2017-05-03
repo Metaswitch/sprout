@@ -325,7 +325,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   SAS::report_marker(start_marker);
 
   // Query the HSS for the associated URIs.
-  std::vector<std::string> uris;
+  AssociatedURIs associated_uris = {};
   std::map<std::string, Ifcs> ifc_map;
 
   // Subscriber must have already registered to be making a subscribe
@@ -335,7 +335,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   HTTPCode http_code = _sproutlet->_hss->get_registration_data(public_id,
                                                                state,
                                                                ifc_map,
-                                                               uris,
+                                                               associated_uris,
                                                                ccfs,
                                                                ecfs,
                                                                trail_id);
@@ -350,8 +350,13 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
     return;
   }
 
-  // Determine the AOR from the first entry in the uris array.
-  std::string aor = uris.front();
+  // Determine the default URI. We have already to a successful response from
+  // the HSS so this should always succeed.
+  std::string aor;
+  associated_uris.get_default(aor, false);
+
+  // Use the unbarred URIs for sending NOTIFYs.
+  std::vector<std::string> uris = associated_uris.unbarred_uris();
 
   TRC_DEBUG("aor = %s", aor.c_str());
   TRC_DEBUG("SUBSCRIBE for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());

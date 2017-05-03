@@ -88,7 +88,8 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          astaire_resolver.cpp \
                          xml_utils.cpp \
                          wildcard_utils.cpp \
-                         ifc.cpp
+                         ifc.cpp \
+                         associated_uris.cpp
 
 sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_counter_table.cpp \
