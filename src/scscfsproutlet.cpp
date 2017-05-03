@@ -555,28 +555,35 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
       if (_session_case->is_terminating())
       {
-        // The bindings are keyed off the primary IMPU which is stored first in
-        // the list of associated URIs.
+        // The bindings are keyed off the default IMPU.
         std::string aor = _default_uri;
         SubscriberDataManager::AoRPair* aor_pair = NULL;
         _scscf->get_bindings(aor, &aor_pair, trail());
-        const SubscriberDataManager::AoR::Bindings bindings = aor_pair->get_current()->bindings();
 
-        // Loop over the bindings. If any binding has an emergency registration,
-        // let the request through. Later on we will make sure we only route the
-        // request to the bindings that have an emergency registration.
-        for (SubscriberDataManager::AoR::Bindings::const_iterator binding = bindings.begin();
-             binding != bindings.end();
-             ++binding)
+        if ((aor_pair != NULL) &&
+            (aor_pair->get_current() != NULL))
         {
-          if (binding->second->_emergency_registration)
+          if (!aor_pair->get_current()->bindings().empty())
           {
-            emergency = true;
-            break;
-          }
-        }
+            const SubscriberDataManager::AoR::Bindings bindings = aor_pair->get_current()->bindings();
 
-        delete aor_pair; aor_pair = NULL;
+            // Loop over the bindings. If any binding has an emergency registration,
+            // let the request through. Later on we will make sure we only route the
+            // request to the bindings that have an emergency registration.
+            for (SubscriberDataManager::AoR::Bindings::const_iterator binding = bindings.begin();
+                 binding != bindings.end();
+                 ++binding)
+            {
+              if (binding->second->_emergency_registration)
+              {
+                emergency = true;
+                break;
+              }
+            }
+          }
+
+          delete aor_pair; aor_pair = NULL;
+        }
       }
 
       if (!emergency)
