@@ -76,7 +76,8 @@ public:
   static const int DEFAULT_SESSION_CONTINUED_TIMEOUT = 2000;
   static const int DEFAULT_SESSION_TERMINATED_TIMEOUT = 4000;
 
-  SCSCFSproutlet(const std::string& scscf_name,
+  SCSCFSproutlet(const std::string& name,
+                 const std::string& scscf_name,
                  const std::string& scscf_cluster_uri,
                  const std::string& scscf_node_uri,
                  const std::string& icscf_uri,
@@ -120,6 +121,9 @@ private:
 
   /// Returns the AS chain table for this system.
   AsChainTable* as_chain_table() const;
+
+  /// Returns the service name of the entire S-CSCF.
+  const std::string scscf_service_name() const;
 
   /// Returns the configured S-CSCF cluster URI for this system.
   const pjsip_uri* scscf_cluster_uri() const;
@@ -192,6 +196,9 @@ private:
   ACR* get_acr(SAS::TrailId trail, ACR::Initiator initiator, ACR::NodeRole role);
 
   friend class SCSCFSproutletTsx;
+
+  /// The service name of the entire S-CSCF.
+  std::string _scscf_name;
 
   /// A URI which routes to the S-CSCF cluster.
   pjsip_uri* _scscf_cluster_uri;
