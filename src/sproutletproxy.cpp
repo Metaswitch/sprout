@@ -466,7 +466,7 @@ pjsip_sip_uri* SproutletProxy::create_internal_sproutlet_uri(pj_pool_t* pool,
 
   pjsip_sip_uri* base_uri = ((existing_uri != nullptr) ? existing_uri : _root_uri);
   pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, base_uri);
-  uri->user = pj_str(const_cast<char*>(""));
+  //uri->user = pj_str(const_cast<char*>(""));
   pj_strdup(pool, &uri->host, &_root_uri->host);
   uri->port = 0;
   uri->lr_param = 1;
