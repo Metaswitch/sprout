@@ -1184,8 +1184,17 @@ SproutletTsx* SproutletProxy::UASTsx::get_sproutlet_tsx(pjsip_tx_data* req,
       break;
     }
 
-    // Remove the top route header if there is one.
-    pjsip_msg_find_remove_hdr(req->msg, PJSIP_H_ROUTE, NULL);
+    // Remove the top route header if there is one and it refers to us.
+
+    pjsip_route_hdr* route = (pjsip_route_hdr*)pjsip_msg_find_hdr(req->msg,
+                                                                  PJSIP_H_ROUTE,
+                                                                  NULL);
+    if ((route != NULL) &&
+        (_sproutlet_proxy->is_uri_local(route->name_addr.uri)))
+    {
+      TRC_DEBUG("Remove top Route header %s", PJUtils::hdr_to_string(route).c_str());
+      pj_list_erase(route);
+    }
 
     // Add on the next hop URI if there is one.
     if (next_hop != NULL)

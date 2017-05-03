@@ -674,7 +674,8 @@ public:
   ///                         incoming request.
   /// @param  req           - The received request message.
   /// @param  next_hop      - The Sproutlet can use this field to specify a
-  ///                         next hop URI when it returns a NULL Tsx.
+  ///                         next hop URI when it returns a NULL Tsx. Filling
+  ///                         in this field is optional.
   /// @param  pool          - The pool for creating the next_hop uri.
   /// @param  trail         - The SAS trail id for the message.
   virtual SproutletTsx* get_tsx(SproutletHelper* proxy,
