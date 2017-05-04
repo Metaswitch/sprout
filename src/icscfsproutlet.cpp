@@ -259,6 +259,25 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
   pj_str_t route_hdr_name = pj_str((char *)"Route");
   PJUtils::remove_hdr(req, &route_hdr_name);
 
+  // Check if this is an emergency registration. This is true if any of the
+  // contact headers in the message contain the "sos" parameter.
+  bool emergency = false;
+  pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)pjsip_msg_find_hdr(req,
+                                                                          PJSIP_H_CONTACT,
+                                                                          NULL);
+  while (contact_hdr != NULL)
+  {
+    if (PJUtils::is_emergency_registration(contact_hdr))
+    {
+      emergency = true;
+      break;
+    }
+
+    contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(req,
+                                                          PJSIP_H_CONTACT,
+                                                          contact_hdr->next);
+  }
+
   // Create an UAR router to handle the HSS interactions and S-CSCF
   // selection.
   _router = (ICSCFRouter*)new ICSCFUARouter(_icscf->get_hss_connection(),
@@ -269,7 +288,8 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
                                             impi,
                                             impu,
                                             visited_network,
-                                            auth_type);
+                                            auth_type,
+                                            emergency);
 
   // We have a router, query it for an S-CSCF to use.
   pjsip_sip_uri* scscf_sip_uri = NULL;

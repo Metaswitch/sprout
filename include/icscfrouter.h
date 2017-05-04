@@ -117,7 +117,8 @@ public:
                 const std::string& impi,
                 const std::string& impu,
                 const std::string& visited_network,
-                const std::string& auth_type);
+                const std::string& auth_type,
+                const bool& emergency);
   ~ICSCFUARouter();
 
 private:
@@ -136,6 +137,9 @@ private:
 
   /// The authorization type to be used on HSS queries.
   std::string _auth_type;
+
+  /// Whether to signal emergency on HSS queries.
+  bool _emergency;
 };
 
 

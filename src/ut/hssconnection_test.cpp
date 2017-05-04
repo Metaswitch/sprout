@@ -155,6 +155,7 @@ class HssConnectionTest : public BaseTest
       "</ClearwaterRegData>";
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid44/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] = CURLE_REMOTE_FILE_NOT_FOUND;
     fakecurl_responses["http://10.42.42.42:80/impi/privid69/registration-status?impu=pubid44"] = "{\"result-code\": 2001, \"scscf\": \"server-name\"}";
+    fakecurl_responses["http://10.42.42.42:80/impi/privid69/registration-status?impu=pubid44&sos=true"] = "{\"result-code\": 2001, \"scscf\": \"server-name\"}";
     fakecurl_responses["http://10.42.42.42:80/impi/privid69/registration-status?impu=pubid44&visited-network=domain&auth-type=REG"] = "{\"result-code\": 2001, \"mandatory-capabilities\": [1, 2, 3], \"optional-capabilities\": []}";
     fakecurl_responses["http://10.42.42.42:80/impi/privid_corrupt/registration-status?impu=pubid44"] = "{\"result-code\": 2001, \"scscf\"; \"server-name\"}";
     fakecurl_responses["http://10.42.42.42:80/impu/pubid44/location"] = "{\"result-code\": 2001, \"scscf\": \"server-name\"}";
@@ -507,7 +508,7 @@ TEST_F(HssConnectionTest, ServerFailure)
 TEST_F(HssConnectionTest, SimpleUserAuth)
 {
   rapidjson::Document* actual;
-  _hss.get_user_auth_status("privid69", "pubid44", "", "", actual, 0);
+  _hss.get_user_auth_status("privid69", "pubid44", "", "", false, actual, 0);
   ASSERT_TRUE(actual != NULL);
   EXPECT_EQ(std::string("server-name"), (*actual)["scscf"].GetString());
   delete actual;
@@ -516,7 +517,7 @@ TEST_F(HssConnectionTest, SimpleUserAuth)
 TEST_F(HssConnectionTest, FullUserAuth)
 {
   rapidjson::Document* actual;
-  _hss.get_user_auth_status("privid69", "pubid44", "domain", "REG", actual, 0);
+  _hss.get_user_auth_status("privid69", "pubid44", "domain", "REG", false, actual, 0);
   ASSERT_TRUE(actual != NULL);
   EXPECT_EQ(2001, (*actual)["result-code"].GetInt());
   delete actual;
@@ -526,9 +527,18 @@ TEST_F(HssConnectionTest, CorruptAuth)
 {
   CapturingTestLogger log;
   rapidjson::Document* actual;
-  _hss.get_user_auth_status("privid_corrupt", "pubid44", "", "", actual, 0);
+  _hss.get_user_auth_status("privid_corrupt", "pubid44", "", "", false, actual, 0);
   ASSERT_TRUE(actual == NULL);
   EXPECT_TRUE(log.contains("Failed to parse Homestead response"));
+  delete actual;
+}
+
+TEST_F(HssConnectionTest, EmergencyAuth)
+{
+  rapidjson::Document* actual;
+  _hss.get_user_auth_status("privid69", "pubid44", "", "", true, actual, 0);
+  ASSERT_TRUE(actual != NULL);
+  EXPECT_EQ(std::string("server-name"), (*actual)["scscf"].GetString());
   delete actual;
 }
 
