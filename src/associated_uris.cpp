@@ -86,6 +86,10 @@ void AssociatedURIs::clear()
 // Returns if the specified URI is barred.
 bool AssociatedURIs::is_barred(std::string uri)
 {
+  // Will the public id end up in the map if it's a wildcard?
+  // KH1 think it will from a UT, but that could be how the UT was written.
+  // If it isn't - say "if not in map, look for matching wc in map and return
+  // their barring status".
   return _barred_map[uri];
 }
 

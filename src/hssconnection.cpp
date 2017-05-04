@@ -524,6 +524,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
   {
     aliases = temp_aliases;
 
+
     if (found_multiple_matches)
     {
       SAS::Event event(trail, SASEvent::AMBIGUOUS_WILDCARD_MATCH, 0);
@@ -531,6 +532,9 @@ bool decode_homestead_xml(const std::string public_user_identity,
       SAS::report_event(event);
     }
   }
+
+  // At this point we could check the barring status of any alias that is a
+  // wilcard, and if it is barred, then set the public user id to be barred.
 
   rapidxml::xml_node<>* charging_addrs_node = cw->first_node("ChargingAddresses");
 
@@ -728,6 +732,8 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                               ecfs,
                               false,
                               trail) ? HTTP_OK : HTTP_SERVER_ERROR;
+
+
 }
 
 HTTPCode HSSConnection::get_registration_data(const std::string& public_user_identity,
