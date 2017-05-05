@@ -646,18 +646,16 @@ pj_status_t AuthenticationSproutletTsx::user_lookup(pj_pool_t *pool,
 ///                       the challenge was retrieved from lookups. Returning
 ///                       this may allow the caller to avoid unnecessary further
 ///                       lookups.
-/// @param trail        - SAS trail ID.
 ///
 /// @return             - The retrieved authentication vector, or NULL.
 AuthenticationVector* AuthenticationSproutletTsx::get_av_from_store(const std::string& impi,
                                                                     const std::string& nonce,
-                                                                    ImpiStore::Impi** out_impi_obj,
-                                                                    SAS::TrailId trail)
+                                                                    ImpiStore::Impi** out_impi_obj)
 {
   AuthenticationVector* av = nullptr;
 
   ImpiStore::Impi* impi_obj =
-    _authentication->_impi_store->get_impi_with_nonce(impi, nonce, trail);
+    _authentication->_impi_store->get_impi_with_nonce(impi, nonce, trail());
 
   if (impi_obj != nullptr)
   {
@@ -771,7 +769,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
       // store so that we don't have to do another read when writing the new
       // challenge back.
       TRC_DEBUG("Challenge ID: impi=%s nonce=%s",impi.c_str(), nonce.c_str());
-      av = get_av_from_store(impi, nonce, &impi_obj, trail());
+      av = get_av_from_store(impi, nonce, &impi_obj);
 
       if (av == NULL)
       {

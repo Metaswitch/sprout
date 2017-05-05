@@ -188,8 +188,7 @@ protected:
   static pjsip_digest_credential* get_credentials(const pjsip_msg* req);
   AuthenticationVector* get_av_from_store(const std::string& impi,
                                           const std::string& nonce,
-                                          ImpiStore::Impi** out_impi_obj,
-                                          SAS::TrailId trail);
+                                          ImpiStore::Impi** out_impi_obj);
 
   AuthenticationSproutlet* _authentication;
 
