@@ -414,7 +414,8 @@ bool AuthenticationSproutlet::get_top_route_param(const pjsip_msg* req,
 AuthenticationSproutletTsx::AuthenticationSproutletTsx(AuthenticationSproutlet* authentication,
                                                        const std::string& next_hop_service) :
   ForwardingSproutletTsx(authentication, next_hop_service),
-  _authentication(authentication)
+  _authentication(authentication),
+  _authenticated_using_sip_digest(false)
 {
 }
 
@@ -1347,6 +1348,15 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
                                            NULL) != NULL);
           delete impi_obj;
 
+          // Save off the authenticated IMPI and nonce. We need these later to
+          // update the service route on a REGISTER. Also store off whether the
+          // user authenticated using SIP digest.
+          _authenticated_impi = impi;
+          _authenticated_nonce = nonce;
+          _authenticated_using_sip_digest =
+            ((pj_strlen(&credentials->algorithm) == 0) ||
+             (pj_stricmp2(&credentials->algorithm, "md5") == 0));
+
           forward_request(req); return;
         }
       }
@@ -1446,4 +1456,36 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
   delete acr;
   delete impi_obj;
+}
+
+void AuthenticationSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
+{
+  if (_authenticated_using_sip_digest)
+  {
+    pjsip_routing_hdr* sr_hdr = (pjsip_routing_hdr*)
+      pjsip_msg_find_hdr_by_name(rsp, &STR_SERVICE_ROUTE, nullptr);
+
+    if (sr_hdr != nullptr)
+    {
+      std::string escaped_username = Utils::url_escape(_authenticated_impi);
+      std::string escaped_nonce = Utils::url_escape(_authenticated_nonce);
+      TRC_DEBUG("Add parameters to Service-Route username=%s, nonce=%s",
+                escaped_username.c_str(), escaped_nonce.c_str());
+
+      pj_pool_t* pool = get_pool(rsp);
+      pjsip_sip_uri* sr_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(&sr_hdr->name_addr);
+
+      pjsip_param *username_param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+      pj_strdup(pool, &username_param->name, &STR_USERNAME);
+      pj_strdup2(pool, &username_param->value, escaped_username.c_str());
+      pj_list_insert_before(&sr_uri->other_param, username_param);
+
+      pjsip_param *nonce_param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+      pj_strdup(pool, &nonce_param->name, &STR_NONCE);
+      pj_strdup2(pool, &nonce_param->value, escaped_nonce.c_str());
+      pj_list_insert_before(&sr_uri->other_param, nonce_param);
+    }
+  }
+
+  send_response(rsp);
 }

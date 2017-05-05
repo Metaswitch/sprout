@@ -217,7 +217,8 @@ public:
     }
   }
 
-  void auth_sproutlet_allows_request(bool expect_100_trying = false)
+  void auth_sproutlet_allows_request(bool expect_100_trying = false,
+                                     bool free_200_ok = true)
   {
     if (expect_100_trying)
     {
@@ -228,11 +229,24 @@ public:
 
     ASSERT_EQ(1, txdata_count());
     EXPECT_EQ(current_txdata()->msg->type, PJSIP_REQUEST_MSG);
-    inject_msg(respond_to_current_txdata(200));
+
+    // Respond to the request. If it's a REGISTER add a Service-Route.
+    bool is_register = (current_txdata()->msg->line.req.method.id == PJSIP_REGISTER_METHOD);
+    std::string rsp = respond_to_current_txdata(200);
+    if (is_register)
+    {
+      rsp.replace(rsp.find("\r\n\r\n"), 4,
+                  ("\r\nService-Route: <sip:scscf.sprout.example.com;orig>\r\n\r\n"));
+    }
+    inject_msg(rsp);
 
     ASSERT_EQ(1, txdata_count());
     RespMatcher(200).matches(current_txdata()->msg);
-    free_txdata();
+
+    if (free_200_ok)
+    {
+      free_txdata();
+    }
   }
 
 protected:
@@ -2121,6 +2135,120 @@ TEST_F(AuthenticationTest, AuthSproutletCanRegisterForAliases)
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
 
+TEST_F(AuthenticationTest, ServiceRouteWithMD5Algorithm)
+{
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Send in a REGISTER request with no authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = false;
+  inject_msg(msg1.get(), _tp);
+
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
+  std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  parse_www_authenticate(auth, auth_params);
+  free_txdata();
+
+  // Send a new REGISTER request with an authentication header including the
+  // response.
+  AuthenticationMessage msg2("REGISTER");
+  msg2._algorithm = "MD5";
+  msg2._key = "12345678123456781234567812345678";
+  msg2._nonce = auth_params["nonce"];
+  msg2._opaque = auth_params["opaque"];
+  msg2._nc = "00000001";
+  msg2._cnonce = "8765432187654321";
+  msg2._qop = "auth";
+  msg2._integ_prot = "ip-assoc-pending";
+  msg1._route_uri = "sip:scscf.sprout.homedomain:5058;transport=TCP";
+  inject_msg(msg2.get(), _tp);
+
+  // The authentication module lets the request through. Keep the 200 OK around
+  // for future checking.
+  auth_sproutlet_allows_request(false, false);
+
+  // Check that the Service-Route contains username and nonce parameters.
+  EXPECT_EQ(get_headers(current_txdata()->msg, "Service-Route"),
+            "Service-Route: <sip:scscf.sprout.example.com;"
+              "orig;username=6505550001%40homedomain;nonce=" + auth_params["nonce"] + ">");
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+}
+
+TEST_F(AuthenticationTest, ServiceRouteWithAKAAlgorithm)
+{
+  // Test a successful AKA authentication flow.
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  // The keys in this test case are not consistent, but that won't matter for
+  // the purposes of the test as Clearwater never itself runs the MILENAGE
+  // algorithms to generate or extract keys.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
+                              "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
+                              "\"response\":\"12345678123456781234567812345678\","
+                              "\"cryptkey\":\"0123456789abcdef\","
+                              "\"integritykey\":\"fedcba9876543210\"}}");
+
+  // Send in a REGISTER request with an authentication header with
+  // integrity-protected=no.  This triggers aka authentication.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._integ_prot = "no";
+  inject_msg(msg1.get(), _tp);
+
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
+  std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  parse_www_authenticate(auth, auth_params);
+  EXPECT_EQ("87654321876543218765432187654321", auth_params["nonce"]);
+  EXPECT_EQ("0123456789abcdef", auth_params["ck"]);
+  EXPECT_EQ("fedcba9876543210", auth_params["ik"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("AKAv1-MD5", auth_params["algorithm"]);
+  free_txdata();
+
+  // Send a new REGISTER request with an authentication header including the
+  // response.
+  AuthenticationMessage msg2("REGISTER");
+  msg2._algorithm = "AKAv1-MD5";
+  msg2._key = "12345678123456781234567812345678";
+  msg2._nonce = auth_params["nonce"];
+  msg2._opaque = auth_params["opaque"];
+  msg2._nc = "00000001";
+  msg2._cnonce = "8765432187654321";
+  msg2._qop = "auth";
+  msg2._integ_prot = "yes";
+  inject_msg(msg2.get(), _tp);
+
+  // The authentication module lets the request through.
+  auth_sproutlet_allows_request(false, false);
+
+  // Check that the Service-Route does not contain username and nonce parameters
+  // - these are only added when the user authenticates using Digest
+  // authentication.
+  EXPECT_EQ(get_headers(current_txdata()->msg, "Service-Route"),
+            "Service-Route: <sip:scscf.sprout.example.com;orig>");
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
+}
 
 TEST_F(AuthenticationPxyAuthHdrTest, ProxyAuthorizationSuccess)
 {

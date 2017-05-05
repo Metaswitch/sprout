@@ -168,6 +168,7 @@ public:
   ~AuthenticationSproutletTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req) override;
+  virtual void on_rx_response(pjsip_msg* rsp, int fork_id) override;
 
 protected:
   friend class AuthenticationSproutlet;
@@ -191,6 +192,14 @@ protected:
                                           SAS::TrailId trail);
 
   AuthenticationSproutlet* _authentication;
+
+  // Fields holding the nonce and the IMPI used for this authentication attempt.
+  // These are only stored once the user has been successfully authenticated.
+  std::string _authenticated_impi;
+  std::string _authenticated_nonce;
+
+  // Whether the user has authenticated using the SIP digest mechanism.
+  bool _authenticated_using_sip_digest;
 };
 
 #endif
