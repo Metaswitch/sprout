@@ -65,7 +65,54 @@ extern "C" {
 typedef std::function<int(pjsip_contact_hdr*, pjsip_expires_hdr*)> get_expiry_for_binding_fn;
 
 class AuthenticationSproutletTsx;
-class AuthenticationVector;
+
+// Classes representing authentication vectors. This allows most of the
+// authentication module to be agnostic with respect to where the AV came from
+// (the HSS which returns AVs as JSON objects, or the IMPI store which returns
+// them as deserialized objects).
+class AuthenticationVector
+{
+public:
+  virtual ~AuthenticationVector() {}
+
+  bool is_aka() { return (_type == AKA); }
+  bool is_digest() { return (_type == DIGEST); }
+
+protected:
+  enum AvType { DIGEST, AKA };
+
+  AuthenticationVector(AvType type) : _type(type) {}
+
+  AvType _type;
+};
+
+class DigestAv : public AuthenticationVector
+{
+public:
+  DigestAv() : AuthenticationVector(DIGEST) {}
+  virtual ~DigestAv() {}
+
+  std::string ha1;
+  std::string qop;
+  std::string realm;
+};
+
+class AkaAv : public AuthenticationVector
+{
+public:
+  AkaAv() :
+    AuthenticationVector(AKA),
+    // Defaults to 1, for back-compatibility with pre-AKAv2 Homestead versions.
+    akaversion(1)
+  {}
+  virtual ~AkaAv() {}
+
+  std::string nonce;
+  std::string cryptkey;
+  std::string integritykey;
+  std::string xres;
+  int akaversion;
+};
 
 class AuthenticationSproutlet : public Sproutlet
 {
