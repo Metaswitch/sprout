@@ -2550,7 +2550,10 @@ bool PJUtils::get_param_in_route_hdr(const pjsip_route_hdr* route,
     pjsip_param* p = pjsip_param_find(&route_sip_uri->other_param, param_name);
     if (p != nullptr)
     {
-      value.assign(p->value.ptr, p->value.slen);
+      if (p->value.slen > 0)
+      {
+        value.assign(p->value.ptr, p->value.slen);
+      }
       return true;
     }
   }
