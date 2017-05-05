@@ -1708,7 +1708,7 @@ void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* 
                                 ((msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
                                  (pjsip_method_cmp(&msg->line.req.method, pjsip_get_subscribe_method()) == 0) ||
                                  (pjsip_method_cmp(&msg->line.req.method, pjsip_get_notify_method()) == 0)));
-  
+
   if (cid_hdr != NULL)
   {
     TRC_DEBUG("Logging SAS Call-ID marker, Call-ID %.*s", cid_hdr->id.slen, cid_hdr->id.ptr);
@@ -2536,4 +2536,53 @@ std::set<pjmedia_type> PJUtils::get_media_types(const pjsip_msg *msg)
   }
 
   return media_types;
+}
+
+bool PJUtils::get_param_in_route_hdr(const pjsip_route_hdr* route,
+                                     const pj_str_t* param_name,
+                                     std::string& value)
+{
+  pjsip_uri* route_uri = (pjsip_uri*)pjsip_uri_get_uri(&route->name_addr);
+
+  if ((route_uri != nullptr) && (PJSIP_URI_SCHEME_IS_SIP(route_uri)))
+  {
+    pjsip_sip_uri* route_sip_uri = (pjsip_sip_uri*)route_uri;
+    pjsip_param* p = pjsip_param_find(&route_sip_uri->other_param, param_name);
+    if (p != nullptr)
+    {
+      value.assign(p->value.ptr, p->value.slen);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool PJUtils::get_param_in_top_route(const pjsip_msg* req,
+                                     const pj_str_t* param_name,
+                                     std::string& value)
+{
+  pjsip_route_hdr* route = (pjsip_route_hdr*)pjsip_msg_find_hdr(req,
+                                                                PJSIP_H_ROUTE,
+                                                                NULL);
+  if (route != nullptr)
+  {
+    return get_param_in_route_hdr(route, param_name, value);
+  }
+
+  return false;
+}
+
+bool PJUtils::is_param_in_route_hdr(const pjsip_route_hdr* route,
+                                    const pj_str_t* param_name)
+{
+  std::string ignored;
+  return get_param_in_route_hdr(route, param_name, ignored);
+}
+
+bool PJUtils::is_param_in_top_route(const pjsip_msg* req,
+                                    const pj_str_t* param_name)
+{
+  std::string ignored;
+  return get_param_in_top_route(req, param_name, ignored);
 }

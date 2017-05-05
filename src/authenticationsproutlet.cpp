@@ -240,7 +240,7 @@ bool AuthenticationSproutlet::needs_authentication(pjsip_msg* req,
       return PJ_FALSE;
     }
 
-    if (!get_top_route_param(req, &STR_ORIG))
+    if (!PJUtils::is_param_in_top_route(req, &STR_ORIG))
     {
       // This is not an originating request so do not get authenticated.
       return PJ_FALSE;
@@ -282,7 +282,7 @@ bool AuthenticationSproutlet::needs_authentication(pjsip_msg* req,
       // Only authenticate the request if the endpoint authenticates with digest
       // authentication. If this is the case the top route header will contain
       // a username parameter.
-      if (get_top_route_param(req, &STR_USERNAME))
+      if (PJUtils::is_param_in_top_route(req, &STR_USERNAME))
       {
         // The username parameter is present so we need to authenticate.
         // TODO SAS
@@ -303,59 +303,6 @@ bool AuthenticationSproutlet::needs_authentication(pjsip_msg* req,
       // LCOV_EXCL_STOP
     }
   }
-}
-
-
-// Utility function to determine if the top route header on a request contains a
-// particular parameter.
-bool AuthenticationSproutlet::get_top_route_param(const pjsip_route_hdr* route,
-                                                  const pj_str_t* param_name,
-                                                  std::string& value)
-{
-  pjsip_uri* route_uri = (pjsip_uri*)pjsip_uri_get_uri(&route->name_addr);
-
-  if ((route_uri != nullptr) && (PJSIP_URI_SCHEME_IS_SIP(route_uri)))
-  {
-    pjsip_sip_uri* route_sip_uri = (pjsip_sip_uri*)route_uri;
-    pjsip_param* p = pjsip_param_find(&route_sip_uri->other_param, param_name);
-    if (p != nullptr)
-    {
-      value.assign(p->value.ptr, p->value.slen);
-      return true;
-    }
-  }
-
-  return false;
-}
-
-bool AuthenticationSproutlet::get_top_route_param(const pjsip_route_hdr* route,
-                                                  const pj_str_t* param_name)
-{
-  std::string ignored;
-  return get_top_route_param(route, param_name, ignored);
-}
-
-bool AuthenticationSproutlet::get_top_route_param(const pjsip_msg* req,
-                                                  const pj_str_t* param_name,
-                                                  std::string& value)
-{
-  pjsip_route_hdr* route = (pjsip_route_hdr*)pjsip_msg_find_hdr(req,
-                                                                PJSIP_H_ROUTE,
-                                                                NULL);
-  if (route != nullptr)
-  {
-    return get_top_route_param(route, param_name, value);
-  }
-
-  return false;
-}
-
-
-bool AuthenticationSproutlet::get_top_route_param(const pjsip_msg* req,
-                                                  const pj_str_t* param_name)
-{
-  std::string ignored;
-  return get_top_route_param(req, param_name, ignored);
 }
 
 
@@ -678,7 +625,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
   AuthenticationVector* av = NULL;
 
   if ((req->line.req.method.id == PJSIP_REGISTER_METHOD) ||
-      (AuthenticationSproutlet::get_top_route_param(route_hdr(), &STR_AUTO_REG)))
+      (PJUtils::is_param_in_route_hdr(route_hdr(), &STR_AUTO_REG)))
   {
     // This is either a REGISTER, or a request that Sprout should authenticate
     // by treating it like a REGISTER. Get the Authentication Vector from the
@@ -711,8 +658,8 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     TRC_DEBUG("Get AV from previous challenge");
     std::string nonce;
 
-    if (AuthenticationSproutlet::get_top_route_param(route_hdr(), &STR_USERNAME, impi) &&
-        AuthenticationSproutlet::get_top_route_param(route_hdr(), &STR_NONCE, nonce))
+    if (PJUtils::get_param_in_route_hdr(route_hdr(), &STR_USERNAME, impi) &&
+        PJUtils::get_param_in_route_hdr(route_hdr(), &STR_NONCE, nonce))
     {
       impi = Utils::url_unescape(impi);
       nonce = Utils::url_unescape(nonce);
