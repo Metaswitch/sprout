@@ -535,8 +535,12 @@ TEST_F(HssConnectionTest, CorruptAuth)
 
 TEST_F(HssConnectionTest, EmergencyAuth)
 {
+  // Checks that when emergency is set to true that we query the HSS with the
+  // "sos=true" parameter.
   rapidjson::Document* actual;
   _hss.get_user_auth_status("privid69", "pubid44", "", "", true, actual, 0);
+  Request& request = fakecurl_requests["http://narcissus:80/impi/privid69/registration-status?impu=pubid44&sos=true"];
+  EXPECT_EQ("GET", request._method);
   ASSERT_TRUE(actual != NULL);
   EXPECT_EQ(std::string("server-name"), (*actual)["scscf"].GetString());
   delete actual;

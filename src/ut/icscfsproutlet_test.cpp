@@ -628,7 +628,6 @@ TEST_F(ICSCFSproutletTest, RouteEmergencyRegister)
   // Tests routing of REGISTER requests when the "sos" flag is set. This test
   // just tests that we correctly add the "sos=true" parameter to the HTTP GET
   // request that we send to Homestead.
-
   pjsip_tx_data* tdata;
 
   // Create a TCP connection to the I-CSCF listening port.
@@ -651,6 +650,9 @@ TEST_F(ICSCFSproutletTest, RouteEmergencyRegister)
   msg1._via = tp->to_string(false);
   msg1._extra = "Contact: <sip:6505551000@" +
                 tp->to_string(true) +
+                ";ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\n" +
+                "Contact: <sip:6505551001@" +
+                tp->to_string(true) +
                 ";ob;sos>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"";
   inject_msg(msg1.get_request(), tp);
 
@@ -670,6 +672,10 @@ TEST_F(ICSCFSproutletTest, RouteEmergencyRegister)
   string route = get_headers(tdata->msg, "Route");
   ASSERT_EQ("", rr);
   ASSERT_EQ("", route);
+
+  // Check that the contact header still contains the sos parameter.
+  string contact = get_headers(tdata->msg, "Contact");
+  EXPECT_THAT(contact, HasSubstr("sos"));
 
   // Send a 200 OK response.
   inject_msg(respond_to_current_txdata(200));
