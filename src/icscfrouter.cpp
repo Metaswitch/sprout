@@ -232,7 +232,7 @@ int ICSCFRouter::parse_hss_response(rapidjson::Document*& rsp, bool queried_caps
   else
   {
     int rc = (*rsp)["result-code"].GetInt();
-  
+
     if ((rc == 2001) ||
         (rc == 2002) ||
         (rc == 2003))
@@ -251,15 +251,15 @@ int ICSCFRouter::parse_hss_response(rapidjson::Document*& rsp, bool queried_caps
           (rsp->HasMember("optional-capabilities")) &&
           ((*rsp)["optional-capabilities"].IsArray()))
       {
-        // Response specifies capabilities - we might have explicitly 
-        // queried capabilities or implicitly because there was no 
+        // Response specifies capabilities - we might have explicitly
+        // queried capabilities or implicitly because there was no
         // server assigned.
         TRC_DEBUG("HSS returned capabilities");
         queried_caps = true;
-  
-        if ((!parse_capabilities((*rsp)["mandatory-capabilities"], 
+
+        if ((!parse_capabilities((*rsp)["mandatory-capabilities"],
                                  _hss_rsp.mandatory_caps)) ||
-            (!parse_capabilities((*rsp)["optional-capabilities"], 
+            (!parse_capabilities((*rsp)["optional-capabilities"],
                                  _hss_rsp.optional_caps)))
         {
           // Failed to parse capabilities, so reject with 480 response.
@@ -334,12 +334,14 @@ ICSCFUARouter::ICSCFUARouter(HSSConnection* hss,
                              const std::string& impi,
                              const std::string& impu,
                              const std::string& visited_network,
-                             const std::string& auth_type) :
+                             const std::string& auth_type,
+                             const bool& emergency) :
   ICSCFRouter(hss, scscf_selector, trail, acr, port),
   _impi(impi),
   _impu(impu),
   _visited_network(visited_network),
-  _auth_type(auth_type)
+  _auth_type(auth_type),
+  _emergency(emergency)
 {
 }
 
@@ -366,6 +368,7 @@ int ICSCFUARouter::hss_query()
                                           _impu,
                                           _visited_network,
                                           auth_type,
+                                          _emergency,
                                           rsp,
                                           _trail);
 

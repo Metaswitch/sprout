@@ -802,6 +802,7 @@ HTTPCode HSSConnection::get_user_auth_status(const std::string& private_user_ide
                                              const std::string& public_user_identity,
                                              const std::string& visited_network,
                                              const std::string& auth_type,
+                                             const bool& emergency,
                                              rapidjson::Document*& user_auth_status,
                                              SAS::TrailId trail)
 {
@@ -826,6 +827,10 @@ HTTPCode HSSConnection::get_user_auth_status(const std::string& private_user_ide
   if (!auth_type.empty())
   {
     path += "&auth-type=" + Utils::url_escape(auth_type);
+  }
+  if (emergency)
+  {
+    path += "&sos=true";
   }
 
   HTTPCode rc = get_json_object(path, user_auth_status, trail);
