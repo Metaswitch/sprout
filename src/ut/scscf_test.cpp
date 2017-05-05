@@ -1314,6 +1314,7 @@ TEST_F(SCSCFTest, TestBadScheme)
 
 TEST_F(SCSCFTest, TestBarredCaller)
 {
+  // Tests that a call attempt from a barred caller is rejected with a 403.
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "REGISTERED",
                                 "<IMSSubscription><ServiceProfile>\n"
@@ -1342,6 +1343,7 @@ TEST_F(SCSCFTest, TestBarredCaller)
 
 TEST_F(SCSCFTest, TestBarredCallee)
 {
+  // Tests that a call to a barred callee is rejected with a 404.
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", "REGISTERED",
                                 "<IMSSubscription><ServiceProfile>\n"

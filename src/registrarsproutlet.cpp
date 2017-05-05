@@ -384,8 +384,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
   // Get the default URI to use as a key in the binding store.
   std::string aor;
-  success = associated_uris.get_default(aor,
-                                        num_emergency_bindings > 0);
+  success = associated_uris.get_default_impu(aor,
+                                             num_emergency_bindings > 0);
   if (!success)
   {
     // Don't have a default IMPU so send an error response. We only hit this
@@ -395,7 +395,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   }
 
   // Use the unbarred URIs for when we send NOTIFYs.
-  std::vector<std::string> uris = associated_uris.unbarred_uris();
+  std::vector<std::string> unbarred_uris = associated_uris.get_unbarred_uris();
   TRC_DEBUG("REGISTER for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
 
   if (reject_with_400)
@@ -449,7 +449,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   SubscriberDataManager::AoRPair* aor_pair =
                                  write_to_store(_sproutlet->_sdm,
                                                 aor,
-                                                uris,
+                                                unbarred_uris,
                                                 req,
                                                 now,
                                                 expiry,
@@ -485,7 +485,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
         SubscriberDataManager::AoRPair* remote_aor_pair =
           write_to_store(*it,
                          aor,
-                         uris,
+                         unbarred_uris,
                          req,
                          now,
                          tmp_expiry,
@@ -738,10 +738,10 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
   // Add P-Associated-URI headers for all of the associated URIs. Don't include
   // any URIs that are wildcard identities.
-  if (!uris.empty())
+  if (!unbarred_uris.empty())
   {
-    for (std::vector<std::string>::iterator it = uris.begin();
-         it != uris.end();
+    for (std::vector<std::string>::iterator it = unbarred_uris.begin();
+         it != unbarred_uris.end();
          it++)
     {
       if (!WildcardUtils::is_wildcard_uri(*it))
@@ -792,7 +792,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     // If the public ID is unbarred, we use that for third party registers. If
     // it is barred, we use the default URI.
     std::string as_reg_id = public_id;
-    if (associated_uris.is_barred(public_id))
+    if (associated_uris.is_impu_barred(public_id))
     {
       as_reg_id = aor;
     }
@@ -826,7 +826,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
                    SubscriberDataManager* primary_sdm,         ///<store to write to
                    std::string aor,                            ///<address of record to write to
-                   std::vector<std::string> irs_impus,         ///<IMPUs in Implicit Registration Set
+                   std::vector<std::string> unbarred_irs_impus,
+                                                               ///<Unbarred IMPUs in Implicit Registration Set
                    pjsip_msg* req,                             ///<received request to read headers from
                    int now,                                    ///<time now
                    int& expiry,                                ///<[out] longest expiry time
@@ -1045,7 +1046,7 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
     if (changed_bindings > 0)
     {
       set_rc = primary_sdm->set_aor_data(aor,
-                                         irs_impus,
+                                         unbarred_irs_impus,
                                          aor_pair,
                                          trail(),
                                          all_bindings_expired);

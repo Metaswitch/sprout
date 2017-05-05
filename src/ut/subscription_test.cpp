@@ -371,6 +371,26 @@ TEST_F(SubscriptionTest, EmergencySubscription)
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
+TEST_F(SubscriptionTest, NotRegistered)
+{
+  _hss_connection->set_impu_result("sip:6505551231@homedomain", "", RegDataXMLUtils::STATE_UNREGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551231@homedomain</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  SubscribeMessage msg;
+  msg._user = "6505551231";
+  inject_msg(msg.get());
+
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = pop_txdata()->msg;
+  EXPECT_EQ(504, out->line.status.code);
+
+  check_subscriptions("sip:6505550231@homedomain", 0u);
+}
+
 /// Simple correct example
 TEST_F(SubscriptionTest, SimpleMainline)
 {
@@ -1000,6 +1020,29 @@ TEST_F(SubscriptionTest, SubscriptionWithBarredIdentity)
 
   // Check there's one subscription stored
   check_subscriptions("sip:6505551231@homedomain", 1u);
+}
+
+TEST_F(SubscriptionTest, NoDefaultID)
+{
+  // This test checks that when there is not default ID we reject the SUBSCRIBE.
+  // This is not a realistic test because we expect the subscriber to be
+  // unregistered which will cause a 504.
+  _hss_connection->set_impu_result("sip:6505551231@homedomain", "", RegDataXMLUtils::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551231@homedomain</Identity><BarringIndication>1</BarringIndication></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  SubscribeMessage msg;
+  msg._user = "6505551231";
+  inject_msg(msg.get());
+
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = pop_txdata()->msg;
+  EXPECT_EQ(403, out->line.status.code);
+
+  check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
 

@@ -384,9 +384,9 @@ TEST_F(HssConnectionTest, SimpleAssociatedUris)
   std::string regstate;
   _hss.get_registration_data("pubid42", regstate, ifcs_map, uris, 0);
   EXPECT_EQ("REGISTERED", regstate);
-  ASSERT_EQ(2u, uris.unbarred_uris().size());
-  EXPECT_EQ("sip:123@example.com", uris.unbarred_uris()[0]);
-  EXPECT_EQ("sip:456@example.com", uris.unbarred_uris()[1]);
+  ASSERT_EQ(2u, uris.get_unbarred_uris().size());
+  EXPECT_EQ("sip:123@example.com", uris.get_unbarred_uris()[0]);
+  EXPECT_EQ("sip:456@example.com", uris.get_unbarred_uris()[1]);
 }
 
 TEST_F(HssConnectionTest, SimpleNotRegisteredGet)
@@ -396,7 +396,7 @@ TEST_F(HssConnectionTest, SimpleNotRegisteredGet)
   std::string regstate;
   _hss.get_registration_data("pubid43", regstate, ifcs_map, uris, 0);
   EXPECT_EQ("NOT_REGISTERED", regstate);
-  EXPECT_EQ(0u, uris.unbarred_uris().size());
+  EXPECT_EQ(0u, uris.get_unbarred_uris().size());
 }
 
 TEST_F(HssConnectionTest, SimpleUnregistered)
@@ -442,14 +442,15 @@ TEST_F(HssConnectionTest, SimpleChargingAddrs)
 
 TEST_F(HssConnectionTest, Barring)
 {
+  // Checks that the BarringIndication field from the HSS is parsed correctly.
   AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("pubid47", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_EQ("REGISTERED", regstate);
-  ASSERT_EQ(1u, uris.unbarred_uris().size());
-  EXPECT_FALSE(uris.is_barred("sip:123@example.com"));
-  EXPECT_TRUE(uris.is_barred("sip:456@example.com"));
+  ASSERT_EQ(1u, uris.get_unbarred_uris().size());
+  EXPECT_FALSE(uris.is_impu_barred("sip:123@example.com"));
+  EXPECT_TRUE(uris.is_impu_barred("sip:456@example.com"));
 }
 
 TEST_F(HssConnectionTest, BadXML)
@@ -459,7 +460,7 @@ TEST_F(HssConnectionTest, BadXML)
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("pubid42_malformed", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.unbarred_uris().empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Failed to parse Homestead response"));
 }
 
@@ -471,7 +472,7 @@ TEST_F(HssConnectionTest, BadXML2)
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("pubid43_malformed", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.unbarred_uris().empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
 }
 
@@ -482,7 +483,7 @@ TEST_F(HssConnectionTest, BadXML_MissingServiceProfile)
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement4", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.unbarred_uris().empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
 }
 
@@ -493,7 +494,7 @@ TEST_F(HssConnectionTest, BadXML_MissingPublicIdentity)
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement5", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.unbarred_uris().empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed ServiceProfile XML"));
 }
 
@@ -504,7 +505,7 @@ TEST_F(HssConnectionTest, BadXML_MissingIdentity)
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement6", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.unbarred_uris().empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed PublicIdentity XML"));
 }
 
@@ -515,7 +516,7 @@ TEST_F(HssConnectionTest, BadXML_MissingRegistrationState)
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement1", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.unbarred_uris().empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed Homestead XML"));
 }
 
@@ -526,7 +527,7 @@ TEST_F(HssConnectionTest, BadXML_MissingClearwaterRegData)
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement3", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.unbarred_uris().empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed Homestead XML"));
 }
 
@@ -537,7 +538,7 @@ TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription)
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement2", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.unbarred_uris().empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
 }
 
@@ -550,7 +551,7 @@ TEST_F(HssConnectionTest, ServerFailure)
   std::string regstate;
   _hss.update_registration_state("pubid44", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_EQ("", regstate);
-  EXPECT_TRUE(uris.unbarred_uris().empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("http://narcissus/impu/pubid44/reg-data failed"));
 }
 

@@ -44,24 +44,33 @@
 struct AssociatedURIs
 {
 public:
-  bool get_default(std::string& uri,
-                   bool emergency);
+  /// Gets sthe default IMPU from an implicit registration set.
+  bool get_default_impu(std::string& uri,
+                        bool emergency);
 
-  bool contains(std::string uri);
+  /// Checks if a URI is in the list of assiated URIs.
+  bool contains_uri(std::string uri);
 
-  void add(std::string uri, bool barred);
+  /// Adds to the list of associated URIs.
+  void add_uri(std::string uri, bool barred);
 
-  void clear();
+  /// Clears this structure.
+  void clear_uris();
 
-  bool is_barred(std::string uri);
+  /// Returns whether a URI is barred or not.
+  bool is_impu_barred(std::string uri);
 
-  std::vector<std::string> unbarred_uris();
+  /// Returns all the unbarred URIs.
+  std::vector<std::string> get_unbarred_uris();
 
-  std::vector<std::string> all_uris();
+  /// Returns all URIs.
+  std::vector<std::string> get_all_uris();
 
 private:
+  /// A vector of associated URIs.
   std::vector<std::string> _associated_uris;
 
+  /// A map from the associated URIs to their barring state.
   std::map<std::string, bool> _barred_map;
 };
 

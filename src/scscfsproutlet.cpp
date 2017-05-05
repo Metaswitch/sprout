@@ -311,13 +311,13 @@ long SCSCFSproutlet::read_hss_data(const std::string& public_id,
     ifcs = ifc_map[public_id];
 
     // Get the default URI. This should always succeed.
-    associated_uris.get_default(default_uri, true);
+    associated_uris.get_default_impu(default_uri, true);
 
     // We may want to route to bindings that are barred (in case of an emergency),
     // so get all the URIs.
-    uris = associated_uris.all_uris();
+    uris = associated_uris.get_all_uris();
     registered = (regstate == RegDataXMLUtils::STATE_REGISTERED);
-    barred = associated_uris.is_barred(public_id);
+    barred = associated_uris.is_impu_barred(public_id);
   }
 
   return (http_code);
@@ -568,8 +568,8 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
             const SubscriberDataManager::AoR::Bindings bindings = aor_pair->get_current()->bindings();
 
             // Loop over the bindings. If any binding has an emergency registration,
-            // let the request through. Later on we will make sure we only route the
-            // request to the bindings that have an emergency registration.
+            // let the request through. When routing to UEs, we will make sure we
+            // only route the request to the bindings that have an emergency registration.
             for (SubscriberDataManager::AoR::Bindings::const_iterator binding = bindings.begin();
                  binding != bindings.end();
                  ++binding)

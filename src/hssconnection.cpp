@@ -414,7 +414,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
   bool found_aliases = false;
   bool maybe_found_aliases = false;
   bool found_multiple_matches = false;
-  associated_uris.clear();
+  associated_uris.clear_uris();
   rapidxml::xml_node<>* sp = NULL;
 
   if (!imss->first_node(RegDataXMLUtils::SERVICE_PROFILE))
@@ -457,7 +457,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
         TRC_DEBUG("Processing Identity node from HSS XML - %s\n",
                   uri.c_str());
 
-        if (!associated_uris.contains(uri))
+        if (!associated_uris.contains_uri(uri))
         {
           bool barred = false;
           if (barring_indication)
@@ -469,9 +469,8 @@ bool decode_homestead_xml(const std::string public_user_identity,
             }
           }
 
-          associated_uris.add(uri, barred);
+          associated_uris.add_uri(uri, barred);
           ifcs_map[uri] = ifc;
-
         }
 
         if (!found_aliases)
@@ -573,7 +572,6 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                    "",
                                    trail);
 }
-
 
 HTTPCode HSSConnection::update_registration_state(const std::string& public_user_identity,
                                                   const std::string& private_user_identity,

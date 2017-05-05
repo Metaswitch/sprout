@@ -132,7 +132,7 @@ protected:
   SubscriberDataManager::AoRPair* write_to_store(
                      SubscriberDataManager* primary_sdm,         ///<store to write to
                      std::string aor,                            ///<address of record to write to
-                     std::vector<std::string> irs_impus,         ///<IMPUs in Implicit Registration Set
+                     std::vector<std::string> unbarred_irs_impus,///<Unbarred IMPUs in Implicit Registration Set
                      pjsip_msg* req,                             ///<received request to read headers from
                      int now,                                    ///<time now
                      int& expiry,                                ///<[out] longest expiry time

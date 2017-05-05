@@ -1380,7 +1380,7 @@ TEST_F(RegistrarTest, AppServersBarredIMPU)
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
   EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550232@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
-            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+            get_headers(out, "Contact"));
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
@@ -2816,7 +2816,8 @@ TEST_F(RegistrarTest, BarredEmergencyRegistration)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 
-  // There should be one binding, and it is an emergency registration. The emergency binding should have 'sos' prepended to its key.
+  // There should be one binding, and it is an emergency registration. The
+  // emergency binding should have 'sos' prepended to its key.
   SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
