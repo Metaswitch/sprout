@@ -213,7 +213,7 @@
             "name": "SPROUT_SESS_TERMINATED_AS_COMM_ERROR",
             "levels" : [
                 {
-                    "severity": "cleared",
+                    "severity": "CLEARED",
                     "details": "Sprout communication to all active session terminated Application Servers has been restored.",
                     "description": "Sprout: Communication error to session terminated Application Servers cleared.",
                     "cause": "Sprout communication to all active Application Servers that use session terminated iFC default handling has been restored. The previously issued alarm has been cleared. ",
@@ -221,7 +221,7 @@
                     "action": "No action."
                 },
                 {
-                    "severity": "major",
+                    "severity": "MAJOR",
                     "details": "Sprout cannot successfully communicate with one or more Application Servers that use session terminated default handling. Check that all ASs are operational, they have network connectivity to Sprout, and iFCs are properly configured.",
                     "description": "Sprout: Communication error to session terminated Application Server.",
                     "cause": "Sprout is unable to successfully communicate with at least one active Application Server that uses session terminated iFC default handling. ",
@@ -236,7 +236,7 @@
             "name": "SPROUT_SESS_CONTINUED_AS_COMM_ERROR",
             "levels": [
                 {
-                    "severity": "cleared",
+                    "severity": "CLEARED",
                     "details": "Sprout communication to all active session continued Application Servers has been restored",
                     "description": "Sprout: Communication error to session continued Application Servers cleared.",
                     "cause": "Sprout communication to all active Application Servers that use session continued iFC default handling has been restored. The previously issued alarm has been cleared.",
@@ -244,7 +244,7 @@
                     "action": "No action"
                 },
                 {
-                    "severity": "minor",
+                    "severity": "MINOR",
                     "details": "Sprout cannot successfully communicate with one or more Application Servers that use session continued default handling. Check that all ASs are operational, they have network connectivity to Sprout, and iFCs are properly configured.",
                     "description": "Sprout: Communication error to session continued Application Server.",
                     "cause": "Sprout is unable to successfully communicate with at least one active Application Server that uses session continued iFC default handling.",
