@@ -246,17 +246,9 @@ bool AuthenticationSproutlet::needs_authentication(pjsip_msg* req,
       return PJ_FALSE;
     }
 
-    // Check to see if we should authenticate this non-REGISTER message - this
-    if (_non_register_auth_mode == 0)
+    if (_non_register_auth_mode & NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT)
     {
-      // Configured to never authenticate non-REGISTER requests.
-      SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_NEVER_AUTH_NON_REG, 0);
-      SAS::report_event(event);
-      return PJ_FALSE;
-    }
-    else if (_non_register_auth_mode & NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT)
-    {
-      // Only authenticate the request if it has a Proxy-Authorization header.
+      // Authenticate the request if it has a Proxy-Authorization header.
       pjsip_proxy_authorization_hdr* auth_hdr = (pjsip_proxy_authorization_hdr*)
         pjsip_msg_find_hdr(req, PJSIP_H_PROXY_AUTHORIZATION, NULL);
 
@@ -268,40 +260,35 @@ bool AuthenticationSproutlet::needs_authentication(pjsip_msg* req,
         SAS::report_event(event);
         return PJ_TRUE;
       }
-      else
-      {
-        // No Proxy-Authorization header - this indicates the P-CSCF trusts this
-        // message so we don't need to perform further authentication.
-        SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_PROXY_AUTHORIZATION, 0);
-        SAS::report_event(event);
-        return PJ_FALSE;
-      }
     }
-    else if (_non_register_auth_mode & NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT)
+
+    if (_non_register_auth_mode & NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT)
     {
-      // Only authenticate the request if the endpoint authenticates with digest
+      // Authenticate the request if the endpoint authenticates with digest
       // authentication. If this is the case the top route header will contain
       // a username parameter.
       if (PJUtils::is_param_in_top_route(req, &STR_USERNAME))
       {
         // The username parameter is present so we need to authenticate.
-        // TODO SAS
+        SAS::Event event(trail, SASEvent::AUTHENTICATION_NEEDED_DIGEST_ENDPOINT, 0);
+        SAS::report_event(event);
         return PJ_TRUE;
       }
-      else
-      {
-        // No username so don't authenticate.
-        // TODO SAS
-        return PJ_FALSE;
-      }
+    }
+
+    // We don't need to authenticate this message. Generate a helpful SAS log.
+    if (_non_register_auth_mode == 0)
+    {
+      SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_NEVER_AUTH_NON_REG, 0);
+      SAS::report_event(event);
     }
     else
     {
-      // Unrecognized authentication mode - should never happen. LCOV_EXCL_START
-      assert(!"Unrecognized authentication mode");
-      return PJ_FALSE;
-      // LCOV_EXCL_STOP
+      SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_SOMETIMES_AUTH_NON_REG, 0);
+      SAS::report_event(event);
     }
+
+    return PJ_FALSE;
   }
 }
 
