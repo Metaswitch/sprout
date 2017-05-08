@@ -19,7 +19,7 @@
                     "description": "Sprout: Process failure.",
                     "cause": "The system has detected that the Sprout process has failed. Monit will automatically attempt to restart it. If this alarm does not clear, the Sprout process may have been stopped or an unrecoverable failure may have occurred.",
                     "effect": "In progress I-CSCF, S-CSCF, and BGCF SIP transactions are interrupted and may require retransmission by the SIP clients. If a single Sprout process failed then there is no significant effect to traffic capacity. If multiple Sprout processes fail then calls will fail and traffic capacity will be reduced.",
-                    "action": "The process will automatically be restarted and the craftsperson must monitor for the alarm to clear and confirm that the I-CSCF, S-CSCF, and BGCF are operating normally. If the failed Sprout node fails to return to service then contact your support representative."
+                    "action": "The process will automatically be restarted. Monitor for the alarm to clear and confirm that the I-CSCF, S-CSCF, and BGCF are operating normally. If the failed Sprout node fails to return to service then contact your support representative."
                 }
             ]
         },
