@@ -249,6 +249,8 @@ public:
     }
   }
 
+  void TestAKAAuthSuccess(char* key);
+
 protected:
   static LocalStore* _local_data_store;
   static ImpiStore* _impi_store;
@@ -271,15 +273,13 @@ FakeChronosConnection* BaseAuthenticationTest::_chronos_connection;
 AnalyticsLogger* BaseAuthenticationTest::_analytics;
 int BaseAuthenticationTest::_current_cseq;
 
-
-class AuthenticationTest : public BaseAuthenticationTest
+template<class C>
+class AuthenticationTestTemplate : public BaseAuthenticationTest
 {
   static void SetUpTestCase()
   {
     BaseAuthenticationTest::SetUpTestCase();
   }
-
-  void TestAKAAuthSuccess(char* key);
 
   static void TearDownTestCase()
   {
@@ -299,123 +299,38 @@ class AuthenticationTest : public BaseAuthenticationTest
                                   _hss_connection,
                                   _chronos_connection,
                                   _acr_factory,
-                                  NonRegisterAuthentication::NEVER,
+                                  C::non_reg_auth(),
                                   _analytics,
                                   &SNMP::FAKE_AUTHENTICATION_STATS_TABLES,
-                                  true,
+                                  C::nonce_count_supported(),
                                   get_binding_expiry);
     EXPECT_TRUE(auth_sproutlet->init());
     return auth_sproutlet;
   }
 };
 
-
-class AuthenticationPxyAuthHdrTest : public BaseAuthenticationTest
+template<uint32_t A, bool N>
+class AuthenticationTestConfig
 {
-  static void SetUpTestCase()
-  {
-    BaseAuthenticationTest::SetUpTestCase();
-  }
-
-  AuthenticationSproutlet* create_auth_sproutlet()
-  {
-    AuthenticationSproutlet* auth_sproutlet =
-      new AuthenticationSproutlet("authentication",
-                                  0,
-                                  "sip:authentication.homedomain",
-                                  "registrar",
-                                  { "scscf" },
-                                  "homedomain",
-                                  _impi_store,
-                                  _hss_connection,
-                                  _chronos_connection,
-                                  _acr_factory,
-                                  NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT,
-                                  _analytics,
-                                  &SNMP::FAKE_AUTHENTICATION_STATS_TABLES,
-                                  true,
-                                  get_binding_expiry);
-    EXPECT_TRUE(auth_sproutlet->init());
-    return auth_sproutlet;
-  }
-
-  static void TearDownTestCase()
-  {
-    BaseAuthenticationTest::TearDownTestCase();
-  }
+  static uint32_t non_reg_auth() { return A; }
+  static uint32_t nonce_count_supported() { return N; }
 };
 
+typedef AuthenticationTestTemplate<
+  AuthenticationTestConfig<NonRegisterAuthentication::NEVER, true>
+> AuthenticationTest;
 
-class AuthenticationNonceCountDisabledTest : public BaseAuthenticationTest
-{
-  static void SetUpTestCase()
-  {
-    BaseAuthenticationTest::SetUpTestCase();
-  }
+typedef AuthenticationTestTemplate<
+  AuthenticationTestConfig<NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT, true>
+> AuthenticationPxyAuthHdrTest;
 
-  AuthenticationSproutlet* create_auth_sproutlet()
-  {
-    AuthenticationSproutlet* auth_sproutlet =
-      new AuthenticationSproutlet("authentication",
-                                  0,
-                                  "sip:authentication.homedomain",
-                                  "registrar",
-                                  { "scscf" },
-                                  "homedomain",
-                                  _impi_store,
-                                  _hss_connection,
-                                  _chronos_connection,
-                                  _acr_factory,
-                                  NonRegisterAuthentication::NEVER,
-                                  _analytics,
-                                  &SNMP::FAKE_AUTHENTICATION_STATS_TABLES,
-                                  false,
-                                  get_binding_expiry);
-    EXPECT_TRUE(auth_sproutlet->init());
-    return auth_sproutlet;
-  }
+typedef AuthenticationTestTemplate<
+  AuthenticationTestConfig<NonRegisterAuthentication::NEVER, false>
+> AuthenticationNonceCountDisabledTest;
 
-  static void TearDownTestCase()
-  {
-    BaseAuthenticationTest::TearDownTestCase();
-  }
-};
-
-
-class AuthenticationChallengeDigestUEsTest : public BaseAuthenticationTest
-{
-  static void SetUpTestCase()
-  {
-    BaseAuthenticationTest::SetUpTestCase();
-  }
-
-  AuthenticationSproutlet* create_auth_sproutlet()
-  {
-    AuthenticationSproutlet* auth_sproutlet =
-      new AuthenticationSproutlet("authentication",
-                                  0,
-                                  "sip:authentication.homedomain",
-                                  "registrar",
-                                  { "scscf" },
-                                  "homedomain",
-                                  _impi_store,
-                                  _hss_connection,
-                                  _chronos_connection,
-                                  _acr_factory,
-                                  NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT,
-                                  _analytics,
-                                  &SNMP::FAKE_AUTHENTICATION_STATS_TABLES,
-                                  false,
-                                  get_binding_expiry);
-    EXPECT_TRUE(auth_sproutlet->init());
-    return auth_sproutlet;
-  }
-
-  static void TearDownTestCase()
-  {
-    BaseAuthenticationTest::TearDownTestCase();
-  }
-};
+typedef AuthenticationTestTemplate<AuthenticationTestConfig<
+  NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT, false>
+> AuthenticationChallengeDigestUEsTest;
 
 
 class AuthenticationMessage
@@ -1459,7 +1374,7 @@ TEST_F(AuthenticationTest, DigestChallengeExpired)
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
 
-void AuthenticationTest::TestAKAAuthSuccess(char* key)
+void BaseAuthenticationTest::TestAKAAuthSuccess(char* key)
 {
   // Test a successful AKA authentication flow.
   pjsip_tx_data* tdata;
@@ -1521,7 +1436,7 @@ TEST_F(AuthenticationTest, AKAAuthSuccess)
                               "\"cryptkey\":\"0123456789abcdef\","
                               "\"integritykey\":\"fedcba9876543210\"}}");
 
-  AuthenticationTest::TestAKAAuthSuccess("12345678123456781234567812345678");
+  BaseAuthenticationTest::TestAKAAuthSuccess("12345678123456781234567812345678");
 }
 
 // Test that a normal AKA authenticated registration succeeds, when the response
@@ -1539,7 +1454,7 @@ TEST_F(AuthenticationTest, AKAAuthSuccessWithNullBytes)
                               "\"cryptkey\":\"0123456789abcdef\","
                               "\"integritykey\":\"fedcba9876543210\"}}");
 
-  AuthenticationTest::TestAKAAuthSuccess("12345678000000000000000012345678");
+  BaseAuthenticationTest::TestAKAAuthSuccess("12345678000000000000000012345678");
 }
 
 TEST_F(AuthenticationTest, AKAv2AuthSuccess)
