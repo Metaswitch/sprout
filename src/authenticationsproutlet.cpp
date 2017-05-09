@@ -659,12 +659,13 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
 
       if (av == NULL)
       {
+        // If we didn't get any IMPI back from the store at all, then the store
+        // has failed, so flag this for later.
+        av_source_unavailable = (impi_obj == NULL);
+
         // We failed to get an AV so discard the impi store object we got when
         // reading from the store.
         delete impi_obj; impi_obj = NULL;
-
-        // TODO work out why we couldn't get an AV and set
-        // `av_source_unavailable` appropriately.
       }
     }
   }

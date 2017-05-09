@@ -2861,3 +2861,74 @@ TYPED_TEST(AuthenticationDigestUEsTest, NoAuthorizationTermRequest)
 
   this->auth_sproutlet_allows_request(true);
 }
+
+TYPED_TEST(AuthenticationDigestUEsTest, StoreFailsWhenGeneratingChallenge)
+{
+  // Test a successful SIP Digest authentication flow.
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  this->_hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                                    "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Send in a REGISTER request with no authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = false;
+  this->inject_msg(msg1.get());
+
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, this->txdata_count());
+  tdata = this->current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
+  std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  this->parse_www_authenticate(auth, auth_params);
+  this->free_txdata();
+
+  // Send a new REGISTER request with an authentication header including the
+  // response.
+  AuthenticationMessage msg2("REGISTER");
+  msg2._algorithm = "MD5";
+  msg2._key = "12345678123456781234567812345678";
+  msg2._nonce = auth_params["nonce"];
+  msg2._opaque = auth_params["opaque"];
+  msg2._nc = "00000001";
+  msg2._cnonce = "8765432187654321";
+  msg2._qop = "auth";
+  msg2._integ_prot = "ip-assoc-pending";
+  this->inject_msg(msg2.get());
+
+  // The authentication module lets the request through.
+  this->auth_sproutlet_allows_request();
+
+  // Delete the result from the HSS. This makes sure that when authenticating
+  // the following INVITE we aren't accidentally querying the HSS.
+  this->_hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+
+  // Advance time by 1 minute to check that the challenge has not been written
+  // with too-short a timeout.
+  cwtest_advance_time_ms(60000);
+
+  // Send in an INVITE but fail the store lookup.
+  this->_local_data_store->force_get_error();
+
+  AuthenticationMessage msg3("INVITE");
+  msg3._auth_hdr = false;
+  msg3._proxy_auth_hdr = false;
+  msg3._route_uri += ";username=6505550001%40homedomain;nonce=" + auth_params["nonce"];
+  this->inject_msg(msg3.get());
+
+  // Expect a 504 response.
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+  tdata = this->current_txdata();
+  RespMatcher(504).matches(tdata->msg);
+
+  AuthenticationMessage ack("ACK");
+  ack._cseq = msg3._cseq;
+  this->inject_msg(ack.get());
+}
