@@ -260,6 +260,17 @@ TYPED_TEST(ImpiOneStoreTest, SetGetWithNonce)
   delete impi1;
 }
 
+TYPED_TEST(ImpiOneStoreTest, SetGetFailure)
+{
+  ImpiStore::Impi* impi1 = example_impi_digest();
+  Store::Status status = this->impi_store->set_impi(impi1);
+  ASSERT_EQ(Store::Status::OK, status);
+
+  this->local_store->force_get_error();
+  ImpiStore::Impi* impi2 = this->impi_store->get_impi(IMPI);
+  EXPECT_TRUE(impi2 == NULL);
+  delete impi1;
+}
 
 /// Wrapper class for scenarios that involve 2 different IMPI store
 /// implementations.
@@ -391,7 +402,9 @@ TYPED_TEST(ImpiTwoStoreTest, Write1Delete1Read2)
   status = this->scenario->store1->delete_impi(impi2);
   ASSERT_EQ(Store::Status::OK, status);
   ImpiStore::Impi* impi3 = this->scenario->store2->get_impi(IMPI);
-  ASSERT_EQ(NULL, impi3);
+  ASSERT_TRUE(impi3 != NULL);
+  EXPECT_TRUE(impi3->auth_challenges.empty());
+  delete impi3;
   delete impi2;
   delete impi1;
 }
@@ -434,7 +447,9 @@ TYPED_TEST(ImpiTwoStoreLostImpiTest, Write1Delete1Read2)
   status = this->scenario->store1->delete_impi(impi2);
   ASSERT_EQ(Store::Status::OK, status);
   ImpiStore::Impi* impi3 = this->scenario->store2->get_impi_with_nonce(IMPI, NONCE1);
-  ASSERT_EQ(NULL, impi3);
+  ASSERT_TRUE(impi3 != NULL);
+  EXPECT_TRUE(impi3->auth_challenges.empty());
+  delete impi3;
   delete impi2;
   delete impi1;
 }
@@ -509,14 +524,18 @@ TEST_F(ImpiStoreParsingTest, IMPICorruptJSON)
 {
   local_store->set_data("impi", IMPI, "{]", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
-  EXPECT_EQ(NULL, impi);
+  ASSERT_TRUE(impi != NULL);
+  EXPECT_TRUE(impi->auth_challenges.empty());
+  delete impi;
 }
 
 TEST_F(ImpiStoreParsingTest, IMPINotObject)
 {
   local_store->set_data("impi", IMPI, "\"not an object\"", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
-  EXPECT_EQ(NULL, impi);
+  ASSERT_TRUE(impi != NULL);
+  EXPECT_TRUE(impi->auth_challenges.empty());
+  delete impi;
 }
 
 TEST_F(ImpiStoreParsingTest, ChallengeNotObject)
@@ -605,14 +624,18 @@ TEST_F(ImpiStoreParsingTest, AVCorruptJSON)
 {
   local_store->set_data("av", IMPI + '\\' + NONCE1, "{]", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
-  ASSERT_EQ(NULL, impi);
+  ASSERT_TRUE(impi != NULL);
+  EXPECT_TRUE(impi->auth_challenges.empty());
+  delete impi;
 }
 
 TEST_F(ImpiStoreParsingTest, AVNotObject)
 {
   local_store->set_data("av", IMPI + '\\' + NONCE1, "\"not an object\"", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
-  ASSERT_EQ(NULL, impi);
+  ASSERT_TRUE(impi != NULL);
+  EXPECT_TRUE(impi->auth_challenges.empty());
+  delete impi;
 }
 
 TEST_F(ImpiStoreParsingTest, AVDigest)
@@ -649,35 +672,45 @@ TEST_F(ImpiStoreParsingTest, AVEmpty)
 {
   local_store->set_data("av", IMPI + '\\' + NONCE1, "{}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
-  ASSERT_EQ(NULL, impi);
+  ASSERT_TRUE(impi != NULL);
+  EXPECT_TRUE(impi->auth_challenges.empty());
+  delete impi;
 }
 
 TEST_F(ImpiStoreParsingTest, AVDigestMissingRealm)
 {
   local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"qop\":\"auth\",\"ha1\":\"ha1\"}}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
-  ASSERT_EQ(NULL, impi);
+  ASSERT_TRUE(impi != NULL);
+  EXPECT_TRUE(impi->auth_challenges.empty());
+  delete impi;
 }
 
 TEST_F(ImpiStoreParsingTest, AVDigestMissingQoP)
 {
   local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"realm\":\"example.com\",\"ha1\":\"ha1\"}}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
-  ASSERT_EQ(NULL, impi);
+  ASSERT_TRUE(impi != NULL);
+  EXPECT_TRUE(impi->auth_challenges.empty());
+  delete impi;
 }
 
 TEST_F(ImpiStoreParsingTest, AVDigestMissingHA1)
 {
   local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\"}}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
-  ASSERT_EQ(NULL, impi);
+  ASSERT_TRUE(impi != NULL);
+  EXPECT_TRUE(impi->auth_challenges.empty());
+  delete impi;
 }
 
 TEST_F(ImpiStoreParsingTest, AVDigestNotObject)
 {
   local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":\"not an objct\"}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
-  ASSERT_EQ(NULL, impi);
+  ASSERT_TRUE(impi != NULL);
+  EXPECT_TRUE(impi->auth_challenges.empty());
+  delete impi;
 }
 
 TEST_F(ImpiStoreParsingTest, AVDigestNCTombstone)
@@ -714,7 +747,9 @@ TEST_F(ImpiStoreParsingTest, AVDigestExpiresInPast)
 {
   local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"digest\":{\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\",\"expires\":1}}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
-  ASSERT_EQ(NULL, impi);
+  ASSERT_TRUE(impi != NULL);
+  EXPECT_TRUE(impi->auth_challenges.empty());
+  delete impi;
 }
 
 TEST_F(ImpiStoreParsingTest, AVDigestBranch)
@@ -731,14 +766,18 @@ TEST_F(ImpiStoreParsingTest, AVAKAMissingResponse)
 {
   local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"aka\":{}}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
-  ASSERT_EQ(NULL, impi);
+  ASSERT_TRUE(impi != NULL);
+  EXPECT_TRUE(impi->auth_challenges.empty());
+  delete impi;
 }
 
 TEST_F(ImpiStoreParsingTest, AVAKANotObject)
 {
   local_store->set_data("av", IMPI + '\\' + NONCE1, "{\"aka\":\"not an objct\"}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi_with_nonce(IMPI, NONCE1, 0L);
-  ASSERT_EQ(NULL, impi);
+  ASSERT_TRUE(impi != NULL);
+  EXPECT_TRUE(impi->auth_challenges.empty());
+  delete impi;
 }
 
 
@@ -767,7 +806,7 @@ public:
     uint64_t cas;
     status = local_store->get_data("av", IMPI + '\\' + NONCE1, data, cas, 0L);
     EXPECT_EQ(Store::Status::OK, status);
-    
+
     rapidjson::Document* json = new rapidjson::Document;
     json->Parse<0>(data.c_str());
     EXPECT_TRUE(!json->HasParseError());

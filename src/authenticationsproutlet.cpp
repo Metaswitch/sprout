@@ -831,10 +831,6 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
         impi_obj = _authentication->_impi_store->get_impi_with_nonce(impi,
                                                                      nonce,
                                                                      trail());
-        if (impi_obj == NULL)
-        {
-          impi_obj = new ImpiStore::Impi(impi);
-        }
       }
 
       // Check whether the IMPI has an existing auth challenge.
