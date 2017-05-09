@@ -2174,20 +2174,14 @@ TEST_F(AuthenticationTest, ServiceRouteWithAKAAlgorithm)
 // non-REGISTER authentication mode config parameter.
 //
 
-template<class T>
-class AuthenticationPxyAuthHdrTest : public AuthenticationTestTemplate<T>
-{
-public:
-  static void SetUpTestCase() { AuthenticationTestTemplate<T>::SetUpTestCase(); }
-  static void TearDownTestCase() { AuthenticationTestTemplate<T>::TearDownTestCase(); }
-};
-
 typedef ::testing::Types <
   AuthenticationTestConfig<NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT, true>,
   AuthenticationTestConfig<NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT |
                              NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT, true>
 > PxyAuthHdrTypes;
 
+// Need to define a new type so the parameterization works.
+template <class T> using AuthenticationPxyAuthHdrTest = AuthenticationTestTemplate<T>;
 TYPED_TEST_CASE(AuthenticationPxyAuthHdrTest, PxyAuthHdrTypes);
 
 TYPED_TEST(AuthenticationPxyAuthHdrTest, ProxyAuthorizationSuccess)
@@ -2698,19 +2692,14 @@ TEST_F(AuthenticationTest, DigestAuthFailureWithSetError)
 // auth mode flag.
 //
 
-template<class C>
-class AuthenticationDigestUEsTest : public AuthenticationTestTemplate<C>
-{
-  static void SetUpTestCase() { AuthenticationTestTemplate<C>::SetUpTestCase(); }
-  static void TearDownTestCase() { AuthenticationTestTemplate<C>::TearDownTestCase(); }
-};
-
 typedef ::testing::Types<
   AuthenticationTestConfig<NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT, false>,
   AuthenticationTestConfig<NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT |
                              NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT, false>
 > DigestUEsTypes;
 
+// Define a new type so that the test parameterization works correctly.
+template <class T> using AuthenticationDigestUEsTest = AuthenticationTestTemplate<T>;
 TYPED_TEST_CASE(AuthenticationDigestUEsTest, DigestUEsTypes);
 
 TYPED_TEST(AuthenticationDigestUEsTest, SuccessFlow)
@@ -2720,7 +2709,7 @@ TYPED_TEST(AuthenticationDigestUEsTest, SuccessFlow)
 
   // Set up the HSS response for the AV query using a default private user identity.
   this->_hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
-                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+                                    "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   // Send in a REGISTER request with no authentication header.  This triggers
   // Digest authentication.
