@@ -2751,66 +2751,86 @@ typedef ::testing::Types<
                              NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT, false>
 > DigestUEsTypes;
 
-// Define a new type so that the test parameterization works correctly.
-template <class T> using AuthenticationDigestUEsTest = AuthenticationTestTemplate<T>;
+template <class T>
+class AuthenticationDigestUEsTest : public AuthenticationTestTemplate<T>
+{
+public:
+  std::string _register_nonce;
+
+  static void SetUpTestCase() { AuthenticationTestTemplate<T>::SetUpTestCase(); }
+  static void TearDownTestCase() { AuthenticationTestTemplate<T>::TearDownTestCase(); }
+
+  // Start this test with a subscriber registered.
+  virtual void SetUp()
+  {
+    AuthenticationTestTemplate<T>::SetUp();
+
+    // Test a successful SIP Digest authentication flow.
+    pjsip_tx_data* tdata;
+
+    // Set up the HSS response for the AV query using a default private user identity.
+    this->_hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                                      "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+    // Send in a REGISTER request with no authentication header.  This triggers
+    // Digest authentication.
+    AuthenticationMessage msg1("REGISTER");
+    msg1._auth_hdr = false;
+    this->inject_msg(msg1.get());
+
+    // Expect a 401 Not Authorized response.
+    ASSERT_EQ(1, this->txdata_count());
+    tdata = this->current_txdata();
+    RespMatcher(401).matches(tdata->msg);
+
+    // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
+    std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
+    std::map<std::string, std::string> auth_params;
+    this->parse_www_authenticate(auth, auth_params);
+    this->free_txdata();
+    this->_register_nonce = auth_params["nonce"];
+
+    // Send a new REGISTER request with an authentication header including the
+    // response.
+    AuthenticationMessage msg2("REGISTER");
+    msg2._algorithm = "MD5";
+    msg2._key = "12345678123456781234567812345678";
+    msg2._nonce = auth_params["nonce"];
+    msg2._opaque = auth_params["opaque"];
+    msg2._nc = "00000001";
+    msg2._cnonce = "8765432187654321";
+    msg2._qop = "auth";
+    msg2._integ_prot = "ip-assoc-pending";
+    this->inject_msg(msg2.get());
+
+    // The authentication module lets the request through.
+    this->auth_sproutlet_allows_request();
+
+    // Delete the result from the HSS. This makes sure that when authenticating
+    // the following INVITE we aren't accidentally querying the HSS.
+    this->_hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+
+    // Advance time by 1 minute to check that the challenge has not been written
+    // with too-short a timeout.
+    cwtest_advance_time_ms(60000);
+
+  }
+};
+
 TYPED_TEST_CASE(AuthenticationDigestUEsTest, DigestUEsTypes);
 
 TYPED_TEST(AuthenticationDigestUEsTest, SuccessFlow)
 {
-  // Test a successful SIP Digest authentication flow.
   pjsip_tx_data* tdata;
-
-  // Set up the HSS response for the AV query using a default private user identity.
-  this->_hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
-                                    "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
-
-  // Send in a REGISTER request with no authentication header.  This triggers
-  // Digest authentication.
-  AuthenticationMessage msg1("REGISTER");
-  msg1._auth_hdr = false;
-  this->inject_msg(msg1.get());
-
-  // Expect a 401 Not Authorized response.
-  ASSERT_EQ(1, this->txdata_count());
-  tdata = this->current_txdata();
-  RespMatcher(401).matches(tdata->msg);
-
-  // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
-  std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
   std::map<std::string, std::string> auth_params;
-  this->parse_www_authenticate(auth, auth_params);
-  this->free_txdata();
-
-  // Send a new REGISTER request with an authentication header including the
-  // response.
-  AuthenticationMessage msg2("REGISTER");
-  msg2._algorithm = "MD5";
-  msg2._key = "12345678123456781234567812345678";
-  msg2._nonce = auth_params["nonce"];
-  msg2._opaque = auth_params["opaque"];
-  msg2._nc = "00000001";
-  msg2._cnonce = "8765432187654321";
-  msg2._qop = "auth";
-  msg2._integ_prot = "ip-assoc-pending";
-  this->inject_msg(msg2.get());
-
-  // The authentication module lets the request through.
-  this->auth_sproutlet_allows_request();
-
-  // Delete the result from the HSS. This makes sure that when authenticating
-  // the following INVITE we aren't accidentally querying the HSS.
-  this->_hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
-
-  // Advance time by 1 minute to check that the challenge has not been written
-  // with too-short a timeout.
-  cwtest_advance_time_ms(60000);
+  std::string auth;
 
   // Send in a request with a Proxy-Authentication header.  This triggers
   // Digest authentication.
   AuthenticationMessage msg3("INVITE");
   msg3._auth_hdr = false;
   msg3._proxy_auth_hdr = false;
-  msg3._route_uri += ";username=6505550001%40homedomain;nonce=" + auth_params["nonce"];
+  msg3._route_uri += ";username=6505550001%40homedomain;nonce=" + this->_register_nonce;
   this->inject_msg(msg3.get());
 
   // Expect a 407 Proxy Authorization Required response.
@@ -2931,53 +2951,9 @@ TYPED_TEST(AuthenticationDigestUEsTest, NoAuthorizationInDialogRequest)
 
 TYPED_TEST(AuthenticationDigestUEsTest, StoreFailsWhenGeneratingChallenge)
 {
-  // Test a successful SIP Digest authentication flow.
   pjsip_tx_data* tdata;
-
-  // Set up the HSS response for the AV query using a default private user identity.
-  this->_hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
-                                    "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
-
-  // Send in a REGISTER request with no authentication header.  This triggers
-  // Digest authentication.
-  AuthenticationMessage msg1("REGISTER");
-  msg1._auth_hdr = false;
-  this->inject_msg(msg1.get());
-
-  // Expect a 401 Not Authorized response.
-  ASSERT_EQ(1, this->txdata_count());
-  tdata = this->current_txdata();
-  RespMatcher(401).matches(tdata->msg);
-
-  // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
-  std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
   std::map<std::string, std::string> auth_params;
-  this->parse_www_authenticate(auth, auth_params);
-  this->free_txdata();
-
-  // Send a new REGISTER request with an authentication header including the
-  // response.
-  AuthenticationMessage msg2("REGISTER");
-  msg2._algorithm = "MD5";
-  msg2._key = "12345678123456781234567812345678";
-  msg2._nonce = auth_params["nonce"];
-  msg2._opaque = auth_params["opaque"];
-  msg2._nc = "00000001";
-  msg2._cnonce = "8765432187654321";
-  msg2._qop = "auth";
-  msg2._integ_prot = "ip-assoc-pending";
-  this->inject_msg(msg2.get());
-
-  // The authentication module lets the request through.
-  this->auth_sproutlet_allows_request();
-
-  // Delete the result from the HSS. This makes sure that when authenticating
-  // the following INVITE we aren't accidentally querying the HSS.
-  this->_hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
-
-  // Advance time by 1 minute to check that the challenge has not been written
-  // with too-short a timeout.
-  cwtest_advance_time_ms(60000);
+  std::string auth;
 
   // Send in an INVITE but fail the store lookup.
   this->_local_data_store->force_get_error();
@@ -2985,7 +2961,7 @@ TYPED_TEST(AuthenticationDigestUEsTest, StoreFailsWhenGeneratingChallenge)
   AuthenticationMessage msg3("INVITE");
   msg3._auth_hdr = false;
   msg3._proxy_auth_hdr = false;
-  msg3._route_uri += ";username=6505550001%40homedomain;nonce=" + auth_params["nonce"];
+  msg3._route_uri += ";username=6505550001%40homedomain;nonce=" + this->_register_nonce;
   this->inject_msg(msg3.get());
 
   // Expect a 504 response.
@@ -3002,60 +2978,16 @@ TYPED_TEST(AuthenticationDigestUEsTest, StoreFailsWhenGeneratingChallenge)
 
 TYPED_TEST(AuthenticationDigestUEsTest, BadAuthResponse)
 {
-  // Test a successful SIP Digest authentication flow.
   pjsip_tx_data* tdata;
-
-  // Set up the HSS response for the AV query using a default private user identity.
-  this->_hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
-                                    "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
-
-  // Send in a REGISTER request with no authentication header.  This triggers
-  // Digest authentication.
-  AuthenticationMessage msg1("REGISTER");
-  msg1._auth_hdr = false;
-  this->inject_msg(msg1.get());
-
-  // Expect a 401 Not Authorized response.
-  ASSERT_EQ(1, this->txdata_count());
-  tdata = this->current_txdata();
-  RespMatcher(401).matches(tdata->msg);
-
-  // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
-  std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
   std::map<std::string, std::string> auth_params;
-  this->parse_www_authenticate(auth, auth_params);
-  this->free_txdata();
-
-  // Send a new REGISTER request with an authentication header including the
-  // response.
-  AuthenticationMessage msg2("REGISTER");
-  msg2._algorithm = "MD5";
-  msg2._key = "12345678123456781234567812345678";
-  msg2._nonce = auth_params["nonce"];
-  msg2._opaque = auth_params["opaque"];
-  msg2._nc = "00000001";
-  msg2._cnonce = "8765432187654321";
-  msg2._qop = "auth";
-  msg2._integ_prot = "ip-assoc-pending";
-  this->inject_msg(msg2.get());
-
-  // The authentication module lets the request through.
-  this->auth_sproutlet_allows_request();
-
-  // Delete the result from the HSS. This makes sure that when authenticating
-  // the following INVITE we aren't accidentally querying the HSS.
-  this->_hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
-
-  // Advance time by 1 minute to check that the challenge has not been written
-  // with too-short a timeout.
-  cwtest_advance_time_ms(60000);
+  std::string auth;
 
   // Send in a request with a Proxy-Authentication header.  This triggers
   // Digest authentication.
   AuthenticationMessage msg3("INVITE");
   msg3._auth_hdr = false;
   msg3._proxy_auth_hdr = false;
-  msg3._route_uri += ";username=6505550001%40homedomain;nonce=" + auth_params["nonce"];
+  msg3._route_uri += ";username=6505550001%40homedomain;nonce=" + this->_register_nonce;
   this->inject_msg(msg3.get());
 
   // Expect a 407 Proxy Authorization Required response.
