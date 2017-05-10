@@ -341,9 +341,11 @@ public:
 
   /// Retrieves the IMPI for the specified private user identity.  If using
   /// Mode::READ_AV_IMPI_WRITE_AV_IMPI, this may return incomplete data.
-  /// @returns         A pointer to an Impi object describing the IMPI, or NULL
-  ///                  if no vector found or if the store is corrupt.  The
-  ///                  caller owns the returned object.
+  ///
+  /// @returns         A pointer to an Impi object describing the IMPI. The
+  ///                  caller owns the returned object. This method only returns
+  ///                  NULL if the underlying store failed - if no IMPI was
+  ///                  found it returns an empty object.
   /// @param impi      The private user identity.
   virtual Impi* get_impi(const std::string& impi,
                          SAS::TrailId trail);
@@ -353,9 +355,11 @@ public:
   /// but data for the specified nonce will be correct.  If using
   /// Mode::READ_IMPI_WRITE, the specified nonce is ignored, and this is the
   /// same as calling get_impi.
-  /// @returns         A pointer to an Impi object describing the IMPI, or NULL
-  ///                  if no vector found or if the store is corrupt.  The
-  ///                  caller owns the returned object.
+  ///
+  /// @returns         A pointer to an Impi object describing the IMPI. The
+  ///                  caller owns the returned object. This method only returns
+  ///                  NULL if the underlying store failed - if no IMPI was
+  ///                  found it returns an empty object.
   /// @param impi      The private user identity.
   /// @param nonce     The nonce being looked for.
   virtual Impi* get_impi_with_nonce(const std::string& impi,
