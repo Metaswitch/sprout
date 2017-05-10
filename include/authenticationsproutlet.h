@@ -149,6 +149,52 @@ private:
   bool needs_authentication(pjsip_msg* req,
                             SAS::TrailId trail);
 
+  /// Read an IMPI from the store (preferring the local store, but falling back
+  /// to GR stores if necessary).
+  ///
+  /// @param impi  - The IMPI to read.
+  /// @param nonce - The nonce that the caller in interested in.
+  /// @param trail - SAS trail ID.
+  ///
+  /// @return      - The IMPI object, or NULL if there was a store failure.
+  ImpiStore::Impi* read_impi(const std::string& impi,
+                             const std::string& nonce,
+                             SAS::TrailId trail);
+
+  /// Write a challenge to the IMPI stores. This handles GR replication.
+  ///
+  /// @param impi           - The IMPI the challenge relates to.
+  /// @param auth_challenge - The challenge to write.
+  /// @param impi_obj       - Optional IMPI object that has previously been read
+  ///                         from the local store. This allows this function to
+  ///                         eliminate a superfluous read.
+  /// @param trail          - SAS trail ID.
+  ///
+  /// @return               - The result of writing the challenge to the local
+  ///                         store.
+  Store::Status write_challenge(const std::string& impi,
+                                ImpiStore::AuthChallenge* auth_challenge,
+                                ImpiStore::Impi* impi_obj,
+                                SAS::TrailId trail);
+
+  /// Write a challenge to a single IMPI.
+  ///
+  /// @param store          - The store to write to.
+  /// @param impi           - The IMPI the challenge relates to.
+  /// @param auth_challenge - The challenge to write.
+  /// @param impi_obj       - Optional IMPI object that has previously been read
+  ///                         from the local store. This allows this function to
+  ///                         eliminate a superfluous read.
+  /// @param trail          - SAS trail ID.
+  ///
+  /// @return               - The result of writing the challenge to the local
+  ///                         store.
+  Store::Status write_challenge_to_store(ImpiStore* store,
+                                         const std::string& impi,
+                                         ImpiStore::AuthChallenge* auth_challenge,
+                                         ImpiStore::Impi* impi_obj,
+                                         SAS::TrailId trail);
+
   friend class AuthenticationSproutletTsx;
 
   // Realm to use on AKA challenges.
