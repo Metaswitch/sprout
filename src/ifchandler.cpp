@@ -117,7 +117,7 @@ Ifcs::Ifcs(std::shared_ptr<xml_document<> > ifc_doc,
 
       if ((sifc_service) && (!ids.empty()))
       {
-        sifc_service->get_ifcs_from_id(ifc_map, ids, trail);
+        sifc_service->get_ifcs_from_id(ifc_map, ids, ifc_doc, trail);
       }
     }
 
@@ -188,6 +188,8 @@ void Ifcs::interpret(const SessionCase& session_case,  //< The session case
       application_servers.push_back(it->as_invocation());
     }
   }
+
+  // TODO - waiting on spec finalization for third party registrations
 }
 
 

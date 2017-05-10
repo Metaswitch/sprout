@@ -70,6 +70,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
                                SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
                                SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                                bool override_npdi,
+                               DIFCService* difcservice,
+                               IFCConfiguration ifc_configuration,
                                int session_continued_timeout_ms,
                                int session_terminated_timeout_ms,
                                AsCommunicationTracker* sess_term_as_tracker,
@@ -85,6 +87,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
   _enum_service(enum_service),
   _acr_factory(acr_factory),
   _override_npdi(override_npdi),
+  _difcservice(difcservice),
+  _ifc_configuration(ifc_configuration),
   _session_continued_timeout_ms(session_continued_timeout_ms),
   _session_terminated_timeout_ms(session_terminated_timeout_ms),
   _scscf_cluster_uri_str(scscf_cluster_uri),
@@ -221,6 +225,15 @@ AsChainTable* SCSCFSproutlet::as_chain_table() const
   return _as_chain_table;
 }
 
+DIFCService* SCSCFSproutlet::difcservice() const
+{
+  return _difcservice;
+}
+
+IFCConfiguration SCSCFSproutlet::ifc_configuration() const
+{
+  return _ifc_configuration;
+}
 
 /// Gets all bindings for the specified Address of Record from the local or
 /// remote registration stores.
@@ -561,6 +574,7 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     }
     else
     {
+      // TODO - decide what to do here?
       // No AS chain set, so don't apply services to the request.
       // Default action will be to try to route following remaining Route
       // headers or to the RequestURI.
@@ -1260,7 +1274,9 @@ AsChainLink SCSCFSproutletTsx::create_as_chain(Ifcs ifcs,
                                                  is_registered,
                                                  chain_trail,
                                                  ifcs,
-                                                 acr);
+                                                 acr,
+                                                 _scscf->difcservice(),
+                                                 _scscf->ifc_configuration());
   acr = NULL;
   TRC_DEBUG("S-CSCF sproutlet transaction %p linked to AsChain %s",
             this, ret.to_string().c_str());
@@ -1284,9 +1300,22 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
 
   // Find the next application server to invoke.
   std::string server_name;
-  _as_chain_link.on_initial_request(req, server_name, trail());
+  pjsip_status_code status_code =
+                   _as_chain_link.on_initial_request(req, server_name, trail());
 
-  if (!server_name.empty())
+  if (status_code != PJSIP_SC_OK)
+  {
+    TRC_ERROR("Rejecting a request as there were no matching IFCs");
+    SAS::Event event(trail(), SASEvent::REJECT_AS_NO_MATCHING_IFC, 0);
+    SAS::report_event(event);
+
+    // TODO - add stat (waiting on spec finalization).
+
+    pjsip_msg* rsp = create_response(req, status_code);
+    send_response(rsp);
+    free_msg(req);
+  }
+  else if (!server_name.empty())
   {
     // We've should have identified an application server to be invoked, so
     // encode the app server hop and the return hop in Route headers.
@@ -1366,7 +1395,21 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
 
   // Find the next application server to invoke.
   std::string server_name;
-  _as_chain_link.on_initial_request(req, server_name, trail());
+  pjsip_status_code status_code =
+                   _as_chain_link.on_initial_request(req, server_name, trail());
+
+  if (status_code != PJSIP_SC_OK)
+  {
+    TRC_ERROR("Rejecting a request as there were no matching IFCs");
+    SAS::Event event(trail(), SASEvent::REJECT_AS_NO_MATCHING_IFC, 0);
+    SAS::report_event(event);
+
+    // TODO - add stat (waiting on spec finalization).
+
+    pjsip_msg* rsp = create_response(req, status_code);
+    send_response(rsp);
+    free_msg(req);
+  }
 
   if (!server_name.empty())
   {

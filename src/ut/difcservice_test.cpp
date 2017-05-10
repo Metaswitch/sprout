@@ -60,23 +60,16 @@ class DIFCServiceTest : public ::testing::Test
   }
 };
 
-void get_ifc_properties(std::vector<std::pair<int32_t, Ifc>> *difc_list,
-                               std::vector<std::string> *server_names,
-                               std::vector<int32_t> *priorities)
+void get_ifc_properties(std::vector<Ifc>& difc_list,
+                        std::vector<std::string> *server_names,
+                        std::vector<int32_t> *priorities)
 {
-  for (std::vector<std::pair<int32_t, Ifc>>::iterator it = difc_list->begin();
-       it != difc_list->end();
-       ++it)
+  for (Ifc ifc : difc_list)
   {
-    server_names->push_back(get_server_name(it->second));
-    priorities->push_back(get_priority(it->second));
+    server_names->push_back(get_server_name(ifc));
+    priorities->push_back(get_priority(ifc));
   }
-  return;
 }
-
-// TODO - In the below tests when the parsed default iFCs are examined, the
-// class variable needs to be looked at. In the future this should be changed so
-// that the function that will be used in the codebase is called instead.
 
 // Test a valid Default iFC configuration file is parsed correctly.
 TEST_F(DIFCServiceTest, ValidDIFCFile)
@@ -84,12 +77,13 @@ TEST_F(DIFCServiceTest, ValidDIFCFile)
   // Load a configuration file containing two iFCs.
   DIFCService difc(string(UT_DIR).append("/test_difc.xml"));
 
-  std::vector<std::pair<int32_t, Ifc>> difc_list = difc._default_ifcs;
+  rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
+  std::vector<Ifc> difc_list = difc.get_default_ifcs(root);
   EXPECT_EQ(difc_list.size(), 2);
 
   std::vector<std::string> server_names;
   std::vector<int32_t> priorities;
-  get_ifc_properties(&difc_list, &server_names, &priorities);
+  get_ifc_properties(difc_list, &server_names, &priorities);
 
   std::vector<std::string> expected_server_names;
   expected_server_names.push_back("example.com");
@@ -98,34 +92,7 @@ TEST_F(DIFCServiceTest, ValidDIFCFile)
 
   std::vector<int32_t> expected_priorities = {1, 2};
   EXPECT_THAT(expected_priorities, UnorderedElementsAreArray(priorities));
-}
-
-// Test that reloading the Default iFC config file works correctly.
-TEST_F(DIFCServiceTest, ReloadDIFCFile)
-{
-  // Load a configuration file containing two iFCs.
-  DIFCService difc(string(UT_DIR).append("/test_difc.xml"));
-
-  std::vector<std::pair<int32_t, Ifc>> difc_list = difc._default_ifcs;
-  EXPECT_EQ(difc_list.size(), 2);
-
-  // Reload the file, and recheck the parsed list.
-  // Nothing should have changed and this should cause no memory issues.
-  difc.update_difcs();
-  difc_list = difc._default_ifcs;
-  EXPECT_EQ(difc_list.size(), 2);
-
- std::vector<std::string> server_names;
- std::vector<int32_t> priorities;
- get_ifc_properties(&difc_list, &server_names, &priorities);
-
- std::vector<std::string> expected_server_names;
- expected_server_names.push_back("example.com");
- expected_server_names.push_back("example_two.com");
- EXPECT_THAT(expected_server_names, UnorderedElementsAreArray(server_names));
-
- std::vector<int32_t> expected_priorities = {1, 2};
- EXPECT_THAT(expected_priorities, UnorderedElementsAreArray(priorities));
+  delete root; root = NULL;
 }
 
 // Test that reloading a Default iFC file with an invalid file doesn't cause the
@@ -135,7 +102,8 @@ TEST_F(DIFCServiceTest, ReloadInvalidDIFCFile)
   // Load a configuration file containing two iFCs.
   DIFCService difc(string(UT_DIR).append("/test_difc.xml"));
 
-  std::vector<std::pair<int32_t, Ifc>> difc_list = difc._default_ifcs;
+  rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
+  std::vector<Ifc> difc_list = difc.get_default_ifcs(root);
   EXPECT_EQ(difc_list.size(), 2);
 
   // Change the file the difc service is using to an invalid file (to mimic the
@@ -143,12 +111,13 @@ TEST_F(DIFCServiceTest, ReloadInvalidDIFCFile)
   // Nothing should have changed and this should cause no memory issues.
   difc._configuration = string(UT_DIR).append("/test_difc_invalid.xml");
   difc.update_difcs();
-  difc_list = difc._default_ifcs;
+  rapidxml::xml_document<>* root_reload = new rapidxml::xml_document<>;
+  difc_list = difc.get_default_ifcs(root_reload);
   EXPECT_EQ(difc_list.size(), 2);
 
   std::vector<std::string> server_names;
   std::vector<int32_t> priorities;
-  get_ifc_properties(&difc_list, &server_names, &priorities);
+  get_ifc_properties(difc_list, &server_names, &priorities);
 
   std::vector<std::string> expected_server_names;
   expected_server_names.push_back("example.com");
@@ -157,6 +126,36 @@ TEST_F(DIFCServiceTest, ReloadInvalidDIFCFile)
 
   std::vector<int32_t> expected_priorities = {1, 2};
   EXPECT_THAT(expected_priorities, UnorderedElementsAreArray(priorities));
+  delete root; root = NULL;
+  delete root_reload; root_reload = NULL;
+}
+
+// Test that reloading a Default iFC file with an invalid file doesn't cause the
+// valid entries to be lost.
+TEST_F(DIFCServiceTest, ReloadChangedDIFCFile)
+{
+  // Load a configuration file containing two iFCs.
+  DIFCService difc(string(UT_DIR).append("/test_difc.xml"));
+
+  rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
+  std::vector<Ifc> difc_list = difc.get_default_ifcs(root);
+  EXPECT_EQ(difc_list.size(), 2);
+
+  // Change the file the difc service is using to an invalid file (to mimic the
+  // file being changed), then reload the file, and recheck the parsed list.
+  // Nothing should have changed and this should cause no memory issues.
+  difc._configuration = string(UT_DIR).append("/test_difc_changed.xml");
+  difc.update_difcs();
+  rapidxml::xml_document<>* root_reload = new rapidxml::xml_document<>;
+  std::vector<Ifc> difc_list_reload = difc.get_default_ifcs(root_reload);
+  EXPECT_EQ(difc_list.size(), 2);
+
+  std::string server_name = get_server_name(difc_list[0]);
+  EXPECT_EQ(server_name, "example.com");
+  std::string server_name_reload = get_server_name(difc_list_reload[0]);
+  EXPECT_EQ(server_name_reload, "example_two.com");
+  delete root; root = NULL;
+  delete root_reload; root_reload = NULL;
 }
 
 // In the following tests we have various invalid/unexpected Default iFC xml
@@ -173,7 +172,9 @@ TEST_F(DIFCServiceTest, MissingFile)
   CapturingTestLogger log;
   DIFCService difc(string(UT_DIR).append("/non_existent_file.xml"));
   EXPECT_TRUE(log.contains("No default IFC configuration found"));
-  EXPECT_TRUE(difc._default_ifcs.empty());
+  rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
+  EXPECT_TRUE(difc.get_default_ifcs(root).empty());
+  delete root; root = NULL;
 }
 
 // Test that we log appropriately if the DiFC config file is empty.
@@ -182,7 +183,9 @@ TEST_F(DIFCServiceTest, EmptyFile)
   CapturingTestLogger log;
   DIFCService difc(string(UT_DIR).append("/test_difc_empty_file.xml"));
   EXPECT_TRUE(log.contains("Failed to read default IFC configuration data"));
-  EXPECT_TRUE(difc._default_ifcs.empty());
+  rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
+  EXPECT_TRUE(difc.get_default_ifcs(root).empty());
+  delete root; root = NULL;
 }
 
 // Test that we log appropriately if the DiFC config file is unparseable.
@@ -191,7 +194,9 @@ TEST_F(DIFCServiceTest, ParseError)
   CapturingTestLogger log;
   DIFCService difc(string(UT_DIR).append("/test_difc_invalid.xml"));
   EXPECT_TRUE(log.contains("Failed to parse the default IFC configuration data"));
-  EXPECT_TRUE(difc._default_ifcs.empty());
+  rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
+  EXPECT_TRUE(difc.get_default_ifcs(root).empty());
+  delete root; root = NULL;
 }
 
 // Test that we log appropriately if the DiFC config file has the wrong syntax.
@@ -200,7 +205,9 @@ TEST_F(DIFCServiceTest, IncorrectSyntax)
   CapturingTestLogger log;
   DIFCService difc(string(UT_DIR).append("/test_difc_missing_node.xml"));
   EXPECT_TRUE(log.contains("Failed to parse the default IFC configuration file as it is invalid (missing DefaultIFCsSet block)"));
-  EXPECT_TRUE(difc._default_ifcs.empty());
+  rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
+  EXPECT_TRUE(difc.get_default_ifcs(root).empty());
+  delete root; root = NULL;
 }
 
 // Test that we cope with the case that the Default iFC file is valid but empty.
@@ -210,7 +217,9 @@ TEST_F(DIFCServiceTest, EmptyValidFile)
   CapturingTestLogger log;
   DIFCService difc(string(UT_DIR).append("/test_difc_valid_empty.xml"));
   EXPECT_FALSE(log.contains("Failed"));
-  EXPECT_TRUE(difc._default_ifcs.empty());
+  rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
+  EXPECT_TRUE(difc.get_default_ifcs(root).empty());
+  delete root; root = NULL;
 }
 
 // In the following test there is a Default iFC xml file that has an invalid
@@ -231,13 +240,13 @@ TEST_F(DIFCServiceTest, SingleInvalidIfc)
 
   EXPECT_TRUE(log.contains("Failed to parse one default IFC"));
 
-  std::vector<std::pair<int32_t, Ifc>> difc_list = difc._default_ifcs;
+  rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
+  std::vector<Ifc> difc_list = difc.get_default_ifcs(root);
   EXPECT_EQ(difc_list.size(), 1);
 
-  std::string server_name = get_server_name(difc_list.begin()->second);
-  int32_t priority = get_priority(difc_list.begin()->second);
+  std::string server_name = get_server_name(difc_list[0]);
+  int32_t priority = get_priority(difc_list[0]);
   EXPECT_EQ(server_name, "example_two.com");
   EXPECT_EQ(priority, 2);
+  delete root; root = NULL;
 }
-
-

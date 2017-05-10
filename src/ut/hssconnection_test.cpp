@@ -974,7 +974,7 @@ TEST_F(HssWithSifcTest, SimpleSiFC)
   ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
   // Expect input of one shared iFC set, with set id 10.
   const std::set<int32_t> ids = {10};
-  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, ids, _))
+  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, ids, _, _))
     .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifcs_from_id)));
 
   // Send in a message, and check that two iFCs are now present in the map.
@@ -994,7 +994,7 @@ TEST_F(HssWithSifcTest, SifcWithIfc)
   ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
   // Expect input of one shared iFC set with set id of 0.
   const std::set<int32_t> ids = {0};
-  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, ids, _))
+  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, ids, _, _))
     .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifcs_from_id)));
 
   // Send in a message, and check that three iFCs are now present in the map,
@@ -1027,7 +1027,7 @@ TEST_F(HssWithSifcTest, MultipleExtensions)
   // anything at this point.
   std::multimap<int32_t, Ifc> ifc_list_one;
   const std::set<int32_t> set_list_one = {1, 2};
-  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, set_list_one, _))
+  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, set_list_one, _, _))
     .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifc_list_one)));
 
   // Any iFCs from the first Shared iFC sets will be passed into this function.
@@ -1038,7 +1038,7 @@ TEST_F(HssWithSifcTest, MultipleExtensions)
   ifc_list_two.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
   ifc_list_two.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
   const std::set<int32_t> set_list_two = {10};
-  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, set_list_two, _))
+  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, set_list_two, _, _))
     .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifc_list_two)));
 
   // Send in a message, and check that three iFCs are now in the iFC map.
@@ -1058,7 +1058,7 @@ TEST_F(HssWithSifcTest, MultipleSifcs)
   ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
   // Expect input of two shared iFC sets, with set ids 1 and 2.
   const std::set<int32_t> ids = {1, 2};
-  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, ids, _))
+  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, ids, _, _))
     .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifcs_from_id)));
 
   // Send in a message, and check that two iFCs are now in the iFC map.
@@ -1082,9 +1082,9 @@ TEST_F(HssWithSifcTest, MultiplePubIdsWithSifcs)
   // profile, and 2 for the other.
   const std::set<int32_t> id_set_one = {1};
   const std::set<int32_t> id_set_two = {2};
-  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, id_set_one, _))
+  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, id_set_one, _, _))
     .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifcs_from_id)));
-  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, id_set_two, _))
+  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, id_set_two, _, _))
     .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifcs_from_id)));
 
   // The iFC map composes of keys, which are public ids, and their values, which
@@ -1112,7 +1112,7 @@ TEST_F(HssWithSifcTest, ComplexSifcIfcMix)
   ifcs_from_id.insert(std::pair<int32_t, Ifc>(2, *_ifc_two));
   // Expect input of two shared iFC sets, with ids 3 and 4.
   const std::set<int32_t> id_set_one = {3, 4};
-  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, id_set_one, _))
+  EXPECT_CALL(_sifc_service, get_ifcs_from_id(_, id_set_one, _, _))
     .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifcs_from_id)));
 
   // Send in a message, and check the expected number of iFCs are present, as

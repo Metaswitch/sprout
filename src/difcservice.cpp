@@ -41,11 +41,11 @@
 #include "sprout_pd_definitions.h"
 #include "utils.h"
 #include "xml_utils.h"
+#include "rapidxml/rapidxml_print.hpp"
 
 DIFCService::DIFCService(std::string configuration):
   _configuration(configuration),
-  _updater(NULL),
-  _root(NULL)
+  _updater(NULL)
 {
   // Create an updater to keep the default iFCs configured correctly.
   _updater = new Updater<void, DIFCService>
@@ -56,7 +56,6 @@ DIFCService::~DIFCService()
 {
   delete _updater; _updater = NULL;
   _default_ifcs.clear();
-  delete _root; _root = NULL;
 }
 
 void DIFCService::update_difcs()
@@ -122,11 +121,10 @@ void DIFCService::update_difcs()
   // Take a lock while we do so.
   boost::lock_guard<boost::shared_mutex> write_lock(_sets_rw_lock);
   _default_ifcs.clear();
-  delete _root; _root = root;
 
   // Parse any iFCs that are present.
-  std::vector<std::pair<int32_t, Ifc>> ifc_list;
-  rapidxml::xml_node<>* difc_set = _root->first_node(DIFCService::DEFAULT_IFCS_SET);
+  std::multimap<int32_t, std::string> ifc_map;
+  rapidxml::xml_node<>* difc_set = root->first_node(DIFCService::DEFAULT_IFCS_SET);
   rapidxml::xml_node<>* ifc = NULL;
   for (ifc = difc_set->first_node(RegDataXMLUtils::IFC);
        ifc != NULL;
@@ -152,13 +150,35 @@ void DIFCService::update_difcs()
     }
     // Creating the iFC always passes, and the iFC isn't validated any
     // further at this stage.
-    ifc_list.push_back(std::make_pair(priority, Ifc(ifc)));
+    std::string ifc_str;
+    rapidxml::print(std::back_inserter(ifc_str), *ifc, 0);
+    ifc_map.insert(std::make_pair(priority, ifc_str));
   }
 
-  TRC_DEBUG("Adding %lu default IFC(s)", ifc_list.size());
-  _default_ifcs = ifc_list;
+  std::vector<std::string> ifcs_vec;
+  for (std::pair<int32_t, std::string> ifc_pair : ifc_map)
+  {
+    ifcs_vec.push_back(ifc_pair.second);
+  }
 
+  TRC_DEBUG("Adding %lu default IFC(s)", ifcs_vec.size());
+  _default_ifcs = ifcs_vec;
+
+  delete root; root = NULL;
   return;
 }
 
+std::vector<Ifc> DIFCService::get_default_ifcs(rapidxml::xml_document<>* ifc_doc) const
+{
+  // Take a read lock on the mutex in RAII style
+  boost::shared_lock<boost::shared_mutex> read_lock(_sets_rw_lock);
+
+  std::vector<Ifc> ifc_vec;
+  for (std::string ifc : _default_ifcs)
+  {
+    ifc_vec.push_back(Ifc(ifc, ifc_doc));
+  }
+
+  return ifc_vec;
+}
 

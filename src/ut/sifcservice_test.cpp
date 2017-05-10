@@ -71,7 +71,9 @@ TEST_F(SIFCServiceTest, ValidSIFCFile)
   // IFC for ID 2).
   std::set<int> single_ifc; single_ifc.insert(2);
   std::multimap<int32_t, Ifc> single_ifc_map;
-  sifc.get_ifcs_from_id(single_ifc_map, single_ifc, 0);
+  rapidxml::xml_document<>* root_underlying_ptr = new rapidxml::xml_document<>;
+  std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
+  sifc.get_ifcs_from_id(single_ifc_map, single_ifc, root, 0);
   EXPECT_EQ(single_ifc_map.size(), 1);
   EXPECT_EQ(get_server_name(single_ifc_map.find(0)->second), "publish.example.com");
 
@@ -79,7 +81,7 @@ TEST_F(SIFCServiceTest, ValidSIFCFile)
   // ID 1)
   std::set<int> multiple_ifcs; multiple_ifcs.insert(1);
   std::multimap<int32_t, Ifc> multiple_ifc_map;
-  sifc.get_ifcs_from_id(multiple_ifc_map, multiple_ifcs, 0);
+  sifc.get_ifcs_from_id(multiple_ifc_map, multiple_ifcs, root, 0);
   EXPECT_EQ(multiple_ifc_map.size(), 2);
   std::vector<std::string> expected_server_names;
   expected_server_names.push_back("invite.example.com");
@@ -96,7 +98,7 @@ TEST_F(SIFCServiceTest, ValidSIFCFile)
   // Pull out multiple IFCs from multiple IDs
   std::set<int> multiple_ids; multiple_ids.insert(1); multiple_ids.insert(2);
   std::multimap<int32_t, Ifc> multiple_ids_map;
-  sifc.get_ifcs_from_id(multiple_ids_map, multiple_ids, 0);
+  sifc.get_ifcs_from_id(multiple_ids_map, multiple_ids, root, 0);
   EXPECT_EQ(multiple_ids_map.size(), 3);
   expected_server_names.push_back("publish.example.com");
   std::vector<std::string> server_names_multiple_ids;
@@ -112,29 +114,8 @@ TEST_F(SIFCServiceTest, ValidSIFCFile)
   // check that this doesn't return any IFCs.
   std::set<int> missing_ids; missing_ids.insert(100);
   std::multimap<int32_t, Ifc> missing_ids_map;
-  sifc.get_ifcs_from_id(missing_ids_map, missing_ids, 0);
+  sifc.get_ifcs_from_id(missing_ids_map, missing_ids, root, 0);
   EXPECT_EQ(missing_ids_map.size(), 0);
-}
-
-// Test that reloading a shared IFC file works correctly
-TEST_F(SIFCServiceTest, SIFCReload)
-{
-  SIFCService sifc(string(UT_DIR).append("/test_sifc.xml"));
-
-  // Load the IFC file, and check that it's been parsed correctly
-  std::set<int> id; id.insert(2);
-  std::multimap<int32_t, Ifc> ifc_map;
-  sifc.get_ifcs_from_id(ifc_map, id, 0);
-  EXPECT_EQ(ifc_map.size(), 1);
-  EXPECT_EQ(get_server_name(ifc_map.find(0)->second), "publish.example.com");
-
-  // Reload the file, then repeat the check. Nothing should have changed,
-  // and there should be no memory issues
-  sifc.update_sets();
-  std::multimap<int32_t, Ifc> ifc_map_reload;
-  sifc.get_ifcs_from_id(ifc_map_reload, id, 0);
-  EXPECT_EQ(ifc_map_reload.size(), 1);
-  EXPECT_EQ(get_server_name(ifc_map_reload.find(0)->second), "publish.example.com");
 }
 
 // Test that reloading a shared IFC file with an invalid file doesn't cause the
@@ -146,7 +127,9 @@ TEST_F(SIFCServiceTest, SIFCReloadInvalidFile)
   // Load the IFC file, and check that it's been parsed correctly
   std::set<int> id; id.insert(2);
   std::multimap<int32_t, Ifc> ifc_map;
-  sifc.get_ifcs_from_id(ifc_map, id, 0);
+  rapidxml::xml_document<>* root_underlying_ptr = new rapidxml::xml_document<>;
+  std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
+  sifc.get_ifcs_from_id(ifc_map, id, root, 0);
   EXPECT_EQ(ifc_map.size(), 1);
   EXPECT_EQ(get_server_name(ifc_map.find(0)->second), "publish.example.com");
 
@@ -156,9 +139,36 @@ TEST_F(SIFCServiceTest, SIFCReloadInvalidFile)
   sifc._configuration = string(UT_DIR).append("/test_sifc_parse_error.xml");
   sifc.update_sets();
   std::multimap<int32_t, Ifc> ifc_map_reload;
-  sifc.get_ifcs_from_id(ifc_map_reload, id, 0);
+  sifc.get_ifcs_from_id(ifc_map_reload, id, root, 0);
   EXPECT_EQ(ifc_map_reload.size(), 1);
   EXPECT_EQ(get_server_name(ifc_map_reload.find(0)->second), "publish.example.com");
+}
+
+// Test that reloading a shared IFC file with an valid changed file doesn't
+// cause any memory issues, and that the old IFC map remains valid.
+TEST_F(SIFCServiceTest, SIFCReloadDifferentFile)
+{
+  SIFCService sifc(string(UT_DIR).append("/test_sifc.xml"));
+
+  // Load the IFC file, and check that it's been parsed correctly
+  std::set<int> id; id.insert(2);
+  std::multimap<int32_t, Ifc> ifc_map;
+  rapidxml::xml_document<>* root_underlying_ptr = new rapidxml::xml_document<>;
+  std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
+  sifc.get_ifcs_from_id(ifc_map, id, root, 0);
+  EXPECT_EQ(ifc_map.size(), 1);
+  EXPECT_EQ(get_server_name(ifc_map.find(0)->second), "publish.example.com");
+
+  // Change the file the sifc service is using (to mimic the file being changed),
+  // then reload the file, and repeat the check. Nothing should have changed,
+  // and there should be no memory issues
+  sifc._configuration = string(UT_DIR).append("/test_sifc_changed.xml");
+  sifc.update_sets();
+  std::multimap<int32_t, Ifc> ifc_map_reload;
+  sifc.get_ifcs_from_id(ifc_map_reload, id, root, 0);
+  EXPECT_EQ(ifc_map_reload.size(), 1);
+  EXPECT_EQ(get_server_name(ifc_map_reload.find(0)->second), "register.example.com");
+  EXPECT_EQ(get_server_name(ifc_map.find(0)->second), "publish.example.com");
 }
 
 // In the following tests we have various invalid/unexpected SIFC xml files.
@@ -231,7 +241,9 @@ TEST_F(SIFCServiceTest, MissingSetID)
   // was added to the map.
   std::set<int> single_ifc; single_ifc.insert(2);
   std::multimap<int32_t, Ifc> single_ifc_map;
-  sifc.get_ifcs_from_id(single_ifc_map, single_ifc, 0);
+  rapidxml::xml_document<>* root_underlying_ptr = new rapidxml::xml_document<>;
+  std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
+  sifc.get_ifcs_from_id(single_ifc_map, single_ifc, root, 0);
   EXPECT_EQ(single_ifc_map.size(), 1);
   EXPECT_EQ(get_server_name(single_ifc_map.find(0)->second), "register.example.com");
 }
@@ -247,7 +259,9 @@ TEST_F(SIFCServiceTest, InvalidSetID)
   // was added to the map.
   std::set<int> single_ifc; single_ifc.insert(2);
   std::multimap<int32_t, Ifc> single_ifc_map;
-  sifc.get_ifcs_from_id(single_ifc_map, single_ifc, 0);
+  rapidxml::xml_document<>* root_underlying_ptr = new rapidxml::xml_document<>;
+  std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
+  sifc.get_ifcs_from_id(single_ifc_map, single_ifc, root, 0);
   EXPECT_EQ(single_ifc_map.size(), 1);
   EXPECT_EQ(get_server_name(single_ifc_map.find(0)->second), "register.example.com");
 }
@@ -264,7 +278,9 @@ TEST_F(SIFCServiceTest, RepeatedSetID)
   // Check that the map entry has the correct server name.
   std::set<int> single_ifc; single_ifc.insert(1);
   std::multimap<int32_t, Ifc> single_ifc_map;
-  sifc.get_ifcs_from_id(single_ifc_map, single_ifc, 0);
+  rapidxml::xml_document<>* root_underlying_ptr = new rapidxml::xml_document<>;
+  std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
+  sifc.get_ifcs_from_id(single_ifc_map, single_ifc, root, 0);
   EXPECT_EQ(single_ifc_map.size(), 1);
   EXPECT_EQ(get_server_name(single_ifc_map.find(0)->second), "publish.example.com");
 }
@@ -281,7 +297,9 @@ TEST_F(SIFCServiceTest, SIFCPriorities)
   // Get the IFCs for ID. There should be two (as one was invalid)
   std::set<int> id; id.insert(1);
   std::multimap<int32_t, Ifc> ifc_map;
-  sifc.get_ifcs_from_id(ifc_map, id, 0);
+  rapidxml::xml_document<>* root_underlying_ptr = new rapidxml::xml_document<>;
+  std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
+  sifc.get_ifcs_from_id(ifc_map, id, root, 0);
   EXPECT_EQ(ifc_map.size(), 2);
   EXPECT_EQ(get_server_name(ifc_map.find(0)->second), "invite.example.com");
   EXPECT_EQ(get_server_name(ifc_map.find(200)->second), "register.example.com");
