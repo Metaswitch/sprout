@@ -300,6 +300,7 @@ class AuthenticationTestTemplate : public BaseAuthenticationTest
                                   { "scscf" },
                                   "homedomain",
                                   _impi_store,
+                                  {},
                                   _hss_connection,
                                   _chronos_connection,
                                   _acr_factory,

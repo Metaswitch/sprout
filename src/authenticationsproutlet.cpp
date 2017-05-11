@@ -74,6 +74,7 @@ AuthenticationSproutlet::AuthenticationSproutlet(const std::string& name,
                                                  const std::list<std::string>& aliases,
                                                  const std::string& realm_name,
                                                  ImpiStore* _impi_store,
+                                                 std::vector<ImpiStore*> remote_impi_stores,
                                                  HSSConnection* hss_connection,
                                                  ChronosConnection* chronos_connection,
                                                  ACRFactory* rfacr_factory,
@@ -90,6 +91,7 @@ AuthenticationSproutlet::AuthenticationSproutlet(const std::string& name,
   _chronos(chronos_connection),
   _acr_factory(rfacr_factory),
   _impi_store(_impi_store),
+  _remote_impi_stores(remote_impi_stores),
   _analytics(analytics_logger),
   _auth_stats_tables(auth_stats_tbls),
   _nonce_count_supported(nonce_count_supported_arg),
@@ -1288,7 +1290,25 @@ Store::Status AuthenticationSproutlet::write_challenge(const std::string& impi,
                                                        ImpiStore::Impi* impi_obj,
                                                        SAS::TrailId trail)
 {
-  return write_challenge_to_store(_impi_store, impi, auth_challenge, impi_obj, trail);
+  Store::Status status = write_challenge_to_store(_impi_store,
+                                                  impi,
+                                                  auth_challenge,
+                                                  impi_obj,
+                                                  trail);
+
+  if ((status == Store::OK) &&
+      (_non_register_auth_mode &
+          NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT))
+  {
+    TRC_DEBUG("Replicate challenge to backup stores");
+
+    for (ImpiStore* store: _remote_impi_stores)
+    {
+      write_challenge_to_store(store, impi, auth_challenge, impi_obj, trail);
+    }
+  }
+
+  return status;
 }
 
 
@@ -1378,5 +1398,39 @@ ImpiStore::Impi* AuthenticationSproutlet::read_impi(const std::string& impi,
                                                     const std::string& nonce,
                                                     SAS::TrailId trail)
 {
-  return _impi_store->get_impi_with_nonce(impi, nonce, trail);
+  TRC_DEBUG("Lookup IMPI object: impi=%s, nonce=%s", impi.c_str(), nonce.c_str());
+  ImpiStore::Impi* impi_obj = _impi_store->get_impi_with_nonce(impi, nonce, trail);
+
+  if ((impi_obj != NULL) && impi_obj->auth_challenges.empty())
+  {
+    TRC_DEBUG("Got an empty IMPI object - try backup stores (%d in total)",
+              _remote_impi_stores.size());
+
+    for (ImpiStore* store: _remote_impi_stores)
+    {
+      TRC_DEBUG("Try to get IMPI from backup store");
+      ImpiStore::Impi* backup_impi_obj = store->get_impi_with_nonce(impi, nonce, trail);
+
+      if (backup_impi_obj != NULL)
+      {
+        if (!backup_impi_obj->auth_challenges.empty())
+        {
+          // We found an IMPI in a backup store that has some challenges. Copy
+          // them over and return (remembering to delete the backup IMPI object).
+          TRC_DEBUG("Found IMPI in backup store");
+          impi_obj->auth_challenges = std::move(backup_impi_obj->auth_challenges);
+          delete backup_impi_obj; backup_impi_obj = NULL;
+        }
+        else
+        {
+          // Didn't find a suitable IMPIs in the backup store, so just delete
+          // any IMPI object in hand.
+          TRC_DEBUG("Didn't find backup IMPI");
+          delete backup_impi_obj; backup_impi_obj = NULL;
+        }
+      }
+    }
+  }
+
+  return impi_obj;
 }

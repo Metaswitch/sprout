@@ -253,6 +253,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                     {opt.prefix_scscf},
                                     opt.auth_realm,
                                     impi_store,
+                                    {},
                                     hss_connection,
                                     chronos_connection,
                                     scscf_acr_factory,

@@ -123,7 +123,8 @@ public:
                           const std::string& next_hop_service,
                           const std::list<std::string>& aliases,
                           const std::string& realm_name,
-                          ImpiStore* _impi_store,
+                          ImpiStore* impi_store,
+                          std::vector<ImpiStore*> remote_impi_stores,
                           HSSConnection* hss_connection,
                           ChronosConnection* chronos_connection,
                           ACRFactory* rfacr_factory,
@@ -208,9 +209,10 @@ private:
   // Factory for creating ACR messages for Rf billing.
   ACRFactory* _acr_factory;
 
-  // IMPI store used to store authentication challenges while waiting for the
+  // IMPI stores used to store authentication challenges while waiting for the
   // client to respond.
   ImpiStore* _impi_store;
+  std::vector<ImpiStore*> _remote_impi_stores;
 
   // Analytics logger.
   AnalyticsLogger* _analytics;
