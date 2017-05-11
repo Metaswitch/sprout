@@ -1296,9 +1296,7 @@ Store::Status AuthenticationSproutlet::write_challenge(const std::string& impi,
                                                   impi_obj,
                                                   trail);
 
-  if ((status == Store::OK) &&
-      (_non_register_auth_mode &
-          NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT))
+  if ((status == Store::OK) && impi_stores_gr())
   {
     TRC_DEBUG("Replicate challenge to backup stores");
 
@@ -1328,7 +1326,7 @@ Store::Status AuthenticationSproutlet::
     if (current_impi_obj == NULL)
     {
       TRC_DEBUG("Lookup IMPI %s (with nonce %s)", impi.c_str(), nonce.c_str());
-      current_impi_obj = read_impi(impi, nonce, trail);
+      current_impi_obj = store->get_impi_with_nonce(impi, nonce, trail);
       if (current_impi_obj == NULL)
       {
         // LCOV_EXCL_START in practise this branch is only hit during data
@@ -1401,7 +1399,9 @@ ImpiStore::Impi* AuthenticationSproutlet::read_impi(const std::string& impi,
   TRC_DEBUG("Lookup IMPI object: impi=%s, nonce=%s", impi.c_str(), nonce.c_str());
   ImpiStore::Impi* impi_obj = _impi_store->get_impi_with_nonce(impi, nonce, trail);
 
-  if ((impi_obj != NULL) && impi_obj->auth_challenges.empty())
+  if ((impi_obj != NULL) &&
+      impi_obj->auth_challenges.empty() &&
+      impi_stores_gr())
   {
     TRC_DEBUG("Got an empty IMPI object - try backup stores (%d in total)",
               _remote_impi_stores.size());
@@ -1433,4 +1433,10 @@ ImpiStore::Impi* AuthenticationSproutlet::read_impi(const std::string& impi,
   }
 
   return impi_obj;
+}
+
+bool AuthenticationSproutlet::impi_stores_gr()
+{
+  return (_non_register_auth_mode &
+            NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT);
 }

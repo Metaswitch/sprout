@@ -196,6 +196,10 @@ private:
                                          ImpiStore::Impi* impi_obj,
                                          SAS::TrailId trail);
 
+  /// Utility function that returns whether the authentication sproutlet is
+  /// using the IMPI stores in a GR mode.
+  bool impi_stores_gr();
+
   friend class AuthenticationSproutletTsx;
 
   // Realm to use on AKA challenges.
