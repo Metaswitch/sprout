@@ -217,15 +217,38 @@ static void sas_log_rx_msg(pjsip_rx_data* rdata)
 
   if (trail == 0)
   {
+    // We are now using a trail for the first time Sprout has seen it,
+    // so we need to log markers
+    first_message_in_trail = true;
+
+    // Check whether a previous NE included a SAS Trail ID for us.
+    pjsip_generic_string_hdr* hdr = (pjsip_generic_string_hdr*)
+      pjsip_msg_find_hdr_by_name(rdata->msg_info.msg, &STR_P_DEBUG_ID, NULL);
+
+    if (hdr != NULL)
+    {
+      trail = pj_strtoul(&hdr->hvalue);
+    }
+
     // The message doesn't correlate to an existing trail, so create a new
     // one.
-
-    // If SAS::new_trail returns 0 or DONT_LOG_TO_SAS, keep going.
-    while ((trail == 0) || (trail == DONT_LOG_TO_SAS))
+    if (trail == 0)
     {
-      trail = SAS::new_trail(1u);
+      // If SAS::new_trail returns 0 or DONT_LOG_TO_SAS, keep going.
+      while ((trail == 0) || (trail == DONT_LOG_TO_SAS))
+      {
+        trail = SAS::new_trail(1u);
+      }
+
+      char* buf = (char*) pj_pool_alloc(rdata->tp_info.pool, sizeof(char)*22);
+      int len = pj_utoa(trail, buf);
+
+      // Tag the message with a P_DEBUG_ID header
+      pj_str_t str = {buf, len};
+      pjsip_generic_string_hdr_create(rdata->tp_info.pool, &STR_P_DEBUG_ID, &str);
+
+      pjsip_msg_insert_first_hdr(rdata->msg_info.msg, (pjsip_hdr*) hdr);
     }
-    first_message_in_trail = true;
   }
 
   // Store the trail in the message as it gets passed up the stack.

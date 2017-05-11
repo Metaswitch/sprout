@@ -61,6 +61,7 @@ const pj_str_t STR_IP_ASSOC_PENDING = pj_str((char *)"ip-assoc-pending");
 const pj_str_t STR_AUTH_DONE = pj_str((char *)"auth-done");
 const pj_str_t STR_PRIVACY = pj_str((char *)"Privacy");
 const pj_str_t STR_P_A_N_I = pj_str((char *)"P-Access-Network-Info");
+const pj_str_t STR_P_DEBUG_ID = pj_str((char *) "P-Debug-ID");
 const pj_str_t STR_P_V_N_I = pj_str((char *)"P-Visited-Network-ID");
 const pj_str_t STR_P_SERVED_USER = pj_str((char*)"P-Served-User");
 const pj_str_t STR_P_ASSERTED_IDENTITY = pj_str((char*)"P-Asserted-Identity");
