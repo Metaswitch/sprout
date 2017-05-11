@@ -280,18 +280,18 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
   {
     // Check whether a previous NE included a SAS Trail ID for us.
     pjsip_generic_string_hdr* hdr = (pjsip_generic_string_hdr*)
-      pjsip_msg_find_hdr_by_name(rdata->msg_info.msg, &STR_P_DEBUG_ID, NULL);
+      pjsip_msg_find_hdr_by_name(tdata->msg_info.msg, &STR_P_DEBUG_ID, NULL);
 
     if (hdr == NULL)
     {
-      char* buf = (char*) pj_pool_alloc(rdata->tp_info.pool, sizeof(char)*22);
+      char* buf = (char*) pj_pool_alloc(tdata->tp_info.pool, sizeof(char)*22);
       int len = pj_utoa(trail, buf);
 
       // Tag the message with a P_DEBUG_ID header
       pj_str_t str = {buf, len};
-      pjsip_generic_string_hdr_create(rdata->tp_info.pool, &STR_P_DEBUG_ID, &str);
+      pjsip_generic_string_hdr_create(tdata->tp_info.pool, &STR_P_DEBUG_ID, &str);
 
-      pjsip_msg_insert_first_hdr(rdata->msg_info.msg, (pjsip_hdr*) hdr);
+      pjsip_msg_insert_first_hdr(tdata->msg_info.msg, (pjsip_hdr*) hdr);
     }
 
     // Raise SAS markers on initial requests only - responses in the same
