@@ -591,6 +591,16 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
         TRC_INFO("Served user is barred so reject the request");
         status_code = _session_case->is_originating() ? PJSIP_SC_FORBIDDEN : PJSIP_SC_NOT_FOUND;
         pjsip_msg* rsp = create_response(req, status_code);
+
+        SAS::Event event(trail(), SASEvent::REJECT_CALL_INVOLVING_BARRED_USER, 0);
+        std::string sess_case = _session_case->is_originating() ? "originating" : "terminating";
+        event.add_var_param(sess_case);
+        std::string served_user = served_user_from_msg(req);
+        event.add_var_param(served_user);
+        std::string st_code = std::to_string(status_code);
+        event.add_var_param(st_code);
+        SAS::report_event(event);
+
         send_response(rsp);
         free_msg(req);
         return;
