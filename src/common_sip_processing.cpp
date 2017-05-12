@@ -266,17 +266,12 @@ static void sas_log_rx_msg(pjsip_rx_data* rdata)
 }
 
 
-static void sas_log_tx_msg(pjsip_tx_data *tdata)
+static void sas_annotate_tx_msg(pjsip_tx_data *tdata)
 {
   // For outgoing messages always use the trail identified in the module data
   SAS::TrailId trail = get_trail(tdata);
 
-  if (trail == DONT_LOG_TO_SAS)
-  {
-    TRC_DEBUG("Skipping SAS logging for OPTIONS response");
-    return;
-  }
-  else if (trail != 0)
+  if (trail != DONT_LOG_TO_SAS && trail != 0)
   {
     // Check whether a previous NE included a SAS Trail ID for us.
     pjsip_generic_string_hdr* hdr = (pjsip_generic_string_hdr*)
@@ -293,7 +288,22 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
 
       pjsip_msg_insert_first_hdr(tdata->msg, new_hdr);
     }
+  }
+}
 
+
+static void sas_log_tx_msg(pjsip_tx_data *tdata)
+{
+  // For outgoing messages always use the trail identified in the module data
+  SAS::TrailId trail = get_trail(tdata);
+
+  if (trail == DONT_LOG_TO_SAS)
+  {
+    TRC_DEBUG("Skipping SAS logging for OPTIONS response");
+    return;
+  }
+  else if (trail != 0)
+  {
     // Raise SAS markers on initial requests only - responses in the same
     // transaction will have the same trail ID so don't need additional markers
     if (tdata->msg->type == PJSIP_REQUEST_MSG)
@@ -430,6 +440,8 @@ static pj_status_t process_on_tx_msg(pjsip_tx_data* tdata)
     // 200 OK to an INVITE - meets S-CSCF health check criteria
     health_checker->health_check_passed();
   }
+
+  sas_annotate_tx_msg(tdata);
 
   // Do logging.
   local_log_tx_msg(tdata);
