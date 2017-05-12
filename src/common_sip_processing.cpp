@@ -289,6 +289,7 @@ static void sas_annotate_tx_msg(pjsip_tx_data *tdata)
       pjsip_msg_insert_first_hdr(tdata->msg, new_hdr);
 
       // Re-encode the PJSIP tx_data
+      pjsip_tx_data_invalidate_msg(tdata);
       pjsip_tx_data_encode(tdata);
     }
   }
