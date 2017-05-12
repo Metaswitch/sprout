@@ -287,6 +287,9 @@ static void sas_annotate_tx_msg(pjsip_tx_data *tdata)
       pjsip_hdr* new_hdr = (pjsip_hdr*) pjsip_generic_string_hdr_create(tdata->pool, &STR_P_DEBUG_ID, &str);
 
       pjsip_msg_insert_first_hdr(tdata->msg, new_hdr);
+
+      // Re-encode the PJSIP tx_data
+      pjsip_tx_data_encode(tdata);
     }
   }
 }
