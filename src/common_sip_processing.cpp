@@ -289,9 +289,9 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
 
       // Tag the message with a P_DEBUG_ID header
       pj_str_t str = {buf, len};
-      pjsip_generic_string_hdr_create(tdata->pool, &STR_P_DEBUG_ID, &str);
+      pjsip_hdr* new_hdr = (pjsip_hdr*) pjsip_generic_string_hdr_create(tdata->pool, &STR_P_DEBUG_ID, &str);
 
-      pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*) hdr);
+      pjsip_msg_insert_first_hdr(tdata->msg, new_hdr);
     }
 
     // Raise SAS markers on initial requests only - responses in the same
