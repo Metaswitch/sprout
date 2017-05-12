@@ -454,8 +454,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
         rapidxml::xml_node<>* barring_indication = public_id->first_node(RegDataXMLUtils::BARRING_INDICATION);
 
-        TRC_DEBUG("Processing Identity node from HSS XML - %s\n",
-                  uri.c_str());
+        TRC_DEBUG("Processing Identity node from HSS XML - %s", uri.c_str());
 
         if (!associated_uris.contains(uri))
         {
@@ -485,7 +484,9 @@ bool decode_homestead_xml(const std::string public_user_identity,
           else if (WildcardUtils::check_users_equivalent(
                                                      uri, public_user_identity))
           {
+            TRC_DEBUG("KKKKKKKKK");
             found_multiple_matches = maybe_found_aliases;
+            TRC_DEBUG("found_multiple_matches: %s", found_multiple_matches ? "true" : "false");
             current_sp_maybe_contains_public_id = true;
 
             if (!maybe_found_aliases)
@@ -502,15 +503,22 @@ bool decode_homestead_xml(const std::string public_user_identity,
       }
     }
 
+    TRC_DEBUG("maybe_found_aliases: %s", maybe_found_aliases ? "true" : "false");
+    TRC_DEBUG("found_multiple_matches: %s", found_multiple_matches ? "true" : "false");
+    TRC_DEBUG("current_sp_maybe_contains_public_id: %s", current_sp_maybe_contains_public_id ? "true" : "false");
+    TRC_DEBUG("found_aliases: %s", found_aliases ? "true" : "false");
+
+
     if ((!found_aliases) &&
         (current_sp_contains_public_id))
     {
       aliases = sp_identities;
       found_aliases = true;
     }
-    else if ((!maybe_found_aliases) &&
+    else if ((!found_multiple_matches) &&
              (current_sp_maybe_contains_public_id))
     {
+      TRC_DEBUG("JJJJJJJJJJJJJJJJJJJ");
       temp_aliases = sp_identities;
       maybe_found_aliases = true;
     }
@@ -524,9 +532,9 @@ bool decode_homestead_xml(const std::string public_user_identity,
   {
     aliases = temp_aliases;
 
-
     if (found_multiple_matches)
     {
+      TRC_DEBUG("BAD");
       SAS::Event event(trail, SASEvent::AMBIGUOUS_WILDCARD_MATCH, 0);
       event.add_var_param(public_user_identity);
       SAS::report_event(event);
