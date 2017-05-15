@@ -296,6 +296,7 @@ void update_request_uri_np_data(pjsip_msg* req,
 bool should_update_np_data(URIClass old_uri_class,
                            URIClass new_uri_class,
                            std::string& new_uri_str,
+                           std::string& new_routing_number,
                            bool should_override_npdi,
                            SAS::TrailId trail);
 

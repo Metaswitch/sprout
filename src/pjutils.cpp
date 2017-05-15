@@ -1708,7 +1708,7 @@ void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* 
                                 ((msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
                                  (pjsip_method_cmp(&msg->line.req.method, pjsip_get_subscribe_method()) == 0) ||
                                  (pjsip_method_cmp(&msg->line.req.method, pjsip_get_notify_method()) == 0)));
-  
+
   if (cid_hdr != NULL)
   {
     TRC_DEBUG("Logging SAS Call-ID marker, Call-ID %.*s", cid_hdr->id.slen, cid_hdr->id.ptr);
@@ -2322,6 +2322,7 @@ void PJUtils::translate_request_uri(pjsip_msg* req,
       // The URI was successfully translated, so see what it is.
       URIClass new_uri_class = URIClassifier::classify_uri(new_uri, false, true);
       std::string rn;
+      get_rn(new_uri, rn);
 
       if ((new_uri_class == HOME_DOMAIN_SIP_URI) ||
           (new_uri_class == NODE_LOCAL_SIP_URI) ||
@@ -2337,7 +2338,7 @@ void PJUtils::translate_request_uri(pjsip_msg* req,
       }
       else if ((new_uri_class == NP_DATA) || (new_uri_class == FINAL_NP_DATA))
       {
-        if (should_update_np_data(uri_class, new_uri_class, new_uri_str, should_override_npdi, trail))
+        if (should_update_np_data(uri_class, new_uri_class, new_uri_str, rn, should_override_npdi, trail))
         {
           req->line.req.uri = new_uri;
         }
@@ -2396,10 +2397,12 @@ void PJUtils::update_request_uri_np_data(pjsip_msg* req,
 
       // The URI was successfully translated, so see what it is.
       URIClass new_uri_class = URIClassifier::classify_uri(new_uri, false, true);
+      std::string rn;
+      get_rn(new_uri, rn);
 
       if ((new_uri_class == NP_DATA) || (new_uri_class == FINAL_NP_DATA))
       {
-        if (should_update_np_data(uri_class, new_uri_class, new_uri_str, should_override_npdi, trail))
+        if (should_update_np_data(uri_class, new_uri_class, new_uri_str, rn, should_override_npdi, trail))
         {
           req->line.req.uri = new_uri;
         }
@@ -2416,6 +2419,7 @@ void PJUtils::update_request_uri_np_data(pjsip_msg* req,
 bool PJUtils::should_update_np_data(URIClass old_uri_class,
                            URIClass new_uri_class,
                            std::string& new_uri_str,
+                           std::string& new_routing_number,
                            bool should_override_npdi,
                            SAS::TrailId trail)
 {
@@ -2428,6 +2432,7 @@ bool PJUtils::should_update_np_data(URIClass old_uri_class,
                 new_uri_str.c_str());
       SAS::Event event(trail, SASEvent::NP_DATA_FROM_ENUM, 0);
       event.add_var_param(new_uri_str);
+      event.add_var_param(new_routing_number);
       SAS::report_event(event);
       return true;
     }
@@ -2438,6 +2443,7 @@ bool PJUtils::should_update_np_data(URIClass old_uri_class,
                 new_uri_str.c_str());
       SAS::Event event(trail, SASEvent::NP_DATA_FROM_ENUM_IGNORING_NPDI, 0);
       event.add_var_param(new_uri_str);
+      event.add_var_param(new_routing_number);
       SAS::report_event(event);
       return true;
     }

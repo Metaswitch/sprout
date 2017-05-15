@@ -1993,8 +1993,7 @@ bool SCSCFSproutletTsx::get_billing_role(ACR::NodeRole &role)
 {
   const pjsip_route_hdr* route = route_hdr();
 
-  if ((route != NULL) &&
-      (is_uri_reflexive(route->name_addr.uri)))
+  if (route != NULL)
   {
     pjsip_sip_uri* uri = (pjsip_sip_uri*)route->name_addr.uri;
     pjsip_param* param = pjsip_param_find(&uri->other_param,
