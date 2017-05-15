@@ -165,6 +165,8 @@ static int worker_thread(void* p)
 
       if (rdata)
       {
+        TRC_DEBUG("Worker thread dequeue message %p", rdata);
+
         CW_TRY
         {
           pjsip_endpt_process_rx_data(stack_data.endpt, rdata, &rp, NULL);
