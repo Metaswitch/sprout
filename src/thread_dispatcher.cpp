@@ -79,13 +79,22 @@ extern "C" {
 
 static std::vector<pj_thread_t*> worker_threads;
 
+struct MessageEvent
+{
+  // The received message
+  pjsip_rx_data* rdata;
+
+  // A stop watch for tracking SIP message latency
+  Utils::StopWatch stop_watch;
+};
+
 // An Event on the queue is either a SIP message or a callback
 enum EventType { MESSAGE, CALLBACK };
 
 union Event
 {
-  pjsip_rx_data* rdata;
   PJUtils::Callback* callback;
+  MessageEvent* message;
 };
 
 struct worker_thread_qe
@@ -95,9 +104,6 @@ struct worker_thread_qe
 
   // The event itself
   Event event;
-
-  // A stop watch for tracking SIP message latency
-  Utils::StopWatch stop_watch;
 };
 
 // Queue for incoming events.
@@ -161,7 +167,8 @@ static int worker_thread(void* p)
   {
     if (qe.type == MESSAGE)
     {
-      pjsip_rx_data* rdata = qe.event.rdata;
+      MessageEvent* me = qe.event.message;
+      pjsip_rx_data* rdata = me->rdata;
 
       if (rdata)
       {
@@ -219,7 +226,7 @@ static int worker_thread(void* p)
         pjsip_rx_data_free_cloned(rdata);
 
         unsigned long latency_us = 0;
-        if (qe.stop_watch.read(latency_us))
+        if (me->stop_watch.read(latency_us))
         {
           TRC_DEBUG("Request latency = %ldus", latency_us);
           latency_table->accumulate(latency_us);
@@ -230,6 +237,7 @@ static int worker_thread(void* p)
           TRC_ERROR("Failed to get done timestamp: %s", strerror(errno));
         }
       }
+      delete me; me = NULL;
     }
     else
     {
@@ -264,9 +272,8 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
 
   // Before we start, get a timestamp.  This will track the time from
   // receiving a message to forwarding it on (or rejecting it).
-  struct worker_thread_qe qe = { MESSAGE };
-  Event queue_event;
-  qe.stop_watch.start();
+  MessageEvent* me = new MessageEvent();
+  me->stop_watch.start();
 
   // Clone the message and queue it to a scheduler thread.
   pjsip_rx_data* clone_rdata;
@@ -289,8 +296,10 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   // have a queue per transport and round-robin them?
 
   TRC_DEBUG("Queuing cloned received message %p for worker threads", clone_rdata);
-  queue_event.rdata = clone_rdata;
-  qe.event = queue_event;
+  me->rdata = clone_rdata;
+  Event queue_event;
+  queue_event.message = me;
+  struct worker_thread_qe qe = { MESSAGE, queue_event };
 
   // Track the current queue size
   queue_size_table->accumulate(worker_thread_q.size());
@@ -372,8 +381,7 @@ void add_callback_to_queue(PJUtils::Callback* cb)
   // Create an Event to hold the Callback
   Event queue_event;
   queue_event.callback = cb;
-  worker_thread_qe qe = { CALLBACK };
-  qe.event = queue_event;
+  worker_thread_qe qe = { CALLBACK, queue_event };
 
   // Track the current queue size
   queue_size_table->accumulate(worker_thread_q.size());
