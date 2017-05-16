@@ -132,9 +132,9 @@ public:
         }
       }
       else
-      // Count all failed registration attempts, not just ones that result in user
-      // being unsubscribed.
       {
+        // Count all failed registration attempts, not just ones that result in
+        // user being unsubscribed.
         if (_reg_data->expires == 0)
         {
           third_party_reg_stats_tables->de_reg_tbl->increment_failures();
@@ -307,7 +307,7 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
 static PJUtils::Callback* build_register_cb(void* token, pjsip_event* event)
 {
   RegisterCallback* cb = new RegisterCallback(token, event);
-  return (PJUtils::Callback*)cb;
+  return cb;
 }
 
 static void send_register_to_as(SubscriberDataManager* sdm,
