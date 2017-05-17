@@ -1138,14 +1138,14 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
         std::vector<std::string> tokens;
         Utils::split_string(this_arg, ',', tokens);
 
-        for (const std::string& tok: tokens)
+        for (const std::string& token: tokens)
         {
-          if (tok == "if_proxy_authorization_present")
+          if (token == "if_proxy_authorization_present")
           {
             options->non_register_auth_mode |=
               NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT;
           }
-          else if (tok == "inital_req_from_reg_digest_endpoint")
+          else if (token == "inital_req_from_reg_digest_endpoint")
           {
             options->non_register_auth_mode |=
               NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT;
@@ -1153,7 +1153,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
           else
           {
             TRC_ERROR("Invalid token in non-REGISTER authentication field: %s",
-                      tok.c_str());
+                      token.c_str());
             return -1;
           }
         }

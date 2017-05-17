@@ -242,7 +242,16 @@ bool AuthenticationSproutlet::needs_authentication(pjsip_msg* req,
 
     if (!PJUtils::is_param_in_top_route(req, &STR_ORIG))
     {
-      // This is not an originating request so do not get authenticated.
+      // This is not an originating request so does not get authenticated.
+      return PJ_FALSE;
+    }
+
+    if (_non_register_auth_mode == 0)
+    {
+      // There are no conditions where we would consider authenticating this
+      // non-REGISTER request.
+      SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_NEVER_AUTH_NON_REG, 0);
+      SAS::report_event(event);
       return PJ_FALSE;
     }
 
@@ -276,18 +285,10 @@ bool AuthenticationSproutlet::needs_authentication(pjsip_msg* req,
       }
     }
 
-    // We don't need to authenticate this message. Generate a helpful SAS log.
-    if (_non_register_auth_mode == 0)
-    {
-      SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_NEVER_AUTH_NON_REG, 0);
-      SAS::report_event(event);
-    }
-    else
-    {
-      SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_SOMETIMES_AUTH_NON_REG, 0);
-      SAS::report_event(event);
-    }
-
+    // We don't need to authenticate this message, but we considered it.
+    // Generate a helpful SAS log.
+    SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_FOR_NON_REG, 0);
+    SAS::report_event(event);
     return PJ_FALSE;
   }
 }

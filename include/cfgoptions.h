@@ -63,7 +63,7 @@ enum struct MemcachedWriteFormat
 };
 
 // Struct containing the possible values for non-REGISTER authentication. These
-// are a set of flags that indicate different conditions that may can a
+// are a set of flags that indicate different conditions that may cause a
 // non-REGISTER to be authenticated. They are represented as a bitmask where
 // each value must be a power of two.
 struct NonRegisterAuthentication
