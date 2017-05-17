@@ -310,6 +310,13 @@ void SIPResolver::resolve(const std::string& name,
       a_resolve(a_name, af, port, transport, retries, targets, dummy_ttl, trail);
     }
   }
+
+  if ((targets.size() == 0) && (trail != 0))
+  {
+    SAS::Event event(trail, SASEvent::SIPRESOLVE_NO_RECORDS, 0);
+    event.add_var_param(name);
+    SAS::report_event(event);
+  }
 }
 
 std::string SIPResolver::get_transport_str(int transport)
