@@ -227,6 +227,9 @@ namespace SASEvent
 
   const int AMBIGUOUS_WILDCARD_MATCH = SPROUT_BASE + 0x0130;
 
+  const int REJECT_CALL_FROM_BARRED_USER = SPROUT_BASE + 0x0140;
+  const int REJECT_CALL_TO_BARRED_USER = SPROUT_BASE + 0x0141;
+
 } //namespace SASEvent
 
 #endif
