@@ -60,6 +60,7 @@ extern "C" {
 #include "sproutsasevent.h"
 #include "enumservice.h"
 #include "uri_classifier.h"
+#include "thread_dispatcher.h"
 
 
 static const int DEFAULT_RETRIES = 5;
@@ -1069,7 +1070,7 @@ struct StatefulSendState
   int current_server;
 
   void* user_token;
-  pjsip_endpt_send_callback user_cb;
+  PJUtils::send_callback_builder cb_builder;
 };
 
 
@@ -1188,9 +1189,25 @@ static void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event)
     TRC_DEBUG("Request transaction completed, status code = %d", tsx->status_code);
     tsx->mod_data[mod_sprout_util.id] = NULL;
 
-    if (sss->user_cb != NULL)
+    if (sss->cb_builder != NULL)
     {
-      (*sss->user_cb)(sss->user_token, event);
+      PJUtils::Callback* cb = (sss->cb_builder)(sss->user_token, event);
+#ifndef UNIT_TEST
+      if (is_pjsip_transport_thread())
+      {
+        // On a transport error, this callback will be on the main PJSIP thread,
+        // so we add the callback to the queue to get picked up by a worker
+        // thread.
+        add_callback_to_queue(cb);
+      }
+      else
+#endif
+      {
+        // If we're already on a worker thread (or in the UTs, which have a
+        // different threading model) we just run the Callback directly.
+        cb->run();
+        delete cb; cb = NULL;
+      }
     }
 
     // The transaction has completed, so decrement our reference to the tx_data
@@ -1206,7 +1223,7 @@ static void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event)
 pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
                                   int retries,
                                   void* token,
-                                  pjsip_endpt_send_callback cb,
+                                  PJUtils::send_callback_builder cb,
                                   bool log_sas_branch)
 {
   pjsip_transaction* tsx;
@@ -1217,9 +1234,9 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
   // Allocate temporary storage for the request.
   StatefulSendState* sss = new StatefulSendState;
 
-  // Store the user supplied callback and token.
+  // Store the user supplied callback builder and token.
   sss->user_token = token;
-  sss->user_cb = cb;
+  sss->cb_builder = cb;
 
   if (tdata->tp_sel.type != PJSIP_TPSELECTOR_TRANSPORT)
   {

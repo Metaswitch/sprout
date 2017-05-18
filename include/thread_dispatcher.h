@@ -63,4 +63,8 @@ void unregister_thread_dispatcher(void);
 pj_status_t start_worker_threads();
 pj_status_t stop_worker_threads();
 
+// Add a Callback object to the queue, to be run on a worker thread.
+// This MUST be called from the main PJSIP transport thread.
+void add_callback_to_queue(PJUtils::Callback*);
+
 #endif
