@@ -152,7 +152,7 @@ enum OptionTypes
   OPT_NONCE_COUNT_SUPPORTED,
   OPT_LOCAL_SITE_NAME,
   OPT_REGISTRATION_STORES,
-  OPT_IMPI_STORE,
+  OPT_IMPI_STORES,
   OPT_SCSCF_NODE_URI,
   OPT_SAS_USE_SIGNALING_IF,
   OPT_DISABLE_TCP_SWITCH,
@@ -177,7 +177,7 @@ const static struct pj_getopt_option long_opt[] =
   { "realm",                        required_argument, 0, 'R'},
   { "local-site-name",              required_argument, 0, OPT_LOCAL_SITE_NAME},
   { "registration-stores",          required_argument, 0, OPT_REGISTRATION_STORES},
-  { "impi-store",                   required_argument, 0, OPT_IMPI_STORE},
+  { "impi-store",                   required_argument, 0, OPT_IMPI_STORES},
   { "sas",                          required_argument, 0, 'S'},
   { "hss",                          required_argument, 0, 'H'},
   { "record-routing-model",         required_argument, 0, 'C'},
@@ -755,8 +755,13 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
-    case OPT_IMPI_STORE:
-      options->impi_store = std::string(pj_optarg);
+    case OPT_IMPI_STORES:
+      {
+        // This option has the same format as OPT_REGISTRATION_STORES. Handle in
+        // the same way.
+        std::string stores_arg = std::string(pj_optarg);
+        boost::split(options->impi_stores, stores_arg, boost::is_any_of(","));
+      }
       break;
 
     case 'S':
@@ -1406,8 +1411,13 @@ void create_sdm_plugins(SubscriberDataManager::SerializerDeserializer*& serializ
 LoadMonitor* load_monitor = NULL;
 HSSConnection* hss_connection = NULL;
 Store* local_data_store = NULL;
+std::vector<Store*> remote_data_stores;
+Store* local_impi_data_store = NULL;
+std::vector<Store*> remote_impi_data_stores;
 SubscriberDataManager* local_sdm = NULL;
 std::vector<SubscriberDataManager*> remote_sdms;
+ImpiStore* local_impi_store = NULL;
+std::vector<ImpiStore*> remote_impi_stores;
 RalfProcessor* ralf_processor = NULL;
 DnsCachedResolver* dns_resolver = NULL;
 HttpResolver* http_resolver = NULL;
@@ -1417,7 +1427,42 @@ ExceptionHandler* exception_handler = NULL;
 AlarmManager* alarm_manager = NULL;
 AnalyticsLogger* analytics_logger = NULL;
 ChronosConnection* chronos_connection = NULL;
-ImpiStore* impi_store = NULL;
+
+bool parse_multi_site_stores_arg(const std::vector<std::string>& stores_arg,
+                                 const std::string& local_site_name,
+                                 const char* store_name,
+                                 std::string& store_location,
+                                 std::vector<std::string>& remote_stores_locations)
+{
+  if (!stores_arg.empty())
+  {
+    if (!Utils::parse_stores_arg(stores_arg,
+                                 local_site_name,
+                                 store_location,
+                                 remote_stores_locations))
+    {
+      TRC_ERROR("Invalid format of %s program argument", store_name);
+      return false;
+    }
+
+    if (store_location == "")
+    {
+      // If we've failed to find a local site registration store then Sprout has
+      // been misconfigured.
+      TRC_ERROR("No local site %s specified", store_name);
+      return false;
+    }
+    else
+    {
+      TRC_INFO("Using memcached %s", store_name);
+      TRC_INFO("  Primary store: %s", store_location.c_str());
+      std::string remote_stores_str = boost::algorithm::join(remote_stores_locations, ", ");
+      TRC_INFO("  Backup store(s): %s", remote_stores_str.c_str());
+    }
+  }
+
+  return true;
+}
 
 /*
  * main()
@@ -1429,7 +1474,6 @@ int main(int argc, char* argv[])
 
   SIPResolver* sip_resolver = NULL;
   AstaireResolver* astaire_resolver = NULL;
-  std::vector<Store*> remote_data_stores = {};
   Store* impi_memstore = NULL;
   HttpConnection* ralf_connection = NULL;
   ACRFactory* pcscf_acr_factory = NULL;
@@ -1650,7 +1694,7 @@ int main(int argc, char* argv[])
     TRC_WARNING("XDM server configured on P-CSCF, ignoring");
   }
 
-  if (((!opt.registration_stores.empty()) || (opt.impi_store != "")) &&
+  if (((!opt.registration_stores.empty()) || (!opt.impi_stores.empty())) &&
       (opt.auth_enabled) &&
       (opt.worker_threads == 1))
   {
@@ -1671,59 +1715,41 @@ int main(int argc, char* argv[])
   // Parse the registration-stores argument.
   std::string registration_store_location;
   std::vector<std::string> remote_registration_stores_locations;
-  if (!opt.registration_stores.empty())
-  {
-    if (!Utils::parse_stores_arg(opt.registration_stores,
-                                 opt.local_site_name,
-                                 registration_store_location,
-                                 remote_registration_stores_locations))
-    {
-      TRC_ERROR("Invalid format of registration-stores program argument");
-      return 1;
-    }
 
-    if (registration_store_location == "")
-    {
-      // If we've failed to find a local site registration store then Sprout has
-      // been misconfigured.
-      TRC_ERROR("No local site registration store specified");
-      return 1;
-    }
-    else
-    {
-      TRC_INFO("Using memcached registration stores");
-      TRC_INFO("  Primary store: %s", registration_store_location.c_str());
-      std::string remote_registration_stores_str = boost::algorithm::join(remote_registration_stores_locations, ", ");
-      TRC_INFO("  Backup store(s): %s", remote_registration_stores_str.c_str());
-    }
+  if (!parse_multi_site_stores_arg(opt.registration_stores,
+                                   opt.local_site_name,
+                                   "registration-store",
+                                   registration_store_location,
+                                   remote_registration_stores_locations))
+  {
+    return 1;
   }
 
-  // The impi-store argument can either just be a string representing the location
-  // of the AV store, or it can be of the format <local_site_name>=<domain>. If
-  // it isn't provided, we just use the local site's registration store later.
+  // Parse the impi-stores argument.
   std::string impi_store_location;
-  if (opt.impi_store != "")
-  {
-    std::string site;
-    if (Utils::split_site_store(opt.impi_store, site, impi_store_location))
-    {
-      if (site != opt.local_site_name)
-      {
-        // No local site AV store, so Sprout has been misconfigured.
-        TRC_ERROR("No local site AV store specified");
-        return 1;
-      }
-    }
-  }
+  std::vector<std::string> remote_impi_stores_locations;
 
-  if (impi_store_location != "")
+  if (opt.impi_stores.empty())
   {
-    TRC_INFO("Using memcached AV store %s", impi_store_location.c_str());
+    // The config option was not specified so use the same locations as for the
+    // regstore.
+    TRC_DEBUG("Use same store locations for IMPI stores as reg stores");
+    impi_store_location = registration_store_location;
+    remote_impi_stores_locations = remote_registration_stores_locations;
   }
   else
   {
-    TRC_INFO("Using registration store for authentication vectors");
+    TRC_DEBUG("Parse IMPI store locations argument");
+    if (!parse_multi_site_stores_arg(opt.impi_stores,
+                                     opt.local_site_name,
+                                     "impi-store",
+                                     impi_store_location,
+                                     remote_impi_stores_locations))
+    {
+      return 1;
+    }
   }
+
 
   // Ensure our random numbers are unpredictable.
   unsigned int seed;
@@ -2085,15 +2111,14 @@ int main(int argc, char* argv[])
                     (ACRFactory*)new RalfACRFactory(ralf_processor, ACR::SCSCF) :
                     new ACRFactory();
 
+  astaire_resolver = new AstaireResolver(dns_resolver,
+                                         stack_data.addr_family,
+                                         opt.astaire_blacklist_duration);
+
   if (registration_store_location != "")
   {
     // Use memcached store.
     TRC_STATUS("Using memcached compatible store with binary protocol");
-
-    astaire_resolver = new AstaireResolver(dns_resolver,
-                                           stack_data.addr_family,
-                                           opt.astaire_blacklist_duration);
-
     local_data_store = (Store*)new TopologyNeutralMemcachedStore(registration_store_location,
                                                                  astaire_resolver,
                                                                  false,
@@ -2198,19 +2223,40 @@ int main(int argc, char* argv[])
   }
 
   // Create an AV store using the local store and initialise the authentication
-  // sproutlet.  We don't create a AV store using the remote data store as
-  // Authentication Vectors are only stored for a short period after the
-  // relevant challenge is sent.
+  // sproutlet.
   if (impi_store_location != "")
   {
-    impi_memstore = (Store*)new TopologyNeutralMemcachedStore(impi_store_location,
-                                                              astaire_resolver,
-                                                              astaire_comm_monitor);
-    impi_store = new ImpiStore(impi_memstore, opt.impi_store_mode);
+    // Use memcached store.
+    TRC_STATUS("Using memcached compatible store with binary protocol");
+    local_impi_data_store = (Store*)new TopologyNeutralMemcachedStore(impi_store_location,
+                                                                      astaire_resolver,
+                                                                      false,
+                                                                      astaire_comm_monitor);
+    local_impi_store = new ImpiStore(impi_memstore, opt.impi_store_mode);
+
+    if (!remote_impi_stores_locations.empty())
+    {
+      // Use remote memcached store too.
+      TRC_STATUS("Using remote memcached compatible stores with binary protocol");
+       for (std::vector<std::string>::iterator it = remote_impi_stores_locations.begin();
+           it != remote_impi_stores_locations.end();
+           ++it)
+      {
+        Store* remote_data_store = (Store*)new TopologyNeutralMemcachedStore(*it,
+                                                                             astaire_resolver,
+                                                                             true,
+                                                                             remote_astaire_comm_monitor);
+        remote_impi_data_stores.push_back(remote_data_store);
+        remote_impi_stores.push_back(new ImpiStore(remote_data_store, opt.impi_store_mode));
+      }
+    }
   }
   else
   {
-    impi_store = new ImpiStore(local_data_store, opt.impi_store_mode);
+    // Use local store.
+    TRC_STATUS("Using local store");
+    local_impi_data_store = (Store*)new LocalStore();
+    local_impi_store = new ImpiStore(local_data_store, opt.impi_store_mode);
   }
 
   // Load the sproutlet plugins.
@@ -2287,13 +2333,17 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  AoRTimeoutTask::Config aor_timeout_config(local_sdm, remote_sdms, hss_connection);
-  AuthTimeoutTask::Config auth_timeout_config(impi_store, hss_connection);
+  AoRTimeoutTask::Config aor_timeout_config(local_sdm,
+                                            remote_sdms,
+                                            hss_connection);
+  AuthTimeoutTask::Config auth_timeout_config(local_impi_store,
+                                              hss_connection);
   DeregistrationTask::Config deregistration_config(local_sdm,
                                                    remote_sdms,
                                                    hss_connection,
                                                    sip_resolver,
-                                                   impi_store);
+                                                   local_impi_store,
+                                                   remote_impi_stores);
   GetCachedDataTask::Config get_cached_data_config(local_sdm, remote_sdms);
   DeleteImpuTask::Config delete_impu_config(local_sdm, remote_sdms, hss_connection);
 
@@ -2441,7 +2491,6 @@ int main(int argc, char* argv[])
   }
   remote_sdms.clear();
 
-  delete impi_store;
   delete local_data_store;
 
   for (std::vector<Store*>::iterator it = remote_data_stores.begin();
@@ -2451,7 +2500,15 @@ int main(int argc, char* argv[])
     delete *it;
   }
   remote_data_stores.clear();
-  delete impi_memstore;
+
+
+  delete local_impi_store;
+  delete local_impi_data_store;
+
+  for (ImpiStore* store: remote_impi_stores) { delete store; }
+  remote_impi_stores.clear();
+  for (Store* store: remote_impi_data_stores) { delete store; }
+  remote_impi_data_stores.clear();
 
   delete ralf_processor;
   delete ralf_connection;

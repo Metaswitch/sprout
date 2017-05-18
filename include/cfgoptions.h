@@ -111,7 +111,7 @@ struct options
   std::string                          xdm_server;
   std::string                          local_site_name;
   std::vector<std::string>             registration_stores;
-  std::string                          impi_store;
+  std::vector<std::string>             impi_stores;
   std::string                          ralf_server;
   int                                  ralf_threads;
   std::vector<std::string>             dns_servers;
@@ -177,8 +177,13 @@ struct options
 extern LoadMonitor* load_monitor;
 extern HSSConnection* hss_connection;
 extern Store* local_data_store;
+extern std::vector<Store*> remote_data_stores;
+extern Store* local_impi_data_store;
+extern std::vector<Store*> remote_impi_data_stores;
 extern SubscriberDataManager* local_sdm;
 extern std::vector<SubscriberDataManager*> remote_sdms;
+extern ImpiStore* local_impi_store;
+extern std::vector<ImpiStore*> remote_impi_stores;
 extern RalfProcessor* ralf_processor;
 extern DnsCachedResolver* dns_resolver;
 extern HttpResolver* http_resolver;
@@ -188,6 +193,5 @@ extern ExceptionHandler* exception_handler;
 extern AlarmManager* alarm_manager;
 extern AnalyticsLogger* analytics_logger;
 extern ChronosConnection* chronos_connection;
-extern ImpiStore* impi_store;
 
 #endif
