@@ -225,6 +225,7 @@ namespace SASEvent
 
   const int AMBIGUOUS_WILDCARD_MATCH = SPROUT_BASE + 0x0130;
 
+  const int NO_MATCHING_SERVICE_PROFILE = SPROUT_BASE + 0x0150;
 } //namespace SASEvent
 
 #endif
