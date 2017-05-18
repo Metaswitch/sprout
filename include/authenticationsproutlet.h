@@ -129,7 +129,7 @@ public:
                           ChronosConnection* chronos_connection,
                           ACRFactory* rfacr_factory,
                           uint32_t non_register_auth_mode_param,
-                          uint32_t non_reg_challenge_expiry_s,
+                          int non_reg_challenge_expiry_s,
                           AnalyticsLogger* analytics_logger,
                           SNMP::AuthenticationStatsTables* auth_stats_tbls,
                           bool nonce_count_supported_arg,
@@ -245,7 +245,7 @@ private:
   // successfully authenticated against. This is only relevant when nonce count
   // support is enabled (otherwise there is no need to store them for an
   // extended period of time).
-  uint32_t _non_reg_challenge_expiry_s;
+  int _non_reg_challenge_expiry_s;
 
   // The next service to route requests onto if the sproutlet does not handle them
   // itself.
