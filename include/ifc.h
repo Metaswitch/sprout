@@ -75,7 +75,7 @@ public:
   {
   }
 
-  // This constructor creates an IFC and makes sure that all of its
+  /// This constructor creates an IFC and makes sure that all of its
   // associated memory is owned by the passed in XML document.
   Ifc(std::string ifc_str,
       rapidxml::xml_document<>* ifc_doc);

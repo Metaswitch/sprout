@@ -250,11 +250,9 @@ pjsip_status_code AsChainLink::on_initial_request(pjsip_msg* msg,
   //   - We haven't found any matching IFC (true if server_name is empty, and
   //     got_dummy_as is false.
   //   - We're using default IFCs
-  //   - It's our first time through this function and we've run through every
-  //     available default IFC to check for a match
   if ((!(got_dummy_as) || (server_name != "")) &&
-      (!_as_chain->_using_standard_ifcs) &&
-      (_as_chain->_ifc_configuration._apply_default_ifcs))
+      ((!_as_chain->_using_standard_ifcs) &&
+       (_as_chain->_ifc_configuration._apply_default_ifcs)))
   {
     TRC_DEBUG("Unable to apply default IFCs as no matching IFCs available");
     SAS::Event event(msg_trail, SASEvent::NO_DEFAULT_IFCS, 0);

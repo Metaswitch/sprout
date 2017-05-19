@@ -9609,7 +9609,7 @@ TEST_F(SCSCFTest, OnlyDummyApplicationServers)
   free_txdata();
 
   // Check that there's a 404 - no attempt to send via an application server
-  // (it's a 404 the terminating subscriber isn't registered to make this UT
+  // (it's a 404 as the terminating subscriber isn't registered to make this UT
   // simpler).
   out = current_txdata()->msg;
   RespMatcher(404).matches(out);

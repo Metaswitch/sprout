@@ -236,7 +236,7 @@ TEST_F(AsChainTest, NoMatchingStandardIFCs)
   EXPECT_EQ(rc, PJSIP_SC_OK);
 }
 
-// There are no matching standard IFCs, we're not using default IFCs, and we're
+// There are matching standard IFCs, we're not using default IFCs, and we're
 // rejecting when there's no matching IFCs.
 // We should select the ASs from the standard IFCs
 TEST_F(AsChainTest, MatchingStandardIFCsRejectIfNone)
@@ -255,7 +255,7 @@ TEST_F(AsChainTest, MatchingStandardIFCsRejectIfNone)
   EXPECT_EQ(rc, PJSIP_SC_OK);
 }
 
-// There are matching standard IFCs, we're not using default IFCs, and we're
+// There are no matching standard IFCs, we're not using default IFCs, and we're
 // rejecting when there's no matching IFCs.
 // We shouldn't select any ASs, and we should have an error response.
 TEST_F(AsChainTest, NoMatchingStandardIFCsRejectIfNone)

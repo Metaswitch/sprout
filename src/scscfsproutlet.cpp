@@ -574,7 +574,6 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     }
     else
     {
-      // TODO - decide what to do here?
       // No AS chain set, so don't apply services to the request.
       // Default action will be to try to route following remaining Route
       // headers or to the RequestURI.
@@ -1401,7 +1400,7 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
   if (status_code != PJSIP_SC_OK)
   {
     TRC_ERROR("Rejecting a request as there were no matching IFCs");
-    SAS::Event event(trail(), SASEvent::REJECT_AS_NO_MATCHING_IFC, 0);
+    SAS::Event event(trail(), SASEvent::REJECT_AS_NO_MATCHING_IFC, 1);
     SAS::report_event(event);
 
     // TODO - add stat (waiting on spec finalization).
