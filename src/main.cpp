@@ -2248,7 +2248,11 @@ int main(int argc, char* argv[])
                                                                       astaire_comm_monitor);
     local_impi_store = new ImpiStore(impi_memstore, opt.impi_store_mode);
 
-    if (!remote_impi_stores_locations.empty())
+    // Only set up remote IMPI stores if some has been configured, and we need
+    // the IMPI store to be GR.
+    if (!remote_impi_stores_locations.empty() &&
+        (opt.non_register_auth_mode &
+           NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT))
     {
       // Use remote memcached store too.
       TRC_STATUS("Using remote memcached compatible stores with binary protocol");

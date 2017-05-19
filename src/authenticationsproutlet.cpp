@@ -1287,7 +1287,7 @@ Store::Status AuthenticationSproutlet::write_challenge(const std::string& impi,
                                                   impi_obj,
                                                   trail);
 
-  if ((status == Store::OK) && impi_stores_gr())
+  if ((status == Store::OK) && !_remote_impi_stores.empty())
   {
     TRC_DEBUG("Replicate challenge to backup stores");
 
@@ -1392,7 +1392,7 @@ ImpiStore::Impi* AuthenticationSproutlet::read_impi(const std::string& impi,
 
   if ((impi_obj != NULL) &&
       impi_obj->auth_challenges.empty() &&
-      impi_stores_gr())
+      !_remote_impi_stores.empty())
   {
     TRC_DEBUG("Got an empty IMPI object - try backup stores (%d in total)",
               _remote_impi_stores.size());
@@ -1424,10 +1424,4 @@ ImpiStore::Impi* AuthenticationSproutlet::read_impi(const std::string& impi,
   }
 
   return impi_obj;
-}
-
-bool AuthenticationSproutlet::impi_stores_gr()
-{
-  return (_non_register_auth_mode &
-            NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT);
 }
