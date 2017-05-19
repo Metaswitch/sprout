@@ -1156,7 +1156,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
             options->non_register_auth_mode |=
               NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT;
           }
-          else if (token == "inital_req_from_reg_digest_endpoint")
+          else if (token == "initial_req_from_reg_digest_endpoint")
           {
             options->non_register_auth_mode |=
               NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT;
@@ -1300,6 +1300,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
                                     non_reg_chal_lifetime_s,
                                     Non-REGISTER challenge lifetime);
       }
+      break;
 
     case 'h':
       usage();
@@ -1487,7 +1488,6 @@ int main(int argc, char* argv[])
 
   SIPResolver* sip_resolver = NULL;
   AstaireResolver* astaire_resolver = NULL;
-  Store* impi_memstore = NULL;
   HttpConnection* ralf_connection = NULL;
   ACRFactory* pcscf_acr_factory = NULL;
   pj_bool_t websockets_enabled = PJ_FALSE;
@@ -2246,7 +2246,7 @@ int main(int argc, char* argv[])
                                                                       astaire_resolver,
                                                                       false,
                                                                       astaire_comm_monitor);
-    local_impi_store = new ImpiStore(impi_memstore, opt.impi_store_mode);
+    local_impi_store = new ImpiStore(local_impi_data_store, opt.impi_store_mode);
 
     // Only set up remote IMPI stores if some has been configured, and we need
     // the IMPI store to be GR.
