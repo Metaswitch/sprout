@@ -79,13 +79,35 @@ extern "C" {
 
 static std::vector<pj_thread_t*> worker_threads;
 
-// Queue for incoming messages.
-struct rx_msg_qe
+struct MessageEvent
 {
-  pjsip_rx_data* rdata;    // received message
-  Utils::StopWatch stop_watch;    // stop watch for tracking message latency
+  // The received message
+  pjsip_rx_data* rdata;
+
+  // A stop watch for tracking SIP message latency
+  Utils::StopWatch stop_watch;
 };
-eventq<struct rx_msg_qe> rx_msg_q;
+
+// An Event on the queue is either a SIP message or a callback
+enum EventType { MESSAGE, CALLBACK };
+
+union Event
+{
+  PJUtils::Callback* callback;
+  MessageEvent* message;
+};
+
+struct worker_thread_qe
+{
+  // The type of the event
+  EventType type;
+
+  // The event itself
+  Event event;
+};
+
+// Queue for incoming events.
+eventq<struct worker_thread_qe> worker_thread_q;
 
 // Deadlock detection threshold for the message queue (in milliseconds).  This
 // is set to roughly twice the expected maximum service time for each message
@@ -139,78 +161,90 @@ static int worker_thread(void* p)
 
   TRC_DEBUG("Worker thread started");
 
-  struct rx_msg_qe qe = {0};
+  struct worker_thread_qe qe = { MESSAGE };
 
-  while (rx_msg_q.pop(qe))
+  while (worker_thread_q.pop(qe))
   {
-    pjsip_rx_data* rdata = qe.rdata;
-
-    if (rdata)
+    if (qe.type == MESSAGE)
     {
-      TRC_DEBUG("Worker thread dequeue message %p", rdata);
+      MessageEvent* me = qe.event.message;
+      pjsip_rx_data* rdata = me->rdata;
 
-      CW_TRY
+      if (rdata)
       {
-        pjsip_endpt_process_rx_data(stack_data.endpt, rdata, &rp, NULL);
-      }
-      CW_EXCEPT(exception_handler)
-      {
-        // Dump details about the exception.  Be defensive about reading these
-        // as we don't know much about the state we're in.
-        TRC_ERROR("Exception SAS Trail: %llu (maybe)", get_trail(rdata));
-        if (rdata->msg_info.cid != NULL)
+        TRC_DEBUG("Worker thread dequeue message %p", rdata);
+
+        CW_TRY
         {
-          TRC_ERROR("Exception Call-Id: %.*s (maybe)",
-                    ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.slen,
-                    ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.ptr);
+          pjsip_endpt_process_rx_data(stack_data.endpt, rdata, &rp, NULL);
         }
-        if (rdata->msg_info.cseq != NULL)
+        CW_EXCEPT(exception_handler)
         {
-          TRC_ERROR("Exception CSeq: %ld %.*s (maybe)",
-                    ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->cseq,
-                    ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.slen,
-                    ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.ptr);
+          // Dump details about the exception.  Be defensive about reading these
+          // as we don't know much about the state we're in.
+          TRC_ERROR("Exception SAS Trail: %llu (maybe)", get_trail(rdata));
+          if (rdata->msg_info.cid != NULL)
+          {
+            TRC_ERROR("Exception Call-Id: %.*s (maybe)",
+                      ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.slen,
+                      ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.ptr);
+          }
+          if (rdata->msg_info.cseq != NULL)
+          {
+            TRC_ERROR("Exception CSeq: %ld %.*s (maybe)",
+                      ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->cseq,
+                      ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.slen,
+                      ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.ptr);
+          }
+
+          // Make a 500 response to the rdata with a retry-after header of
+          // 10 mins if it's a request other than an ACK
+
+          if ((rdata->msg_info.msg->type == PJSIP_REQUEST_MSG) &&
+             (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD))
+          {
+            TRC_DEBUG("Returning 500 response following exception");
+            pjsip_retry_after_hdr* retry_after =
+                           pjsip_retry_after_hdr_create(rdata->tp_info.pool, 600);
+            PJUtils::respond_stateless(stack_data.endpt,
+                                     rdata,
+                                     PJSIP_SC_INTERNAL_SERVER_ERROR,
+                                     NULL,
+                                     (pjsip_hdr*)retry_after,
+                                     NULL);
+          }
+
+          if (num_worker_threads == 1)
+          {
+            // There's only one worker thread, so we can't sensibly proceed.
+            exit(1);
+          }
         }
+        CW_END
 
-        // Make a 500 response to the rdata with a retry-after header of
-        // 10 mins if it's a request other than an ACK
+        TRC_DEBUG("Worker thread completed processing message %p", rdata);
+        pjsip_rx_data_free_cloned(rdata);
 
-        if ((rdata->msg_info.msg->type == PJSIP_REQUEST_MSG) &&
-           (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD))
+        unsigned long latency_us = 0;
+        if (me->stop_watch.read(latency_us))
         {
-          TRC_DEBUG("Returning 500 response following exception");
-          pjsip_retry_after_hdr* retry_after =
-                         pjsip_retry_after_hdr_create(rdata->tp_info.pool, 600);
-          PJUtils::respond_stateless(stack_data.endpt,
-                                   rdata,
-                                   PJSIP_SC_INTERNAL_SERVER_ERROR,
-                                   NULL,
-                                   (pjsip_hdr*)retry_after,
-                                   NULL);
+          TRC_DEBUG("Request latency = %ldus", latency_us);
+          latency_table->accumulate(latency_us);
+          load_monitor->request_complete(latency_us);
         }
-
-        if (num_worker_threads == 1)
+        else
         {
-          // There's only one worker thread, so we can't sensibly proceed.
-          exit(1);
+          TRC_ERROR("Failed to get done timestamp: %s", strerror(errno));
         }
       }
-      CW_END
-
-      TRC_DEBUG("Worker thread completed processing message %p", rdata);
-      pjsip_rx_data_free_cloned(rdata);
-
-      unsigned long latency_us = 0;
-      if (qe.stop_watch.read(latency_us))
-      {
-        TRC_DEBUG("Request latency = %ldus", latency_us);
-        latency_table->accumulate(latency_us);
-        load_monitor->request_complete(latency_us);
-      }
-      else
-      {
-        TRC_ERROR("Failed to get done timestamp: %s", strerror(errno));
-      }
+      delete me; me = NULL;
+    }
+    else
+    {
+      // If this is a Callback, we just run it and then delete it.
+      PJUtils::Callback* cb = qe.event.callback;
+      cb->run();
+      delete cb; cb = NULL;
     }
   }
 
@@ -226,7 +260,7 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   SAS::report_event(event);
 
   // Check that the worker threads are not all deadlocked.
-  if (rx_msg_q.is_deadlocked())
+  if (worker_thread_q.is_deadlocked())
   {
     // The queue has not been serviced for sufficiently long to imply that
     // all the worker threads are deadlock, so exit the process so it will be
@@ -238,8 +272,8 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
 
   // Before we start, get a timestamp.  This will track the time from
   // receiving a message to forwarding it on (or rejecting it).
-  struct rx_msg_qe qe;
-  qe.stop_watch.start();
+  MessageEvent* me = new MessageEvent();
+  me->stop_watch.start();
 
   // Clone the message and queue it to a scheduler thread.
   pjsip_rx_data* clone_rdata;
@@ -262,11 +296,14 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   // have a queue per transport and round-robin them?
 
   TRC_DEBUG("Queuing cloned received message %p for worker threads", clone_rdata);
-  qe.rdata = clone_rdata;
+  me->rdata = clone_rdata;
+  Event queue_event;
+  queue_event.message = me;
+  struct worker_thread_qe qe = { MESSAGE, queue_event };
 
   // Track the current queue size
-  queue_size_table->accumulate(rx_msg_q.size());
-  rx_msg_q.push(qe);
+  queue_size_table->accumulate(worker_thread_q.size());
+  worker_thread_q.push(qe);
 
   // return TRUE to flag that we have absorbed the incoming message.
   return PJ_TRUE;
@@ -283,7 +320,7 @@ pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
   worker_threads.resize(num_worker_threads_arg);
 
   // Enable deadlock detection on the message queue.
-  rx_msg_q.set_deadlock_threshold(MSG_Q_DEADLOCK_TIME);
+  worker_thread_q.set_deadlock_threshold(MSG_Q_DEADLOCK_TIME);
 
   num_worker_threads = num_worker_threads_arg;
   latency_table = latency_table_arg;
@@ -323,7 +360,7 @@ void stop_worker_threads()
 {
   // Now it is safe to signal the worker threads to exit via the queue and to
   // wait for them to terminate.
-  rx_msg_q.terminate();
+  worker_thread_q.terminate();
   for (std::vector<pj_thread_t*>::iterator i = worker_threads.begin();
        i != worker_threads.end();
        ++i)
@@ -337,4 +374,18 @@ void unregister_thread_dispatcher(void)
 {
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_thread_dispatcher);
 
+}
+
+void add_callback_to_queue(PJUtils::Callback* cb)
+{
+  // Create an Event to hold the Callback
+  Event queue_event;
+  queue_event.callback = cb;
+  worker_thread_qe qe = { CALLBACK, queue_event };
+
+  // Track the current queue size
+  queue_size_table->accumulate(worker_thread_q.size());
+
+  // Add the Event
+  worker_thread_q.push(qe);
 }

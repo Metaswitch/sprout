@@ -200,10 +200,21 @@ void set_dest_info(pjsip_tx_data* tdata, const AddrInfo& ai);
 
 void generate_new_branch_id(pjsip_tx_data* tdata);
 
+class Callback
+{
+public:
+  virtual void run() = 0;
+  virtual ~Callback() {}
+};
+
+// A function that takes a token and a pjsip_event, and returns a Callback
+// object that can safely be run on another thread.
+typedef Callback* (*send_callback_builder)(void* token, pjsip_event* event);
+
 pj_status_t send_request(pjsip_tx_data* tdata,
                          int retries=0,
                          void* token=NULL,
-                         pjsip_endpt_send_callback cb=NULL,
+                         send_callback_builder cb=NULL,
                          bool log_sas_branch = false);
 
 pj_status_t send_request_stateless(pjsip_tx_data* tdata,
@@ -296,6 +307,7 @@ void update_request_uri_np_data(pjsip_msg* req,
 bool should_update_np_data(URIClass old_uri_class,
                            URIClass new_uri_class,
                            std::string& new_uri_str,
+                           std::string& new_routing_number,
                            bool should_override_npdi,
                            SAS::TrailId trail);
 

@@ -37,20 +37,18 @@
 #include "forwardingsproutlet.h"
 #include "pjutils.h"
 
-ForwardingSproutletTsx::ForwardingSproutletTsx(SproutletTsxHelper* helper,
+ForwardingSproutletTsx::ForwardingSproutletTsx(Sproutlet* sproutlet,
                                                const std::string& upstream_service_name) :
-  SproutletTsx(helper),
+  SproutletTsx(sproutlet),
   _upstream_service_name(upstream_service_name)
 {}
 
 void ForwardingSproutletTsx::forward_request(pjsip_msg* req)
 {
   const pjsip_route_hdr* route = route_hdr();
-  pjsip_sip_uri* base_uri = (pjsip_sip_uri*)(route ? route->name_addr.uri : nullptr);
-  pjsip_sip_uri* uri =
-    (pjsip_sip_uri*)get_uri_for_service(_upstream_service_name,
-                                        get_pool(req),
-                                        base_uri);
+  pjsip_sip_uri* uri = next_hop_uri(_upstream_service_name,
+                                    route,
+                                    get_pool(req));
   PJUtils::add_top_route_header(req, uri, get_pool(req));
   send_request(req);
 }

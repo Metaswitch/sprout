@@ -118,18 +118,20 @@ bool ICSCFSproutlet::init()
 
 /// Creates a ICSCFSproutletTsx instance for performing I-CSCF service processing
 /// on a request.
-SproutletTsx* ICSCFSproutlet::get_tsx(SproutletTsxHelper* helper,
+SproutletTsx* ICSCFSproutlet::get_tsx(SproutletHelper* helper,
                                       const std::string& alias,
-                                      pjsip_msg* req)
+                                      pjsip_msg* req,
+                                      pjsip_sip_uri*& next_hop,
+                                      pj_pool_t* pool,
+                                      SAS::TrailId trail)
 {
   if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
   {
-    return (SproutletTsx*)new ICSCFSproutletRegTsx(helper, this);
+    return (SproutletTsx*)new ICSCFSproutletRegTsx(this);
   }
   else
   {
-    return (SproutletTsx*)new ICSCFSproutletTsx(helper,
-                                                this,
+    return (SproutletTsx*)new ICSCFSproutletTsx(this,
                                                 req->line.req.method.id);
   }
 }
@@ -161,9 +163,8 @@ void ICSCFSproutlet::translate_request_uri(pjsip_msg* req,
 /*****************************************************************************/
 
 /// Individual Tsx constructor for REGISTER requests.
-ICSCFSproutletRegTsx::ICSCFSproutletRegTsx(SproutletTsxHelper* helper,
-                                           ICSCFSproutlet* icscf) :
-  SproutletTsx(helper),
+ICSCFSproutletRegTsx::ICSCFSproutletRegTsx(ICSCFSproutlet* icscf) :
+  SproutletTsx(icscf),
   _icscf(icscf),
   _acr(NULL),
   _router(NULL)
@@ -258,6 +259,25 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
   pj_str_t route_hdr_name = pj_str((char *)"Route");
   PJUtils::remove_hdr(req, &route_hdr_name);
 
+  // Check if this is an emergency registration. This is true if any of the
+  // contact headers in the message contain the "sos" parameter.
+  bool emergency = false;
+  pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)pjsip_msg_find_hdr(req,
+                                                                          PJSIP_H_CONTACT,
+                                                                          NULL);
+  while (contact_hdr != NULL)
+  {
+    if (PJUtils::is_emergency_registration(contact_hdr))
+    {
+      emergency = true;
+      break;
+    }
+
+    contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(req,
+                                                          PJSIP_H_CONTACT,
+                                                          contact_hdr->next);
+  }
+
   // Create an UAR router to handle the HSS interactions and S-CSCF
   // selection.
   _router = (ICSCFRouter*)new ICSCFUARouter(_icscf->get_hss_connection(),
@@ -268,7 +288,8 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
                                             impi,
                                             impu,
                                             visited_network,
-                                            auth_type);
+                                            auth_type,
+                                            emergency);
 
   // We have a router, query it for an S-CSCF to use.
   pjsip_sip_uri* scscf_sip_uri = NULL;
@@ -430,10 +451,9 @@ void ICSCFSproutletRegTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
 /*****************************************************************************/
 
 /// Individual Tsx constructor for non-REGISTER requests.
-ICSCFSproutletTsx::ICSCFSproutletTsx(SproutletTsxHelper* helper,
-                                     ICSCFSproutlet* icscf,
+ICSCFSproutletTsx::ICSCFSproutletTsx(ICSCFSproutlet* icscf,
                                      pjsip_method_e req_type) :
-  SproutletTsx(helper),
+  SproutletTsx(icscf),
   _icscf(icscf),
   _acr(NULL),
   _router(NULL),

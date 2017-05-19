@@ -47,7 +47,7 @@
 class ForwardingSproutletTsx : public SproutletTsx
 {
 public:
-  ForwardingSproutletTsx(SproutletTsxHelper* helper,
+  ForwardingSproutletTsx(Sproutlet* sproutlet,
                          const std::string& upstream_service_name);
   virtual ~ForwardingSproutletTsx() {}
 

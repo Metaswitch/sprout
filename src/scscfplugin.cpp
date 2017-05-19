@@ -168,6 +168,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                    &CL_SPROUT_SESS_CONT_AS_COMM_SUCCESS);
 
     _scscf_sproutlet = new SCSCFSproutlet(PROXY_SERVICE_NAME,
+                                          opt.prefix_scscf,
                                           opt.uri_scscf,
                                           scscf_node_uri,
                                           icscf_uri,

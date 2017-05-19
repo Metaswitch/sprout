@@ -307,6 +307,7 @@ public:
     // Create the S-CSCF Sproutlet.
     IFCConfiguration ifc_configuration(false, false, "sip:DUMMY_AS");
     _scscf_sproutlet = new SCSCFSproutlet("scscf",
+                                          "scscf",
                                           "sip:scscf.homedomain:5058;transport=tcp",
                                           "sip:127.0.0.1:5058",
                                           "",

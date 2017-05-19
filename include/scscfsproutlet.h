@@ -76,7 +76,8 @@ public:
   static const int DEFAULT_SESSION_CONTINUED_TIMEOUT = 2000;
   static const int DEFAULT_SESSION_TERMINATED_TIMEOUT = 4000;
 
-  SCSCFSproutlet(const std::string& scscf_name,
+  SCSCFSproutlet(const std::string& name,
+                 const std::string& scscf_name,
                  const std::string& scscf_cluster_uri,
                  const std::string& scscf_node_uri,
                  const std::string& icscf_uri,
@@ -100,9 +101,12 @@ public:
   ~SCSCFSproutlet();
 
   bool init();
-  SproutletTsx* get_tsx(SproutletTsxHelper* helper,
+  SproutletTsx* get_tsx(SproutletHelper* helper,
                         const std::string& alias,
-                        pjsip_msg* req);
+                        pjsip_msg* req,
+                        pjsip_sip_uri*& next_hop,
+                        pj_pool_t* pool,
+                        SAS::TrailId trail);
 
   // Methods used to change the values of internal configuration during unit
   // test.
@@ -119,6 +123,9 @@ private:
 
   /// Returns the AS chain table for this system.
   AsChainTable* as_chain_table() const;
+
+  /// Returns the service name of the entire S-CSCF.
+  const std::string scscf_service_name() const;
 
   /// Returns the configured S-CSCF cluster URI for this system.
   const pjsip_uri* scscf_cluster_uri() const;
@@ -195,6 +202,9 @@ private:
 
   friend class SCSCFSproutletTsx;
 
+  /// The service name of the entire S-CSCF.
+  std::string _scscf_name;
+
   /// A URI which routes to the S-CSCF cluster.
   pjsip_uri* _scscf_cluster_uri;
 
@@ -249,7 +259,7 @@ private:
 class SCSCFSproutletTsx : public SproutletTsx
 {
 public:
-  SCSCFSproutletTsx(SproutletTsxHelper* helper, SCSCFSproutlet* scscf, pjsip_method_e req_type);
+  SCSCFSproutletTsx(SCSCFSproutlet* scscf, pjsip_method_e req_type);
   ~SCSCFSproutletTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req) override;

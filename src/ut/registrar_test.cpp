@@ -706,6 +706,7 @@ TEST_F(RegistrarTest, NotOurs)
 {
   Message msg;
   msg._domain = "not-us.example.org";
+  add_host_mapping("not-us.example.org", "5.6.7.8");
   inject_msg(msg.get());
   registrar_sproutlet_handle_200();
 }

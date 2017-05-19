@@ -80,6 +80,7 @@ public:
                                 const std::string& public_user_identity,
                                 const std::string& visited_network,
                                 const std::string& auth_type,
+                                const bool& emergency,
                                 rapidjson::Document*& object,
                                 SAS::TrailId trail);
   HTTPCode get_location_data(const std::string& public_user_identity,

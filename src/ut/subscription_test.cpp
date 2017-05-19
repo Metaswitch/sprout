@@ -331,6 +331,7 @@ TEST_F(SubscriptionTest, NotOurs)
 {
   SubscribeMessage msg;
   msg._domain = "not-us.example.org";
+  add_host_mapping("not-us.example.org", "5.6.7.8");
   inject_msg(msg.get());
   subscription_sproutlet_handle_200();
   check_subscriptions("sip:6505550231@homedomain", 0u);

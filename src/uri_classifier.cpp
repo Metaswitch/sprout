@@ -33,9 +33,18 @@
  */
 
 #include <vector>
+#include <boost/regex.hpp>
 #include "uri_classifier.h"
 #include "stack.h"
 #include "constants.h"
+
+// Regexes that match global and local numbers:
+// - A global number starts with "+" followed by a combination of digits "0-9"
+//   and visual separators ",-()".
+// - A local number can contain a combination of hexdigits "0-9A-F", "*#" and
+//   visual separators ",-()".
+static const boost::regex CHARS_ALLOWED_IN_GLOBAL_NUM = boost::regex("\\+[0-9,\\-\\(\\)]*");
+static const boost::regex CHARS_ALLOWED_IN_LOCAL_NUM = boost::regex("[0-9A-F\\*#,\\-\\(\\)]*");
 
 std::vector<pj_str_t*> URIClassifier::home_domains;
 bool URIClassifier::enforce_global;
@@ -147,7 +156,9 @@ URIClass URIClassifier::classify_uri(const pjsip_uri* uri, bool prefer_sip, bool
   {
     // TEL URIs can only represent phone numbers - decide if it's a global (E.164) number or not
     pjsip_tel_uri* tel_uri = (pjsip_tel_uri*)uri;
-    if (tel_uri->number.slen > 0 && tel_uri->number.ptr[0] == '+')
+    std::string user = PJUtils::pj_str_to_string(&tel_uri->number);
+    boost::match_results<std::string::const_iterator> results;
+    if (boost::regex_match(user, results, CHARS_ALLOWED_IN_GLOBAL_NUM))
     {
       ret = GLOBAL_PHONE_NUMBER;
     }
@@ -177,13 +188,22 @@ URIClass URIClassifier::classify_uri(const pjsip_uri* uri, bool prefer_sip, bool
     if ((!pj_strcmp(&((pjsip_sip_uri*)uri)->user_param, &STR_USER_PHONE) ||
          (home_domain && treat_number_as_phone && !is_gruu)))
     {
-      if (sip_uri->user.slen > 0 && sip_uri->user.ptr[0] == '+')
+      // Get the user part minus any parameters.
+      std::string user = PJUtils::pj_str_to_string(&sip_uri->user);
+      std::vector<std::string> user_tokens;
+      Utils::split_string(user, ';', user_tokens, 0, true);
+      boost::match_results<std::string::const_iterator> results;
+      if (boost::regex_match(user_tokens[0], results, CHARS_ALLOWED_IN_GLOBAL_NUM))
       {
         ret = GLOBAL_PHONE_NUMBER;
       }
-      else
+      else if (boost::regex_match(user_tokens[0], results, CHARS_ALLOWED_IN_LOCAL_NUM))
       {
         ret = enforce_global ? LOCAL_PHONE_NUMBER : GLOBAL_PHONE_NUMBER;
+      }
+      else
+      {
+        ret = HOME_DOMAIN_SIP_URI;
       }
     }
     // Not a phone number - classify it based on domain
