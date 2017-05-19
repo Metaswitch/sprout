@@ -38,6 +38,11 @@
 #include "stack.h"
 #include "constants.h"
 
+// Regexes that match global and local numbers:
+// - A global number starts with "+" followed by a combination of digits "0-9"
+//   and visual separators ",-()".
+// - A local number can contain a combination of hexdigits "0-9A-F", "*#" and
+//   visual separators ",-()".
 static const boost::regex CHARS_ALLOWED_IN_GLOBAL_NUM = boost::regex("\\+[0-9,\\-\\(\\)]*");
 static const boost::regex CHARS_ALLOWED_IN_LOCAL_NUM = boost::regex("[0-9A-F\\*#,\\-\\(\\)]*");
 
