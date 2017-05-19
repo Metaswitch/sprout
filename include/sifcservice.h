@@ -64,13 +64,13 @@ public:
   /// Get the IFCs that belong to a set of IDs
   virtual void get_ifcs_from_id(std::multimap<int32_t, Ifc>& ifc_map,
                                 const std::set<int32_t>& id,
+                                std::shared_ptr<xml_document<> > ifc_doc,
                                 SAS::TrailId trail) const;
 
 private:
-  std::map<int32_t, std::vector<std::pair<int32_t, Ifc>>> _shared_ifc_sets;
+  std::map<int32_t, std::vector<std::pair<int32_t, std::string>>> _shared_ifc_sets;
   std::string _configuration;
   Updater<void, SIFCService>* _updater;
-  rapidxml::xml_document<>* _root;
 
   // Mark as mutable to flag that this can be modified without affecting the
   // external behaviour of the class, allowing for locking in 'const' methods.

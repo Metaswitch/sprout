@@ -55,7 +55,8 @@
 const char* NO_SERVED_USER = "";
 
 /// SCSCFSproutlet constructor.
-SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
+SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
+                               const std::string& scscf_name,
                                const std::string& scscf_cluster_uri,
                                const std::string& scscf_node_uri,
                                const std::string& icscf_uri,
@@ -70,11 +71,14 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
                                SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
                                SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                                bool override_npdi,
+                               DIFCService* difcservice,
+                               IFCConfiguration ifc_configuration,
                                int session_continued_timeout_ms,
                                int session_terminated_timeout_ms,
                                AsCommunicationTracker* sess_term_as_tracker,
                                AsCommunicationTracker* sess_cont_as_tracker) :
-  Sproutlet(scscf_name, port, uri, "", incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl),
+  Sproutlet(name, port, uri, "", incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl),
+  _scscf_name(scscf_name),
   _scscf_cluster_uri(NULL),
   _scscf_node_uri(NULL),
   _icscf_uri(NULL),
@@ -85,6 +89,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_name,
   _enum_service(enum_service),
   _acr_factory(acr_factory),
   _override_npdi(override_npdi),
+  _difcservice(difcservice),
+  _ifc_configuration(ifc_configuration),
   _session_continued_timeout_ms(session_continued_timeout_ms),
   _session_terminated_timeout_ms(session_terminated_timeout_ms),
   _scscf_cluster_uri_str(scscf_cluster_uri),
@@ -177,12 +183,22 @@ bool SCSCFSproutlet::init()
 
 /// Creates a SCSCFSproutletTsx instance for performing S-CSCF service processing
 /// on a request.
-SproutletTsx* SCSCFSproutlet::get_tsx(SproutletTsxHelper* helper,
+SproutletTsx* SCSCFSproutlet::get_tsx(SproutletHelper* helper,
                                       const std::string& alias,
-                                      pjsip_msg* req)
+                                      pjsip_msg* req,
+                                      pjsip_sip_uri*& next_hop,
+                                      pj_pool_t* pool,
+                                      SAS::TrailId trail)
 {
   pjsip_method_e req_type = req->line.req.method.id;
-  return (SproutletTsx*)new SCSCFSproutletTsx(helper, this, req_type);
+  return (SproutletTsx*)new SCSCFSproutletTsx(this, req_type);
+}
+
+
+/// Returns the service name of the entire S-CSCF.
+const std::string SCSCFSproutlet::scscf_service_name() const
+{
+  return _scscf_name;
 }
 
 
@@ -221,6 +237,15 @@ AsChainTable* SCSCFSproutlet::as_chain_table() const
   return _as_chain_table;
 }
 
+DIFCService* SCSCFSproutlet::difcservice() const
+{
+  return _difcservice;
+}
+
+IFCConfiguration SCSCFSproutlet::ifc_configuration() const
+{
+  return _ifc_configuration;
+}
 
 /// Gets all bindings for the specified Address of Record from the local or
 /// remote registration stores.
@@ -382,10 +407,9 @@ void SCSCFSproutlet::track_session_setup_time(uint64_t tsx_start_time_usec,
   }
 }
 
-SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
-                                     SCSCFSproutlet* scscf,
+SCSCFSproutletTsx::SCSCFSproutletTsx(SCSCFSproutlet* scscf,
                                      pjsip_method_e req_type) :
-  SproutletTsx(helper),
+  SproutletTsx(scscf),
   _scscf(scscf),
   _cancelled(false),
   _session_case(NULL),
@@ -1260,7 +1284,9 @@ AsChainLink SCSCFSproutletTsx::create_as_chain(Ifcs ifcs,
                                                  is_registered,
                                                  chain_trail,
                                                  ifcs,
-                                                 acr);
+                                                 acr,
+                                                 _scscf->difcservice(),
+                                                 _scscf->ifc_configuration());
   acr = NULL;
   TRC_DEBUG("S-CSCF sproutlet transaction %p linked to AsChain %s",
             this, ret.to_string().c_str());
@@ -1284,9 +1310,22 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
 
   // Find the next application server to invoke.
   std::string server_name;
-  _as_chain_link.on_initial_request(req, server_name, trail());
+  pjsip_status_code status_code =
+                   _as_chain_link.on_initial_request(req, server_name, trail());
 
-  if (!server_name.empty())
+  if (status_code != PJSIP_SC_OK)
+  {
+    TRC_ERROR("Rejecting a request as there were no matching IFCs");
+    SAS::Event event(trail(), SASEvent::REJECT_AS_NO_MATCHING_IFC, 0);
+    SAS::report_event(event);
+
+    // TODO - add stat (waiting on spec finalization).
+
+    pjsip_msg* rsp = create_response(req, status_code);
+    send_response(rsp);
+    free_msg(req);
+  }
+  else if (!server_name.empty())
   {
     // We've should have identified an application server to be invoked, so
     // encode the app server hop and the return hop in Route headers.
@@ -1366,7 +1405,21 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
 
   // Find the next application server to invoke.
   std::string server_name;
-  _as_chain_link.on_initial_request(req, server_name, trail());
+  pjsip_status_code status_code =
+                   _as_chain_link.on_initial_request(req, server_name, trail());
+
+  if (status_code != PJSIP_SC_OK)
+  {
+    TRC_ERROR("Rejecting a request as there were no matching IFCs");
+    SAS::Event event(trail(), SASEvent::REJECT_AS_NO_MATCHING_IFC, 1);
+    SAS::report_event(event);
+
+    // TODO - add stat (waiting on spec finalization).
+
+    pjsip_msg* rsp = create_response(req, status_code);
+    send_response(rsp);
+    free_msg(req);
+  }
 
   if (!server_name.empty())
   {
@@ -1441,7 +1494,7 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     pjsip_param* services_p = PJ_POOL_ALLOC_T(get_pool(req), pjsip_param);
     pj_strdup(get_pool(req), &services_p->name, &STR_SERVICE);
     pj_list_insert_before(&odi_uri->other_param, services_p);
-    std::string services = _scscf->service_name();
+    std::string services = _scscf->scscf_service_name();
     pj_strdup2(get_pool(req), &services_p->value, services.c_str());
 
     if (_session_case->is_originating())
@@ -1982,8 +2035,7 @@ bool SCSCFSproutletTsx::get_billing_role(ACR::NodeRole &role)
 {
   const pjsip_route_hdr* route = route_hdr();
 
-  if ((route != NULL) &&
-      (is_uri_reflexive(route->name_addr.uri)))
+  if (route != NULL)
   {
     pjsip_sip_uri* uri = (pjsip_sip_uri*)route->name_addr.uri;
     pjsip_param* param = pjsip_param_find(&uri->other_param,

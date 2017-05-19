@@ -76,6 +76,11 @@ public:
     return _ifcs[index];
   }
 
+  const std::vector<Ifc> ifcs_list() const
+  {
+    return _ifcs;
+  }
+
   void interpret(const SessionCase& session_case,
                  bool is_registered,
                  bool is_initial_registration,

@@ -69,9 +69,12 @@ public:
   ~Mangelwurzel() {}
 
   /// Create a MangelwurzelTsx.
-  SproutletTsx* get_tsx(SproutletTsxHelper* helper,
+  SproutletTsx* get_tsx(SproutletHelper* helper,
                         const std::string& alias,
-                        pjsip_msg* req);
+                        pjsip_msg* req,
+                        pjsip_sip_uri*& next_hop,
+                        pj_pool_t* pool,
+                        SAS::TrailId trail);
 };
 
 /// Definition of the MangelwurzelTsx class.
@@ -133,16 +136,19 @@ public:
   };
 
   /// Constructor.
-  MangelwurzelTsx(SproutletTsxHelper* helper, Config& config) :
-    SproutletTsx(helper),
+  MangelwurzelTsx(Mangelwurzel* mangelwurzel, Config& config) :
+    SproutletTsx(mangelwurzel),
     _config(config),
-    _unmodified_request(original_request())
+    _unmodified_request(NULL)
   {}
 
   /// Destructor.
   ~MangelwurzelTsx()
   {
-    free_msg(_unmodified_request);
+    if (_unmodified_request != NULL)
+    {
+      free_msg(_unmodified_request);
+    }
   }
 
   /// Implementation of SproutletTsx methods in mangelwurzel.

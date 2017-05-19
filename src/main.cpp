@@ -159,7 +159,9 @@ enum OptionTypes
   OPT_DEFAULT_TEL_URI_TRANSLATION,
   OPT_CHRONOS_HOSTNAME,
   OPT_SPROUT_CHRONOS_CALLBACK_URI,
-  OPT_ALLOW_FALLBACK_IFCS,
+  OPT_APPLY_DEFAULT_IFCS,
+  OPT_REJECT_IF_NO_MATCHING_IFCS,
+  OPT_DUMMY_APP_SERVER,
 };
 
 
@@ -245,6 +247,9 @@ const static struct pj_getopt_option long_opt[] =
   { "disable-tcp-switch",           no_argument,       0, OPT_DISABLE_TCP_SWITCH},
   { "chronos-hostname",             required_argument, 0, OPT_CHRONOS_HOSTNAME},
   { "sprout-chronos-callback-uri",  required_argument, 0, OPT_SPROUT_CHRONOS_CALLBACK_URI},
+  { "apply-default-ifcs",           no_argument,       0, OPT_APPLY_DEFAULT_IFCS},
+  { "reject-if-no-matching-ifcs",   no_argument,       0, OPT_REJECT_IF_NO_MATCHING_IFCS},
+  { "dummy-app-server",             required_argument, 0, OPT_DUMMY_APP_SERVER},
   { NULL,                           0,                 0, 0}
 };
 
@@ -453,6 +458,13 @@ static void usage(void)
        "                            Specify the sprout hostname used for Chronos callbacks. If unset \n"
        "                            the default is to use the sprout-hostname.\n"
        "                            Ignored if chronos-hostname is not set.\n"
+       "     --apply-default-ifcs   Whether calls that don't have any matching IFCs should have some \n"
+       "                            preconfigured IFCs applied instead.\n"
+       "     --reject-if-no-matching-ifcs\n"
+       "                            Whether calls that don't have any matching IFCs should be rejected.\n"
+       "     --dummy-app-server <app server URI>\n"
+       "                            If any IFC has an application server that matches the one defined here, \n"
+       "                            then the IFC is skipped over.\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
        " -F, --log-file <directory>\n"
@@ -1254,6 +1266,21 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       TRC_INFO("Sprout Chronos callback uri set to %s", pj_optarg);
       break;
 
+    case OPT_APPLY_DEFAULT_IFCS:
+      options->apply_default_ifcs = true;
+      TRC_INFO("Requests that have no matching IFCs will have some preconfigured IFCs applied");
+      break;
+
+    case OPT_REJECT_IF_NO_MATCHING_IFCS:
+      options->reject_if_no_matching_ifcs = true;
+      TRC_INFO("Requests that have no matching IFCs will be rejected");
+      break;
+
+    case OPT_DUMMY_APP_SERVER:
+      options->dummy_app_server = std::string(pj_optarg);
+      TRC_INFO("Dummy application server set to %s", pj_optarg);
+      break;
+
     case OPT_LISTEN_PORT:
       {
         int listen_port;
@@ -1410,6 +1437,7 @@ AnalyticsLogger* analytics_logger = NULL;
 ChronosConnection* chronos_connection = NULL;
 ImpiStore* impi_store = NULL;
 SIFCService* sifc_service = NULL;
+DIFCService* difc_service = NULL;
 
 /*
  * main()
@@ -1506,6 +1534,9 @@ int main(int argc, char* argv[])
   opt.scscf_node_uri = "";
   opt.sas_signaling_if = false;
   opt.disable_tcp_switch = false;
+  opt.apply_default_ifcs = false;
+  opt.reject_if_no_matching_ifcs = false;
+  opt.dummy_app_server = "";
 
   status = init_logging_options(argc, argv, &opt);
 
@@ -1962,6 +1993,9 @@ int main(int argc, char* argv[])
                                        opt.uri_scscf,
                                        sifc_service);
   }
+
+  // Create DIFC service
+  difc_service = new DIFCService();
 
   // Create ENUM service.
   if (!opt.enum_servers.empty())
@@ -2422,6 +2456,7 @@ int main(int argc, char* argv[])
   delete http_stack_mgmt; http_stack_mgmt = NULL;
   delete chronos_connection;
   delete hss_connection;
+  delete difc_service;
   delete sifc_service;
   delete quiescing_mgr;
   delete exception_handler;
