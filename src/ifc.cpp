@@ -69,6 +69,23 @@ using namespace rapidxml;
 #define ORIGINATING_UNREGISTERED 3
 #define ORIGINATING_CDIV 4
 
+Ifc::Ifc(std::string ifc_str,
+         rapidxml::xml_document<>* ifc_doc) :
+  _ifc(NULL)
+{
+  rapidxml::xml_document<>* new_document = new rapidxml::xml_document<>();
+
+  // We must use a new XML document to parse the string (as it's destructive).
+  // We allocate the string from the passed in document, and then clone the
+  // node into that document, ensuring that the passed in document owns
+  // everything associated with the IFC.
+  char* xml_str = ifc_doc->allocate_string(ifc_str.c_str());
+  new_document->parse<0>(xml_str);
+  _ifc = ifc_doc->clone_node(new_document->first_node());
+
+  delete new_document;
+}
+
 void Ifc::invalid_ifc(std::string error,
                       std::string server_name,
                       int sas_event_id,

@@ -49,8 +49,9 @@ public:
   MockSIFCService();
   virtual ~MockSIFCService();
 
-  MOCK_CONST_METHOD3(get_ifcs_from_id, void(std::multimap<int32_t, Ifc>&,
+  MOCK_CONST_METHOD4(get_ifcs_from_id, void(std::multimap<int32_t, Ifc>&,
                                             const std::set<int32_t>&,
+                                            std::shared_ptr<xml_document<> > ifc_doc,
                                             SAS::TrailId));
 
 };

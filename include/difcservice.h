@@ -56,11 +56,13 @@ public:
   /// Updates the default iFCs.
   void update_difcs();
 
+  /// Get the default IFCs
+  std::vector<Ifc> get_default_ifcs(rapidxml::xml_document<>* ifc_doc) const;
+
 private:
-  std::vector<std::pair<int32_t, Ifc>> _default_ifcs;
+  std::vector<std::string> _default_ifcs;
   std::string _configuration;
   Updater<void, DIFCService>* _updater;
-  rapidxml::xml_document<>* _root;
 
   // Mark as mutable to flag that this can be modified without affecting the
   // external behaviour of the calss, allowing for locking in 'const' methods.
