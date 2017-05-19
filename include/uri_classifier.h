@@ -35,6 +35,8 @@
 #ifndef URI_CLASSIFIER_H
 #define URI_CLASSIFIER_H
 
+#include <string>
+
 extern "C" {
 #include <pjsip.h>
 #include <pjlib-util.h>
