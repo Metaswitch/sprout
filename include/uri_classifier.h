@@ -41,6 +41,13 @@ extern "C" {
 #include <pjlib.h>
 }
 
+// Forward declaration of PJUtils function.
+namespace PJUtils {
+
+std::string pj_str_to_string(const pj_str_t* pjstr);
+
+}
+
 enum URIClass
 {
   UNKNOWN = 0,
