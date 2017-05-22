@@ -86,11 +86,12 @@ if [[ ! -s $CONFPATH/$FILENAME ]]
 then
   echo "The configuration file at $CONFPATH/$FILENAME is empty, uploading a blank file"
 else
-  python -m json.tool < $CONFPATH/$FILENAME > /dev/null 2>&1
+  jsoncheck=$(python -m json.tool < $CONFPATH/$FILENAME 2>&1)
   rc=$?
   if [ $rc != 0 ]; then
-    echo "The configuration file at $CONFPATH/$FILENAME contains invalid JSON"
-    echo "Please provide a valid configuration file, and re-run the command"
+    echo "The configuration file at $CONFPATH/$FILENAME contains invalid JSON. The JSON parser reported the following error:"
+    echo - \"$jsoncheck\"
+    echo "Correct $CONFPATH/$FILENAME to use the documented syntax for this configuration file type, and re-run the command"
     exit 2
   fi
 fi

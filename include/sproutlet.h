@@ -55,9 +55,11 @@ extern "C" {
 
 #define API_VERSION 1
 
+class SproutletHelper;
 class SproutletTsxHelper;
 class Sproutlet;
 class SproutletTsx;
+class SproutletProxy;
 
 
 /// Typedefs for Sproutlet-specific types
@@ -277,13 +279,14 @@ public:
   /// @returns            - The new URI.
   ///
   /// @param service      - Name of the service to route to.
-  /// @param pool         - Pool to allocate the URI in.
-  /// @param existing_uri - An existing URI to use as a base for the new one.
+  /// @param route        - An existing Route to use as a base for the new one.
   ///                       Parameters from this URI will be preserved if
   ///                       possible.
-  virtual pjsip_sip_uri* get_uri_for_service(const std::string& service,
-                                             pj_pool_t* pool,
-                                             pjsip_sip_uri* existing_uri) const = 0;
+  /// @param pool         - Pool to allocate the URI in.
+  /// Constructs the next URI for the Sproutlet
+  virtual pjsip_sip_uri* next_hop_uri(const std::string& service,
+                                      const pjsip_route_hdr* route,
+                                      pj_pool_t* pool) const = 0;
 };
 
 
@@ -296,10 +299,21 @@ class SproutletTsx
 {
 public:
   /// Constructor.
-  SproutletTsx(SproutletTsxHelper* helper) : _helper(helper) {}
+  ///
+  /// @param sproutlet     - The parent sproutlet.
+  SproutletTsx(Sproutlet* sproutlet) :
+    _sproutlet(sproutlet),
+    _helper(NULL)
+  {
+  }
 
   /// Virtual destructor.
   virtual ~SproutletTsx() {}
+
+  /// Set the SproutletTsxHelper on the SproutletTsx.
+  ///
+  /// @param  helper       - The sproutlet helper.
+  virtual void set_helper(SproutletTsxHelper* helper) { _helper = helper; }
 
   /// Called when an initial request (dialog-initiating or out-of-dialog) is
   /// received for the transaction.
@@ -587,20 +601,41 @@ protected:
   /// @returns            - The new URI.
   ///
   /// @param service      - Name of the service to route to.
-  /// @param pool         - Pool to allocate the URI in.
-  /// @param existing_uri - An existing URI to use as a base for the new one.
+  /// @param route        - An existing Route to use as a base for the new one.
   ///                       Parameters from this URI will be preserved if
   ///                       possible, but the user part will be stripped.
-  pjsip_sip_uri* get_uri_for_service(const std::string& service,
-                                     pj_pool_t* pool,
-                                     pjsip_sip_uri* existing_uri) const
+  /// @param pool         - Pool to allocate the URI in.
+  pjsip_sip_uri* next_hop_uri(const std::string& service,
+                              const pjsip_route_hdr* route,
+                              pj_pool_t* pool) const
   {
-    return _helper->get_uri_for_service(service, pool, existing_uri);
+    return _helper->next_hop_uri(service, route, pool);
   }
 
 private:
+  /// Parent sproutlet object.
+  Sproutlet* _sproutlet;
+
   /// Transaction helper to use for underlying service-related processing.
   SproutletTsxHelper* _helper;
+
+  friend class SproutletProxy;
+};
+
+
+/// An abstract base class that handles service-related processing for a
+/// Sproutlet.
+class SproutletHelper
+{
+public:
+  /// Virtual descrustor.
+  virtual ~SproutletHelper() {}
+
+  /// Constructs the next URI for the Sproutlet that doesn't want to handle a
+  /// request.
+  virtual pjsip_sip_uri* next_hop_uri(const std::string& service,
+                                      const pjsip_route_hdr* route,
+                                      pj_pool_t* pool) const = 0;
 };
 
 
@@ -634,14 +669,21 @@ public:
   /// does not want to process the request, or create a suitable object
   /// derived from the SproutletTsx class to process the request.
   ///
-  /// @param  helper        - The service helper to use to perform
-  ///                         the underlying service-related processing.
+  /// @param  proxy         - The Sproutlet proxy.
   /// @param  alias         - The alias of this Sproutlet that matched the
   ///                         incoming request.
   /// @param  req           - The received request message.
-  virtual SproutletTsx* get_tsx(SproutletTsxHelper* helper,
-                                const std::string& service_name,
-                                pjsip_msg* req) = 0;
+  /// @param  next_hop      - The Sproutlet can use this field to specify a
+  ///                         next hop URI when it returns a NULL Tsx. Filling
+  ///                         in this field is optional.
+  /// @param  pool          - The pool for creating the next_hop uri.
+  /// @param  trail         - The SAS trail id for the message.
+  virtual SproutletTsx* get_tsx(SproutletHelper* proxy,
+                                const std::string& alias,
+                                pjsip_msg* req,
+                                pjsip_sip_uri*& next_hop,
+                                pj_pool_t* pool,
+                                SAS::TrailId trail) = 0;
 
   /// Returns the name of this service.
   const std::string service_name() const { return _service_name; }

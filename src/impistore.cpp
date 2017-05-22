@@ -661,7 +661,11 @@ Store::Status ImpiStore::set_impi(Impi* impi,
   else
   {
     // LCOV_EXCL_START
-    TRC_ERROR("Failed to write IMPI for private_id %s", impi->impi.c_str());
+    if (status != Store::Status::DATA_CONTENTION)
+    {
+      TRC_ERROR("Failed to write IMPI for private_id %s", impi->impi.c_str());
+    }
+
     SAS::Event event(trail, SASEvent::IMPISTORE_IMPI_SET_FAILURE, 0);
     event.add_var_param(impi->impi);
     SAS::report_event(event);

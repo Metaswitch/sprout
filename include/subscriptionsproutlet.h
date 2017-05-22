@@ -77,11 +77,17 @@ public:
 
   bool init();
 
-  SproutletTsx* get_tsx(SproutletTsxHelper* helper,
+  SproutletTsx* get_tsx(SproutletHelper* helper,
                         const std::string& alias,
-                        pjsip_msg* req) override;
+                        pjsip_msg* req,
+                        pjsip_sip_uri*& next_hop,
+                        pj_pool_t* pool,
+                        SAS::TrailId trail) override;
 
 private:
+  bool handle_request(pjsip_msg* req,
+                      SAS::TrailId trail);
+
   friend class SubscriptionSproutletTsx;
 
   SubscriberDataManager* _sdm;
@@ -110,9 +116,8 @@ private:
 class SubscriptionSproutletTsx : public ForwardingSproutletTsx
 {
 public:
-  SubscriptionSproutletTsx(SproutletTsxHelper* helper,
-                           const std::string& next_hop_service,
-                           SubscriptionSproutlet* sproutlet);
+  SubscriptionSproutletTsx(SubscriptionSproutlet* subscription,
+                           const std::string& next_hop_service);
   ~SubscriptionSproutletTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req) override;
@@ -120,7 +125,6 @@ public:
 
 protected:
   void on_rx_request(pjsip_msg* req);
-  bool handle_request(pjsip_msg* req);
   void process_subscription_request(pjsip_msg* req);
 
   SubscriberDataManager::AoRPair* write_subscriptions_to_store(
@@ -142,7 +146,7 @@ protected:
   void log_subscriptions(const std::string& aor_name,
                          SubscriberDataManager::AoR* aor_data);
 
-  SubscriptionSproutlet* _sproutlet;
+  SubscriptionSproutlet* _subscription;
 };
 
 #endif

@@ -149,7 +149,7 @@ pj_xml_node* notify_create_reg_state_xml(
        ++impu)
   {
     bool is_wildcard_impu = WildcardUtils::is_wildcard_uri(*impu);
-
+    TRC_DEBUG("Insert registration element for one IRS");
     // Escape the IMPU as an aor
     std::string unescaped_aor = *impu;
 
@@ -255,6 +255,7 @@ pj_xml_node* notify_create_reg_state_xml(
       if (is_wildcard_impu)
       {
         // Add the wildcard node to the registration node
+        TRC_DEBUG("Add wildcard registration node");
         pj_str_t c_wildcard;
         pj_strdup2(pool, &c_wildcard, Utils::xml_escape(*impu).c_str());
         pj_xml_node* wildcard_node = pj_xml_node_new(pool, &STR_WILDCARD);

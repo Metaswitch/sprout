@@ -305,6 +305,7 @@ public:
 
     // Create the S-CSCF Sproutlet.
     _scscf_sproutlet = new SCSCFSproutlet("scscf",
+                                          "scscf",
                                           "sip:scscf.homedomain:5058;transport=tcp",
                                           "sip:127.0.0.1:5058",
                                           "",

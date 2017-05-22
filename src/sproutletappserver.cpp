@@ -332,41 +332,31 @@ SproutletAppServerShim::SproutletAppServerShim(AppServer* app,
 ///                         the underlying service-related processing.
 /// @param  alias         - Ignored.
 /// @param  req           - The received request message.
-SproutletTsx* SproutletAppServerShim::get_tsx(SproutletTsxHelper* helper,
+SproutletTsx* SproutletAppServerShim::get_tsx(SproutletHelper* helper,
                                               const std::string& alias,
-                                              pjsip_msg* req)
+                                              pjsip_msg* req,
+                                              pjsip_sip_uri*& next_hop,
+                                              pj_pool_t* pool,
+                                              SAS::TrailId trail)
 {
   SproutletTsx* tsx = NULL;
+  AppServerTsx* app_tsx = _app->get_app_tsx(helper, req, next_hop, pool, trail);
 
-  // Create the helper for the AppServer layer.
-  SproutletAppServerTsxHelper* shim_helper = new SproutletAppServerTsxHelper(helper);
-
-  // Ask the AppServer for a Tsx.
-  AppServerTsx* app_tsx = _app->get_app_tsx(shim_helper, req);
-  if (app_tsx == NULL)
+  if (app_tsx != NULL)
   {
-    // Create a default AppServerTsx to simply forward requests and responses
-    // transparently.  We have to do this (rather than return NULL) as we
-    // still need to manipulate Route headers to avoid looping.
-    app_tsx = new AppServerTsx((AppServerTsxHelper*)shim_helper);
+    tsx = new SproutletAppServerShimTsx(this, app_tsx);
   }
-
-  tsx = new SproutletAppServerShimTsx(helper,
-                                      shim_helper,
-                                      app_tsx);
 
   return tsx;
 }
 
 /// Constructor.
-SproutletAppServerShimTsx::SproutletAppServerShimTsx(SproutletTsxHelper* sproutlet_helper,
-                                                     SproutletAppServerTsxHelper*& app_server_helper,
+SproutletAppServerShimTsx::SproutletAppServerShimTsx(SproutletAppServerShim* sproutlet,
                                                      AppServerTsx* app_tsx) :
-  SproutletTsx(sproutlet_helper),
-  _app_server_helper(app_server_helper),
+  SproutletTsx(sproutlet),
+  _app_server_helper(NULL),
   _app_tsx(app_tsx)
 {
-  app_server_helper = NULL;
 }
 
 /// Destructor
@@ -374,6 +364,17 @@ SproutletAppServerShimTsx::~SproutletAppServerShimTsx()
 {
   delete _app_server_helper;
   delete _app_tsx;
+}
+
+/// Initializes the Sproutlet Tsx
+void SproutletAppServerShimTsx::set_helper(SproutletTsxHelper* sproutlet_helper)
+{
+  SproutletTsx::set_helper(sproutlet_helper);
+
+  // Create the helper for the AppServer layer.
+  _app_server_helper = new SproutletAppServerTsxHelper(sproutlet_helper);
+
+  _app_tsx->set_helper(_app_server_helper);
 }
 
 /// Called for an initial request (dialog-initiating or out-of-dialog) with

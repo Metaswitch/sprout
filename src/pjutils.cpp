@@ -60,6 +60,7 @@ extern "C" {
 #include "sproutsasevent.h"
 #include "enumservice.h"
 #include "uri_classifier.h"
+#include "thread_dispatcher.h"
 
 
 static const int DEFAULT_RETRIES = 5;
@@ -1069,7 +1070,7 @@ struct StatefulSendState
   int current_server;
 
   void* user_token;
-  pjsip_endpt_send_callback user_cb;
+  PJUtils::send_callback_builder cb_builder;
 };
 
 
@@ -1188,9 +1189,25 @@ static void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event)
     TRC_DEBUG("Request transaction completed, status code = %d", tsx->status_code);
     tsx->mod_data[mod_sprout_util.id] = NULL;
 
-    if (sss->user_cb != NULL)
+    if (sss->cb_builder != NULL)
     {
-      (*sss->user_cb)(sss->user_token, event);
+      PJUtils::Callback* cb = (sss->cb_builder)(sss->user_token, event);
+#ifndef UNIT_TEST
+      if (is_pjsip_transport_thread())
+      {
+        // On a transport error, this callback will be on the main PJSIP thread,
+        // so we add the callback to the queue to get picked up by a worker
+        // thread.
+        add_callback_to_queue(cb);
+      }
+      else
+#endif
+      {
+        // If we're already on a worker thread (or in the UTs, which have a
+        // different threading model) we just run the Callback directly.
+        cb->run();
+        delete cb; cb = NULL;
+      }
     }
 
     // The transaction has completed, so decrement our reference to the tx_data
@@ -1206,7 +1223,7 @@ static void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event)
 pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
                                   int retries,
                                   void* token,
-                                  pjsip_endpt_send_callback cb,
+                                  PJUtils::send_callback_builder cb,
                                   bool log_sas_branch)
 {
   pjsip_transaction* tsx;
@@ -1217,9 +1234,9 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
   // Allocate temporary storage for the request.
   StatefulSendState* sss = new StatefulSendState;
 
-  // Store the user supplied callback and token.
+  // Store the user supplied callback builder and token.
   sss->user_token = token;
-  sss->user_cb = cb;
+  sss->cb_builder = cb;
 
   if (tdata->tp_sel.type != PJSIP_TPSELECTOR_TRANSPORT)
   {
@@ -1708,7 +1725,7 @@ void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* 
                                 ((msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
                                  (pjsip_method_cmp(&msg->line.req.method, pjsip_get_subscribe_method()) == 0) ||
                                  (pjsip_method_cmp(&msg->line.req.method, pjsip_get_notify_method()) == 0)));
-  
+
   if (cid_hdr != NULL)
   {
     TRC_DEBUG("Logging SAS Call-ID marker, Call-ID %.*s", cid_hdr->id.slen, cid_hdr->id.ptr);
@@ -2322,6 +2339,7 @@ void PJUtils::translate_request_uri(pjsip_msg* req,
       // The URI was successfully translated, so see what it is.
       URIClass new_uri_class = URIClassifier::classify_uri(new_uri, false, true);
       std::string rn;
+      get_rn(new_uri, rn);
 
       if ((new_uri_class == HOME_DOMAIN_SIP_URI) ||
           (new_uri_class == NODE_LOCAL_SIP_URI) ||
@@ -2337,7 +2355,7 @@ void PJUtils::translate_request_uri(pjsip_msg* req,
       }
       else if ((new_uri_class == NP_DATA) || (new_uri_class == FINAL_NP_DATA))
       {
-        if (should_update_np_data(uri_class, new_uri_class, new_uri_str, should_override_npdi, trail))
+        if (should_update_np_data(uri_class, new_uri_class, new_uri_str, rn, should_override_npdi, trail))
         {
           req->line.req.uri = new_uri;
         }
@@ -2396,10 +2414,12 @@ void PJUtils::update_request_uri_np_data(pjsip_msg* req,
 
       // The URI was successfully translated, so see what it is.
       URIClass new_uri_class = URIClassifier::classify_uri(new_uri, false, true);
+      std::string rn;
+      get_rn(new_uri, rn);
 
       if ((new_uri_class == NP_DATA) || (new_uri_class == FINAL_NP_DATA))
       {
-        if (should_update_np_data(uri_class, new_uri_class, new_uri_str, should_override_npdi, trail))
+        if (should_update_np_data(uri_class, new_uri_class, new_uri_str, rn, should_override_npdi, trail))
         {
           req->line.req.uri = new_uri;
         }
@@ -2416,6 +2436,7 @@ void PJUtils::update_request_uri_np_data(pjsip_msg* req,
 bool PJUtils::should_update_np_data(URIClass old_uri_class,
                            URIClass new_uri_class,
                            std::string& new_uri_str,
+                           std::string& new_routing_number,
                            bool should_override_npdi,
                            SAS::TrailId trail)
 {
@@ -2428,6 +2449,7 @@ bool PJUtils::should_update_np_data(URIClass old_uri_class,
                 new_uri_str.c_str());
       SAS::Event event(trail, SASEvent::NP_DATA_FROM_ENUM, 0);
       event.add_var_param(new_uri_str);
+      event.add_var_param(new_routing_number);
       SAS::report_event(event);
       return true;
     }
@@ -2438,6 +2460,7 @@ bool PJUtils::should_update_np_data(URIClass old_uri_class,
                 new_uri_str.c_str());
       SAS::Event event(trail, SASEvent::NP_DATA_FROM_ENUM_IGNORING_NPDI, 0);
       event.add_var_param(new_uri_str);
+      event.add_var_param(new_routing_number);
       SAS::report_event(event);
       return true;
     }

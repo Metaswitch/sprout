@@ -623,6 +623,78 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSCaps)
 }
 
 
+TEST_F(ICSCFSproutletTest, RouteEmergencyRegister)
+{
+  // Tests routing of REGISTER requests when the "sos" flag is set. This test
+  // just tests that we correctly add the "sos=true" parameter to the HTTP GET
+  // request that we send to Homestead.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        ICSCF_PORT,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS response for the user registration status query using
+  // a default private user identity.
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG&sos=true",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+
+  // Inject a REGISTER request.
+  Message msg1;
+  msg1._method = "REGISTER";
+  msg1._requri = "sip:homedomain";
+  msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: <sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\n" +
+                "Contact: <sip:6505551001@" +
+                tp->to_string(true) +
+                ";ob;sos>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"";
+  inject_msg(msg1.get_request(), tp);
+
+  // REGISTER request should be forwarded to the server named in the HSS
+  // response, scscf1.homedomain.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.1", 5058, tdata);
+  ReqMatcher r1("REGISTER");
+  r1.matches(tdata->msg);
+
+  // Check the RequestURI has been altered to direct the message appropriately.
+  ASSERT_EQ("sip:scscf1.homedomain:5058;transport=TCP", str_uri(tdata->msg->line.req.uri));
+
+  // Check no Route or Record-Route headers have been added.
+  string rr = get_headers(tdata->msg, "Record-Route");
+  string route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("", rr);
+  ASSERT_EQ("", route);
+
+  // Check that the contact header still contains the sos parameter.
+  string contact = get_headers(tdata->msg, "Contact");
+  EXPECT_THAT(contact, HasSubstr("sos"));
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "1.2.3.4", 49152, tdata);
+  RespMatcher r2(200);
+  r2.matches(tdata->msg);
+
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG;sos=true");
+
+  delete tp;
+}
+
+
 TEST_F(ICSCFSproutletTest, RouteRegisterHSSCapsNoMatch)
 {
   // Tests routing of REGISTER requests when the HSS responses with
