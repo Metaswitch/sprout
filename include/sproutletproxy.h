@@ -132,6 +132,9 @@ protected:
 
   bool is_uri_local(const pjsip_uri* uri);
   bool is_host_local(const pj_str_t* host);
+  bool is_uri_reflexive(const pjsip_uri* uri,
+                        Sproutlet* sproutlet,
+                        SAS::TrailId trail);
 
   /// Defintion of a timer set by an child sproutlet transaction.
   struct SproutletTimerCallbackData
