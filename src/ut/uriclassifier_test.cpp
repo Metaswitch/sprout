@@ -148,3 +148,10 @@ TEST_F(URIClassiferTest, NPData)
             classify_uri_helper("tel:1234;rn=567;npdi"));
 
 }
+
+TEST_F(URIClassiferTest, NoUserSIPURI)
+{
+  URIClassifier::enforce_user_phone = false;
+  EXPECT_EQ(URIClass::HOME_DOMAIN_SIP_URI,
+            classify_uri_helper("sip:homedomain", false));
+}
