@@ -70,7 +70,7 @@ std::string default_private_id_from_uri(const pjsip_uri* uri);
 
 pj_str_t domain_from_uri(const std::string& uri_str, pj_pool_t* pool);
 
-pjsip_uri* orig_served_user(pjsip_msg* msg);
+pjsip_uri* orig_served_user(const pjsip_msg* msg);
 
 pjsip_uri* term_served_user(pjsip_msg* msg);
 
