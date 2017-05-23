@@ -190,16 +190,23 @@ URIClass URIClassifier::classify_uri(const pjsip_uri* uri, bool prefer_sip, bool
     {
       // Get the user part minus any parameters.
       std::string user = PJUtils::pj_str_to_string(&sip_uri->user);
-      std::vector<std::string> user_tokens;
-      Utils::split_string(user, ';', user_tokens, 0, true);
-      boost::match_results<std::string::const_iterator> results;
-      if (boost::regex_match(user_tokens[0], results, CHARS_ALLOWED_IN_GLOBAL_NUM))
+      if (!user.empty())
       {
-        ret = GLOBAL_PHONE_NUMBER;
-      }
-      else if (boost::regex_match(user_tokens[0], results, CHARS_ALLOWED_IN_LOCAL_NUM))
-      {
-        ret = enforce_global ? LOCAL_PHONE_NUMBER : GLOBAL_PHONE_NUMBER;
+        std::vector<std::string> user_tokens;
+        Utils::split_string(user, ';', user_tokens, 0, true);
+        boost::match_results<std::string::const_iterator> results;
+        if (boost::regex_match(user_tokens[0], results, CHARS_ALLOWED_IN_GLOBAL_NUM))
+        {
+          ret = GLOBAL_PHONE_NUMBER;
+        }
+        else if (boost::regex_match(user_tokens[0], results, CHARS_ALLOWED_IN_LOCAL_NUM))
+        {
+          ret = enforce_global ? LOCAL_PHONE_NUMBER : GLOBAL_PHONE_NUMBER;
+        }
+        else
+        {
+          ret = HOME_DOMAIN_SIP_URI;
+        }
       }
       else
       {
