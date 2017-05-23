@@ -50,6 +50,7 @@ void filter_bindings_to_targets(const std::string& aor,
                                 pj_pool_t* pool,
                                 int max_targets,
                                 TargetList& targets,
+                                bool barred,
                                 SAS::TrailId trail)
 {
   std::vector<pjsip_accept_contact_hdr*> accept_headers;
@@ -114,6 +115,14 @@ void filter_bindings_to_targets(const std::string& aor,
     TRC_DEBUG("Performing contact filtering on binding %s", binding->first.c_str());
     bool rejected = false;
     bool deprioritized = false;
+
+    // Perform Barred filtering. If we are routing to a barred IMPU, only return
+    // bindings that have an emergency registration.
+    if ((barred) &&
+        (!binding->second->_emergency_registration))
+    {
+      rejected = true;
+    }
 
     // Perform GRUU filtering.
     if (request_uri_is_gruu)

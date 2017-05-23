@@ -488,12 +488,13 @@ public:
     /// Create and send any appropriate NOTIFYs
     ///
     /// @param aor_id       The AoR ID
-    /// @param irs_impus    The IMPUs in the Implicit Registration Set for the AoR
+    /// @param unbarred_irs_impus
+    ///                     The unbarred IMPUs in the Implicit Registration Set for the AoR
     /// @param aor_pair     The AoR pair to send NOTIFYs for
     /// @param now          The current time
     /// @param trail        SAS trail
     void send_notifys(const std::string& aor_id,
-                      std::vector<std::string> irs_impus,
+                      std::vector<std::string> unbarred_irs_impus,
                       AoRPair* aor_pair,
                       int now,
                       SAS::TrailId trail);
@@ -505,13 +506,14 @@ public:
     // Create and send any appropriate NOTIFYs for any expired subscriptions
     //
     // @param aor_id       The AoR ID
-    // @param irs_impus    The IMPUs in the Implicit Registration Set for the AoR
+    // @param unbarred_irs_impus
+    //                     The unbarred IMPUs in the Implicit Registration Set for the AoR
     // @param aor_pair     The AoR pair to send NOTIFYs for
     // @param now          The current time
     // @param trail        SAS trail
     void send_notifys_for_expired_subscriptions(
                                    const std::string& aor_id,
-                                   std::vector<std::string> irs_impus,
+                                   std::vector<std::string> unbarred_irs_impus,
                                    SubscriberDataManager::AoRPair* aor_pair,
                                    int now,
                                    SAS::TrailId trail);
@@ -519,13 +521,14 @@ public:
     // Create and send any appropriate NOTIFYs for any current subscriptions
     //
     // @param aor_id       The AoR ID
-    // @param irs_impus    The IMPUs in the Implicit Registration Set for the AoR
+    // @param unbarred_irs_impus
+    //                     The IMPUs in the Implicit Registration Set for the AoR
     // @param aor_pair     The AoR pair to send NOTIFYs for
     // @param now          The current time
     // @param trail        SAS trail
     void send_notifys_for_current_subscriptions(
                                       const std::string& aor_id,
-                                      std::vector<std::string> irs_impus,
+                                      std::vector<std::string> unbarred_irs_impus,
                                       SubscriberDataManager::AoRPair* aor_pair,
                                       int now,
                                       SAS::TrailId trail);
@@ -593,14 +596,14 @@ public:
   /// succeeds, this returns true.
   ///
   /// @param aor_id               The AoR to retrieve
-  /// @param irs_impus            The IMPUs in the Implicit Registration Set
-  ///                             for the AoR
+  /// @param unbarred_irs_impus   The unbarred IMPUs in the Implicit Registration
+  ///                             Set for the AoR
   /// @param aor_pair             The AoR pair to set
   /// @param trail                SAS trail
   /// @param all_bindings_expired Whether all bindings have expired
   ///                             as a result of the set
   virtual Store::Status set_aor_data(const std::string& aor_id,
-                                     std::vector<std::string> irs_impus,
+                                     std::vector<std::string> unbarred_irs_impus,
                                      AoRPair* aor_pair,
                                      SAS::TrailId trail,
                                      bool& all_bindings_expired = unused_bool);

@@ -333,6 +333,44 @@ class HssConnectionTest : public BaseTest
           "<ECF priority=\"1\">ecf1</ECF>"
         "</ChargingAddresses>"
       "</ClearwaterRegData>";
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid47/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<ClearwaterRegData>"
+        "<RegistrationState>REGISTERED</RegistrationState>"
+        "<IMSSubscription>"
+          "<ServiceProfile>"
+            "<PublicIdentity>"
+              "<Identity>sip:123@example.com</Identity>"
+              "<BarringIndication>0</BarringIndication>"
+            "</PublicIdentity>"
+            "<PublicIdentity>"
+              "<Identity>sip:456@example.com</Identity>"
+              "<BarringIndication>1</BarringIndication>"
+            "</PublicIdentity>"
+            "<InitialFilterCriteria>"
+              "<TriggerPoint>"
+                "<ConditionTypeCNF>0</ConditionTypeCNF>"
+                "<SPT>"
+                  "<ConditionNegated>0</ConditionNegated>"
+                  "<Group>0</Group>"
+                  "<Method>INVITE</Method>"
+                  "<Extension></Extension>"
+                "</SPT>"
+              "</TriggerPoint>"
+              "<ApplicationServer>"
+                "<ServerName>mmtel.narcissi.example.com</ServerName>"
+                "<DefaultHandling>0</DefaultHandling>"
+              "</ApplicationServer>"
+            "</InitialFilterCriteria>"
+          "</ServiceProfile>"
+        "</IMSSubscription>"
+        "<ChargingAddresses>"
+          "<CCF priority=\"1\">ccf1</CCF>"
+          "<CCF priority=\"2\">ccf2</CCF>"
+          "<ECF priority=\"2\">ecf2</ECF>"
+          "<ECF priority=\"1\">ecf1</ECF>"
+        "</ChargingAddresses>"
+      "</ClearwaterRegData>";
  }
 
   virtual ~HssConnectionTest()
@@ -342,29 +380,29 @@ class HssConnectionTest : public BaseTest
 
 TEST_F(HssConnectionTest, SimpleAssociatedUris)
 {
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.get_registration_data("pubid42", regstate, ifcs_map, uris, 0);
   EXPECT_EQ("REGISTERED", regstate);
-  ASSERT_EQ(2u, uris.size());
-  EXPECT_EQ("sip:123@example.com", uris[0]);
-  EXPECT_EQ("sip:456@example.com", uris[1]);
+  ASSERT_EQ(2u, uris.get_unbarred_uris().size());
+  EXPECT_EQ("sip:123@example.com", uris.get_unbarred_uris()[0]);
+  EXPECT_EQ("sip:456@example.com", uris.get_unbarred_uris()[1]);
 }
 
 TEST_F(HssConnectionTest, SimpleNotRegisteredGet)
 {
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.get_registration_data("pubid43", regstate, ifcs_map, uris, 0);
   EXPECT_EQ("NOT_REGISTERED", regstate);
-  EXPECT_EQ(0u, uris.size());
+  EXPECT_EQ(0u, uris.get_unbarred_uris().size());
 }
 
 TEST_F(HssConnectionTest, SimpleUnregistered)
 {
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("pubid50", "", HSSConnection::CALL, regstate, ifcs_map, uris, 0);
@@ -373,7 +411,7 @@ TEST_F(HssConnectionTest, SimpleUnregistered)
 
 TEST_F(HssConnectionTest, SimpleNotRegisteredUpdate)
 {
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("pubid50", "", HSSConnection::DEREG_ADMIN, regstate, ifcs_map, uris, 0);
@@ -382,7 +420,7 @@ TEST_F(HssConnectionTest, SimpleNotRegisteredUpdate)
 
 TEST_F(HssConnectionTest, SimpleIfc)
 {
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("pubid42", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
@@ -391,7 +429,7 @@ TEST_F(HssConnectionTest, SimpleIfc)
 
 TEST_F(HssConnectionTest, SimpleChargingAddrs)
 {
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   std::deque<std::string> ccfs;
@@ -403,14 +441,27 @@ TEST_F(HssConnectionTest, SimpleChargingAddrs)
   EXPECT_EQ(actual_ecfs, ecfs);
 }
 
+TEST_F(HssConnectionTest, Barring)
+{
+  // Checks that the BarringIndication field from the HSS is parsed correctly.
+  AssociatedURIs uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+  _hss.update_registration_state("pubid47", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  EXPECT_EQ("REGISTERED", regstate);
+  ASSERT_EQ(1u, uris.get_unbarred_uris().size());
+  EXPECT_FALSE(uris.is_impu_barred("sip:123@example.com"));
+  EXPECT_TRUE(uris.is_impu_barred("sip:456@example.com"));
+}
+
 TEST_F(HssConnectionTest, BadXML)
 {
   CapturingTestLogger log;
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("pubid42_malformed", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Failed to parse Homestead response"));
 }
 
@@ -418,77 +469,77 @@ TEST_F(HssConnectionTest, BadXML)
 TEST_F(HssConnectionTest, BadXML2)
 {
   CapturingTestLogger log;
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("pubid43_malformed", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingServiceProfile)
 {
   CapturingTestLogger log;
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement4", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingPublicIdentity)
 {
   CapturingTestLogger log;
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement5", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed ServiceProfile XML"));
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingIdentity)
 {
   CapturingTestLogger log;
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement6", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed PublicIdentity XML"));
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingRegistrationState)
 {
   CapturingTestLogger log;
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement1", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed Homestead XML"));
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingClearwaterRegData)
 {
   CapturingTestLogger log;
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement3", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed Homestead XML"));
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription)
 {
   CapturingTestLogger log;
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement2", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
 }
 
@@ -496,12 +547,12 @@ TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription)
 TEST_F(HssConnectionTest, ServerFailure)
 {
   CapturingTestLogger log;
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("pubid44", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_EQ("", regstate);
-  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("http://narcissus/impu/pubid44/reg-data failed"));
 }
 
@@ -587,14 +638,14 @@ TEST_F(HssConnectionTest, SimpleAliases)
   std::vector<std::string> aliases;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  std::vector<std::string> unused_vector;
+  AssociatedURIs unused_uris;
   std::deque<std::string> unused_deque;
   _hss.update_registration_state("pubid46",
                                  "",
                                  HSSConnection::CALL,
                                  regstate,
                                  ifcs_map,
-                                 unused_vector,
+                                 unused_uris,
                                  aliases,
                                  unused_deque,
                                  unused_deque,
@@ -612,14 +663,14 @@ TEST_F(HssConnectionTest, CacheNotAllowed)
   std::vector<std::string> aliases;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  std::vector<std::string> unused_vector;
+  AssociatedURIs unused_uris;
   std::deque<std::string> unused_deque;
   HTTPCode rc = _hss.update_registration_state("public-needs-private",
                                                "a-private-id",
                                                HSSConnection::REG,
                                                regstate,
                                                ifcs_map,
-                                               unused_vector,
+                                               unused_uris,
                                                aliases,
                                                unused_deque,
                                                unused_deque,

@@ -50,6 +50,7 @@
 #include "scscfsproutlet.h"
 #include "uri_classifier.h"
 #include "wildcard_utils.h"
+#include "associated_uris.h"
 
 // Constant indicating there is no served user for a request.
 const char* NO_SERVED_USER = "";
@@ -291,6 +292,8 @@ long SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                    const std::string& req_type,
                                    bool cache_allowed,
                                    bool& registered,
+                                   bool& barred,
+                                   std::string& default_uri,
                                    std::vector<std::string>& uris,
                                    std::vector<std::string>& aliases,
                                    Ifcs& ifcs,
@@ -299,6 +302,7 @@ long SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                    const std::string& wildcard,
                                    SAS::TrailId trail)
 {
+  AssociatedURIs associated_uris = {};
   std::string regstate;
   std::map<std::string, Ifcs> ifc_map;
 
@@ -307,7 +311,7 @@ long SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                                    req_type,
                                                    regstate,
                                                    ifc_map,
-                                                   uris,
+                                                   associated_uris,
                                                    aliases,
                                                    ccfs,
                                                    ecfs,
@@ -317,9 +321,16 @@ long SCSCFSproutlet::read_hss_data(const std::string& public_id,
   if (http_code == HTTP_OK)
   {
     ifcs = ifc_map[public_id];
-  }
 
-  registered = (regstate == RegDataXMLUtils::STATE_REGISTERED);
+    // Get the default URI. This should always succeed.
+    associated_uris.get_default_impu(default_uri, true);
+
+    // We may want to route to bindings that are barred (in case of an emergency),
+    // so get all the URIs.
+    uris = associated_uris.get_all_uris();
+    registered = (regstate == RegDataXMLUtils::STATE_REGISTERED);
+    barred = associated_uris.is_impu_barred(public_id);
+  }
 
   return (http_code);
 }
@@ -403,6 +414,8 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SCSCFSproutlet* scscf,
   _as_chain_link(),
   _hss_data_cached(false),
   _registered(false),
+  _barred(false),
+  _default_uri(""),
   _uris(),
   _ifcs(),
   _in_dialog_acr(NULL),
@@ -544,6 +557,73 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   }
   else
   {
+    // Check if the served user is barred. If it is barred, we reject the request
+    // unless it is a terminating request to a binding that is using an
+    // emergency registration in which case we let it through.
+    if (_barred)
+    {
+      bool emergency = false;
+
+      if (_session_case->is_terminating())
+      {
+        // The bindings are keyed off the default IMPU.
+        std::string aor = _default_uri;
+        SubscriberDataManager::AoRPair* aor_pair = NULL;
+        _scscf->get_bindings(aor, &aor_pair, trail());
+
+        if ((aor_pair != NULL) &&
+            (aor_pair->get_current() != NULL))
+        {
+          if (!aor_pair->get_current()->bindings().empty())
+          {
+            const SubscriberDataManager::AoR::Bindings bindings = aor_pair->get_current()->bindings();
+
+            // Loop over the bindings. If any binding has an emergency registration,
+            // let the request through. When routing to UEs, we will make sure we
+            // only route the request to the bindings that have an emergency registration.
+            for (SubscriberDataManager::AoR::Bindings::const_iterator binding = bindings.begin();
+                 binding != bindings.end();
+                 ++binding)
+            {
+              if (binding->second->_emergency_registration)
+              {
+                emergency = true;
+                break;
+              }
+            }
+          }
+
+          delete aor_pair; aor_pair = NULL;
+        }
+      }
+
+      if (!emergency)
+      {
+        TRC_INFO("Served user is barred so reject the request");
+        status_code = _session_case->is_originating() ? PJSIP_SC_FORBIDDEN : PJSIP_SC_NOT_FOUND;
+        pjsip_msg* rsp = create_response(req, status_code);
+
+        if (_session_case->is_originating())
+        {
+          SAS::Event event(trail(), SASEvent::REJECT_CALL_FROM_BARRED_USER, 0);
+          std::string served_user = served_user_from_msg(req);
+          event.add_var_param(served_user);
+          SAS::report_event(event);
+        }
+        else
+        {
+          SAS::Event event(trail(), SASEvent::REJECT_CALL_TO_BARRED_USER, 0);
+          std::string served_user = served_user_from_msg(req);
+          event.add_var_param(served_user);
+          SAS::report_event(event);
+        }
+
+        send_response(rsp);
+        free_msg(req);
+        return;
+      }
+    }
+
     // Add a P-Charging-Function-Addresses header if one is not already present
     // for some reason. We only do this if we have the charging addresses cached
     // (which we should do).
@@ -1670,8 +1750,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       {
         if (WildcardUtils::check_users_equivalent(uri, public_id))
         {
-          // Take the first associated URI as the AOR.
-          aor = uris.front();
+          aor = _default_uri;
           break;
         }
       }
@@ -1703,6 +1782,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
                                  pool,
                                  MAX_FORKING,
                                  targets,
+                                 _barred,
                                  trail());
       delete aor_pair; aor_pair = NULL;
     }
@@ -1795,6 +1875,8 @@ long SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
                                       req_type,
                                       cache_allowed,
                                       _registered,
+                                      _barred,
+                                      _default_uri,
                                       _uris,
                                       _aliases,
                                       _ifcs,

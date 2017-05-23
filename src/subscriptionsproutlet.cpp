@@ -334,7 +334,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   SAS::report_marker(start_marker);
 
   // Query the HSS for the associated URIs.
-  std::vector<std::string> uris;
+  AssociatedURIs associated_uris = {};
   std::map<std::string, Ifcs> ifc_map;
 
   // Subscriber must have already registered to be making a subscribe
@@ -344,7 +344,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   HTTPCode http_code = _subscription->_hss->get_registration_data(public_id,
                                                                state,
                                                                ifc_map,
-                                                               uris,
+                                                               associated_uris,
                                                                ccfs,
                                                                ecfs,
                                                                trail_id);
@@ -359,8 +359,21 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
     return;
   }
 
-  // Determine the AOR from the first entry in the uris array.
-  std::string aor = uris.front();
+  // Determine the default URI. If we don't find a default URI, the SUBSCRIBE
+  // should already have been rejected for the subscriber being unregistered,
+  // but we handle the error case where it isn't.
+  std::string aor;
+  if (!associated_uris.get_default_impu(aor, false))
+  {
+    pjsip_msg* rsp = create_response(req, PJSIP_SC_FORBIDDEN);
+    send_response(rsp);
+    free_msg(req);
+    delete acr;
+    return;
+  }
+
+  // Use the unbarred URIs for sending NOTIFYs.
+  std::vector<std::string> unbarred_uris = associated_uris.get_unbarred_uris();
 
   TRC_DEBUG("aor = %s", aor.c_str());
   TRC_DEBUG("SUBSCRIBE for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
@@ -373,7 +386,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   SubscriberDataManager::AoRPair* aor_pair =
                               write_subscriptions_to_store(_subscription->_sdm,
                                                            aor,
-                                                           uris,
+                                                           unbarred_uris,
                                                            req,
                                                            now,
                                                            NULL,
@@ -400,7 +413,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
         SubscriberDataManager::AoRPair* remote_aor_pair =
           write_subscriptions_to_store(*it,
                                        aor,
-                                       uris,
+                                       unbarred_uris,
                                        req,
                                        now,
                                        aor_pair,
@@ -471,7 +484,8 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
 SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to_store(
                    SubscriberDataManager* primary_sdm,        ///<store to write to
                    std::string aor,                           ///<address of record to write to
-                   std::vector<std::string> irs_impus,        ///(IMPUs in Implicit Registration Set
+                   std::vector<std::string> unbarred_irs_impus,
+                                                              ///<Unbarred IMPUs in Implicit Registration Set
                    pjsip_msg* req,                            ///<received request to read headers from
                    int now,                                   ///<time now
                    SubscriberDataManager::AoRPair* backup_aor,///<backup data if no entry in store
@@ -647,7 +661,7 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
 
     // Try to write the AoR back to the store.
     bool unused;
-    set_rc = primary_sdm->set_aor_data(aor, irs_impus, aor_pair, trail(), unused);
+    set_rc = primary_sdm->set_aor_data(aor, unbarred_irs_impus, aor_pair, trail(), unused);
 
     if (set_rc == Store::OK)
     {

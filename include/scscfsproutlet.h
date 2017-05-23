@@ -156,6 +156,8 @@ private:
                      const std::string& req_type,
                      bool cache_allowed,
                      bool& registered,
+                     bool& barred,
+                     std::string& default_uri,
                      std::vector<std::string>& uris,
                      std::vector<std::string>& aliases,
                      Ifcs& ifcs,
@@ -395,6 +397,8 @@ private:
   /// Data retrieved from HSS for this service hop.
   bool _hss_data_cached;
   bool _registered;
+  bool _barred;
+  std::string _default_uri;
   std::vector<std::string> _uris;
   std::vector<std::string> _aliases;
   Ifcs _ifcs;

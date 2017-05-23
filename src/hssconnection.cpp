@@ -325,7 +325,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
                           std::shared_ptr<rapidxml::xml_document<> > root,
                           std::string& regstate,
                           std::map<std::string, Ifcs >& ifcs_map,
-                          std::vector<std::string>& associated_uris,
+                          AssociatedURIs& associated_uris,
                           std::vector<std::string>& aliases,
                           std::deque<std::string>& ccfs,
                           std::deque<std::string>& ecfs,
@@ -414,7 +414,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
   bool found_aliases = false;
   bool maybe_found_aliases = false;
   bool found_multiple_matches = false;
-  associated_uris.clear();
+  associated_uris.clear_uris();
   rapidxml::xml_node<>* sp = NULL;
 
   if (!imss->first_node(RegDataXMLUtils::SERVICE_PROFILE))
@@ -452,13 +452,24 @@ bool decode_homestead_xml(const std::string public_user_identity,
           RegDataXMLUtils::parse_extension_identity(uri, extension);
         }
 
+        rapidxml::xml_node<>* barring_indication = public_id->first_node(RegDataXMLUtils::BARRING_INDICATION);
+
         TRC_DEBUG("Processing Identity node from HSS XML - %s\n",
                   uri.c_str());
 
-        if (std::find(associated_uris.begin(), associated_uris.end(), uri) ==
-            associated_uris.end())
+        if (!associated_uris.contains_uri(uri))
         {
-          associated_uris.push_back(uri);
+          bool barred = false;
+          if (barring_indication)
+          {
+            std::string value = barring_indication->value();
+            if (value == RegDataXMLUtils::STATE_BARRED)
+            {
+              barred = true;
+            }
+          }
+
+          associated_uris.add_uri(uri, barred);
           ifcs_map[uri] = ifc;
         }
 
@@ -551,7 +562,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                                   const std::string& type,
                                                   std::string& regstate,
                                                   std::map<std::string, Ifcs >& ifcs_map,
-                                                  std::vector<std::string>& associated_uris,
+                                                  AssociatedURIs& associated_uris,
                                                   SAS::TrailId trail)
 {
   std::vector<std::string> unused_aliases;
@@ -575,7 +586,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                                   const std::string& private_user_identity,
                                                   const std::string& type,
                                                   std::map<std::string, Ifcs >& ifcs_map,
-                                                  std::vector<std::string>& associated_uris,
+                                                  AssociatedURIs& associated_uris,
                                                   SAS::TrailId trail)
 {
   std::string unused_regstate;
@@ -602,7 +613,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                                   SAS::TrailId trail)
 {
   std::map<std::string, Ifcs > ifcs_map;
-  std::vector<std::string> associated_uris;
+  AssociatedURIs associated_uris = {};
   std::string unused_regstate;
   std::vector<std::string> unused_aliases;
   std::deque<std::string> unused_ccfs;
@@ -626,7 +637,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                                   const std::string& type,
                                                   std::string& regstate,
                                                   std::map<std::string, Ifcs >& ifcs_map,
-                                                  std::vector<std::string>& associated_uris,
+                                                  AssociatedURIs& associated_uris,
                                                   std::deque<std::string>& ccfs,
                                                   std::deque<std::string>& ecfs,
                                                   SAS::TrailId trail)
@@ -651,7 +662,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                                   const std::string& type,
                                                   std::string& regstate,
                                                   std::map<std::string, Ifcs >& ifcs_map,
-                                                  std::vector<std::string>& associated_uris,
+                                                  AssociatedURIs& associated_uris,
                                                   std::vector<std::string>& aliases,
                                                   std::deque<std::string>& ccfs,
                                                   std::deque<std::string>& ecfs,
@@ -729,7 +740,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
 HTTPCode HSSConnection::get_registration_data(const std::string& public_user_identity,
                                               std::string& regstate,
                                               std::map<std::string, Ifcs >& ifcs_map,
-                                              std::vector<std::string>& associated_uris,
+                                              AssociatedURIs& associated_uris,
                                               SAS::TrailId trail)
 {
   std::deque<std::string> unused_ccfs;
@@ -746,7 +757,7 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
 HTTPCode HSSConnection::get_registration_data(const std::string& public_user_identity,
                                               std::string& regstate,
                                               std::map<std::string, Ifcs >& ifcs_map,
-                                              std::vector<std::string>& associated_uris,
+                                              AssociatedURIs& associated_uris,
                                               std::deque<std::string>& ccfs,
                                               std::deque<std::string>& ecfs,
                                               SAS::TrailId trail)
