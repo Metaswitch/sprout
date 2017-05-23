@@ -519,6 +519,18 @@ bool SproutletProxy::is_host_local(const pj_str_t* host)
   return rc;
 }
 
+bool SproutletProxy::is_uri_reflexive(const pjsip_uri* uri,
+                                      Sproutlet* sproutlet,
+                                      SAS::TrailId trail)
+{
+  std::string alias_unused;
+  Sproutlet* matched_sproutlet = match_sproutlet_from_uri(uri,
+                                                          alias_unused,
+                                                          trail);
+
+  return (sproutlet == matched_sproutlet);
+}
+
 bool SproutletProxy::schedule_timer(pj_timer_entry* tentry, int duration)
 {
   pj_time_val tval;
@@ -1686,12 +1698,7 @@ SAS::TrailId SproutletWrapper::trail() const
 
 bool SproutletWrapper::is_uri_reflexive(const pjsip_uri* uri) const
 {
-  std::string alias_unused;
-  Sproutlet* sproutlet = _proxy->match_sproutlet_from_uri(uri,
-                                                          alias_unused,
-                                                          trail());
-
-  return (_sproutlet == sproutlet);
+  return _proxy->is_uri_reflexive(uri, _sproutlet, trail());
 }
 
 bool SproutletWrapper::is_uri_local(const pjsip_uri* uri) const

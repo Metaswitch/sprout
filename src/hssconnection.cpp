@@ -471,7 +471,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
       aliases = sp_identities;
       found_aliases = true;
     }
-    else if ((!maybe_found_aliases) &&
+    else if ((!found_multiple_matches) &&
              (current_sp_maybe_contains_public_id))
     {
       temp_aliases = sp_identities;
@@ -483,13 +483,22 @@ bool decode_homestead_xml(const std::string public_user_identity,
     }
   }
 
-  if (aliases.empty() && !temp_aliases.empty())
+  if (aliases.empty())
   {
-    aliases = temp_aliases;
-
-    if (found_multiple_matches)
+    if (!temp_aliases.empty())
     {
-      SAS::Event event(trail, SASEvent::AMBIGUOUS_WILDCARD_MATCH, 0);
+      aliases = temp_aliases;
+
+      if (found_multiple_matches)
+      {
+        SAS::Event event(trail, SASEvent::AMBIGUOUS_WILDCARD_MATCH, 0);
+        event.add_var_param(public_user_identity);
+        SAS::report_event(event);
+      }
+    }
+    else
+    {
+      SAS::Event event(trail, SASEvent::NO_MATCHING_SERVICE_PROFILE, 0);
       event.add_var_param(public_user_identity);
       SAS::report_event(event);
     }

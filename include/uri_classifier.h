@@ -10,10 +10,19 @@
 #ifndef URI_CLASSIFIER_H
 #define URI_CLASSIFIER_H
 
+#include <string>
+
 extern "C" {
 #include <pjsip.h>
 #include <pjlib-util.h>
 #include <pjlib.h>
+}
+
+// Forward declaration of PJUtils function.
+namespace PJUtils {
+
+std::string pj_str_to_string(const pj_str_t* pjstr);
+
 }
 
 enum URIClass

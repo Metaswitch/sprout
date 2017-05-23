@@ -109,6 +109,8 @@ TEST_F(URIClassiferTest, PreferSip)
             classify_uri_helper("sip:+1234@homedomain", false));
   EXPECT_EQ(URIClass::HOME_DOMAIN_SIP_URI,
             classify_uri_helper("sip:+1234@homedomain", true));
+  EXPECT_EQ(URIClass::HOME_DOMAIN_SIP_URI,
+            classify_uri_helper("sip:notaphonenumber@homedomain", false));
 }
 
 

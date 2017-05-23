@@ -606,6 +606,15 @@ public:
   virtual pjsip_sip_uri* next_hop_uri(const std::string& service,
                                       const pjsip_route_hdr* route,
                                       pj_pool_t* pool) const = 0;
+
+  /// Check if a given URI would be routed to the current Sproutlet if it was
+  /// recieved as the top Route header on a request.  This can be used to
+  /// locate a Sproutlet in a Route set.
+  ///
+  /// If the URI is not a SIP URI, this function returns FALSE.
+  virtual bool is_uri_reflexive(const pjsip_uri* uri,
+                                Sproutlet* sproutlet,
+                                SAS::TrailId trail) = 0;
 };
 
 
