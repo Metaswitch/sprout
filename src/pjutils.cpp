@@ -315,7 +315,7 @@ pjsip_uri* PJUtils::orig_served_user(const pjsip_msg* msg)
 
 
 /// Determine the served user for terminating requests.
-pjsip_uri* PJUtils::term_served_user(pjsip_msg* msg)
+pjsip_uri* PJUtils::term_served_user(const pjsip_msg* msg)
 {
   // The served user for terminating requests is always determined from the
   // Request URI.
