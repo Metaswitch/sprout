@@ -2,7 +2,7 @@
  * @file registrarsproutlet.h Initialization/Termination functions for
  *                            Sprout's Registrar sproutlet.
  *
- * Copyright (C) Metaswitch Networks
+ * Copyright (C) Metaswitch Networks 2017
  * If license terms are provided to you in a COPYING file in the root directory
  * of the source code repository by which you are accessing this code, then
  * the license outlined in that COPYING file applies to your use.
