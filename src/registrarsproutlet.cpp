@@ -778,7 +778,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     if (!WildcardUtils::is_wildcard_uri(aor))
     {
       pjsip_uri* aor_uri = PJUtils::uri_from_string(aor, get_pool(rsp));
-      if (this_uri != NULL)
+      if (aor_uri != NULL)
       {
         pjsip_routing_hdr* pau =
                         identity_hdr_create(get_pool(rsp), STR_P_ASSOCIATED_URI);
@@ -787,7 +787,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
       }
       else
       {
-        TRC_DEBUG("Bad associated URI %s", aor->c_str());
+        TRC_DEBUG("Bad associated URI %s", aor.c_str());
         SAS::Event event(trail(), SASEvent::HTTP_HOMESTEAD_BAD_IDENTITY, 1);
         event.add_var_param(aor);
         SAS::report_event(event);
