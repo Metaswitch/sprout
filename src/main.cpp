@@ -2132,7 +2132,7 @@ int main(int argc, char* argv[])
   if (registration_store_location != "")
   {
     // Use memcached store.
-    TRC_STATUS("Using memcached compatible store with binary protocol");
+    TRC_STATUS("Using memcached store");
     local_data_store = (Store*)new TopologyNeutralMemcachedStore(registration_store_location,
                                                                  astaire_resolver,
                                                                  false,
@@ -2141,7 +2141,7 @@ int main(int argc, char* argv[])
     if (!remote_registration_stores_locations.empty())
     {
       // Use remote memcached store too.
-      TRC_STATUS("Using remote memcached compatible stores with binary protocol");
+      TRC_STATUS("Using remote memcached stores");
        for (std::vector<std::string>::iterator it = remote_registration_stores_locations.begin();
            it != remote_registration_stores_locations.end();
            ++it)
@@ -2241,21 +2241,21 @@ int main(int argc, char* argv[])
   if (impi_store_location != "")
   {
     // Use memcached store.
-    TRC_STATUS("Using memcached compatible store with binary protocol");
+    TRC_STATUS("Using memcached store");
     local_impi_data_store = (Store*)new TopologyNeutralMemcachedStore(impi_store_location,
                                                                       astaire_resolver,
                                                                       false,
                                                                       astaire_comm_monitor);
     local_impi_store = new ImpiStore(local_impi_data_store, opt.impi_store_mode);
 
-    // Only set up remote IMPI stores if some has been configured, and we need
+    // Only set up remote IMPI stores if some have been configured, and we need
     // the IMPI store to be GR.
     if (!remote_impi_stores_locations.empty() &&
         (opt.non_register_auth_mode &
            NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT))
     {
       // Use remote memcached store too.
-      TRC_STATUS("Using remote memcached compatible stores with binary protocol");
+      TRC_STATUS("Using remote memcached stores");
        for (std::vector<std::string>::iterator it = remote_impi_stores_locations.begin();
            it != remote_impi_stores_locations.end();
            ++it)

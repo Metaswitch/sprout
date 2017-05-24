@@ -1049,7 +1049,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
           TRC_DEBUG("Storing challenge because nonce counts are supported");
           auth_challenge->expires = calculate_challenge_expiration_time(req);
         }
-        else if (is_register &&
+        else if ((is_register) &&
                  (auth_challenge->type == ImpiStore::AuthChallenge::DIGEST) &&
                  (_authentication->_non_register_auth_mode &
                   NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT))
@@ -1411,6 +1411,7 @@ ImpiStore::Impi* AuthenticationSproutlet::read_impi(const std::string& impi,
           TRC_DEBUG("Found IMPI in backup store");
           impi_obj->auth_challenges = std::move(backup_impi_obj->auth_challenges);
           delete backup_impi_obj; backup_impi_obj = NULL;
+          break;
         }
         else
         {

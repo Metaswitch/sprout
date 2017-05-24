@@ -155,7 +155,7 @@ private:
   /// to GR stores if necessary).
   ///
   /// @param impi  - The IMPI to read.
-  /// @param nonce - The nonce that the caller in interested in.
+  /// @param nonce - The nonce that the caller is in interested in.
   /// @param trail - SAS trail ID.
   ///
   /// @return      - The IMPI object, or NULL if there was a store failure.
@@ -179,7 +179,7 @@ private:
                                 ImpiStore::Impi* impi_obj,
                                 SAS::TrailId trail);
 
-  /// Write a challenge to a single IMPI.
+  /// Write a challenge to a single store.
   ///
   /// @param store          - The store to write to.
   /// @param impi           - The IMPI the challenge relates to.
