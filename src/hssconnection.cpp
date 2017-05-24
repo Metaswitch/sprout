@@ -429,7 +429,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
         //                  select the correct service profile.
         //  - associated_uri: The actual associated URI.
         //
-        // These identitues are normally the same, except in the case of a
+        // These identities are normally the same, except in the case of a
         // non-distinct IMPU, where the identity_uri is the distinct IMPU, and
         // the associated_uri is the wildcard IMPU.
         std::string identity_uri = std::string(identity->value());
@@ -738,8 +738,6 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                               ecfs,
                               false,
                               trail) ? HTTP_OK : HTTP_SERVER_ERROR;
-
-
 }
 
 HTTPCode HSSConnection::get_registration_data(const std::string& public_user_identity,
