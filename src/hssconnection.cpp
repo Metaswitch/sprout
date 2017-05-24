@@ -382,6 +382,10 @@ bool decode_homestead_xml(const std::string public_user_identity,
   // found_aliases is a flag used to indicate that we've already found our list
   // of aliases, maybe_found_aliases indicates that we might have found it, but
   // it could be overridden later.
+  // wildcard_uri saves of the value of a wildcard identity that potentially
+  // matches the public identity, so that we can update the barring state of
+  // the public identity if the wildcard identity is the best match after we've
+  // looked at all the service profiles.
   std::vector<std::string> sp_identities;
   std::vector<std::string> temp_aliases;
   bool current_sp_contains_public_id = false;
@@ -389,6 +393,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
   bool found_aliases = false;
   bool maybe_found_aliases = false;
   bool found_multiple_matches = false;
+  std::string wildcard_uri;
   associated_uris.clear_uris();
   rapidxml::xml_node<>* sp = NULL;
 
@@ -419,53 +424,72 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
       if (identity)
       {
-        std::string uri = std::string(identity->value());
+        // There are two potential identities in the Identity node:
+        //  - identity_uri: Identity used for matching against identities to
+        //                  select the correct service profile.
+        //  - associated_uri: The actual associated URI.
+        //
+        // These identitues are normally the same, except in the case of a
+        // non-distinct IMPU, where the identity_uri is the distinct IMPU, and
+        // the associated_uri is the wildcard IMPU.
+        std::string identity_uri = std::string(identity->value());
+        std::string associated_uri = identity_uri;
+        rapidxml::xml_node<>* extension =
+                              public_id->first_node(RegDataXMLUtils::EXTENSION);
 
-        rapidxml::xml_node<>* extension = public_id->first_node(RegDataXMLUtils::EXTENSION);
         if (extension)
         {
-          RegDataXMLUtils::parse_extension_identity(uri, extension);
+          RegDataXMLUtils::parse_extension_identity(associated_uri, extension);
         }
 
-        rapidxml::xml_node<>* barring_indication = public_id->first_node(RegDataXMLUtils::BARRING_INDICATION);
+        rapidxml::xml_node<>* barring_indication =
+                     public_id->first_node(RegDataXMLUtils::BARRING_INDICATION);
 
-        TRC_DEBUG("Processing Identity node from HSS XML - %s", uri.c_str());
+        TRC_DEBUG("Processing Identity node from HSS XML - %s", identity_uri.c_str());
 
-        if (!associated_uris.contains_uri(uri))
+        bool barred = false;
+        if (barring_indication)
         {
-          bool barred = false;
-          if (barring_indication)
+          std::string value = barring_indication->value();
+          if (value == RegDataXMLUtils::STATE_BARRED)
           {
-            std::string value = barring_indication->value();
-            if (value == RegDataXMLUtils::STATE_BARRED)
-            {
-              barred = true;
-            }
+            barred = true;
           }
+        }
 
-          associated_uris.add_uri(uri, barred);
-          ifcs_map[uri] = ifc;
+        if (associated_uri != identity_uri)
+        {
+          // We're in the case where we're processing a non-distinct IMPU. We
+          // don't want to handle updating the associated URI, as this should
+          // be covered when we handle the corresponding wildcard IMPU entry.
+          // Instead, store off any barring information for the IMPU as this
+          // needs to override the barring status of the wildcard IMPU.
+          associated_uris.update_barring_status(identity_uri, barred);
+        }
+        else if (!associated_uris.contains_uri(associated_uri))
+        {
+          associated_uris.add_uri(associated_uri, barred);
+          ifcs_map[associated_uri] = ifc;
         }
 
         if (!found_aliases)
         {
-          sp_identities.push_back(uri);
+          sp_identities.push_back(associated_uri);
 
-          if (uri == public_user_identity)
+          if (identity_uri == public_user_identity)
           {
             current_sp_contains_public_id = true;
           }
           else if (WildcardUtils::check_users_equivalent(
-                                                     uri, public_user_identity))
+                                                     identity_uri, public_user_identity))
           {
-            TRC_DEBUG("KKKKKKKKK");
             found_multiple_matches = maybe_found_aliases;
-            TRC_DEBUG("found_multiple_matches: %s", found_multiple_matches ? "true" : "false");
             current_sp_maybe_contains_public_id = true;
 
             if (!maybe_found_aliases)
             {
               ifcs_map[public_user_identity] = ifc;
+              wildcard_uri = identity_uri;
             }
           }
         }
@@ -477,12 +501,6 @@ bool decode_homestead_xml(const std::string public_user_identity,
       }
     }
 
-    TRC_DEBUG("maybe_found_aliases: %s", maybe_found_aliases ? "true" : "false");
-    TRC_DEBUG("found_multiple_matches: %s", found_multiple_matches ? "true" : "false");
-    TRC_DEBUG("current_sp_maybe_contains_public_id: %s", current_sp_maybe_contains_public_id ? "true" : "false");
-    TRC_DEBUG("found_aliases: %s", found_aliases ? "true" : "false");
-
-
     if ((!found_aliases) &&
         (current_sp_contains_public_id))
     {
@@ -492,7 +510,6 @@ bool decode_homestead_xml(const std::string public_user_identity,
     else if ((!found_multiple_matches) &&
              (current_sp_maybe_contains_public_id))
     {
-      TRC_DEBUG("JJJJJJJJJJJJJJJJJJJ");
       temp_aliases = sp_identities;
       maybe_found_aliases = true;
     }
@@ -506,7 +523,10 @@ bool decode_homestead_xml(const std::string public_user_identity,
   {
     if (!temp_aliases.empty())
     {
+      // The best match was a wildcard.
       aliases = temp_aliases;
+      associated_uris.add_wildcard_mapping(wildcard_uri,
+                                           public_user_identity);
 
       if (found_multiple_matches)
       {
@@ -522,9 +542,6 @@ bool decode_homestead_xml(const std::string public_user_identity,
       SAS::report_event(event);
     }
   }
-
-  // At this point we could check the barring status of any alias that is a
-  // wilcard, and if it is barred, then set the public user id to be barred.
 
   rapidxml::xml_node<>* charging_addrs_node = cw->first_node("ChargingAddresses");
 

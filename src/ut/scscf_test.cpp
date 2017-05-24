@@ -44,6 +44,134 @@ using testing::_;
 using testing::NiceMock;
 using testing::HasSubstr;
 
+const std::string IMS_SUB_BARRED_MULTIPLE_WILDCARD =
+                               "<IMSSubscription>\n"
+                               "  <ServiceProfile>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:610@homedomain</Identity>"
+                               "    </PublicIdentity>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:6!.*!@homedomain</Identity>"
+                               "    </PublicIdentity>\n"
+                               "    <InitialFilterCriteria>\n"
+                               "      <Priority>1</Priority>\n"
+                               "      <ApplicationServer>\n"
+                               "        <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                               "        <DefaultHandling>0</DefaultHandling>\n"
+                               "      </ApplicationServer>\n"
+                               "    </InitialFilterCriteria>\n"
+                               "  </ServiceProfile>\n"
+                               "  <ServiceProfile>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:611@homedomain</Identity>"
+                               "    </PublicIdentity>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:65!.*!@homedomain</Identity>"
+                               "      <BarringIndication>1</BarringIndication>"
+                               "    </PublicIdentity>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:650!.*!@homedomain</Identity>"
+                               "    </PublicIdentity>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:6505551000@homedomain</Identity>"
+                               "      <BarringIndication>1</BarringIndication>"
+                               "      <Extension>"
+                               "        <IdentityType>3</IdentityType>"
+                               "        <Extension>"
+                               "          <Extension>"
+                               "            <WildcardedIMPU>sip:65!.*!@homedomain</WildcardedIMPU>"
+                               "          </Extension>"
+                               "        </Extension>"
+                               "      </Extension>"
+                               "    </PublicIdentity>\n"
+                               "    <InitialFilterCriteria>\n"
+                               "      <Priority>1</Priority>\n"
+                               "      <ApplicationServer>\n"
+                               "        <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                               "        <DefaultHandling>0</DefaultHandling>\n"
+                               "      </ApplicationServer>\n"
+                               "    </InitialFilterCriteria>\n"
+                               "  </ServiceProfile>\n"
+                               "  <ServiceProfile>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:612@homedomain</Identity>"
+                               "    </PublicIdentity>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:!.*!@homedomain</Identity>"
+                               "    </PublicIdentity>\n"
+                               "    <InitialFilterCriteria>\n"
+                               "      <Priority>1</Priority>\n"
+                               "      <ApplicationServer>\n"
+                               "        <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                               "        <DefaultHandling>0</DefaultHandling>\n"
+                               "      </ApplicationServer>\n"
+                               "    </InitialFilterCriteria>\n"
+                               "  </ServiceProfile>\n"
+                               "</IMSSubscription>";
+const std::string IMS_SUB_BARRED_WILDCARD =
+                               "<IMSSubscription><ServiceProfile>\n"
+                               "  <PublicIdentity>"
+                               "    <Identity>sip:610@homedomain</Identity>"
+                               "  </PublicIdentity>\n"
+                               "  <PublicIdentity>"
+                               "    <Identity>sip:65!.*!@homedomain</Identity>"
+                               "    <BarringIndication>1</BarringIndication>"
+                               "  </PublicIdentity>\n"
+                               "  <InitialFilterCriteria>\n"
+                               "    <Priority>1</Priority>\n"
+                               "    <TriggerPoint>\n"
+                               "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                               "    <SPT>\n"
+                               "      <ConditionNegated>1</ConditionNegated>\n"
+                               "      <Group>0</Group>\n"
+                               "      <Method>INVITE</Method>\n"
+                               "      <Extension></Extension>\n"
+                               "    </SPT>\n"
+                               "  </TriggerPoint>\n"
+                               "  <ApplicationServer>\n"
+                               "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                               "    <DefaultHandling>0</DefaultHandling>\n"
+                               "  </ApplicationServer>\n"
+                               "  </InitialFilterCriteria>\n"
+                               "</ServiceProfile></IMSSubscription>";
+const std::string IMS_SUB_BARRED_IMPU_IN_WILDCARD =
+                               "<IMSSubscription><ServiceProfile>\n"
+                               "  <PublicIdentity>"
+                               "    <Identity>sip:610@homedomain</Identity>"
+                               "  </PublicIdentity>\n"
+                               "  <PublicIdentity>"
+                               "    <Identity>sip:65!.*!@homedomain</Identity>"
+                               "  </PublicIdentity>\n"
+                               "  <PublicIdentity>"
+                               "    <Identity>sip:6505551000@homedomain</Identity>"
+                               "    <BarringIndication>1</BarringIndication>"
+                               "    <Extension>"
+                               "      <IdentityType>3</IdentityType>"
+                               "      <Extension>"
+                               "        <Extension>"
+                               "          <WildcardedIMPU>sip:65!.*!@homedomain</WildcardedIMPU>"
+                               "        </Extension>"
+                               "      </Extension>"
+                               "    </Extension>"
+                               "  </PublicIdentity>\n"
+                               "  <InitialFilterCriteria>\n"
+                               "    <Priority>1</Priority>\n"
+                               "    <TriggerPoint>\n"
+                               "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                               "    <SPT>\n"
+                               "      <ConditionNegated>1</ConditionNegated>\n"
+                               "      <Group>0</Group>\n"
+                               "      <Method>INVITE</Method>\n"
+                               "      <Extension></Extension>\n"
+                               "    </SPT>\n"
+                               "  </TriggerPoint>\n"
+                               "  <ApplicationServer>\n"
+                               "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                               "    <DefaultHandling>0</DefaultHandling>\n"
+                               "  </ApplicationServer>\n"
+                               "  </InitialFilterCriteria>\n"
+                               "</ServiceProfile></IMSSubscription>";
+
 namespace SP
 {
   class Message
@@ -1288,101 +1416,6 @@ TEST_F(SCSCFTest, TestBadScheme)
   doFastFailureFlow(msg, 416);  // bad scheme
 }
 
-const std::string IMS_SUB_BARRED_MULTIPLE_WILDCARD =
-                               "<IMSSubscription><ServiceProfile>\n"
-                               "  <PublicIdentity>"
-                               "    <Identity>sip:65!.*!@homedomain</Identity>"
-                               "    <BarringIndication>1</BarringIndication>"
-                               "  </PublicIdentity>\n"
-                               "  <PublicIdentity>"
-                               "    <Identity>sip:650!.*!@homedomain</Identity>"
-                               "  </PublicIdentity>\n"
-                               "  <PublicIdentity>"
-                               "    <Identity>sip:6505551000@homedomain</Identity>"
-                               "    <Extension>"
-                               "      <IdentityType>3</IdentityType>"
-                               "      <Extension>"
-                               "        <Extension>"
-                               "          <WildcardedIMPU>sip:65!.*!@homedomain</WildcardedIMPU>"
-                               "        </Extension>"
-                               "      </Extension>"
-                               "    </Extension>"
-                               "  </PublicIdentity>\n"
-                               "  <InitialFilterCriteria>\n"
-                               "    <Priority>1</Priority>\n"
-                               "    <TriggerPoint>\n"
-                               "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                               "    <SPT>\n"
-                               "      <ConditionNegated>1</ConditionNegated>\n"
-                               "      <Group>0</Group>\n"
-                               "      <Method>INVITE</Method>\n"
-                               "      <Extension></Extension>\n"
-                               "    </SPT>\n"
-                               "  </TriggerPoint>\n"
-                               "  <ApplicationServer>\n"
-                               "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                               "    <DefaultHandling>0</DefaultHandling>\n"
-                               "  </ApplicationServer>\n"
-                               "  </InitialFilterCriteria>\n"
-                               "</ServiceProfile></IMSSubscription>";
-const std::string IMS_SUB_BARRED_WILDCARD =
-                               "<IMSSubscription><ServiceProfile>\n"
-                               "  <PublicIdentity>"
-                               "    <Identity>sip:65!.*!@homedomain</Identity>"
-                               "    <BarringIndication>1</BarringIndication>"
-                               "  </PublicIdentity>\n"
-                               "  <InitialFilterCriteria>\n"
-                               "    <Priority>1</Priority>\n"
-                               "    <TriggerPoint>\n"
-                               "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                               "    <SPT>\n"
-                               "      <ConditionNegated>1</ConditionNegated>\n"
-                               "      <Group>0</Group>\n"
-                               "      <Method>INVITE</Method>\n"
-                               "      <Extension></Extension>\n"
-                               "    </SPT>\n"
-                               "  </TriggerPoint>\n"
-                               "  <ApplicationServer>\n"
-                               "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                               "    <DefaultHandling>0</DefaultHandling>\n"
-                               "  </ApplicationServer>\n"
-                               "  </InitialFilterCriteria>\n"
-                               "</ServiceProfile></IMSSubscription>";
-const std::string IMS_SUB_BARRED_IMPU_IN_WILDCARD =
-                               "<IMSSubscription><ServiceProfile>\n"
-                               "  <PublicIdentity>"
-                               "    <Identity>sip:65!.*!@homedomain</Identity>"
-                               "  </PublicIdentity>\n"
-                               "  <PublicIdentity>"
-                               "    <Identity>sip:6505551000@homedomain</Identity>"
-                               "    <BarringIndication>1</BarringIndication>"
-                               "    <Extension>"
-                               "      <IdentityType>3</IdentityType>"
-                               "      <Extension>"
-                               "        <Extension>"
-                               "          <WildcardedIMPU>sip:65!.*!@homedomain</WildcardedIMPU>"
-                               "        </Extension>"
-                               "      </Extension>"
-                               "    </Extension>"
-                               "  </PublicIdentity>\n"
-                               "  <InitialFilterCriteria>\n"
-                               "    <Priority>1</Priority>\n"
-                               "    <TriggerPoint>\n"
-                               "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                               "    <SPT>\n"
-                               "      <ConditionNegated>1</ConditionNegated>\n"
-                               "      <Group>0</Group>\n"
-                               "      <Method>INVITE</Method>\n"
-                               "      <Extension></Extension>\n"
-                               "    </SPT>\n"
-                               "  </TriggerPoint>\n"
-                               "  <ApplicationServer>\n"
-                               "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                               "    <DefaultHandling>0</DefaultHandling>\n"
-                               "  </ApplicationServer>\n"
-                               "  </InitialFilterCriteria>\n"
-                               "</ServiceProfile></IMSSubscription>";
-
 // Test that a call from an IMPU that belongs to a barred wildcarded public
 // identity is rejected with a 403 (forbidden).
 TEST_F(SCSCFTest, TestBarredWildcardCaller)
@@ -1458,40 +1491,6 @@ TEST_F(SCSCFTest, TestBarredCaller)
   doSlowFailureFlow(msg, 403);
 }
 
-// BAD TEST - INCLUDES BAD XML. (Multiple WCs match and the WC we should use
-// isn't specified.) KEEP AROUND ONLY TO FIND BUG THEN DELETE - TODO
-TEST_F(SCSCFTest, TestToFindWCBug)
-{
-  SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", "REGISTERED",
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "  <PublicIdentity>"
-                                   "    <Identity>sip:65!.*!@homedomain</Identity>"
-                                   "    <BarringIndication>1</BarringIndication>"
-                                   "  </PublicIdentity>\n"
-                                   "  <PublicIdentity>"
-                                   "    <Identity>sip:650!.*!@homedomain</Identity>"
-                                   "  </PublicIdentity>\n"
-                                   "  <InitialFilterCriteria>\n"
-                                   "    <Priority>1</Priority>\n"
-                                   "    <TriggerPoint>\n"
-                                   "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                   "    <SPT>\n"
-                                   "      <ConditionNegated>1</ConditionNegated>\n"
-                                   "      <Group>0</Group>\n"
-                                   "      <Method>INVITE</Method>\n"
-                                   "      <Extension></Extension>\n"
-                                   "    </SPT>\n"
-                                   "  </TriggerPoint>\n"
-                                   "  <ApplicationServer>\n"
-                                   "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                   "    <DefaultHandling>0</DefaultHandling>\n"
-                                   "  </ApplicationServer>\n"
-                                   "  </InitialFilterCriteria>\n"
-                                   "</ServiceProfile></IMSSubscription>");
-  Message msg;
-  doSlowFailureFlow(msg, 404);
-}
 
 // Test that a call to an IMPU that belongs to a barred wildcarded public
 // identity is rejected with a 404 (not found).
@@ -1503,7 +1502,6 @@ TEST_F(SCSCFTest, TestBarredWildcardCallee)
                                    "REGISTERED",
                                    IMS_SUB_BARRED_WILDCARD);
   Message msg;
-  msg._route = "Route: <sip:homedomain;orig>";
   doSlowFailureFlow(msg, 404);
 }
 
@@ -1518,7 +1516,6 @@ TEST_F(SCSCFTest, TestBarredMultipleWildcardCallee)
                                    "REGISTERED",
                                    IMS_SUB_BARRED_MULTIPLE_WILDCARD);
   Message msg;
-  msg._route = "Route: <sip:homedomain;orig>";
   doSlowFailureFlow(msg, 404);
 }
 
@@ -1532,7 +1529,6 @@ TEST_F(SCSCFTest, TestWildcardBarredCallee)
                                    "REGISTERED",
                                    IMS_SUB_BARRED_IMPU_IN_WILDCARD);
   Message msg;
-  msg._route = "Route: <sip:homedomain;orig>";
   doSlowFailureFlow(msg, 404);
 }
 

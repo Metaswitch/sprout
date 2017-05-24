@@ -29,6 +29,9 @@ public:
   /// Adds to the list of associated URIs.
   void add_uri(std::string uri, bool barred);
 
+  /// Updates the barring status of a URI.
+  void update_barring_status(std::string uri, bool barred);
+
   /// Clears this structure.
   void clear_uris();
 
@@ -41,12 +44,18 @@ public:
   /// Returns all URIs.
   std::vector<std::string> get_all_uris();
 
+  /// Add a mapping between a distinct IMPU and the wildcard it belongs to
+  void add_wildcard_mapping(std::string wildcard, std::string distinct);
+
 private:
   /// A vector of associated URIs.
   std::vector<std::string> _associated_uris;
 
   /// A map from the associated URIs to their barring state.
   std::map<std::string, bool> _barred_map;
+
+  /// A map of distinct IMPUs to their wildcards
+  std::map<std::string, std::string> _distinct_to_wildcard;
 };
 
 #endif

@@ -10,6 +10,7 @@
  */
 
 #include "associated_uris.h"
+#include "log.h"
 
 #include <algorithm>
 
@@ -48,6 +49,14 @@ void AssociatedURIs::add_uri(std::string uri,
                              bool barred)
 {
   _associated_uris.push_back(uri);
+  update_barring_status(uri, barred);
+}
+
+// Updates the barring state of a URI. This map includes URIs that aren't in the
+// associated URI list (e.g. it includes non-distinct IMPUs)
+void AssociatedURIs::update_barring_status(std::string uri,
+                                           bool barred)
+{
   _barred_map[uri] = barred;
 }
 
@@ -61,11 +70,28 @@ void AssociatedURIs::clear_uris()
 // Returns if the specified URI is barred.
 bool AssociatedURIs::is_impu_barred(std::string uri)
 {
-  // Will the public id end up in the map if it's a wildcard?
-  // KH1 think it will from a UT, but that could be how the UT was written.
-  // If it isn't - say "if not in map, look for matching wc in map and return
-  // their barring status".
-  return _barred_map[uri];
+  // Sometimes we don't have the barring status of the specific URI as it's
+  // actually an URI that matches a wildcard - get the wildcard URI before
+  // we check the barring status. In the case where a non-distinct IMPU
+  // has had its barring indication set specifically in the IMS subscription
+  // we got from the HSS then it was directly added to the _barred_map.
+  std::string uri_to_check = uri;
+  if (_distinct_to_wildcard.find(uri) != _distinct_to_wildcard.end())
+  {
+    uri_to_check = _distinct_to_wildcard[uri];
+  }
+
+  if (_barred_map.find(uri_to_check) != _barred_map.end())
+  {
+    return _barred_map[uri_to_check];
+  }
+  else
+  {
+    // We shouldn't ever end up here - return false (we do hit this in UTs
+    // though as we don't always use valid data).
+    TRC_DEBUG("No barring information available for %s", uri.c_str());
+    return false;
+  }
 }
 
 // Returns all unbarred associated URIs.
@@ -88,4 +114,11 @@ std::vector<std::string> AssociatedURIs::get_unbarred_uris()
 std::vector<std::string> AssociatedURIs::get_all_uris()
 {
   return _associated_uris;
+}
+
+// Sets up the link between a distinct IMPU and its wildcard
+void AssociatedURIs::add_wildcard_mapping(std::string wildcard,
+                                          std::string distinct)
+{
+  _distinct_to_wildcard.insert(std::make_pair(distinct, wildcard));
 }
