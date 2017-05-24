@@ -2327,7 +2327,7 @@ TYPED_TEST(AuthenticationPxyAuthHdrTest, ProxyAuthorizationSuccess)
 }
 
 
-TYPED_TEST(AuthenticationPxyAuthHdrTest, ProxyAuthorizationWorksWithNonceCount)
+TYPED_TEST(AuthenticationPxyAuthHdrTest, ProxyAuthorizationOneResponsePerChallenge)
 {
   // Test a successful SIP Digest authentication flow.
   pjsip_tx_data* tdata;
@@ -2383,8 +2383,15 @@ TYPED_TEST(AuthenticationPxyAuthHdrTest, ProxyAuthorizationWorksWithNonceCount)
   // The authentication module lets the request through.
   this->auth_sproutlet_allows_request(true);
 
-  // Submit a same request with a new authentication response (nc=2). This is
-  // accepted.
+  //
+  // Send another request that tries to use the same nonce as the first request.
+  //
+  // Note that because all challenges are stored for at least 40s (to allow the
+  // initial auth response flow to complete) we advance time by 60s first which
+  // makes the challenge expire and causes the request to be challenged.
+  //
+  cwtest_advance_time_ms(60 * 1000);
+
   AuthenticationMessage msg3("INVITE");
   msg3._auth_hdr = false;
   msg3._proxy_auth_hdr = true;
@@ -2398,6 +2405,42 @@ TYPED_TEST(AuthenticationPxyAuthHdrTest, ProxyAuthorizationWorksWithNonceCount)
   msg3._integ_prot = "ip-assoc-pending";
   msg3._route_uri += ";auto-reg";
   this->inject_msg(msg3.get());
+
+  // Expect a 407 Proxy Authorization Required response.
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+  tdata = this->current_txdata();
+  RespMatcher(407).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the header.
+  std::string auth2 = get_headers(tdata->msg, "Proxy-Authenticate");
+  std::map<std::string, std::string> auth_params2;
+  this->parse_www_authenticate(auth2, auth_params2);
+  EXPECT_EQ("true", auth_params2["stale"]);
+  EXPECT_NE(auth_params["nonce"], auth_params2["nonce"]);
+  this->free_txdata();
+
+  // ACK that response
+  AuthenticationMessage ack2("ACK");
+  ack2._cseq = msg3._cseq;
+  this->inject_msg(ack2.get());
+
+  // Submit a same request with the same authentication response. Check it is
+  // rejected.
+  AuthenticationMessage msg4("INVITE");
+  msg4._auth_hdr = false;
+  msg4._proxy_auth_hdr = true;
+  msg4._algorithm = "MD5";
+  msg4._key = "12345678123456781234567812345678";
+  msg4._nonce = auth_params2["nonce"];
+  msg4._opaque = auth_params2["opaque"];
+  msg4._nc = "00000002";
+  msg4._cnonce = "8765432187654321";
+  msg4._qop = "auth";
+  msg4._integ_prot = "ip-assoc-pending";
+  msg4._route_uri += ";auto-reg";
+  this->inject_msg(msg4.get());
 
   // The authentication module lets the request through.
   this->auth_sproutlet_allows_request(true);
