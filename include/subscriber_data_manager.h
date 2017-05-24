@@ -630,9 +630,11 @@ private:
   // @param now           The current time
   // @param force_expires Whether all subscriptions should be expired
   //                      no matter the current time
+  // @param trail         SAS trail
   void expire_subscriptions(AoRPair* aor_pair,
                             int now,
-                            bool force_expire);
+                            bool force_expire,
+                            SAS::TrailId trail);
 
   // Iterate over all original and current bindings in an AoR pair and
   // classify them as removed ("EXPIRED"), created ("CREATED"), refreshed ("REFRESHED"),

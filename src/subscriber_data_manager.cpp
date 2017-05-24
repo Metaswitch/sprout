@@ -400,7 +400,7 @@ int SubscriberDataManager::expire_aor_members(AoRPair* aor_pair,
   // N.B. Subscriptions are not factored into the returned expiry time on the
   // store record because, according to 5.4.2.1.2/TS 24.229, all subscriptions
   // automatically expire when the last binding expires.
-  expire_subscriptions(aor_pair, now, (max_expires == now));
+  expire_subscriptions(aor_pair, now, (max_expires == now), trail);
 
   return max_expires;
 }
@@ -413,7 +413,8 @@ int SubscriberDataManager::expire_aor_members(AoRPair* aor_pair,
 /// @param force_expire  Whether we should always remove the subscriptions
 void SubscriberDataManager::expire_subscriptions(AoRPair* aor_pair,
                                                  int now,
-                                                 bool force_expire)
+                                                 bool force_expire,
+                                                 SAS::TrailId trail)
 {
   for (AoR::Subscriptions::iterator i =
          aor_pair->get_current()->_subscriptions.begin();
@@ -424,6 +425,16 @@ void SubscriberDataManager::expire_subscriptions(AoRPair* aor_pair,
 
     if ((force_expire) || (s->_expires <= now))
     {
+      if (trail != 0)
+      {
+        SAS::Event event(trail, SASEvent::REGSTORE_SUBSCRIPTION_EXPIRED, 0);
+        event.add_var_param(s->_req_uri);
+        event.add_var_param(s->_from_uri);
+        event.add_static_param(force_expire);
+        event.add_static_param(s->_expires);
+        event.add_static_param(now);
+        SAS::report_event(event);
+      }
       // The subscription has expired, so remove it. This could be
       // a single one shot subscription though - if so pretend it was
       // part of the original AoR
@@ -474,6 +485,8 @@ int SubscriberDataManager::expire_bindings(AoR* aor_data,
         event.add_var_param(b->_address_of_record);
         event.add_var_param(b->_uri);
         event.add_var_param(b->_cid);
+        event.add_static_param(b->_expires);
+        event.add_static_param(now);
         SAS::report_event(event);
       }
 
