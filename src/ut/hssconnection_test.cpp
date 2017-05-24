@@ -1,37 +1,12 @@
 /**
  * @file hssconnection_test.cpp UT for Sprout HSS connection.
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 ///
@@ -155,6 +130,7 @@ class HssConnectionTest : public BaseTest
       "</ClearwaterRegData>";
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid44/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] = CURLE_REMOTE_FILE_NOT_FOUND;
     fakecurl_responses["http://10.42.42.42:80/impi/privid69/registration-status?impu=pubid44"] = "{\"result-code\": 2001, \"scscf\": \"server-name\"}";
+    fakecurl_responses["http://10.42.42.42:80/impi/privid69/registration-status?impu=pubid44&sos=true"] = "{\"result-code\": 2001, \"scscf\": \"server-name\"}";
     fakecurl_responses["http://10.42.42.42:80/impi/privid69/registration-status?impu=pubid44&visited-network=domain&auth-type=REG"] = "{\"result-code\": 2001, \"mandatory-capabilities\": [1, 2, 3], \"optional-capabilities\": []}";
     fakecurl_responses["http://10.42.42.42:80/impi/privid_corrupt/registration-status?impu=pubid44"] = "{\"result-code\": 2001, \"scscf\"; \"server-name\"}";
     fakecurl_responses["http://10.42.42.42:80/impu/pubid44/location"] = "{\"result-code\": 2001, \"scscf\": \"server-name\"}";
@@ -384,9 +360,9 @@ TEST_F(HssConnectionTest, SimpleAssociatedUris)
   std::string regstate;
   _hss.get_registration_data("pubid42", regstate, ifcs_map, uris, 0);
   EXPECT_EQ("REGISTERED", regstate);
-  ASSERT_EQ(2u, uris.unbarred_uris().size());
-  EXPECT_EQ("sip:123@example.com", uris.unbarred_uris()[0]);
-  EXPECT_EQ("sip:456@example.com", uris.unbarred_uris()[1]);
+  ASSERT_EQ(2u, uris.get_unbarred_uris().size());
+  EXPECT_EQ("sip:123@example.com", uris.get_unbarred_uris()[0]);
+  EXPECT_EQ("sip:456@example.com", uris.get_unbarred_uris()[1]);
 }
 
 TEST_F(HssConnectionTest, SimpleNotRegisteredGet)
@@ -396,7 +372,7 @@ TEST_F(HssConnectionTest, SimpleNotRegisteredGet)
   std::string regstate;
   _hss.get_registration_data("pubid43", regstate, ifcs_map, uris, 0);
   EXPECT_EQ("NOT_REGISTERED", regstate);
-  EXPECT_EQ(0u, uris.unbarred_uris().size());
+  EXPECT_EQ(0u, uris.get_unbarred_uris().size());
 }
 
 TEST_F(HssConnectionTest, SimpleUnregistered)
@@ -442,14 +418,15 @@ TEST_F(HssConnectionTest, SimpleChargingAddrs)
 
 TEST_F(HssConnectionTest, Barring)
 {
+  // Checks that the BarringIndication field from the HSS is parsed correctly.
   AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("pubid47", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_EQ("REGISTERED", regstate);
-  ASSERT_EQ(1u, uris.unbarred_uris().size());
-  EXPECT_FALSE(uris.is_barred("sip:123@example.com"));
-  EXPECT_TRUE(uris.is_barred("sip:456@example.com"));
+  ASSERT_EQ(1u, uris.get_unbarred_uris().size());
+  EXPECT_FALSE(uris.is_impu_barred("sip:123@example.com"));
+  EXPECT_TRUE(uris.is_impu_barred("sip:456@example.com"));
 }
 
 TEST_F(HssConnectionTest, BadXML)
@@ -459,7 +436,7 @@ TEST_F(HssConnectionTest, BadXML)
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("pubid42_malformed", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.unbarred_uris().empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Failed to parse Homestead response"));
 }
 
@@ -471,7 +448,7 @@ TEST_F(HssConnectionTest, BadXML2)
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("pubid43_malformed", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.unbarred_uris().empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
 }
 
@@ -482,7 +459,7 @@ TEST_F(HssConnectionTest, BadXML_MissingServiceProfile)
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement4", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.unbarred_uris().empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
 }
 
@@ -493,7 +470,7 @@ TEST_F(HssConnectionTest, BadXML_MissingPublicIdentity)
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement5", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.unbarred_uris().empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed ServiceProfile XML"));
 }
 
@@ -504,7 +481,7 @@ TEST_F(HssConnectionTest, BadXML_MissingIdentity)
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement6", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.unbarred_uris().empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed PublicIdentity XML"));
 }
 
@@ -515,7 +492,7 @@ TEST_F(HssConnectionTest, BadXML_MissingRegistrationState)
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement1", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.unbarred_uris().empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed Homestead XML"));
 }
 
@@ -526,7 +503,7 @@ TEST_F(HssConnectionTest, BadXML_MissingClearwaterRegData)
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement3", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.unbarred_uris().empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed Homestead XML"));
 }
 
@@ -537,7 +514,7 @@ TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription)
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement2", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.unbarred_uris().empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
 }
 
@@ -550,14 +527,14 @@ TEST_F(HssConnectionTest, ServerFailure)
   std::string regstate;
   _hss.update_registration_state("pubid44", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_EQ("", regstate);
-  EXPECT_TRUE(uris.unbarred_uris().empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("http://narcissus/impu/pubid44/reg-data failed"));
 }
 
 TEST_F(HssConnectionTest, SimpleUserAuth)
 {
   rapidjson::Document* actual;
-  _hss.get_user_auth_status("privid69", "pubid44", "", "", actual, 0);
+  _hss.get_user_auth_status("privid69", "pubid44", "", "", false, actual, 0);
   ASSERT_TRUE(actual != NULL);
   EXPECT_EQ(std::string("server-name"), (*actual)["scscf"].GetString());
   delete actual;
@@ -566,7 +543,7 @@ TEST_F(HssConnectionTest, SimpleUserAuth)
 TEST_F(HssConnectionTest, FullUserAuth)
 {
   rapidjson::Document* actual;
-  _hss.get_user_auth_status("privid69", "pubid44", "domain", "REG", actual, 0);
+  _hss.get_user_auth_status("privid69", "pubid44", "domain", "REG", false, actual, 0);
   ASSERT_TRUE(actual != NULL);
   EXPECT_EQ(2001, (*actual)["result-code"].GetInt());
   delete actual;
@@ -576,9 +553,22 @@ TEST_F(HssConnectionTest, CorruptAuth)
 {
   CapturingTestLogger log;
   rapidjson::Document* actual;
-  _hss.get_user_auth_status("privid_corrupt", "pubid44", "", "", actual, 0);
+  _hss.get_user_auth_status("privid_corrupt", "pubid44", "", "", false, actual, 0);
   ASSERT_TRUE(actual == NULL);
   EXPECT_TRUE(log.contains("Failed to parse Homestead response"));
+  delete actual;
+}
+
+TEST_F(HssConnectionTest, EmergencyAuth)
+{
+  // Checks that when emergency is set to true that we query the HSS with the
+  // "sos=true" parameter.
+  rapidjson::Document* actual;
+  _hss.get_user_auth_status("privid69", "pubid44", "", "", true, actual, 0);
+  Request& request = fakecurl_requests["http://narcissus:80/impi/privid69/registration-status?impu=pubid44&sos=true"];
+  EXPECT_EQ("GET", request._method);
+  ASSERT_TRUE(actual != NULL);
+  EXPECT_EQ(std::string("server-name"), (*actual)["scscf"].GetString());
   delete actual;
 }
 

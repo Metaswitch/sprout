@@ -12,8 +12,8 @@ extern "C" {
 class SampleForkASTsx : public AppServerTsx
 {
 public:
-  SampleForkASTsx(AppServerTsxHelper* helper) :
-    AppServerTsx(helper) {}
+  SampleForkASTsx() :
+    AppServerTsx() {}
 
   void on_initial_request(pjsip_msg* req)
   {
@@ -52,9 +52,9 @@ public:
   {
   }
 
-  AppServerTsx* get_app_tsx(AppServerTsxHelper* helper, pjsip_msg* req)
+  AppServerTsx* get_app_tsx(SproutletProxy* proxy, pjsip_msg* req, pjsip_sip_uri*& next_hop, pj_pool_t* pool, SAS::TrailId trail)
   {
-    return (AppServerTsx*) new SampleForkASTsx(helper);
+    return (AppServerTsx*) new SampleForkASTsx();
   }
 };
 

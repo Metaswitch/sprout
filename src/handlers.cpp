@@ -1,37 +1,12 @@
 /**
  * @file handlers.cpp
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 #include "rapidjson/document.h"
@@ -142,7 +117,7 @@ static bool sdm_access_common(SubscriberDataManager::AoRPair** aor_pair,
 
 static bool get_reg_data(HSSConnection* hss,
                          std::string aor_id,
-                         std::vector<std::string>& irs_impus,
+                         std::vector<std::string>& unbarred_irs_impus,
                          std::map<std::string, Ifcs>& ifc_map,
                          SAS::TrailId trail)
 {
@@ -155,18 +130,18 @@ static bool get_reg_data(HSSConnection* hss,
                                                   trail);
 
   // Use only the unbarred URIs for when we send NOTIFYs.
-  irs_impus = associated_uris.unbarred_uris();
+  unbarred_irs_impus = associated_uris.get_unbarred_uris();
 
-  if ((http_code != HTTP_OK) || irs_impus.empty())
+  if ((http_code != HTTP_OK) || unbarred_irs_impus.empty())
   {
     // We were unable to determine the set of IMPUs for this AoR.  Push the AoR
     // we have into the IRS list so that we have at least one IMPU we can issue
     // NOTIFYs for. We should only do this if the IMPU is not barred.
     TRC_WARNING("Unable to get Implicit Registration Set for %s: %d", aor_id.c_str(), http_code);
-    irs_impus.clear();
-    if (!associated_uris.is_barred(aor_id))
+    unbarred_irs_impus.clear();
+    if (!associated_uris.is_impu_barred(aor_id))
     {
-      irs_impus.push_back(aor_id);
+      unbarred_irs_impus.push_back(aor_id);
     }
   }
 
@@ -309,13 +284,13 @@ void AoRTimeoutTask::handle_response()
   bool all_bindings_expired = false;
 
   // Determine the set of IMPUs in the Implicit Registration Set
-  std::vector<std::string> irs_impus;
+  std::vector<std::string> unbarred_irs_impus;
   std::map<std::string, Ifcs> ifc_map;
-  get_reg_data(_cfg->_hss, _aor_id, irs_impus, ifc_map, trail());
+  get_reg_data(_cfg->_hss, _aor_id, unbarred_irs_impus, ifc_map, trail());
 
   SubscriberDataManager::AoRPair* aor_pair = set_aor_data(_cfg->_sdm,
                                                           _aor_id,
-                                                          irs_impus,
+                                                          unbarred_irs_impus,
                                                           NULL,
                                                           _cfg->_remote_sdms,
                                                           all_bindings_expired);
@@ -335,7 +310,7 @@ void AoRTimeoutTask::handle_response()
         SubscriberDataManager::AoRPair* remote_aor_pair =
                                                         set_aor_data(*sdm,
                                                                      _aor_id,
-                                                                     irs_impus,
+                                                                     unbarred_irs_impus,
                                                                      aor_pair,
                                                                      {},
                                                                      ignored);
@@ -375,7 +350,7 @@ void AoRTimeoutTask::handle_response()
 SubscriberDataManager::AoRPair* AoRTimeoutTask::set_aor_data(
                           SubscriberDataManager* current_sdm,
                           std::string aor_id,
-                          std::vector<std::string> irs_impus,
+                          std::vector<std::string> unbarred_irs_impus,
                           SubscriberDataManager::AoRPair* previous_aor_pair,
                           std::vector<SubscriberDataManager*> remote_sdms,
                           bool& all_bindings_expired)
@@ -396,7 +371,7 @@ SubscriberDataManager::AoRPair* AoRTimeoutTask::set_aor_data(
     }
 
     set_rc = current_sdm->set_aor_data(aor_id,
-                                       irs_impus,
+                                       unbarred_irs_impus,
                                        aor_pair,
                                        trail(),
                                        all_bindings_expired);
@@ -596,9 +571,9 @@ SubscriberDataManager::AoRPair* DeregistrationTask::deregister_bindings(
   std::vector<std::string> impis_to_dereg;
 
   // Get registration data
-  std::vector<std::string> irs_impus;
+  std::vector<std::string> unbarred_irs_impus;
   std::map<std::string, Ifcs> ifc_map;
-  got_ifcs = get_reg_data(_cfg->_hss, aor_id, irs_impus, ifc_map, trail());
+  got_ifcs = get_reg_data(_cfg->_hss, aor_id, unbarred_irs_impus, ifc_map, trail());
 
   do
   {
@@ -644,7 +619,7 @@ SubscriberDataManager::AoRPair* DeregistrationTask::deregister_bindings(
     }
 
     set_rc = current_sdm->set_aor_data(aor_id,
-                                       irs_impus,
+                                       unbarred_irs_impus,
                                        aor_pair,
                                        trail(),
                                        all_bindings_expired);

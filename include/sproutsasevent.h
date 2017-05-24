@@ -1,37 +1,12 @@
 /**
  * @file sproutsasevent.h Sprout-specific SAS event IDs
  *
- * project clearwater - ims in the cloud
- * copyright (c) 2013  metaswitch networks ltd
- *
- * this program is free software: you can redistribute it and/or modify it
- * under the terms of the gnu general public license as published by the
- * free software foundation, either version 3 of the license, or (at your
- * option) any later version, along with the "special exception" for use of
- * the program along with ssl, set forth below. this program is distributed
- * in the hope that it will be useful, but without any warranty;
- * without even the implied warranty of merchantability or fitness for
- * a particular purpose.  see the gnu general public license for more
- * details. you should have received a copy of the gnu general public
- * license along with this program.  if not, see
- * <http://www.gnu.org/licenses/>.
- *
- * the author can be reached by email at clearwater@metaswitch.com or by
- * post at metaswitch networks ltd, 100 church st, enfield en2 6bq, uk
- *
- * special exception
- * metaswitch networks ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining openssl with the
- * software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the gpl. you must comply with the gpl in all
- * respects for all of the code used other than openssl.
- * "openssl" means openssl toolkit software distributed by the openssl
- * project and licensed under the openssl licenses, or a work based on such
- * software and licensed under the openssl licenses.
- * "openssl licenses" means the openssl license and original ssleay license
- * under which the openssl project distributes the openssl toolkit software,
- * as those licenses appear in the file license-openssl.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 #ifndef SPROUTSASEVENT_H__
@@ -89,6 +64,7 @@ namespace SASEvent
   const int SIPRESOLVE_SRV_LOOKUP = SPROUT_BASE + 0x000037;
   const int SIPRESOLVE_A_LOOKUP = SPROUT_BASE + 0x000038;
   const int SIPRESOLVE_IP_ADDRESS = SPROUT_BASE + 0x000039;
+  const int SIPRESOLVE_NO_RECORDS = SPROUT_BASE + 0x00003A;
 
   const int AUTHENTICATION_FAILED_OVERLOAD = SPROUT_BASE + 0x000041;
   const int AUTHENTICATION_FAILED = SPROUT_BASE + 0x000042;
@@ -157,6 +133,7 @@ namespace SASEvent
   const int HTTP_HOMESTEAD_GET_REG = SPROUT_BASE + 0x0000A3;
   const int HTTP_HOMESTEAD_AUTH_STATUS = SPROUT_BASE + 0x0000A4;
   const int HTTP_HOMESTEAD_LOCATION = SPROUT_BASE + 0x0000A5;
+  const int HTTP_HOMESTEAD_BAD_IDENTITY = SPROUT_BASE + 0x0000A6;
 
   const int IFC_INVALID = SPROUT_BASE + 0x0000C0;
   const int IFC_INVALID_NOAS = SPROUT_BASE + 0x0000C1;
@@ -208,8 +185,7 @@ namespace SASEvent
   const int STARTING_SPROUTLET_SELECTION_PORT = SPROUT_BASE + 0x0111;
   const int SPROUTLET_SELECTION_PORT = SPROUT_BASE + 0x0112;
   const int SPROUTLET_SELECTION_URI = SPROUT_BASE + 0x0113;
-  const int FORCE_EXTERNAL_ROUTING_SUBSCRIBE = SPROUT_BASE + 0x0115;
-  const int NO_SPROUTLET_SELECTED = SPROUT_BASE + 0x0116;
+  const int NO_SPROUTLET_SELECTED = SPROUT_BASE + 0x0114;
 
   const int BEGIN_SPROUTLET_REQ = SPROUT_BASE + 0x0120;
   const int BEGIN_SPROUTLET_RSP = SPROUT_BASE + 0x0121;
@@ -219,14 +195,14 @@ namespace SASEvent
   const int BEGIN_STATEFUL_PROXY_REQ = SPROUT_BASE + 0x0122;
   const int BEGIN_STATEFUL_PROXY_RSP = SPROUT_BASE + 0x0123;
 
-  const int BEGIN_AUTHENTICATION_MODULE = SPROUT_BASE + 0x0124;
-  const int BEGIN_OPTIONS_MODULE = SPROUT_BASE + 0x0125;
-  const int BEGIN_REGISTRAR_MODULE = SPROUT_BASE + 0x0126;
-  const int BEGIN_SUBSCRIPTION_MODULE = SPROUT_BASE + 0x0127;
-  const int BEGIN_THREAD_DISPATCHER = SPROUT_BASE + 0x0128;
+  const int BEGIN_OPTIONS_MODULE = SPROUT_BASE + 0x0124;
+  const int BEGIN_THREAD_DISPATCHER = SPROUT_BASE + 0x0125;
 
   const int AMBIGUOUS_WILDCARD_MATCH = SPROUT_BASE + 0x0130;
+  const int NO_MATCHING_SERVICE_PROFILE = SPROUT_BASE + 0x0131;
 
+  const int REJECT_CALL_FROM_BARRED_USER = SPROUT_BASE + 0x0140;
+  const int REJECT_CALL_TO_BARRED_USER = SPROUT_BASE + 0x0141;
 } //namespace SASEvent
 
 #endif

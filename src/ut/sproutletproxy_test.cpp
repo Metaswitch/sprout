@@ -1,42 +1,12 @@
 /**
  * @file sproutletproxy_test.cpp  SproutletProxy unit tests.
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2014  Metaswitch Networks Ltd
- *
- * Parts of this module were derived from GPL licensed PJSIP sample code
- * with the following copyrights.
- *   Copyright (C) 2008-2011 Teluu Inc. (http://www.teluu.com)
- *   Copyright (C) 2003-2008 Benny Prijono <benny@prijono.org>
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 #include "gmock/gmock.h"
@@ -65,19 +35,25 @@ template <class T>
 class FakeSproutlet : public Sproutlet
 {
 public:
-  FakeSproutlet(const std::string& service_name, int port, const std::string& uri, const std::string& service_host, std::string alias = "") :
-    Sproutlet(service_name, port, uri, service_host)
+  FakeSproutlet(const std::string& service_name,
+                int port,
+                const std::string& uri,
+                const std::string& service_host,
+                std::string alias = "",
+                SNMP::FakeSuccessFailCountByRequestTypeTable* fake_inc_tbl = NULL,
+                SNMP::FakeSuccessFailCountByRequestTypeTable* fake_out_tbl = NULL) :
+    Sproutlet(service_name, port, uri, service_host, fake_inc_tbl, fake_out_tbl)
   {
-    // Only one sproutlet loaded can own this alias.
+    // Only one sproutlet loaded can own each alias.
     if (alias != "")
     {
       _aliases.push_back(alias);
     }
   }
 
-  SproutletTsx* get_tsx(SproutletTsxHelper* helper, const std::string& alias, pjsip_msg* req)
+  SproutletTsx* get_tsx(SproutletHelper* helper, const std::string& alias, pjsip_msg* req, pjsip_sip_uri*& next_hop, pj_pool_t* pool, SAS::TrailId trail)
   {
-    return (SproutletTsx*)new T(helper);
+    return (SproutletTsx*)new T(this);
   }
 
   const std::list<std::string> aliases() const
@@ -94,8 +70,8 @@ template <int S>
 class FakeSproutletTsxReject : public SproutletTsx
 {
 public:
-  FakeSproutletTsxReject(SproutletTsxHelper* helper) :
-    SproutletTsx(helper)
+  FakeSproutletTsxReject(Sproutlet* sproutlet) :
+    SproutletTsx(sproutlet)
   {
   }
 
@@ -111,8 +87,8 @@ template <bool RR>
 class FakeSproutletTsxForwarder : public SproutletTsx
 {
 public:
-  FakeSproutletTsxForwarder(SproutletTsxHelper* helper) :
-    SproutletTsx(helper)
+  FakeSproutletTsxForwarder(Sproutlet* sproutlet) :
+    SproutletTsx(sproutlet)
   {
   }
 
@@ -163,8 +139,8 @@ public:
 class FakeSproutletTsxDownstreamRequest : public SproutletTsx
 {
 public:
-  FakeSproutletTsxDownstreamRequest(SproutletTsxHelper* helper) :
-    SproutletTsx(helper)
+  FakeSproutletTsxDownstreamRequest(Sproutlet* sproutlet) :
+    SproutletTsx(sproutlet)
   {
   }
 
@@ -189,8 +165,8 @@ template <int N>
 class FakeSproutletTsxForker : public SproutletTsx
 {
 public:
-  FakeSproutletTsxForker(SproutletTsxHelper* helper) :
-    SproutletTsx(helper)
+  FakeSproutletTsxForker(Sproutlet* sproutlet) :
+    SproutletTsx(sproutlet)
   {
   }
 
@@ -229,8 +205,8 @@ public:
 template <int T>
 class FakeSproutletTsxDelayRedirect : public SproutletTsx
 {
-  FakeSproutletTsxDelayRedirect(SproutletTsxHelper* helper) :
-    SproutletTsx(helper),
+  FakeSproutletTsxDelayRedirect(Sproutlet* sproutlet) :
+    SproutletTsx(sproutlet),
     _tid(0),
     _fork_id(-1)
   {
@@ -282,8 +258,8 @@ class FakeSproutletTsxDelayRedirect : public SproutletTsx
 
 class FakeSproutletTsxBad : public SproutletTsx
 {
-  FakeSproutletTsxBad(SproutletTsxHelper* helper) :
-    SproutletTsx(helper)
+  FakeSproutletTsxBad(Sproutlet* sproutlet) :
+    SproutletTsx(sproutlet)
   {
   }
 
@@ -339,8 +315,8 @@ class FakeSproutletTsxBad : public SproutletTsx
 class FakeSproutletTsxB2BUA : public SproutletTsx
 {
 public:
-  FakeSproutletTsxB2BUA(SproutletTsxHelper* helper) :
-    SproutletTsx(helper)
+  FakeSproutletTsxB2BUA(Sproutlet* sproutlet) :
+    SproutletTsx(sproutlet)
   {
   }
 
@@ -441,8 +417,8 @@ private:
 template <int T>
 class FakeSproutletTsxDelayAfterRsp : public SproutletTsx
 {
-  FakeSproutletTsxDelayAfterRsp(SproutletTsxHelper* helper) :
-    SproutletTsx(helper),
+  FakeSproutletTsxDelayAfterRsp(Sproutlet* sproutlet) :
+    SproutletTsx(sproutlet),
     _tsx_from_tag(),
     _tid(0)
   {
@@ -530,8 +506,8 @@ template<int T> std::mutex FakeSproutletTsxDelayAfterRsp<T>::_live_tsxs_mutex;
 template <int T>
 class FakeSproutletTsxDelayAfterFwd : public SproutletTsx
 {
-  FakeSproutletTsxDelayAfterFwd(SproutletTsxHelper* helper) :
-    SproutletTsx(helper),
+  FakeSproutletTsxDelayAfterFwd(Sproutlet* sproutlet) :
+    SproutletTsx(sproutlet),
     _tid(0),
     _response(0)
   {
@@ -586,8 +562,8 @@ class FakeSproutletTsxDelayAfterFwd : public SproutletTsx
 class FakeSproutletTsxDummySCSCF : public SproutletTsx
 {
 public:
-  FakeSproutletTsxDummySCSCF(SproutletTsxHelper* helper) :
-    SproutletTsx(helper)
+  FakeSproutletTsxDummySCSCF(Sproutlet* sproutlet) :
+    SproutletTsx(sproutlet)
   {
   }
 
@@ -602,8 +578,8 @@ public:
 class FakeSproutletReusesTransport : public SproutletTsx
 {
 public:
-  FakeSproutletReusesTransport(SproutletTsxHelper* helper) :
-    SproutletTsx(helper)
+  FakeSproutletReusesTransport(Sproutlet* sproutlet) :
+    SproutletTsx(sproutlet)
   {
   }
 
@@ -647,6 +623,7 @@ public:
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDelayAfterFwd<1> >("delayafterfwd", 0, "sip:delayafterfwd.homedomain;transport=tcp", ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDummySCSCF>("scscf", 44444, "sip:scscf.homedomain:44444;transport=tcp", "scscf"));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletReusesTransport>("transport", 0, "sip:transport.homedomain;transport=tcp", ""));
+    _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxForwarder<false> >("fwdwithstats", 0, "sip:fwdwithstats.homedomain;transport=tcp", "", "", &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE, &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE));
 
     // Create a host alias.
     std::unordered_set<std::string> host_aliases;
@@ -1537,6 +1514,64 @@ TEST_F(SproutletProxyTest, CancelForking)
 
   // All done!
   req.clear();
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+TEST_F(SproutletProxyTest, ForkErrorTimeout)
+{
+  // Tests handling of a request timeout.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with two Route headers - the first referencing the
+  // forwarder Sproutlet and the second referencing an external node.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@awaydomain";
+  msg1._from = "sip:alice@homedomain";
+  msg1._to = "sip:bob@awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:fwdwithstats.proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
+  free_txdata();
+
+  // Request is forwarded to the node in the second Route header.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // We won't be responding to this one, so free the data.
+  free_txdata();
+
+  // Advance time to trigger a timeout.
+  cwtest_advance_time_ms(33000L);
+  poll();
+
+  // Expect a 408 response to be sent by the sproutlet.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(408).matches(tdata->msg);
+  free_txdata();
+
+  // All done!
   ASSERT_EQ(0, txdata_count());
 
   delete tp;

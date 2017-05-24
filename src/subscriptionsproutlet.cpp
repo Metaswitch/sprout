@@ -4,42 +4,12 @@
  *                                 classes, implementing S-CSCF specific
  *                                 Subscription functions.
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2016  Metaswitch Networks Ltd
- *
- * Parts of this module were derived from GPL licensed PJSIP sample code
- * with the following copyrights.
- *   Copyright (C) 2008-2011 Teluu Inc. (http://www.teluu.com)
- *   Copyright (C) 2003-2008 Benny Prijono <benny@prijono.org>
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 extern "C" {
@@ -75,7 +45,7 @@ SubscriptionSproutlet::SubscriptionSproutlet(const std::string& name,
                                              ACRFactory* acr_factory,
                                              AnalyticsLogger* analytics_logger,
                                              int cfg_max_expires) :
-  Sproutlet(name, port, uri, ""),
+  Sproutlet(name, port, uri),
   _sdm(sdm),
   _remote_sdms(remote_sdms),
   _hss(hss_connection),
@@ -96,53 +66,31 @@ bool SubscriptionSproutlet::init()
   return true;
 }
 
-SproutletTsx* SubscriptionSproutlet::get_tsx(SproutletTsxHelper* helper,
+SproutletTsx* SubscriptionSproutlet::get_tsx(SproutletHelper* helper,
                                              const std::string& alias,
-                                             pjsip_msg* req)
+                                             pjsip_msg* req,
+                                             pjsip_sip_uri*& next_hop,
+                                             pj_pool_t* pool,
+                                             SAS::TrailId trail)
 {
-  return (SproutletTsx*)new SubscriptionSproutletTsx(helper, _next_hop_service, this);
-}
-
-SubscriptionSproutletTsx::SubscriptionSproutletTsx(SproutletTsxHelper* helper,
-                                                   const std::string& next_hop_service,
-                                                   SubscriptionSproutlet* sproutlet):
-  ForwardingSproutletTsx(helper, next_hop_service),
-  _sproutlet(sproutlet)
-{
-  TRC_DEBUG("Subscription Transaction (%p) created", this);
-}
-
-SubscriptionSproutletTsx::~SubscriptionSproutletTsx()
-{
-  TRC_DEBUG("Subscription Transaction (%p) destroyed", this);
-}
-
-void SubscriptionSproutletTsx::on_rx_initial_request(pjsip_msg* req)
-{
-  TRC_INFO("Subscription sproutlet received intitial request");
-  return on_rx_request(req);
-}
-
-void SubscriptionSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
-{
-  TRC_INFO("Subscription sproutlet received in dialog request");
-  return on_rx_request(req);
-}
-
-void SubscriptionSproutletTsx::on_rx_request(pjsip_msg* req)
-{
-  if (handle_request(req))
+  if (handle_request(req, trail))
   {
-    process_subscription_request(req);
+    return (SproutletTsx*)new SubscriptionSproutletTsx(this, _next_hop_service);
   }
-  else
-  {
-    forward_request(req);
-  }
+
+  // We're not interested in the message so create a next hop URI.
+  pjsip_route_hdr* route = (pjsip_route_hdr*)
+                              pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
+
+  next_hop = helper->next_hop_uri(_next_hop_service,
+                                  route,
+                                  pool);
+  return NULL;
 }
 
 // Check whether this request should be absorbed by the subscription module
-bool SubscriptionSproutletTsx::handle_request(pjsip_msg* req)
+bool SubscriptionSproutlet::handle_request(pjsip_msg* req,
+                                           SAS::TrailId trail)
 {
   if (pjsip_method_cmp(&req->line.req.method, pjsip_get_subscribe_method()))
   {
@@ -158,7 +106,7 @@ bool SubscriptionSproutletTsx::handle_request(pjsip_msg* req)
   {
     TRC_DEBUG("Not processing subscription request not targeted at this domain or node");
     // LCOV_EXCL_START - No SAS events in UT
-    SAS::Event event(trail(), SASEvent::SUBSCRIBE_FAILED_EARLY_DOMAIN, 0);
+    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_DOMAIN, 0);
     SAS::report_event(event);
     // LCOV_EXCL_STOP
     return false;
@@ -178,7 +126,7 @@ bool SubscriptionSproutletTsx::handle_request(pjsip_msg* req)
     TRC_DEBUG("Not processing subscription request that's not for the 'reg' package");
 
     // LCOV_EXCL_START - No SAS events in UT
-    SAS::Event sas_event(trail(), SASEvent::SUBSCRIBE_FAILED_EARLY_EVENT, 0);
+    SAS::Event sas_event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_EVENT, 0);
     if (event)
     {
       char event_hdr_str[256];
@@ -216,7 +164,7 @@ bool SubscriptionSproutletTsx::handle_request(pjsip_msg* req)
       pjsip_hdr_print_on(accept, accept_hdr_str, 255);
 
       // LCOV_EXCL_START - No SAS events in UT
-      SAS::Event event(trail(), SASEvent::SUBSCRIBE_FAILED_EARLY_ACCEPT, 0);
+      SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_ACCEPT, 0);
       event.add_var_param(accept_hdr_str);
       SAS::report_event(event);
       // LCOV_EXCL_STOP
@@ -227,6 +175,37 @@ bool SubscriptionSproutletTsx::handle_request(pjsip_msg* req)
 
   return true;
 }
+
+SubscriptionSproutletTsx::SubscriptionSproutletTsx(SubscriptionSproutlet* subscription,
+                                                   const std::string& next_hop_service) :
+  ForwardingSproutletTsx(subscription, next_hop_service),
+  _subscription(subscription)
+{
+  TRC_DEBUG("Subscription Transaction (%p) created", this);
+}
+
+SubscriptionSproutletTsx::~SubscriptionSproutletTsx()
+{
+  TRC_DEBUG("Subscription Transaction (%p) destroyed", this);
+}
+
+void SubscriptionSproutletTsx::on_rx_initial_request(pjsip_msg* req)
+{
+  TRC_INFO("Subscription sproutlet received intitial request");
+  return on_rx_request(req);
+}
+
+void SubscriptionSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
+{
+  TRC_INFO("Subscription sproutlet received in dialog request");
+  return on_rx_request(req);
+}
+
+void SubscriptionSproutletTsx::on_rx_request(pjsip_msg* req)
+{
+  process_subscription_request(req);
+}
+
 
 void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
 {
@@ -239,10 +218,10 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_EXPIRES, NULL);
   int expiry = (expires != NULL) ? expires->ivalue : SubscriptionSproutlet::DEFAULT_SUBSCRIPTION_EXPIRES;
 
-  if (expiry > _sproutlet->_max_expires)
+  if (expiry > _subscription->_max_expires)
   {
     // Expiry is too long, set it to the maximum.
-    expiry = _sproutlet->_max_expires;
+    expiry = _subscription->_max_expires;
   }
 
   if ((!PJSIP_URI_SCHEME_IS_SIP(uri)) && (!PJSIP_URI_SCHEME_IS_TEL(uri)))
@@ -301,7 +280,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
 
   // Create an ACR for the request.  The node role is always considered
   // originating for SUBSCRIBE requests.
-  ACR* acr = _sproutlet->_acr_factory->get_acr(trail_id,
+  ACR* acr = _subscription->_acr_factory->get_acr(trail_id,
                                                ACR::CALLING_PARTY,
                                                ACR::NODE_ROLE_ORIGINATING);
   acr->rx_request(req);
@@ -332,7 +311,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   std::string state;
   std::deque<std::string> ccfs;
   std::deque<std::string> ecfs;
-  HTTPCode http_code = _sproutlet->_hss->get_registration_data(public_id,
+  HTTPCode http_code = _subscription->_hss->get_registration_data(public_id,
                                                                state,
                                                                ifc_map,
                                                                associated_uris,
@@ -350,13 +329,21 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
     return;
   }
 
-  // Determine the default URI. We have already to a successful response from
-  // the HSS so this should always succeed.
+  // Determine the default URI. If we don't find a default URI, the SUBSCRIBE
+  // should already have been rejected for the subscriber being unregistered,
+  // but we handle the error case where it isn't.
   std::string aor;
-  associated_uris.get_default(aor, false);
+  if (!associated_uris.get_default_impu(aor, false))
+  {
+    pjsip_msg* rsp = create_response(req, PJSIP_SC_FORBIDDEN);
+    send_response(rsp);
+    free_msg(req);
+    delete acr;
+    return;
+  }
 
   // Use the unbarred URIs for sending NOTIFYs.
-  std::vector<std::string> uris = associated_uris.unbarred_uris();
+  std::vector<std::string> unbarred_uris = associated_uris.get_unbarred_uris();
 
   TRC_DEBUG("aor = %s", aor.c_str());
   TRC_DEBUG("SUBSCRIBE for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
@@ -367,13 +354,13 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   // Write to the local store, checking the remote stores if there is no entry locally.
   // If the write to the local store succeeds, then write to the remote stores.
   SubscriberDataManager::AoRPair* aor_pair =
-                              write_subscriptions_to_store(_sproutlet->_sdm,
+                              write_subscriptions_to_store(_subscription->_sdm,
                                                            aor,
-                                                           uris,
+                                                           unbarred_uris,
                                                            req,
                                                            now,
                                                            NULL,
-                                                           _sproutlet->_remote_sdms,
+                                                           _subscription->_remote_sdms,
                                                            public_id,
                                                            true,
                                                            acr,
@@ -387,8 +374,8 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
 
     // If we have any remote stores, try to store this there too.  We don't worry
     // about failures in this case.
-    for (std::vector<SubscriberDataManager*>::iterator it = _sproutlet->_remote_sdms.begin();
-         it != _sproutlet->_remote_sdms.end();
+    for (std::vector<SubscriberDataManager*>::iterator it = _subscription->_remote_sdms.begin();
+         it != _subscription->_remote_sdms.end();
          ++it)
     {
       if ((*it)->has_servers())
@@ -396,7 +383,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
         SubscriberDataManager::AoRPair* remote_aor_pair =
           write_subscriptions_to_store(*it,
                                        aor,
-                                       uris,
+                                       unbarred_uris,
                                        req,
                                        now,
                                        aor_pair,
@@ -467,7 +454,8 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
 SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to_store(
                    SubscriberDataManager* primary_sdm,        ///<store to write to
                    std::string aor,                           ///<address of record to write to
-                   std::vector<std::string> irs_impus,        ///(IMPUs in Implicit Registration Set
+                   std::vector<std::string> unbarred_irs_impus,
+                                                              ///<Unbarred IMPUs in Implicit Registration Set
                    pjsip_msg* req,                            ///<received request to read headers from
                    int now,                                   ///<time now
                    SubscriberDataManager::AoRPair* backup_aor,///<backup data if no entry in store
@@ -631,10 +619,10 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
       expiry = (expires != NULL) ?
         expires->ivalue : SubscriptionSproutlet::DEFAULT_SUBSCRIPTION_EXPIRES;
 
-      if (expiry > _sproutlet->_max_expires)
+      if (expiry > _subscription->_max_expires)
       {
         // Expiry is too long, set it to the maximum.
-        expiry = _sproutlet->_max_expires;
+        expiry = _subscription->_max_expires;
       }
 
       subscription->_expires = now + expiry;
@@ -643,7 +631,7 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
 
     // Try to write the AoR back to the store.
     bool unused;
-    set_rc = primary_sdm->set_aor_data(aor, irs_impus, aor_pair, trail(), unused);
+    set_rc = primary_sdm->set_aor_data(aor, unbarred_irs_impus, aor_pair, trail(), unused);
 
     if (set_rc == Store::OK)
     {
@@ -682,10 +670,10 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
   }
   while (set_rc == Store::DATA_CONTENTION);
 
-  if ((_sproutlet->_analytics != NULL) && (is_primary))
+  if ((_subscription->_analytics != NULL) && (is_primary))
   {
     // Generate an analytics log for this subscription update.
-    _sproutlet->_analytics->subscription(aor,
+    _subscription->_analytics->subscription(aor,
                                          subscription_id,
                                          subscription_contact,
                                          expiry);

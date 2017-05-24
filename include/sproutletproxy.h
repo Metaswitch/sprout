@@ -1,42 +1,12 @@
 /**
  * @file sproutletproxy.h  Sproutlet controller proxy class definition
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2014  Metaswitch Networks Ltd
- *
- * Parts of this module were derived from GPL licensed PJSIP sample code
- * with the following copyrights.
- *   Copyright (C) 2008-2011 Teluu Inc. (http://www.teluu.com)
- *   Copyright (C) 2003-2008 Benny Prijono <benny@prijono.org>
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 #ifndef SPROUTLETPROXY_H__
@@ -54,7 +24,7 @@
 
 class SproutletWrapper;
 
-class SproutletProxy : public BasicProxy
+class SproutletProxy : public BasicProxy, SproutletHelper
 {
 public:
   /// Constructor.
@@ -78,6 +48,12 @@ public:
   /// Static callback for timers
   static void on_timer_pop(pj_timer_heap_t* th, pj_timer_entry* tentry);
 
+  /// Constructs the next hop URI if a Sproutlet doesn't want to handle a
+  /// request.
+  pjsip_sip_uri* next_hop_uri(const std::string& service,
+                              const pjsip_route_hdr* route,
+                              pj_pool_t* pool) const;
+
 protected:
   /// Pre-declaration
   class UASTsx;
@@ -93,7 +69,6 @@ protected:
   Sproutlet* target_sproutlet(pjsip_msg* req,
                               int port,
                               std::string& alias,
-                              bool& force_external_routing,
                               SAS::TrailId trail);
 
   /// Return the sproutlet that matches the URI supplied.
@@ -110,9 +85,7 @@ protected:
   ///
   /// @param pool         - Pool to allocate the URI from.
   /// @param name         - The name of the service to invoke.
-  /// @param existing_uri - An existing URI to base the new URI on. Any URI
-  ///                       parameters are copied over to the new URI but the
-  ///                       user part is stripped off.
+  /// @param existing_uri - An existing URI to base the new URI on.
   pjsip_sip_uri* create_internal_sproutlet_uri(pj_pool_t* pool,
                                                const std::string& name,
                                                pjsip_sip_uri* existing_uri) const;
@@ -129,6 +102,9 @@ protected:
 
   bool is_uri_local(const pjsip_uri* uri);
   bool is_host_local(const pj_str_t* host);
+  bool is_uri_reflexive(const pjsip_uri* uri,
+                        Sproutlet* sproutlet,
+                        SAS::TrailId trail);
 
   /// Defintion of a timer set by an child sproutlet transaction.
   struct SproutletTimerCallbackData
@@ -194,20 +170,13 @@ protected:
                    int fork_id,
                    pjsip_tx_data* cancel);
 
-    /// Gets the next target Sproutlet for the message by analysing the top
-    /// Route header.
-    Sproutlet* target_sproutlet(pjsip_msg* msg,
-                                int port,
-                                std::string& alias,
-                                SAS::TrailId trail);
-    Sproutlet* target_sproutlet(pjsip_msg* msg,
-                                int port,
-                                std::string& alias,
-                                bool& force_external_routing,
-                                SAS::TrailId trail);
-
     /// Checks to see if it is safe to destroy the UASTsx.
     void check_destroy();
+
+    /// Finds a SproutletTsx willing to handle a request
+    SproutletTsx* get_sproutlet_tsx(pjsip_tx_data* req,
+                                    int port,
+                                    std::string& alias);
 
     /// The root Sproutlet for this transaction.
     SproutletWrapper* _root;
@@ -283,6 +252,7 @@ public:
   SproutletWrapper(SproutletProxy* proxy,
                    SproutletProxy::UASTsx* proxy_tsx,
                    Sproutlet* sproutlet,
+                   SproutletTsx* sproutlet_tsx,
                    const std::string& sproutlet_alias,
                    pjsip_tx_data* req,
                    pjsip_transport* original_transport,
@@ -321,9 +291,9 @@ public:
   SAS::TrailId trail() const;
   bool is_uri_reflexive(const pjsip_uri*) const;
   pjsip_sip_uri* get_reflexive_uri(pj_pool_t*) const;
-  pjsip_sip_uri* get_uri_for_service(const std::string& service,
-                                     pj_pool_t* pool,
-                                     pjsip_sip_uri* existing_uri) const;
+  pjsip_sip_uri* next_hop_uri(const std::string& service,
+                              const pjsip_route_hdr* route,
+                              pj_pool_t* pool) const;
 
 private:
   void rx_request(pjsip_tx_data* req);
@@ -359,8 +329,9 @@ private:
   /// of the service name and the address of the object.
   std::string _id;
 
-  /// Immutable reference to the original request.  A mutable clone of this
-  /// is passed to the Sproutlet.
+  /// Reference to the original request. This can been modified by the Sproutlet
+  /// Proxy depending on where it sends this message. A clone of this is passed
+  /// to the root Sproutlet.
   pjsip_tx_data* _req;
   SNMP::SIPRequestTypes _req_type;
 

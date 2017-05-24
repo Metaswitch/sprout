@@ -1,37 +1,12 @@
 /**
  * @file registrar_test.cpp UT for Sprout registrar module.
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 #include <string>
@@ -187,9 +162,8 @@ public:
     _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
     _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, false);
     _remote_sdms = {_remote_sdm};
-    _hss_connection_observer = new MockHSSConnection();
-    _hss_connection = new FakeHSSConnection(_hss_connection_observer);
     _acr_factory = new ACRFactory();
+    _hss_connection = new FakeHSSConnection();
   }
 
   static void TearDownTestCase()
@@ -199,7 +173,6 @@ public:
     pjsip_tsx_layer_destroy();
     delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
-    delete _hss_connection_observer; _hss_connection_observer = NULL;
     delete _remote_sdm; _remote_sdm = NULL;
     delete _sdm; _sdm = NULL;
     delete _remote_data_store; _remote_data_store = NULL;
@@ -210,11 +183,11 @@ public:
 
   void SetUp()
   {
-    _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, "");
-    _hss_connection->set_impu_result("tel:6505550231", "reg", RegDataXMLUtils::STATE_REGISTERED, "");
-    _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, "");
-    _hss_connection->set_impu_result("sip:6505550231@homedomain", "", RegDataXMLUtils::STATE_REGISTERED, "");
-    _hss_connection->set_rc("/impu/sip%3A6505550231%40homedomain/reg-data", HTTP_OK);
+    hss_connection()->set_impu_result("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, "");
+    hss_connection()->set_impu_result("tel:6505550231", "reg", RegDataXMLUtils::STATE_REGISTERED, "");
+    hss_connection()->set_impu_result("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, "");
+    hss_connection()->set_impu_result("sip:6505550231@homedomain", "", RegDataXMLUtils::STATE_REGISTERED, "");
+    hss_connection()->set_rc("/impu/sip%3A6505550231%40homedomain/reg-data", HTTP_OK);
     _chronos_connection->set_result("", HTTP_OK);
     _chronos_connection->set_result("post_identity", HTTP_OK);
   }
@@ -223,10 +196,18 @@ public:
   {
     _hss_connection->flush_all();
     _chronos_connection->flush_all();
-    ::testing::Mock::VerifyAndClear(_hss_connection_observer);
   }
 
-  RegistrarTest()
+  RegistrarTest() : RegistrarTest(_hss_connection)
+  {
+  }
+
+  virtual FakeHSSConnection* hss_connection()
+  {
+    return _hss_connection;
+  }
+
+  RegistrarTest(FakeHSSConnection* hss_connection)
   {
     _local_data_store->flush_all();  // start from a clean slate on each test
     _remote_data_store->flush_all();
@@ -237,7 +218,7 @@ public:
                                                   "subscription",
                                                   _sdm,
                                                   _remote_sdms,
-                                                  _hss_connection,
+                                                  hss_connection,
                                                   _acr_factory,
                                                   300,
                                                   false,
@@ -331,14 +312,14 @@ public:
     ASSERT_EQ(contact_values.second, std::string(contact->first_attribute("event")->value()));
   }
 
-void registrar_sproutlet_handle_200()
-{
-  ASSERT_EQ(1, txdata_count());
-  inject_msg(respond_to_current_txdata(200));
-  ASSERT_EQ(1, txdata_count());
-  EXPECT_EQ(200, current_txdata()->msg->line.status.code);
-  free_txdata();
-}
+  void registrar_sproutlet_handle_200()
+  {
+    ASSERT_EQ(1, txdata_count());
+    inject_msg(respond_to_current_txdata(200));
+    ASSERT_EQ(1, txdata_count());
+    EXPECT_EQ(200, current_txdata()->msg->line.status.code);
+    free_txdata();
+  }
 
 protected:
   static LocalStore* _local_data_store;
@@ -348,11 +329,49 @@ protected:
   static std::vector<SubscriberDataManager*> _remote_sdms;
   static IfcHandler* _ifc_handler;
   static ACRFactory* _acr_factory;
-  static MockHSSConnection* _hss_connection_observer;
   static FakeHSSConnection* _hss_connection;
   static FakeChronosConnection* _chronos_connection;
   RegistrarSproutlet* _registrar_sproutlet;
   SproutletProxy* _registrar_proxy;
+};
+
+/// Fixture for RegistrarTest, which observes a HSS Connection
+class RegistrarObservedHssTest : public RegistrarTest
+{
+public:
+
+  static void SetUpTestCase()
+  {
+    RegistrarTest::SetUpTestCase();
+    _hss_connection_observer = new MockHSSConnection();
+    _observed_hss_connection = new FakeHSSConnection(_hss_connection_observer);
+  }
+
+  static void TearDownTestCase()
+  {
+    RegistrarTest::TearDownTestCase();
+    delete _observed_hss_connection; _observed_hss_connection = NULL;
+    delete _hss_connection_observer; _hss_connection_observer = NULL;
+  }
+
+  RegistrarObservedHssTest() : RegistrarTest(_observed_hss_connection)
+  {
+  }
+
+  virtual FakeHSSConnection* hss_connection()
+  {
+    return _observed_hss_connection;
+  }
+
+  void TearDown()
+  {
+    RegistrarTest::TearDown();
+    ::testing::Mock::VerifyAndClear(_hss_connection_observer);
+  }
+
+protected:
+  static MockHSSConnection* _hss_connection_observer;
+  static FakeHSSConnection* _observed_hss_connection;
 
 private:
 
@@ -595,51 +614,40 @@ public:
 /// Fixture for RegistrarTestRemoteSDM (for REGISTER tests that use the remote
 /// store by artificially causing the local SDM and first remote SDM lookups to
 /// return nothing)
-class RegistrarTestRemoteSDM : public RegistrarTest
+class RegistrarTestRemoteSDM : public RegistrarObservedHssTest
 {
 public:
   // Similar to RegistrarTest, but we deliberately give it a dummy local sdm
   // and first remote sdm that never return bindings.
   static void SetUpTestCase()
   {
-    SipTest::SetUpTestCase();
-    SipTest::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
+    RegistrarObservedHssTest::SetUpTestCase();
 
-    _chronos_connection = new FakeChronosConnection();
-    _local_data_store = new LocalStore();
     _remote_data_store_no_bindings = new LocalStore();
-    _remote_data_store = new LocalStore();
-    _sdm = new SDMNoBindings((Store*)_local_data_store, _chronos_connection, true);
     _remote_sdm_no_bindings = new SDMNoBindings((Store*)_remote_data_store_no_bindings, _chronos_connection, false);
-    _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, false);
     _remote_sdms = {_remote_sdm_no_bindings, _remote_sdm};
-    _hss_connection_observer = new MockHSSConnection();
-    _hss_connection = new FakeHSSConnection(_hss_connection_observer);
-    _acr_factory = new ACRFactory();
+
+    if (_sdm)
+    {
+      delete _sdm;
+      _sdm = NULL;
+    }
+
+    _sdm = new SDMNoBindings((Store*)_local_data_store, _chronos_connection, true);
   }
 
-  RegistrarTestRemoteSDM() : RegistrarTest()
+  RegistrarTestRemoteSDM() : RegistrarObservedHssTest()
   {
+    // Start from a clean slate on each test
     _remote_data_store_no_bindings->flush_all();
-                                 // start from a clean slate on each test
   }
 
   static void TearDownTestCase()
   {
-    // Shut down the transaction module first, before we destroy the
-    // objects that might handle any callbacks!
-    pjsip_tsx_layer_destroy();
-    delete _acr_factory; _acr_factory = NULL;
-    delete _hss_connection; _hss_connection = NULL;
-    delete _hss_connection_observer; _hss_connection_observer = NULL;
+    RegistrarObservedHssTest::TearDownTestCase();
+
     delete _remote_sdm_no_bindings; _remote_sdm_no_bindings = NULL;
-    delete _remote_sdm; _remote_sdm = NULL;
-    delete _sdm; _sdm = NULL;
-    delete _remote_data_store; _remote_data_store = NULL;
     delete _remote_data_store_no_bindings; _remote_data_store_no_bindings = NULL;
-    delete _local_data_store; _local_data_store = NULL;
-    delete _chronos_connection; _chronos_connection = NULL;
-    SipTest::TearDownTestCase();
   }
 
 protected:
@@ -657,7 +665,8 @@ std::vector<SubscriberDataManager*> RegistrarTest::_remote_sdms;
 IfcHandler* RegistrarTest::_ifc_handler;
 ACRFactory* RegistrarTest::_acr_factory;
 FakeHSSConnection* RegistrarTest::_hss_connection;
-MockHSSConnection* RegistrarTest::_hss_connection_observer;
+FakeHSSConnection* RegistrarObservedHssTest::_observed_hss_connection;
+MockHSSConnection* RegistrarObservedHssTest::_hss_connection_observer;
 FakeChronosConnection* RegistrarTest::_chronos_connection;
 
 TEST_F(RegistrarTest, NotRegister)
@@ -672,6 +681,7 @@ TEST_F(RegistrarTest, NotOurs)
 {
   Message msg;
   msg._domain = "not-us.example.org";
+  add_host_mapping("not-us.example.org", "5.6.7.8");
   inject_msg(msg.get());
   registrar_sproutlet_handle_200();
 }
@@ -941,7 +951,7 @@ TEST_F(RegistrarTest, GRUUNotSupported)
   free_txdata();
 }
 
-TEST_F(RegistrarTest, MultipleRegistrations)
+TEST_F(RegistrarObservedHssTest, MultipleRegistrations)
 {
   MultipleRegistrationTest();
 }
@@ -1380,7 +1390,7 @@ TEST_F(RegistrarTest, AppServersBarredIMPU)
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
   EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550232@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
-            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+            get_headers(out, "Contact"));
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
@@ -1980,10 +1990,14 @@ TEST_F(RegistrarTest, MultipleAssociatedUrisWithTelURI)
   Message msg;
   msg._user = "6505550233";
   msg._scheme = "tel";
+
+  // Add a bad tel URI (the one with the domain) to the set of Identities.  This
+  // should be ignored in the constructions of the P-Associated-URI headers.
   _hss_connection->set_impu_result("tel:6505550233", "reg", RegDataXMLUtils::STATE_REGISTERED,
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>tel:6505550233</Identity></PublicIdentity>\n"
                               "  <PublicIdentity><Identity>tel:6505550234</Identity></PublicIdentity>\n"
+                              "  <PublicIdentity><Identity>tel:6505550235@baddomain.com</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
                               "  </InitialFilterCriteria>\n"
                               "</ServiceProfile></IMSSubscription>");
@@ -2816,13 +2830,64 @@ TEST_F(RegistrarTest, BarredEmergencyRegistration)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 
-  // There should be one binding, and it is an emergency registration. The emergency binding should have 'sos' prepended to its key.
+  // There should be one binding, and it is an emergency registration. The
+  // emergency binding should have 'sos' prepended to its key.
   SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
   EXPECT_TRUE(aor_data->get_current()->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
   delete aor_data; aor_data = NULL;
 }
+
+// Test that a bad URI in the HSS response is not added to the P-Associated-URI
+// even for an emergency registration when all identities are barred.
+TEST_F(RegistrarTest, BarredEmergencyRegistrationBadURI)
+{
+  // We have a private ID in this test, so set up the expect response
+  // to the query.
+  _hss_connection->set_impu_result("tel:6505550231", "reg", RegDataXMLUtils::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>tel:6505550232@badhomedomain</Identity><BarringIndication>1</BarringIndicaton></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:6505550231</Identity><BarringIndication>1</BarringIndicaton></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>",
+                                   "?private_id=Alice");
+
+  // Make an emergency registration
+  Message msg;
+  msg._scheme = "tel";
+  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+  msg._contact = "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob";
+  inject_msg(msg.get());
+
+  // Check the 200 OK
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1",
+            get_headers(out, "Contact"));
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+
+  // We shouldn't have anything in the P-Associated-URI
+  EXPECT_EQ("", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
+  free_txdata();
+
+  // There should be one binding, and it is an emergency registration. The
+  // emergency binding should have 'sos' prepended to its key.
+  SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data("tel:6505550232@badhomedomain", 0);
+  ASSERT_TRUE(aor_data != NULL);
+  EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
+  EXPECT_TRUE(aor_data->get_current()->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
+  delete aor_data; aor_data = NULL;
+}
+
 
 // Test that if all IMPUs are barred, and this is not an emergency registration
 // that the REGISTER will fail.

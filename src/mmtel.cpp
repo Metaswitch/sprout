@@ -1,37 +1,12 @@
 /**
  * @file mmtel.cpp MMTel call service implementation
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 #include <string>
@@ -60,8 +35,11 @@ using namespace rapidxml;
 
 
 /// Get a new MmtelTsx from the Mmtel AS.
-AppServerTsx* Mmtel::get_app_tsx(AppServerTsxHelper* helper,
-                                 pjsip_msg* req)
+AppServerTsx* Mmtel::get_app_tsx(SproutletHelper* helper,
+                                 pjsip_msg* req,
+                                 pjsip_sip_uri*& next_hop,
+                                 pj_pool_t* pool,
+                                 SAS::TrailId trail)
 {
   MmtelTsx* mmtel_tsx = NULL;
 
@@ -75,8 +53,8 @@ AppServerTsx* Mmtel::get_app_tsx(AppServerTsxHelper* helper,
     pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(&psu_hdr->name_addr);
     std::string served_user = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri);
 
-    simservs* user_services = get_user_services(served_user, helper->trail());
-    mmtel_tsx = new MmtelTsx(helper, req, user_services);
+    simservs* user_services = get_user_services(served_user, trail);
+    mmtel_tsx = new MmtelTsx(req, user_services, trail);
   }
   else
   {
@@ -155,13 +133,17 @@ void CallDiversionAS::cdiv_callback(std::string target, unsigned int conditions)
 }
 
 /// Get a new MmtelTsx from the CallDiversionAS.
-AppServerTsx* CallDiversionAS::get_app_tsx(AppServerTsxHelper* helper,
-                                           pjsip_msg* req)
+AppServerTsx* CallDiversionAS::get_app_tsx(SproutletHelper* helper,
+                                           pjsip_msg* req,
+                                           pjsip_sip_uri*& next_hop,
+                                           pj_pool_t* pool,
+                                           SAS::TrailId trail)
 {
   MmtelTsx* mmtel_tsx = NULL;
 
   // Find the Route header, parse the simservs parameters out and construct an MmtelTsx.
-  pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)helper->route_hdr();
+  pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)
+                                      pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
   if (route_hdr != NULL)
   {
     TRC_DEBUG("Found Route header: %s",
@@ -169,7 +151,7 @@ AppServerTsx* CallDiversionAS::get_app_tsx(AppServerTsxHelper* helper,
     pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_get_uri(&route_hdr->name_addr);
 
     {
-      SAS::Event event(helper->trail(), SASEvent::CALL_DIVERSION_INVOKED, 0);
+      SAS::Event event(trail, SASEvent::CALL_DIVERSION_INVOKED, 0);
       event.add_var_param(PJUtils::uri_to_string(PJSIP_URI_IN_CONTACT_HDR, (pjsip_uri*)uri));
       SAS::report_event(event);
     }
@@ -216,7 +198,7 @@ AppServerTsx* CallDiversionAS::get_app_tsx(AppServerTsxHelper* helper,
           else
           {
             TRC_DEBUG("Unrecognized condition: %s", it->c_str());
-            SAS::Event event(helper->trail(), SASEvent::UNRECOGNIZED_CONDITION, 0);
+            SAS::Event event(trail, SASEvent::UNRECOGNIZED_CONDITION, 0);
             event.add_var_param(*it);
             SAS::report_event(event);
           }
@@ -240,17 +222,17 @@ AppServerTsx* CallDiversionAS::get_app_tsx(AppServerTsxHelper* helper,
         else
         {
           TRC_DEBUG("Failed to parse no-reply-timer as integer - ignoring");
-          SAS::Event event(helper->trail(), SASEvent::UNPARSEABLE_NO_REPLY_TIMER, 0);
+          SAS::Event event(trail, SASEvent::UNPARSEABLE_NO_REPLY_TIMER, 0);
           event.add_var_param(no_reply_timer_str);
           SAS::report_event(event);
         }
       }
 
       simservs* user_services = new simservs(target, conditions, no_reply_timer);
-      mmtel_tsx = new MmtelTsx(helper, req, user_services, this);
+      mmtel_tsx = new MmtelTsx(req, user_services, trail, this);
 
       {
-        SAS::Event event(helper->trail(), SASEvent::CALL_DIVERSION_ENABLED, 0);
+        SAS::Event event(trail, SASEvent::CALL_DIVERSION_ENABLED, 0);
         event.add_var_param(target);
         event.add_var_param(conditions_str);
         event.add_static_param(no_reply_timer);
@@ -260,7 +242,7 @@ AppServerTsx* CallDiversionAS::get_app_tsx(AppServerTsxHelper* helper,
     else
     {
       TRC_DEBUG("Failed to find target parameter - not invoking MMTEL");
-      SAS::Event event(helper->trail(), SASEvent::NO_TARGET_PARAM, 0);
+      SAS::Event event(trail, SASEvent::NO_TARGET_PARAM, 0);
       SAS::report_event(event);
     }
   }
@@ -273,11 +255,11 @@ AppServerTsx* CallDiversionAS::get_app_tsx(AppServerTsxHelper* helper,
 }
 
 /// Constructor for the MmtelTsx.
-MmtelTsx::MmtelTsx(AppServerTsxHelper* helper,
-                   pjsip_msg* req,
+MmtelTsx::MmtelTsx(pjsip_msg* req,
                    simservs* user_services,
+                   SAS::TrailId trail,
                    CDivCallback* cdiv_callback) :
-  AppServerTsx(helper),
+  AppServerTsx(),
   _user_services(user_services),
   _cdiv_callback(cdiv_callback),
   _no_reply_timer(0),
@@ -317,14 +299,14 @@ MmtelTsx::MmtelTsx(AppServerTsxHelper* helper,
         ((_user_services->oir_enabled()) ||
          (_user_services->outbound_cb_enabled())))
     {
-      SAS::Event event(helper->trail(), SASEvent::ORIGINATING_SERVICES_ENABLED, 0);
+      SAS::Event event(trail, SASEvent::ORIGINATING_SERVICES_ENABLED, 0);
       event.add_static_param(_user_services->oir_enabled());
       event.add_static_param(_user_services->outbound_cb_enabled());
       SAS::report_event(event);
     }
     else
     {
-      SAS::Event event(helper->trail(), SASEvent::ORIGINATING_SERVICES_DISABLED, 0);
+      SAS::Event event(trail, SASEvent::ORIGINATING_SERVICES_DISABLED, 0);
       SAS::report_event(event);
     }
   }
@@ -345,14 +327,14 @@ MmtelTsx::MmtelTsx(AppServerTsxHelper* helper,
         ((_user_services->cdiv_enabled()) ||
          (_user_services->inbound_cb_enabled())))
     {
-      SAS::Event event(helper->trail(), SASEvent::TERMINATING_SERVICES_ENABLED, 0);
+      SAS::Event event(trail, SASEvent::TERMINATING_SERVICES_ENABLED, 0);
       event.add_static_param(_user_services->cdiv_enabled());
       event.add_static_param(_user_services->inbound_cb_enabled());
       SAS::report_event(event);
     }
     else
     {
-      SAS::Event event(helper->trail(), SASEvent::TERMINATING_SERVICES_DISABLED, 0);
+      SAS::Event event(trail, SASEvent::TERMINATING_SERVICES_DISABLED, 0);
       SAS::report_event(event);
     }
   }

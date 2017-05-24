@@ -1,37 +1,12 @@
 /**
  * @file associated_uris.cpp Implementation of the AssociatedURIs class.
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2017  Metaswitch Networks Ltd
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 #include "associated_uris.h"
@@ -41,10 +16,10 @@
 // Gets the default URI. We return the first unbarred URI. If there is no
 // unbarred URI, we don't return anything unless it is an emergency in which
 // case we return the first URI.
-bool AssociatedURIs::get_default(std::string& uri,
-                                 bool emergency)
+bool AssociatedURIs::get_default_impu(std::string& uri,
+                                      bool emergency)
 {
-  std::vector<std::string> unbarred_uris = this->unbarred_uris();
+  std::vector<std::string> unbarred_uris = this->get_unbarred_uris();
   if (!unbarred_uris.empty())
   {
     uri = unbarred_uris.front();
@@ -61,30 +36,30 @@ bool AssociatedURIs::get_default(std::string& uri,
   return false;
 }
 
-// Checks if the uri is in the list of associated URIs.
-bool AssociatedURIs::contains(std::string uri)
+// Checks if the URI is in the list of associated URIs.
+bool AssociatedURIs::contains_uri(std::string uri)
 {
   return (std::find(_associated_uris.begin(), _associated_uris.end(), uri) !=
           _associated_uris.end());
 }
 
-// Adds a uri and its barring state to the list of associated URIs.
-void AssociatedURIs::add(std::string uri,
-                         bool barred)
+// Adds a URI and its barring state to the list of associated URIs.
+void AssociatedURIs::add_uri(std::string uri,
+                             bool barred)
 {
   _associated_uris.push_back(uri);
   _barred_map[uri] = barred;
 }
 
 // Removes all URIs.
-void AssociatedURIs::clear()
+void AssociatedURIs::clear_uris()
 {
   _associated_uris.clear();
   _barred_map.clear();
 }
 
 // Returns if the specified URI is barred.
-bool AssociatedURIs::is_barred(std::string uri)
+bool AssociatedURIs::is_impu_barred(std::string uri)
 {
   // Will the public id end up in the map if it's a wildcard?
   // KH1 think it will from a UT, but that could be how the UT was written.
@@ -93,8 +68,8 @@ bool AssociatedURIs::is_barred(std::string uri)
   return _barred_map[uri];
 }
 
-// Retruns all unbarred associatd URIs.
-std::vector<std::string> AssociatedURIs::unbarred_uris()
+// Returns all unbarred associated URIs.
+std::vector<std::string> AssociatedURIs::get_unbarred_uris()
 {
   std::vector<std::string> unbarred_uris;
 
@@ -110,7 +85,7 @@ std::vector<std::string> AssociatedURIs::unbarred_uris()
 }
 
 // Returns all associated URIs.
-std::vector<std::string> AssociatedURIs::all_uris()
+std::vector<std::string> AssociatedURIs::get_all_uris()
 {
   return _associated_uris;
 }

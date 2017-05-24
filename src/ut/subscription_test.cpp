@@ -1,37 +1,12 @@
 /**
  * @file subscription_test.cpp
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 #include <string>
@@ -331,6 +306,7 @@ TEST_F(SubscriptionTest, NotOurs)
 {
   SubscribeMessage msg;
   msg._domain = "not-us.example.org";
+  add_host_mapping("not-us.example.org", "5.6.7.8");
   inject_msg(msg.get());
   subscription_sproutlet_handle_200();
   check_subscriptions("sip:6505550231@homedomain", 0u);
@@ -367,6 +343,26 @@ TEST_F(SubscriptionTest, EmergencySubscription)
   EXPECT_EQ(489, out->line.status.code);
   EXPECT_EQ("Bad Event", str_pj(out->line.status.reason));
   EXPECT_THAT(get_headers(out, "Allow-Events"), testing::MatchesRegex("Allow-Events: reg"));
+
+  check_subscriptions("sip:6505550231@homedomain", 0u);
+}
+
+TEST_F(SubscriptionTest, NotRegistered)
+{
+  _hss_connection->set_impu_result("sip:6505551231@homedomain", "", RegDataXMLUtils::STATE_UNREGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551231@homedomain</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  SubscribeMessage msg;
+  msg._user = "6505551231";
+  inject_msg(msg.get());
+
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = pop_txdata()->msg;
+  EXPECT_EQ(504, out->line.status.code);
 
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
@@ -1000,6 +996,29 @@ TEST_F(SubscriptionTest, SubscriptionWithBarredIdentity)
 
   // Check there's one subscription stored
   check_subscriptions("sip:6505551231@homedomain", 1u);
+}
+
+TEST_F(SubscriptionTest, NoDefaultID)
+{
+  // This test checks that when there is not default ID we reject the SUBSCRIBE.
+  // This is not a realistic test because we expect the subscriber to be
+  // unregistered which will cause a 504.
+  _hss_connection->set_impu_result("sip:6505551231@homedomain", "", RegDataXMLUtils::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551231@homedomain</Identity><BarringIndication>1</BarringIndication></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  SubscribeMessage msg;
+  msg._user = "6505551231";
+  inject_msg(msg.get());
+
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = pop_txdata()->msg;
+  EXPECT_EQ(403, out->line.status.code);
+
+  check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
 

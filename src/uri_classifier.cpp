@@ -1,41 +1,25 @@
 /**
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2015  Metaswitch Networks Ltd
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 #include <vector>
+#include <boost/regex.hpp>
 #include "uri_classifier.h"
 #include "stack.h"
 #include "constants.h"
+
+// Regexes that match global and local numbers:
+// - A global number starts with "+" followed by a combination of digits "0-9"
+//   and visual separators ",-()".
+// - A local number can contain a combination of hexdigits "0-9A-F", "*#" and
+//   visual separators ",-()".
+static const boost::regex CHARS_ALLOWED_IN_GLOBAL_NUM = boost::regex("\\+[0-9,\\-\\(\\)]*");
+static const boost::regex CHARS_ALLOWED_IN_LOCAL_NUM = boost::regex("[0-9A-F\\*#,\\-\\(\\)]*");
 
 std::vector<pj_str_t*> URIClassifier::home_domains;
 bool URIClassifier::enforce_global;
@@ -147,7 +131,9 @@ URIClass URIClassifier::classify_uri(const pjsip_uri* uri, bool prefer_sip, bool
   {
     // TEL URIs can only represent phone numbers - decide if it's a global (E.164) number or not
     pjsip_tel_uri* tel_uri = (pjsip_tel_uri*)uri;
-    if (tel_uri->number.slen > 0 && tel_uri->number.ptr[0] == '+')
+    std::string user = PJUtils::pj_str_to_string(&tel_uri->number);
+    boost::match_results<std::string::const_iterator> results;
+    if (boost::regex_match(user, results, CHARS_ALLOWED_IN_GLOBAL_NUM))
     {
       ret = GLOBAL_PHONE_NUMBER;
     }
@@ -177,13 +163,29 @@ URIClass URIClassifier::classify_uri(const pjsip_uri* uri, bool prefer_sip, bool
     if ((!pj_strcmp(&((pjsip_sip_uri*)uri)->user_param, &STR_USER_PHONE) ||
          (home_domain && treat_number_as_phone && !is_gruu)))
     {
-      if (sip_uri->user.slen > 0 && sip_uri->user.ptr[0] == '+')
+      // Get the user part minus any parameters.
+      std::string user = PJUtils::pj_str_to_string(&sip_uri->user);
+      if (!user.empty())
       {
-        ret = GLOBAL_PHONE_NUMBER;
+        std::vector<std::string> user_tokens;
+        Utils::split_string(user, ';', user_tokens, 0, true);
+        boost::match_results<std::string::const_iterator> results;
+        if (boost::regex_match(user_tokens[0], results, CHARS_ALLOWED_IN_GLOBAL_NUM))
+        {
+          ret = GLOBAL_PHONE_NUMBER;
+        }
+        else if (boost::regex_match(user_tokens[0], results, CHARS_ALLOWED_IN_LOCAL_NUM))
+        {
+          ret = enforce_global ? LOCAL_PHONE_NUMBER : GLOBAL_PHONE_NUMBER;
+        }
+        else
+        {
+          ret = HOME_DOMAIN_SIP_URI;
+        }
       }
       else
       {
-        ret = enforce_global ? LOCAL_PHONE_NUMBER : GLOBAL_PHONE_NUMBER;
+        ret = HOME_DOMAIN_SIP_URI;
       }
     }
     // Not a phone number - classify it based on domain

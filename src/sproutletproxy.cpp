@@ -1,42 +1,12 @@
 /**
  * @file sproutletproxy.cpp  Sproutlet controlling proxy class implementation
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2014  Metaswitch Networks Ltd
- *
- * Parts of this module were derived from GPL licensed PJSIP sample code
- * with the following copyrights.
- *   Copyright (C) 2008-2011 Teluu Inc. (http://www.teluu.com)
- *   Copyright (C) 2003-2008 Benny Prijono <benny@prijono.org>
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 extern "C" {
@@ -195,13 +165,11 @@ bool SproutletProxy::register_sproutlet(Sproutlet* sproutlet)
 Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
                                             int port,
                                             std::string& alias,
-                                            bool& force_external_routing,
                                             SAS::TrailId trail)
 {
   TRC_DEBUG("Find target Sproutlet for request");
 
   Sproutlet* sproutlet = NULL;
-  force_external_routing = false;
   std::string id;
 
   // Find and parse the top Route header.
@@ -420,6 +388,18 @@ Sproutlet* SproutletProxy::match_sproutlet_from_uri(const pjsip_uri* uri,
 }
 
 
+pjsip_sip_uri* SproutletProxy::next_hop_uri(const std::string& service,
+                                            const pjsip_route_hdr* route,
+                                            pj_pool_t* pool) const
+{
+  pjsip_sip_uri* base_uri = (pjsip_sip_uri*)(route ? route->name_addr.uri : nullptr);
+  pjsip_sip_uri* next_hop = create_internal_sproutlet_uri(pool,
+                                                          service,
+                                                          base_uri);
+  return next_hop;
+}
+
+
 pjsip_sip_uri* SproutletProxy::create_sproutlet_uri(pj_pool_t* pool,
                                                     Sproutlet* sproutlet) const
 {
@@ -456,7 +436,6 @@ pjsip_sip_uri* SproutletProxy::create_internal_sproutlet_uri(pj_pool_t* pool,
 
   pjsip_sip_uri* base_uri = ((existing_uri != nullptr) ? existing_uri : _root_uri);
   pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, base_uri);
-  uri->user = pj_str(const_cast<char*>(""));
   pj_strdup(pool, &uri->host, &_root_uri->host);
   uri->port = 0;
   uri->lr_param = 1;
@@ -538,6 +517,18 @@ bool SproutletProxy::is_host_local(const pj_str_t* host)
   }
 
   return rc;
+}
+
+bool SproutletProxy::is_uri_reflexive(const pjsip_uri* uri,
+                                      Sproutlet* sproutlet,
+                                      SAS::TrailId trail)
+{
+  std::string alias_unused;
+  Sproutlet* matched_sproutlet = match_sproutlet_from_uri(uri,
+                                                          alias_unused,
+                                                          trail);
+
+  return (sproutlet == matched_sproutlet);
 }
 
 bool SproutletProxy::schedule_timer(pj_timer_entry* tentry, int duration)
@@ -634,35 +625,18 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
     // Locate the target Sproutlet for the request, and create the helper and
     // the Sproutlet transaction.
     std::string alias;
-    bool force_external_routing;
-    Sproutlet* sproutlet =
-                   target_sproutlet(_req->msg,
-                                    rdata->tp_info.transport->local_name.port,
-                                    alias,
-                                    force_external_routing,
-                                    trail());
+    Sproutlet* sproutlet = NULL;
+    pjsip_route_hdr* route = (pjsip_route_hdr*)
+                pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_ROUTE, NULL);
+    SproutletTsx* sproutlet_tsx = get_sproutlet_tsx(_req,
+                                                    rdata->tp_info.transport->local_name.port,
+                                                    alias);
 
-    if (sproutlet == NULL)
+    if (sproutlet_tsx == NULL)
     {
       // Failed to find a target Sproutlet for this request, so we need to
       // decide what to do.
-      pjsip_route_hdr* route = (pjsip_route_hdr*)
-                  pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_ROUTE, NULL);
-      if (route != NULL)
-      {
-        // There is a top Route header in the request, which by definition
-        // caused the request to be routed to this node, so remove it and
-        // allow the request to be forwarded. The exception here is if we
-        // rejected the sproutlet selection - which means that we want to
-        // route to the same location but route externally to get the
-        // registrar/subscription modules
-        if (!force_external_routing)
-        {
-          TRC_INFO("Remove top Route header and forward request");
-          pj_list_erase(route);
-        }
-      }
-      else
+      if (route == NULL)
       {
         // There is no top Route header in the request, so forwarding it will
         // result in a loop.  There is no option other than to reject the
@@ -671,12 +645,18 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
         status = PJ_ENOTSUP;
       }
     }
+    else
+    {
+      // We have a SproutletTsx, so get the sproutlet that relates to it.
+      sproutlet = sproutlet_tsx->_sproutlet;
+    }
 
     if (status == PJ_SUCCESS)
     {
       _root = new SproutletWrapper(_sproutlet_proxy,
                                    this,
                                    sproutlet,
+                                   sproutlet_tsx,
                                    alias,
                                    _req,
                                    _original_transport,
@@ -707,9 +687,12 @@ void SproutletProxy::UASTsx::process_cancel_request(pjsip_rx_data* rdata)
   // the root Sproutlet is still connected.
   if (_root != NULL)
   {
-    // Pass the CANCEL to the Sproutlet at the root of the tree.
-    pjsip_tx_data* tdata = PJUtils::clone_msg(stack_data.endpt, rdata);
-    _root->rx_cancel(tdata);
+    // We might have modified the original request that was received, so we
+    // should create the CANCEL from that.
+    pjsip_tx_data* cancel = PJUtils::create_cancel(stack_data.endpt,
+                                                   _req,
+                                                   0);
+    _root->rx_cancel(cancel);
 
     // Schedule any requests generated by the Sproutlet.
     schedule_requests();
@@ -842,34 +825,6 @@ void SproutletProxy::UASTsx::on_tsx_state(pjsip_event* event)
   exit_context();
 }
 
-
-Sproutlet* SproutletProxy::UASTsx::target_sproutlet(pjsip_msg* msg,
-                                                    int port,
-                                                    std::string& alias,
-                                                    SAS::TrailId trail)
-{
-  bool unused_force_external_routing;
-  return _sproutlet_proxy->target_sproutlet(msg,
-                                            port,
-                                            alias,
-                                            unused_force_external_routing,
-                                            trail);
-}
-
-Sproutlet* SproutletProxy::UASTsx::target_sproutlet(pjsip_msg* msg,
-                                                    int port,
-                                                    std::string& alias,
-                                                    bool& force_external_routing,
-                                                    SAS::TrailId trail)
-{
-  return _sproutlet_proxy->target_sproutlet(msg,
-                                            port,
-                                            alias,
-                                            force_external_routing,
-                                            trail);
-}
-
-
 void SproutletProxy::UASTsx::tx_request(SproutletWrapper* upstream,
                                         int fork_id,
                                         pjsip_tx_data* req)
@@ -920,18 +875,17 @@ void SproutletProxy::UASTsx::schedule_requests()
     else
     {
       std::string alias;
-      Sproutlet* sproutlet = target_sproutlet(req.req->msg,
-                                              0,
-                                              alias,
-                                              trail());
+      SproutletTsx* sproutlet_tsx = get_sproutlet_tsx(req.req, 0, alias);
 
-      if (sproutlet != NULL)
+      if (sproutlet_tsx != NULL)
       {
-        // Found a local Sproutlet to handle the request, so create a
-        // SproutletWrapper.
+        // Found a local Sproutlet and SproutletTsx to handle the request, so
+        // create a SproutletWrapper. Since the Tsx is non-NULL, there is
+        // guaranteed to be a sproutlet to handle the request.
         SproutletWrapper* downstream = new SproutletWrapper(_sproutlet_proxy,
                                                             this,
-                                                            sproutlet,
+                                                            sproutlet_tsx->_sproutlet,
+                                                            sproutlet_tsx,
                                                             alias,
                                                             req.req,
                                                             _original_transport,
@@ -1178,6 +1132,67 @@ void SproutletProxy::UASTsx::check_destroy()
   }
 }
 
+SproutletTsx* SproutletProxy::UASTsx::get_sproutlet_tsx(pjsip_tx_data* req,
+                                                        int port,
+                                                        std::string& alias)
+{
+  SproutletTsx* sproutlet_tsx = NULL;
+
+  // Do an initial lookup for the target sproutlet.
+  Sproutlet* sproutlet = _sproutlet_proxy->target_sproutlet(req->msg,
+                                                            port,
+                                                            alias,
+                                                            trail());
+
+  // Keep cycling though sproutlets until we either find a sproutlet that
+  // wants to handle the request or run out of sproutlets.
+  while (sproutlet != NULL)
+  {
+    // Found a local Sproutlet, so offer the sproutlet a chance to handle
+    // the request.
+    pjsip_sip_uri* next_hop = NULL;
+    sproutlet_tsx = sproutlet->get_tsx(_sproutlet_proxy,
+                                       alias,
+                                       req->msg,
+                                       next_hop,
+                                       req->pool,
+                                       trail());
+
+    if (sproutlet_tsx != NULL)
+    {
+      // We've found a sproutlet that wants to handle the request so break
+      // out of the loop.
+      break;
+    }
+
+    // Remove the top route header if there is one and it refers to us.
+
+    pjsip_route_hdr* route = (pjsip_route_hdr*)pjsip_msg_find_hdr(req->msg,
+                                                                  PJSIP_H_ROUTE,
+                                                                  NULL);
+    if ((route != NULL) &&
+        (_sproutlet_proxy->is_uri_local(route->name_addr.uri)))
+    {
+      TRC_DEBUG("Remove top Route header %s", PJUtils::hdr_to_string(route).c_str());
+      pj_list_erase(route);
+    }
+
+    // Add on the next hop URI if there is one.
+    if (next_hop != NULL)
+    {
+      PJUtils::add_top_route_header(req->msg, next_hop, req->pool);
+    }
+
+    // Attempt to find the next Sproutlet.
+    sproutlet = _sproutlet_proxy->target_sproutlet(req->msg,
+                                                   0,
+                                                   alias,
+                                                   trail());
+  }
+
+  return sproutlet_tsx;
+}
+
 
 //
 // UASTsx::SproutletWrapper methods.
@@ -1186,6 +1201,7 @@ void SproutletProxy::UASTsx::check_destroy()
 SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
                                    SproutletProxy::UASTsx* proxy_tsx,
                                    Sproutlet* sproutlet,
+                                   SproutletTsx* sproutlet_tsx,
                                    const std::string& sproutlet_alias,
                                    pjsip_tx_data* req,
                                    pjsip_transport* original_transport,
@@ -1193,7 +1209,7 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _proxy(proxy),
   _proxy_tsx(proxy_tsx),
   _sproutlet(sproutlet),
-  _sproutlet_tsx(NULL),
+  _sproutlet_tsx(sproutlet_tsx),
   _service_name(""),
   _id(""),
   _req(req),
@@ -1220,8 +1236,7 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
                                            _req->msg->line.req.method.name.slen);
   if (sproutlet != NULL)
   {
-    // Offer the Sproutlet the chance to handle this transaction.
-    _sproutlet_tsx = sproutlet->get_tsx(this, sproutlet_alias, req->msg);
+    // Set the service name from the sproutlet
     _service_name = sproutlet->service_name();
   }
   else
@@ -1232,10 +1247,13 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
 
   if (_sproutlet_tsx == NULL)
   {
-    // The Sproutlet doesn't want to handle this request, so create a default
-    // SproutletTsx to handle it.
-    _sproutlet_tsx = new SproutletTsx(this);
+    // We haven't been supplied a tsx, so create a default SproutletTsx to
+    // handle the request.
+    _sproutlet_tsx = new SproutletTsx(NULL);
   }
+
+  // Initialize the Tsx
+  _sproutlet_tsx->set_helper(this);
 
   if ((_sproutlet != NULL) &&
       (_sproutlet->_incoming_sip_transactions_tbl != NULL))
@@ -1680,12 +1698,7 @@ SAS::TrailId SproutletWrapper::trail() const
 
 bool SproutletWrapper::is_uri_reflexive(const pjsip_uri* uri) const
 {
-  std::string alias_unused;
-  Sproutlet* sproutlet = _proxy->match_sproutlet_from_uri(uri,
-                                                          alias_unused,
-                                                          trail());
-
-  return (_sproutlet == sproutlet);
+  return _proxy->is_uri_reflexive(uri, _sproutlet, trail());
 }
 
 bool SproutletWrapper::is_uri_local(const pjsip_uri* uri) const
@@ -1698,11 +1711,11 @@ pjsip_sip_uri* SproutletWrapper::get_reflexive_uri(pj_pool_t* pool) const
   return _proxy->create_sproutlet_uri(pool, _sproutlet);
 }
 
-pjsip_sip_uri* SproutletWrapper::get_uri_for_service(const std::string& service,
-                                                     pj_pool_t* pool,
-                                                     pjsip_sip_uri* existing_uri) const
+pjsip_sip_uri* SproutletWrapper::next_hop_uri(const std::string& service,
+                                              const pjsip_route_hdr* route,
+                                              pj_pool_t* pool) const
 {
-  return _proxy->create_internal_sproutlet_uri(pool, service, existing_uri);
+  return _proxy->next_hop_uri(service, route, pool);
 }
 
 void SproutletWrapper::rx_request(pjsip_tx_data* req)
@@ -1876,6 +1889,13 @@ void SproutletWrapper::rx_fork_error(pjsip_event_id_e event, int fork_id)
 
     if (status == PJ_SUCCESS)
     {
+      if ((_sproutlet != NULL) &&
+          (_sproutlet->_outgoing_sip_transactions_tbl != NULL))
+      {
+        // Update SNMP SIP transaction failure statistic for the Sproutlet.
+        _sproutlet->_outgoing_sip_transactions_tbl->increment_failures(_req_type);
+      }
+
       // Pass the response to the application.
       register_tdata(rsp);
       _sproutlet_tsx->on_rx_response(rsp->msg, fork_id);

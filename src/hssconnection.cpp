@@ -1,37 +1,12 @@
 /**
  * @file hssconnection.cpp HSSConnection class methods.
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 #include <cassert>
@@ -414,7 +389,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
   bool found_aliases = false;
   bool maybe_found_aliases = false;
   bool found_multiple_matches = false;
-  associated_uris.clear();
+  associated_uris.clear_uris();
   rapidxml::xml_node<>* sp = NULL;
 
   if (!imss->first_node(RegDataXMLUtils::SERVICE_PROFILE))
@@ -456,7 +431,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
         TRC_DEBUG("Processing Identity node from HSS XML - %s", uri.c_str());
 
-        if (!associated_uris.contains(uri))
+        if (!associated_uris.contains_uri(uri))
         {
           bool barred = false;
           if (barring_indication)
@@ -468,9 +443,8 @@ bool decode_homestead_xml(const std::string public_user_identity,
             }
           }
 
-          associated_uris.add(uri, barred);
+          associated_uris.add_uri(uri, barred);
           ifcs_map[uri] = ifc;
-
         }
 
         if (!found_aliases)
@@ -528,14 +502,22 @@ bool decode_homestead_xml(const std::string public_user_identity,
     }
   }
 
-  if (aliases.empty() && !temp_aliases.empty())
+  if (aliases.empty())
   {
-    aliases = temp_aliases;
-
-    if (found_multiple_matches)
+    if (!temp_aliases.empty())
     {
-      TRC_DEBUG("BAD");
-      SAS::Event event(trail, SASEvent::AMBIGUOUS_WILDCARD_MATCH, 0);
+      aliases = temp_aliases;
+
+      if (found_multiple_matches)
+      {
+        SAS::Event event(trail, SASEvent::AMBIGUOUS_WILDCARD_MATCH, 0);
+        event.add_var_param(public_user_identity);
+        SAS::report_event(event);
+      }
+    }
+    else
+    {
+      SAS::Event event(trail, SASEvent::NO_MATCHING_SERVICE_PROFILE, 0);
       event.add_var_param(public_user_identity);
       SAS::report_event(event);
     }
@@ -585,7 +567,6 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                    "",
                                    trail);
 }
-
 
 HTTPCode HSSConnection::update_registration_state(const std::string& public_user_identity,
                                                   const std::string& private_user_identity,
@@ -829,6 +810,7 @@ HTTPCode HSSConnection::get_user_auth_status(const std::string& private_user_ide
                                              const std::string& public_user_identity,
                                              const std::string& visited_network,
                                              const std::string& auth_type,
+                                             const bool& emergency,
                                              rapidjson::Document*& user_auth_status,
                                              SAS::TrailId trail)
 {
@@ -853,6 +835,10 @@ HTTPCode HSSConnection::get_user_auth_status(const std::string& private_user_ide
   if (!auth_type.empty())
   {
     path += "&auth-type=" + Utils::url_escape(auth_type);
+  }
+  if (emergency)
+  {
+    path += "&sos=true";
   }
 
   HTTPCode rc = get_json_object(path, user_auth_status, trail);

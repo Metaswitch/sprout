@@ -1,37 +1,12 @@
 /**
  * @file icscfproxy_test.cpp UT for I-CSCF proxy class.
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 #include <string>
@@ -618,6 +593,78 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSCaps)
   free_txdata();
 
   _hss_connection->delete_result("/impi/7132565489%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG");
+
+  delete tp;
+}
+
+
+TEST_F(ICSCFSproutletTest, RouteEmergencyRegister)
+{
+  // Tests routing of REGISTER requests when the "sos" flag is set. This test
+  // just tests that we correctly add the "sos=true" parameter to the HTTP GET
+  // request that we send to Homestead.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        ICSCF_PORT,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS response for the user registration status query using
+  // a default private user identity.
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG&sos=true",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+
+  // Inject a REGISTER request.
+  Message msg1;
+  msg1._method = "REGISTER";
+  msg1._requri = "sip:homedomain";
+  msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: <sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\n" +
+                "Contact: <sip:6505551001@" +
+                tp->to_string(true) +
+                ";ob;sos>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"";
+  inject_msg(msg1.get_request(), tp);
+
+  // REGISTER request should be forwarded to the server named in the HSS
+  // response, scscf1.homedomain.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.1", 5058, tdata);
+  ReqMatcher r1("REGISTER");
+  r1.matches(tdata->msg);
+
+  // Check the RequestURI has been altered to direct the message appropriately.
+  ASSERT_EQ("sip:scscf1.homedomain:5058;transport=TCP", str_uri(tdata->msg->line.req.uri));
+
+  // Check no Route or Record-Route headers have been added.
+  string rr = get_headers(tdata->msg, "Record-Route");
+  string route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("", rr);
+  ASSERT_EQ("", route);
+
+  // Check that the contact header still contains the sos parameter.
+  string contact = get_headers(tdata->msg, "Contact");
+  EXPECT_THAT(contact, HasSubstr("sos"));
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "1.2.3.4", 49152, tdata);
+  RespMatcher r2(200);
+  r2.matches(tdata->msg);
+
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG;sos=true");
 
   delete tp;
 }

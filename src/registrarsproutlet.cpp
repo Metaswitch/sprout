@@ -2,42 +2,12 @@
  *
  * @file registrarproutlet.cpp
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2016  Metaswitch Networks Ltd
- *
- * Parts of this module were derived from GPL licensed PJSIP sample code
- * with the following copyrights.
- *   Copyright (C) 2008-2011 Teluu Inc. (http://www.teluu.com)
- *   Copyright (C) 2003-2008 Benny Prijono <benny@prijono.org>
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 #include <time.h>
@@ -86,7 +56,7 @@ RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
                                        bool force_original_register_inclusion,
                                        SNMP::RegistrationStatsTables* reg_stats_tbls,
                                        SNMP::RegistrationStatsTables* third_party_reg_stats_tbls):
-  Sproutlet(name, port, uri, ""),
+  Sproutlet(name, port, uri),
   _sdm(reg_sdm),
   _remote_sdms(reg_remote_sdms),
   _hss(hss_connection),
@@ -147,18 +117,36 @@ bool RegistrarSproutlet::init()
   return init_success;
 }
 
-SproutletTsx* RegistrarSproutlet::get_tsx(SproutletTsxHelper* helper,
+SproutletTsx* RegistrarSproutlet::get_tsx(SproutletHelper* helper,
                                           const std::string& alias,
-                                          pjsip_msg* req)
+                                          pjsip_msg* req,
+                                          pjsip_sip_uri*& next_hop,
+                                          pj_pool_t* pool,
+                                          SAS::TrailId trail)
 {
-  return (SproutletTsx*)new RegistrarSproutletTsx(helper, _next_hop_service, this);
+  URIClass uri_class = URIClassifier::classify_uri(req->line.req.uri);
+  if ((req->line.req.method.id == PJSIP_REGISTER_METHOD) &&
+      ((uri_class == NODE_LOCAL_SIP_URI) ||
+       (uri_class == HOME_DOMAIN_SIP_URI)) &&
+      (PJUtils::check_route_headers(req)))
+  {
+    return (SproutletTsx*)new RegistrarSproutletTsx(this, _next_hop_service);
+  }
+
+  // We're not interested in the message so create a next hop URI.
+  pjsip_route_hdr* route = (pjsip_route_hdr*)
+                              pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
+
+  next_hop = helper->next_hop_uri(_next_hop_service,
+                                  route,
+                                  pool);
+  return NULL;
 }
 
-RegistrarSproutletTsx::RegistrarSproutletTsx(SproutletTsxHelper* helper,
-                                             const std::string& next_hop_service,
-                                             RegistrarSproutlet* sproutlet):
-  ForwardingSproutletTsx(helper, next_hop_service),
-  _sproutlet(sproutlet)
+RegistrarSproutletTsx::RegistrarSproutletTsx(RegistrarSproutlet* registrar,
+                                             const std::string& next_hop_service) :
+  ForwardingSproutletTsx(registrar, next_hop_service),
+  _registrar(registrar)
 {
   TRC_DEBUG("Registrar Transaction (%p) created", this);
 }
@@ -172,19 +160,7 @@ void RegistrarSproutletTsx::on_rx_initial_request(pjsip_msg *req)
 {
   TRC_INFO("Registrar sproutlet received initial request");
 
-  URIClass uri_class = URIClassifier::classify_uri(req->line.req.uri);
-  if ((req->line.req.method.id == PJSIP_REGISTER_METHOD) &&
-      ((uri_class == NODE_LOCAL_SIP_URI) ||
-       (uri_class == HOME_DOMAIN_SIP_URI)) &&
-      (PJUtils::check_route_headers(req)))
-  {
-    // REGISTER request targeted at the home domain or specifically at this node.
-    process_register_request(req);
-  }
-  else
-  {
-    forward_request(req);
-  }
+  process_register_request(req);
 }
 
 void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
@@ -212,7 +188,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   {
     num_contacts++;
     pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_EXPIRES, NULL);
-    expiry = _sproutlet->expiry_for_binding(contact_hdr, expires);
+    expiry = _registrar->expiry_for_binding(contact_hdr, expires);
 
     if ((contact_hdr->star) && (expiry != 0))
     {
@@ -259,15 +235,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     {
       if (expiry == 0)
       {
-        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_attempts();
-        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
+        _registrar->_reg_stats_tbls->de_reg_tbl->increment_attempts();
+        _registrar->_reg_stats_tbls->de_reg_tbl->increment_failures();
       }
       else
       // Invalid URI means this cannot be a re-register request, so if not
       // a de-register request, then treat as an initial register request.
       {
-        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_attempts();
-        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_failures();
+        _registrar->_reg_stats_tbls->init_reg_tbl->increment_attempts();
+        _registrar->_reg_stats_tbls->init_reg_tbl->increment_failures();
       }
     }
     return;
@@ -275,7 +251,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
   // Allocate an ACR for this transaction and pass the request to it.  Node
   // role is always considered originating for REGISTER requests.
-  ACR* acr = _sproutlet->_acr_factory->get_acr(trail(),
+  ACR* acr = _registrar->_acr_factory->get_acr(trail(),
                                                ACR::CALLING_PARTY,
                                                ACR::NODE_ROLE_ORIGINATING);
   acr->rx_request(req);
@@ -338,7 +314,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   std::string regstate;
   std::deque<std::string> ccfs;
   std::deque<std::string> ecfs;
-  HTTPCode http_code = _sproutlet->_hss->update_registration_state(public_id,
+  HTTPCode http_code = _registrar->_hss->update_registration_state(public_id,
                                                                    private_id,
                                                                    HSSConnection::REG,
                                                                    regstate,
@@ -368,15 +344,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     {
       if (expiry == 0)
       {
-        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_attempts();
-        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
+        _registrar->_reg_stats_tbls->de_reg_tbl->increment_attempts();
+        _registrar->_reg_stats_tbls->de_reg_tbl->increment_failures();
       }
       else
       // Invalid public/private identity means this cannot be a re-register request,
       // so if not a de-register request, then treat as an initial register request.
       {
-        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_attempts();
-        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_failures();
+        _registrar->_reg_stats_tbls->init_reg_tbl->increment_attempts();
+        _registrar->_reg_stats_tbls->init_reg_tbl->increment_failures();
       }
     }
     return;
@@ -384,8 +360,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
   // Get the default URI to use as a key in the binding store.
   std::string aor;
-  success = associated_uris.get_default(aor,
-                                        num_emergency_bindings > 0);
+  success = associated_uris.get_default_impu(aor,
+                                             num_emergency_bindings > 0);
   if (!success)
   {
     // Don't have a default IMPU so send an error response. We only hit this
@@ -395,7 +371,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   }
 
   // Use the unbarred URIs for when we send NOTIFYs.
-  std::vector<std::string> uris = associated_uris.unbarred_uris();
+  std::vector<std::string> unbarred_uris = associated_uris.get_unbarred_uris();
   TRC_DEBUG("REGISTER for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
 
   if (reject_with_400)
@@ -413,8 +389,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
     if (num_contacts > 0)
     {
-      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_attempts();
-      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
+      _registrar->_reg_stats_tbls->de_reg_tbl->increment_attempts();
+      _registrar->_reg_stats_tbls->de_reg_tbl->increment_failures();
     }
 
     return;
@@ -437,8 +413,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
     if (num_contacts > 0)
     {
-      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_attempts();
-      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
+      _registrar->_reg_stats_tbls->de_reg_tbl->increment_attempts();
+      _registrar->_reg_stats_tbls->de_reg_tbl->increment_failures();
     }
 
     return;
@@ -447,21 +423,21 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // Write to the local store, checking the remote stores if there is no entry locally.
   bool all_bindings_expired;
   SubscriberDataManager::AoRPair* aor_pair =
-                                 write_to_store(_sproutlet->_sdm,
+                                 write_to_store(_registrar->_sdm,
                                                 aor,
-                                                uris,
+                                                unbarred_uris,
                                                 req,
                                                 now,
                                                 expiry,
                                                 is_initial_registration,
                                                 NULL,
-                                                _sproutlet->_remote_sdms,
+                                                _registrar->_remote_sdms,
                                                 private_id_for_binding,
                                                 all_bindings_expired);
   if (all_bindings_expired)
   {
     TRC_DEBUG("All bindings have expired - triggering deregistration at the HSS");
-    _sproutlet->_hss->update_registration_state(aor,
+    _registrar->_hss->update_registration_state(aor,
                                                 "",
                                                 HSSConnection::DEREG_USER,
                                                 trail());
@@ -474,8 +450,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
     // If we have any remote stores, try to store this in them too.  We don't worry
     // about failures in this case.
-    for (std::vector<SubscriberDataManager*>::iterator it = _sproutlet->_remote_sdms.begin();
-         it != _sproutlet->_remote_sdms.end();
+    for (std::vector<SubscriberDataManager*>::iterator it = _registrar->_remote_sdms.begin();
+         it != _registrar->_remote_sdms.end();
          ++it)
     {
       if ((*it)->has_servers())
@@ -485,7 +461,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
         SubscriberDataManager::AoRPair* remote_aor_pair =
           write_to_store(*it,
                          aor,
-                         uris,
+                         unbarred_uris,
                          req,
                          now,
                          tmp_expiry,
@@ -516,15 +492,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   {
     if (expiry == 0)
     {
-      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_attempts();
+      _registrar->_reg_stats_tbls->de_reg_tbl->increment_attempts();
     }
     else if (is_initial_registration)
     {
-      _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_attempts();
+      _registrar->_reg_stats_tbls->init_reg_tbl->increment_attempts();
     }
     else
     {
-      _sproutlet->_reg_stats_tbls->re_reg_tbl->increment_attempts();
+      _registrar->_reg_stats_tbls->re_reg_tbl->increment_attempts();
     }
   }
 
@@ -554,15 +530,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     {
       if (is_initial_registration)
       {
-        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_failures();
+        _registrar->_reg_stats_tbls->init_reg_tbl->increment_failures();
       }
       else if (expiry == 0)
       {
-        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
+        _registrar->_reg_stats_tbls->de_reg_tbl->increment_failures();
       }
       else
       {
-        _sproutlet->_reg_stats_tbls->re_reg_tbl->increment_failures();
+        _registrar->_reg_stats_tbls->re_reg_tbl->increment_failures();
       }
     }
 
@@ -599,15 +575,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     {
       if (is_initial_registration)
       {
-        _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_failures();
+        _registrar->_reg_stats_tbls->init_reg_tbl->increment_failures();
       }
       else if (expiry == 0)
       {
-        _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_failures();
+        _registrar->_reg_stats_tbls->de_reg_tbl->increment_failures();
       }
       else
       {
-        _sproutlet->_reg_stats_tbls->re_reg_tbl->increment_failures();
+        _registrar->_reg_stats_tbls->re_reg_tbl->increment_failures();
       }
     }
 
@@ -692,15 +668,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   {
     if (expiry == 0)
     {
-      _sproutlet->_reg_stats_tbls->de_reg_tbl->increment_successes();
+      _registrar->_reg_stats_tbls->de_reg_tbl->increment_successes();
     }
     else if (is_initial_registration)
     {
-      _sproutlet->_reg_stats_tbls->init_reg_tbl->increment_successes();
+      _registrar->_reg_stats_tbls->init_reg_tbl->increment_successes();
     }
     else
     {
-      _sproutlet->_reg_stats_tbls->re_reg_tbl->increment_successes();
+      _registrar->_reg_stats_tbls->re_reg_tbl->increment_successes();
     }
   }
 
@@ -733,23 +709,35 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // structures in the header may get overwritten, but it is safe to do a
   // shallow clone.
   pjsip_hdr* clone = (pjsip_hdr*)
-                          pjsip_hdr_shallow_clone(get_pool(rsp), _sproutlet->_service_route);
+                          pjsip_hdr_shallow_clone(get_pool(rsp), _registrar->_service_route);
   pjsip_msg_insert_first_hdr(rsp, clone);
 
-  // Add P-Associated-URI headers for all of the associated URIs. Don't include
-  // any URIs that are wildcard identities.
-  if (!uris.empty())
+  // Add P-Associated-URI headers for all of the associated URIs that are real
+  // URIs, ignoring wildcard URIs and logging any URIs that aren't wildcards
+  // but are still unparseable as URIs.
+  if (!unbarred_uris.empty())
   {
-    for (std::vector<std::string>::iterator it = uris.begin();
-         it != uris.end();
+    for (std::vector<std::string>::iterator it = unbarred_uris.begin();
+         it != unbarred_uris.end();
          it++)
     {
       if (!WildcardUtils::is_wildcard_uri(*it))
       {
-        pjsip_routing_hdr* pau =
-                         identity_hdr_create(get_pool(rsp), STR_P_ASSOCIATED_URI);
-        pau->name_addr.uri = PJUtils::uri_from_string(*it, get_pool(rsp));
-        pjsip_msg_add_hdr(rsp, (pjsip_hdr*)pau);
+        pjsip_uri* this_uri = PJUtils::uri_from_string(*it, get_pool(rsp));
+        if (this_uri != NULL)
+        {
+          pjsip_routing_hdr* pau =
+                           identity_hdr_create(get_pool(rsp), STR_P_ASSOCIATED_URI);
+          pau->name_addr.uri = this_uri;
+          pjsip_msg_add_hdr(rsp, (pjsip_hdr*)pau);
+        }
+        else
+        {
+          TRC_DEBUG("Bad associated URI %s", it->c_str());
+          SAS::Event event(trail(), SASEvent::HTTP_HOMESTEAD_BAD_IDENTITY, 0);
+          event.add_var_param(*it);
+          SAS::report_event(event);
+        }
       }
     }
   }
@@ -759,10 +747,21 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     // URI header. We should only have to do this for emergency registrations.
     if (!WildcardUtils::is_wildcard_uri(aor))
     {
-      pjsip_routing_hdr* pau =
-                       identity_hdr_create(get_pool(rsp), STR_P_ASSOCIATED_URI);
-      pau->name_addr.uri = PJUtils::uri_from_string(aor, get_pool(rsp));
-      pjsip_msg_add_hdr(rsp, (pjsip_hdr*)pau);
+      pjsip_uri* aor_uri = PJUtils::uri_from_string(aor, get_pool(rsp));
+      if (aor_uri != NULL)
+      {
+        pjsip_routing_hdr* pau =
+                        identity_hdr_create(get_pool(rsp), STR_P_ASSOCIATED_URI);
+        pau->name_addr.uri = aor_uri;
+        pjsip_msg_add_hdr(rsp, (pjsip_hdr*)pau);
+      }
+      else
+      {
+        TRC_DEBUG("Bad associated URI %s", aor.c_str());
+        SAS::Event event(trail(), SASEvent::HTTP_HOMESTEAD_BAD_IDENTITY, 1);
+        event.add_var_param(aor);
+        SAS::report_event(event);
+      }
     }
   }
 
@@ -792,15 +791,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     // If the public ID is unbarred, we use that for third party registers. If
     // it is barred, we use the default URI.
     std::string as_reg_id = public_id;
-    if (associated_uris.is_barred(public_id))
+    if (associated_uris.is_impu_barred(public_id))
     {
       as_reg_id = aor;
     }
 
     RegistrationUtils::register_with_application_servers(ifc_map[public_id],
-                                                         _sproutlet->_sdm,
-                                                         _sproutlet->_remote_sdms,
-                                                         _sproutlet->_hss,
+                                                         _registrar->_sdm,
+                                                         _registrar->_remote_sdms,
+                                                         _registrar->_hss,
                                                          req,
                                                          clone_rsp,
                                                          expiry,
@@ -826,7 +825,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
                    SubscriberDataManager* primary_sdm,         ///<store to write to
                    std::string aor,                            ///<address of record to write to
-                   std::vector<std::string> irs_impus,         ///<IMPUs in Implicit Registration Set
+                   std::vector<std::string> unbarred_irs_impus,
+                                                               ///<Unbarred IMPUs in Implicit Registration Set
                    pjsip_msg* req,                             ///<received request to read headers from
                    int now,                                    ///<time now
                    int& expiry,                                ///<[out] longest expiry time
@@ -934,7 +934,7 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
     while (contact != NULL)
     {
       changed_bindings++;
-      expiry = _sproutlet->expiry_for_binding(contact, expires);
+      expiry = _registrar->expiry_for_binding(contact, expires);
 
       if (contact->star)
       {
@@ -1045,7 +1045,7 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
     if (changed_bindings > 0)
     {
       set_rc = primary_sdm->set_aor_data(aor,
-                                         irs_impus,
+                                         unbarred_irs_impus,
                                          aor_pair,
                                          trail(),
                                          all_bindings_expired);

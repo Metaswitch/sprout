@@ -1,37 +1,12 @@
 /**
  * @file registration_utils.cpp Registration and deregistration functions
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 extern "C" {
@@ -75,6 +50,88 @@ struct ThirdPartyRegData
   SAS::TrailId trail;
   int expires;
   bool is_initial_registration;
+};
+
+class RegisterCallback : public PJUtils::Callback
+{
+  int _status_code;
+  ThirdPartyRegData* _reg_data;
+  std::function<void(ThirdPartyRegData*, int)> _send_register_callback;
+
+public:
+  ~RegisterCallback() override
+  {
+    delete _reg_data; _reg_data = NULL;
+  }
+
+  void run() override
+  {
+    if ((_reg_data->default_handling == SESSION_TERMINATED) &&
+        ((_status_code == 408) ||
+         (PJSIP_IS_STATUS_IN_CLASS(_status_code, 500))))
+    {
+      std::string error_msg = "Third-party REGISTER transaction failed with code " + std::to_string(_status_code);
+      TRC_INFO(error_msg.c_str());
+
+      SAS::Event event(_reg_data->trail, SASEvent::REGISTER_AS_FAILED, 0);
+      event.add_var_param(error_msg);
+      SAS::report_event(event);
+
+      // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure
+      // where SESSION_TERMINATED is set means that we should deregister "the
+      // currently registered public user identity" - i.e. all bindings
+      RegistrationUtils::remove_bindings(_reg_data->sdm,
+                                         _reg_data->remote_sdms,
+                                         _reg_data->hss,
+                                         _reg_data->public_id,
+                                         "*",
+                                         HSSConnection::DEREG_ADMIN,
+                                         _reg_data->trail);
+    }
+
+    if (third_party_reg_stats_tables != NULL)
+    {
+      if (_status_code == 200)
+      {
+        if (_reg_data->expires == 0)
+        {
+          third_party_reg_stats_tables->de_reg_tbl->increment_successes();
+        }
+        else if (_reg_data->is_initial_registration)
+        {
+          third_party_reg_stats_tables->init_reg_tbl->increment_successes();
+        }
+        else
+        {
+          third_party_reg_stats_tables->re_reg_tbl->increment_successes();
+        }
+      }
+      else
+      {
+        // Count all failed registration attempts, not just ones that result in
+        // user being unsubscribed.
+        if (_reg_data->expires == 0)
+        {
+          third_party_reg_stats_tables->de_reg_tbl->increment_failures();
+        }
+        else if (_reg_data->is_initial_registration)
+        {
+          third_party_reg_stats_tables->init_reg_tbl->increment_failures();
+        }
+        else
+        {
+          third_party_reg_stats_tables->re_reg_tbl->increment_failures();
+        }
+      }
+    }
+  }
+
+  RegisterCallback(void* token, pjsip_event* event)
+  {
+    // Save the regdata from the token, and the status code from the event
+    _reg_data = (ThirdPartyRegData*)token;
+    _status_code = event->body.tsx_state.tsx->status_code;
+  }
 };
 
 static void send_register_to_as(SubscriberDataManager* sdm,
@@ -222,71 +279,10 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
   }
 }
 
-static void send_register_cb(void* token, pjsip_event *event)
+static PJUtils::Callback* build_register_cb(void* token, pjsip_event* event)
 {
-  ThirdPartyRegData* tsxdata = (ThirdPartyRegData*)token;
-  pjsip_transaction* tsx = event->body.tsx_state.tsx;
-
-  if ((tsxdata->default_handling == SESSION_TERMINATED) &&
-      ((tsx->status_code == 408) ||
-       (PJSIP_IS_STATUS_IN_CLASS(tsx->status_code, 500))))
-  {
-    std::string error_msg = "Third-party REGISTER transaction failed with code " + std::to_string(tsx->status_code);
-    TRC_INFO(error_msg.c_str());
-
-    SAS::Event event(tsxdata->trail, SASEvent::REGISTER_AS_FAILED, 0);
-    event.add_var_param(error_msg);
-    SAS::report_event(event);
-
-    // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure
-    // where SESSION_TERMINATED is set means that we should deregister "the
-    // currently registered public user identity" - i.e. all bindings
-    RegistrationUtils::remove_bindings(tsxdata->sdm,
-                                       tsxdata->remote_sdms,
-                                       tsxdata->hss,
-                                       tsxdata->public_id,
-                                       "*",
-                                       HSSConnection::DEREG_ADMIN,
-                                       tsxdata->trail);
-  }
-
-  if (third_party_reg_stats_tables != NULL)
-  {
-    if (tsx->status_code == 200)
-    {
-      if (tsxdata->expires == 0)
-      {
-        third_party_reg_stats_tables->de_reg_tbl->increment_successes();
-      }
-      else if (tsxdata->is_initial_registration)
-      {
-        third_party_reg_stats_tables->init_reg_tbl->increment_successes();
-      }
-      else
-      {
-        third_party_reg_stats_tables->re_reg_tbl->increment_successes();
-      }
-    }
-    else
-    // Count all failed registration attempts, not just ones that result in user
-    // being unsubscribed.
-    {
-      if (tsxdata->expires == 0)
-      {
-        third_party_reg_stats_tables->de_reg_tbl->increment_failures();
-      }
-      else if (tsxdata->is_initial_registration)
-      {
-        third_party_reg_stats_tables->init_reg_tbl->increment_failures();
-      }
-      else
-      {
-        third_party_reg_stats_tables->re_reg_tbl->increment_failures();
-      }
-    }
-  }
-
-  delete tsxdata; tsxdata = NULL;
+  RegisterCallback* cb = new RegisterCallback(token, event);
+  return cb;
 }
 
 static void send_register_to_as(SubscriberDataManager* sdm,
@@ -433,7 +429,7 @@ static void send_register_to_as(SubscriberDataManager* sdm,
   tsxdata->public_id = served_user;
   tsxdata->expires = expires;
   tsxdata->is_initial_registration = is_initial_registration;
-  pj_status_t resolv_status = PJUtils::send_request(tdata, 0, tsxdata, &send_register_cb);
+  pj_status_t resolv_status = PJUtils::send_request(tdata, 0, tsxdata, &build_register_cb);
 
   if (resolv_status != PJ_SUCCESS)
   {
@@ -449,7 +445,7 @@ static void notify_application_servers()
 
 static bool expire_bindings(SubscriberDataManager *sdm,
                             const std::string& aor,
-                            std::vector<std::string> irs_impus,
+                            std::vector<std::string> unbarred_irs_impus,
                             const std::string& binding_id,
                             SAS::TrailId trail)
 {
@@ -480,7 +476,7 @@ static bool expire_bindings(SubscriberDataManager *sdm,
                                                            // single binding (flow failed).
     }
 
-    set_rc = sdm->set_aor_data(aor, irs_impus, aor_pair, trail, all_bindings_expired);
+    set_rc = sdm->set_aor_data(aor, unbarred_irs_impus, aor_pair, trail, all_bindings_expired);
     delete aor_pair; aor_pair = NULL;
 
     // We can only say for sure that the bindings were expired if we were able
@@ -506,7 +502,7 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
   bool all_bindings_expired = false;
 
   // Determine the set of IMPUs in the Implicit Registration Set
-  std::vector<std::string> irs_impus;
+  std::vector<std::string> unbarred_irs_impus;
   AssociatedURIs associated_uris = {};
   std::string state;
   std::map<std::string, Ifcs> ifc_map;
@@ -517,22 +513,22 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
                                                   trail);
 
   // We only want to send NOTIFYs for unbarred IMPUs.
-  irs_impus = associated_uris.unbarred_uris();
+  unbarred_irs_impus = associated_uris.get_unbarred_uris();
 
-  if ((http_code != HTTP_OK) || irs_impus.empty())
+  if ((http_code != HTTP_OK) || unbarred_irs_impus.empty())
   {
     // We were unable to determine the set of IMPUs for this AoR.  Push the AoR
     // we have into the IRS list so that we have at least one IMPU we can issue
     // NOTIFYs for. We should only do this if that IMPU is not barred.
     TRC_WARNING("Unable to get Implicit Registration Set for %s: %d", aor.c_str(), http_code);
-    irs_impus.clear();
-    if (!associated_uris.is_barred(aor))
+    unbarred_irs_impus.clear();
+    if (!associated_uris.is_impu_barred(aor))
     {
-      irs_impus.push_back(aor);
+      unbarred_irs_impus.push_back(aor);
     }
   }
 
-  if (expire_bindings(sdm, aor, irs_impus, binding_id, trail))
+  if (expire_bindings(sdm, aor, unbarred_irs_impus, binding_id, trail))
   {
     // All bindings have been expired, so do deregistration processing for the
     // IMPU.
@@ -572,7 +568,7 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
        remote_sdm != remote_sdms.end();
        ++remote_sdm)
   {
-    (void) expire_bindings(*remote_sdm, aor, irs_impus, binding_id, trail);
+    (void) expire_bindings(*remote_sdm, aor, unbarred_irs_impus, binding_id, trail);
   }
 
   return all_bindings_expired;
