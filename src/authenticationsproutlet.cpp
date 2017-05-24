@@ -989,19 +989,6 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
         status = PJSIP_EAUTHACCNOTFOUND;
         auth_challenge = NULL;
       }
-      else if (!is_register)
-      {
-        // We only support nonce counts for REGISTER requests (as for other
-        // requests we wouldn't know how long to store the challenge for)
-        TRC_INFO("Nonce count %d supplied on a non-REGISTER - ignore it",
-                 nonce_count);
-        SAS::Event event(trail(), SASEvent::AUTHENTICATION_NC_ON_NON_REG, 0);
-        event.add_static_param(nonce_count);
-        SAS::report_event(event);
-
-        status = PJSIP_EAUTHACCNOTFOUND;
-        auth_challenge = NULL;
-      }
     }
 
     if (status == PJ_SUCCESS)
