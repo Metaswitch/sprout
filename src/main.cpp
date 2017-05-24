@@ -507,6 +507,153 @@ bool parse_port(const std::string& port_str, int& port)
     return -1;                                                                 \
   }
 
+// Set the options to their defaults
+static void default_options(struct options& opt)
+{
+  opt.pcscf_enabled = false;
+  opt.pcscf_trusted_port = 0;
+  opt.pcscf_untrusted_port = 0;
+  opt.upstream_proxy_port = 0;
+  opt.webrtc_port = 0;
+  opt.ibcf = PJ_FALSE;
+  opt.external_icscf_uri = "";
+  opt.auth_enabled = PJ_FALSE;
+  opt.enum_suffix = ".e164.arpa";
+  opt.default_tel_uri_translation = false;
+
+  // If changing this default for reg_max_expires, note that
+  // debian/homestead.init.d in the homestead repository also defaults
+  // reg_max_expires, and so the default value set in that file must be changed
+  // also.
+  opt.reg_max_expires = 300;
+
+  opt.sub_max_expires = 0;
+  opt.sas_server = "0.0.0.0";
+  opt.record_routing_model = 1;
+  opt.default_session_expires = 10 * 60;
+  opt.max_session_expires = 10 * 60;
+  opt.worker_threads = 1;
+  opt.analytics_enabled = PJ_FALSE;
+  opt.http_address = "127.0.0.1";
+  opt.http_port = 9888;
+  opt.http_threads = 1;
+  opt.dns_servers.push_back("127.0.0.1");
+  opt.billing_cdf = "";
+  opt.emerg_reg_accepted = PJ_FALSE;
+  opt.max_call_list_length = 0;
+  opt.memento_threads = 25;
+  opt.call_list_ttl = 604800;
+  opt.target_latency_us = 100000;
+  opt.cass_target_latency_us = 1000000;
+  opt.max_tokens = 1000;
+  opt.init_token_rate = 100.0;
+  opt.min_token_rate = 10.0;
+  opt.log_to_file = PJ_FALSE;
+  opt.log_level = 0;
+  opt.daemon = PJ_FALSE;
+  opt.interactive = PJ_FALSE;
+  opt.memcached_write_format = MemcachedWriteFormat::JSON;
+  opt.override_npdi = PJ_FALSE;
+  opt.exception_max_ttl = 600;
+  opt.sip_blacklist_duration = SIPResolver::DEFAULT_BLACKLIST_DURATION;
+  opt.http_blacklist_duration = HttpResolver::DEFAULT_BLACKLIST_DURATION;
+  opt.astaire_blacklist_duration = AstaireResolver::DEFAULT_BLACKLIST_DURATION;
+  opt.sip_tcp_connect_timeout = 2000;
+  opt.sip_tcp_send_timeout = 2000;
+  opt.session_continued_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_CONTINUED_TIMEOUT;
+  opt.session_terminated_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_TERMINATED_TIMEOUT;
+  opt.stateless_proxies.clear();
+  opt.ralf_threads = 25;
+  opt.non_register_auth_mode = NonRegisterAuthentication::NEVER;
+  opt.force_third_party_register_body = false;
+  opt.listen_port = 0;
+  SPROUTLET_MACRO(SPROUTLET_CFG_OPTIONS_DEFAULT_VALUES)
+  opt.impi_store_mode = ImpiStore::Mode::READ_IMPI_WRITE_IMPI;
+  opt.nonce_count_supported = false;
+  opt.scscf_node_uri = "";
+  opt.sas_signaling_if = false;
+  opt.disable_tcp_switch = false;
+
+}
+
+static int validate_options(struct options& opt)
+{
+  if (opt.sas_server == "0.0.0.0")
+  {
+    TRC_WARNING("SAS server option was invalid or not configured - SAS is disabled");
+    CL_SPROUT_INVALID_SAS_OPTION.log();
+  }
+
+  if ((!opt.pcscf_enabled) && (!opt.enabled_scscf) && (!opt.enabled_icscf))
+  {
+    CL_SPROUT_NO_SI_CSCF.log();
+    TRC_WARNING("Most Sprout nodes have at least one of P-CSCF, S-CSCF or I-CSCF enabled");
+  }
+
+  if ((opt.pcscf_enabled) && ((opt.enabled_scscf) || (opt.enabled_icscf)))
+  {
+    TRC_ERROR("Cannot enable both P-CSCF and S/I-CSCF");
+    return 1;
+  }
+
+  if ((opt.pcscf_enabled) &&
+      (opt.upstream_proxy == ""))
+  {
+    TRC_ERROR("Cannot enable P-CSCF without specifying --routing-proxy");
+    return 1;
+  }
+
+  if ((opt.ibcf) && (!opt.pcscf_enabled))
+  {
+    TRC_ERROR("Cannot enable IBCF without also enabling P-CSCF");
+    return 1;
+  }
+
+  if ((opt.webrtc_port != 0 ) && (!opt.pcscf_enabled))
+  {
+    TRC_ERROR("Cannot enable WebRTC without also enabling P-CSCF");
+    return 1;
+  }
+
+  if (((opt.enabled_scscf) || (opt.enabled_icscf)) &&
+      (opt.hss_server == ""))
+  {
+    CL_SPROUT_SI_CSCF_NO_HOMESTEAD.log();
+    TRC_ERROR("S/I-CSCF enabled with no Homestead server");
+    return 1;
+  }
+
+  if ((opt.pcscf_enabled) && (opt.hss_server != ""))
+  {
+    TRC_WARNING("Homestead server configured on P-CSCF, ignoring");
+  }
+
+  if ((opt.pcscf_enabled) && (opt.xdm_server != ""))
+  {
+    TRC_WARNING("XDM server configured on P-CSCF, ignoring");
+  }
+
+  if (((!opt.registration_stores.empty()) || (opt.impi_store != "")) &&
+      (opt.auth_enabled) &&
+      (opt.worker_threads == 1))
+  {
+    TRC_WARNING("Use multiple threads for good performance when using memstore and/or authentication");
+  }
+
+  if ((opt.pcscf_enabled) && (opt.reg_max_expires != 0))
+  {
+    TRC_WARNING("A registration expiry period should not be specified for P-CSCF");
+  }
+
+  if ((!opt.enum_servers.empty()) &&
+      (!opt.enum_file.empty()))
+  {
+    TRC_WARNING("Both ENUM server and ENUM file lookup enabled - ignoring ENUM file");
+  }
+
+  return 0;
+}
+
 static pj_status_t init_logging_options(int argc, char* argv[], struct options* options)
 {
   int c;
@@ -1417,69 +1564,7 @@ int main(int argc, char* argv[])
   sem_init(&term_sem, 0, 0);
   signal(SIGTERM, terminate_handler);
 
-  opt.pcscf_enabled = false;
-  opt.pcscf_trusted_port = 0;
-  opt.pcscf_untrusted_port = 0;
-  opt.upstream_proxy_port = 0;
-  opt.webrtc_port = 0;
-  opt.ibcf = PJ_FALSE;
-  opt.external_icscf_uri = "";
-  opt.auth_enabled = PJ_FALSE;
-  opt.enum_suffix = ".e164.arpa";
-  opt.default_tel_uri_translation = false;
-
-  // If changing this default for reg_max_expires, note that
-  // debian/homestead.init.d in the homestead repository also defaults
-  // reg_max_expires, and so the default value set in that file must be changed
-  // also.
-  opt.reg_max_expires = 300;
-
-  opt.sub_max_expires = 0;
-  opt.sas_server = "0.0.0.0";
-  opt.record_routing_model = 1;
-  opt.default_session_expires = 10 * 60;
-  opt.max_session_expires = 10 * 60;
-  opt.worker_threads = 1;
-  opt.analytics_enabled = PJ_FALSE;
-  opt.http_address = "127.0.0.1";
-  opt.http_port = 9888;
-  opt.http_threads = 1;
-  opt.dns_servers.push_back("127.0.0.1");
-  opt.billing_cdf = "";
-  opt.emerg_reg_accepted = PJ_FALSE;
-  opt.max_call_list_length = 0;
-  opt.memento_threads = 25;
-  opt.call_list_ttl = 604800;
-  opt.target_latency_us = 100000;
-  opt.cass_target_latency_us = 1000000;
-  opt.max_tokens = 1000;
-  opt.init_token_rate = 100.0;
-  opt.min_token_rate = 10.0;
-  opt.log_to_file = PJ_FALSE;
-  opt.log_level = 0;
-  opt.daemon = PJ_FALSE;
-  opt.interactive = PJ_FALSE;
-  opt.memcached_write_format = MemcachedWriteFormat::JSON;
-  opt.override_npdi = PJ_FALSE;
-  opt.exception_max_ttl = 600;
-  opt.sip_blacklist_duration = SIPResolver::DEFAULT_BLACKLIST_DURATION;
-  opt.http_blacklist_duration = HttpResolver::DEFAULT_BLACKLIST_DURATION;
-  opt.astaire_blacklist_duration = AstaireResolver::DEFAULT_BLACKLIST_DURATION;
-  opt.sip_tcp_connect_timeout = 2000;
-  opt.sip_tcp_send_timeout = 2000;
-  opt.session_continued_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_CONTINUED_TIMEOUT;
-  opt.session_terminated_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_TERMINATED_TIMEOUT;
-  opt.stateless_proxies.clear();
-  opt.ralf_threads = 25;
-  opt.non_register_auth_mode = NonRegisterAuthentication::NEVER;
-  opt.force_third_party_register_body = false;
-  opt.listen_port = 0;
-  SPROUTLET_MACRO(SPROUTLET_CFG_OPTIONS_DEFAULT_VALUES)
-  opt.impi_store_mode = ImpiStore::Mode::READ_IMPI_WRITE_IMPI;
-  opt.nonce_count_supported = false;
-  opt.scscf_node_uri = "";
-  opt.sas_signaling_if = false;
-  opt.disable_tcp_switch = false;
+  default_options(opt);
 
   status = init_logging_options(argc, argv, &opt);
 
@@ -1559,79 +1644,21 @@ int main(int argc, char* argv[])
   }
 
   std::vector<std::string> sproutlet_uris;
+
   SPROUTLET_MACRO(SPROUTLET_VERIFY_OPTIONS)
 
-  if (opt.sas_server == "0.0.0.0")
+  status = validate_options(opt);
+
+  if (status != PJ_SUCCESS)
   {
-    TRC_WARNING("SAS server option was invalid or not configured - SAS is disabled");
-    CL_SPROUT_INVALID_SAS_OPTION.log();
+    return status;
   }
 
-  if ((!opt.pcscf_enabled) && (!opt.enabled_scscf) && (!opt.enabled_icscf))
+  // If local host was not specified, use the host name returned by
+  // pj_gethostname.
+  if (opt.local_host == "")
   {
-    CL_SPROUT_NO_SI_CSCF.log();
-    TRC_WARNING("Most Sprout nodes have at least one of P-CSCF, S-CSCF or I-CSCF enabled");
-  }
-
-  if ((opt.pcscf_enabled) && ((opt.enabled_scscf) || (opt.enabled_icscf)))
-  {
-    TRC_ERROR("Cannot enable both P-CSCF and S/I-CSCF");
-    return 1;
-  }
-
-  if ((opt.pcscf_enabled) &&
-      (opt.upstream_proxy == ""))
-  {
-    TRC_ERROR("Cannot enable P-CSCF without specifying --routing-proxy");
-    return 1;
-  }
-
-  if ((opt.ibcf) && (!opt.pcscf_enabled))
-  {
-    TRC_ERROR("Cannot enable IBCF without also enabling P-CSCF");
-    return 1;
-  }
-
-  if ((opt.webrtc_port != 0 ) && (!opt.pcscf_enabled))
-  {
-    TRC_ERROR("Cannot enable WebRTC without also enabling P-CSCF");
-    return 1;
-  }
-
-  if (((opt.enabled_scscf) || (opt.enabled_icscf)) &&
-      (opt.hss_server == ""))
-  {
-    CL_SPROUT_SI_CSCF_NO_HOMESTEAD.log();
-    TRC_ERROR("S/I-CSCF enabled with no Homestead server");
-    return 1;
-  }
-
-  if ((opt.pcscf_enabled) && (opt.hss_server != ""))
-  {
-    TRC_WARNING("Homestead server configured on P-CSCF, ignoring");
-  }
-
-  if ((opt.pcscf_enabled) && (opt.xdm_server != ""))
-  {
-    TRC_WARNING("XDM server configured on P-CSCF, ignoring");
-  }
-
-  if (((!opt.registration_stores.empty()) || (opt.impi_store != "")) &&
-      (opt.auth_enabled) &&
-      (opt.worker_threads == 1))
-  {
-    TRC_WARNING("Use multiple threads for good performance when using memstore and/or authentication");
-  }
-
-  if ((opt.pcscf_enabled) && (opt.reg_max_expires != 0))
-  {
-    TRC_WARNING("A registration expiry period should not be specified for P-CSCF");
-  }
-
-  if ((!opt.enum_servers.empty()) &&
-      (!opt.enum_file.empty()))
-  {
-    TRC_WARNING("Both ENUM server and ENUM file lookup enabled - ignoring ENUM file");
+    opt.local_host = PJUtils::pj_str_to_string(pj_gethostname());
   }
 
   // Parse the registration-stores argument.
@@ -1847,30 +1874,37 @@ int main(int argc, char* argv[])
   quiescing_mgr = new QuiescingManager();
   quiescing_mgr->register_completion_handler(new QuiesceCompleteHandler());
 
+  // Set up the default address family.  This is IPv4 unless our local host is an IPv6 address.
+  int addr_family = AF_INET;
+  struct in6_addr dummy_addr;
+  if (inet_pton(AF_INET6, opt.local_host.c_str(), &dummy_addr) == 1)
+  {
+    TRC_DEBUG("Local host is an IPv6 address - enabling IPv6 mode");
+    addr_family = AF_INET6;
+  }
+
   // Initialize the PJSIP stack and associated subsystems.
+  // We need to do this early so that components which use PJSIP
+  // can create data on stack_data.pool.
   status = init_stack(opt.sas_system_name,
                       opt.sas_server,
                       opt.pcscf_trusted_port,
                       opt.pcscf_untrusted_port,
                       opt.port_scscf,
                       opt.sas_signaling_if,
-                      opt.sproutlet_ports,
+                      addr_family,
                       opt.local_host,
                       opt.public_host,
                       opt.home_domain,
                       opt.additional_home_domains,
                       opt.uri_scscf,
-                      opt.sprout_hostname,
-                      opt.alias_hosts,
                       sip_resolver,
                       opt.record_routing_model,
                       opt.default_session_expires,
                       opt.max_session_expires,
                       opt.sip_tcp_connect_timeout,
                       opt.sip_tcp_send_timeout,
-                      quiescing_mgr,
-                      opt.billing_cdf,
-                      sproutlet_uris);
+                      opt.billing_cdf);
 
   if (status != PJ_SUCCESS)
   {
@@ -1879,21 +1913,9 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  //If the flag is set, disable UDP-to-TCP uplift.
-  if (opt.disable_tcp_switch)
-  {
-    TRC_STATUS("Disabling UDP-to-TCP uplift");
-    pjsip_cfg_t* pjsip_config = pjsip_cfg();
-    pjsip_config->endpt.disable_tcp_switch = true;
-  }
-
-  // Set up our signal handler for (un)quiesce signals.
-  signal(QUIESCE_SIGNAL, quiesce_unquiesce_handler);
-  signal(UNQUIESCE_SIGNAL, quiesce_unquiesce_handler);
-
   // Now that we know the address family, create an HttpResolver too.
   http_resolver = new HttpResolver(dns_resolver,
-                                   stack_data.addr_family,
+                                   addr_family,
                                    opt.http_blacklist_duration);
 
   if (opt.ralf_server != "")
@@ -1914,9 +1936,6 @@ int main(int argc, char* argv[])
   {
     CL_SPROUT_NO_RALF_CONFIGURED.log();
   }
-
-  // Initialise the OPTIONS handling module.
-  status = init_options();
 
   if (opt.hss_server != "")
   {
@@ -1953,58 +1972,6 @@ int main(int argc, char* argv[])
   {
     TRC_STATUS("Setting up ENUM service to do default TEL->SIP URI translation");
     enum_service = new DummyEnumService(opt.home_domain);
-  }
-
-  if (opt.pcscf_enabled)
-  {
-    // Create an ACR factory for the P-CSCF.
-    pcscf_acr_factory = (ralf_processor != NULL) ?
-                (ACRFactory*)new RalfACRFactory(ralf_processor, ACR::PCSCF) :
-                new ACRFactory();
-
-    // Launch stateful proxy as P-CSCF.
-    status = init_stateful_proxy(NULL,
-                                 NULL,
-                                 NULL,
-                                 true,
-                                 opt.upstream_proxy,
-                                 opt.upstream_proxy_port,
-                                 opt.upstream_proxy_connections,
-                                 opt.upstream_proxy_recycle,
-                                 opt.ibcf,
-                                 opt.trusted_hosts,
-                                 opt.pbxes,
-                                 opt.pbx_service_route,
-                                 analytics_logger,
-                                 NULL,
-                                 NULL,
-                                 NULL,
-                                 pcscf_acr_factory,
-                                 NULL,
-                                 NULL,
-                                 "",
-                                 quiescing_mgr,
-                                 opt.enabled_icscf,
-                                 opt.enabled_scscf,
-                                 opt.emerg_reg_accepted);
-    if (status != PJ_SUCCESS)
-    {
-      TRC_ERROR("Failed to enable P-CSCF edge proxy");
-      return 1;
-    }
-
-    pj_bool_t websockets_enabled = (opt.webrtc_port != 0);
-    if (websockets_enabled)
-    {
-      status = init_websockets((unsigned short)opt.webrtc_port);
-      if (status != PJ_SUCCESS)
-      {
-        TRC_ERROR("Error initializing websockets, %s",
-                  PJUtils::pj_status_to_string(status).c_str());
-
-        return 1;
-      }
-    }
   }
 
   // Create a connection to Chronos.
@@ -2057,7 +2024,7 @@ int main(int argc, char* argv[])
     TRC_STATUS("Using memcached compatible store with binary protocol");
 
     astaire_resolver = new AstaireResolver(dns_resolver,
-                                           stack_data.addr_family,
+                                           addr_family,
                                            opt.astaire_blacklist_duration);
 
     local_data_store = (Store*)new TopologyNeutralMemcachedStore(registration_store_location,
@@ -2188,6 +2155,106 @@ int main(int argc, char* argv[])
     CL_SPROUT_PLUGIN_FAILURE.log();
     TRC_ERROR("Failed to successfully load plug-ins");
     return 1;
+  }
+
+  // Add all of the sproutlets to the list of sproutlet ports and URIs
+  for (Sproutlet* sproutlet : sproutlets)
+  {
+    int port = sproutlet->port();
+    std::string uri = sproutlet->uri_as_str();
+
+    if (port != 0)
+    {
+      opt.sproutlet_ports.insert(port);
+    }
+
+    if (uri != "")
+    {
+      sproutlet_uris.push_back(uri);
+    }
+  }
+
+  // Start the PJSIP stack and it's transports. These needs to
+  // happen after we have loaded the sproutlets so they can adjust the
+  // listening ports.
+  status = start_stack(opt.sproutlet_ports,
+                       opt.sprout_hostname,
+                       opt.alias_hosts,
+                       quiescing_mgr,
+                       sproutlet_uris);
+
+  if (status != PJ_SUCCESS)
+  {
+    CL_SPROUT_SIP_INIT_INTERFACE_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
+    TRC_ERROR("Error starting stack %s", PJUtils::pj_status_to_string(status).c_str());
+    return 1;
+  }
+
+  // If the flag is set, disable UDP-to-TCP uplift.
+  if (opt.disable_tcp_switch)
+  {
+    TRC_STATUS("Disabling UDP-to-TCP uplift");
+    pjsip_cfg_t* pjsip_config = pjsip_cfg();
+    pjsip_config->endpt.disable_tcp_switch = true;
+  }
+
+  // Set up our signal handler for (un)quiesce signals.
+  signal(QUIESCE_SIGNAL, quiesce_unquiesce_handler);
+  signal(UNQUIESCE_SIGNAL, quiesce_unquiesce_handler);
+
+  // Initialise the OPTIONS handling module.
+  status = init_options();
+
+  if (opt.pcscf_enabled)
+  {
+    // Create an ACR factory for the P-CSCF.
+    pcscf_acr_factory = (ralf_processor != NULL) ?
+                (ACRFactory*)new RalfACRFactory(ralf_processor, ACR::PCSCF) :
+                new ACRFactory();
+
+    // Launch stateful proxy as P-CSCF.
+    status = init_stateful_proxy(NULL,
+                                 NULL,
+                                 NULL,
+                                 true,
+                                 opt.upstream_proxy,
+                                 opt.upstream_proxy_port,
+                                 opt.upstream_proxy_connections,
+                                 opt.upstream_proxy_recycle,
+                                 opt.ibcf,
+                                 opt.trusted_hosts,
+                                 opt.pbxes,
+                                 opt.pbx_service_route,
+                                 analytics_logger,
+                                 NULL,
+                                 NULL,
+                                 NULL,
+                                 pcscf_acr_factory,
+                                 NULL,
+                                 NULL,
+                                 "",
+                                 quiescing_mgr,
+                                 opt.enabled_icscf,
+                                 opt.enabled_scscf,
+                                 opt.emerg_reg_accepted);
+    if (status != PJ_SUCCESS)
+    {
+      TRC_ERROR("Failed to enable P-CSCF edge proxy");
+      return 1;
+    }
+
+    pj_bool_t websockets_enabled = (opt.webrtc_port != 0);
+    if (websockets_enabled)
+    {
+      status = init_websockets((unsigned short)opt.webrtc_port);
+      if (status != PJ_SUCCESS)
+      {
+        TRC_ERROR("Error initializing websockets, %s",
+                  PJUtils::pj_status_to_string(status).c_str());
+
+        return 1;
+      }
+    }
   }
 
   // Must happen after all SNMP tables have been registered.
