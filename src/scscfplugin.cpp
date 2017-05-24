@@ -258,7 +258,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                     chronos_connection,
                                     scscf_acr_factory,
                                     opt.non_register_auth_mode,
-                                    opt.non_reg_chal_lifetime_s,
+                                    0,
                                     analytics_logger,
                                     &auth_stats_tbls,
                                     opt.nonce_count_supported,
