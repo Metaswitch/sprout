@@ -548,30 +548,41 @@ HTTPCode DeregistrationTask::handle_request()
       impi != impis_to_delete.end();
       ++impi)
   {
-    TRC_DEBUG("Delete %s from the IMPI store", impi->c_str());
+    TRC_DEBUG("Delete %s from the IMPI store(s)", impi->c_str());
 
-    Store::Status store_rc = Store::OK;
-    ImpiStore::Impi* impi_obj = NULL;
-
-    do
+    delete_impi_from_store(_cfg->_local_impi_store, *impi);
+    for (ImpiStore* store: _cfg->_remote_impi_stores)
     {
-      // Free any IMPI we had from the last loop iteration.
-      delete impi_obj; impi_obj = NULL;
-
-      impi_obj = _cfg->_impi_store->get_impi(*impi, _trail);
-
-      if (impi_obj != NULL)
-      {
-        store_rc = _cfg->_impi_store->delete_impi(impi_obj, _trail);
-      }
+      delete_impi_from_store(store, *impi);
     }
-    while ((impi_obj != NULL) && (store_rc == Store::DATA_CONTENTION));
-
-    delete impi_obj; impi_obj = NULL;
   }
 
   return HTTP_OK;
 }
+
+void DeregistrationTask::delete_impi_from_store(ImpiStore* store,
+                                                const std::string& impi)
+{
+  Store::Status store_rc = Store::OK;
+  ImpiStore::Impi* impi_obj = NULL;
+
+  do
+  {
+    // Free any IMPI we had from the last loop iteration.
+    delete impi_obj; impi_obj = NULL;
+
+    impi_obj = store->get_impi(impi, _trail);
+
+    if (impi_obj != NULL)
+    {
+      store_rc = store->delete_impi(impi_obj, _trail);
+    }
+  }
+  while ((impi_obj != NULL) && (store_rc == Store::DATA_CONTENTION));
+
+  delete impi_obj; impi_obj = NULL;
+}
+
 
 SubscriberDataManager::AoRPair* DeregistrationTask::deregister_bindings(
                                         SubscriberDataManager* current_sdm,
@@ -694,8 +705,18 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
     return HTTP_BAD_REQUEST;
   }
 
+  // Locate the challenge that this timer refers to, to check if the user
+  // authenticated against it. If it didn't, we will need to send an
+  // AUTHENTICATION_TIMEOUT SAR.
+  //
+  // Note that we don't bother checking any of the remote IMPI stores if we
+  // don't find a record in the local store. This suggests that the IMPI record
+  // didn't get replicated to this site but the chronos timer did, which is
+  // quite a weird situation to be in. If we do hit it, we'll return a 500
+  // response to chronos which will eventually cause it to retry in a different
+  // site, which will hopefully have the data.
   bool success = false;
-  ImpiStore::Impi* impi = _cfg->_impi_store->get_impi_with_nonce(_impi, _nonce, trail());
+  ImpiStore::Impi* impi = _cfg->_local_impi_store->get_impi_with_nonce(_impi, _nonce, trail());
   ImpiStore::AuthChallenge* auth_challenge = NULL;
   if (impi != NULL)
   {

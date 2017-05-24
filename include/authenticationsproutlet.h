@@ -123,11 +123,13 @@ public:
                           const std::string& next_hop_service,
                           const std::list<std::string>& aliases,
                           const std::string& realm_name,
-                          ImpiStore* _impi_store,
+                          ImpiStore* impi_store,
+                          std::vector<ImpiStore*> remote_impi_stores,
                           HSSConnection* hss_connection,
                           ChronosConnection* chronos_connection,
                           ACRFactory* rfacr_factory,
                           uint32_t non_register_auth_mode_param,
+                          int non_reg_challenge_expiry_s,
                           AnalyticsLogger* analytics_logger,
                           SNMP::AuthenticationStatsTables* auth_stats_tbls,
                           bool nonce_count_supported_arg,
@@ -149,6 +151,52 @@ private:
   bool needs_authentication(pjsip_msg* req,
                             SAS::TrailId trail);
 
+  /// Read an IMPI from the store (preferring the local store, but falling back
+  /// to GR stores if necessary).
+  ///
+  /// @param impi  - The IMPI to read.
+  /// @param nonce - The nonce that the caller is in interested in.
+  /// @param trail - SAS trail ID.
+  ///
+  /// @return      - The IMPI object, or NULL if there was a store failure.
+  ImpiStore::Impi* read_impi(const std::string& impi,
+                             const std::string& nonce,
+                             SAS::TrailId trail);
+
+  /// Write a challenge to the IMPI stores. This handles GR replication.
+  ///
+  /// @param impi           - The IMPI the challenge relates to.
+  /// @param auth_challenge - The challenge to write.
+  /// @param impi_obj       - Optional IMPI object that has previously been read
+  ///                         from the local store. This allows this function to
+  ///                         eliminate a superfluous read.
+  /// @param trail          - SAS trail ID.
+  ///
+  /// @return               - The result of writing the challenge to the local
+  ///                         store.
+  Store::Status write_challenge(const std::string& impi,
+                                ImpiStore::AuthChallenge* auth_challenge,
+                                ImpiStore::Impi* impi_obj,
+                                SAS::TrailId trail);
+
+  /// Write a challenge to a single store.
+  ///
+  /// @param store          - The store to write to.
+  /// @param impi           - The IMPI the challenge relates to.
+  /// @param auth_challenge - The challenge to write.
+  /// @param impi_obj       - Optional IMPI object that has previously been read
+  ///                         from the local store. This allows this function to
+  ///                         eliminate a superfluous read.
+  /// @param trail          - SAS trail ID.
+  ///
+  /// @return               - The result of writing the challenge to the local
+  ///                         store.
+  Store::Status write_challenge_to_store(ImpiStore* store,
+                                         const std::string& impi,
+                                         ImpiStore::AuthChallenge* auth_challenge,
+                                         ImpiStore::Impi* impi_obj,
+                                         SAS::TrailId trail);
+
   friend class AuthenticationSproutletTsx;
 
   // Realm to use on AKA challenges.
@@ -162,9 +210,10 @@ private:
   // Factory for creating ACR messages for Rf billing.
   ACRFactory* _acr_factory;
 
-  // IMPI store used to store authentication challenges while waiting for the
+  // IMPI stores used to store authentication challenges while waiting for the
   // client to respond.
   ImpiStore* _impi_store;
+  std::vector<ImpiStore*> _remote_impi_stores;
 
   // Analytics logger.
   AnalyticsLogger* _analytics;
@@ -187,6 +236,12 @@ private:
   // Controls when to challenge non-REGISTER messages.  This is a bitmask with
   // values taken from NonRegisterAuthentication.
   uint32_t _non_register_auth_mode;
+
+  // Controls how long non-REGISTER challenges are stored for after being
+  // successfully authenticated against. This is only relevant when nonce count
+  // support is enabled (otherwise there is no need to store them for an
+  // extended period of time).
+  int _non_reg_challenge_expiry_s;
 
   // The next service to route requests onto if the sproutlet does not handle them
   // itself.

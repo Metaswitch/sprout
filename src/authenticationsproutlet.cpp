@@ -74,10 +74,12 @@ AuthenticationSproutlet::AuthenticationSproutlet(const std::string& name,
                                                  const std::list<std::string>& aliases,
                                                  const std::string& realm_name,
                                                  ImpiStore* _impi_store,
+                                                 std::vector<ImpiStore*> remote_impi_stores,
                                                  HSSConnection* hss_connection,
                                                  ChronosConnection* chronos_connection,
                                                  ACRFactory* rfacr_factory,
                                                  uint32_t non_register_auth_mode_param,
+                                                 int non_reg_challenge_expiry_s,
                                                  AnalyticsLogger* analytics_logger,
                                                  SNMP::AuthenticationStatsTables* auth_stats_tbls,
                                                  bool nonce_count_supported_arg,
@@ -90,11 +92,13 @@ AuthenticationSproutlet::AuthenticationSproutlet(const std::string& name,
   _chronos(chronos_connection),
   _acr_factory(rfacr_factory),
   _impi_store(_impi_store),
+  _remote_impi_stores(remote_impi_stores),
   _analytics(analytics_logger),
   _auth_stats_tables(auth_stats_tbls),
   _nonce_count_supported(nonce_count_supported_arg),
   _get_expiry_for_binding(get_expiry_for_binding_arg),
   _non_register_auth_mode(non_register_auth_mode_param),
+  _non_reg_challenge_expiry_s(non_reg_challenge_expiry_s),
   _next_hop_service(next_hop_service),
   _aliases(aliases)
 {
@@ -346,16 +350,23 @@ int AuthenticationSproutletTsx::calculate_challenge_expiration_time(pjsip_msg* r
 {
   int expires = 0;
 
-  pjsip_expires_hdr* expires_hdr = (pjsip_expires_hdr*)
-    pjsip_msg_find_hdr(req, PJSIP_H_EXPIRES, NULL);
-
-  for (pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
-          pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, NULL);
-       contact_hdr != NULL;
-       contact_hdr = (pjsip_contact_hdr*)
-          pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, contact_hdr->next))
+  if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
   {
-    expires = std::max(expires, _authentication->_get_expiry_for_binding(contact_hdr, expires_hdr));
+    pjsip_expires_hdr* expires_hdr = (pjsip_expires_hdr*)
+      pjsip_msg_find_hdr(req, PJSIP_H_EXPIRES, NULL);
+
+    for (pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
+            pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, NULL);
+         contact_hdr != NULL;
+         contact_hdr = (pjsip_contact_hdr*)
+            pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, contact_hdr->next))
+    {
+      expires = std::max(expires, _authentication->_get_expiry_for_binding(contact_hdr, expires_hdr));
+    }
+  }
+  else
+  {
+    expires = _authentication->_non_reg_challenge_expiry_s;
   }
 
   return expires + time(NULL);
@@ -541,8 +552,7 @@ AuthenticationVector* AuthenticationSproutletTsx::get_av_from_store(const std::s
 {
   AuthenticationVector* av = nullptr;
 
-  ImpiStore::Impi* impi_obj =
-    _authentication->_impi_store->get_impi_with_nonce(impi, nonce, trail());
+  ImpiStore::Impi* impi_obj = _authentication->read_impi(impi, nonce, trail());
 
   if (impi_obj != nullptr)
   {
@@ -825,61 +835,12 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     // the IMPI at the end of the loop.
     std::string nonce = auth_challenge->nonce;
 
-    do
-    {
-      if (impi_obj == NULL)
-      {
-        TRC_DEBUG("Lookup IMPI %s (with nonce %s)", impi.c_str(), nonce.c_str());
-        impi_obj = _authentication->_impi_store->get_impi_with_nonce(impi,
-                                                                     nonce,
-                                                                     trail());
-      }
+    // Write the challenge back to the store.
+    status = _authentication->write_challenge(impi, auth_challenge, impi_obj, trail());
 
-      // Check whether the IMPI has an existing auth challenge.
-      ImpiStore::AuthChallenge* challenge =
-        impi_obj->get_auth_challenge(auth_challenge->nonce);
-
-      if (challenge != NULL)
-      {
-        // The IMPI already has a challenge. This shouldn't happen in mainline
-        // operation but it can happen if we hit data contention (the IMPI store
-        // may have failed to write data in the new format but succeeded writing
-        // a challenge int he old format meaning the challenge could appear on a
-        // subsequent get.
-        //
-        // Regardless, we want to be defensive and update the existing challenge
-        // (making sure the nonce count and expiry don't move backwards).
-        challenge->nonce_count = std::max(auth_challenge->nonce_count,
-                                          challenge->nonce_count);
-        challenge->expires = std::max(auth_challenge->expires,
-                                      challenge->expires);
-        delete auth_challenge; auth_challenge = NULL;
-      }
-      else
-      {
-        // Add our new challenges to the IMPI.
-        impi_obj->auth_challenges.push_back(auth_challenge);
-        auth_challenge = NULL;
-      }
-
-      status = _authentication->_impi_store->set_impi(impi_obj, trail());
-
-      // Regardless of what happened take the challenge back. If everything
-      // went well we will delete it below. If we hit data contention we will
-      // need it the next time round the loop.
-      auth_challenge = impi_obj->get_auth_challenge(nonce);
-      std::vector<ImpiStore::AuthChallenge*>& challenges = impi_obj->auth_challenges;
-      challenges.erase(std::remove(challenges.begin(),
-                                   challenges.end(),
-                                   auth_challenge),
-                       challenges.end());
-
-      delete impi_obj; impi_obj = NULL;
-
-    } while (status == Store::DATA_CONTENTION);
-
-    // We're done with the auth challenge now.
+    // We're done with the auth challenge and IMPI object now.
     delete auth_challenge; auth_challenge = NULL;
+    delete impi_obj; impi_obj = NULL;
 
     if (status == Store::OK)
     {
@@ -958,7 +919,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   {
     std::string impi = PJUtils::pj_str_to_string(&credentials->username);
     std::string nonce = PJUtils::pj_str_to_string(&credentials->nonce);
-    impi_obj = _authentication->_impi_store->get_impi_with_nonce(impi, nonce, trail());
+    impi_obj = _authentication->read_impi(impi, nonce, trail());
     ImpiStore::AuthChallenge* auth_challenge = NULL;
     if (impi_obj != NULL)
     {
@@ -1037,19 +998,6 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
         status = PJSIP_EAUTHACCNOTFOUND;
         auth_challenge = NULL;
       }
-      else if (!is_register)
-      {
-        // We only support nonce counts for REGISTER requests (as for other
-        // requests we wouldn't know how long to store the challenge for)
-        TRC_INFO("Nonce count %d supplied on a non-REGISTER - ignore it",
-                 nonce_count);
-        SAS::Event event(trail(), SASEvent::AUTHENTICATION_NC_ON_NON_REG, 0);
-        event.add_static_param(nonce_count);
-        SAS::report_event(event);
-
-        status = PJSIP_EAUTHACCNOTFOUND;
-        auth_challenge = NULL;
-      }
     }
 
     if (status == PJ_SUCCESS)
@@ -1089,78 +1037,30 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
         // Increment the nonce count and set it back to the AV store, handling
         // contention.  We don't check for overflow - it will take ~2^32
         // authentications before it happens.
-        uint32_t new_nonce_count = nonce_count + 1;
+        auth_challenge->nonce_count = nonce_count + 1;
 
         // Work out when the challenge should expire. We keep it around if we
         // might need it later which is the case if either:
-        // - Nonce counts are supported.
-        // - It is a digest challenge and we need to challenge initial requests
-        //   from endpoints that use digest.
-        //
-        // We also only store challenges to REGISTERs, as these have a
-        // well-defined lifetime (the duration of the REGISTER).
-        int new_expiry = auth_challenge->expires;
-
-        if (is_register)
+        // -  Nonce counts are supported.
+        // -  It is a digest challenge to a REGISTER and we need to challenge
+        //    initial requests from endpoints that use digest.
+        if (_authentication->_nonce_count_supported)
         {
-          if (_authentication->_nonce_count_supported)
-          {
-            TRC_DEBUG("Storing challenge because nonce counts are supported");
-            new_expiry = calculate_challenge_expiration_time(req);
-          }
-          else if ((auth_challenge->type == ImpiStore::AuthChallenge::DIGEST) &&
-                   (_authentication->_non_register_auth_mode &
-                       NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT))
-          {
-            TRC_DEBUG("Storing challenge in order to challenge non-REGISTER requests");
-            new_expiry = calculate_challenge_expiration_time(req);
-          }
+          TRC_DEBUG("Storing challenge because nonce counts are supported");
+          auth_challenge->expires = calculate_challenge_expiration_time(req);
+        }
+        else if ((is_register) &&
+                 (auth_challenge->type == ImpiStore::AuthChallenge::DIGEST) &&
+                 (_authentication->_non_register_auth_mode &
+                  NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT))
+        {
+          TRC_DEBUG("Storing challenge from REGISTER to challenge non-REGISTER requests");
+          auth_challenge->expires = calculate_challenge_expiration_time(req);
         }
 
-        Store::Status store_status;
-        do
-        {
-          // Work out the next nonce count and expiry to use. We don't police
-          // against another UE using this nonce at exactly the same time, but
-          // we don't want the expiration or nonce counts to travel backwards in
-          // this case.
-          //
-          // We don't police this race condition because:
-          // * A genuine UE gains no benefit from exploiting it.
-          // * An attacker may be able to clone a genuine UE's auth response,
-          //   and the attacker's response may beat the genuine UE's response
-          //   in a race. If this happens there is no way for us to tell the
-          //   difference between the attacker and the genuine UE. The right
-          //   way to protect against this attack is to use the auth-int qop.
-          auth_challenge->nonce_count = std::max(new_nonce_count,
-                                                 auth_challenge->nonce_count);
-          auth_challenge->expires = std::max(new_expiry,
-                                             auth_challenge->expires);
-
-          // Store it.  If this fails due to contention, read the updated JSON.
-          store_status = _authentication->_impi_store->set_impi(impi_obj, trail());
-
-          if (store_status == Store::DATA_CONTENTION)
-          {
-            // LCOV_EXCL_START - No support for contention in UT
-            TRC_DEBUG("Data contention writing tombstone - retry");
-            delete impi_obj;
-            impi_obj = _authentication->_impi_store->get_impi_with_nonce(impi, nonce, trail());
-            auth_challenge = NULL;
-
-            if (impi_obj != NULL)
-            {
-              auth_challenge = impi_obj->get_auth_challenge(nonce);
-            }
-
-            if (auth_challenge == NULL)
-            {
-              store_status = Store::ERROR;
-            }
-            // LCOV_EXCL_STOP
-          }
-        }
-        while (store_status == Store::DATA_CONTENTION);
+        // Write the challenge back to the store.
+        Store::Status store_status =
+          _authentication->write_challenge(impi, auth_challenge, impi_obj, trail());
 
         if (store_status != Store::OK)
         {
@@ -1228,7 +1128,6 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
           while (pjsip_msg_find_remove_hdr(req,
                                            PJSIP_H_PROXY_AUTHORIZATION,
                                            NULL) != NULL);
-          delete impi_obj;
 
           // Save off the authenticated IMPI and nonce. We need these later to
           // update the service route on a REGISTER. Also store off whether the
@@ -1238,6 +1137,9 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
           _authenticated_using_sip_digest =
             ((pj_strlen(&credentials->algorithm) == 0) ||
              (pj_stricmp2(&credentials->algorithm, "md5") == 0));
+
+          // Free off the IMPI object before returning.
+          delete impi_obj;
 
           forward_request(req); return;
         }
@@ -1250,6 +1152,8 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     status = PJSIP_EAUTHNOAUTH;
   }
 
+  // We're done with the IMPI object now so delete it.
+  delete impi_obj; impi_obj = NULL;
 
   // The message either has insufficient authentication information, or
   // has failed authentication.  In either case, the message will be
@@ -1337,7 +1241,6 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   free_msg(req);
 
   delete acr;
-  delete impi_obj;
 }
 
 void AuthenticationSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
@@ -1370,4 +1273,156 @@ void AuthenticationSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
   }
 
   send_response(rsp);
+}
+
+
+Store::Status AuthenticationSproutlet::write_challenge(const std::string& impi,
+                                                       ImpiStore::AuthChallenge* auth_challenge,
+                                                       ImpiStore::Impi* impi_obj,
+                                                       SAS::TrailId trail)
+{
+  Store::Status status = write_challenge_to_store(_impi_store,
+                                                  impi,
+                                                  auth_challenge,
+                                                  impi_obj,
+                                                  trail);
+
+  if ((status == Store::OK) && !_remote_impi_stores.empty())
+  {
+    TRC_DEBUG("Replicate challenge to backup stores");
+
+    for (ImpiStore* store: _remote_impi_stores)
+    {
+      write_challenge_to_store(store, impi, auth_challenge, impi_obj, trail);
+    }
+  }
+
+  return status;
+}
+
+
+Store::Status AuthenticationSproutlet::
+  write_challenge_to_store(ImpiStore* store,
+                           const std::string& impi,
+                           ImpiStore::AuthChallenge* auth_challenge,
+                           ImpiStore::Impi* impi_obj,
+                           SAS::TrailId trail)
+{
+  Store::Status status;
+  const std::string nonce = auth_challenge->nonce;
+  ImpiStore::Impi* current_impi_obj = impi_obj;
+
+  do
+  {
+    if (current_impi_obj == NULL)
+    {
+      TRC_DEBUG("Lookup IMPI %s (with nonce %s)", impi.c_str(), nonce.c_str());
+      current_impi_obj = store->get_impi_with_nonce(impi, nonce, trail);
+      if (current_impi_obj == NULL)
+      {
+        // LCOV_EXCL_START in practise this branch is only hit during data
+        // contention, which is not tested in UT.
+        status = Store::ERROR;
+        break;
+        // LCOV_EXCL_STOP
+      }
+    }
+
+    // Check whether the IMPI has an existing auth challenge.
+    ImpiStore::AuthChallenge* challenge =
+      current_impi_obj->get_auth_challenge(nonce);
+
+    if (challenge != NULL)
+    {
+      // The IMPI already has a challenge. This shouldn't happen in mainline
+      // operation but it can happen if we hit data contention (the IMPI store
+      // may have failed to write data in the new format but succeeded writing
+      // a challenge int he old format meaning the challenge could appear on a
+      // subsequent get.
+      //
+      // Regardless, we want to be defensive and update the existing challenge
+      // (making sure the nonce count and expiry don't move backwards).
+      challenge->nonce_count = std::max(auth_challenge->nonce_count,
+                                        challenge->nonce_count);
+      challenge->expires = std::max(auth_challenge->expires,
+                                    challenge->expires);
+    }
+    else
+    {
+      // Add our new challenges to the IMPI.
+      current_impi_obj->auth_challenges.push_back(auth_challenge);
+      auth_challenge = NULL;
+    }
+
+    status = store->set_impi(current_impi_obj, trail);
+
+    // If we inserted the auth challenge into the IMPI object take it back - the
+    // caller owns it.
+    if (auth_challenge == NULL)
+    {
+      // Take the challenge back as the caller still owns it.
+      auth_challenge = current_impi_obj->get_auth_challenge(nonce);
+      std::vector<ImpiStore::AuthChallenge*>& challenges = current_impi_obj->auth_challenges;
+      challenges.erase(std::remove(challenges.begin(),
+                                   challenges.end(),
+                                   auth_challenge),
+                       challenges.end());
+    }
+
+    // If we've allocated a new IMPI object, free it off now. We always NULL off
+    // the pointer though - if we hit data contention any IMPI object the caller
+    // provided us with is no good as it has the wrong CAS.
+    if (current_impi_obj != impi_obj)
+    {
+      delete current_impi_obj;
+    }
+    current_impi_obj = NULL;
+
+  } while (status == Store::DATA_CONTENTION);
+
+  return status;
+}
+
+ImpiStore::Impi* AuthenticationSproutlet::read_impi(const std::string& impi,
+                                                    const std::string& nonce,
+                                                    SAS::TrailId trail)
+{
+  TRC_DEBUG("Lookup IMPI object: impi=%s, nonce=%s", impi.c_str(), nonce.c_str());
+  ImpiStore::Impi* impi_obj = _impi_store->get_impi_with_nonce(impi, nonce, trail);
+
+  if ((impi_obj != NULL) &&
+      impi_obj->auth_challenges.empty() &&
+      !_remote_impi_stores.empty())
+  {
+    TRC_DEBUG("Got an empty IMPI object - try backup stores (%d in total)",
+              _remote_impi_stores.size());
+
+    for (ImpiStore* store: _remote_impi_stores)
+    {
+      TRC_DEBUG("Try to get IMPI from backup store");
+      ImpiStore::Impi* backup_impi_obj = store->get_impi_with_nonce(impi, nonce, trail);
+
+      if (backup_impi_obj != NULL)
+      {
+        if (!backup_impi_obj->auth_challenges.empty())
+        {
+          // We found an IMPI in a backup store that has some challenges. Copy
+          // them over and return (remembering to delete the backup IMPI object).
+          TRC_DEBUG("Found IMPI in backup store");
+          impi_obj->auth_challenges = std::move(backup_impi_obj->auth_challenges);
+          delete backup_impi_obj; backup_impi_obj = NULL;
+          break;
+        }
+        else
+        {
+          // Didn't find a suitable IMPIs in the backup store, so just delete
+          // any IMPI object in hand.
+          TRC_DEBUG("Didn't find backup IMPI");
+          delete backup_impi_obj; backup_impi_obj = NULL;
+        }
+      }
+    }
+  }
+
+  return impi_obj;
 }
