@@ -44,6 +44,133 @@ using testing::_;
 using testing::NiceMock;
 using testing::HasSubstr;
 
+const std::string IMS_SUB_BARRED_MULTIPLE_WILDCARD =
+                               "<IMSSubscription>\n"
+                               "  <ServiceProfile>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:610@homedomain</Identity>"
+                               "    </PublicIdentity>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:6!.*!@homedomain</Identity>"
+                               "    </PublicIdentity>\n"
+                               "    <InitialFilterCriteria>\n"
+                               "      <Priority>1</Priority>\n"
+                               "      <ApplicationServer>\n"
+                               "        <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                               "        <DefaultHandling>0</DefaultHandling>\n"
+                               "      </ApplicationServer>\n"
+                               "    </InitialFilterCriteria>\n"
+                               "  </ServiceProfile>\n"
+                               "  <ServiceProfile>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:611@homedomain</Identity>"
+                               "    </PublicIdentity>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:65!.*!@homedomain</Identity>"
+                               "    </PublicIdentity>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:650!.*!@homedomain</Identity>"
+                               "    </PublicIdentity>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:6505551000@homedomain</Identity>"
+                               "      <BarringIndication>1</BarringIndication>"
+                               "      <Extension>"
+                               "        <IdentityType>3</IdentityType>"
+                               "        <Extension>"
+                               "          <Extension>"
+                               "            <WildcardedIMPU>sip:65!.*!@homedomain</WildcardedIMPU>"
+                               "          </Extension>"
+                               "        </Extension>"
+                               "      </Extension>"
+                               "    </PublicIdentity>\n"
+                               "    <InitialFilterCriteria>\n"
+                               "      <Priority>1</Priority>\n"
+                               "      <ApplicationServer>\n"
+                               "        <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                               "        <DefaultHandling>0</DefaultHandling>\n"
+                               "      </ApplicationServer>\n"
+                               "    </InitialFilterCriteria>\n"
+                               "  </ServiceProfile>\n"
+                               "  <ServiceProfile>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:612@homedomain</Identity>"
+                               "    </PublicIdentity>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:!.*!@homedomain</Identity>"
+                               "    </PublicIdentity>\n"
+                               "    <InitialFilterCriteria>\n"
+                               "      <Priority>1</Priority>\n"
+                               "      <ApplicationServer>\n"
+                               "        <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                               "        <DefaultHandling>0</DefaultHandling>\n"
+                               "      </ApplicationServer>\n"
+                               "    </InitialFilterCriteria>\n"
+                               "  </ServiceProfile>\n"
+                               "</IMSSubscription>";
+const std::string IMS_SUB_BARRED_WILDCARD =
+                               "<IMSSubscription><ServiceProfile>\n"
+                               "  <PublicIdentity>"
+                               "    <Identity>sip:610@homedomain</Identity>"
+                               "  </PublicIdentity>\n"
+                               "  <PublicIdentity>"
+                               "    <Identity>sip:65!.*!@homedomain</Identity>"
+                               "    <BarringIndication>1</BarringIndication>"
+                               "  </PublicIdentity>\n"
+                               "  <InitialFilterCriteria>\n"
+                               "    <Priority>1</Priority>\n"
+                               "    <TriggerPoint>\n"
+                               "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                               "    <SPT>\n"
+                               "      <ConditionNegated>1</ConditionNegated>\n"
+                               "      <Group>0</Group>\n"
+                               "      <Method>INVITE</Method>\n"
+                               "      <Extension></Extension>\n"
+                               "    </SPT>\n"
+                               "  </TriggerPoint>\n"
+                               "  <ApplicationServer>\n"
+                               "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                               "    <DefaultHandling>0</DefaultHandling>\n"
+                               "  </ApplicationServer>\n"
+                               "  </InitialFilterCriteria>\n"
+                               "</ServiceProfile></IMSSubscription>";
+const std::string IMS_SUB_BARRED_IMPU_IN_WILDCARD =
+                               "<IMSSubscription><ServiceProfile>\n"
+                               "  <PublicIdentity>"
+                               "    <Identity>sip:610@homedomain</Identity>"
+                               "  </PublicIdentity>\n"
+                               "  <PublicIdentity>"
+                               "    <Identity>sip:65!.*!@homedomain</Identity>"
+                               "  </PublicIdentity>\n"
+                               "  <PublicIdentity>"
+                               "    <Identity>sip:6505551000@homedomain</Identity>"
+                               "    <BarringIndication>1</BarringIndication>"
+                               "    <Extension>"
+                               "      <IdentityType>3</IdentityType>"
+                               "      <Extension>"
+                               "        <Extension>"
+                               "          <WildcardedIMPU>sip:65!.*!@homedomain</WildcardedIMPU>"
+                               "        </Extension>"
+                               "      </Extension>"
+                               "    </Extension>"
+                               "  </PublicIdentity>\n"
+                               "  <InitialFilterCriteria>\n"
+                               "    <Priority>1</Priority>\n"
+                               "    <TriggerPoint>\n"
+                               "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                               "    <SPT>\n"
+                               "      <ConditionNegated>1</ConditionNegated>\n"
+                               "      <Group>0</Group>\n"
+                               "      <Method>INVITE</Method>\n"
+                               "      <Extension></Extension>\n"
+                               "    </SPT>\n"
+                               "  </TriggerPoint>\n"
+                               "  <ApplicationServer>\n"
+                               "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                               "    <DefaultHandling>0</DefaultHandling>\n"
+                               "  </ApplicationServer>\n"
+                               "  </InitialFilterCriteria>\n"
+                               "</ServiceProfile></IMSSubscription>";
+
 namespace SP
 {
   class Message
@@ -1293,25 +1420,28 @@ TEST_F(SCSCFTest, TestBarredCaller)
   // Tests that a call attempt from a barred caller is rejected with a 403.
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "REGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity><BarringIndication>1</BarringIndication></PublicIdentity>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>1</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "  <PublicIdentity>"
+                                   "    <Identity>sip:6505551000@homedomain</Identity>"
+                                   "    <BarringIndication>1</BarringIndication>"
+                                   "  </PublicIdentity>\n"
+                                   "  <InitialFilterCriteria>\n"
+                                   "    <Priority>1</Priority>\n"
+                                   "    <TriggerPoint>\n"
+                                   "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                   "      <SPT>\n"
+                                   "        <ConditionNegated>1</ConditionNegated>\n"
+                                   "        <Group>0</Group>\n"
+                                   "        <Method>INVITE</Method>\n"
+                                   "        <Extension></Extension>\n"
+                                   "      </SPT>\n"
+                                   "    </TriggerPoint>\n"
+                                   "    <ApplicationServer>\n"
+                                   "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                   "      <DefaultHandling>0</DefaultHandling>\n"
+                                   "    </ApplicationServer>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
   Message msg;
   msg._route = "Route: <sip:homedomain;orig>";
   doSlowFailureFlow(msg, 403);
@@ -1345,6 +1475,94 @@ TEST_F(SCSCFTest, TestBarredCallee)
   doSlowFailureFlow(msg, 404);
 }
 
+// Test that a call from an IMPU that belongs to a barred wildcarded public
+// identity is rejected with a 403 (forbidden). The IMPU isn't included as
+// a non-distinct IMPU in the HSS response.
+TEST_F(SCSCFTest, TestBarredWildcardCaller)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   IMS_SUB_BARRED_WILDCARD);
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  doSlowFailureFlow(msg, 403);
+}
+
+// Test that a call to an IMPU that belongs to a barred wildcarded public
+// identity is rejected with a 404 (not found). The IMPU isn't included as
+// a non-distinct IMPU in the HSS response.
+TEST_F(SCSCFTest, TestBarredWildcardCallee)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   IMS_SUB_BARRED_WILDCARD);
+  Message msg;
+  doSlowFailureFlow(msg, 404);
+}
+
+// Test that a call from a barred IMPU that belongs to a non-barred wildcarded
+// public identity is rejected with a 403 (forbidden). The IMPU is included as
+// a non-distinct IMPU in the HSS response.
+TEST_F(SCSCFTest, TestWildcardBarredCaller)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   IMS_SUB_BARRED_IMPU_IN_WILDCARD);
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  doSlowFailureFlow(msg, 403);
+}
+
+// Test that a call to a barred IMPU that belongs to a non-barred wildcarded
+// public identity is rejected with a 404. The IMPU is included as a
+// non-distinct IMPU in the HSS response.
+TEST_F(SCSCFTest, TestWildcardBarredCallee)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   IMS_SUB_BARRED_IMPU_IN_WILDCARD);
+  Message msg;
+  doSlowFailureFlow(msg, 404);
+}
+
+// Test that a call from a barred IMPU that belongs to a non-barred wildcarded
+// public identity is rejected with a 403. The HSS response includes multiple
+// wildcard identities that could match the IMPU, so this checks that the
+// correct identity is selected.
+TEST_F(SCSCFTest, TestBarredMultipleWildcardCaller)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   IMS_SUB_BARRED_MULTIPLE_WILDCARD);
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  doSlowFailureFlow(msg, 403);
+}
+
+// Test that a call to a barred IMPU that belongs to a non-barred wildcarded
+// public identity is rejected with a 404. The HSS response includes multiple
+// wildcard identities that could match the IMPU, so this checks that the
+// correct identity is selected.
+TEST_F(SCSCFTest, TestBarredMultipleWildcardCallee)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   IMS_SUB_BARRED_MULTIPLE_WILDCARD);
+  Message msg;
+  doSlowFailureFlow(msg, 404);
+}
 
 TEST_F(SCSCFTest, TestSimpleTelURI)
 {
