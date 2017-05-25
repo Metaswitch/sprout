@@ -110,6 +110,7 @@ struct options
   int                                  astaire_blacklist_duration;
   int                                  sip_tcp_connect_timeout;
   int                                  sip_tcp_send_timeout;
+  int                                  dns_timeout;
   int                                  session_continued_timeout_ms;
   int                                  session_terminated_timeout_ms;
   std::set<std::string>                stateless_proxies;

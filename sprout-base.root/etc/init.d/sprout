@@ -267,6 +267,7 @@ get_daemon_args()
         [ "$astaire_blacklist_duration" = "" ]    || DAEMON_ARGS="$DAEMON_ARGS --astaire-blacklist-duration=$astaire_blacklist_duration"
         [ "$sip_tcp_connect_timeout" = "" ]       || DAEMON_ARGS="$DAEMON_ARGS --sip-tcp-connect-timeout=$sip_tcp_connect_timeout"
         [ "$sip_tcp_send_timeout" = "" ]          || DAEMON_ARGS="$DAEMON_ARGS --sip-tcp-send-timeout=$sip_tcp_send_timeout"
+        [ "$dns_timeout" = "" ]                   || DAEMON_ARGS="$DAEMON_ARGS --dns-timeout=$dns_timeout"
         [ "$session_continued_timeout_ms" = "" ]  || DAEMON_ARGS="$DAEMON_ARGS --session-continued-timeout=$session_continued_timeout_ms"
         [ "$session_terminated_timeout_ms" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --session-terminated-timeout=$session_terminated_timeout_ms"
         [ "$stateless_proxies" = "" ]             || DAEMON_ARGS="$DAEMON_ARGS --stateless-proxies=$stateless_proxies"

@@ -110,6 +110,7 @@ enum OptionTypes
   OPT_ASTAIRE_BLACKLIST_DURATION,
   OPT_SIP_TCP_CONNECT_TIMEOUT,
   OPT_SIP_TCP_SEND_TIMEOUT,
+  OPT_DNS_TIMEOUT,
   OPT_SESSION_CONTINUED_TIMEOUT_MS,
   OPT_SESSION_TERMINATED_TIMEOUT_MS,
   OPT_STATELESS_PROXIES,
@@ -200,6 +201,7 @@ const static struct pj_getopt_option long_opt[] =
   { "astaire-blacklist-duration",   required_argument, 0, OPT_ASTAIRE_BLACKLIST_DURATION},
   { "sip-tcp-connect-timeout",      required_argument, 0, OPT_SIP_TCP_CONNECT_TIMEOUT},
   { "sip-tcp-send-timeout",         required_argument, 0, OPT_SIP_TCP_SEND_TIMEOUT},
+  { "dns-timeout",                  required_argument, 0, OPT_DNS_TIMEOUT},
   { "session-continued-timeout",    required_argument, 0, OPT_SESSION_CONTINUED_TIMEOUT_MS},
   { "session-terminated-timeout",   required_argument, 0, OPT_SESSION_TERMINATED_TIMEOUT_MS},
   { "stateless-proxies",            required_argument, 0, OPT_STATELESS_PROXIES},
@@ -375,6 +377,8 @@ static void usage(void)
        "     --sip-tcp-send-timeout <milliseconds>\n"
        "                            The amount of time to wait for data sent on a SIP TCP connection to be\n"
        "                            acknowledged by the peer.\n"
+       "     --dns-timeout <milliseconds>\n"
+       "                            The amount of time to wait for a DNS response (default: 200)n"
        "     --session-continued-timeout <milliseconds>\n"
        "                            If an Application Server with default handling of 'continue session'\n"
        "                            is unresponsive, this is the time that sprout will wait (in ms)\n"
@@ -1060,6 +1064,14 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
+    case OPT_DNS_TIMEOUT:
+      {
+        VALIDATE_INT_PARAM(options->dns_timeout,
+                           dns_timeout,
+                           DNS request timeout);
+      }
+      break;
+
     case OPT_SESSION_CONTINUED_TIMEOUT_MS:
       {
         VALIDATE_INT_PARAM(options->session_continued_timeout_ms,
@@ -1467,6 +1479,7 @@ int main(int argc, char* argv[])
   opt.astaire_blacklist_duration = AstaireResolver::DEFAULT_BLACKLIST_DURATION;
   opt.sip_tcp_connect_timeout = 2000;
   opt.sip_tcp_send_timeout = 2000;
+  opt.dns_timeout = DnsCachedResolver::DEFAULT_TIMEOUT;
   opt.session_continued_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_CONTINUED_TIMEOUT;
   opt.session_terminated_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_TERMINATED_TIMEOUT;
   opt.stateless_proxies.clear();
@@ -1839,7 +1852,7 @@ int main(int argc, char* argv[])
                                            hc);
 
   // Create a DNS resolver and a SIP specific resolver.
-  dns_resolver = new DnsCachedResolver(opt.dns_servers);
+  dns_resolver = new DnsCachedResolver(opt.dns_servers, opt.dns_timeout);
   sip_resolver = new SIPResolver(dns_resolver, opt.sip_blacklist_duration);
 
   // Create a new quiescing manager instance and register our completion handler
