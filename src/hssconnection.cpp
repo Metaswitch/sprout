@@ -430,8 +430,9 @@ bool decode_homestead_xml(const std::string public_user_identity,
         //  - associated_uri: The actual associated URI.
         //
         // These identities are normally the same, except in the case of a
-        // non-distinct IMPU, where the identity_uri is the distinct IMPU, and
-        // the associated_uri is the wildcard IMPU.
+        // non-distinct IMPU (an IMPU that is part of a wildcard range, but is
+        // explicitly included in the XML), where the identity_uri is the
+        // distinct IMPU, and the associated_uri is the wildcard IMPU.
         std::string identity_uri = std::string(identity->value());
         std::string associated_uri = identity_uri;
         rapidxml::xml_node<>* extension =
@@ -464,7 +465,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
           // be covered when we handle the corresponding wildcard IMPU entry.
           // Instead, store off any barring information for the IMPU as this
           // needs to override the barring status of the wildcard IMPU.
-          associated_uris.update_barring_status(identity_uri, barred);
+          associated_uris.add_barring_status(identity_uri, barred);
         }
         else if (!associated_uris.contains_uri(associated_uri))
         {

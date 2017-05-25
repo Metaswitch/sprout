@@ -49,13 +49,13 @@ void AssociatedURIs::add_uri(std::string uri,
                              bool barred)
 {
   _associated_uris.push_back(uri);
-  update_barring_status(uri, barred);
+  add_barring_status(uri, barred);
 }
 
-// Updates the barring state of a URI. This map includes URIs that aren't in the
+// Adds the barring state of a URI. This map includes URIs that aren't in the
 // associated URI list (e.g. it includes non-distinct IMPUs)
-void AssociatedURIs::update_barring_status(std::string uri,
-                                           bool barred)
+void AssociatedURIs::add_barring_status(std::string uri,
+                                        bool barred)
 {
   _barred_map[uri] = barred;
 }
@@ -74,7 +74,8 @@ bool AssociatedURIs::is_impu_barred(std::string uri)
   // actually an URI that matches a wildcard - get the wildcard URI before
   // we check the barring status. In the case where a non-distinct IMPU
   // has had its barring indication set specifically in the IMS subscription
-  // we got from the HSS then it was directly added to the _barred_map.
+  // we got from the HSS then it was directly added to the _barred_map (and
+  // not added to the _distinct_to_wildcard map).
   std::string uri_to_check = uri;
   if (_distinct_to_wildcard.find(uri) != _distinct_to_wildcard.end())
   {
@@ -116,7 +117,7 @@ std::vector<std::string> AssociatedURIs::get_all_uris()
   return _associated_uris;
 }
 
-// Sets up the link between a distinct IMPU and its wildcard
+// Sets up the link between a distinct IMPU and its wildcard.
 void AssociatedURIs::add_wildcard_mapping(std::string wildcard,
                                           std::string distinct)
 {

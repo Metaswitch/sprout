@@ -67,7 +67,6 @@ const std::string IMS_SUB_BARRED_MULTIPLE_WILDCARD =
                                "    </PublicIdentity>\n"
                                "    <PublicIdentity>"
                                "      <Identity>sip:65!.*!@homedomain</Identity>"
-                               "      <BarringIndication>1</BarringIndication>"
                                "    </PublicIdentity>\n"
                                "    <PublicIdentity>"
                                "      <Identity>sip:650!.*!@homedomain</Identity>"
@@ -1416,49 +1415,6 @@ TEST_F(SCSCFTest, TestBadScheme)
   doFastFailureFlow(msg, 416);  // bad scheme
 }
 
-// Test that a call from an IMPU that belongs to a barred wildcarded public
-// identity is rejected with a 403 (forbidden).
-TEST_F(SCSCFTest, TestBarredWildcardCaller)
-{
-  SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "REGISTERED",
-                                   IMS_SUB_BARRED_WILDCARD);
-  Message msg;
-  msg._route = "Route: <sip:homedomain;orig>";
-  doSlowFailureFlow(msg, 403);
-}
-
-// Test that a call from an IMPU that belongs to a barred wildcarded public
-// identity, when multiple wildcarded public identities are present in the
-// subscription, is rejected with a 403 (forbidden).
-TEST_F(SCSCFTest, TestBarredMultipleWildcardCaller)
-{
-  SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "REGISTERED",
-                                   IMS_SUB_BARRED_MULTIPLE_WILDCARD);
-  Message msg;
-  msg._route = "Route: <sip:homedomain;orig>";
-  doSlowFailureFlow(msg, 403);
-}
-
-// Test that a call from a barred IMPU that belongs to a wildcarded public
-// identity is rejected with a 403 (forbidden).
-TEST_F(SCSCFTest, TestWildcardBarredCaller)
-{
-  SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "REGISTERED",
-                                   IMS_SUB_BARRED_IMPU_IN_WILDCARD);
-  Message msg;
-  msg._route = "Route: <sip:homedomain;orig>";
-  doSlowFailureFlow(msg, 403);
-}
-
 TEST_F(SCSCFTest, TestBarredCaller)
 {
   // Tests that a call attempt from a barred caller is rejected with a 403.
@@ -1491,47 +1447,6 @@ TEST_F(SCSCFTest, TestBarredCaller)
   doSlowFailureFlow(msg, 403);
 }
 
-
-// Test that a call to an IMPU that belongs to a barred wildcarded public
-// identity is rejected with a 404 (not found).
-TEST_F(SCSCFTest, TestBarredWildcardCallee)
-{
-  SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "REGISTERED",
-                                   IMS_SUB_BARRED_WILDCARD);
-  Message msg;
-  doSlowFailureFlow(msg, 404);
-}
-
-// Test that a call to an IMPU that belongs to a barred wildcarded public
-// identity, when multiple wildcarded public identities are present in the
-// subscription, is rejected with a 404 (not found).
-TEST_F(SCSCFTest, TestBarredMultipleWildcardCallee)
-{
-  SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "REGISTERED",
-                                   IMS_SUB_BARRED_MULTIPLE_WILDCARD);
-  Message msg;
-  doSlowFailureFlow(msg, 404);
-}
-
-// Test that a call to a barred IMPU that belongs to a wildcarded public
-// identity is rejected with a 404 (not found).
-TEST_F(SCSCFTest, TestWildcardBarredCallee)
-{
-  SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   "REGISTERED",
-                                   IMS_SUB_BARRED_IMPU_IN_WILDCARD);
-  Message msg;
-  doSlowFailureFlow(msg, 404);
-}
-
 TEST_F(SCSCFTest, TestBarredCallee)
 {
   // Tests that a call to a barred callee is rejected with a 404.
@@ -1560,6 +1475,94 @@ TEST_F(SCSCFTest, TestBarredCallee)
   doSlowFailureFlow(msg, 404);
 }
 
+// Test that a call from an IMPU that belongs to a barred wildcarded public
+// identity is rejected with a 403 (forbidden). The IMPU isn't included as
+// a non-distinct IMPU in the HSS response.
+TEST_F(SCSCFTest, TestBarredWildcardCaller)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   IMS_SUB_BARRED_WILDCARD);
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  doSlowFailureFlow(msg, 403);
+}
+
+// Test that a call to an IMPU that belongs to a barred wildcarded public
+// identity is rejected with a 404 (not found). The IMPU isn't included as
+// a non-distinct IMPU in the HSS response.
+TEST_F(SCSCFTest, TestBarredWildcardCallee)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   IMS_SUB_BARRED_WILDCARD);
+  Message msg;
+  doSlowFailureFlow(msg, 404);
+}
+
+// Test that a call from a barred IMPU that belongs to a non-barred wildcarded
+// public identity is rejected with a 403 (forbidden). The IMPU is included as
+// a non-distinct IMPU in the HSS response.
+TEST_F(SCSCFTest, TestWildcardBarredCaller)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   IMS_SUB_BARRED_IMPU_IN_WILDCARD);
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  doSlowFailureFlow(msg, 403);
+}
+
+// Test that a call to a barred IMPU that belongs to a non-barred wildcarded
+// public identity is rejected with a 404. The IMPU is included as a
+// non-distinct IMPU in the HSS response.
+TEST_F(SCSCFTest, TestWildcardBarredCallee)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   IMS_SUB_BARRED_IMPU_IN_WILDCARD);
+  Message msg;
+  doSlowFailureFlow(msg, 404);
+}
+
+// Test that a call from a barred IMPU that belongs to a non-barred wildcarded
+// public identity is rejected with a 403. The HSS response includes multiple
+// wildcard identities that could match the IMPU, so this checks that the
+// correct identity is selected.
+TEST_F(SCSCFTest, TestBarredMultipleWildcardCaller)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   IMS_SUB_BARRED_MULTIPLE_WILDCARD);
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  doSlowFailureFlow(msg, 403);
+}
+
+// Test that a call to a barred IMPU that belongs to a non-barred wildcarded
+// public identity is rejected with a 404. The HSS response includes multiple
+// wildcard identities that could match the IMPU, so this checks that the
+// correct identity is selected.
+TEST_F(SCSCFTest, TestBarredMultipleWildcardCallee)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   IMS_SUB_BARRED_MULTIPLE_WILDCARD);
+  Message msg;
+  doSlowFailureFlow(msg, 404);
+}
 
 TEST_F(SCSCFTest, TestSimpleTelURI)
 {

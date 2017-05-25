@@ -29,8 +29,8 @@ public:
   /// Adds to the list of associated URIs.
   void add_uri(std::string uri, bool barred);
 
-  /// Updates the barring status of a URI.
-  void update_barring_status(std::string uri, bool barred);
+  /// Adds the barring status of a URI.
+  void add_barring_status(std::string uri, bool barred);
 
   /// Clears this structure.
   void clear_uris();
