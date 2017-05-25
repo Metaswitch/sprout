@@ -1089,13 +1089,13 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
-      case OPT_DNS_TIMEOUT:
-        {
-          VALIDATE_INT_PARAM(options->dns_timeout,
-                             dns_timeout,
-                             DNS request timeout);
-        }
-        break;
+    case OPT_DNS_TIMEOUT:
+      {
+        VALIDATE_INT_PARAM(options->dns_timeout,
+                           dns_timeout,
+                           DNS request timeout);
+      }
+      break;
 
     case OPT_SESSION_CONTINUED_TIMEOUT_MS:
       {
