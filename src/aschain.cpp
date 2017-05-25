@@ -235,6 +235,10 @@ pjsip_status_code AsChainLink::on_initial_request(pjsip_msg* msg,
       ((first_pass_through_ifcs) && (complete())) &&
       (_as_chain->_ifc_configuration._apply_default_ifcs))
   {
+    TRC_DEBUG("No IFCs apply to this message; looking up default IFCs");
+    SAS::Event event(msg_trail, SASEvent::STARTING_DEFAULT_IFCS_LOOKUP, 0);
+    SAS::report_event(event);
+
     // Reset the AsChain IFCs given we've moving onto the default IFCs
     _as_chain->_using_standard_ifcs = false;
     _index = 0;
@@ -242,10 +246,18 @@ pjsip_status_code AsChainLink::on_initial_request(pjsip_msg* msg,
                                 server_name,
                                 got_dummy_as,
                                 msg_trail);
+
+    if (server_name != "")
+    {
+      TRC_DEBUG("We've found a matching default IFC - applying it");
+      SAS::Event event(msg_trail, SASEvent::FIRST_DEFAULT_IFC, 0);
+      event.add_var_param(server_name);
+      SAS::report_event(event);
+    }
   }
 
   // Check if we should have applied default IFCs, but didn't find any. We
-  // SAS log this, and increment a statistic (TODO - waiting on spec finalization).
+  // SAS log this, and increment a statistic.
   // We're in this case if:
   //   - We haven't found any matching IFC (true if server_name is empty, and
   //     got_dummy_as is false.
@@ -254,22 +266,34 @@ pjsip_status_code AsChainLink::on_initial_request(pjsip_msg* msg,
       ((!_as_chain->_using_standard_ifcs) &&
        (_as_chain->_ifc_configuration._apply_default_ifcs)))
   {
+    if (_as_chain->_ifc_configuration._no_matching_default_ifcs_tbl)
+    {
+      _as_chain->_ifc_configuration._no_matching_default_ifcs_tbl->increment();
+    }
+
     TRC_DEBUG("Unable to apply default IFCs as no matching IFCs available");
     SAS::Event event(msg_trail, SASEvent::NO_DEFAULT_IFCS, 0);
     SAS::report_event(event);
   }
 
-  // Now check if we should reject the request. We do this if:
+  // Now check if we found any IFCs at all. We didn't find any if:
   //   - We haven't found any matching IFC (true if server_name is empty, and
   //     got_dummy_as is false.
   //   - It's our first time through this function and we've run through
   //     every available IFC to check for a match
-  //   - The config option to reject when there are no matching IFCs is set.
   if ((!(got_dummy_as) || (server_name != "")) &&
-      ((first_pass_through_ifcs) && (complete())) &&
-      (_as_chain->_ifc_configuration._reject_if_no_matching_ifcs))
+      ((first_pass_through_ifcs) && (complete())))
   {
-    rc = PJSIP_SC_BAD_REQUEST;
+    if (_as_chain->_ifc_configuration._no_matching_ifcs_tbl)
+    {
+      _as_chain->_ifc_configuration._no_matching_ifcs_tbl->increment();
+    }
+
+    // Reject the request if the config option to do so is set.
+    if (_as_chain->_ifc_configuration._reject_if_no_matching_ifcs)
+    {
+      rc = PJSIP_SC_BAD_REQUEST;
+    }
   }
 
   return rc;

@@ -1,1 +1,12 @@
 build/bin/sprout_scscf.so usr/share/clearwater/sprout/plugins
+
+# Install the IFCs plugins and scripts
+modules/clearwater-etcd-plugins/clearwater_config_manager/shared_ifcs_config_plugin.py /usr/share/clearwater/clearwater-config-manager/plugins/
+modules/clearwater-etcd-plugins/clearwater_config_manager/default_ifcs_config_plugin.py /usr/share/clearwater/clearwater-config-manager/plugins/
+modules/clearwater-etcd-plugins/clearwater_config_manager/scripts/upload_shared_ifcs_config /usr/share/clearwater/clearwater-config-manager/scripts
+modules/clearwater-etcd-plugins/clearwater_config_manager/scripts/upload_default_ifcs_config /usr/share/clearwater/clearwater-config-manager/scripts
+modules/clearwater-etcd-plugins/clearwater_config_manager/scripts/remove_shared_ifcs_config /usr/share/clearwater/clearwater-config-manager/scripts
+modules/clearwater-etcd-plugins/clearwater_config_manager/scripts/remove_default_ifcs_config /usr/share/clearwater/clearwater-config-manager/scripts
+modules/clearwater-etcd-plugins/clearwater_config_manager/scripts/validate_shared_ifcs_config /usr/share/clearwater/clearwater-config-manager/scripts
+modules/clearwater-etcd-plugins/clearwater_config_manager/scripts/validate_default_ifcs_config /usr/share/clearwater/clearwater-config-manager/scripts
+modules/clearwater-etcd-plugins/clearwater_config_manager/scripts/config_validation/* /usr/share/clearwater/clearwater-config-manager/scripts/config_validation

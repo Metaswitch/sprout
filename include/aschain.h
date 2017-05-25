@@ -61,13 +61,19 @@ struct IFCConfiguration
   bool _apply_default_ifcs;
   bool _reject_if_no_matching_ifcs;
   std::string _dummy_as;
+  SNMP::CounterTable* _no_matching_ifcs_tbl;
+  SNMP::CounterTable* _no_matching_default_ifcs_tbl;
 
   IFCConfiguration(bool apply_default_ifcs,
                    bool reject_if_no_matching_ifcs,
-                   std::string dummy_as) :
+                   std::string dummy_as,
+                   SNMP::CounterTable* no_matching_ifcs_tbl,
+                   SNMP::CounterTable* no_matching_default_ifcs_tbl) :
     _apply_default_ifcs(apply_default_ifcs),
     _reject_if_no_matching_ifcs(reject_if_no_matching_ifcs),
-    _dummy_as(dummy_as)
+    _dummy_as(dummy_as),
+    _no_matching_ifcs_tbl(no_matching_ifcs_tbl),
+    _no_matching_default_ifcs_tbl(no_matching_default_ifcs_tbl)
   {}
 };
 

@@ -1776,6 +1776,7 @@ int main(int argc, char* argv[])
   SNMP::EventAccumulatorTable* homestead_sar_latency_table = NULL;
   SNMP::EventAccumulatorTable* homestead_uar_latency_table = NULL;
   SNMP::EventAccumulatorTable* homestead_lir_latency_table = NULL;
+  SNMP::CounterTable* no_shared_ifcs_set_table = NULL;
 
   SNMP::ContinuousAccumulatorByScopeTable* token_rate_table = NULL;
   SNMP::ScalarByScopeTable* smoothed_latency_scalar = NULL;
@@ -1817,6 +1818,8 @@ int main(int argc, char* argv[])
                                                                  ".1.2.826.0.1.1578918.9.3.3.5");
     homestead_lir_latency_table = SNMP::EventAccumulatorTable::create("sprout_homestead_lir_latency",
                                                                  ".1.2.826.0.1.1578918.9.3.3.6");
+    no_shared_ifcs_set_table = SNMP::CounterTable::create("no_shared_ifcs_set",
+                                                          ".1.2.826.0.1.1578918.9.3.40");
     token_rate_table = SNMP::ContinuousAccumulatorByScopeTable::create("sprout_token_rate",
                                                                        ".1.2.826.0.1.1578918.9.3.27");
     smoothed_latency_scalar = SNMP::ScalarByScopeTable::create("sprout_smoothed_latency",
@@ -1979,7 +1982,11 @@ int main(int argc, char* argv[])
   {
     // Create a connection to the HSS.
     TRC_STATUS("Creating connection to HSS %s", opt.hss_server.c_str());
-    sifc_service = new SIFCService();
+    sifc_service = new SIFCService(new Alarm(alarm_manager,
+                                             "sprout",
+                                             AlarmDef::SPROUT_SIFC_STATUS,
+                                             AlarmDef::CRITICAL),
+                                   no_shared_ifcs_set_table);
     hss_connection = new HSSConnection(opt.hss_server,
                                        http_resolver,
                                        load_monitor,
@@ -1995,7 +2002,10 @@ int main(int argc, char* argv[])
   }
 
   // Create DIFC service
-  difc_service = new DIFCService();
+  difc_service = new DIFCService(new Alarm(alarm_manager,
+                                           "sprout",
+                                           AlarmDef::SPROUT_DIFC_STATUS,
+                                           AlarmDef::CRITICAL));
 
   // Create ENUM service.
   if (!opt.enum_servers.empty())
@@ -2516,6 +2526,7 @@ int main(int argc, char* argv[])
   delete homestead_sar_latency_table;
   delete homestead_uar_latency_table;
   delete homestead_lir_latency_table;
+  delete no_shared_ifcs_set_table;
 
   delete token_rate_table;
   delete smoothed_latency_scalar;
