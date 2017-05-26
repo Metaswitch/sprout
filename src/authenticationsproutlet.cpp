@@ -79,7 +79,6 @@ AuthenticationSproutlet::AuthenticationSproutlet(const std::string& name,
                                                  ChronosConnection* chronos_connection,
                                                  ACRFactory* rfacr_factory,
                                                  uint32_t non_register_auth_mode_param,
-                                                 int non_reg_challenge_expiry_s,
                                                  AnalyticsLogger* analytics_logger,
                                                  SNMP::AuthenticationStatsTables* auth_stats_tbls,
                                                  bool nonce_count_supported_arg,
@@ -98,7 +97,6 @@ AuthenticationSproutlet::AuthenticationSproutlet(const std::string& name,
   _nonce_count_supported(nonce_count_supported_arg),
   _get_expiry_for_binding(get_expiry_for_binding_arg),
   _non_register_auth_mode(non_register_auth_mode_param),
-  _non_reg_challenge_expiry_s(non_reg_challenge_expiry_s),
   _next_hop_service(next_hop_service),
   _aliases(aliases)
 {
@@ -350,23 +348,16 @@ int AuthenticationSproutletTsx::calculate_challenge_expiration_time(pjsip_msg* r
 {
   int expires = 0;
 
-  if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
-  {
-    pjsip_expires_hdr* expires_hdr = (pjsip_expires_hdr*)
-      pjsip_msg_find_hdr(req, PJSIP_H_EXPIRES, NULL);
+  pjsip_expires_hdr* expires_hdr = (pjsip_expires_hdr*)
+    pjsip_msg_find_hdr(req, PJSIP_H_EXPIRES, NULL);
 
-    for (pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
-            pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, NULL);
-         contact_hdr != NULL;
-         contact_hdr = (pjsip_contact_hdr*)
-            pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, contact_hdr->next))
-    {
-      expires = std::max(expires, _authentication->_get_expiry_for_binding(contact_hdr, expires_hdr));
-    }
-  }
-  else
+  for (pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
+          pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, NULL);
+       contact_hdr != NULL;
+       contact_hdr = (pjsip_contact_hdr*)
+          pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, contact_hdr->next))
   {
-    expires = _authentication->_non_reg_challenge_expiry_s;
+    expires = std::max(expires, _authentication->_get_expiry_for_binding(contact_hdr, expires_hdr));
   }
 
   return expires + time(NULL);
@@ -1041,21 +1032,26 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
         // Work out when the challenge should expire. We keep it around if we
         // might need it later which is the case if either:
-        // -  Nonce counts are supported.
-        // -  It is a digest challenge to a REGISTER and we need to challenge
-        //    initial requests from endpoints that use digest.
-        if (_authentication->_nonce_count_supported)
+        // - Nonce counts are supported.
+        // - It is a digest challenge and we need to challenge initial requests
+        //   from endpoints that use digest.
+        //
+        // We also only store challenges to REGISTERs, as these have a
+        // well-defined lifetime (the duration of the REGISTER).
+        if (is_register)
         {
-          TRC_DEBUG("Storing challenge because nonce counts are supported");
-          auth_challenge->expires = calculate_challenge_expiration_time(req);
-        }
-        else if ((is_register) &&
-                 (auth_challenge->type == ImpiStore::AuthChallenge::DIGEST) &&
-                 (_authentication->_non_register_auth_mode &
-                  NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT))
-        {
-          TRC_DEBUG("Storing challenge from REGISTER to challenge non-REGISTER requests");
-          auth_challenge->expires = calculate_challenge_expiration_time(req);
+          if (_authentication->_nonce_count_supported)
+          {
+            TRC_DEBUG("Storing challenge because nonce counts are supported");
+            auth_challenge->expires = calculate_challenge_expiration_time(req);
+          }
+          else if ((auth_challenge->type == ImpiStore::AuthChallenge::DIGEST) &&
+                   (_authentication->_non_register_auth_mode &
+                       NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT))
+          {
+            TRC_DEBUG("Storing challenge in order to challenge non-REGISTER requests");
+            auth_challenge->expires = calculate_challenge_expiration_time(req);
+          }
         }
 
         // Write the challenge back to the store.

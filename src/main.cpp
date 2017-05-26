@@ -160,93 +160,91 @@ enum OptionTypes
   OPT_CHRONOS_HOSTNAME,
   OPT_SPROUT_CHRONOS_CALLBACK_URI,
   OPT_ALLOW_FALLBACK_IFCS,
-  OPT_NON_REG_CHAL_LIFETIME,
 };
 
 
 const static struct pj_getopt_option long_opt[] =
 {
-  { "pcscf",                           required_argument, 0, 'p'},
-  { "webrtc-port",                     required_argument, 0, 'w'},
-  { "localhost",                       required_argument, 0, 'l'},
-  { "domain",                          required_argument, 0, 'D'},
-  { "additional-domains",              required_argument, 0, OPT_ADDITIONAL_HOME_DOMAINS},
-  { "alias",                           required_argument, 0, 'n'},
-  { "routing-proxy",                   required_argument, 0, 'r'},
-  { "ibcf",                            required_argument, 0, 'I'},
-  { "external-icscf",                  required_argument, 0, 'j'},
-  { "realm",                           required_argument, 0, 'R'},
-  { "local-site-name",                 required_argument, 0, OPT_LOCAL_SITE_NAME},
-  { "registration-stores",             required_argument, 0, OPT_REGISTRATION_STORES},
-  { "impi-store",                      required_argument, 0, OPT_IMPI_STORES},
-  { "sas",                             required_argument, 0, 'S'},
-  { "hss",                             required_argument, 0, 'H'},
-  { "record-routing-model",            required_argument, 0, 'C'},
-  { "default-session-expires",         required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
-  { "max-session-expires",             required_argument, 0, OPT_MAX_SESSION_EXPIRES},
-  { "target-latency-us",               required_argument, 0, OPT_TARGET_LATENCY_US},
-  { "xdms",                            required_argument, 0, 'X'},
-  { "ralf",                            required_argument, 0, 'G'},
-  { "dns-server",                      required_argument, 0, OPT_DNS_SERVER },
-  { "enum",                            required_argument, 0, 'E'},
-  { "enum-suffix",                     required_argument, 0, 'x'},
-  { "enum-file",                       required_argument, 0, 'f'},
-  { "default-tel-uri-translation",     no_argument,       0, OPT_DEFAULT_TEL_URI_TRANSLATION},
-  { "enforce-user-phone",              no_argument,       0, 'u'},
-  { "enforce-global-only-lookups",     no_argument,       0, 'g'},
-  { "reg-max-expires",                 required_argument, 0, 'e'},
-  { "sub-max-expires",                 required_argument, 0, OPT_SUB_MAX_EXPIRES},
-  { "pjsip-threads",                   required_argument, 0, 'P'},
-  { "worker-threads",                  required_argument, 0, 'W'},
-  { "analytics",                       required_argument, 0, 'a'},
-  { "authentication",                  no_argument,       0, 'A'},
-  { "log-file",                        required_argument, 0, 'F'},
-  { "http-address",                    required_argument, 0, 'T'},
-  { "http-port",                       required_argument, 0, 'o'},
-  { "http-threads",                    required_argument, 0, 'q'},
-  { "billing-cdf",                     required_argument, 0, 'B'},
-  { "allow-emergency-registration",    no_argument,       0, OPT_EMERGENCY_REG_ACCEPTED},
-  { "max-call-list-length",            required_argument, 0, OPT_MAX_CALL_LIST_LENGTH},
-  { "memento-threads",                 required_argument, 0, OPT_MEMENTO_THREADS},
-  { "call-list-ttl",                   required_argument, 0, OPT_CALL_LIST_TTL},
-  { "memento-notify-url",              required_argument, 0, OPT_MEMENTO_NOTIFY_URL},
-  { "log-level",                       required_argument, 0, 'L'},
-  { "daemon",                          no_argument,       0, 'd'},
-  { "interactive",                     no_argument,       0, 't'},
-  { "help",                            no_argument,       0, 'h'},
-  { "memcached-write-format",          required_argument, 0, OPT_MEMCACHED_WRITE_FORMAT},
-  { "override-npdi",                   no_argument,       0, OPT_OVERRIDE_NPDI},
-  { "max-tokens",                      required_argument, 0, OPT_MAX_TOKENS},
-  { "init-token-rate",                 required_argument, 0, OPT_INIT_TOKEN_RATE},
-  { "min-token-rate",                  required_argument, 0, OPT_MIN_TOKEN_RATE},
-  { "cass-target-latency-us",          required_argument, 0, OPT_CASS_TARGET_LATENCY_US},
-  { "exception-max-ttl",               required_argument, 0, OPT_EXCEPTION_MAX_TTL},
-  { "sip-blacklist-duration",          required_argument, 0, OPT_SIP_BLACKLIST_DURATION},
-  { "http-blacklist-duration",         required_argument, 0, OPT_HTTP_BLACKLIST_DURATION},
-  { "astaire-blacklist-duration",      required_argument, 0, OPT_ASTAIRE_BLACKLIST_DURATION},
-  { "sip-tcp-connect-timeout",         required_argument, 0, OPT_SIP_TCP_CONNECT_TIMEOUT},
-  { "sip-tcp-send-timeout",            required_argument, 0, OPT_SIP_TCP_SEND_TIMEOUT},
-  { "session-continued-timeout",       required_argument, 0, OPT_SESSION_CONTINUED_TIMEOUT_MS},
-  { "session-terminated-timeout",      required_argument, 0, OPT_SESSION_TERMINATED_TIMEOUT_MS},
-  { "stateless-proxies",               required_argument, 0, OPT_STATELESS_PROXIES},
-  { "non-registering-pbxes",           required_argument, 0, OPT_NON_REGISTERING_PBXES},
-  { "ralf-threads",                    required_argument, 0, OPT_RALF_THREADS},
-  { "non-register-authentication",     required_argument, 0, OPT_NON_REGISTER_AUTHENTICATION},
-  { "pbx-service-route",               required_argument, 0, OPT_PBX_SERVICE_ROUTE},
-  { "force-3pr-body",                  no_argument,       0, OPT_FORCE_THIRD_PARTY_REGISTER_BODY},
-  { "pidfile",                         required_argument, 0, OPT_PIDFILE},
-  { "plugin-option",                   required_argument, 0, 'N'},
-  { "sprout-hostname",                 required_argument, 0, OPT_SPROUT_HOSTNAME},
-  { "listen-port",                     required_argument, 0, OPT_LISTEN_PORT},
+  { "pcscf",                        required_argument, 0, 'p'},
+  { "webrtc-port",                  required_argument, 0, 'w'},
+  { "localhost",                    required_argument, 0, 'l'},
+  { "domain",                       required_argument, 0, 'D'},
+  { "additional-domains",           required_argument, 0, OPT_ADDITIONAL_HOME_DOMAINS},
+  { "alias",                        required_argument, 0, 'n'},
+  { "routing-proxy",                required_argument, 0, 'r'},
+  { "ibcf",                         required_argument, 0, 'I'},
+  { "external-icscf",               required_argument, 0, 'j'},
+  { "realm",                        required_argument, 0, 'R'},
+  { "local-site-name",              required_argument, 0, OPT_LOCAL_SITE_NAME},
+  { "registration-stores",          required_argument, 0, OPT_REGISTRATION_STORES},
+  { "impi-store",                   required_argument, 0, OPT_IMPI_STORES},
+  { "sas",                          required_argument, 0, 'S'},
+  { "hss",                          required_argument, 0, 'H'},
+  { "record-routing-model",         required_argument, 0, 'C'},
+  { "default-session-expires",      required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
+  { "max-session-expires",          required_argument, 0, OPT_MAX_SESSION_EXPIRES},
+  { "target-latency-us",            required_argument, 0, OPT_TARGET_LATENCY_US},
+  { "xdms",                         required_argument, 0, 'X'},
+  { "ralf",                         required_argument, 0, 'G'},
+  { "dns-server",                   required_argument, 0, OPT_DNS_SERVER },
+  { "enum",                         required_argument, 0, 'E'},
+  { "enum-suffix",                  required_argument, 0, 'x'},
+  { "enum-file",                    required_argument, 0, 'f'},
+  { "default-tel-uri-translation",  no_argument,       0, OPT_DEFAULT_TEL_URI_TRANSLATION},
+  { "enforce-user-phone",           no_argument,       0, 'u'},
+  { "enforce-global-only-lookups",  no_argument,       0, 'g'},
+  { "reg-max-expires",              required_argument, 0, 'e'},
+  { "sub-max-expires",              required_argument, 0, OPT_SUB_MAX_EXPIRES},
+  { "pjsip-threads",                required_argument, 0, 'P'},
+  { "worker-threads",               required_argument, 0, 'W'},
+  { "analytics",                    required_argument, 0, 'a'},
+  { "authentication",               no_argument,       0, 'A'},
+  { "log-file",                     required_argument, 0, 'F'},
+  { "http-address",                 required_argument, 0, 'T'},
+  { "http-port",                    required_argument, 0, 'o'},
+  { "http-threads",                 required_argument, 0, 'q'},
+  { "billing-cdf",                  required_argument, 0, 'B'},
+  { "allow-emergency-registration", no_argument,       0, OPT_EMERGENCY_REG_ACCEPTED},
+  { "max-call-list-length",         required_argument, 0, OPT_MAX_CALL_LIST_LENGTH},
+  { "memento-threads",              required_argument, 0, OPT_MEMENTO_THREADS},
+  { "call-list-ttl",                required_argument, 0, OPT_CALL_LIST_TTL},
+  { "memento-notify-url",           required_argument, 0, OPT_MEMENTO_NOTIFY_URL},
+  { "log-level",                    required_argument, 0, 'L'},
+  { "daemon",                       no_argument,       0, 'd'},
+  { "interactive",                  no_argument,       0, 't'},
+  { "help",                         no_argument,       0, 'h'},
+  { "memcached-write-format",       required_argument, 0, OPT_MEMCACHED_WRITE_FORMAT},
+  { "override-npdi",                no_argument,       0, OPT_OVERRIDE_NPDI},
+  { "max-tokens",                   required_argument, 0, OPT_MAX_TOKENS},
+  { "init-token-rate",              required_argument, 0, OPT_INIT_TOKEN_RATE},
+  { "min-token-rate",               required_argument, 0, OPT_MIN_TOKEN_RATE},
+  { "cass-target-latency-us",       required_argument, 0, OPT_CASS_TARGET_LATENCY_US},
+  { "exception-max-ttl",            required_argument, 0, OPT_EXCEPTION_MAX_TTL},
+  { "sip-blacklist-duration",       required_argument, 0, OPT_SIP_BLACKLIST_DURATION},
+  { "http-blacklist-duration",      required_argument, 0, OPT_HTTP_BLACKLIST_DURATION},
+  { "astaire-blacklist-duration",   required_argument, 0, OPT_ASTAIRE_BLACKLIST_DURATION},
+  { "sip-tcp-connect-timeout",      required_argument, 0, OPT_SIP_TCP_CONNECT_TIMEOUT},
+  { "sip-tcp-send-timeout",         required_argument, 0, OPT_SIP_TCP_SEND_TIMEOUT},
+  { "session-continued-timeout",    required_argument, 0, OPT_SESSION_CONTINUED_TIMEOUT_MS},
+  { "session-terminated-timeout",   required_argument, 0, OPT_SESSION_TERMINATED_TIMEOUT_MS},
+  { "stateless-proxies",            required_argument, 0, OPT_STATELESS_PROXIES},
+  { "non-registering-pbxes",        required_argument, 0, OPT_NON_REGISTERING_PBXES},
+  { "ralf-threads",                 required_argument, 0, OPT_RALF_THREADS},
+  { "non-register-authentication",  required_argument, 0, OPT_NON_REGISTER_AUTHENTICATION},
+  { "pbx-service-route",            required_argument, 0, OPT_PBX_SERVICE_ROUTE},
+  { "force-3pr-body",               no_argument,       0, OPT_FORCE_THIRD_PARTY_REGISTER_BODY},
+  { "pidfile",                      required_argument, 0, OPT_PIDFILE},
+  { "plugin-option",                required_argument, 0, 'N'},
+  { "sprout-hostname",              required_argument, 0, OPT_SPROUT_HOSTNAME},
+  { "listen-port",                  required_argument, 0, OPT_LISTEN_PORT},
   SPROUTLET_MACRO(SPROUTLET_CFG_PJ_STRUCT)
-  { "impi-store-mode",                 required_argument, 0, OPT_IMPI_STORE_MODE},
-  { "nonce-count-supported",           no_argument,       0, OPT_NONCE_COUNT_SUPPORTED},
-  { "scscf-node-uri",                  required_argument, 0, OPT_SCSCF_NODE_URI},
-  { "sas-use-signaling-interface",     no_argument,       0, OPT_SAS_USE_SIGNALING_IF},
-  { "disable-tcp-switch",              no_argument,       0, OPT_DISABLE_TCP_SWITCH},
-  { "chronos-hostname",                required_argument, 0, OPT_CHRONOS_HOSTNAME},
-  { "sprout-chronos-callback-uri",     required_argument, 0, OPT_SPROUT_CHRONOS_CALLBACK_URI},
-  { "non-register-challenge-lifetime", required_argument, 0, OPT_NON_REG_CHAL_LIFETIME},
+  { "impi-store-mode",              required_argument, 0, OPT_IMPI_STORE_MODE},
+  { "nonce-count-supported",        no_argument,       0, OPT_NONCE_COUNT_SUPPORTED},
+  { "scscf-node-uri",               required_argument, 0, OPT_SCSCF_NODE_URI},
+  { "sas-use-signaling-interface",  no_argument,       0, OPT_SAS_USE_SIGNALING_IF},
+  { "disable-tcp-switch",           no_argument,       0, OPT_DISABLE_TCP_SWITCH},
+  { "chronos-hostname",             required_argument, 0, OPT_CHRONOS_HOSTNAME},
+  { "sprout-chronos-callback-uri",  required_argument, 0, OPT_SPROUT_CHRONOS_CALLBACK_URI},
   { NULL,                           0,                 0, 0}
 };
 
@@ -431,10 +429,6 @@ static void usage(void)
        "                              requests that already have a Proxy-Authorization header.\n"
        "                            - 'initial_req_from_reg_digest_endpoint' means sprout will challenge\n"
        "                              requests from an endpoint that reigsters with SIP digest authentication.\n"
-       "     --non-register-challenge-lifetime <seconds>\n"
-       "                            The duration (in seconds) that a challenge will be stored for when is has\n"
-       "                            been used to authenticate a non-REGISTER request. This option is only relevant\n"
-       "                            if nonce count support is enabled.\n"
        "     --force-3pr-body       Always include the original REGISTER and 200 OK in the body of\n"
        "                            third-party REGISTER messages to application servers, even if the\n"
        "                            User-Data doesn't specify it\n"
@@ -1294,14 +1288,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     SPROUTLET_MACRO(SPROUTLET_OPTIONS)
 
-    case OPT_NON_REG_CHAL_LIFETIME:
-      {
-        VALIDATE_INT_PARAM_NON_ZERO(options->non_reg_chal_lifetime_s,
-                                    non_reg_chal_lifetime_s,
-                                    Non-REGISTER challenge lifetime);
-      }
-      break;
-
     case 'h':
       usage();
       return -1;
@@ -1571,7 +1557,6 @@ int main(int argc, char* argv[])
   opt.scscf_node_uri = "";
   opt.sas_signaling_if = false;
   opt.disable_tcp_switch = false;
-  opt.non_reg_chal_lifetime_s = 0;
 
   status = init_logging_options(argc, argv, &opt);
 
