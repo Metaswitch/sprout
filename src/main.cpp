@@ -1,37 +1,12 @@
 /**
  * @file main.cpp
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 extern "C" {
@@ -135,6 +110,7 @@ enum OptionTypes
   OPT_ASTAIRE_BLACKLIST_DURATION,
   OPT_SIP_TCP_CONNECT_TIMEOUT,
   OPT_SIP_TCP_SEND_TIMEOUT,
+  OPT_DNS_TIMEOUT,
   OPT_SESSION_CONTINUED_TIMEOUT_MS,
   OPT_SESSION_TERMINATED_TIMEOUT_MS,
   OPT_STATELESS_PROXIES,
@@ -227,6 +203,7 @@ const static struct pj_getopt_option long_opt[] =
   { "astaire-blacklist-duration",   required_argument, 0, OPT_ASTAIRE_BLACKLIST_DURATION},
   { "sip-tcp-connect-timeout",      required_argument, 0, OPT_SIP_TCP_CONNECT_TIMEOUT},
   { "sip-tcp-send-timeout",         required_argument, 0, OPT_SIP_TCP_SEND_TIMEOUT},
+  { "dns-timeout",                  required_argument, 0, OPT_DNS_TIMEOUT},
   { "session-continued-timeout",    required_argument, 0, OPT_SESSION_CONTINUED_TIMEOUT_MS},
   { "session-terminated-timeout",   required_argument, 0, OPT_SESSION_TERMINATED_TIMEOUT_MS},
   { "stateless-proxies",            required_argument, 0, OPT_STATELESS_PROXIES},
@@ -405,6 +382,8 @@ static void usage(void)
        "     --sip-tcp-send-timeout <milliseconds>\n"
        "                            The amount of time to wait for data sent on a SIP TCP connection to be\n"
        "                            acknowledged by the peer.\n"
+       "     --dns-timeout <milliseconds>\n"
+       "                            The amount of time to wait for a DNS response (default: 200)n"
        "     --session-continued-timeout <milliseconds>\n"
        "                            If an Application Server with default handling of 'continue session'\n"
        "                            is unresponsive, this is the time that sprout will wait (in ms)\n"
@@ -1097,6 +1076,14 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
+    case OPT_DNS_TIMEOUT:
+      {
+        VALIDATE_INT_PARAM(options->dns_timeout,
+                           dns_timeout,
+                           DNS request timeout);
+      }
+      break;
+
     case OPT_SESSION_CONTINUED_TIMEOUT_MS:
       {
         VALIDATE_INT_PARAM(options->session_continued_timeout_ms,
@@ -1521,6 +1508,7 @@ int main(int argc, char* argv[])
   opt.astaire_blacklist_duration = AstaireResolver::DEFAULT_BLACKLIST_DURATION;
   opt.sip_tcp_connect_timeout = 2000;
   opt.sip_tcp_send_timeout = 2000;
+  opt.dns_timeout = DnsCachedResolver::DEFAULT_TIMEOUT;
   opt.session_continued_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_CONTINUED_TIMEOUT;
   opt.session_terminated_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_TERMINATED_TIMEOUT;
   opt.stateless_proxies.clear();
@@ -1899,7 +1887,7 @@ int main(int argc, char* argv[])
                                            hc);
 
   // Create a DNS resolver and a SIP specific resolver.
-  dns_resolver = new DnsCachedResolver(opt.dns_servers);
+  dns_resolver = new DnsCachedResolver(opt.dns_servers, opt.dns_timeout);
   sip_resolver = new SIPResolver(dns_resolver, opt.sip_blacklist_duration);
 
   // Create a new quiescing manager instance and register our completion handler

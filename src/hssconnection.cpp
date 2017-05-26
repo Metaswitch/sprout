@@ -1,37 +1,12 @@
 /**
  * @file hssconnection.cpp HSSConnection class methods.
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 #include <cassert>
@@ -327,7 +302,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
                           std::shared_ptr<rapidxml::xml_document<> > root,
                           std::string& regstate,
                           std::map<std::string, Ifcs >& ifcs_map,
-                          std::vector<std::string>& associated_uris,
+                          AssociatedURIs& associated_uris,
                           std::vector<std::string>& aliases,
                           std::deque<std::string>& ccfs,
                           std::deque<std::string>& ecfs,
@@ -410,6 +385,10 @@ bool decode_homestead_xml(const std::string public_user_identity,
   // found_aliases is a flag used to indicate that we've already found our list
   // of aliases, maybe_found_aliases indicates that we might have found it, but
   // it could be overridden later.
+  // wildcard_uri saves of the value of a wildcard identity that potentially
+  // matches the public identity, so that we can update the barring state of
+  // the public identity if the wildcard identity is the best match after we've
+  // looked at all the service profiles.
   std::vector<std::string> sp_identities;
   std::vector<std::string> temp_aliases;
   bool current_sp_contains_public_id = false;
@@ -417,7 +396,8 @@ bool decode_homestead_xml(const std::string public_user_identity,
   bool found_aliases = false;
   bool maybe_found_aliases = false;
   bool found_multiple_matches = false;
-  associated_uris.clear();
+  std::string wildcard_uri;
+  associated_uris.clear_uris();
   rapidxml::xml_node<>* sp = NULL;
 
   if (!imss->first_node(RegDataXMLUtils::SERVICE_PROFILE))
@@ -447,34 +427,65 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
       if (identity)
       {
-        std::string uri = std::string(identity->value());
+        // There are two potential identities in the Identity node:
+        //  - identity_uri: Identity used for matching against identities to
+        //                  select the correct service profile.
+        //  - associated_uri: The actual associated URI.
+        //
+        // These identities are normally the same, except in the case of a
+        // non-distinct IMPU (an IMPU that is part of a wildcard range, but is
+        // explicitly included in the XML), where the identity_uri is the
+        // distinct IMPU, and the associated_uri is the wildcard IMPU.
+        std::string identity_uri = std::string(identity->value());
+        std::string associated_uri = identity_uri;
+        rapidxml::xml_node<>* extension =
+                              public_id->first_node(RegDataXMLUtils::EXTENSION);
 
-        rapidxml::xml_node<>* extension = public_id->first_node(RegDataXMLUtils::EXTENSION);
         if (extension)
         {
-          RegDataXMLUtils::parse_extension_identity(uri, extension);
+          RegDataXMLUtils::parse_extension_identity(associated_uri, extension);
         }
 
-        TRC_DEBUG("Processing Identity node from HSS XML - %s\n",
-                  uri.c_str());
+        rapidxml::xml_node<>* barring_indication =
+                     public_id->first_node(RegDataXMLUtils::BARRING_INDICATION);
 
-        if (std::find(associated_uris.begin(), associated_uris.end(), uri) ==
-            associated_uris.end())
+        TRC_DEBUG("Processing Identity node from HSS XML - %s", identity_uri.c_str());
+
+        bool barred = false;
+        if (barring_indication)
         {
-          associated_uris.push_back(uri);
-          ifcs_map[uri] = ifc;
+          std::string value = barring_indication->value();
+          if (value == RegDataXMLUtils::STATE_BARRED)
+          {
+            barred = true;
+          }
+        }
+
+        if (associated_uri != identity_uri)
+        {
+          // We're in the case where we're processing a non-distinct IMPU. We
+          // don't want to handle updating the associated URI, as this should
+          // be covered when we handle the corresponding wildcard IMPU entry.
+          // Instead, store off any barring information for the IMPU as this
+          // needs to override the barring status of the wildcard IMPU.
+          associated_uris.add_barring_status(identity_uri, barred);
+        }
+        else if (!associated_uris.contains_uri(associated_uri))
+        {
+          associated_uris.add_uri(associated_uri, barred);
+          ifcs_map[associated_uri] = ifc;
         }
 
         if (!found_aliases)
         {
-          sp_identities.push_back(uri);
+          sp_identities.push_back(associated_uri);
 
-          if (uri == public_user_identity)
+          if (identity_uri == public_user_identity)
           {
             current_sp_contains_public_id = true;
           }
           else if (WildcardUtils::check_users_equivalent(
-                                                     uri, public_user_identity))
+                                                     identity_uri, public_user_identity))
           {
             found_multiple_matches = maybe_found_aliases;
             current_sp_maybe_contains_public_id = true;
@@ -482,6 +493,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
             if (!maybe_found_aliases)
             {
               ifcs_map[public_user_identity] = ifc;
+              wildcard_uri = identity_uri;
             }
           }
         }
@@ -515,7 +527,10 @@ bool decode_homestead_xml(const std::string public_user_identity,
   {
     if (!temp_aliases.empty())
     {
+      // The best match was a wildcard.
       aliases = temp_aliases;
+      associated_uris.add_wildcard_mapping(wildcard_uri,
+                                           public_user_identity);
 
       if (found_multiple_matches)
       {
@@ -554,7 +569,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                                   const std::string& type,
                                                   std::string& regstate,
                                                   std::map<std::string, Ifcs >& ifcs_map,
-                                                  std::vector<std::string>& associated_uris,
+                                                  AssociatedURIs& associated_uris,
                                                   SAS::TrailId trail)
 {
   std::vector<std::string> unused_aliases;
@@ -578,7 +593,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                                   const std::string& private_user_identity,
                                                   const std::string& type,
                                                   std::map<std::string, Ifcs >& ifcs_map,
-                                                  std::vector<std::string>& associated_uris,
+                                                  AssociatedURIs& associated_uris,
                                                   SAS::TrailId trail)
 {
   std::string unused_regstate;
@@ -605,7 +620,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                                   SAS::TrailId trail)
 {
   std::map<std::string, Ifcs > ifcs_map;
-  std::vector<std::string> associated_uris;
+  AssociatedURIs associated_uris = {};
   std::string unused_regstate;
   std::vector<std::string> unused_aliases;
   std::deque<std::string> unused_ccfs;
@@ -629,7 +644,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                                   const std::string& type,
                                                   std::string& regstate,
                                                   std::map<std::string, Ifcs >& ifcs_map,
-                                                  std::vector<std::string>& associated_uris,
+                                                  AssociatedURIs& associated_uris,
                                                   std::deque<std::string>& ccfs,
                                                   std::deque<std::string>& ecfs,
                                                   SAS::TrailId trail)
@@ -654,7 +669,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                                   const std::string& type,
                                                   std::string& regstate,
                                                   std::map<std::string, Ifcs >& ifcs_map,
-                                                  std::vector<std::string>& associated_uris,
+                                                  AssociatedURIs& associated_uris,
                                                   std::vector<std::string>& aliases,
                                                   std::deque<std::string>& ccfs,
                                                   std::deque<std::string>& ecfs,
@@ -733,7 +748,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
 HTTPCode HSSConnection::get_registration_data(const std::string& public_user_identity,
                                               std::string& regstate,
                                               std::map<std::string, Ifcs >& ifcs_map,
-                                              std::vector<std::string>& associated_uris,
+                                              AssociatedURIs& associated_uris,
                                               SAS::TrailId trail)
 {
   std::deque<std::string> unused_ccfs;
@@ -750,7 +765,7 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
 HTTPCode HSSConnection::get_registration_data(const std::string& public_user_identity,
                                               std::string& regstate,
                                               std::map<std::string, Ifcs >& ifcs_map,
-                                              std::vector<std::string>& associated_uris,
+                                              AssociatedURIs& associated_uris,
                                               std::deque<std::string>& ccfs,
                                               std::deque<std::string>& ecfs,
                                               SAS::TrailId trail)

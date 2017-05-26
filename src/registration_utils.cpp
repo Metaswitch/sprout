@@ -1,37 +1,12 @@
 /**
  * @file registration_utils.cpp Registration and deregistration functions
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 extern "C" {
@@ -470,7 +445,7 @@ static void notify_application_servers()
 
 static bool expire_bindings(SubscriberDataManager *sdm,
                             const std::string& aor,
-                            std::vector<std::string> irs_impus,
+                            std::vector<std::string> unbarred_irs_impus,
                             const std::string& binding_id,
                             SAS::TrailId trail)
 {
@@ -501,7 +476,7 @@ static bool expire_bindings(SubscriberDataManager *sdm,
                                                            // single binding (flow failed).
     }
 
-    set_rc = sdm->set_aor_data(aor, irs_impus, aor_pair, trail, all_bindings_expired);
+    set_rc = sdm->set_aor_data(aor, unbarred_irs_impus, aor_pair, trail, all_bindings_expired);
     delete aor_pair; aor_pair = NULL;
 
     // We can only say for sure that the bindings were expired if we were able
@@ -527,26 +502,33 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
   bool all_bindings_expired = false;
 
   // Determine the set of IMPUs in the Implicit Registration Set
-  std::vector<std::string> irs_impus;
+  std::vector<std::string> unbarred_irs_impus;
+  AssociatedURIs associated_uris = {};
   std::string state;
   std::map<std::string, Ifcs> ifc_map;
   HTTPCode http_code = hss->get_registration_data(aor,
                                                   state,
                                                   ifc_map,
-                                                  irs_impus,
+                                                  associated_uris,
                                                   trail);
 
-  if ((http_code != HTTP_OK) || irs_impus.empty())
+  // We only want to send NOTIFYs for unbarred IMPUs.
+  unbarred_irs_impus = associated_uris.get_unbarred_uris();
+
+  if ((http_code != HTTP_OK) || unbarred_irs_impus.empty())
   {
     // We were unable to determine the set of IMPUs for this AoR.  Push the AoR
     // we have into the IRS list so that we have at least one IMPU we can issue
-    // NOTIFYs for.
+    // NOTIFYs for. We should only do this if that IMPU is not barred.
     TRC_WARNING("Unable to get Implicit Registration Set for %s: %d", aor.c_str(), http_code);
-    irs_impus.clear();
-    irs_impus.push_back(aor);
+    unbarred_irs_impus.clear();
+    if (!associated_uris.is_impu_barred(aor))
+    {
+      unbarred_irs_impus.push_back(aor);
+    }
   }
 
-  if (expire_bindings(sdm, aor, irs_impus, binding_id, trail))
+  if (expire_bindings(sdm, aor, unbarred_irs_impus, binding_id, trail))
   {
     // All bindings have been expired, so do deregistration processing for the
     // IMPU.
@@ -555,11 +537,12 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
 
     std::vector<std::string> uris;
     std::map<std::string, Ifcs> ifc_map;
+
     HTTPCode http_code = hss->update_registration_state(aor,
                                                         "",
                                                         dereg_type,
                                                         ifc_map,
-                                                        irs_impus,
+                                                        associated_uris,
                                                         trail);
 
     if (http_code == HTTP_OK)
@@ -585,7 +568,7 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
        remote_sdm != remote_sdms.end();
        ++remote_sdm)
   {
-    (void) expire_bindings(*remote_sdm, aor, irs_impus, binding_id, trail);
+    (void) expire_bindings(*remote_sdm, aor, unbarred_irs_impus, binding_id, trail);
   }
 
   return all_bindings_expired;
