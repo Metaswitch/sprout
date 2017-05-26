@@ -46,7 +46,11 @@
 #include "utils.h"
 #include "rapidxml/rapidxml_print.hpp"
 
-SIFCService::SIFCService(std::string configuration) :
+SIFCService::SIFCService(Alarm* alarm,
+                         SNMP::CounterTable* no_shared_ifcs_set_tbl,
+                         std::string configuration) :
+  _alarm(alarm),
+  _no_shared_ifcs_set_tbl(no_shared_ifcs_set_tbl),
   _configuration(configuration),
   _updater(NULL)
 {
@@ -66,6 +70,7 @@ void SIFCService::update_sets()
     TRC_STATUS("No shared IFCs configuration (file %s does not exist)",
                _configuration.c_str());
     CL_SPROUT_SIFC_FILE_MISSING.log();
+    set_alarm();
     return;
   }
 
@@ -81,6 +86,7 @@ void SIFCService::update_sets()
     TRC_ERROR("Failed to read shared IFCs configuration data from %s",
               _configuration.c_str());
     CL_SPROUT_SIFC_FILE_EMPTY.log();
+    set_alarm();
     return;
   }
 
@@ -97,6 +103,7 @@ void SIFCService::update_sets()
               sifc_str.c_str(),
               err.what());
     CL_SPROUT_SIFC_FILE_INVALID_XML.log();
+    set_alarm();
     delete root; root = NULL;
     return;
   }
@@ -105,6 +112,7 @@ void SIFCService::update_sets()
   {
     TRC_ERROR("Invalid shared IFCs configuration file - missing SharedIFCsSets block");
     CL_SPROUT_SIFC_FILE_MISSING_SHARED_IFCS_SETS.log();
+    set_alarm();
     delete root; root = NULL;
     return;
   }
@@ -113,6 +121,7 @@ void SIFCService::update_sets()
   // Update our map, taking a lock while we do so.
   boost::lock_guard<boost::shared_mutex> write_lock(_sets_rw_lock);
   _shared_ifc_sets.clear();
+  bool any_errors = false;
 
   rapidxml::xml_node<>* sets = root->first_node(SIFCService::SHARED_IFCS_SETS);
   rapidxml::xml_node<>* set = NULL;
@@ -127,6 +136,7 @@ void SIFCService::update_sets()
     {
       TRC_ERROR("Invalid shared IFC block - missing SetID. Skipping this entry");
       CL_SPROUT_SIFC_FILE_MISSING_SET_ID.log();
+      any_errors = true;
       continue;
     }
 
@@ -139,6 +149,7 @@ void SIFCService::update_sets()
       TRC_ERROR("Invalid shared IFC block - SetID (%s) isn't an int. Skipping this entry",
                 set_id_str.c_str());
       CL_SPROUT_SIFC_FILE_INVALID_SET_ID.log(set_id_str.c_str());
+      any_errors = true;
       continue;
     }
 
@@ -147,6 +158,7 @@ void SIFCService::update_sets()
       TRC_ERROR("Invalid shared IFC block - SetID (%d) is repeated. Skipping this entry",
                 set_id);
       CL_SPROUT_SIFC_FILE_REPEATED_SET_ID.log(set_id_str.c_str());
+      any_errors = true;
       continue;
     }
 
@@ -170,6 +182,7 @@ void SIFCService::update_sets()
           TRC_ERROR("Invalid shared IFC block - Priority (%s) isn't an int. Skipping this entry",
                     priority_str.c_str());
           CL_SPROUT_SIFC_FILE_INVALID_PRIORITY.log(priority_str.c_str());
+          any_errors = true;
           continue;
         }
       }
@@ -181,8 +194,17 @@ void SIFCService::update_sets()
       ifc_set.push_back(std::make_pair(priority, ifc_str));
     }
 
-    TRC_DEBUG("Adding %lu IFCs for ID %d", ifc_set.size(), set_id);
+    TRC_STATUS("Adding %lu IFCs for ID %d", ifc_set.size(), set_id);
     _shared_ifc_sets.insert(std::make_pair(set_id, ifc_set));
+  }
+
+  if (any_errors)
+  {
+    set_alarm();
+  }
+  else
+  {
+    clear_alarm();
   }
 
   delete root; root = NULL;
@@ -190,10 +212,9 @@ void SIFCService::update_sets()
 
 SIFCService::~SIFCService()
 {
-  // Destroy the updater (if it was created).
   delete _updater; _updater = NULL;
-
   _shared_ifc_sets.clear();
+  delete _alarm; _alarm = NULL;
 }
 
 void SIFCService::get_ifcs_from_id(std::multimap<int32_t, Ifc>& ifc_map,
@@ -222,9 +243,31 @@ void SIFCService::get_ifcs_from_id(std::multimap<int32_t, Ifc>& ifc_map,
     else
     {
       TRC_WARNING("No IFCs stored for ID %d", id);
+
+      if (_no_shared_ifcs_set_tbl)
+      {
+        _no_shared_ifcs_set_tbl->increment();
+      }
+
       SAS::Event event(trail, SASEvent::SIFC_NO_SET_FOR_ID, 0);
       event.add_static_param(id);
       SAS::report_event(event);
     }
+  }
+}
+
+void SIFCService::set_alarm()
+{
+  if (_alarm)
+  {
+    _alarm->set();
+  }
+}
+
+void SIFCService::clear_alarm()
+{
+  if (_alarm)
+  {
+    _alarm->clear();
   }
 }

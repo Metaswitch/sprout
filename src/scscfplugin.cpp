@@ -49,6 +49,8 @@ private:
   SNMP::RegistrationStatsTables reg_stats_tbls = {nullptr, nullptr, nullptr};
   SNMP::RegistrationStatsTables third_party_reg_stats_tbls = {nullptr, nullptr, nullptr};
   SNMP::AuthenticationStatsTables auth_stats_tbls = {nullptr, nullptr, nullptr};
+  SNMP::CounterTable* _no_matching_ifcs_tbl;
+  SNMP::CounterTable* _no_matching_default_ifcs_tbl;
 };
 
 /// Export the plug-in using the magic symbol "sproutlet_plugin"
@@ -61,7 +63,9 @@ SCSCFPlugin::SCSCFPlugin() :
   _subscription_sproutlet(NULL),
   _registrar_sproutlet(NULL),
   _incoming_sip_transactions_tbl(NULL),
-  _outgoing_sip_transactions_tbl(NULL)
+  _outgoing_sip_transactions_tbl(NULL),
+  _no_matching_ifcs_tbl(NULL),
+  _no_matching_default_ifcs_tbl(NULL)
 {
 }
 
@@ -69,6 +73,8 @@ SCSCFPlugin::~SCSCFPlugin()
 {
   delete _incoming_sip_transactions_tbl;
   delete _outgoing_sip_transactions_tbl;
+  delete _no_matching_ifcs_tbl;
+  delete _no_matching_default_ifcs_tbl;
 }
 
 /// Loads the S-CSCF plug-in, returning the supported Sproutlets.
@@ -83,6 +89,10 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                                                                     "1.2.826.0.1.1578918.9.3.20");
   _outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("scscf_outgoing_sip_transactions",
                                                                                     "1.2.826.0.1.1578918.9.3.21");
+  _no_matching_default_ifcs_tbl = SNMP::CounterTable::create("no_matching_default_ifcs",
+                                                             "1.2.826.0.1.1578918.9.3.39");
+  _no_matching_ifcs_tbl = SNMP::CounterTable::create("no_matching_ifcs",
+                                                     "1.2.826.0.1.1578918.9.3.41");
 
   if (opt.enabled_scscf)
   {
@@ -156,7 +166,9 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           difc_service,
                                           IFCConfiguration(opt.apply_default_ifcs,
                                                            opt.reject_if_no_matching_ifcs,
-                                                           opt.dummy_app_server),
+                                                           opt.dummy_app_server,
+                                                           _no_matching_ifcs_tbl,
+                                                           _no_matching_default_ifcs_tbl),
                                           opt.session_continued_timeout_ms,
                                           opt.session_terminated_timeout_ms,
                                           sess_term_as_tracker,

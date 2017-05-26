@@ -375,7 +375,7 @@ public:
     _enum_service = new JSONEnumService(string(UT_DIR).append("/test_stateful_proxy_enum.json"));
 
     _acr_factory = new ACRFactory();
-    _difc_service = new DIFCService(string(UT_DIR).append("/test_scscf_difc.xml"));
+    _difc_service = new DIFCService(NULL, string(UT_DIR).append("/test_scscf_difc.xml"));
 
     // Schedule timers.
     SipTest::poll();
@@ -407,7 +407,7 @@ public:
     _hss_connection = new FakeHSSConnection();
 
     // Create the S-CSCF Sproutlet.
-    IFCConfiguration ifc_configuration(false, false, "sip:DUMMY_AS");
+    IFCConfiguration ifc_configuration(false, false, "sip:DUMMY_AS", NULL, NULL);
     _scscf_sproutlet = new SCSCFSproutlet("scscf",
                                           "scscf",
                                           "sip:scscf.homedomain:5058;transport=tcp",

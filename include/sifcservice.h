@@ -46,11 +46,15 @@
 #include "updater.h"
 #include "sas.h"
 #include "ifc.h"
+#include "alarm.h"
+#include "snmp_counter_table.h"
 
 class SIFCService
 {
 public:
-  SIFCService(std::string configuration = "./sifc.xml");
+  SIFCService(Alarm* alarm,
+              SNMP::CounterTable* no_shared_ifcs_set_tbl,
+              std::string configuration = "./shared_ifcs.xml");
   virtual ~SIFCService();
 
   // Node names within the Shared IFC configuration file.
@@ -68,6 +72,8 @@ public:
                                 SAS::TrailId trail) const;
 
 private:
+  Alarm* _alarm;
+  SNMP::CounterTable* _no_shared_ifcs_set_tbl;
   std::map<int32_t, std::vector<std::pair<int32_t, std::string>>> _shared_ifc_sets;
   std::string _configuration;
   Updater<void, SIFCService>* _updater;
@@ -75,6 +81,10 @@ private:
   // Mark as mutable to flag that this can be modified without affecting the
   // external behaviour of the class, allowing for locking in 'const' methods.
   mutable boost::shared_mutex _sets_rw_lock;
+
+  // Helper functions to set/clear the alarm.
+  void set_alarm();
+  void clear_alarm();
 };
 
 #endif

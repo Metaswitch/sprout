@@ -38,7 +38,7 @@
 #include "mock_sifc_parser.h"
 
 MockSIFCService::MockSIFCService() :
-  SIFCService()
+  SIFCService(NULL, NULL)
 {}
 
 MockSIFCService::~MockSIFCService()

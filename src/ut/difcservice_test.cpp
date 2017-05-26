@@ -43,8 +43,10 @@
 #include "test_utils.hpp"
 #include "difcservice.h"
 #include "ifc_parsing_utils.h"
+#include "mockalarm.h"
 
 using ::testing::UnorderedElementsAreArray;
+using ::testing::AtLeast;
 
 using namespace std;
 
@@ -53,11 +55,17 @@ class DIFCServiceTest : public ::testing::Test
 {
   DIFCServiceTest()
   {
+    _am = new AlarmManager();
+    _mock_alarm = new MockAlarm(_am);
   }
 
   virtual ~DIFCServiceTest()
   {
+    delete _am; _am = NULL;
   }
+
+  AlarmManager* _am;
+  MockAlarm* _mock_alarm;
 };
 
 void get_ifc_properties(std::vector<Ifc>& difc_list,
@@ -75,7 +83,8 @@ void get_ifc_properties(std::vector<Ifc>& difc_list,
 TEST_F(DIFCServiceTest, ValidDIFCFile)
 {
   // Load a configuration file containing two iFCs.
-  DIFCService difc(string(UT_DIR).append("/test_difc.xml"));
+  EXPECT_CALL(*_mock_alarm, clear()).Times(AtLeast(1));
+  DIFCService difc(_mock_alarm, string(UT_DIR).append("/test_difc.xml"));
 
   rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
   std::vector<Ifc> difc_list = difc.get_default_ifcs(root);
@@ -100,7 +109,8 @@ TEST_F(DIFCServiceTest, ValidDIFCFile)
 TEST_F(DIFCServiceTest, ReloadInvalidDIFCFile)
 {
   // Load a configuration file containing two iFCs.
-  DIFCService difc(string(UT_DIR).append("/test_difc.xml"));
+  EXPECT_CALL(*_mock_alarm, clear()).Times(AtLeast(1));
+  DIFCService difc(_mock_alarm, string(UT_DIR).append("/test_difc.xml"));
 
   rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
   std::vector<Ifc> difc_list = difc.get_default_ifcs(root);
@@ -109,6 +119,7 @@ TEST_F(DIFCServiceTest, ReloadInvalidDIFCFile)
   // Change the file the difc service is using to an invalid file (to mimic the
   // file being changed), then reload the file, and recheck the parsed list.
   // Nothing should have changed and this should cause no memory issues.
+  EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
   difc._configuration = string(UT_DIR).append("/test_difc_invalid.xml");
   difc.update_difcs();
   rapidxml::xml_document<>* root_reload = new rapidxml::xml_document<>;
@@ -130,21 +141,23 @@ TEST_F(DIFCServiceTest, ReloadInvalidDIFCFile)
   delete root_reload; root_reload = NULL;
 }
 
-// Test that reloading a Default iFC file with an invalid file doesn't cause the
-// valid entries to be lost.
+// Test that reloading a Default iFC file with valid file doesn't destroy any
+// references to the old values.
 TEST_F(DIFCServiceTest, ReloadChangedDIFCFile)
 {
   // Load a configuration file containing two iFCs.
-  DIFCService difc(string(UT_DIR).append("/test_difc.xml"));
+  EXPECT_CALL(*_mock_alarm, clear()).Times(AtLeast(1));
+  DIFCService difc(_mock_alarm, string(UT_DIR).append("/test_difc.xml"));
 
   rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
   std::vector<Ifc> difc_list = difc.get_default_ifcs(root);
   EXPECT_EQ(difc_list.size(), 2);
 
-  // Change the file the difc service is using to an invalid file (to mimic the
-  // file being changed), then reload the file, and recheck the parsed list.
-  // Nothing should have changed and this should cause no memory issues.
+  // Change the file the difc service is using (to mimic the file being
+  // changed), then reload the file, and recheck the parsed list. Nothing
+  // should have changed and this should cause no memory issues.
   difc._configuration = string(UT_DIR).append("/test_difc_changed.xml");
+  EXPECT_CALL(*_mock_alarm, clear()).Times(AtLeast(1));
   difc.update_difcs();
   rapidxml::xml_document<>* root_reload = new rapidxml::xml_document<>;
   std::vector<Ifc> difc_list_reload = difc.get_default_ifcs(root_reload);
@@ -170,7 +183,8 @@ TEST_F(DIFCServiceTest, ReloadChangedDIFCFile)
 TEST_F(DIFCServiceTest, MissingFile)
 {
   CapturingTestLogger log;
-  DIFCService difc(string(UT_DIR).append("/non_existent_file.xml"));
+  EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
+  DIFCService difc(_mock_alarm, string(UT_DIR).append("/non_existent_file.xml"));
   EXPECT_TRUE(log.contains("No default IFC configuration found"));
   rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
   EXPECT_TRUE(difc.get_default_ifcs(root).empty());
@@ -181,7 +195,8 @@ TEST_F(DIFCServiceTest, MissingFile)
 TEST_F(DIFCServiceTest, EmptyFile)
 {
   CapturingTestLogger log;
-  DIFCService difc(string(UT_DIR).append("/test_difc_empty_file.xml"));
+  EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
+  DIFCService difc(_mock_alarm, string(UT_DIR).append("/test_difc_empty_file.xml"));
   EXPECT_TRUE(log.contains("Failed to read default IFC configuration data"));
   rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
   EXPECT_TRUE(difc.get_default_ifcs(root).empty());
@@ -192,7 +207,8 @@ TEST_F(DIFCServiceTest, EmptyFile)
 TEST_F(DIFCServiceTest, ParseError)
 {
   CapturingTestLogger log;
-  DIFCService difc(string(UT_DIR).append("/test_difc_invalid.xml"));
+  EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
+  DIFCService difc(_mock_alarm, string(UT_DIR).append("/test_difc_invalid.xml"));
   EXPECT_TRUE(log.contains("Failed to parse the default IFC configuration data"));
   rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
   EXPECT_TRUE(difc.get_default_ifcs(root).empty());
@@ -203,7 +219,8 @@ TEST_F(DIFCServiceTest, ParseError)
 TEST_F(DIFCServiceTest, IncorrectSyntax)
 {
   CapturingTestLogger log;
-  DIFCService difc(string(UT_DIR).append("/test_difc_missing_node.xml"));
+  EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
+  DIFCService difc(_mock_alarm, string(UT_DIR).append("/test_difc_missing_node.xml"));
   EXPECT_TRUE(log.contains("Failed to parse the default IFC configuration file as it is invalid (missing DefaultIFCsSet block)"));
   rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
   EXPECT_TRUE(difc.get_default_ifcs(root).empty());
@@ -215,7 +232,8 @@ TEST_F(DIFCServiceTest, IncorrectSyntax)
 TEST_F(DIFCServiceTest, EmptyValidFile)
 {
   CapturingTestLogger log;
-  DIFCService difc(string(UT_DIR).append("/test_difc_valid_empty.xml"));
+  EXPECT_CALL(*_mock_alarm, clear()).Times(AtLeast(1));
+  DIFCService difc(_mock_alarm, string(UT_DIR).append("/test_difc_empty_valid.xml"));
   EXPECT_FALSE(log.contains("Failed"));
   rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
   EXPECT_TRUE(difc.get_default_ifcs(root).empty());
@@ -236,7 +254,8 @@ TEST_F(DIFCServiceTest, SingleInvalidIfc)
   CapturingTestLogger log;
 
   // Load a configuration file which contains one valid, and one invalid, iFC.
-  DIFCService difc(string(UT_DIR).append("/test_difc_one_invalid.xml"));
+  EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
+  DIFCService difc(_mock_alarm, string(UT_DIR).append("/test_difc_one_invalid.xml"));
 
   EXPECT_TRUE(log.contains("Failed to parse one default IFC"));
 

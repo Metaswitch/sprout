@@ -43,7 +43,9 @@
 #include "xml_utils.h"
 #include "rapidxml/rapidxml_print.hpp"
 
-DIFCService::DIFCService(std::string configuration):
+DIFCService::DIFCService(Alarm* alarm,
+                         std::string configuration):
+  _alarm(alarm),
   _configuration(configuration),
   _updater(NULL)
 {
@@ -56,6 +58,7 @@ DIFCService::~DIFCService()
 {
   delete _updater; _updater = NULL;
   _default_ifcs.clear();
+  delete _alarm; _alarm = NULL;
 }
 
 void DIFCService::update_difcs()
@@ -70,6 +73,7 @@ void DIFCService::update_difcs()
     TRC_STATUS("No default IFC configuration found (file %s does not exist)",
                _configuration.c_str());
     CL_SPROUT_DIFC_FILE_MISSING.log();
+    set_alarm();
     return;
   }
 
@@ -85,6 +89,7 @@ void DIFCService::update_difcs()
     TRC_ERROR("Failed to read default IFC configuration data from %s",
               _configuration.c_str());
     CL_SPROUT_DIFC_FILE_EMPTY.log();
+    set_alarm();
     return;
   }
 
@@ -102,6 +107,7 @@ void DIFCService::update_difcs()
               difc_str.c_str(),
               err.what());
     CL_SPROUT_DIFC_FILE_INVALID_XML.log();
+    set_alarm();
     delete root; root = NULL;
     return;
   }
@@ -112,6 +118,7 @@ void DIFCService::update_difcs()
     TRC_ERROR("Failed to parse the default IFC configuration file as it is "
               "invalid (missing DefaultIFCsSet block)");
     CL_SPROUT_DIFC_FILE_MISSING_DEFAULT_IFCS_SET.log();
+    set_alarm();
     delete root; root = NULL;
     return;
   }
@@ -120,6 +127,7 @@ void DIFCService::update_difcs()
   // default ifc list.
   // Take a lock while we do so.
   boost::lock_guard<boost::shared_mutex> write_lock(_sets_rw_lock);
+  bool any_errors = false;
   _default_ifcs.clear();
 
   // Parse any iFCs that are present.
@@ -145,6 +153,7 @@ void DIFCService::update_difcs()
                   "int. This IFC will not be included in the default IFC list",
                   priority_str.c_str());
         CL_SPROUT_DIFC_FILE_INVALID_PRIORITY.log(priority_str.c_str());
+        any_errors = true;
         continue;
       }
     }
@@ -164,6 +173,15 @@ void DIFCService::update_difcs()
   TRC_DEBUG("Adding %lu default IFC(s)", ifcs_vec.size());
   _default_ifcs = ifcs_vec;
 
+  if (any_errors)
+  {
+    set_alarm();
+  }
+  else
+  {
+    clear_alarm();
+  }
+
   delete root; root = NULL;
   return;
 }
@@ -182,3 +200,18 @@ std::vector<Ifc> DIFCService::get_default_ifcs(rapidxml::xml_document<>* ifc_doc
   return ifc_vec;
 }
 
+void DIFCService::set_alarm()
+{
+  if (_alarm)
+  {
+    _alarm->set();
+  }
+}
+
+void DIFCService::clear_alarm()
+{
+  if (_alarm)
+  {
+    _alarm->clear();
+  }
+}
