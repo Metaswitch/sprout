@@ -135,7 +135,9 @@ enum OptionTypes
   OPT_DEFAULT_TEL_URI_TRANSLATION,
   OPT_CHRONOS_HOSTNAME,
   OPT_SPROUT_CHRONOS_CALLBACK_URI,
-  OPT_ALLOW_FALLBACK_IFCS,
+  OPT_APPLY_DEFAULT_IFCS,
+  OPT_REJECT_IF_NO_MATCHING_IFCS,
+  OPT_DUMMY_APP_SERVER,
 };
 
 
@@ -222,6 +224,9 @@ const static struct pj_getopt_option long_opt[] =
   { "disable-tcp-switch",           no_argument,       0, OPT_DISABLE_TCP_SWITCH},
   { "chronos-hostname",             required_argument, 0, OPT_CHRONOS_HOSTNAME},
   { "sprout-chronos-callback-uri",  required_argument, 0, OPT_SPROUT_CHRONOS_CALLBACK_URI},
+  { "apply-default-ifcs",           no_argument,       0, OPT_APPLY_DEFAULT_IFCS},
+  { "reject-if-no-matching-ifcs",   no_argument,       0, OPT_REJECT_IF_NO_MATCHING_IFCS},
+  { "dummy-app-server",             required_argument, 0, OPT_DUMMY_APP_SERVER},
   { NULL,                           0,                 0, 0}
 };
 
@@ -432,6 +437,13 @@ static void usage(void)
        "                            Specify the sprout hostname used for Chronos callbacks. If unset \n"
        "                            the default is to use the sprout-hostname.\n"
        "                            Ignored if chronos-hostname is not set.\n"
+       "     --apply-default-ifcs   Whether calls that don't have any matching IFCs should have some \n"
+       "                            preconfigured IFCs applied instead.\n"
+       "     --reject-if-no-matching-ifcs\n"
+       "                            Whether calls that don't have any matching IFCs should be rejected.\n"
+       "     --dummy-app-server <app server URI>\n"
+       "                            If any IFC has an application server that matches the one defined here, \n"
+       "                            then the IFC is skipped over.\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
        " -F, --log-file <directory>\n"
@@ -1241,6 +1253,21 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       TRC_INFO("Sprout Chronos callback uri set to %s", pj_optarg);
       break;
 
+    case OPT_APPLY_DEFAULT_IFCS:
+      options->apply_default_ifcs = true;
+      TRC_INFO("Requests that have no matching IFCs will have some preconfigured IFCs applied");
+      break;
+
+    case OPT_REJECT_IF_NO_MATCHING_IFCS:
+      options->reject_if_no_matching_ifcs = true;
+      TRC_INFO("Requests that have no matching IFCs will be rejected");
+      break;
+
+    case OPT_DUMMY_APP_SERVER:
+      options->dummy_app_server = std::string(pj_optarg);
+      TRC_INFO("Dummy application server set to %s", pj_optarg);
+      break;
+
     case OPT_LISTEN_PORT:
       {
         int listen_port;
@@ -1396,6 +1423,8 @@ AlarmManager* alarm_manager = NULL;
 AnalyticsLogger* analytics_logger = NULL;
 ChronosConnection* chronos_connection = NULL;
 ImpiStore* impi_store = NULL;
+SIFCService* sifc_service = NULL;
+DIFCService* difc_service = NULL;
 
 /*
  * main()
@@ -1493,6 +1522,9 @@ int main(int argc, char* argv[])
   opt.scscf_node_uri = "";
   opt.sas_signaling_if = false;
   opt.disable_tcp_switch = false;
+  opt.apply_default_ifcs = false;
+  opt.reject_if_no_matching_ifcs = false;
+  opt.dummy_app_server = "";
 
   status = init_logging_options(argc, argv, &opt);
 
@@ -1732,6 +1764,7 @@ int main(int argc, char* argv[])
   SNMP::EventAccumulatorTable* homestead_sar_latency_table = NULL;
   SNMP::EventAccumulatorTable* homestead_uar_latency_table = NULL;
   SNMP::EventAccumulatorTable* homestead_lir_latency_table = NULL;
+  SNMP::CounterTable* no_shared_ifcs_set_table = NULL;
 
   SNMP::ContinuousAccumulatorByScopeTable* token_rate_table = NULL;
   SNMP::ScalarByScopeTable* smoothed_latency_scalar = NULL;
@@ -1773,6 +1806,8 @@ int main(int argc, char* argv[])
                                                                  ".1.2.826.0.1.1578918.9.3.3.5");
     homestead_lir_latency_table = SNMP::EventAccumulatorTable::create("sprout_homestead_lir_latency",
                                                                  ".1.2.826.0.1.1578918.9.3.3.6");
+    no_shared_ifcs_set_table = SNMP::CounterTable::create("no_shared_ifcs_set",
+                                                          ".1.2.826.0.1.1578918.9.3.40");
     token_rate_table = SNMP::ContinuousAccumulatorByScopeTable::create("sprout_token_rate",
                                                                        ".1.2.826.0.1.1578918.9.3.27");
     smoothed_latency_scalar = SNMP::ScalarByScopeTable::create("sprout_smoothed_latency",
@@ -1935,6 +1970,11 @@ int main(int argc, char* argv[])
   {
     // Create a connection to the HSS.
     TRC_STATUS("Creating connection to HSS %s", opt.hss_server.c_str());
+    sifc_service = new SIFCService(new Alarm(alarm_manager,
+                                             "sprout",
+                                             AlarmDef::SPROUT_SIFC_STATUS,
+                                             AlarmDef::CRITICAL),
+                                   no_shared_ifcs_set_table);
     hss_connection = new HSSConnection(opt.hss_server,
                                        http_resolver,
                                        load_monitor,
@@ -1945,8 +1985,15 @@ int main(int argc, char* argv[])
                                        homestead_uar_latency_table,
                                        homestead_lir_latency_table,
                                        hss_comm_monitor,
-                                       opt.uri_scscf);
+                                       opt.uri_scscf,
+                                       sifc_service);
   }
+
+  // Create DIFC service
+  difc_service = new DIFCService(new Alarm(alarm_manager,
+                                           "sprout",
+                                           AlarmDef::SPROUT_DIFC_STATUS,
+                                           AlarmDef::CRITICAL));
 
   // Create ENUM service.
   if (!opt.enum_servers.empty())
@@ -2407,6 +2454,8 @@ int main(int argc, char* argv[])
   delete http_stack_mgmt; http_stack_mgmt = NULL;
   delete chronos_connection;
   delete hss_connection;
+  delete difc_service;
+  delete sifc_service;
   delete quiescing_mgr;
   delete exception_handler;
   delete load_monitor;
@@ -2465,6 +2514,7 @@ int main(int argc, char* argv[])
   delete homestead_sar_latency_table;
   delete homestead_uar_latency_table;
   delete homestead_lir_latency_table;
+  delete no_shared_ifcs_set_table;
 
   delete token_rate_table;
   delete smoothed_latency_scalar;

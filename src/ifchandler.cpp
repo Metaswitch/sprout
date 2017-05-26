@@ -54,7 +54,9 @@ Ifcs::Ifcs() :
 //
 // If there are any errors, yields an empty iFC doc (but does not fail).
 Ifcs::Ifcs(std::shared_ptr<xml_document<> > ifc_doc,
-           xml_node<>* sp) :
+           xml_node<>* sp,
+           SIFCService* sifc_service,
+           SAS::TrailId trail) :
   _ifc_doc(ifc_doc)
 {
   // List sorted by priority (smallest should be handled first).
@@ -63,6 +65,37 @@ Ifcs::Ifcs(std::shared_ptr<xml_document<> > ifc_doc,
 
   if (sp)
   {
+
+    for (xml_node<>* ext = sp->first_node(RegDataXMLUtils::EXTENSION);
+         ext;
+         ext = ext->next_sibling(RegDataXMLUtils::EXTENSION))
+    {
+      std::set<int32_t> ids;
+      for (xml_node<>* sifc = ext->first_node(RegDataXMLUtils::SIFC);
+           sifc;
+           sifc = sifc->next_sibling(RegDataXMLUtils::SIFC))
+      {
+        try
+        {
+          ids.insert(XMLUtils::parse_integer(sifc,
+                                             "SharedIFCSetID",
+                                             0,
+                                             std::numeric_limits<int32_t>::max()));
+        }
+        catch (xml_error err)
+        {
+          // Ignore a shared IFC set ID which can't be parsed, and keep
+          // going with the rest.
+          TRC_ERROR("SiFC evaluation error %s", err.what());
+        }
+      }
+
+      if ((sifc_service) && (!ids.empty()))
+      {
+        sifc_service->get_ifcs_from_id(ifc_map, ids, ifc_doc, trail);
+      }
+    }
+
     // Spin through the list of filter criteria, adding each to the list.
     for (xml_node<>* ifc = sp->first_node(RegDataXMLUtils::IFC);
          ifc;
@@ -130,6 +163,8 @@ void Ifcs::interpret(const SessionCase& session_case,  //< The session case
       application_servers.push_back(it->as_invocation());
     }
   }
+
+  // TODO - waiting on spec finalization for third party registrations
 }
 
 

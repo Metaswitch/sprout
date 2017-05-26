@@ -252,6 +252,52 @@
                     "action": "Use ENT logs to identify which Application Servers cannot be successfully communicated with and investigate the cause. It might be due to failure of an AS, misconfiguration of Initial Filter Criteria, or network / DNS problems. Once the issue has been resolved this alarm will clear after approximately 5-10 minutes."
                 }
             ]
+        },
+        {
+            "index": 1011,
+            "name": "SPROUT_SIFC_STATUS",
+            "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "The configuration file for shared IFCs is valid.",
+                    "description": "sprout: The configuration file for shared IFCs is valid.",
+                    "cause": "The configuration file at /etc/clearwater/shared_ifcs.xml is valid.",
+                    "effect": "The S-CSCF can correctly translate IDs in Service Profiles sent from the HSS into Initial Filter Criteria",
+                    "action": "No action."
+                },
+                {
+                    "severity": "CRITICAL",
+                    "details": "There is at least one invalid entry in the configuration file for shared IFCs.",
+                    "description": "sprout: The configuration file for shared IFCs is invalid.",
+                    "cause": "The configuration file at /etc/clearwater/shared_ifcs.xml has at least one invalid entry.",
+                    "effect": "The S-CSCF will not be able to correctly translate IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
+                    "action": "Correct the configuration file at /etc/clearwater/shared_ifcs.xml and upload it."
+                }
+            ]
+        },
+        {
+            "index": 1012,
+            "name": "SPROUT_DIFC_STATUS",
+            "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "The configuration file for default IFCs is valid.",
+                    "description": "sprout: The configuration file for default IFCs is valid.",
+                    "cause": "The configuration file at /etc/clearwater/default_ifcs.xml is valid.",
+                    "effect": "The S-CSCF will be able to correctly apply any default IFCs.",
+                    "action": "No action."
+                },
+                {
+                    "severity": "CRITICAL",
+                    "details": "There is at least one invalid entry in the configuration file for default IFCs.",
+                    "description": "sprout: The configuration file for default IFCs is invalid.",
+                    "cause": "The configuration file at /etc/clearwater/default_ifcs.xml has at least one invalid entry.",
+                    "effect": "The S-CSCF will not be able to correctly apply any default IFCs.",
+                    "action": "Correct the configuration file at /etc/clearwater/default_ifcs.xml and upload it."
+                }
+            ]
         }
     ]
 }
