@@ -173,9 +173,11 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
   std::string id;
 
   // Find and parse the top Route header.
-  pjsip_route_hdr* route = (pjsip_route_hdr*)
-                                  pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
-
+  pjsip_route_hdr* route = NULL;
+  if (false)
+  {
+    route = (pjsip_route_hdr*) pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
+  }
 
   pjsip_sip_uri* uri = NULL;
   if (route == NULL)
