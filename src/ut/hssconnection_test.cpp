@@ -1,37 +1,12 @@
 /**
  * @file hssconnection_test.cpp UT for Sprout HSS connection.
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 ///
@@ -338,6 +313,44 @@ class HssConnectionTest : public BaseTest
           "<ECF priority=\"1\">ecf1</ECF>"
         "</ChargingAddresses>"
       "</ClearwaterRegData>";
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid47/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<ClearwaterRegData>"
+        "<RegistrationState>REGISTERED</RegistrationState>"
+        "<IMSSubscription>"
+          "<ServiceProfile>"
+            "<PublicIdentity>"
+              "<Identity>sip:123@example.com</Identity>"
+              "<BarringIndication>0</BarringIndication>"
+            "</PublicIdentity>"
+            "<PublicIdentity>"
+              "<Identity>sip:456@example.com</Identity>"
+              "<BarringIndication>1</BarringIndication>"
+            "</PublicIdentity>"
+            "<InitialFilterCriteria>"
+              "<TriggerPoint>"
+                "<ConditionTypeCNF>0</ConditionTypeCNF>"
+                "<SPT>"
+                  "<ConditionNegated>0</ConditionNegated>"
+                  "<Group>0</Group>"
+                  "<Method>INVITE</Method>"
+                  "<Extension></Extension>"
+                "</SPT>"
+              "</TriggerPoint>"
+              "<ApplicationServer>"
+                "<ServerName>mmtel.narcissi.example.com</ServerName>"
+                "<DefaultHandling>0</DefaultHandling>"
+              "</ApplicationServer>"
+            "</InitialFilterCriteria>"
+          "</ServiceProfile>"
+        "</IMSSubscription>"
+        "<ChargingAddresses>"
+          "<CCF priority=\"1\">ccf1</CCF>"
+          "<CCF priority=\"2\">ccf2</CCF>"
+          "<ECF priority=\"2\">ecf2</ECF>"
+          "<ECF priority=\"1\">ecf1</ECF>"
+        "</ChargingAddresses>"
+      "</ClearwaterRegData>";
   }
 
   virtual ~HssConnectionTest()
@@ -347,29 +360,29 @@ class HssConnectionTest : public BaseTest
 
 TEST_F(HssConnectionTest, SimpleAssociatedUris)
 {
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.get_registration_data("pubid42", regstate, ifcs_map, uris, 0);
   EXPECT_EQ("REGISTERED", regstate);
-  ASSERT_EQ(2u, uris.size());
-  EXPECT_EQ("sip:123@example.com", uris[0]);
-  EXPECT_EQ("sip:456@example.com", uris[1]);
+  ASSERT_EQ(2u, uris.get_unbarred_uris().size());
+  EXPECT_EQ("sip:123@example.com", uris.get_unbarred_uris()[0]);
+  EXPECT_EQ("sip:456@example.com", uris.get_unbarred_uris()[1]);
 }
 
 TEST_F(HssConnectionTest, SimpleNotRegisteredGet)
 {
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.get_registration_data("pubid43", regstate, ifcs_map, uris, 0);
   EXPECT_EQ("NOT_REGISTERED", regstate);
-  EXPECT_EQ(0u, uris.size());
+  EXPECT_EQ(0u, uris.get_unbarred_uris().size());
 }
 
 TEST_F(HssConnectionTest, SimpleUnregistered)
 {
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("pubid50", "", HSSConnection::CALL, regstate, ifcs_map, uris, 0);
@@ -378,7 +391,7 @@ TEST_F(HssConnectionTest, SimpleUnregistered)
 
 TEST_F(HssConnectionTest, SimpleNotRegisteredUpdate)
 {
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("pubid50", "", HSSConnection::DEREG_ADMIN, regstate, ifcs_map, uris, 0);
@@ -387,7 +400,7 @@ TEST_F(HssConnectionTest, SimpleNotRegisteredUpdate)
 
 TEST_F(HssConnectionTest, SimpleIfc)
 {
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("pubid42", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
@@ -396,7 +409,7 @@ TEST_F(HssConnectionTest, SimpleIfc)
 
 TEST_F(HssConnectionTest, SimpleChargingAddrs)
 {
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   std::deque<std::string> ccfs;
@@ -408,14 +421,27 @@ TEST_F(HssConnectionTest, SimpleChargingAddrs)
   EXPECT_EQ(actual_ecfs, ecfs);
 }
 
+TEST_F(HssConnectionTest, Barring)
+{
+  // Checks that the BarringIndication field from the HSS is parsed correctly.
+  AssociatedURIs uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+  _hss.update_registration_state("pubid47", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  EXPECT_EQ("REGISTERED", regstate);
+  ASSERT_EQ(1u, uris.get_unbarred_uris().size());
+  EXPECT_FALSE(uris.is_impu_barred("sip:123@example.com"));
+  EXPECT_TRUE(uris.is_impu_barred("sip:456@example.com"));
+}
+
 TEST_F(HssConnectionTest, BadXML)
 {
   CapturingTestLogger log;
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("pubid42_malformed", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Failed to parse Homestead response"));
 }
 
@@ -423,77 +449,77 @@ TEST_F(HssConnectionTest, BadXML)
 TEST_F(HssConnectionTest, BadXML2)
 {
   CapturingTestLogger log;
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("pubid43_malformed", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingServiceProfile)
 {
   CapturingTestLogger log;
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement4", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingPublicIdentity)
 {
   CapturingTestLogger log;
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement5", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed ServiceProfile XML"));
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingIdentity)
 {
   CapturingTestLogger log;
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement6", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed PublicIdentity XML"));
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingRegistrationState)
 {
   CapturingTestLogger log;
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement1", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed Homestead XML"));
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingClearwaterRegData)
 {
   CapturingTestLogger log;
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement3", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed Homestead XML"));
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription)
 {
   CapturingTestLogger log;
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement2", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
 }
 
@@ -501,12 +527,12 @@ TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription)
 TEST_F(HssConnectionTest, ServerFailure)
 {
   CapturingTestLogger log;
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("pubid44", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_EQ("", regstate);
-  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("http://narcissus/impu/pubid44/reg-data failed"));
 }
 
@@ -592,14 +618,14 @@ TEST_F(HssConnectionTest, SimpleAliases)
   std::vector<std::string> aliases;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  std::vector<std::string> unused_vector;
+  AssociatedURIs unused_uris;
   std::deque<std::string> unused_deque;
   _hss.update_registration_state("pubid46",
                                  "",
                                  HSSConnection::CALL,
                                  regstate,
                                  ifcs_map,
-                                 unused_vector,
+                                 unused_uris,
                                  aliases,
                                  unused_deque,
                                  unused_deque,
@@ -617,14 +643,14 @@ TEST_F(HssConnectionTest, CacheNotAllowed)
   std::vector<std::string> aliases;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  std::vector<std::string> unused_vector;
+  AssociatedURIs unused_uris;
   std::deque<std::string> unused_deque;
   HTTPCode rc = _hss.update_registration_state("public-needs-private",
                                                "a-private-id",
                                                HSSConnection::REG,
                                                regstate,
                                                ifcs_map,
-                                               unused_vector,
+                                               unused_uris,
                                                aliases,
                                                unused_deque,
                                                unused_deque,
@@ -979,7 +1005,7 @@ class HssWithSifcTest : public BaseTest
 // Check that some iFCs are returned when a shared iFC set is encountered.
 TEST_F(HssWithSifcTest, SimpleSiFC)
 {
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
 
@@ -999,7 +1025,7 @@ TEST_F(HssWithSifcTest, SimpleSiFC)
 // Check that SiFCs are compatible with iFCs.
 TEST_F(HssWithSifcTest, SifcWithIfc)
 {
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
 
@@ -1020,7 +1046,7 @@ TEST_F(HssWithSifcTest, SifcWithIfc)
 // Check that an invalid SiFC, that is not an integer, is not accepted.
 TEST_F(HssWithSifcTest, NonIntegerSifc)
 {
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
 
@@ -1032,7 +1058,7 @@ TEST_F(HssWithSifcTest, NonIntegerSifc)
 // Check that shared IFCs are read out from all Extensions present in the XML.
 TEST_F(HssWithSifcTest, MultipleExtensions)
 {
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
 
@@ -1063,7 +1089,7 @@ TEST_F(HssWithSifcTest, MultipleExtensions)
 // Check that multiple shared iFCs are parsed correctly.
 TEST_F(HssWithSifcTest, MultipleSifcs)
 {
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
 
@@ -1085,7 +1111,7 @@ TEST_F(HssWithSifcTest, MultipleSifcs)
 // ServiceProfiles.
 TEST_F(HssWithSifcTest, MultiplePubIdsWithSifcs)
 {
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
 
@@ -1116,7 +1142,7 @@ TEST_F(HssWithSifcTest, MultiplePubIdsWithSifcs)
 // iFCs.
 TEST_F(HssWithSifcTest, ComplexSifcIfcMix)
 {
-  std::vector<std::string> uris;
+  AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
 

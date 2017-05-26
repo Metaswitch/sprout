@@ -89,6 +89,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          xml_utils.cpp \
                          wildcard_utils.cpp \
                          ifc.cpp \
+                         associated_uris.cpp \
                          sifcservice.cpp \
                          difcservice.cpp
 

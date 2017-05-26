@@ -1,0 +1,85 @@
+#! /usr/bin/python
+
+# @file print-bgcf-configuration
+#
+# Copyright (C) Metaswitch Networks
+# If license terms are provided to you in a COPYING file in the root directory
+# of the source code repository by which you are accessing this code, then
+# the license outlined in that COPYING file applies to your use.
+# Otherwise no rights are granted except for those provided to you by
+# Metaswitch Networks in a separate written agreement.
+
+import json, sys
+from textwrap import dedent
+
+# Expected format for the BGCF file
+EXPECTED_FORMAT = dedent("""The expected format is:\n\
+{
+\"routes\" :
+ [
+   {
+     \"name\" : \"<route 1 descriptive name>\",
+     \"<domain|number>\" : \"<SIP trunk IP address, domain name or routing number>\",
+     \"route\" : [<\"IBCF SIP URI\">, <\"IBCF SIP URI\">,...]
+   },
+   ...
+ ]
+}""")
+
+source = sys.argv[1] if len(sys.argv) > 1 else "/etc/clearwater/bgcf.json"
+
+# This does some basic validation of the BGCF configuration file, and
+# prints the contents
+try:
+    with open(source) as bgcf_file:
+        try:
+            bgcf_data = json.load(bgcf_file)
+            routes = bgcf_data["routes"]
+
+            if routes:
+                try:
+                    for bgcf_route in routes:
+                        name = bgcf_route["name"]
+                        route = bgcf_route["route"]
+                        value = ""
+                        value_count = 0
+
+                        try:
+                            domain = bgcf_route["domain"]
+                            value = "Domain: " + domain
+                            value_count += 1
+                        except KeyError as e:
+                            pass
+
+                        try:
+                            number = bgcf_route["number"]
+                            value = "Number: " + number
+                            value_count += 1
+                        except KeyError as e:
+                            pass
+
+                        if value_count != 1:
+                            raise KeyError
+
+                        print "  Name: {}".format(name)
+                        print "  {}".format(value)
+                        print "  Route: "
+                        for route_part in route:
+                            print "    {}".format(route_part)
+                        print ""
+
+                except KeyError as e:
+                    print "Invalid BGCF entry detected in file.\n"
+                    print EXPECTED_FORMAT
+
+            else:
+                print "Configuration file is present, but contains no entries.\n"
+                print EXPECTED_FORMAT
+
+        except ValueError, KeyError:
+            print "\nInvalid BGCF file at %s\n" % source
+            print EXPECTED_FORMAT
+
+except IOError:
+    print "\nNo BGCF file at %s\n" % source
+ 
