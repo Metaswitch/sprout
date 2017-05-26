@@ -153,9 +153,9 @@ TEST_F(DIFCServiceTest, ReloadChangedDIFCFile)
   std::vector<Ifc> difc_list = difc.get_default_ifcs(root);
   EXPECT_EQ(difc_list.size(), 2);
 
-  // Change the file the difc service is using to an invalid file (to mimic the
-  // file being changed), then reload the file, and recheck the parsed list.
-  // Nothing should have changed and this should cause no memory issues.
+  // Change the file the difc service is using (to mimic the file being
+  // changed), then reload the file, and recheck the parsed list. Nothing
+  // should have changed and this should cause no memory issues.
   difc._configuration = string(UT_DIR).append("/test_difc_changed.xml");
   EXPECT_CALL(*_mock_alarm, clear()).Times(AtLeast(1));
   difc.update_difcs();

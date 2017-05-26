@@ -226,7 +226,6 @@ pjsip_status_code AsChainLink::on_initial_request(pjsip_msg* msg,
     {
       TRC_DEBUG("We've found a matching default IFC - applying it");
       SAS::Event event(msg_trail, SASEvent::FIRST_DEFAULT_IFC, 0);
-      event.add_var_param(server_name);
       SAS::report_event(event);
     }
   }

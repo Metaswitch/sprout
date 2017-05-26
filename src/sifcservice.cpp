@@ -194,7 +194,7 @@ void SIFCService::update_sets()
       ifc_set.push_back(std::make_pair(priority, ifc_str));
     }
 
-    TRC_DEBUG("Adding %lu IFCs for ID %d", ifc_set.size(), set_id);
+    TRC_STATUS("Adding %lu IFCs for ID %d", ifc_set.size(), set_id);
     _shared_ifc_sets.insert(std::make_pair(set_id, ifc_set));
   }
 
