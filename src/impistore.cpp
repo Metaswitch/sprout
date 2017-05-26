@@ -763,12 +763,10 @@ ImpiStore::Impi* ImpiStore::get_impi(const std::string& impi,
     SAS::Event event(trail, SASEvent::IMPISTORE_IMPI_GET_SUCCESS, 0);
     event.add_var_param(impi);
     SAS::report_event(event);
+
     impi_obj = ImpiStore::Impi::from_json(impi, data);
     if (impi_obj != NULL)
     {
-      // Got an IMPI.  Fill in the CAS.
-      impi_obj->_cas = cas;
-
       // If we're in Mode::READ_AV_IMPI_WRITE_AV_IMPI, spin through the
       // AuthChallenges, getting the version from the AV store if it exists.
       // In particular, this means we have the correct CAS for when we write
@@ -793,6 +791,18 @@ ImpiStore::Impi* ImpiStore::get_impi(const std::string& impi,
         }
       }
     }
+    else
+    {
+      // IMPI was corrupt. Create a new one.
+      impi_obj = new Impi(impi);
+    }
+
+    // By this point we've got an IMPI.  Fill in the CAS.
+    impi_obj->_cas = cas;
+  }
+  else if (status == Store::Status::NOT_FOUND)
+  {
+    impi_obj = new Impi(impi);
   }
   else
   {
@@ -814,18 +824,13 @@ ImpiStore::Impi* ImpiStore::get_impi_with_nonce(const std::string& impi,
   // contain an AuthChallenge matching this nonce, look up the nonce
   // explicitly.
   if ((_mode == ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI) &&
-      ((impi_obj == NULL) ||
-       (impi_obj->get_auth_challenge(nonce) == NULL)))
+      (impi_obj != NULL) &&
+      (impi_obj->get_auth_challenge(nonce) == NULL))
   {
     ImpiStore::AuthChallenge* auth_challenge = get_av(impi, nonce, trail);
     if (auth_challenge != NULL)
     {
-      // Found an AuthChallenge.  Add it to the IMPI, creating if it doesn't
-      // exist.
-      if (impi_obj == NULL)
-      {
-        impi_obj = new ImpiStore::Impi(impi);
-      }
+      // Found an AuthChallenge - add it to the IMPI.
       impi_obj->auth_challenges.push_back(auth_challenge);
       impi_obj->_nonces.push_back(nonce);
     }

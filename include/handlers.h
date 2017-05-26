@@ -88,18 +88,21 @@ public:
            std::vector<SubscriberDataManager*> remote_sdms,
            HSSConnection* hss,
            SIPResolver* sipresolver,
-           ImpiStore* impi_store) :
+           ImpiStore* local_impi_store,
+           std::vector<ImpiStore*> remote_impi_stores) :
       _sdm(sdm),
       _remote_sdms(remote_sdms),
       _hss(hss),
       _sipresolver(sipresolver),
-      _impi_store(impi_store)
+      _local_impi_store(local_impi_store),
+      _remote_impi_stores(remote_impi_stores)
     {}
     SubscriberDataManager* _sdm;
     std::vector<SubscriberDataManager*> _remote_sdms;
     HSSConnection* _hss;
     SIPResolver* _sipresolver;
-    ImpiStore* _impi_store;
+    ImpiStore* _local_impi_store;
+    std::vector<ImpiStore*> _remote_impi_stores;
   };
 
 
@@ -122,6 +125,8 @@ public:
                     std::set<std::string>& impis_to_delete);
 
 protected:
+  void delete_impi_from_store(ImpiStore* store, const std::string& impi);
+
   const Config* _cfg;
   std::map<std::string, std::string> _bindings;
   std::string _notify;
@@ -132,9 +137,11 @@ class AuthTimeoutTask : public HttpStackUtils::Task
 public:
   struct Config
   {
-  Config(ImpiStore* store, HSSConnection* hss) :
-    _impi_store(store), _hss(hss) {}
-    ImpiStore* _impi_store;
+    Config(ImpiStore* local_impi_store, HSSConnection* hss) :
+      _local_impi_store(local_impi_store),
+      _hss(hss)
+    {}
+    ImpiStore* _local_impi_store;
     HSSConnection* _hss;
   };
   AuthTimeoutTask(HttpStack::Request& req,
@@ -150,7 +157,6 @@ protected:
   std::string _impi;
   std::string _impu;
   std::string _nonce;
-
 };
 
 

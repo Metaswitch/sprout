@@ -297,6 +297,50 @@ std::set<pjmedia_type> get_media_types(const pjsip_msg *msg);
 pjsip_uri* get_next_routing_uri(const pjsip_msg* msg,
                                 pjsip_uri_context_e* context);
 
+
+/// Get a parameter from a particular route header.
+///
+/// @param route      - The route header in question.
+/// @param param_name - The name of the parameter.
+/// @param value      - The value of the parameter.
+///
+/// @return           - Whether the parameter was present or not.
+bool get_param_in_route_hdr(const pjsip_route_hdr* route,
+                            const pj_str_t* param_name,
+                            std::string& value);
+
+/// Get a parameter from the top route header on a message.
+///
+/// @param route      - The route header in question.
+/// @param param_name - The name of the parameter.
+/// @param value      - The value of the parameter.
+///
+/// @return           - Whether the parameter was present or not. This also
+/// returns false if the route header was not present.
+bool get_param_in_top_route(const pjsip_msg* req,
+                            const pj_str_t* param_name,
+                            std::string& value);
+
+/// Check whether a parameter is present in a route header.
+///
+/// @param route      - The route header in question.
+/// @param param_name - The name of the parameter.
+///
+/// @return           - Whether the parameter was present or not.
+bool is_param_in_route_hdr(const pjsip_route_hdr* route,
+                           const pj_str_t* param_name);
+
+
+/// Check whether a parameter is present in the top route header of a message.
+///
+/// @param route      - The route header in question.
+/// @param param_name - The name of the parameter.
+/// @param value      - The value of the parameter.
+///
+/// @return           - Whether the parameter was present or not.
+bool is_param_in_top_route(const pjsip_msg* req,
+                           const pj_str_t* param_name);
+
 } // namespace PJUtils
 
 #endif
