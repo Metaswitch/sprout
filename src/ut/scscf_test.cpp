@@ -1,37 +1,12 @@
 /**
  * @file scscf_test.cpp UT for S-CSCF functionality
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 #include <string>
@@ -68,6 +43,133 @@ using testing::Not;
 using testing::_;
 using testing::NiceMock;
 using testing::HasSubstr;
+
+const std::string IMS_SUB_BARRED_MULTIPLE_WILDCARD =
+                               "<IMSSubscription>\n"
+                               "  <ServiceProfile>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:610@homedomain</Identity>"
+                               "    </PublicIdentity>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:6!.*!@homedomain</Identity>"
+                               "    </PublicIdentity>\n"
+                               "    <InitialFilterCriteria>\n"
+                               "      <Priority>1</Priority>\n"
+                               "      <ApplicationServer>\n"
+                               "        <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                               "        <DefaultHandling>0</DefaultHandling>\n"
+                               "      </ApplicationServer>\n"
+                               "    </InitialFilterCriteria>\n"
+                               "  </ServiceProfile>\n"
+                               "  <ServiceProfile>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:611@homedomain</Identity>"
+                               "    </PublicIdentity>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:65!.*!@homedomain</Identity>"
+                               "    </PublicIdentity>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:650!.*!@homedomain</Identity>"
+                               "    </PublicIdentity>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:6505551000@homedomain</Identity>"
+                               "      <BarringIndication>1</BarringIndication>"
+                               "      <Extension>"
+                               "        <IdentityType>3</IdentityType>"
+                               "        <Extension>"
+                               "          <Extension>"
+                               "            <WildcardedIMPU>sip:65!.*!@homedomain</WildcardedIMPU>"
+                               "          </Extension>"
+                               "        </Extension>"
+                               "      </Extension>"
+                               "    </PublicIdentity>\n"
+                               "    <InitialFilterCriteria>\n"
+                               "      <Priority>1</Priority>\n"
+                               "      <ApplicationServer>\n"
+                               "        <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                               "        <DefaultHandling>0</DefaultHandling>\n"
+                               "      </ApplicationServer>\n"
+                               "    </InitialFilterCriteria>\n"
+                               "  </ServiceProfile>\n"
+                               "  <ServiceProfile>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:612@homedomain</Identity>"
+                               "    </PublicIdentity>\n"
+                               "    <PublicIdentity>"
+                               "      <Identity>sip:!.*!@homedomain</Identity>"
+                               "    </PublicIdentity>\n"
+                               "    <InitialFilterCriteria>\n"
+                               "      <Priority>1</Priority>\n"
+                               "      <ApplicationServer>\n"
+                               "        <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                               "        <DefaultHandling>0</DefaultHandling>\n"
+                               "      </ApplicationServer>\n"
+                               "    </InitialFilterCriteria>\n"
+                               "  </ServiceProfile>\n"
+                               "</IMSSubscription>";
+const std::string IMS_SUB_BARRED_WILDCARD =
+                               "<IMSSubscription><ServiceProfile>\n"
+                               "  <PublicIdentity>"
+                               "    <Identity>sip:610@homedomain</Identity>"
+                               "  </PublicIdentity>\n"
+                               "  <PublicIdentity>"
+                               "    <Identity>sip:65!.*!@homedomain</Identity>"
+                               "    <BarringIndication>1</BarringIndication>"
+                               "  </PublicIdentity>\n"
+                               "  <InitialFilterCriteria>\n"
+                               "    <Priority>1</Priority>\n"
+                               "    <TriggerPoint>\n"
+                               "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                               "    <SPT>\n"
+                               "      <ConditionNegated>1</ConditionNegated>\n"
+                               "      <Group>0</Group>\n"
+                               "      <Method>INVITE</Method>\n"
+                               "      <Extension></Extension>\n"
+                               "    </SPT>\n"
+                               "  </TriggerPoint>\n"
+                               "  <ApplicationServer>\n"
+                               "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                               "    <DefaultHandling>0</DefaultHandling>\n"
+                               "  </ApplicationServer>\n"
+                               "  </InitialFilterCriteria>\n"
+                               "</ServiceProfile></IMSSubscription>";
+const std::string IMS_SUB_BARRED_IMPU_IN_WILDCARD =
+                               "<IMSSubscription><ServiceProfile>\n"
+                               "  <PublicIdentity>"
+                               "    <Identity>sip:610@homedomain</Identity>"
+                               "  </PublicIdentity>\n"
+                               "  <PublicIdentity>"
+                               "    <Identity>sip:65!.*!@homedomain</Identity>"
+                               "  </PublicIdentity>\n"
+                               "  <PublicIdentity>"
+                               "    <Identity>sip:6505551000@homedomain</Identity>"
+                               "    <BarringIndication>1</BarringIndication>"
+                               "    <Extension>"
+                               "      <IdentityType>3</IdentityType>"
+                               "      <Extension>"
+                               "        <Extension>"
+                               "          <WildcardedIMPU>sip:65!.*!@homedomain</WildcardedIMPU>"
+                               "        </Extension>"
+                               "      </Extension>"
+                               "    </Extension>"
+                               "  </PublicIdentity>\n"
+                               "  <InitialFilterCriteria>\n"
+                               "    <Priority>1</Priority>\n"
+                               "    <TriggerPoint>\n"
+                               "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                               "    <SPT>\n"
+                               "      <ConditionNegated>1</ConditionNegated>\n"
+                               "      <Group>0</Group>\n"
+                               "      <Method>INVITE</Method>\n"
+                               "      <Extension></Extension>\n"
+                               "    </SPT>\n"
+                               "  </TriggerPoint>\n"
+                               "  <ApplicationServer>\n"
+                               "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                               "    <DefaultHandling>0</DefaultHandling>\n"
+                               "  </ApplicationServer>\n"
+                               "  </InitialFilterCriteria>\n"
+                               "</ServiceProfile></IMSSubscription>";
 
 namespace SP
 {
@@ -273,6 +375,8 @@ public:
     _enum_service = new JSONEnumService(string(UT_DIR).append("/test_stateful_proxy_enum.json"));
 
     _acr_factory = new ACRFactory();
+    _difc_service = new DIFCService(NULL, string(UT_DIR).append("/test_scscf_difc.xml"));
+
     // Schedule timers.
     SipTest::poll();
   }
@@ -282,7 +386,7 @@ public:
     // Shut down the transaction module first, before we destroy the
     // objects that might handle any callbacks!
     pjsip_tsx_layer_destroy();
-    delete _acr_factory; _acr_factory = NULL;
+    delete _difc_service; _difc_service = NULL;
     delete _sdm; _sdm = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
     delete _local_data_store; _local_data_store = NULL;
@@ -302,8 +406,8 @@ public:
 
     _hss_connection = new FakeHSSConnection();
 
-
     // Create the S-CSCF Sproutlet.
+    IFCConfiguration ifc_configuration(false, false, "sip:DUMMY_AS", NULL, NULL);
     _scscf_sproutlet = new SCSCFSproutlet("scscf",
                                           "scscf",
                                           "sip:scscf.homedomain:5058;transport=tcp",
@@ -320,6 +424,8 @@ public:
                                           &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
                                           &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
                                           false,
+                                          _difc_service,
+                                          ifc_configuration,
                                           3000, // Session continue timeout - different from default
                                           6000, // Session terminated timeout - different from default
                                           _sess_term_comm_tracker,
@@ -453,6 +559,7 @@ protected:
   static BgcfService* _bgcf_service;
   static EnumService* _enum_service;
   static ACRFactory* _acr_factory;
+  static DIFCService* _difc_service;
   SCSCFSproutlet* _scscf_sproutlet;
   BGCFSproutlet* _bgcf_sproutlet;
   Mmtel* _mmtel;
@@ -495,6 +602,7 @@ FakeXDMConnection* SCSCFTest::_xdm_connection;
 BgcfService* SCSCFTest::_bgcf_service;
 EnumService* SCSCFTest::_enum_service;
 ACRFactory* SCSCFTest::_acr_factory;
+DIFCService* SCSCFTest::_difc_service;
 MockAsCommunicationTracker* SCSCFTest::_sess_term_comm_tracker;
 MockAsCommunicationTracker* SCSCFTest::_sess_cont_comm_tracker;
 
@@ -1311,6 +1419,155 @@ TEST_F(SCSCFTest, TestBadScheme)
   Message msg;
   msg._toscheme = "sips";
   doFastFailureFlow(msg, 416);  // bad scheme
+}
+
+TEST_F(SCSCFTest, TestBarredCaller)
+{
+  // Tests that a call attempt from a barred caller is rejected with a 403.
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "REGISTERED",
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "  <PublicIdentity>"
+                                   "    <Identity>sip:6505551000@homedomain</Identity>"
+                                   "    <BarringIndication>1</BarringIndication>"
+                                   "  </PublicIdentity>\n"
+                                   "  <InitialFilterCriteria>\n"
+                                   "    <Priority>1</Priority>\n"
+                                   "    <TriggerPoint>\n"
+                                   "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                   "      <SPT>\n"
+                                   "        <ConditionNegated>1</ConditionNegated>\n"
+                                   "        <Group>0</Group>\n"
+                                   "        <Method>INVITE</Method>\n"
+                                   "        <Extension></Extension>\n"
+                                   "      </SPT>\n"
+                                   "    </TriggerPoint>\n"
+                                   "    <ApplicationServer>\n"
+                                   "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                   "      <DefaultHandling>0</DefaultHandling>\n"
+                                   "    </ApplicationServer>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  doSlowFailureFlow(msg, 403);
+}
+
+TEST_F(SCSCFTest, TestBarredCallee)
+{
+  // Tests that a call to a barred callee is rejected with a 404.
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", "REGISTERED",
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity><BarringIndication>1</BarringIndication></PublicIdentity>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>1</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+  Message msg;
+  doSlowFailureFlow(msg, 404);
+}
+
+// Test that a call from an IMPU that belongs to a barred wildcarded public
+// identity is rejected with a 403 (forbidden). The IMPU isn't included as
+// a non-distinct IMPU in the HSS response.
+TEST_F(SCSCFTest, TestBarredWildcardCaller)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   IMS_SUB_BARRED_WILDCARD);
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  doSlowFailureFlow(msg, 403);
+}
+
+// Test that a call to an IMPU that belongs to a barred wildcarded public
+// identity is rejected with a 404 (not found). The IMPU isn't included as
+// a non-distinct IMPU in the HSS response.
+TEST_F(SCSCFTest, TestBarredWildcardCallee)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   IMS_SUB_BARRED_WILDCARD);
+  Message msg;
+  doSlowFailureFlow(msg, 404);
+}
+
+// Test that a call from a barred IMPU that belongs to a non-barred wildcarded
+// public identity is rejected with a 403 (forbidden). The IMPU is included as
+// a non-distinct IMPU in the HSS response.
+TEST_F(SCSCFTest, TestWildcardBarredCaller)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   IMS_SUB_BARRED_IMPU_IN_WILDCARD);
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  doSlowFailureFlow(msg, 403);
+}
+
+// Test that a call to a barred IMPU that belongs to a non-barred wildcarded
+// public identity is rejected with a 404. The IMPU is included as a
+// non-distinct IMPU in the HSS response.
+TEST_F(SCSCFTest, TestWildcardBarredCallee)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   IMS_SUB_BARRED_IMPU_IN_WILDCARD);
+  Message msg;
+  doSlowFailureFlow(msg, 404);
+}
+
+// Test that a call from a barred IMPU that belongs to a non-barred wildcarded
+// public identity is rejected with a 403. The HSS response includes multiple
+// wildcard identities that could match the IMPU, so this checks that the
+// correct identity is selected.
+TEST_F(SCSCFTest, TestBarredMultipleWildcardCaller)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   IMS_SUB_BARRED_MULTIPLE_WILDCARD);
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  doSlowFailureFlow(msg, 403);
+}
+
+// Test that a call to a barred IMPU that belongs to a non-barred wildcarded
+// public identity is rejected with a 404. The HSS response includes multiple
+// wildcard identities that could match the IMPU, so this checks that the
+// correct identity is selected.
+TEST_F(SCSCFTest, TestBarredMultipleWildcardCallee)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   IMS_SUB_BARRED_MULTIPLE_WILDCARD);
+  Message msg;
+  doSlowFailureFlow(msg, 404);
 }
 
 TEST_F(SCSCFTest, TestSimpleTelURI)
@@ -9372,3 +9629,498 @@ TEST_F(SCSCFTest, TestAddStoredPathURI)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
+TEST_F(SCSCFTest, TestCallerNotBarred)
+{
+  SCOPED_TRACE("");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+
+  // The primary IMPU is barred, but this shouldn't stop us making a call since
+  // we are calling from one of the other IMPUs.
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "REGISTERED",
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551001@homedomain</Identity><BarringIndication>1</BarringIndication></PublicIdentity>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>1</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
+}
+
+TEST_F(SCSCFTest, TestCalleeNotBarred)
+{
+  SCOPED_TRACE("");
+
+  // Need to use the first unbarred identity since that is the key used in memcached.
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+
+  // The primary IMPU is barred, but this shouldn't stop us making a call since
+  // we are calling one of the other IMPUs.
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", "REGISTERED",
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551235@homedomain</Identity><BarringIndication>1</BarringIndication></PublicIdentity>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>1</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+  Message msg;
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
+}
+
+// Test emergency registrations receive calls when barred.
+TEST_F(SCSCFTest, TestEmergencyCalleeNotBarred)
+{
+  SCOPED_TRACE("");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;sos;ob", 3600, "", true);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", "REGISTERED",
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity><BarringIndication>1</BarringIndication></PublicIdentity>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>1</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+  Message msg;
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
+}
+
+// Test only emergency registrations in an implicit registration set receive
+// calls to barred IMPUs.
+TEST_F(SCSCFTest, TestEmergencyMultipleBindings)
+{
+  SCOPED_TRACE("");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;sos;ob", 3600, "", true);
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:fowertreetoowun@10.114.61.213:5061;transport=tcp;ob", 3600, "", false);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", "REGISTERED",
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity><BarringIndication>1</BarringIndication></PublicIdentity>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>1</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+  Message msg;
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
+}
+
+// Check that a request with no matching IFCs is rejected.
+TEST_F(SCSCFTest, NoMatchingIFCsReject)
+{
+  _scscf_sproutlet->_ifc_configuration._reject_if_no_matching_ifcs = true;
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "    <Priority>0</Priority>\n"
+                                   "    <TriggerPoint>\n"
+                                   "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                   "    <SPT>\n"
+                                   "      <ConditionNegated>0</ConditionNegated>\n"
+                                   "      <Group>0</Group>\n"
+                                   "      <Method>PUBLISH</Method>\n"
+                                   "      <Extension></Extension>\n"
+                                   "    </SPT>\n"
+                                   "  </TriggerPoint>\n"
+                                   "  <ApplicationServer>\n"
+                                   "    <ServerName>sip:DUMMY_AS</ServerName>\n"
+                                   "    <DefaultHandling>0</DefaultHandling>\n"
+                                   "  </ApplicationServer>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  free_txdata();
+
+  // Request is rejected with a 400.
+  out = current_txdata()->msg;
+  RespMatcher(400).matches(out);
+  tpBono.expect_target(current_txdata(), true);
+  free_txdata();
+}
+
+// Test that we use default IFCs if there are no matching IFCs, and that the
+// application server flows are as expected.
+TEST_F(SCSCFTest, NoMatchingIFCsUseDefaultIFCs)
+{
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _scscf_sproutlet->_ifc_configuration._apply_default_ifcs = true;
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "    <Priority>0</Priority>\n"
+                                   "    <TriggerPoint>\n"
+                                   "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                   "    <SPT>\n"
+                                   "      <ConditionNegated>0</ConditionNegated>\n"
+                                   "      <Group>0</Group>\n"
+                                   "      <Method>PUBLISH</Method>\n"
+                                   "      <Extension></Extension>\n"
+                                   "    </SPT>\n"
+                                   "    </TriggerPoint>\n"
+                                   "    <ApplicationServer>\n"
+                                   "      <ServerName>sip:1.2.3.5:56789;transport=UDP</ServerName>\n"
+                                   "      <DefaultHandling>0</DefaultHandling>\n"
+                                   "    </ApplicationServer>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.5", 56789);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  free_txdata();
+
+  // INVITE passed on to AS1
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS1.expect_target(current_txdata(), false);
+
+  // ---------- AS1 sends a 100 Trying to indicate it has received the request.
+  string fresp = respond_to_txdata(current_txdata(), 100);
+  inject_msg(fresp, &tpAS1);
+
+  // ---------- AS1 turns it around (acting as proxy)
+  const pj_str_t STR_ROUTE = pj_str("Route");
+  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS1);
+  free_txdata();
+
+  // 100 Trying goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS1
+  out = current_txdata()->msg;
+  ReqMatcher r2("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r2.matches(out));
+
+  tpAS1.expect_target(current_txdata(), false);
+
+  // ---------- AS1 sends a 100 Trying to indicate it has received the request.
+  fresp = respond_to_txdata(current_txdata(), 100);
+  inject_msg(fresp, &tpAS1);
+
+  // ---------- AS1 turns it around (acting as proxy)
+  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS1);
+  free_txdata();
+
+  // 100 Trying goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to final destination
+  out = current_txdata()->msg;
+  ReqMatcher r3("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r3.matches(out));
+
+  tpBono.expect_target(current_txdata(), false);
+
+  // Target sends back 100 Trying
+  inject_msg(respond_to_txdata(current_txdata(), 100), &tpBono);
+  pjsip_tx_data* txdata = pop_txdata();
+
+  // Send a 200 ringing back down the chain to finish the transaction. This is a
+  // more realistic test of AS communication tracking.
+  send_response_back_through_dialog(respond_to_txdata(txdata, 200), 200, 2);
+  pjsip_tx_data_dec_ref(txdata); txdata = NULL;
+}
+
+// Test that if a user only has dummy application servers, then no application
+// servers are triggered.
+TEST_F(SCSCFTest, OnlyDummyApplicationServers)
+{
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "    <Priority>0</Priority>\n"
+                                   "    <TriggerPoint>\n"
+                                   "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                   "    <SPT>\n"
+                                   "      <ConditionNegated>0</ConditionNegated>\n"
+                                   "      <Group>0</Group>\n"
+                                   "      <Method>INVITE</Method>\n"
+                                   "      <Extension></Extension>\n"
+                                   "    </SPT>\n"
+                                   "  </TriggerPoint>\n"
+                                   "  <ApplicationServer>\n"
+                                   "    <ServerName>sip:DUMMY_AS</ServerName>\n"
+                                   "    <DefaultHandling>0</DefaultHandling>\n"
+                                   "  </ApplicationServer>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "  <InitialFilterCriteria>\n"
+                                   "    <Priority>1</Priority>\n"
+                                   "    <TriggerPoint>\n"
+                                   "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                   "    <SPT>\n"
+                                   "      <ConditionNegated>0</ConditionNegated>\n"
+                                   "      <Group>0</Group>\n"
+                                   "      <Method>INVITE</Method>\n"
+                                   "      <Extension></Extension>\n"
+                                   "    </SPT>\n"
+                                   "  </TriggerPoint>\n"
+                                   "  <ApplicationServer>\n"
+                                   "    <ServerName>sip:DUMMY_AS</ServerName>\n"
+                                   "    <DefaultHandling>0</DefaultHandling>\n"
+                                   "  </ApplicationServer>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  free_txdata();
+
+  // Check that there's a 404 - no attempt to send via an application server
+  // (it's a 404 as the terminating subscriber isn't registered to make this UT
+  // simpler).
+  out = current_txdata()->msg;
+  RespMatcher(404).matches(out);
+  tpBono.expect_target(current_txdata(), true);
+  free_txdata();
+}
+
+// Test that if a user has a mix of real and dummy application servers, only
+// the real application servers are triggered.
+TEST_F(SCSCFTest, MixedRealAndDummyApplicationServer)
+{
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>0</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:DUMMY_AS</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>2</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:DUMMY_AS</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(StrEq("sip:1.2.3.4:56789;transport=UDP")));
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS1
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS1.expect_target(current_txdata(), false);
+
+  // ---------- AS1 sends a 100 Trying to indicate it has received the request.
+  string fresp = respond_to_txdata(current_txdata(), 100);
+  inject_msg(fresp, &tpAS1);
+
+  // ---------- AS1 turns it around (acting as proxy)
+  const pj_str_t STR_ROUTE = pj_str("Route");
+  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS1);
+  free_txdata();
+
+  // 100 Trying goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to final destination
+  out = current_txdata()->msg;
+  ReqMatcher r2("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r2.matches(out));
+
+  tpBono.expect_target(current_txdata(), false);
+
+  // Target sends back 100 Trying
+  inject_msg(respond_to_txdata(current_txdata(), 100), &tpBono);
+  pjsip_tx_data* txdata = pop_txdata();
+
+  // Send a 200 ringing back down the chain to finish the transaction. This is a
+  // more realistic test of AS communication tracking.
+  send_response_back_through_dialog(respond_to_txdata(txdata, 200), 200, 2);
+  pjsip_tx_data_dec_ref(txdata); txdata = NULL;
+}

@@ -1,42 +1,12 @@
 /**
  * @file pjutils.h Helper functions for working with pjsip types.
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
- *
- * Parts of this header were derived from GPL licensed PJSIP sample code
- * with the following copyrights.
- *   Copyright (C) 2008-2011 Teluu Inc. (http://www.teluu.com)
- *   Copyright (C) 2003-2008 Benny Prijono <benny@prijono.org>
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 #ifndef PJUTILS_H__
@@ -200,10 +170,21 @@ void set_dest_info(pjsip_tx_data* tdata, const AddrInfo& ai);
 
 void generate_new_branch_id(pjsip_tx_data* tdata);
 
+class Callback
+{
+public:
+  virtual void run() = 0;
+  virtual ~Callback() {}
+};
+
+// A function that takes a token and a pjsip_event, and returns a Callback
+// object that can safely be run on another thread.
+typedef Callback* (*send_callback_builder)(void* token, pjsip_event* event);
+
 pj_status_t send_request(pjsip_tx_data* tdata,
                          int retries=0,
                          void* token=NULL,
-                         pjsip_endpt_send_callback cb=NULL,
+                         send_callback_builder cb=NULL,
                          bool log_sas_branch = false);
 
 pj_status_t send_request_stateless(pjsip_tx_data* tdata,
@@ -296,6 +277,7 @@ void update_request_uri_np_data(pjsip_msg* req,
 bool should_update_np_data(URIClass old_uri_class,
                            URIClass new_uri_class,
                            std::string& new_uri_str,
+                           std::string& new_routing_number,
                            bool should_override_npdi,
                            SAS::TrailId trail);
 

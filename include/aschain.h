@@ -1,37 +1,12 @@
 /**
  * @file aschain.h The AS chain data type.
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 #pragma once
@@ -49,10 +24,33 @@ extern "C" {
 #include "sessioncase.h"
 #include "ifchandler.h"
 #include "acr.h"
-
+#include "difcservice.h"
 
 // Forward declarations.
 class UASTransaction;
+
+/// Structure that holds IFC configuration that isn't covered by the TS specs
+// (e.g. default and dummy IFCs).
+struct IFCConfiguration
+{
+  bool _apply_default_ifcs;
+  bool _reject_if_no_matching_ifcs;
+  std::string _dummy_as;
+  SNMP::CounterTable* _no_matching_ifcs_tbl;
+  SNMP::CounterTable* _no_matching_default_ifcs_tbl;
+
+  IFCConfiguration(bool apply_default_ifcs,
+                   bool reject_if_no_matching_ifcs,
+                   std::string dummy_as,
+                   SNMP::CounterTable* no_matching_ifcs_tbl,
+                   SNMP::CounterTable* no_matching_default_ifcs_tbl) :
+    _apply_default_ifcs(apply_default_ifcs),
+    _reject_if_no_matching_ifcs(reject_if_no_matching_ifcs),
+    _dummy_as(dummy_as),
+    _no_matching_ifcs_tbl(no_matching_ifcs_tbl),
+    _no_matching_default_ifcs_tbl(no_matching_default_ifcs_tbl)
+  {}
+};
 
 /// Short-lived data structure holding the details of a calculated target.
 struct Target
@@ -115,7 +113,9 @@ private:
           bool is_registered,
           SAS::TrailId trail,
           Ifcs& ifcs,
-          ACR* acr);
+          ACR* acr,
+          DIFCService* difc_service,
+          IFCConfiguration ifc_configuration);
   ~AsChain();
 
   bool inc_ref()
@@ -149,6 +149,9 @@ private:
   size_t size() const;
   SAS::TrailId trail() const;
   ACR* acr() const;
+  std::vector<Ifc> default_ifcs() const;
+  IFCConfiguration ifc_configuration() const;
+  bool using_standard_ifcs() const;
 
   AsChainTable* const _as_chain_table;
   std::atomic<int> _refs;
@@ -179,6 +182,12 @@ private:
 
   /// A pointer to the ACR for this chain if Rf billing is enabled.
   ACR* _acr;
+
+  /// Member variables covering the IFCs for the ASChain.
+  std::vector<Ifc> _default_ifcs;
+  IFCConfiguration _ifc_configuration;
+  bool _using_standard_ifcs;
+  rapidxml::xml_document<>* _root;
 };
 
 
@@ -331,11 +340,13 @@ public:
                                      bool is_registered,
                                      SAS::TrailId trail,
                                      Ifcs& ifcs,
-                                     ACR* acr);
+                                     ACR* acr,
+                                     DIFCService* difc_service,
+                                     IFCConfiguration ifc_configuration);
 
-  void on_initial_request(pjsip_msg* msg,
-                          std::string& server_name,
-                          SAS::TrailId msg_trail);
+  pjsip_status_code on_initial_request(pjsip_msg* msg,
+                                       std::string& server_name,
+                                       SAS::TrailId msg_trail);
 
   /// Interrupt AS processing on this chain link. This prevents any more
   /// application servers from being invoked.
@@ -360,6 +371,11 @@ private:
     _interrupted(false)
   {
   }
+
+  void get_next_application_server(pjsip_msg* msg,
+                                   std::string& server_name,
+                                   bool& got_dummy_as,
+                                   SAS::TrailId msg_trail);
 
   /// Pointer to the owning AsChain object.
   AsChain* _as_chain;

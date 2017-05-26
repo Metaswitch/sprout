@@ -19,7 +19,7 @@
                     "description": "Sprout: Process failure.",
                     "cause": "The system has detected that the Sprout process has failed. Monit will automatically attempt to restart it. If this alarm does not clear, the Sprout process may have been stopped or an unrecoverable failure may have occurred.",
                     "effect": "In progress I-CSCF, S-CSCF, and BGCF SIP transactions are interrupted and may require retransmission by the SIP clients. If a single Sprout process failed then there is no significant effect to traffic capacity. If multiple Sprout processes fail then calls will fail and traffic capacity will be reduced.",
-                    "action": "The process will automatically be restarted and the craftsperson must monitor for the alarm to clear and confirm that the I-CSCF, S-CSCF, and BGCF are operating normally. If the failed Sprout node fails to return to service then contact your support representative."
+                    "action": "The process will automatically be restarted. Monitor for the alarm to clear and confirm that the I-CSCF, S-CSCF, and BGCF are operating normally. If the failed Sprout node fails to return to service then contact your support representative."
                 }
             ]
         },
@@ -213,7 +213,7 @@
             "name": "SPROUT_SESS_TERMINATED_AS_COMM_ERROR",
             "levels" : [
                 {
-                    "severity": "cleared",
+                    "severity": "CLEARED",
                     "details": "Sprout communication to all active session terminated Application Servers has been restored.",
                     "description": "Sprout: Communication error to session terminated Application Servers cleared.",
                     "cause": "Sprout communication to all active Application Servers that use session terminated iFC default handling has been restored. The previously issued alarm has been cleared. ",
@@ -221,7 +221,7 @@
                     "action": "No action."
                 },
                 {
-                    "severity": "major",
+                    "severity": "MAJOR",
                     "details": "Sprout cannot successfully communicate with one or more Application Servers that use session terminated default handling. Check that all ASs are operational, they have network connectivity to Sprout, and iFCs are properly configured.",
                     "description": "Sprout: Communication error to session terminated Application Server.",
                     "cause": "Sprout is unable to successfully communicate with at least one active Application Server that uses session terminated iFC default handling. ",
@@ -236,7 +236,7 @@
             "name": "SPROUT_SESS_CONTINUED_AS_COMM_ERROR",
             "levels": [
                 {
-                    "severity": "cleared",
+                    "severity": "CLEARED",
                     "details": "Sprout communication to all active session continued Application Servers has been restored",
                     "description": "Sprout: Communication error to session continued Application Servers cleared.",
                     "cause": "Sprout communication to all active Application Servers that use session continued iFC default handling has been restored. The previously issued alarm has been cleared.",
@@ -244,12 +244,58 @@
                     "action": "No action"
                 },
                 {
-                    "severity": "minor",
+                    "severity": "MINOR",
                     "details": "Sprout cannot successfully communicate with one or more Application Servers that use session continued default handling. Check that all ASs are operational, they have network connectivity to Sprout, and iFCs are properly configured.",
                     "description": "Sprout: Communication error to session continued Application Server.",
                     "cause": "Sprout is unable to successfully communicate with at least one active Application Server that uses session continued iFC default handling.",
                     "effect": "Probable minor degradation of service, or loss of a supplemental service. The precise impact will vary depending on the role of Application Servers in the deployment.",
                     "action": "Use ENT logs to identify which Application Servers cannot be successfully communicated with and investigate the cause. It might be due to failure of an AS, misconfiguration of Initial Filter Criteria, or network / DNS problems. Once the issue has been resolved this alarm will clear after approximately 5-10 minutes."
+                }
+            ]
+        },
+        {
+            "index": 1011,
+            "name": "SPROUT_SIFC_STATUS",
+            "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "The configuration file for shared IFCs is valid.",
+                    "description": "sprout: The configuration file for shared IFCs is valid.",
+                    "cause": "The configuration file at /etc/clearwater/shared_ifcs.xml is valid.",
+                    "effect": "The S-CSCF can correctly translate IDs in Service Profiles sent from the HSS into Initial Filter Criteria",
+                    "action": "No action."
+                },
+                {
+                    "severity": "CRITICAL",
+                    "details": "There is at least one invalid entry in the configuration file for shared IFCs.",
+                    "description": "sprout: The configuration file for shared IFCs is invalid.",
+                    "cause": "The configuration file at /etc/clearwater/shared_ifcs.xml has at least one invalid entry.",
+                    "effect": "The S-CSCF will not be able to correctly translate IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
+                    "action": "Correct the configuration file at /etc/clearwater/shared_ifcs.xml and upload it."
+                }
+            ]
+        },
+        {
+            "index": 1012,
+            "name": "SPROUT_DIFC_STATUS",
+            "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "The configuration file for default IFCs is valid.",
+                    "description": "sprout: The configuration file for default IFCs is valid.",
+                    "cause": "The configuration file at /etc/clearwater/default_ifcs.xml is valid.",
+                    "effect": "The S-CSCF will be able to correctly apply any default IFCs.",
+                    "action": "No action."
+                },
+                {
+                    "severity": "CRITICAL",
+                    "details": "There is at least one invalid entry in the configuration file for default IFCs.",
+                    "description": "sprout: The configuration file for default IFCs is invalid.",
+                    "cause": "The configuration file at /etc/clearwater/default_ifcs.xml has at least one invalid entry.",
+                    "effect": "The S-CSCF will not be able to correctly apply any default IFCs.",
+                    "action": "Correct the configuration file at /etc/clearwater/default_ifcs.xml and upload it."
                 }
             ]
         }

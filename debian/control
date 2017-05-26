@@ -66,7 +66,7 @@ Description: Debugging symbols for sprout, the SIP Router
 
 Package: sprout-scscf
 Architecture: any
-Depends: sprout-base
+Depends: sprout-base, libxml2-utils
 Suggests: sprout-scscf-dbg
 Description: sprout-scscf, the SIP Router S-CSCF plug-in
 

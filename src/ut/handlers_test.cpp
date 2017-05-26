@@ -1,37 +1,12 @@
 /**
  * @file handlers_test.cpp UT for Handlers module.
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 #include "test_utils.hpp"
@@ -196,6 +171,10 @@ TEST_F(AoRTimeoutTasksTest, MainlineTest)
   // Set up IRS IMPU list to be returned by the mocked get_registration_data call.
   // Add a bunch of random IMPUs to this list - they should all be passed to set_aor_data.
   std::vector<std::string> irs_impus;
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri("tel:6505550232", false);
+  associated_uris.add_uri(aor_id, false);
+  associated_uris.add_uri("sip:another_user@another_domain.com", false);
   irs_impus.push_back("tel:6505550232");
   irs_impus.push_back(aor_id);
   irs_impus.push_back("sip:another_user@another_domain.com");
@@ -204,7 +183,7 @@ TEST_F(AoRTimeoutTasksTest, MainlineTest)
     InSequence s;
       EXPECT_CALL(*stack, send_reply(_, 200, _));
       EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _))
-           .WillOnce(DoAll(SetArgReferee<3>(std::vector<std::string>(irs_impus)), //IMPUs in IRS
+           .WillOnce(DoAll(SetArgReferee<3>(AssociatedURIs(associated_uris)), //IMPUs in IRS
                            Return(HTTP_OK)));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor));
       EXPECT_CALL(*store, set_aor_data(aor_id, irs_impus, aor, _, _)).WillOnce(Return(Store::OK));
@@ -326,13 +305,15 @@ TEST_F(AoRTimeoutTasksTest, LocalAoRNoBindingsTest)
 
   // Set up IRS IMPU list to be returned by the mocked get_registration_data call
   std::vector<std::string> irs_impus;
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri(aor_id, false);
   irs_impus.push_back(aor_id);
 
   {
     InSequence s;
       EXPECT_CALL(*stack, send_reply(_, 200, _));
       EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _))
-           .WillOnce(DoAll(SetArgReferee<3>(std::vector<std::string>(irs_impus)), //IMPUs in IRS
+           .WillOnce(DoAll(SetArgReferee<3>(AssociatedURIs(associated_uris)), //IMPUs in IRS
                            Return(HTTP_OK)));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
@@ -381,13 +362,15 @@ TEST_F(AoRTimeoutTasksTest, NoBindingsTest)
 
   // Set up IRS IMPU list to be returned by the mocked get_registration_data call
   std::vector<std::string> irs_impus;
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri(aor_id, false);
   irs_impus.push_back(aor_id);
 
   {
     InSequence s;
       EXPECT_CALL(*stack, send_reply(_, 200, _));
       EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _))
-           .WillOnce(DoAll(SetArgReferee<3>(std::vector<std::string>(irs_impus)), //IMPUs in IRS
+           .WillOnce(DoAll(SetArgReferee<3>(AssociatedURIs(associated_uris)), //IMPUs in IRS
                            Return(HTTP_OK)));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
@@ -424,13 +407,15 @@ TEST_F(AoRTimeoutTasksTest, NullAoRTest)
 
   // Set up IRS IMPU list to be returned by the mocked get_registration_data call
   std::vector<std::string> irs_impus;
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri(aor_id, false);
   irs_impus.push_back(aor_id);
 
   {
     InSequence s;
       EXPECT_CALL(*stack, send_reply(_, 200, _));
       EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _))
-           .WillOnce(DoAll(SetArgReferee<3>(std::vector<std::string>(irs_impus)), //IMPUs in IRS
+           .WillOnce(DoAll(SetArgReferee<3>(AssociatedURIs(associated_uris)), //IMPUs in IRS
                            Return(HTTP_OK)));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
       EXPECT_CALL(*store, set_aor_data(aor_id, _, _, _, _)).Times(0);

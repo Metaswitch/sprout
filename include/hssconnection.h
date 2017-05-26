@@ -1,37 +1,12 @@
 /**
  * @file hssconnection.h Definitions for HSSConnection class.
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 #ifndef HSSCONNECTION_H__
@@ -46,6 +21,8 @@
 #include "sas.h"
 #include "snmp_event_accumulator_table.h"
 #include "load_monitor.h"
+#include "associated_uris.h"
+#include "sifcservice.h"
 
 /// @class HSSConnection
 ///
@@ -57,7 +34,7 @@ class HSSConnection
 public:
   HSSConnection(const std::string& server,
                 HttpResolver* resolver,
-                LoadMonitor *load_monitor,
+                LoadMonitor* load_monitor,
                 SNMP::IPCountTable* homestead_count_tbl,
                 SNMP::EventAccumulatorTable* homestead_overall_latency_tbl,
                 SNMP::EventAccumulatorTable* homestead_mar_latency_tbl,
@@ -65,7 +42,8 @@ public:
                 SNMP::EventAccumulatorTable* homestead_uar_latency_tbl,
                 SNMP::EventAccumulatorTable* homestead_lir_latency_tbl,
                 CommunicationMonitor* comm_monitor,
-                std::string scscf_uri);
+                std::string scscf_uri,
+                SIFCService* sifc_service);
   virtual ~HSSConnection();
 
   HTTPCode get_auth_vector(const std::string& private_user_id,
@@ -78,6 +56,7 @@ public:
                                 const std::string& public_user_identity,
                                 const std::string& visited_network,
                                 const std::string& auth_type,
+                                const bool& emergency,
                                 rapidjson::Document*& object,
                                 SAS::TrailId trail);
   HTTPCode get_location_data(const std::string& public_user_identity,
@@ -91,7 +70,7 @@ public:
                                      const std::string& type,
                                      std::string& regstate,
                                      std::map<std::string, Ifcs >& service_profiles,
-                                     std::vector<std::string>& associated_uris,
+                                     AssociatedURIs& associated_uris,
                                      std::vector<std::string>& aliases,
                                      std::deque<std::string>& ccfs,
                                      std::deque<std::string>& ecfs,
@@ -103,7 +82,7 @@ public:
                                              const std::string& type,
                                              std::string& regstate,
                                              std::map<std::string, Ifcs >& service_profiles,
-                                             std::vector<std::string>& associated_uris,
+                                             AssociatedURIs& associated_uris,
                                              std::deque<std::string>& ccfs,
                                              std::deque<std::string>& ecfs,
                                              SAS::TrailId trail);
@@ -112,7 +91,7 @@ public:
                                      const std::string& type,
                                      std::string& regstate,
                                      std::map<std::string, Ifcs >& service_profiles,
-                                     std::vector<std::string>& associated_uris,
+                                     AssociatedURIs& associated_uris,
                                      SAS::TrailId trail);
   virtual HTTPCode update_registration_state(const std::string& public_user_identity,
                                              const std::string& private_user_identity,
@@ -122,20 +101,20 @@ public:
                                              const std::string& private_user_identity,
                                              const std::string& type,
                                              std::map<std::string, Ifcs >& service_profiles,
-                                             std::vector<std::string>& associated_uris,
+                                             AssociatedURIs& associated_uris,
                                              SAS::TrailId trail);
 
   HTTPCode get_registration_data(const std::string& public_user_identity,
                                  std::string& regstate,
                                  std::map<std::string, Ifcs >& service_profiles,
-                                 std::vector<std::string>& associated_uris,
+                                 AssociatedURIs& associated_uris,
                                  std::deque<std::string>& ccfs,
                                  std::deque<std::string>& ecfs,
                                  SAS::TrailId trail);
   virtual HTTPCode get_registration_data(const std::string& public_user_identity,
                                          std::string& regstate,
                                          std::map<std::string, Ifcs >& service_profiles,
-                                         std::vector<std::string>& associated_uris,
+                                         AssociatedURIs& associated_uris,
                                          SAS::TrailId trail);
   rapidxml::xml_document<>* parse_xml(std::string raw, const std::string& url);
 
@@ -167,6 +146,7 @@ private:
   SNMP::EventAccumulatorTable* _uar_latency_tbl;
   SNMP::EventAccumulatorTable* _lir_latency_tbl;
   std::string _scscf_uri;
+  SIFCService* _sifc_service;
 };
 
 #endif

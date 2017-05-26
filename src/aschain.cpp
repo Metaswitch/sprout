@@ -1,37 +1,12 @@
 /**
  * @file aschain.cpp The AS chain data type.
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 #include <boost/lexical_cast.hpp>
@@ -42,6 +17,7 @@
 #include "constants.h"
 #include "aschain.h"
 #include "ifchandler.h"
+#include "sproutsasevent.h"
 
 /// Create an AsChain.
 //
@@ -55,7 +31,9 @@ AsChain::AsChain(AsChainTable* as_chain_table,
                  bool is_registered,
                  SAS::TrailId trail,
                  Ifcs& ifcs,
-                 ACR* acr) :
+                 ACR* acr,
+                 DIFCService* difc_service,
+                 IFCConfiguration ifc_configuration) :
   _as_chain_table(as_chain_table),
   _refs(1),  // for the initial chain link being returned
   _as_info(ifcs.size() + 1),
@@ -66,9 +44,13 @@ AsChain::AsChain(AsChainTable* as_chain_table,
   _is_registered(is_registered),
   _trail(trail),
   _ifcs(ifcs),
-  _acr(acr)
+  _acr(acr),
+  _default_ifcs({}),
+  _ifc_configuration(ifc_configuration),
+  _using_standard_ifcs(true),
+  _root(NULL)
 {
-  TRC_DEBUG("Creating AsChain %p with %d IFC and adding to map", this, ifcs.size());
+  TRC_DEBUG("Creating AsChain %p with %d IFCs and adding to map", this, ifcs.size());
   _as_chain_table->register_(this, _odi_tokens);
   TRC_DEBUG("Attached ACR (%p) to chain", _acr);
 
@@ -79,6 +61,12 @@ AsChain::AsChain(AsChainTable* as_chain_table,
       ++it)
   {
     *it = false;
+  }
+
+  if ((difc_service) && (_ifc_configuration._apply_default_ifcs))
+  {
+    _root = new rapidxml::xml_document<>;
+    _default_ifcs = difc_service->get_default_ifcs(_root);
   }
 }
 
@@ -109,6 +97,8 @@ AsChain::~AsChain()
   }
 
   _as_chain_table->unregister(_odi_tokens);
+
+  delete _root; _root = NULL;
 }
 
 
@@ -130,16 +120,16 @@ const SessionCase& AsChain::session_case() const
 /// @returns the number of elements in this chain
 size_t AsChain::size() const
 {
-  return _ifcs.size();
+  return _using_standard_ifcs ? _ifcs.size() : _default_ifcs.size();
 }
 
 
 /// @returns a pointer to the ACR attached to the AS chain if Rf is enabled.
 ACR* AsChain::acr() const
 {
-//LCOV_EXCL_START
+  // LCOV_EXCL_START
   return _acr;
-//LCOV_EXCL_STOP
+  // LCOV_EXCL_STOP
 }
 
 
@@ -159,7 +149,9 @@ AsChainLink AsChainLink::create_as_chain(AsChainTable* as_chain_table,
                                          bool is_registered,
                                          SAS::TrailId trail,
                                          Ifcs& ifcs,
-                                         ACR* acr)
+                                         ACR* acr,
+                                         DIFCService* difc_service,
+                                         IFCConfiguration ifc_configuration)
 {
   AsChain* as_chain = new AsChain(as_chain_table,
                                   session_case,
@@ -167,7 +159,9 @@ AsChainLink AsChainLink::create_as_chain(AsChainTable* as_chain_table,
                                   is_registered,
                                   trail,
                                   ifcs,
-                                  acr);
+                                  acr,
+                                  difc_service,
+                                  ifc_configuration);
   return AsChainLink(as_chain, 0u);
 }
 
@@ -178,49 +172,157 @@ AsChainLink AsChainLink::create_as_chain(AsChainTable* as_chain_table,
 // step-by-step details.
 //
 // @Returns whether processing should stop, continue, or skip to the end.
-void AsChainLink::on_initial_request(pjsip_msg* msg,
-                                     std::string& server_name,
-                                     SAS::TrailId msg_trail)
+pjsip_status_code AsChainLink::on_initial_request(pjsip_msg* msg,
+                                                  std::string& server_name,
+                                                  SAS::TrailId msg_trail)
 {
+  pjsip_status_code rc = PJSIP_SC_OK;
   server_name = "";
 
   if (_as_chain->trail() != msg_trail)
   {
     // Associate the two trails in SAS so B2BUA calls are displayed properly
-    TRC_DEBUG("Asssociating original SAS trail %ld with new message SAS trail %ld", _as_chain->trail(), msg_trail);
+    TRC_DEBUG("Asssociating original SAS trail %ld with new message SAS trail %ld",
+              _as_chain->trail(), msg_trail);
     SAS::associate_trails(_as_chain->trail(), msg_trail);
   }
 
+  // Check if this is our first passthrough this function.
+  bool first_pass_through_ifcs = (_index == 0) &&
+                                 (_as_chain->_using_standard_ifcs);
+
+  // Attempt to get the next application server. This uses either the standard
+  // IFCs or the default IFCs depending on what's happened when we went through
+  // this function previously.
+  bool got_dummy_as = false;
+  get_next_application_server(msg,
+                              server_name,
+                              got_dummy_as,
+                              msg_trail);
+
+  // Check if we should apply any default IFCs. We do this if:
+  //   - We haven't found any matching IFC (true if server_name is empty, and
+  //     got_dummy_as is false.
+  //   - It's our first time through this function and we've run through
+  //     every available standard IFC to check for a match
+  //   - The config option to apply default IFCs is set.
+  if ((!(got_dummy_as) || (server_name != "")) &&
+      ((first_pass_through_ifcs) && (complete())) &&
+      (_as_chain->_ifc_configuration._apply_default_ifcs))
+  {
+    TRC_DEBUG("No IFCs apply to this message; looking up default IFCs");
+    SAS::Event event(msg_trail, SASEvent::STARTING_DEFAULT_IFCS_LOOKUP, 0);
+    SAS::report_event(event);
+
+    // Reset the AsChain IFCs given we've moving onto the default IFCs
+    _as_chain->_using_standard_ifcs = false;
+    _index = 0;
+    get_next_application_server(msg,
+                                server_name,
+                                got_dummy_as,
+                                msg_trail);
+
+    if (server_name != "")
+    {
+      TRC_DEBUG("We've found a matching default IFC - applying it");
+      SAS::Event event(msg_trail, SASEvent::FIRST_DEFAULT_IFC, 0);
+      SAS::report_event(event);
+    }
+  }
+
+  // Check if we should have applied default IFCs, but didn't find any. We
+  // SAS log this, and increment a statistic.
+  // We're in this case if:
+  //   - We haven't found any matching IFC (true if server_name is empty, and
+  //     got_dummy_as is false.
+  //   - We're using default IFCs
+  if ((!(got_dummy_as) || (server_name != "")) &&
+      ((!_as_chain->_using_standard_ifcs) &&
+       (_as_chain->_ifc_configuration._apply_default_ifcs)))
+  {
+    if (_as_chain->_ifc_configuration._no_matching_default_ifcs_tbl)
+    {
+      _as_chain->_ifc_configuration._no_matching_default_ifcs_tbl->increment();
+    }
+
+    TRC_DEBUG("Unable to apply default IFCs as no matching IFCs available");
+    SAS::Event event(msg_trail, SASEvent::NO_DEFAULT_IFCS, 0);
+    SAS::report_event(event);
+  }
+
+  // Now check if we found any IFCs at all. We didn't find any if:
+  //   - We haven't found any matching IFC (true if server_name is empty, and
+  //     got_dummy_as is false.
+  //   - It's our first time through this function and we've run through
+  //     every available IFC to check for a match
+  if ((!(got_dummy_as) || (server_name != "")) &&
+      ((first_pass_through_ifcs) && (complete())))
+  {
+    if (_as_chain->_ifc_configuration._no_matching_ifcs_tbl)
+    {
+      _as_chain->_ifc_configuration._no_matching_ifcs_tbl->increment();
+    }
+
+    // Reject the request if the config option to do so is set.
+    if (_as_chain->_ifc_configuration._reject_if_no_matching_ifcs)
+    {
+      rc = PJSIP_SC_BAD_REQUEST;
+    }
+  }
+
+  return rc;
+}
+
+void AsChainLink::get_next_application_server(pjsip_msg* msg,
+                                              std::string& server_name,
+                                              bool& got_dummy_as,
+                                              SAS::TrailId msg_trail)
+{
+  std::vector<Ifc> ifcs = _as_chain->_using_standard_ifcs ?
+                          _as_chain->_ifcs.ifcs_list() :
+                          _as_chain->_default_ifcs;
+  got_dummy_as = false;
+
   while (!complete())
   {
-    const Ifc& ifc = (_as_chain->_ifcs)[_index];
+    const Ifc& ifc = ifcs[_index];
     if (ifc.filter_matches(_as_chain->session_case(),
-                            _as_chain->_is_registered,
-                            false,
-                            msg,
-                            trail()))
+                           _as_chain->_is_registered,
+                           false,
+                           msg,
+                           trail()))
     {
       TRC_DEBUG("Matched iFC %s", to_string().c_str());
       AsInvocation application_server = ifc.as_invocation();
-      server_name = application_server.server_name;
 
-      // Store the RequestURI and application server name in the AsInformation
-      // structure for this link.
-      _as_chain->_as_info[_index].request_uri =
-            PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, msg->line.req.uri);
-      _as_chain->_as_info[_index].as_uri = server_name;
+      if (_as_chain->_ifc_configuration._dummy_as != application_server.server_name)
+      {
+        server_name = application_server.server_name;
 
-      // Store the default handling as we may need it later.
-      _default_handling = application_server.default_handling;
+        // Store the RequestURI and application server name in the AsInformation
+        // structure for this link.
+        _as_chain->_as_info[_index].request_uri =
+              PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, msg->line.req.uri);
+        _as_chain->_as_info[_index].as_uri = server_name;
 
-      break;
+        // Store the default handling as we may need it later.
+        _default_handling = application_server.default_handling;
+
+        break;
+      }
+      else
+      {
+        TRC_DEBUG("Ignoring this IFC as it matches a dummy AS (%s)",
+                  application_server.server_name.c_str());
+        SAS::Event event(msg_trail, SASEvent::IFC_MATCHED_DUMMY_AS, 0);
+        event.add_var_param(_as_chain->_ifc_configuration._dummy_as);
+        SAS::report_event(event);
+        got_dummy_as = true;
+      }
     }
     ++_index;
   }
-
-  return;
 }
-
 
 void AsChainLink::on_response(int status_code)
 {

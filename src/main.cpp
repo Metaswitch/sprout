@@ -1,37 +1,12 @@
 /**
  * @file main.cpp
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 extern "C" {
@@ -135,6 +110,7 @@ enum OptionTypes
   OPT_ASTAIRE_BLACKLIST_DURATION,
   OPT_SIP_TCP_CONNECT_TIMEOUT,
   OPT_SIP_TCP_SEND_TIMEOUT,
+  OPT_DNS_TIMEOUT,
   OPT_SESSION_CONTINUED_TIMEOUT_MS,
   OPT_SESSION_TERMINATED_TIMEOUT_MS,
   OPT_STATELESS_PROXIES,
@@ -159,7 +135,9 @@ enum OptionTypes
   OPT_DEFAULT_TEL_URI_TRANSLATION,
   OPT_CHRONOS_HOSTNAME,
   OPT_SPROUT_CHRONOS_CALLBACK_URI,
-  OPT_ALLOW_FALLBACK_IFCS,
+  OPT_APPLY_DEFAULT_IFCS,
+  OPT_REJECT_IF_NO_MATCHING_IFCS,
+  OPT_DUMMY_APP_SERVER,
 };
 
 
@@ -225,6 +203,7 @@ const static struct pj_getopt_option long_opt[] =
   { "astaire-blacklist-duration",   required_argument, 0, OPT_ASTAIRE_BLACKLIST_DURATION},
   { "sip-tcp-connect-timeout",      required_argument, 0, OPT_SIP_TCP_CONNECT_TIMEOUT},
   { "sip-tcp-send-timeout",         required_argument, 0, OPT_SIP_TCP_SEND_TIMEOUT},
+  { "dns-timeout",                  required_argument, 0, OPT_DNS_TIMEOUT},
   { "session-continued-timeout",    required_argument, 0, OPT_SESSION_CONTINUED_TIMEOUT_MS},
   { "session-terminated-timeout",   required_argument, 0, OPT_SESSION_TERMINATED_TIMEOUT_MS},
   { "stateless-proxies",            required_argument, 0, OPT_STATELESS_PROXIES},
@@ -245,6 +224,9 @@ const static struct pj_getopt_option long_opt[] =
   { "disable-tcp-switch",           no_argument,       0, OPT_DISABLE_TCP_SWITCH},
   { "chronos-hostname",             required_argument, 0, OPT_CHRONOS_HOSTNAME},
   { "sprout-chronos-callback-uri",  required_argument, 0, OPT_SPROUT_CHRONOS_CALLBACK_URI},
+  { "apply-default-ifcs",           no_argument,       0, OPT_APPLY_DEFAULT_IFCS},
+  { "reject-if-no-matching-ifcs",   no_argument,       0, OPT_REJECT_IF_NO_MATCHING_IFCS},
+  { "dummy-app-server",             required_argument, 0, OPT_DUMMY_APP_SERVER},
   { NULL,                           0,                 0, 0}
 };
 
@@ -400,6 +382,8 @@ static void usage(void)
        "     --sip-tcp-send-timeout <milliseconds>\n"
        "                            The amount of time to wait for data sent on a SIP TCP connection to be\n"
        "                            acknowledged by the peer.\n"
+       "     --dns-timeout <milliseconds>\n"
+       "                            The amount of time to wait for a DNS response (default: 200)n"
        "     --session-continued-timeout <milliseconds>\n"
        "                            If an Application Server with default handling of 'continue session'\n"
        "                            is unresponsive, this is the time that sprout will wait (in ms)\n"
@@ -455,6 +439,13 @@ static void usage(void)
        "                            Specify the sprout hostname used for Chronos callbacks. If unset \n"
        "                            the default is to use the sprout-hostname.\n"
        "                            Ignored if chronos-hostname is not set.\n"
+       "     --apply-default-ifcs   Whether calls that don't have any matching IFCs should have some \n"
+       "                            preconfigured IFCs applied instead.\n"
+       "     --reject-if-no-matching-ifcs\n"
+       "                            Whether calls that don't have any matching IFCs should be rejected.\n"
+       "     --dummy-app-server <app server URI>\n"
+       "                            If any IFC has an application server that matches the one defined here, \n"
+       "                            then the IFC is skipped over.\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
        " -F, --log-file <directory>\n"
@@ -1092,6 +1083,14 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
+    case OPT_DNS_TIMEOUT:
+      {
+        VALIDATE_INT_PARAM(options->dns_timeout,
+                           dns_timeout,
+                           DNS request timeout);
+      }
+      break;
+
     case OPT_SESSION_CONTINUED_TIMEOUT_MS:
       {
         VALIDATE_INT_PARAM(options->session_continued_timeout_ms,
@@ -1268,6 +1267,21 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       TRC_INFO("Sprout Chronos callback uri set to %s", pj_optarg);
       break;
 
+    case OPT_APPLY_DEFAULT_IFCS:
+      options->apply_default_ifcs = true;
+      TRC_INFO("Requests that have no matching IFCs will have some preconfigured IFCs applied");
+      break;
+
+    case OPT_REJECT_IF_NO_MATCHING_IFCS:
+      options->reject_if_no_matching_ifcs = true;
+      TRC_INFO("Requests that have no matching IFCs will be rejected");
+      break;
+
+    case OPT_DUMMY_APP_SERVER:
+      options->dummy_app_server = std::string(pj_optarg);
+      TRC_INFO("Dummy application server set to %s", pj_optarg);
+      break;
+
     case OPT_LISTEN_PORT:
       {
         int listen_port;
@@ -1427,6 +1441,8 @@ ExceptionHandler* exception_handler = NULL;
 AlarmManager* alarm_manager = NULL;
 AnalyticsLogger* analytics_logger = NULL;
 ChronosConnection* chronos_connection = NULL;
+SIFCService* sifc_service = NULL;
+DIFCService* difc_service = NULL;
 
 bool parse_multi_site_stores_arg(const std::vector<std::string>& stores_arg,
                                  const std::string& local_site_name,
@@ -1544,6 +1560,7 @@ int main(int argc, char* argv[])
   opt.astaire_blacklist_duration = AstaireResolver::DEFAULT_BLACKLIST_DURATION;
   opt.sip_tcp_connect_timeout = 2000;
   opt.sip_tcp_send_timeout = 2000;
+  opt.dns_timeout = DnsCachedResolver::DEFAULT_TIMEOUT;
   opt.session_continued_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_CONTINUED_TIMEOUT;
   opt.session_terminated_timeout_ms = SCSCFSproutlet::DEFAULT_SESSION_TERMINATED_TIMEOUT;
   opt.stateless_proxies.clear();
@@ -1557,6 +1574,9 @@ int main(int argc, char* argv[])
   opt.scscf_node_uri = "";
   opt.sas_signaling_if = false;
   opt.disable_tcp_switch = false;
+  opt.apply_default_ifcs = false;
+  opt.reject_if_no_matching_ifcs = false;
+  opt.dummy_app_server = "";
 
   status = init_logging_options(argc, argv, &opt);
 
@@ -1778,6 +1798,7 @@ int main(int argc, char* argv[])
   SNMP::EventAccumulatorTable* homestead_sar_latency_table = NULL;
   SNMP::EventAccumulatorTable* homestead_uar_latency_table = NULL;
   SNMP::EventAccumulatorTable* homestead_lir_latency_table = NULL;
+  SNMP::CounterTable* no_shared_ifcs_set_table = NULL;
 
   SNMP::ContinuousAccumulatorByScopeTable* token_rate_table = NULL;
   SNMP::ScalarByScopeTable* smoothed_latency_scalar = NULL;
@@ -1819,6 +1840,8 @@ int main(int argc, char* argv[])
                                                                  ".1.2.826.0.1.1578918.9.3.3.5");
     homestead_lir_latency_table = SNMP::EventAccumulatorTable::create("sprout_homestead_lir_latency",
                                                                  ".1.2.826.0.1.1578918.9.3.3.6");
+    no_shared_ifcs_set_table = SNMP::CounterTable::create("no_shared_ifcs_set",
+                                                          ".1.2.826.0.1.1578918.9.3.40");
     token_rate_table = SNMP::ContinuousAccumulatorByScopeTable::create("sprout_token_rate",
                                                                        ".1.2.826.0.1.1578918.9.3.27");
     smoothed_latency_scalar = SNMP::ScalarByScopeTable::create("sprout_smoothed_latency",
@@ -1898,7 +1921,7 @@ int main(int argc, char* argv[])
                                            hc);
 
   // Create a DNS resolver and a SIP specific resolver.
-  dns_resolver = new DnsCachedResolver(opt.dns_servers);
+  dns_resolver = new DnsCachedResolver(opt.dns_servers, opt.dns_timeout);
   sip_resolver = new SIPResolver(dns_resolver, opt.sip_blacklist_duration);
 
   // Create a new quiescing manager instance and register our completion handler
@@ -1981,6 +2004,11 @@ int main(int argc, char* argv[])
   {
     // Create a connection to the HSS.
     TRC_STATUS("Creating connection to HSS %s", opt.hss_server.c_str());
+    sifc_service = new SIFCService(new Alarm(alarm_manager,
+                                             "sprout",
+                                             AlarmDef::SPROUT_SIFC_STATUS,
+                                             AlarmDef::CRITICAL),
+                                   no_shared_ifcs_set_table);
     hss_connection = new HSSConnection(opt.hss_server,
                                        http_resolver,
                                        load_monitor,
@@ -1991,8 +2019,15 @@ int main(int argc, char* argv[])
                                        homestead_uar_latency_table,
                                        homestead_lir_latency_table,
                                        hss_comm_monitor,
-                                       opt.uri_scscf);
+                                       opt.uri_scscf,
+                                       sifc_service);
   }
+
+  // Create DIFC service
+  difc_service = new DIFCService(new Alarm(alarm_manager,
+                                           "sprout",
+                                           AlarmDef::SPROUT_DIFC_STATUS,
+                                           AlarmDef::CRITICAL));
 
   // Create ENUM service.
   if (!opt.enum_servers.empty())
@@ -2481,6 +2516,8 @@ int main(int argc, char* argv[])
   delete http_stack_mgmt; http_stack_mgmt = NULL;
   delete chronos_connection;
   delete hss_connection;
+  delete difc_service;
+  delete sifc_service;
   delete quiescing_mgr;
   delete exception_handler;
   delete load_monitor;
@@ -2546,6 +2583,7 @@ int main(int argc, char* argv[])
   delete homestead_sar_latency_table;
   delete homestead_uar_latency_table;
   delete homestead_lir_latency_table;
+  delete no_shared_ifcs_set_table;
 
   delete token_rate_table;
   delete smoothed_latency_scalar;

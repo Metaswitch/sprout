@@ -2,42 +2,12 @@
  *
  * @file registrarproutlet.cpp
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2016  Metaswitch Networks Ltd
- *
- * Parts of this module were derived from GPL licensed PJSIP sample code
- * with the following copyrights.
- *   Copyright (C) 2008-2011 Teluu Inc. (http://www.teluu.com)
- *   Copyright (C) 2003-2008 Benny Prijono <benny@prijono.org>
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 #include <time.h>
@@ -71,6 +41,7 @@ extern "C" {
 #include "log.h"
 #include "notify_utils.h"
 #include "uri_classifier.h"
+#include "associated_uris.h"
 
 // RegistrarSproutlet constructor.
 RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
@@ -299,7 +270,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   SAS::report_marker(start_marker);
 
   // Query the HSS for the associated URIs.
-  std::vector<std::string> uris;
+  AssociatedURIs associated_uris = {};
   std::map<std::string, Ifcs> ifc_map;
   std::string private_id;
   std::string private_id_for_binding;
@@ -348,7 +319,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                                                                    HSSConnection::REG,
                                                                    regstate,
                                                                    ifc_map,
-                                                                   uris,
+                                                                   associated_uris,
                                                                    ccfs,
                                                                    ecfs,
                                                                    trail());
@@ -387,8 +358,20 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     return;
   }
 
-  // Determine the AOR from the first entry in the uris array.
-  std::string aor = uris.front();
+  // Get the default URI to use as a key in the binding store.
+  std::string aor;
+  success = associated_uris.get_default_impu(aor,
+                                             num_emergency_bindings > 0);
+  if (!success)
+  {
+    // Don't have a default IMPU so send an error response. We only hit this
+    // if the subscriber is misconfigured at the HSS, so send a generic server
+    // error.
+    st_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
+  }
+
+  // Use the unbarred URIs for when we send NOTIFYs.
+  std::vector<std::string> unbarred_uris = associated_uris.get_unbarred_uris();
   TRC_DEBUG("REGISTER for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
 
   if (reject_with_400)
@@ -442,7 +425,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   SubscriberDataManager::AoRPair* aor_pair =
                                  write_to_store(_registrar->_sdm,
                                                 aor,
-                                                uris,
+                                                unbarred_uris,
                                                 req,
                                                 now,
                                                 expiry,
@@ -478,7 +461,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
         SubscriberDataManager::AoRPair* remote_aor_pair =
           write_to_store(*it,
                          aor,
-                         uris,
+                         unbarred_uris,
                          req,
                          now,
                          tmp_expiry,
@@ -733,25 +716,51 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // Add P-Associated-URI headers for all of the associated URIs that are real
   // URIs, ignoring wildcard URIs and logging any URIs that aren't wildcards
   // but are still unparseable as URIs.
-  for (std::vector<std::string>::iterator it = uris.begin();
-       it != uris.end();
-       it++)
+  if (!unbarred_uris.empty())
   {
-    if (!WildcardUtils::is_wildcard_uri(*it))
+    for (std::vector<std::string>::iterator it = unbarred_uris.begin();
+         it != unbarred_uris.end();
+         it++)
     {
-      pjsip_uri* this_uri = PJUtils::uri_from_string(*it, get_pool(rsp));
-      if (this_uri != NULL)
+      if (!WildcardUtils::is_wildcard_uri(*it))
+      {
+        pjsip_uri* this_uri = PJUtils::uri_from_string(*it, get_pool(rsp));
+        if (this_uri != NULL)
+        {
+          pjsip_routing_hdr* pau =
+                           identity_hdr_create(get_pool(rsp), STR_P_ASSOCIATED_URI);
+          pau->name_addr.uri = this_uri;
+          pjsip_msg_add_hdr(rsp, (pjsip_hdr*)pau);
+        }
+        else
+        {
+          TRC_DEBUG("Bad associated URI %s", it->c_str());
+          SAS::Event event(trail(), SASEvent::HTTP_HOMESTEAD_BAD_IDENTITY, 0);
+          event.add_var_param(*it);
+          SAS::report_event(event);
+        }
+      }
+    }
+  }
+  else
+  {
+    // There aren't any associated URIs so just add the AoR in the P-Associated
+    // URI header. We should only have to do this for emergency registrations.
+    if (!WildcardUtils::is_wildcard_uri(aor))
+    {
+      pjsip_uri* aor_uri = PJUtils::uri_from_string(aor, get_pool(rsp));
+      if (aor_uri != NULL)
       {
         pjsip_routing_hdr* pau =
                         identity_hdr_create(get_pool(rsp), STR_P_ASSOCIATED_URI);
-        pau->name_addr.uri = this_uri;
+        pau->name_addr.uri = aor_uri;
         pjsip_msg_add_hdr(rsp, (pjsip_hdr*)pau);
       }
       else
       {
-        TRC_DEBUG("Bad associated URI %s", it->c_str());
-        SAS::Event event(trail(), SASEvent::HTTP_HOMESTEAD_BAD_IDENTITY, 0);
-        event.add_var_param(*it);
+        TRC_DEBUG("Bad associated URI %s", aor.c_str());
+        SAS::Event event(trail(), SASEvent::HTTP_HOMESTEAD_BAD_IDENTITY, 1);
+        event.add_var_param(aor);
         SAS::report_event(event);
       }
     }
@@ -780,6 +789,14 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
   if (num_emergency_bindings == 0)
   {
+    // If the public ID is unbarred, we use that for third party registers. If
+    // it is barred, we use the default URI.
+    std::string as_reg_id = public_id;
+    if (associated_uris.is_impu_barred(public_id))
+    {
+      as_reg_id = aor;
+    }
+
     RegistrationUtils::register_with_application_servers(ifc_map[public_id],
                                                          _registrar->_sdm,
                                                          _registrar->_remote_sdms,
@@ -788,7 +805,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                                                          clone_rsp,
                                                          expiry,
                                                          is_initial_registration,
-                                                         public_id,
+                                                         as_reg_id,
                                                          trail());
   }
 
@@ -809,7 +826,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
                    SubscriberDataManager* primary_sdm,         ///<store to write to
                    std::string aor,                            ///<address of record to write to
-                   std::vector<std::string> irs_impus,         ///<IMPUs in Implicit Registration Set
+                   std::vector<std::string> unbarred_irs_impus,
+                                                               ///<Unbarred IMPUs in Implicit Registration Set
                    pjsip_msg* req,                             ///<received request to read headers from
                    int now,                                    ///<time now
                    int& expiry,                                ///<[out] longest expiry time
@@ -1028,7 +1046,7 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
     if (changed_bindings > 0)
     {
       set_rc = primary_sdm->set_aor_data(aor,
-                                         irs_impus,
+                                         unbarred_irs_impus,
                                          aor_pair,
                                          trail(),
                                          all_bindings_expired);

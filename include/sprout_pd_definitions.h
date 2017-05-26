@@ -1,37 +1,12 @@
 /**
  * @file sprout_pd_definitions.h  Sprout PDLog instances.
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2014  Metaswitch Networks Ltd
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 #ifndef _SPROUT_PD_DEFINITIONS_H__
@@ -461,6 +436,136 @@ static const PDLog1<const char *> CL_SPROUT_SESS_CONT_AS_COMM_SUCCESS
   "Communication has been restored to an Application Server",
   "Full service has been restored.",
   "No action"
+);
+
+static const PDLog CL_SPROUT_SIFC_FILE_MISSING
+(
+  PDLogBase::CL_SPROUT_ID + 52,
+  LOG_ERR,
+  "The shared IFC sets file is not present.",
+  "The S-CSCF supports shared IFC sets, but the configuration file for this does not exist.",
+  "The S-CSCF will not be able to correctly translate IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
+  "The shared IFC sets should be defined in /etc/clearwater/shared_ifcs.xml. Create this file according to the documentation. If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd."
+);
+
+static const PDLog CL_SPROUT_SIFC_FILE_EMPTY
+(
+  PDLogBase::CL_SPROUT_ID + 53,
+  LOG_ERR,
+  "The shared IFC sets file is empty.",
+  "The S-CSCF supports shared IFC sets, but the configuration file for this is empty.",
+  "The S-CSCF will not be able to correctly translate IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
+  "The shared IFC sets should be defined in /etc/clearwater/shared_ifcs.xml. Populate this file according to the documentation."
+);
+
+static const PDLog CL_SPROUT_SIFC_FILE_INVALID_XML
+(
+  PDLogBase::CL_SPROUT_ID + 54,
+  LOG_ERR,
+  "The shared IFC sets file contains invalid XML.",
+  "The S-CSCF supports shared IFC sets, but the configuration file for this is invalid.",
+  "The S-CSCF will not be able to correctly translate IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
+  "The shared IFC sets should be defined in /etc/clearwater/shared_ifcs.xml. Populate this file according to the documentation."
+);
+
+static const PDLog CL_SPROUT_SIFC_FILE_MISSING_SHARED_IFCS_SETS
+(
+  PDLogBase::CL_SPROUT_ID + 55,
+  LOG_ERR,
+  "The shared IFCs file doesn't have the correct syntax.",
+  "The S-CSCF supports shared IFC sets, but the configuration file for this doesn't match the expected syntax (no SharedIFCsSets block).",
+  "The S-CSCF will not be able to correctly translate IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
+  "The shared IFCs should be defined in /etc/clearwater/shared_ifcs.xml. Populate this file according to the documentation."
+);
+
+static const PDLog CL_SPROUT_SIFC_FILE_MISSING_SET_ID
+(
+  PDLogBase::CL_SPROUT_ID + 56,
+  LOG_ERR,
+  "An entry in the shared IFC file doesn't have the correct syntax; it's missing the SetID.",
+  "The S-CSCF supports shared IFC sets, but one of the shared IFC sets in the configuration file for this doesn't match the expected syntax (no SetID).",
+  "The S-CSCF will not be able to correctly translate some IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
+  "The shared IFCs should be defined in /etc/clearwater/shared_ifcs.xml. Populate this file according to the documentation."
+);
+
+static const PDLog1<const char *> CL_SPROUT_SIFC_FILE_INVALID_SET_ID
+(
+  PDLogBase::CL_SPROUT_ID + 57,
+  LOG_ERR,
+  "An entry in the shared IFCs file doesn't have the correct syntax; its SetID (%s) isn't an integer.",
+  "The S-CSCF supports shared IFC sets, but one of the shared IFC sets in the configuration file for this doesn't match the expected syntax (invalid SetID).",
+  "The S-CSCF will not be able to correctly translate some IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
+  "The shared IFCs should be defined in /etc/clearwater/shared_ifcs.xml. Populate this file according to the documentation."
+);
+
+static const PDLog1<const char *> CL_SPROUT_SIFC_FILE_REPEATED_SET_ID
+(
+  PDLogBase::CL_SPROUT_ID + 58,
+  LOG_ERR,
+  "Multiple entries in the shared IFC sets file use the same SetID (%s)(",
+  "The S-CSCF supports shared IFC sets, but the configuration file for this has multiple entries for one ID.",
+  "The S-CSCF will not be able to correctly translate some IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
+  "The shared IFC sets should be defined in /etc/clearwater/shared_ifcs.xml. Populate this file according to the documentation."
+);
+
+static const PDLog1<const char *> CL_SPROUT_SIFC_FILE_INVALID_PRIORITY
+(
+  PDLogBase::CL_SPROUT_ID + 59,
+  LOG_ERR,
+  "An entry in the shared IFC sets file doesn't have the correct syntax; its Priority (%s) isn't an integer.",
+  "The S-CSCF supports shared IFC sets, but one of the shared IFC sets in the configuration file for this doesn't match the expected syntax (invalid Priority).",
+  "The S-CSCF will not be able to correctly translate some IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
+  "The shared IFC sets should be defined in /etc/clearwater/shared_ifcs.xml. Populate this file according to the documentation."
+);
+
+static const PDLog CL_SPROUT_DIFC_FILE_MISSING
+(
+  PDLogBase::CL_SPROUT_ID + 60,
+  LOG_ERR,
+  "The default IFCs configuration file is not present.",
+  "The S-CSCF supports default IFCs, but the configuration file for them does not exist.",
+  "The S-CSCF will not be able to correctly apply any default IFCs.",
+  "The default IFCs should be defined in /etc/clearwater/default_ifcs.xml. Create this file according to the documentation. If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd."
+);
+
+static const PDLog CL_SPROUT_DIFC_FILE_EMPTY
+(
+  PDLogBase::CL_SPROUT_ID + 61,
+  LOG_ERR,
+  "The default IFCs configuration file is empty.",
+  "The S-CSCF supports default IFCs, but the configuration file for this is empty.",
+  "The S-CSCF will not be able to correctly apply any default IFCs.",
+  "The default IFCs should be defined in /etc/clearwater/default_ifcs.xml. Populate this file according to the documentation."
+);
+
+static const PDLog CL_SPROUT_DIFC_FILE_INVALID_XML
+(
+  PDLogBase::CL_SPROUT_ID + 62,
+  LOG_ERR,
+  "The default IFCs configuration file contains invalid XML.",
+  "The S-CSCF supports default IFCs, but the configuration file for this is invalid.",
+  "The S-CSCF will not be able to correctly apply any default IFCs.",
+  "The default IFCs should be defined in /etc/clearwater/default_ifcs.xml. Populate this file according to the documentation."
+);
+
+static const PDLog CL_SPROUT_DIFC_FILE_MISSING_DEFAULT_IFCS_SET
+(
+ PDLogBase::CL_SPROUT_ID + 63,
+ LOG_ERR,
+ "The default IFCs configuration file doesn't have the correct syntax.",
+ "The S-CSCF supports default IFCs, but the configuration file for this doesn't match the expected syntax (no DefaultIFCsSet block).",
+ "The S-CSCF will not be able to correctly apply any default IFCs.",
+ "The default IFCs should be defined in /etc/clearwater/default_ifcs.xml. Populate this file according to the documentation."
+ );
+
+static const PDLog1<const char *> CL_SPROUT_DIFC_FILE_INVALID_PRIORITY
+(
+  PDLogBase::CL_SPROUT_ID + 64,
+  LOG_ERR,
+  "An IFC in the default IFCs configuration file doesn't have the correct syntax; its Priority (%s) isn't an integer.",
+  "The S-CSCF supports default IFCs, but one of the default IFCs doesn't match the expected syntax (invalid Priority).",
+  "The S-CSCF will not be able to apply this default IFC.",
+  "The default IFCs should be defined in /etc/clearwater/default_ifcs.xml. Populate this file according to the documentation."
 );
 
 #endif

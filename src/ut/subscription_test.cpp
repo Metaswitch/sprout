@@ -1,37 +1,12 @@
 /**
  * @file subscription_test.cpp
  *
- * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
- *
- * This program is free software: you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation, either version 3 of the License, or (at your
- * option) any later version, along with the "Special Exception" for use of
- * the program along with SSL, set forth below. This program is distributed
- * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details. You should have received a copy of the GNU General Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/>.
- *
- * The author can be reached by email at clearwater@metaswitch.com or by
- * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
- *
- * Special Exception
- * Metaswitch Networks Ltd  grants you permission to copy, modify,
- * propagate, and distribute a work formed by combining OpenSSL with The
- * Software, or a work derivative of such a combination, even if such
- * copying, modification, propagation, or distribution would otherwise
- * violate the terms of the GPL. You must comply with the GPL in all
- * respects for all of the code used other than OpenSSL.
- * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
- * Project and licensed under the OpenSSL Licenses, or a work based on such
- * software and licensed under the OpenSSL Licenses.
- * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
- * under which the OpenSSL Project distributes the OpenSSL toolkit software,
- * as those licenses appear in the file LICENSE-OPENSSL.
+ * Copyright (C) Metaswitch Networks 2017
+ * If license terms are provided to you in a COPYING file in the root directory
+ * of the source code repository by which you are accessing this code, then
+ * the license outlined in that COPYING file applies to your use.
+ * Otherwise no rights are granted except for those provided to you by
+ * Metaswitch Networks in a separate written agreement.
  */
 
 #include <string>
@@ -368,6 +343,26 @@ TEST_F(SubscriptionTest, EmergencySubscription)
   EXPECT_EQ(489, out->line.status.code);
   EXPECT_EQ("Bad Event", str_pj(out->line.status.reason));
   EXPECT_THAT(get_headers(out, "Allow-Events"), testing::MatchesRegex("Allow-Events: reg"));
+
+  check_subscriptions("sip:6505550231@homedomain", 0u);
+}
+
+TEST_F(SubscriptionTest, NotRegistered)
+{
+  _hss_connection->set_impu_result("sip:6505551231@homedomain", "", RegDataXMLUtils::STATE_UNREGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551231@homedomain</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  SubscribeMessage msg;
+  msg._user = "6505551231";
+  inject_msg(msg.get());
+
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = pop_txdata()->msg;
+  EXPECT_EQ(504, out->line.status.code);
 
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
@@ -949,6 +944,83 @@ TEST_F(SubscriptionTest, SubscriptionWithWildcard)
   // Check there's one subscription stored
   check_subscriptions("sip:6505551231@homedomain", 1u);
 }
+
+/// Check that only unbarred idententies are sent in a notify.
+TEST_F(SubscriptionTest, SubscriptionWithBarredIdentity)
+{
+  // Get an initial empty AoR record and add a binding.
+  int now = time(NULL);
+  SubscriberDataManager::AoRPair* aor_pair = _sdm->get_aor_data(std::string("sip:6505551231@homedomain"), 0);
+  SubscriberDataManager::AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  b1->_uri = std::string("<sip:6505551231@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_priority = 0;
+  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
+  b1->_emergency_registration = false;
+
+  // Add the AoR record to the store.
+  std::vector<std::string> irs_impus_aor;
+  irs_impus_aor.push_back("sip:6505551231@homedomain");
+  _sdm->set_aor_data(irs_impus_aor[0], irs_impus_aor, aor_pair, 0);
+  delete aor_pair; aor_pair = NULL;
+
+  _hss_connection->set_impu_result("sip:6505551231@homedomain", "", RegDataXMLUtils::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551231@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>sip:6505551232@homedomain</Identity><BarringIndication>1</BarringIndication></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  // Set up a single subscription - this should generate a 200 OK then
+  // a NOTIFY
+  SubscribeMessage msg;
+  msg._user = "6505551231";
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505551231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
+  inject_msg(msg.get());
+
+  // The NOTIFY should only contain the barred IMPU.
+  std::vector<std::pair<std::string, bool>> irs_impus;
+  irs_impus.push_back(std::make_pair("sip:6505551231@homedomain", false));
+
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
+
+  // Check there's one subscription stored
+  check_subscriptions("sip:6505551231@homedomain", 1u);
+}
+
+TEST_F(SubscriptionTest, NoDefaultID)
+{
+  // This test checks that when there is not default ID we reject the SUBSCRIBE.
+  // This is not a realistic test because we expect the subscriber to be
+  // unregistered which will cause a 504.
+  _hss_connection->set_impu_result("sip:6505551231@homedomain", "", RegDataXMLUtils::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551231@homedomain</Identity><BarringIndication>1</BarringIndication></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  SubscribeMessage msg;
+  msg._user = "6505551231";
+  inject_msg(msg.get());
+
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = pop_txdata()->msg;
+  EXPECT_EQ(403, out->line.status.code);
+
+  check_subscriptions("sip:6505550231@homedomain", 0u);
+}
+
 
 void SubscriptionTest::check_subscriptions(std::string aor, uint32_t expected)
 {
