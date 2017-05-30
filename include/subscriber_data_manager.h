@@ -572,8 +572,7 @@ public:
   /// succeeds, this returns true.
   ///
   /// @param aor_id               The AoR to retrieve
-  /// @param associated_uris      The associated IMPUs in the Implicit Registration
-  ///                             Set for the AoR
+  /// @param associated_uris      The IMPUs associated with this IRS
   /// @param aor_pair             The AoR pair to set
   /// @param trail                SAS trail
   /// @param all_bindings_expired Whether all bindings have expired

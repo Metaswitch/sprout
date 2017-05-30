@@ -726,7 +726,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
       list = list.substr(0, list.length() - 1);
     }
 
-    SAS::Event event(trail(), SASEvent::OMIT_ID_FROM_P_ASSOC_URI, 0);
+    SAS::Event event(trail(), SASEvent::OMIT_BARRED_ID_FROM_P_ASSOC_URI, 0);
     event.add_var_param(list);
     SAS::report_event(event);
   }

@@ -134,7 +134,7 @@ pj_xml_node* notify_create_reg_state_xml(
       list = list.substr(0, list.length() - 1);
     }
 
-    SAS::Event event(trail, SASEvent::OMIT_ID_FROM_NOTIFY, 0);
+    SAS::Event event(trail, SASEvent::OMIT_BARRED_ID_FROM_NOTIFY, 0);
     event.add_var_param(list);
     SAS::report_event(event);
   }
