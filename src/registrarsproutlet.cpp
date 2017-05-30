@@ -365,9 +365,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   if (!success)
   {
     // Don't have a default IMPU so send an error response. We only hit this
-    // if the subscriber is misconfigured at the HSS, so send a generic server
-    // error.
-    st_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
+    // if the subscriber is misconfigured at the HSS.
+    reject_with_400 = true;
   }
 
   // Use the unbarred URIs for when we send NOTIFYs.
@@ -425,7 +424,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   SubscriberDataManager::AoRPair* aor_pair =
                                  write_to_store(_registrar->_sdm,
                                                 aor,
-                                                unbarred_uris,
+                                                &associated_uris,
                                                 req,
                                                 now,
                                                 expiry,
@@ -461,7 +460,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
         SubscriberDataManager::AoRPair* remote_aor_pair =
           write_to_store(*it,
                          aor,
-                         unbarred_uris,
+                         &associated_uris,
                          req,
                          now,
                          tmp_expiry,
@@ -712,6 +711,25 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                           pjsip_hdr_shallow_clone(get_pool(rsp), _registrar->_service_route);
   pjsip_msg_insert_first_hdr(rsp, clone);
 
+  // Log any URIs that have been left out of the P-Associated-URI because they
+  // are barred.
+  std::vector<std::string> barred_uris = associated_uris.get_barred_uris();
+  if (!barred_uris.empty())
+  {
+    std::stringstream ss;
+    std::copy(barred_uris.begin(), barred_uris.end(), std::ostream_iterator<std::string>(ss, ","));
+    std::string list = ss.str();
+    if (!list.empty())
+    {
+      // Strip the trailing comma.
+      list = list.substr(0, list.length() - 1);
+    }
+
+    SAS::Event event(trail(), SASEvent::OMIT_ID_FROM_P_ASSOC_URI, 0);
+    event.add_var_param(list);
+    SAS::report_event(event);
+  }
+
   // Add P-Associated-URI headers for all of the associated URIs that are real
   // URIs, ignoring wildcard URIs and logging any URIs that aren't wildcards
   // but are still unparseable as URIs.
@@ -825,8 +843,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
                    SubscriberDataManager* primary_sdm,         ///<store to write to
                    std::string aor,                            ///<address of record to write to
-                   std::vector<std::string> unbarred_irs_impus,
-                                                               ///<Unbarred IMPUs in Implicit Registration Set
+                   AssociatedURIs* associated_uris,
+                                                               ///<Associated IMPUs in Implicit Registration Set
                    pjsip_msg* req,                             ///<received request to read headers from
                    int now,                                    ///<time now
                    int& expiry,                                ///<[out] longest expiry time
@@ -1045,7 +1063,7 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
     if (changed_bindings > 0)
     {
       set_rc = primary_sdm->set_aor_data(aor,
-                                         unbarred_irs_impus,
+                                         associated_uris,
                                          aor_pair,
                                          trail(),
                                          all_bindings_expired);

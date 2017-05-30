@@ -203,6 +203,8 @@ namespace SASEvent
 
   const int REJECT_CALL_FROM_BARRED_USER = SPROUT_BASE + 0x0140;
   const int REJECT_CALL_TO_BARRED_USER = SPROUT_BASE + 0x0141;
+  const int OMIT_ID_FROM_P_ASSOC_URI = SPROUT_BASE + 0x0142;
+  const int OMIT_ID_FROM_NOTIFY = SPROUT_BASE + 0x0143;
 } //namespace SASEvent
 
 #endif

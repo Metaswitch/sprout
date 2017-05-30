@@ -342,9 +342,6 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
     return;
   }
 
-  // Use the unbarred URIs for sending NOTIFYs.
-  std::vector<std::string> unbarred_uris = associated_uris.get_unbarred_uris();
-
   TRC_DEBUG("aor = %s", aor.c_str());
   TRC_DEBUG("SUBSCRIBE for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
 
@@ -356,7 +353,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
   SubscriberDataManager::AoRPair* aor_pair =
                               write_subscriptions_to_store(_subscription->_sdm,
                                                            aor,
-                                                           unbarred_uris,
+                                                           &associated_uris,
                                                            req,
                                                            now,
                                                            NULL,
@@ -383,7 +380,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
         SubscriberDataManager::AoRPair* remote_aor_pair =
           write_subscriptions_to_store(*it,
                                        aor,
-                                       unbarred_uris,
+                                       &associated_uris,
                                        req,
                                        now,
                                        aor_pair,
@@ -454,8 +451,8 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
 SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to_store(
                    SubscriberDataManager* primary_sdm,        ///<store to write to
                    std::string aor,                           ///<address of record to write to
-                   std::vector<std::string> unbarred_irs_impus,
-                                                              ///<Unbarred IMPUs in Implicit Registration Set
+                   AssociatedURIs* associated_uris,
+                                                              ///<IMPUs associated with this IRS
                    pjsip_msg* req,                            ///<received request to read headers from
                    int now,                                   ///<time now
                    SubscriberDataManager::AoRPair* backup_aor,///<backup data if no entry in store
@@ -631,7 +628,7 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
 
     // Try to write the AoR back to the store.
     bool unused;
-    set_rc = primary_sdm->set_aor_data(aor, unbarred_irs_impus, aor_pair, trail(), unused);
+    set_rc = primary_sdm->set_aor_data(aor, associated_uris, aor_pair, trail(), unused);
 
     if (set_rc == Store::OK)
     {

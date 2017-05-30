@@ -24,6 +24,7 @@ extern "C" {
 #include "log.h"
 #include "constants.h"
 #include "wildcard_utils.h"
+#include "sproutsasevent.h"
 
 // Return a XML registration node with the attributes populated
 pj_xml_node* create_reg_node(pj_pool_t *pool,
@@ -77,10 +78,11 @@ pj_xml_node* create_contact_node(pj_pool_t *pool,
 pj_xml_node* notify_create_reg_state_xml(
                          pj_pool_t *pool,
                          std::string& aor,
-                         std::vector<std::string> irs_impus,
+                         AssociatedURIs* associated_uris,
                          SubscriberDataManager::AoR::Subscription* subscription,
                          std::vector<NotifyUtils::BindingNotifyInformation*> bnis,
-                         NotifyUtils::RegistrationState reg_state)
+                         NotifyUtils::RegistrationState reg_state,
+                         SAS::TrailId trail)
 {
   TRC_DEBUG("Create the XML body for a SIP NOTIFY");
 
@@ -118,7 +120,28 @@ pj_xml_node* notify_create_reg_state_xml(
   pj_str_t reg_id;
   pj_str_t reg_state_str;
 
-  // Iterate over the IRS, inserting a registration element for each one
+  // Log any URIs that have been left out of the P-Associated-URI because they
+  // are barred.
+  std::vector<std::string> barred_uris = associated_uris->get_barred_uris();
+  if (!barred_uris.empty())
+  {
+    std::stringstream ss;
+    std::copy(barred_uris.begin(), barred_uris.end(), std::ostream_iterator<std::string>(ss, ","));
+    std::string list = ss.str();
+    if (!list.empty())
+    {
+      // Strip the trailing comma.
+      list = list.substr(0, list.length() - 1);
+    }
+
+    SAS::Event event(trail, SASEvent::OMIT_ID_FROM_NOTIFY, 0);
+    event.add_var_param(list);
+    SAS::report_event(event);
+  }
+
+  // Iterate over the unbarred IMPUs in the IRS, inserting a registration
+  // element for each one
+  std::vector<std::string> irs_impus = associated_uris->get_unbarred_uris();
   for (std::vector<std::string>::const_iterator impu = irs_impus.begin();
        impu != irs_impus.end();
        ++impu)
@@ -260,20 +283,22 @@ static int xml_print_body( struct pjsip_msg_body *msg_body,
 pj_status_t notify_create_body(pjsip_msg_body* body,
                                pj_pool_t *pool,
                                std::string& aor,
-                               std::vector<std::string> irs_impus,
+                               AssociatedURIs* associated_uris,
                                SubscriberDataManager::AoR::Subscription* subscription,
                                std::vector<NotifyUtils::BindingNotifyInformation*> bnis,
-                               NotifyUtils::RegistrationState reg_state)
+                               NotifyUtils::RegistrationState reg_state,
+                               SAS::TrailId trail)
 {
   TRC_DEBUG("Create body of a SIP NOTIFY");
 
   pj_xml_node *doc;
   doc = notify_create_reg_state_xml(pool,
                                     aor,
-                                    irs_impus,
+                                    associated_uris,
                                     subscription,
                                     bnis,
-                                    reg_state);
+                                    reg_state,
+                                    trail);
 
   if (doc == NULL)
   {
@@ -329,11 +354,12 @@ pj_status_t NotifyUtils::create_subscription_notify(
                                     pjsip_tx_data** tdata_notify,
                                     SubscriberDataManager::AoR::Subscription* s,
                                     std::string aor,
-                                    std::vector<std::string> irs_impus,
+                                    AssociatedURIs* associated_uris,
                                     SubscriberDataManager::AoR* aor_data,
                                     std::vector<NotifyUtils::BindingNotifyInformation*> bnis,
                                     NotifyUtils::RegistrationState reg_state,
-                                    int now)
+                                    int now,
+                                    SAS::TrailId trail)
 {
   // Set the correct subscription state header
   NotifyUtils::SubscriptionState state = NotifyUtils::SubscriptionState::ACTIVE;
@@ -348,12 +374,13 @@ pj_status_t NotifyUtils::create_subscription_notify(
   pj_status_t status = NotifyUtils::create_notify(tdata_notify,
                                                   s,
                                                   aor,
-                                                  irs_impus,
+                                                  associated_uris,
                                                   aor_data->_notify_cseq,
                                                   bnis,
                                                   reg_state,
                                                   state,
-                                                  expiry);
+                                                  expiry,
+                                                  trail);
   return status;
 }
 // Create the request with to and from headers and a null body string, then add the body.
@@ -361,12 +388,13 @@ pj_status_t NotifyUtils::create_notify(
                                     pjsip_tx_data** tdata_notify,
                                     SubscriberDataManager::AoR::Subscription* subscription,
                                     std::string aor,
-                                    std::vector<std::string> irs_impus,
+                                    AssociatedURIs* associated_uris,
                                     int cseq,
                                     std::vector<NotifyUtils::BindingNotifyInformation*> bnis,
                                     NotifyUtils::RegistrationState reg_state,
                                     NotifyUtils::SubscriptionState subscription_state,
-                                    int expiry)
+                                    int expiry,
+                                    SAS::TrailId trail)
 {
   pj_status_t status = create_request_from_subscription(tdata_notify,
                                                         subscription,
@@ -443,10 +471,11 @@ pj_status_t NotifyUtils::create_notify(
     status = notify_create_body(body2,
                                (*tdata_notify)->pool,
                                 aor,
-                                irs_impus,
+                                associated_uris,
                                 subscription,
                                 bnis,
-                                reg_state);
+                                reg_state,
+                                trail);
     (*tdata_notify)->msg->body = body2;
   }
   else

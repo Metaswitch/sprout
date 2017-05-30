@@ -30,6 +30,7 @@ using namespace std;
 using ::testing::_;
 using ::testing::Return;
 using ::testing::SetArgReferee;
+using ::testing::SetArgPointee;
 using ::testing::SaveArg;
 using ::testing::SaveArgPointee;
 using ::testing::InSequence;
@@ -169,14 +170,10 @@ TEST_F(AoRTimeoutTasksTest, MainlineTest)
 
   // Set up IRS IMPU list to be returned by the mocked get_registration_data call.
   // Add a bunch of random IMPUs to this list - they should all be passed to set_aor_data.
-  std::vector<std::string> irs_impus;
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri("tel:6505550232", false);
   associated_uris.add_uri(aor_id, false);
   associated_uris.add_uri("sip:another_user@another_domain.com", false);
-  irs_impus.push_back("tel:6505550232");
-  irs_impus.push_back(aor_id);
-  irs_impus.push_back("sip:another_user@another_domain.com");
 
   {
     InSequence s;
@@ -185,13 +182,16 @@ TEST_F(AoRTimeoutTasksTest, MainlineTest)
            .WillOnce(DoAll(SetArgReferee<3>(AssociatedURIs(associated_uris)), //IMPUs in IRS
                            Return(HTTP_OK)));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(aor_id, irs_impus, aor, _, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*store, set_aor_data(aor_id, _, aor, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
+                                                                             Return(Store::OK)));
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote_aor1));
-      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, irs_impus, remote_aor1, _, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, _, remote_aor1, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
+                                                                                             Return(Store::OK)));
       EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote_aor2));
-      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, irs_impus, remote_aor2, _, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, _, remote_aor2, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
+                                                                                             Return(Store::OK)));
   }
 
   handler->run();
@@ -259,23 +259,26 @@ TEST_F(AoRTimeoutTasksTest, RemoteAoRNoBindingsTest)
   // Set up IRS IMPU list to be returned by the mocked get_registration_data calls
   // We'll return an empty list from the mocked get_registration_data.  We should still
   // see our AoR in the irs_impus list passed to set_aor_data.
-  std::vector<std::string> irs_impus;
-  irs_impus.push_back(aor_id);
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri(aor_id, false);
 
   {
     InSequence s;
       EXPECT_CALL(*stack, send_reply(_, 200, _));
       EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _)).WillOnce(Return(HTTP_OK));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(aor_id, irs_impus, aor, _, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*store, set_aor_data(aor_id, _, aor, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
+                                                                             Return(Store::OK)));
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair));
-      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, irs_impus, remote1_aor_pair, _, _))
-                   .WillOnce(Return(Store::OK));
+      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, _, remote1_aor_pair, _, _))
+                   .WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
+                                   Return(Store::OK)));
       EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair));
-      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, irs_impus, remote2_aor_pair, _, _))
-                   .WillOnce(Return(Store::OK));
+      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, _, remote2_aor_pair, _, _))
+                   .WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
+                                   Return(Store::OK)));
   }
 
   handler->run();
@@ -303,10 +306,8 @@ TEST_F(AoRTimeoutTasksTest, LocalAoRNoBindingsTest)
   SubscriberDataManager::AoRPair* remote2_aor = build_aor(aor_id);
 
   // Set up IRS IMPU list to be returned by the mocked get_registration_data call
-  std::vector<std::string> irs_impus;
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(aor_id, false);
-  irs_impus.push_back(aor_id);
 
   {
     InSequence s;
@@ -317,13 +318,16 @@ TEST_F(AoRTimeoutTasksTest, LocalAoRNoBindingsTest)
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor1));
-      EXPECT_CALL(*store, set_aor_data(aor_id, irs_impus, aor_pair, _, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*store, set_aor_data(aor_id, _, aor_pair, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
+                                                                                  Return(Store::OK)));
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor2));
-      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, irs_impus, remote1_aor2, _, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, _, remote1_aor2, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
+                                                                                              Return(Store::OK)));
       EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor));
-      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, irs_impus, remote2_aor, _, _)).WillOnce(Return(Store::OK));
+      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, _, remote2_aor, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
+                                                                                             Return(Store::OK)));
   }
 
   handler->run();
@@ -360,10 +364,8 @@ TEST_F(AoRTimeoutTasksTest, NoBindingsTest)
   SubscriberDataManager::AoRPair* remote2_aor_pair2 = new SubscriberDataManager::AoRPair(remote2_aor3, remote2_aor4);
 
   // Set up IRS IMPU list to be returned by the mocked get_registration_data call
-  std::vector<std::string> irs_impus;
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(aor_id, false);
-  irs_impus.push_back(aor_id);
 
   {
     InSequence s;
@@ -376,13 +378,19 @@ TEST_F(AoRTimeoutTasksTest, NoBindingsTest)
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair1));
       EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair1));
-      EXPECT_CALL(*store, set_aor_data(aor_id, irs_impus, aor_pair, _, _)).WillOnce(DoAll(SetArgReferee<4>(true), Return(Store::OK)));
+      EXPECT_CALL(*store, set_aor_data(aor_id, _, aor_pair, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
+                                                                                  SetArgReferee<4>(true),
+                                                                                  Return(Store::OK)));
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair2));
-      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, irs_impus, remote1_aor_pair2, _, _)).WillOnce(DoAll(SetArgReferee<4>(true), Return(Store::OK)));
+      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, _, remote1_aor_pair2, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
+                                                                                                   SetArgReferee<4>(true),
+                                                                                                   Return(Store::OK)));
       EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair2));
-      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, irs_impus, remote2_aor_pair2, _, _)).WillOnce(DoAll(SetArgReferee<4>(true), Return(Store::OK)));
+      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, _, remote2_aor_pair2, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
+                                                                                                   SetArgReferee<4>(true),
+                                                                                                   Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(aor_id, "", HSSConnection::DEREG_TIMEOUT, 0));
   }
 
@@ -405,10 +413,8 @@ TEST_F(AoRTimeoutTasksTest, NullAoRTest)
   SubscriberDataManager::AoRPair* remote2_aor_pair = new SubscriberDataManager::AoRPair(aor, aor);
 
   // Set up IRS IMPU list to be returned by the mocked get_registration_data call
-  std::vector<std::string> irs_impus;
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(aor_id, false);
-  irs_impus.push_back(aor_id);
 
   {
     InSequence s;
@@ -420,10 +426,10 @@ TEST_F(AoRTimeoutTasksTest, NullAoRTest)
       EXPECT_CALL(*store, set_aor_data(aor_id, _, _, _, _)).Times(0);
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair));
-      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, irs_impus, _, _, _)).Times(0);
+      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, _, _, _, _)).Times(0);
       EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair));
-      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, irs_impus, _, _, _)).Times(0);
+      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, _, _, _, _)).Times(0);
   }
 
   handler->run();
@@ -474,11 +480,12 @@ TEST_F(AoRTimeoutTasksMockStoreTest, SubscriberDataManagerWritesFail)
   SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
 
   // Set up IRS IMPU list to be returned by the mocked get_registration_data call
-  std::vector<std::string> irs_impus;
-  irs_impus.push_back("sip:6505550231@homedomain");
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri("sip:6505550231@homedomain", false);
 
   EXPECT_CALL(*store, get_aor_data(_, _)).WillOnce(Return(aor_pair));
-  EXPECT_CALL(*store, set_aor_data(_, irs_impus, _, _, _)).WillOnce(Return(Store::ERROR));
+  EXPECT_CALL(*store, set_aor_data(_, _, _, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
+                                                                  Return(Store::ERROR)));
 
   // Parse and handle the request
   std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"notavalidID\"}";

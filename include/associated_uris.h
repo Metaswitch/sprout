@@ -41,6 +41,9 @@ public:
   /// Returns all the unbarred URIs.
   std::vector<std::string> get_unbarred_uris();
 
+  /// Returns all the barred URIs.
+  std::vector<std::string> get_barred_uris();
+
   /// Returns all URIs.
   std::vector<std::string> get_all_uris();
 

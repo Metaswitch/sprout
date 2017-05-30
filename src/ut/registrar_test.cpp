@@ -2574,9 +2574,9 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   int now = time(NULL);
   s1->_expires = now + 300;
 
-  std::vector<std::string> irs_impus;
-  irs_impus.push_back(aor);
-  pj_status_t rc = _sdm->set_aor_data(aor, irs_impus, aor_pair, 0);
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri(aor, false);
+  pj_status_t rc = _sdm->set_aor_data(aor, &associated_uris, aor_pair, 0);
   EXPECT_TRUE(rc);
   delete aor_pair; aor_pair = NULL;
 
@@ -2663,9 +2663,9 @@ TEST_F(RegistrarTest, NoNotifyToUnregisteredUser)
   int now = time(NULL);
   s1->_expires = now + 300;
 
-  std::vector<std::string> irs_impus;
-  irs_impus.push_back(aor);
-  pj_status_t rc = _sdm->set_aor_data(aor, irs_impus, aor_pair, 0);
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri(aor, false);
+  pj_status_t rc = _sdm->set_aor_data(aor, &associated_uris, aor_pair, 0);
   EXPECT_TRUE(rc);
   delete aor_pair; aor_pair = NULL;
 
@@ -2721,9 +2721,9 @@ TEST_F(RegistrarTest, MultipleRegistrationsWithSubscription)
   int now = time(NULL);
   s1->_expires = now + 300;
 
-  std::vector<std::string> irs_impus;
-  irs_impus.push_back(aor);
-  pj_status_t rc = _sdm->set_aor_data(aor, irs_impus, aor_pair, 0);
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri(aor, false);
+  pj_status_t rc = _sdm->set_aor_data(aor, &associated_uris, aor_pair, 0);
   EXPECT_TRUE(rc);
   delete aor_pair; aor_pair = NULL;
   ASSERT_EQ(1, txdata_count());
@@ -2912,7 +2912,7 @@ TEST_F(RegistrarTest, AllIMPUsBarred)
   // Check the error
   ASSERT_EQ(1, txdata_count());
   pjsip_msg* out = current_txdata()->msg;
-  EXPECT_EQ(500, out->line.status.code);
+  EXPECT_EQ(400, out->line.status.code);
 }
 
 /// Fixture for RegistrarTest.
