@@ -26,6 +26,7 @@ extern "C" {
 
 #include "sas.h"
 #include "ifc.h"
+#include "sifcservice.h"
 
 /// A set of iFCs.
 //
@@ -35,7 +36,9 @@ class Ifcs
 public:
   Ifcs();
   Ifcs(std::shared_ptr<rapidxml::xml_document<>> ifc_doc,
-       rapidxml::xml_node<>* sp);
+       rapidxml::xml_node<>* sp,
+       SIFCService* sifc_service,
+       SAS::TrailId trail);
   ~Ifcs();
 
   size_t size() const
@@ -46,6 +49,11 @@ public:
   const Ifc& operator[](size_t index) const
   {
     return _ifcs[index];
+  }
+
+  const std::vector<Ifc> ifcs_list() const
+  {
+    return _ifcs;
   }
 
   void interpret(const SessionCase& session_case,

@@ -26,19 +26,29 @@
 #include "sproutlet_options.h"
 #include "impistore.h"
 #include "analyticslogger.h"
+#include "difcservice.h"
 
 enum struct MemcachedWriteFormat
 {
   BINARY, JSON
 };
 
-enum struct NonRegisterAuthentication
+// Struct containing the possible values for non-REGISTER authentication. These
+// are a set of flags that indicate different conditions that may cause a
+// non-REGISTER to be authenticated. They are represented as a bitmask where
+// each value must be a power of two.
+struct NonRegisterAuthentication
 {
-  // Never challenge a non-REGISTER.
-  NEVER,
+  // Never authenticate non-REGISTER requests. This represents the case where no
+  // conditions are set, so this must have the value 0.
+  static const uint32_t NEVER = 0;
 
-  // Only challenge a non-REGISTER if it has a Proxy-Authorization header.
-  IF_PROXY_AUTHORIZATION_PRESENT
+  // Authenticate a non-REGISTER if it has a Proxy-Authorization header.
+  static const uint32_t IF_PROXY_AUTHORIZATION_PRESENT = 1;
+
+  // Authenticate a non-REGISTER if it came from a registered endpoint that uses
+  // SIP digest authentication (see TS 24.229, section 5.4.3.6).
+  static const uint32_t INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT = 2;
 };
 
 struct options
@@ -72,7 +82,7 @@ struct options
   std::string                          xdm_server;
   std::string                          local_site_name;
   std::vector<std::string>             registration_stores;
-  std::string                          impi_store;
+  std::vector<std::string>             impi_stores;
   std::string                          ralf_server;
   int                                  ralf_threads;
   std::vector<std::string>             dns_servers;
@@ -116,7 +126,7 @@ struct options
   std::set<std::string>                stateless_proxies;
   std::string                          pbxes;
   std::string                          pbx_service_route;
-  NonRegisterAuthentication            non_register_auth_mode;
+  uint32_t                             non_register_auth_mode;
   bool                                 force_third_party_register_body;
   std::string                          memento_notify_url;
   std::string                          pidfile;
@@ -132,6 +142,9 @@ struct options
   bool                                 disable_tcp_switch;
   std::string                          chronos_hostname;
   std::string                          sprout_chronos_callback_uri;
+  bool                                 apply_default_ifcs;
+  bool                                 reject_if_no_matching_ifcs;
+  std::string                          dummy_app_server;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
@@ -139,8 +152,13 @@ struct options
 extern LoadMonitor* load_monitor;
 extern HSSConnection* hss_connection;
 extern Store* local_data_store;
+extern std::vector<Store*> remote_data_stores;
+extern Store* local_impi_data_store;
+extern std::vector<Store*> remote_impi_data_stores;
 extern SubscriberDataManager* local_sdm;
 extern std::vector<SubscriberDataManager*> remote_sdms;
+extern ImpiStore* local_impi_store;
+extern std::vector<ImpiStore*> remote_impi_stores;
 extern RalfProcessor* ralf_processor;
 extern DnsCachedResolver* dns_resolver;
 extern HttpResolver* http_resolver;
@@ -150,6 +168,6 @@ extern ExceptionHandler* exception_handler;
 extern AlarmManager* alarm_manager;
 extern AnalyticsLogger* analytics_logger;
 extern ChronosConnection* chronos_connection;
-extern ImpiStore* impi_store;
+extern DIFCService* difc_service;
 
 #endif

@@ -43,7 +43,8 @@ HSSConnection::HSSConnection(const std::string& server,
                              SNMP::EventAccumulatorTable* homestead_uar_latency_tbl,
                              SNMP::EventAccumulatorTable* homestead_lir_latency_tbl,
                              CommunicationMonitor* comm_monitor,
-                             std::string scscf_uri) :
+                             std::string scscf_uri,
+                             SIFCService* sifc_service) :
   _http(new HttpConnection(server,
                            false,
                            resolver,
@@ -56,7 +57,8 @@ HSSConnection::HSSConnection(const std::string& server,
   _sar_latency_tbl(homestead_sar_latency_tbl),
   _uar_latency_tbl(homestead_uar_latency_tbl),
   _lir_latency_tbl(homestead_lir_latency_tbl),
-  _scscf_uri(scscf_uri)
+  _scscf_uri(scscf_uri),
+  _sifc_service(sifc_service)
 {
 }
 
@@ -304,6 +306,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
                           std::vector<std::string>& aliases,
                           std::deque<std::string>& ccfs,
                           std::deque<std::string>& ecfs,
+                          SIFCService* sifc_service,
                           bool allowNoIMS,
                           SAS::TrailId trail)
 {
@@ -407,7 +410,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
        sp != NULL;
        sp = sp->next_sibling(RegDataXMLUtils::SERVICE_PROFILE))
   {
-    Ifcs ifc(root, sp);
+    Ifcs ifc(root, sp, sifc_service, trail);
     rapidxml::xml_node<>* public_id = NULL;
 
     if (!sp->first_node(RegDataXMLUtils::PUBLIC_IDENTITY))
@@ -737,6 +740,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                               aliases,
                               ccfs,
                               ecfs,
+                              _sifc_service,
                               false,
                               trail) ? HTTP_OK : HTTP_SERVER_ERROR;
 }
@@ -816,6 +820,7 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
                               unused_aliases,
                               ccfs,
                               ecfs,
+                              _sifc_service,
                               true,
                               trail) ? HTTP_OK : HTTP_SERVER_ERROR;
 }

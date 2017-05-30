@@ -2,7 +2,7 @@
  * @file session_expires_helper.cpp Class that implements the relevant parts of
  * session expires processing (RFC 4028)
  *
- * Copyright (C) Metaswitch Networks 2017
+ * Copyright (C) Metaswitch Networks 2015
  * If license terms are provided to you in a COPYING file in the root directory
  * of the source code repository by which you are accessing this code, then
  * the license outlined in that COPYING file applies to your use.

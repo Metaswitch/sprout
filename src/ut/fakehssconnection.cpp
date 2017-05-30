@@ -33,7 +33,8 @@ FakeHSSConnection::FakeHSSConnection(MockHSSConnection* hss_connection_observer)
                 &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
                 &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
                 NULL,
-                "sip:scscf.sprout.homedomain:5058;transport=TCP")
+                "sip:scscf.sprout.homedomain:5058;transport=TCP",
+                NULL)
 {
   _hss_connection_observer = hss_connection_observer;
 }

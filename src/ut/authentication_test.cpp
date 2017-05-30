@@ -46,7 +46,7 @@ int get_binding_expiry(pjsip_contact_hdr* contact, pjsip_expires_hdr* expires)
   return 300;
 }
 
-/// Fixture for AuthenticationTest.
+/// Common fixture for all authentication tests.
 class BaseAuthenticationTest : public SipTest
 {
 public:
@@ -58,6 +58,9 @@ public:
 
     _local_data_store = new LocalStore();
     _impi_store = new ImpiStore(_local_data_store, ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI);
+    _remote_data_stores.push_back(new LocalStore());
+    _remote_impi_stores.push_back(new ImpiStore(_remote_data_stores[0],
+                                                ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI));
     _hss_connection = new FakeHSSConnection();
     _chronos_connection = new FakeChronosConnection();
     _analytics = new AnalyticsLogger();
@@ -72,6 +75,12 @@ public:
     delete _analytics;
     delete _impi_store;
     delete _local_data_store;
+
+    for (ImpiStore* store: _remote_impi_stores) { delete store; }
+    _remote_impi_stores.clear();
+
+    for (LocalStore* store: _remote_data_stores) { delete store; }
+    _remote_data_stores.clear();
 
     SipTest::TearDownTestCase();
   }
@@ -192,7 +201,8 @@ public:
     }
   }
 
-  void auth_sproutlet_allows_request(bool expect_100_trying = false)
+  void auth_sproutlet_allows_request(bool expect_100_trying = false,
+                                     bool free_200_ok = true)
   {
     if (expect_100_trying)
     {
@@ -203,12 +213,27 @@ public:
 
     ASSERT_EQ(1, txdata_count());
     EXPECT_EQ(current_txdata()->msg->type, PJSIP_REQUEST_MSG);
-    inject_msg(respond_to_current_txdata(200));
+
+    // Respond to the request. If it's a REGISTER add a Service-Route.
+    bool is_register = (current_txdata()->msg->line.req.method.id == PJSIP_REGISTER_METHOD);
+    std::string rsp = respond_to_current_txdata(200);
+    if (is_register)
+    {
+      rsp.replace(rsp.find("\r\n\r\n"), 4,
+                  ("\r\nService-Route: <sip:scscf.sprout.example.com;orig>\r\n\r\n"));
+    }
+    inject_msg(rsp);
 
     ASSERT_EQ(1, txdata_count());
     RespMatcher(200).matches(current_txdata()->msg);
-    free_txdata();
+
+    if (free_200_ok)
+    {
+      free_txdata();
+    }
   }
+
+  void TestAKAAuthSuccess(char* key);
 
 protected:
   static LocalStore* _local_data_store;
@@ -218,6 +243,8 @@ protected:
   static FakeChronosConnection* _chronos_connection;
   static AnalyticsLogger* _analytics;
   static int _current_cseq;
+  static std::vector<LocalStore*> _remote_data_stores;
+  static std::vector<ImpiStore*> _remote_impi_stores;
 
   AuthenticationSproutlet* _auth_sproutlet;
   SproutletProxy* _sproutlet_proxy;
@@ -231,16 +258,20 @@ FakeHSSConnection* BaseAuthenticationTest::_hss_connection;
 FakeChronosConnection* BaseAuthenticationTest::_chronos_connection;
 AnalyticsLogger* BaseAuthenticationTest::_analytics;
 int BaseAuthenticationTest::_current_cseq;
+std::vector<LocalStore*> BaseAuthenticationTest::_remote_data_stores;
+std::vector<ImpiStore*> BaseAuthenticationTest::_remote_impi_stores;
 
 
-class AuthenticationTest : public BaseAuthenticationTest
+/// A test fixture that is templated over a configuration class. This allows the
+/// authentication sproutlet to be set up in different ways without lots of
+/// boilerplate code.
+template<class C>
+class AuthenticationTestTemplate : public BaseAuthenticationTest
 {
   static void SetUpTestCase()
   {
     BaseAuthenticationTest::SetUpTestCase();
   }
-
-  void TestAKAAuthSuccess(char* key);
 
   static void TearDownTestCase()
   {
@@ -257,91 +288,27 @@ class AuthenticationTest : public BaseAuthenticationTest
                                   { "scscf" },
                                   "homedomain",
                                   _impi_store,
+                                  _remote_impi_stores,
                                   _hss_connection,
                                   _chronos_connection,
                                   _acr_factory,
-                                  NonRegisterAuthentication::NEVER,
+                                  C::non_reg_auth(),
                                   _analytics,
                                   &SNMP::FAKE_AUTHENTICATION_STATS_TABLES,
-                                  true,
+                                  C::nonce_count_supported(),
                                   get_binding_expiry);
     EXPECT_TRUE(auth_sproutlet->init());
     return auth_sproutlet;
   }
 };
 
-
-class AuthenticationPxyAuthHdrTest : public BaseAuthenticationTest
+/// Templated configuration class for use with the above fixture.
+template<uint32_t A, bool N>
+class AuthenticationTestConfig
 {
-  static void SetUpTestCase()
-  {
-    BaseAuthenticationTest::SetUpTestCase();
-  }
-
-  AuthenticationSproutlet* create_auth_sproutlet()
-  {
-    AuthenticationSproutlet* auth_sproutlet =
-      new AuthenticationSproutlet("authentication",
-                                  0,
-                                  "sip:authentication.homedomain",
-                                  "registrar",
-                                  { "scscf" },
-                                  "homedomain",
-                                  _impi_store,
-                                  _hss_connection,
-                                  _chronos_connection,
-                                  _acr_factory,
-                                  NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT,
-                                  _analytics,
-                                  &SNMP::FAKE_AUTHENTICATION_STATS_TABLES,
-                                  true,
-                                  get_binding_expiry);
-    EXPECT_TRUE(auth_sproutlet->init());
-    return auth_sproutlet;
-  }
-
-  static void TearDownTestCase()
-  {
-    BaseAuthenticationTest::TearDownTestCase();
-  }
+  static uint32_t non_reg_auth() { return A; }
+  static uint32_t nonce_count_supported() { return N; }
 };
-
-
-class AuthenticationNonceCountDisabledTest : public BaseAuthenticationTest
-{
-  static void SetUpTestCase()
-  {
-    BaseAuthenticationTest::SetUpTestCase();
-  }
-
-  AuthenticationSproutlet* create_auth_sproutlet()
-  {
-    AuthenticationSproutlet* auth_sproutlet =
-      new AuthenticationSproutlet("authentication",
-                                  0,
-                                  "sip:authentication.homedomain",
-                                  "registrar",
-                                  { "scscf" },
-                                  "homedomain",
-                                  _impi_store,
-                                  _hss_connection,
-                                  _chronos_connection,
-                                  _acr_factory,
-                                  NonRegisterAuthentication::NEVER,
-                                  _analytics,
-                                  &SNMP::FAKE_AUTHENTICATION_STATS_TABLES,
-                                  false,
-                                  get_binding_expiry);
-    EXPECT_TRUE(auth_sproutlet->init());
-    return auth_sproutlet;
-  }
-
-  static void TearDownTestCase()
-  {
-    BaseAuthenticationTest::TearDownTestCase();
-  }
-};
-
 
 class AuthenticationMessage
 {
@@ -369,7 +336,7 @@ public:
   string _extra_contact;
   string _to_tag;
   bool _force_aka;
-  string _route;
+  string _route_uri;
 
   AuthenticationMessage(std::string method) :
     _method(method),
@@ -394,7 +361,7 @@ public:
     _extra_contact(""),
     _to_tag(""),
     _force_aka(false),
-    _route("sip:authentication.sprout.homedomain:5058;transport=TCP")
+    _route_uri("sip:authentication.sprout.homedomain:5058;transport=TCP;orig")
   {
   }
 
@@ -502,10 +469,10 @@ string AuthenticationMessage::get()
 
   if (_cseq == 0)
   {
-    _cseq = AuthenticationTest::_current_cseq;
+    _cseq = BaseAuthenticationTest::_current_cseq;
 
     // Increment the shared counter, allowing room for manual increments.
-    AuthenticationTest::_current_cseq += 10;
+    BaseAuthenticationTest::_current_cseq += 10;
   }
 
   int n = snprintf(buf, sizeof(buf),
@@ -567,7 +534,7 @@ string AuthenticationMessage::get()
                               "",
                     /* 8 */ _cseq,
                     /* 9 */ _to_tag.c_str(),
-                    /* 10 */ _route.c_str()
+                    /* 10 */ _route_uri.c_str()
     );
 
   EXPECT_LT(n, (int)sizeof(buf));
@@ -576,13 +543,26 @@ string AuthenticationMessage::get()
   return ret;
 }
 
+
+//
+// Authentication tests that use the default configuration settings for the
+// authentication sproutlet.
+//
+
+/// Test fixture for these tests. This is just a typedef of the test template +
+/// a particular configuration.
+typedef AuthenticationTestTemplate<
+  AuthenticationTestConfig<NonRegisterAuthentication::NEVER, true>
+> AuthenticationTest;
+
+
 TEST_F(AuthenticationTest, NoAuthorizationNonReg)
 {
   // Test that the authentication module lets through non-REGISTER requests
   // with no authorization header.
   AuthenticationMessage msg("PUBLISH");
   msg._auth_hdr = false;
-  inject_msg(msg.get(), _tp);
+  inject_msg(msg.get());
   auth_sproutlet_allows_request();
 }
 
@@ -596,8 +576,8 @@ TEST_F(AuthenticationTest, DISABLED_NoAuthorizationNonRegUserPart)
   // the original route contains a user part. See issue 1696.
   AuthenticationMessage msg("PUBLISH");
   msg._auth_hdr = false;
-  msg._route = "sip:authentication@sprout.homedomain:5058;transport=TCP";
-  inject_msg(msg.get(), _tp);
+  msg._route_uri = "sip:authentication@sprout.homedomain:5058;transport=TCP";
+  inject_msg(msg.get());
   auth_sproutlet_allows_request();
 }
 
@@ -609,7 +589,7 @@ TEST_F(AuthenticationTest, NoAuthorizationNonRegWithPxyAuthHdr)
   AuthenticationMessage msg("PUBLISH");
   msg._auth_hdr = false;
   msg._proxy_auth_hdr = true;
-  inject_msg(msg.get(), _tp);
+  inject_msg(msg.get());
   auth_sproutlet_allows_request();
 }
 
@@ -621,7 +601,7 @@ TEST_F(AuthenticationTest, NoAuthorizationInDialog)
   msg._auth_hdr = false;
   msg._proxy_auth_hdr = true;
   msg._to_tag = ";tag=abcde";
-  inject_msg(msg.get(), _tp);
+  inject_msg(msg.get());
   auth_sproutlet_allows_request();
 }
 
@@ -631,8 +611,19 @@ TEST_F(AuthenticationTest, NoAuthorizationEmergencyReg)
   AuthenticationMessage msg("REGISTER");
   msg._auth_hdr = false;
   msg._sos = true;
-  inject_msg(msg.get(), _tp);
+  inject_msg(msg.get());
   auth_sproutlet_allows_request();
+}
+
+TEST_F(AuthenticationTest, NoAuthorizationDigest)
+{
+  // Test that the authentication module lets through non-REGISTER requests that
+  // comes from a digest UE.
+  AuthenticationMessage msg("INVITE");
+  msg._auth_hdr = false;
+  msg._route_uri += ";username=Alice;nonce=123456";
+  inject_msg(msg.get());
+  auth_sproutlet_allows_request(true);
 }
 
 TEST_F(AuthenticationTest, IntegrityProtected)
@@ -645,40 +636,49 @@ TEST_F(AuthenticationTest, IntegrityProtected)
   AuthenticationMessage msg1("REGISTER");
   msg1._auth_hdr = true;
   msg1._integ_prot = "yes";
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
   auth_sproutlet_allows_request();
 
   AuthenticationMessage msg2("REGISTER");
   msg2._auth_hdr = true;
   msg2._integ_prot = "yes";
-  msg2._route = "sip:scscf.sprout.homedomain:5058;transport=TCP;lr;orig";
-  inject_msg(msg2.get(), _tp);
+  inject_msg(msg2.get());
   auth_sproutlet_allows_request();
 
   AuthenticationMessage msg3("REGISTER");
   msg3._auth_hdr = true;
   msg3._integ_prot = "tls-yes";
-  inject_msg(msg3.get(), _tp);
+  inject_msg(msg3.get());
   auth_sproutlet_allows_request();
   msg3._response = "12341234123412341234123412341234";
   msg3._cseq++;
-  inject_msg(msg3.get(), _tp);
-  auth_sproutlet_allows_request();
-
-  AuthenticationMessage msg4("REGISTER");
-  msg4._auth_hdr = true;
-  msg4._integ_prot = "ip-assoc-yes";
-  inject_msg(msg4.get(), _tp);
-  auth_sproutlet_allows_request();
-  msg4._response = "12341234123412341234123412341234";
-  msg4._cseq++;
-  inject_msg(msg4.get(), _tp);
+  inject_msg(msg3.get());
   auth_sproutlet_allows_request();
 
   EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->_attempts);
   EXPECT_EQ(0,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->_attempts);
 }
 
+TEST_F(AuthenticationTest, IntegrityProtectedIpAssocYes)
+{
+  // Test that the authentication module challenges requests with an integrity
+  // protected value of ip-assoc-yes.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  AuthenticationMessage msg("REGISTER");
+  msg._auth_hdr = true;
+  msg._integ_prot = "ip-assoc-yes";
+  inject_msg(msg.get());
+
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, txdata_count());
+  pjsip_tx_data* tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+}
 
 // Tests that authentication is needed on registers that have at least one non
 // emergency contact
@@ -692,7 +692,7 @@ TEST_F(AuthenticationTest, AuthorizationEmergencyReg)
   msg._auth_hdr = false;
   msg._sos = true;
   msg._extra_contact = "Contact: <sip:6505550001@uac.example.com:5060;rinstance=a0b20987985b61df;transport=TCP>";
-  inject_msg(msg.get(), _tp);
+  inject_msg(msg.get());
 
   // Expect a 401 Not Authorized response.
   ASSERT_EQ(1, txdata_count());
@@ -717,7 +717,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccess)
   // Digest authentication.
   AuthenticationMessage msg1("REGISTER");
   msg1._auth_hdr = false;
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
   ASSERT_EQ(1, txdata_count());
@@ -744,7 +744,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccess)
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
   msg2._integ_prot = "ip-assoc-pending";
-  inject_msg(msg2.get(), _tp);
+  inject_msg(msg2.get());
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
@@ -768,7 +768,7 @@ TEST_F(AuthenticationTest, NoAlgorithmDigestAuthSuccess)
   // Digest authentication.
   AuthenticationMessage msg1("REGISTER");
   msg1._auth_hdr = false;
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
   ASSERT_EQ(1, txdata_count());
@@ -795,7 +795,7 @@ TEST_F(AuthenticationTest, NoAlgorithmDigestAuthSuccess)
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
   msg2._integ_prot = "ip-assoc-pending";
-  inject_msg(msg2.get(), _tp);
+  inject_msg(msg2.get());
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
@@ -819,7 +819,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessWithNonceCount)
   // Digest authentication.
   AuthenticationMessage msg1("REGISTER");
   msg1._auth_hdr = false;
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
   ASSERT_EQ(1, txdata_count());
@@ -846,7 +846,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessWithNonceCount)
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
   msg2._integ_prot = "ip-assoc-pending";
-  inject_msg(msg2.get(), _tp);
+  inject_msg(msg2.get());
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
@@ -866,7 +866,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessWithNonceCount)
   msg3._cnonce = "8765432187654321";
   msg3._qop = "auth";
   msg3._integ_prot = "ip-assoc-pending";
-  inject_msg(msg3.get(), _tp);
+  inject_msg(msg3.get());
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
@@ -888,7 +888,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessNonceCountJump)
   // Digest authentication.
   AuthenticationMessage msg1("REGISTER");
   msg1._auth_hdr = false;
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
   ASSERT_EQ(1, txdata_count());
@@ -915,7 +915,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessNonceCountJump)
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
   msg2._integ_prot = "ip-assoc-pending";
-  inject_msg(msg2.get(), _tp);
+  inject_msg(msg2.get());
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
@@ -948,7 +948,7 @@ TEST_F(AuthenticationTest, NoAlgorithmBadNonceDigestAuthFailure)
   msg2._nc = "00000001";
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
-  inject_msg(msg2.get(), _tp);
+  inject_msg(msg2.get());
 
   // Expect a 401 Not Authorized response.
   ASSERT_EQ(1, txdata_count());
@@ -975,7 +975,7 @@ TEST_F(AuthenticationTest, DigestAuthFailBadResponse)
   // Send in a REGISTER request with an authentication header, but with no
   // integrity protected parameter.  This triggers Digest authentication.
   AuthenticationMessage msg1("REGISTER");
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
   ASSERT_EQ(1, txdata_count());
@@ -1003,7 +1003,7 @@ TEST_F(AuthenticationTest, DigestAuthFailBadResponse)
   msg2._qop = "auth";
   msg2._integ_prot = "ip-assoc-pending";
   msg2._response = "00000000000000000000000000000000";
-  inject_msg(msg2.get(), _tp);
+  inject_msg(msg2.get());
 
   // Check 403 forbidden response.
   ASSERT_EQ(1, txdata_count());
@@ -1031,7 +1031,7 @@ TEST_F(AuthenticationTest, DigestAuthFailBadIMPI)
   AuthenticationMessage msg1("REGISTER");
   msg1._auth_hdr = true;
   msg1._auth_user = "unknown@homedomain";
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
 
   // Expect a 403 Forbidden response.
   ASSERT_EQ(1, txdata_count());
@@ -1068,7 +1068,7 @@ TEST_F(AuthenticationTest, DigestAuthFailStale)
   msg1._qop = "auth";
   msg1._integ_prot = "ip-assoc-pending";
   msg1._response = "00000000000000000000000000000000";
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
 
   // The authentication module should recognise this as a stale request and
   // respond with a challenge.
@@ -1099,7 +1099,7 @@ TEST_F(AuthenticationTest, DigestAuthFailStale)
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
   msg2._integ_prot = "ip-assoc-pending";
-  inject_msg(msg2.get(), _tp);
+  inject_msg(msg2.get());
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
@@ -1124,7 +1124,7 @@ TEST_F(AuthenticationTest, DigestAuthFailWrongRealm)
   // Digest authentication.
   AuthenticationMessage msg1("REGISTER");
   msg1._auth_hdr = false;
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
   ASSERT_EQ(1, txdata_count());
@@ -1152,7 +1152,7 @@ TEST_F(AuthenticationTest, DigestAuthFailWrongRealm)
   msg2._qop = "auth";
   msg2._integ_prot = "ip-assoc-pending";
   msg2._auth_realm = "otherdomain";
-  inject_msg(msg2.get(), _tp);
+  inject_msg(msg2.get());
 
   // Check 401 Unauthorized response.
   ASSERT_EQ(1, txdata_count());
@@ -1182,7 +1182,7 @@ TEST_F(AuthenticationTest, DigestAuthFailTimeout)
   AuthenticationMessage msg1("REGISTER");
   msg1._auth_hdr = true;
   msg1._auth_user = "6505550001@homedomain";
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
 
   // Expect a 504 Server Timeout response.
   ASSERT_EQ(1, txdata_count());
@@ -1193,7 +1193,7 @@ TEST_F(AuthenticationTest, DigestAuthFailTimeout)
   AuthenticationMessage msg2("REGISTER");
   msg2._auth_hdr = true;
   msg2._auth_user = "6505550002@homedomain";
-  inject_msg(msg2.get(), _tp);
+  inject_msg(msg2.get());
 
   // Expect a 504 Server Timeout response.
   ASSERT_EQ(1, txdata_count());
@@ -1220,7 +1220,7 @@ TEST_F(AuthenticationTest, DigestNonceCountTooLow)
   // Digest authentication.
   AuthenticationMessage msg1("REGISTER");
   msg1._auth_hdr = false;
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
   ASSERT_EQ(1, txdata_count());
@@ -1247,14 +1247,14 @@ TEST_F(AuthenticationTest, DigestNonceCountTooLow)
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
   msg2._integ_prot = "ip-assoc-pending";
-  inject_msg(msg2.get(), _tp);
+  inject_msg(msg2.get());
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
 
   // Resubmit the same register. This should be re-challenged.
   msg2._cseq++;
-  inject_msg(msg2.get(), _tp);
+  inject_msg(msg2.get());
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(401).matches(tdata->msg);
@@ -1277,7 +1277,7 @@ TEST_F(AuthenticationTest, DigestNonceCountTooLow)
   msg3._cnonce = "8765432187654321";
   msg3._qop = "auth";
   msg3._integ_prot = "ip-assoc-pending";
-  inject_msg(msg3.get(), _tp);
+  inject_msg(msg3.get());
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
@@ -1299,7 +1299,7 @@ TEST_F(AuthenticationTest, DigestChallengeExpired)
   // Digest authentication.
   AuthenticationMessage msg1("REGISTER");
   msg1._auth_hdr = false;
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
   ASSERT_EQ(1, txdata_count());
@@ -1326,7 +1326,7 @@ TEST_F(AuthenticationTest, DigestChallengeExpired)
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
   msg2._integ_prot = "ip-assoc-pending";
-  inject_msg(msg2.get(), _tp);
+  inject_msg(msg2.get());
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
@@ -1345,7 +1345,7 @@ TEST_F(AuthenticationTest, DigestChallengeExpired)
   msg3._cnonce = "8765432187654321";
   msg3._qop = "auth";
   msg3._integ_prot = "ip-assoc-pending";
-  inject_msg(msg3.get(), _tp);
+  inject_msg(msg3.get());
 
   // The authentication module has generated a fresh challenge.
   ASSERT_EQ(1, txdata_count());
@@ -1364,7 +1364,7 @@ TEST_F(AuthenticationTest, DigestChallengeExpired)
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
 
-void AuthenticationTest::TestAKAAuthSuccess(char* key)
+void BaseAuthenticationTest::TestAKAAuthSuccess(char* key)
 {
   // Test a successful AKA authentication flow.
   pjsip_tx_data* tdata;
@@ -1373,7 +1373,7 @@ void AuthenticationTest::TestAKAAuthSuccess(char* key)
   // integrity-protected=no.  This triggers aka authentication.
   AuthenticationMessage msg1("REGISTER");
   msg1._integ_prot = "no";
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
   ASSERT_EQ(1, txdata_count());
@@ -1402,7 +1402,7 @@ void AuthenticationTest::TestAKAAuthSuccess(char* key)
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
   msg2._integ_prot = "yes";
-  inject_msg(msg2.get(), _tp);
+  inject_msg(msg2.get());
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
@@ -1426,7 +1426,7 @@ TEST_F(AuthenticationTest, AKAAuthSuccess)
                               "\"cryptkey\":\"0123456789abcdef\","
                               "\"integritykey\":\"fedcba9876543210\"}}");
 
-  AuthenticationTest::TestAKAAuthSuccess("12345678123456781234567812345678");
+  BaseAuthenticationTest::TestAKAAuthSuccess("12345678123456781234567812345678");
 }
 
 // Test that a normal AKA authenticated registration succeeds, when the response
@@ -1444,7 +1444,7 @@ TEST_F(AuthenticationTest, AKAAuthSuccessWithNullBytes)
                               "\"cryptkey\":\"0123456789abcdef\","
                               "\"integritykey\":\"fedcba9876543210\"}}");
 
-  AuthenticationTest::TestAKAAuthSuccess("12345678000000000000000012345678");
+  BaseAuthenticationTest::TestAKAAuthSuccess("12345678000000000000000012345678");
 }
 
 TEST_F(AuthenticationTest, AKAv2AuthSuccess)
@@ -1467,7 +1467,7 @@ TEST_F(AuthenticationTest, AKAv2AuthSuccess)
   // algorithm=AKAv2-MD5.  This triggers AKAv2 authentication.
   AuthenticationMessage msg1("REGISTER");
   msg1._algorithm = "AKAv2-MD5";
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
   ASSERT_EQ(1, txdata_count());
@@ -1493,7 +1493,7 @@ TEST_F(AuthenticationTest, AKAv2AuthSuccess)
   msg2._cnonce = "897a977118d3092e88d574e833f7e3a3";
   msg2._qop = "auth";
   msg2._integ_prot = "yes";
-  inject_msg(msg2.get(), _tp);
+  inject_msg(msg2.get());
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
@@ -1523,7 +1523,7 @@ TEST_F(AuthenticationTest, NoAlgorithmAKAAuthSuccess)
   // integrity-protected=no.  This triggers aka authentication.
   AuthenticationMessage msg1("REGISTER");
   msg1._integ_prot = "no";
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
   ASSERT_EQ(1, txdata_count());
@@ -1553,7 +1553,7 @@ TEST_F(AuthenticationTest, NoAlgorithmAKAAuthSuccess)
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
   msg2._integ_prot = "yes";
-  inject_msg(msg2.get(), _tp);
+  inject_msg(msg2.get());
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
@@ -1583,7 +1583,7 @@ TEST_F(AuthenticationTest, AKAAuthSuccessWithNonceCount)
   // integrity-protected=no.  This triggers aka authentication.
   AuthenticationMessage msg1("REGISTER");
   msg1._integ_prot = "no";
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
   ASSERT_EQ(1, txdata_count());
@@ -1612,7 +1612,7 @@ TEST_F(AuthenticationTest, AKAAuthSuccessWithNonceCount)
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
   msg2._integ_prot = "yes";
-  inject_msg(msg2.get(), _tp);
+  inject_msg(msg2.get());
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
@@ -1633,7 +1633,7 @@ TEST_F(AuthenticationTest, AKAAuthSuccessWithNonceCount)
   msg3._cnonce = "8765432187654321";
   msg3._qop = "auth";
   msg3._integ_prot = "yes";
-  inject_msg(msg3.get(), _tp);
+  inject_msg(msg3.get());
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
@@ -1661,7 +1661,7 @@ TEST_F(AuthenticationTest, AKAAuthFailBadResponse)
   // integrity-protected=no.  This triggers aka authentication.
   AuthenticationMessage msg1("REGISTER");
   msg1._integ_prot = "no";
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
   ASSERT_EQ(1, txdata_count());
@@ -1691,7 +1691,7 @@ TEST_F(AuthenticationTest, AKAAuthFailBadResponse)
   msg2._qop = "auth";
   msg2._response = "00000000000000000000000000000000";
   msg2._integ_prot = "yes";
-  inject_msg(msg2.get(), _tp);
+  inject_msg(msg2.get());
 
   // Check 403 forbidden response.
   ASSERT_EQ(1, txdata_count());
@@ -1731,7 +1731,7 @@ TEST_F(AuthenticationTest, AKAAuthFailStale)
   msg1._qop = "auth";
   msg1._integ_prot = "ip-assoc-pending";
   msg1._response = "00000000000000000000000000000000";
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
 
   // The authentication module should recognise this as a stale request and
   // respond with a challenge.
@@ -1765,7 +1765,7 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
   // integrity-protected=no.  This triggers aka authentication.
   AuthenticationMessage msg1("REGISTER");
   msg1._integ_prot = "no";
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
   ASSERT_EQ(1, txdata_count());
@@ -1810,7 +1810,7 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
     msg2._nonce, msg2._nc,
     msg2._cnonce, msg2._qop,
     msg2._auth_realm);
-  inject_msg(msg2.get(), _tp);
+  inject_msg(msg2.get());
 
   // Expect another 401 Not Authorized response with a new challenge.
   ASSERT_EQ(1, txdata_count());
@@ -1841,7 +1841,7 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
   msg3._cnonce = "8765432187654321";
   msg3._qop = "auth";
   msg3._integ_prot = "yes";
-  inject_msg(msg3.get(), _tp);
+  inject_msg(msg3.get());
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
@@ -1875,7 +1875,7 @@ TEST_F(AuthenticationTest, AKAAuthResyncFail)
   // integrity-protected=no.  This triggers aka authentication.
   AuthenticationMessage msg1("REGISTER");
   msg1._integ_prot = "no";
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
   ASSERT_EQ(1, txdata_count());
@@ -1911,7 +1911,7 @@ TEST_F(AuthenticationTest, AKAAuthResyncFail)
     msg2._nonce, msg2._nc,
     msg2._cnonce, msg2._qop,
     msg2._auth_realm);
-  inject_msg(msg2.get(), _tp);
+  inject_msg(msg2.get());
 
   // Expect a 403 Forbidden response.
   ASSERT_EQ(1, txdata_count());
@@ -1939,7 +1939,7 @@ TEST_F(AuthenticationTest, AuthCorruptAV)
   // integrity-protected=no.  This triggers aka authentication.
   AuthenticationMessage msg1("REGISTER");
   msg1._integ_prot = "no";
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
 
   // Expect a 403 Forbidden response.
   ASSERT_EQ(1, txdata_count());
@@ -1960,7 +1960,7 @@ TEST_F(AuthenticationTest, AuthCorruptAV)
   // integrity-protected=no.  This triggers aka authentication.
   AuthenticationMessage msg2("REGISTER");
   msg2._integ_prot = "no";
-  inject_msg(msg2.get(), _tp);
+  inject_msg(msg2.get());
 
   // Expect a 403 Forbidden response.
   ASSERT_EQ(1, txdata_count());
@@ -1980,7 +1980,7 @@ TEST_F(AuthenticationTest, AuthCorruptAV)
   // Digest authentication.
   AuthenticationMessage msg3("REGISTER");
   msg3._auth_hdr = false;
-  inject_msg(msg3.get(), _tp);
+  inject_msg(msg3.get());
 
   // Expect a 403 Forbidden response.
   ASSERT_EQ(1, txdata_count());
@@ -2006,8 +2006,8 @@ TEST_F(AuthenticationTest, AuthSproutletCanRegisterForAliases)
   // Digest authentication.
   AuthenticationMessage msg1("REGISTER");
   msg1._auth_hdr = false;
-  msg1._route = "sip:scscf.sprout.homedomain:5058;transport=TCP";
-  inject_msg(msg1.get(), _tp);
+  msg1._route_uri = "sip:authentication.sprout.homedomain:5058;transport=TCP";
+  inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
   ASSERT_EQ(1, txdata_count());
@@ -2031,8 +2031,8 @@ TEST_F(AuthenticationTest, AuthSproutletCanRegisterForAliases)
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
   msg2._integ_prot = "ip-assoc-pending";
-  msg1._route = "sip:scscf.sprout.homedomain:5058;transport=TCP";
-  inject_msg(msg2.get(), _tp);
+  msg1._route_uri = "sip:scscf.sprout.homedomain:5058;transport=TCP";
+  inject_msg(msg2.get());
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
@@ -2040,48 +2040,34 @@ TEST_F(AuthenticationTest, AuthSproutletCanRegisterForAliases)
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
 
-
-TEST_F(AuthenticationPxyAuthHdrTest, ProxyAuthorizationSuccess)
+TEST_F(AuthenticationTest, ServiceRouteWithMD5Algorithm)
 {
-  // Test a successful SIP Digest authentication flow.
   pjsip_tx_data* tdata;
 
   // Set up the HSS response for the AV query using a default private user identity.
   _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
-  // Send in a request with a Proxy-Authentication header.  This triggers
+  // Send in a REGISTER request with no authentication header.  This triggers
   // Digest authentication.
-  AuthenticationMessage msg("INVITE");
-  msg._auth_hdr = false;
-  msg._proxy_auth_hdr = true;
-  inject_msg(msg.get(), _tp);
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = false;
+  inject_msg(msg1.get());
 
-  // Expect a 407 Proxy Authorization Required response.
-  ASSERT_EQ(2, txdata_count());
-  RespMatcher(100).matches(current_txdata()->msg);
-  free_txdata();
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
-  RespMatcher(407).matches(tdata->msg);
+  RespMatcher(401).matches(tdata->msg);
 
-  // Extract the nonce, nc, cnonce and qop fields from the header.
-  std::string auth = get_headers(tdata->msg, "Proxy-Authenticate");
+  // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
+  std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
   std::map<std::string, std::string> auth_params;
   parse_www_authenticate(auth, auth_params);
-  EXPECT_NE("", auth_params["nonce"]);
-  EXPECT_EQ("auth", auth_params["qop"]);
-  EXPECT_EQ("MD5", auth_params["algorithm"]);
   free_txdata();
 
-  // ACK that response
-  AuthenticationMessage ack("ACK");
-  ack._cseq = 1;
-  inject_msg(ack.get(), _tp);
-
-  // Send a new request with an authentication header including the response.
-  AuthenticationMessage msg2("INVITE");
-  msg2._auth_hdr = false;
-  msg2._proxy_auth_hdr = true;
+  // Send a new REGISTER request with an authentication header including the
+  // response.
+  AuthenticationMessage msg2("REGISTER");
   msg2._algorithm = "MD5";
   msg2._key = "12345678123456781234567812345678";
   msg2._nonce = auth_params["nonce"];
@@ -2090,32 +2076,86 @@ TEST_F(AuthenticationPxyAuthHdrTest, ProxyAuthorizationSuccess)
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
   msg2._integ_prot = "ip-assoc-pending";
+  msg1._route_uri = "sip:scscf.sprout.homedomain:5058;transport=TCP";
+  inject_msg(msg2.get());
 
-  // Inject the request into the auth module. Check that it passes the request
-  // through, and strips the Proxy-Authorization header.
-  inject_msg(msg2.get(), _tp);
+  // The authentication module lets the request through. Keep the 200 OK around
+  // for future checking.
+  auth_sproutlet_allows_request(false, false);
 
-  ASSERT_EQ(2, txdata_count());
-  RespMatcher(100).matches(current_txdata()->msg);
+  // Check that the Service-Route contains username and nonce parameters.
+  EXPECT_EQ(get_headers(current_txdata()->msg, "Service-Route"),
+            "Service-Route: <sip:scscf.sprout.example.com;"
+              "orig;username=6505550001%40homedomain;nonce=" + auth_params["nonce"] + ">");
   free_txdata();
-
-  ASSERT_EQ(1, txdata_count());
-  EXPECT_EQ(current_txdata()->msg->type, PJSIP_REQUEST_MSG);
-  EXPECT_EQ(get_headers(current_txdata()->msg, "Proxy-Authorization"), "");
-  inject_msg(respond_to_current_txdata(200));
-
-  ASSERT_EQ(1, txdata_count());
-  RespMatcher(200).matches(current_txdata()->msg);
-  free_txdata();
-
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->_successes);
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
 
+TEST_F(AuthenticationTest, ServiceRouteWithAKAAlgorithm)
+{
+  // Test a successful AKA authentication flow.
+  pjsip_tx_data* tdata;
 
-TEST_F(AuthenticationPxyAuthHdrTest, ProxyAuthorizationOneResponsePerChallenge)
+  // Set up the HSS response for the AV query using a default private user identity.
+  // The keys in this test case are not consistent, but that won't matter for
+  // the purposes of the test as Clearwater never itself runs the MILENAGE
+  // algorithms to generate or extract keys.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
+                              "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
+                              "\"response\":\"12345678123456781234567812345678\","
+                              "\"cryptkey\":\"0123456789abcdef\","
+                              "\"integritykey\":\"fedcba9876543210\"}}");
+
+  // Send in a REGISTER request with an authentication header with
+  // integrity-protected=no.  This triggers aka authentication.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._integ_prot = "no";
+  inject_msg(msg1.get());
+
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
+  std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  parse_www_authenticate(auth, auth_params);
+  EXPECT_EQ("87654321876543218765432187654321", auth_params["nonce"]);
+  EXPECT_EQ("0123456789abcdef", auth_params["ck"]);
+  EXPECT_EQ("fedcba9876543210", auth_params["ik"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("AKAv1-MD5", auth_params["algorithm"]);
+  free_txdata();
+
+  // Send a new REGISTER request with an authentication header including the
+  // response.
+  AuthenticationMessage msg2("REGISTER");
+  msg2._algorithm = "AKAv1-MD5";
+  msg2._key = "12345678123456781234567812345678";
+  msg2._nonce = auth_params["nonce"];
+  msg2._opaque = auth_params["opaque"];
+  msg2._nc = "00000001";
+  msg2._cnonce = "8765432187654321";
+  msg2._qop = "auth";
+  msg2._integ_prot = "yes";
+  inject_msg(msg2.get());
+
+  // The authentication module lets the request through.
+  auth_sproutlet_allows_request(false, false);
+
+  // Check that the Service-Route does not contain username and nonce parameters
+  // - these are only added when the user authenticates using Digest
+  // authentication.
+  EXPECT_EQ(get_headers(current_txdata()->msg, "Service-Route"),
+            "Service-Route: <sip:scscf.sprout.example.com;orig>");
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
+}
+
+TEST_F(AuthenticationTest, StoreFailsWhenCheckingAuthResponse)
 {
   // Test a successful SIP Digest authentication flow.
   pjsip_tx_data* tdata;
@@ -2124,22 +2164,19 @@ TEST_F(AuthenticationPxyAuthHdrTest, ProxyAuthorizationOneResponsePerChallenge)
   _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
-  // Send in a request with a Proxy-Authentication header.  This triggers
+  // Send in a REGISTER request with no authentication header.  This triggers
   // Digest authentication.
-  AuthenticationMessage msg("INVITE");
-  msg._auth_hdr = false;
-  msg._proxy_auth_hdr = true;
-  inject_msg(msg.get(), _tp);
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = false;
+  inject_msg(msg1.get());
 
-  // Expect a 407 Proxy Authorization Required response.
-  ASSERT_EQ(2, txdata_count());
-  RespMatcher(100).matches(current_txdata()->msg);
-  free_txdata();
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
-  RespMatcher(407).matches(tdata->msg);
+  RespMatcher(401).matches(tdata->msg);
 
-  // Extract the nonce, nc, cnonce and qop fields from the header.
-  std::string auth = get_headers(tdata->msg, "Proxy-Authenticate");
+  // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
+  std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
   std::map<std::string, std::string> auth_params;
   parse_www_authenticate(auth, auth_params);
   EXPECT_NE("", auth_params["nonce"]);
@@ -2147,10 +2184,85 @@ TEST_F(AuthenticationPxyAuthHdrTest, ProxyAuthorizationOneResponsePerChallenge)
   EXPECT_EQ("MD5", auth_params["algorithm"]);
   free_txdata();
 
+  // Send a new REGISTER request with an authentication header including the
+  // response. Simulate a store failure during this request.
+  _local_data_store->force_error();
+  _local_data_store->force_get_error();
+
+  AuthenticationMessage msg2("REGISTER");
+  msg2._algorithm = "MD5";
+  msg2._key = "12345678123456781234567812345678";
+  msg2._nonce = auth_params["nonce"];
+  msg2._opaque = auth_params["opaque"];
+  msg2._nc = "00000001";
+  msg2._cnonce = "8765432187654321";
+  msg2._qop = "auth";
+  msg2._integ_prot = "ip-assoc-pending";
+  inject_msg(msg2.get());
+
+  // Expect a 500 Server Internal Error
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(500).matches(tdata->msg);
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+}
+
+//
+// Tests involving triggering authentication based on a Proxy-Authorization
+// header.
+//
+// These are typed tests, parameterized over different settings for the
+// non-REGISTER authentication mode config parameter.
+//
+
+typedef ::testing::Types <
+  AuthenticationTestConfig<NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT, true>,
+  AuthenticationTestConfig<NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT |
+                             NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT, true>
+> PxyAuthHdrTypes;
+
+// Need to define a new type so the parameterization works.
+template <class T> using AuthenticationPxyAuthHdrTest = AuthenticationTestTemplate<T>;
+TYPED_TEST_CASE(AuthenticationPxyAuthHdrTest, PxyAuthHdrTypes);
+
+TYPED_TEST(AuthenticationPxyAuthHdrTest, ProxyAuthorizationSuccess)
+{
+  // Test a successful SIP Digest authentication flow.
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  this->_hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                                    "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Send in a request with a Proxy-Authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg("INVITE");
+  msg._auth_hdr = false;
+  msg._proxy_auth_hdr = true;
+  msg._route_uri += ";auto-reg";
+  this->inject_msg(msg.get());
+
+  // Expect a 407 Proxy Authorization Required response.
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+  tdata = this->current_txdata();
+  RespMatcher(407).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the header.
+  std::string auth = get_headers(tdata->msg, "Proxy-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  this->parse_www_authenticate(auth, auth_params);
+  EXPECT_NE("", auth_params["nonce"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("MD5", auth_params["algorithm"]);
+  this->free_txdata();
+
   // ACK that response
   AuthenticationMessage ack("ACK");
   ack._cseq = 1;
-  inject_msg(ack.get(), _tp);
+  this->inject_msg(ack.get());
 
   // Send a new request with an authentication header including the response.
   AuthenticationMessage msg2("INVITE");
@@ -2164,13 +2276,97 @@ TEST_F(AuthenticationPxyAuthHdrTest, ProxyAuthorizationOneResponsePerChallenge)
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
   msg2._integ_prot = "ip-assoc-pending";
-  inject_msg(msg2.get(), _tp);
+  msg2._route_uri += ";auto-reg";
+
+  // Inject the request into the auth module. Check that it passes the request
+  // through, and strips the Proxy-Authorization header.
+  this->inject_msg(msg2.get());
+
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+
+  ASSERT_EQ(1, this->txdata_count());
+  EXPECT_EQ(this->current_txdata()->msg->type, PJSIP_REQUEST_MSG);
+  EXPECT_EQ(get_headers(this->current_txdata()->msg, "Proxy-Authorization"), "");
+  this->inject_msg(this->respond_to_current_txdata(200));
+
+  ASSERT_EQ(1, this->txdata_count());
+  RespMatcher(200).matches(this->current_txdata()->msg);
+  this->free_txdata();
+
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->_successes);
+
+  this->_hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+}
+
+
+TYPED_TEST(AuthenticationPxyAuthHdrTest, ProxyAuthorizationOneResponsePerChallenge)
+{
+  // Test a successful SIP Digest authentication flow.
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  this->_hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                                    "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Send in a request with a Proxy-Authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg("INVITE");
+  msg._auth_hdr = false;
+  msg._proxy_auth_hdr = true;
+  msg._route_uri += ";auto-reg";
+  this->inject_msg(msg.get());
+
+  // Expect a 407 Proxy Authorization Required response.
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+  tdata = this->current_txdata();
+  RespMatcher(407).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the header.
+  std::string auth = get_headers(tdata->msg, "Proxy-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  this->parse_www_authenticate(auth, auth_params);
+  EXPECT_NE("", auth_params["nonce"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("MD5", auth_params["algorithm"]);
+  this->free_txdata();
+
+  // ACK that response
+  AuthenticationMessage ack("ACK");
+  ack._cseq = 1;
+  this->inject_msg(ack.get());
+
+  // Send a new request with an authentication header including the response.
+  AuthenticationMessage msg2("INVITE");
+  msg2._auth_hdr = false;
+  msg2._proxy_auth_hdr = true;
+  msg2._algorithm = "MD5";
+  msg2._key = "12345678123456781234567812345678";
+  msg2._nonce = auth_params["nonce"];
+  msg2._opaque = auth_params["opaque"];
+  msg2._nc = "00000001";
+  msg2._cnonce = "8765432187654321";
+  msg2._qop = "auth";
+  msg2._integ_prot = "ip-assoc-pending";
+  msg2._route_uri += ";auto-reg";
+  this->inject_msg(msg2.get());
 
   // The authentication module lets the request through.
-  auth_sproutlet_allows_request(true);
+  this->auth_sproutlet_allows_request(true);
 
-  // Submit a same request with the same authentication response. Check it is
-  // rejected.
+  //
+  // Send another request that tries to use the same nonce as the first request.
+  //
+  // Note that because all challenges are stored for at least 40s (to allow the
+  // initial auth response flow to complete) we advance time by 60s first which
+  // makes the challenge expire and causes the request to be challenged.
+  //
+  cwtest_advance_time_ms(60 * 1000);
+
   AuthenticationMessage msg3("INVITE");
   msg3._auth_hdr = false;
   msg3._proxy_auth_hdr = true;
@@ -2178,31 +2374,32 @@ TEST_F(AuthenticationPxyAuthHdrTest, ProxyAuthorizationOneResponsePerChallenge)
   msg3._key = "12345678123456781234567812345678";
   msg3._nonce = auth_params["nonce"];
   msg3._opaque = auth_params["opaque"];
-  msg3._nc = "00000001";
+  msg3._nc = "00000002";
   msg3._cnonce = "8765432187654321";
   msg3._qop = "auth";
   msg3._integ_prot = "ip-assoc-pending";
-  inject_msg(msg3.get(), _tp);
+  msg3._route_uri += ";auto-reg";
+  this->inject_msg(msg3.get());
 
   // Expect a 407 Proxy Authorization Required response.
-  ASSERT_EQ(2, txdata_count());
-  RespMatcher(100).matches(current_txdata()->msg);
-  free_txdata();
-  tdata = current_txdata();
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+  tdata = this->current_txdata();
   RespMatcher(407).matches(tdata->msg);
 
   // Extract the nonce, nc, cnonce and qop fields from the header.
   std::string auth2 = get_headers(tdata->msg, "Proxy-Authenticate");
   std::map<std::string, std::string> auth_params2;
-  parse_www_authenticate(auth2, auth_params2);
+  this->parse_www_authenticate(auth2, auth_params2);
   EXPECT_EQ("true", auth_params2["stale"]);
   EXPECT_NE(auth_params["nonce"], auth_params2["nonce"]);
-  free_txdata();
+  this->free_txdata();
 
   // ACK that response
   AuthenticationMessage ack2("ACK");
   ack2._cseq = msg3._cseq;
-  inject_msg(ack2.get(), _tp);
+  this->inject_msg(ack2.get());
 
   // Submit a same request with the same authentication response. Check it is
   // rejected.
@@ -2211,75 +2408,58 @@ TEST_F(AuthenticationPxyAuthHdrTest, ProxyAuthorizationOneResponsePerChallenge)
   msg4._proxy_auth_hdr = true;
   msg4._algorithm = "MD5";
   msg4._key = "12345678123456781234567812345678";
-  msg4._nonce = auth_params["nonce"];
-  msg4._opaque = auth_params["opaque"];
+  msg4._nonce = auth_params2["nonce"];
+  msg4._opaque = auth_params2["opaque"];
   msg4._nc = "00000002";
   msg4._cnonce = "8765432187654321";
   msg4._qop = "auth";
   msg4._integ_prot = "ip-assoc-pending";
-  inject_msg(msg4.get(), _tp);
+  msg4._route_uri += ";auto-reg";
+  this->inject_msg(msg4.get());
 
-  // Expect a 407 Proxy Authorization Required response.
-  ASSERT_EQ(2, txdata_count());
-  RespMatcher(100).matches(current_txdata()->msg);
-  free_txdata();
-  tdata = current_txdata();
-  RespMatcher(407).matches(tdata->msg);
+  // The authentication module lets the request through.
+  this->auth_sproutlet_allows_request(true);
 
-  // Extract the nonce, nc, cnonce and qop fields from the header.
-  std::string auth3 = get_headers(tdata->msg, "Proxy-Authenticate");
-  std::map<std::string, std::string> auth_params3;
-  parse_www_authenticate(auth3, auth_params3);
-  EXPECT_EQ("true", auth_params3["stale"]);
-  EXPECT_NE(auth_params["nonce"], auth_params3["nonce"]);
-  EXPECT_NE(auth_params2["nonce"], auth_params3["nonce"]);
-  free_txdata();
-
-  // ACK that response
-  AuthenticationMessage ack3("ACK");
-  ack3._cseq = msg4._cseq;
-  inject_msg(ack3.get(), _tp);
-
-  ASSERT_EQ(0, txdata_count());
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  this->_hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
 
-TEST_F(AuthenticationPxyAuthHdrTest, ProxyAuthorizationFailure)
+TYPED_TEST(AuthenticationPxyAuthHdrTest, ProxyAuthorizationFailure)
 {
   // Test a successful SIP Digest authentication flow.
   pjsip_tx_data* tdata;
 
   // Set up the HSS response for the AV query using a default private user identity.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
-                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+  this->_hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                                    "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
   // Send in a request with a Proxy-Authentication header.  This triggers
   // Digest authentication.
   AuthenticationMessage msg("INVITE");
   msg._auth_hdr = false;
   msg._proxy_auth_hdr = true;
-  inject_msg(msg.get(), _tp);
+  msg._route_uri += ";auto-reg";
+  this->inject_msg(msg.get());
 
   // Expect a 407 Proxy Authorization Required response.
-  ASSERT_EQ(2, txdata_count());
-  RespMatcher(100).matches(current_txdata()->msg);
-  free_txdata();
-  tdata = current_txdata();
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+  tdata = this->current_txdata();
   RespMatcher(407).matches(tdata->msg);
 
   // Extract the nonce, nc, cnonce and qop fields from the header.
   std::string auth = get_headers(tdata->msg, "Proxy-Authenticate");
   std::map<std::string, std::string> auth_params;
-  parse_www_authenticate(auth, auth_params);
+  this->parse_www_authenticate(auth, auth_params);
   EXPECT_NE("", auth_params["nonce"]);
   EXPECT_EQ("auth", auth_params["qop"]);
   EXPECT_EQ("MD5", auth_params["algorithm"]);
-  free_txdata();
+  this->free_txdata();
 
   // ACK that response
   AuthenticationMessage ack("ACK");
   ack._cseq = 1;
-  inject_msg(ack.get(), _tp);
+  this->inject_msg(ack.get());
 
   // Send a new request with an authentication header - the nonce should match but the password
   // should be wrong.
@@ -2294,32 +2474,42 @@ TEST_F(AuthenticationPxyAuthHdrTest, ProxyAuthorizationFailure)
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
   msg2._integ_prot = "ip-assoc-pending";
-  inject_msg(msg2.get(), _tp);
+  msg2._route_uri += ";auto-reg";
+  this->inject_msg(msg2.get());
 
   // Expect a 403 Forbidden response.
-  ASSERT_EQ(2, txdata_count());
-  RespMatcher(100).matches(current_txdata()->msg);
-  free_txdata();
-  tdata = current_txdata();
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+  tdata = this->current_txdata();
   RespMatcher(403).matches(tdata->msg);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->_failures);
-  free_txdata();
+  this->free_txdata();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  this->_hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
 
-TEST_F(AuthenticationPxyAuthHdrTest, NoProxyAuthorization)
+TYPED_TEST(AuthenticationPxyAuthHdrTest, NoProxyAuthorization)
 {
   // Send in a request with a Proxy-Authentication header.  This triggers
   // Digest authentication.
   AuthenticationMessage msg("INVITE");
   msg._auth_hdr = false;
   msg._proxy_auth_hdr = false;
-  inject_msg(msg.get(), _tp);
+  this->inject_msg(msg.get());
 
-  auth_sproutlet_allows_request(true);
+  this->auth_sproutlet_allows_request(true);
 }
+
+
+//
+// Tests when nonce count support is disabled.
+//
+
+typedef AuthenticationTestTemplate<
+  AuthenticationTestConfig<NonRegisterAuthentication::NEVER, false>
+> AuthenticationNonceCountDisabledTest;
 
 TEST_F(AuthenticationNonceCountDisabledTest, DigestAuthSuccessWithNonceCount)
 {
@@ -2334,7 +2524,7 @@ TEST_F(AuthenticationNonceCountDisabledTest, DigestAuthSuccessWithNonceCount)
   // Digest authentication.
   AuthenticationMessage msg1("REGISTER");
   msg1._auth_hdr = false;
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
   ASSERT_EQ(1, txdata_count());
@@ -2361,7 +2551,7 @@ TEST_F(AuthenticationNonceCountDisabledTest, DigestAuthSuccessWithNonceCount)
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
   msg2._integ_prot = "ip-assoc-pending";
-  inject_msg(msg2.get(), _tp);
+  inject_msg(msg2.get());
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
@@ -2376,7 +2566,7 @@ TEST_F(AuthenticationNonceCountDisabledTest, DigestAuthSuccessWithNonceCount)
   msg3._cnonce = "8765432187654321";
   msg3._qop = "auth";
   msg3._integ_prot = "ip-assoc-pending";
-  inject_msg(msg3.get(), _tp);
+  inject_msg(msg3.get());
 
   // Expect a 401 Not Authorized response.
   ASSERT_EQ(1, txdata_count());
@@ -2406,7 +2596,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessWithDataContention)
   // get an IMPI into the store.
   AuthenticationMessage msg1("REGISTER");
   msg1._auth_hdr = false;
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
 
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
@@ -2426,7 +2616,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessWithDataContention)
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
   msg2._integ_prot = "ip-assoc-pending";
-  inject_msg(msg2.get(), _tp);
+  inject_msg(msg2.get());
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
@@ -2439,7 +2629,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessWithDataContention)
   // first attempt to write the challenge back fails, but the second succeeds.
   AuthenticationMessage msg3("REGISTER");
   msg3._auth_hdr = false;
-  inject_msg(msg3.get(), _tp);
+  inject_msg(msg3.get());
 
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
@@ -2458,7 +2648,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessWithDataContention)
   msg4._cnonce = "8765432187654321";
   msg4._qop = "auth";
   msg4._integ_prot = "ip-assoc-pending";
-  inject_msg(msg4.get(), _tp);
+  inject_msg(msg4.get());
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
@@ -2473,7 +2663,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessWithDataContention)
   msg5._cnonce = "8765432187654321";
   msg5._qop = "auth";
   msg5._integ_prot = "ip-assoc-pending";
-  inject_msg(msg5.get(), _tp);
+  inject_msg(msg5.get());
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
@@ -2488,7 +2678,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccessWithDataContention)
   msg6._cnonce = "8765432187654321";
   msg6._qop = "auth";
   msg6._integ_prot = "ip-assoc-pending";
-  inject_msg(msg6.get(), _tp);
+  inject_msg(msg6.get());
 
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
@@ -2515,10 +2705,778 @@ TEST_F(AuthenticationTest, DigestAuthFailureWithSetError)
   // Digest authentication.
   AuthenticationMessage msg1("REGISTER");
   msg1._auth_hdr = false;
-  inject_msg(msg1.get(), _tp);
+  inject_msg(msg1.get());
 
   // Expect a 500 Server Internal Error response.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(500).matches(tdata->msg);
+}
+
+
+//
+// Tests for authenticating non-REGISTER messages from a UE that authenticates
+// using SIP Digest.
+//
+// This is a typed test, parameterized over different values of the non-REGISTER
+// auth mode flag.
+//
+
+typedef ::testing::Types<
+  AuthenticationTestConfig<NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT, false>,
+  AuthenticationTestConfig<NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT |
+                             NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT, false>
+> DigestUEsTypes;
+
+template <class T>
+class AuthenticationDigestUEsTest : public AuthenticationTestTemplate<T>
+{
+public:
+  std::map<std::string, std::string> _reg_auth_params;
+
+  static void SetUpTestCase() { AuthenticationTestTemplate<T>::SetUpTestCase(); }
+  static void TearDownTestCase() { AuthenticationTestTemplate<T>::TearDownTestCase(); }
+
+  // Start this test with a subscriber registered.
+  virtual void SetUp()
+  {
+    AuthenticationTestTemplate<T>::SetUp();
+
+    // Test a successful SIP Digest authentication flow.
+    pjsip_tx_data* tdata;
+
+    // Set up the HSS response for the AV query using a default private user identity.
+    this->_hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                                      "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+    // Send in a REGISTER request with no authentication header.  This triggers
+    // Digest authentication.
+    AuthenticationMessage msg1("REGISTER");
+    msg1._auth_hdr = false;
+    this->inject_msg(msg1.get());
+
+    // Expect a 401 Not Authorized response.
+    ASSERT_EQ(1, this->txdata_count());
+    tdata = this->current_txdata();
+    RespMatcher(401).matches(tdata->msg);
+
+    // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
+    std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
+    this->parse_www_authenticate(auth, _reg_auth_params);
+    this->free_txdata();
+
+    // Send a new REGISTER request with an authentication header including the
+    // response.
+    AuthenticationMessage msg2("REGISTER");
+    msg2._algorithm = "MD5";
+    msg2._key = "12345678123456781234567812345678";
+    msg2._nonce = _reg_auth_params["nonce"];
+    msg2._opaque = _reg_auth_params["opaque"];
+    msg2._nc = "00000001";
+    msg2._cnonce = "8765432187654321";
+    msg2._qop = "auth";
+    msg2._integ_prot = "ip-assoc-pending";
+    this->inject_msg(msg2.get());
+
+    // The authentication module lets the request through.
+    this->auth_sproutlet_allows_request();
+
+    // Delete the result from the HSS. This makes sure that when authenticating
+    // the following INVITE we aren't accidentally querying the HSS.
+    this->_hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+
+    // Advance time by 1 minute to check that the challenge has not been written
+    // with too-short a timeout.
+    cwtest_advance_time_ms(60000);
+
+  }
+};
+
+TYPED_TEST_CASE(AuthenticationDigestUEsTest, DigestUEsTypes);
+
+TYPED_TEST(AuthenticationDigestUEsTest, SuccessFlow)
+{
+  pjsip_tx_data* tdata;
+  std::map<std::string, std::string> auth_params;
+  std::string auth;
+
+  // Send in a request with a Proxy-Authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg3("INVITE");
+  msg3._auth_hdr = false;
+  msg3._proxy_auth_hdr = false;
+  msg3._route_uri += ";username=6505550001%40homedomain;nonce=" + this->_reg_auth_params["nonce"];
+  this->inject_msg(msg3.get());
+
+  // Expect a 407 Proxy Authorization Required response.
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+  tdata = this->current_txdata();
+  RespMatcher(407).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the header.
+  auth = get_headers(tdata->msg, "Proxy-Authenticate");
+  auth_params.clear();
+  this->parse_www_authenticate(auth, auth_params);
+  EXPECT_NE("", auth_params["nonce"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("MD5", auth_params["algorithm"]);
+  this->free_txdata();
+
+  // ACK that response
+  AuthenticationMessage ack("ACK");
+  ack._cseq = msg3._cseq;
+  this->inject_msg(ack.get());
+
+  // Send a new request with an authentication header including the response.
+  AuthenticationMessage msg4("INVITE");
+  msg4._auth_hdr = false;
+  msg4._proxy_auth_hdr = true;
+  msg4._algorithm = "MD5";
+  msg4._key = "12345678123456781234567812345678";
+  msg4._nonce = auth_params["nonce"];
+  msg4._opaque = auth_params["opaque"];
+  msg4._nc = "00000001";
+  msg4._cnonce = "8765432187654321";
+  msg4._qop = "auth";
+  msg4._integ_prot = "ip-assoc-pending";
+  msg4._route_uri = msg3._route_uri;
+  this->inject_msg(msg4.get());
+
+  // Eat the 100 trying.
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+
+  ReqMatcher invite_matcher("INVITE");
+  invite_matcher.matches(this->current_txdata()->msg);
+  EXPECT_EQ(get_headers(this->current_txdata()->msg, "Proxy-Authorization"), "");
+
+  // The authentication module lets the request through.
+  this->auth_sproutlet_allows_request();
+}
+
+TYPED_TEST(AuthenticationDigestUEsTest, NonDigestSubscriberMakesCall)
+{
+  // Send in a request from an unregistered digest endpoint. Note that this will
+  // not have a real nonce.
+  AuthenticationMessage msg("INVITE");
+  msg._auth_hdr = false;
+  msg._proxy_auth_hdr = false;
+  this->inject_msg(msg.get());
+
+  this->auth_sproutlet_allows_request(true);
+}
+
+TYPED_TEST(AuthenticationDigestUEsTest, UnregSubscriberMakesCall)
+{
+  // Test a successful SIP Digest authentication flow.
+  pjsip_tx_data* tdata;
+
+  // Send in an INVITE that looks like it's from a digest UE, but the UE isn't
+  // actually registered.
+  AuthenticationMessage msg3("INVITE");
+  msg3._auth_hdr = false;
+  msg3._proxy_auth_hdr = false;
+  msg3._route_uri += ";username=9995550002%40homedomain;nonce=123456";
+  this->inject_msg(msg3.get());
+
+  // Expect a 403 Forbidden response.
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+  tdata = this->current_txdata();
+  RespMatcher(403).matches(tdata->msg);
+  this->free_txdata();
+
+  // Tidy up the transaction by sending the ACK.
+  AuthenticationMessage ack("ACK");
+  ack._cseq = msg3._cseq;
+  this->inject_msg(ack.get());
+}
+
+TYPED_TEST(AuthenticationDigestUEsTest, NoAuthorizationTermRequest)
+{
+  // Test that the authentication module lets through terminating requests, even
+  // if the rest of the message means it would be challenged.
+  AuthenticationMessage msg3("INVITE");
+  msg3._auth_hdr = false;
+  msg3._proxy_auth_hdr = false;
+  msg3._route_uri.erase(msg3._route_uri.find(";orig"));
+  msg3._route_uri += ";username=6505550001%40homedomain;nonce=123456";
+  this->inject_msg(msg3.get());
+
+  this->auth_sproutlet_allows_request(true);
+}
+
+TYPED_TEST(AuthenticationDigestUEsTest, NoAuthorizationInDialogRequest)
+{
+  // Test that the authentication module lets through terminating requests, even
+  // if the rest of the message means it would be challenged.
+  AuthenticationMessage msg3("INVITE");
+  msg3._auth_hdr = false;
+  msg3._proxy_auth_hdr = false;
+  msg3._route_uri += ";username=6505550001%40homedomain;nonce=123456";
+  msg3._to_tag = ";tag=kermit";
+  this->inject_msg(msg3.get());
+
+  this->auth_sproutlet_allows_request(true);
+}
+
+TYPED_TEST(AuthenticationDigestUEsTest, StoreFailsWhenGeneratingChallenge)
+{
+  pjsip_tx_data* tdata;
+  std::map<std::string, std::string> auth_params;
+  std::string auth;
+
+  // Send in an INVITE but fail the store lookup.
+  this->_local_data_store->force_get_error();
+
+  AuthenticationMessage msg3("INVITE");
+  msg3._auth_hdr = false;
+  msg3._proxy_auth_hdr = false;
+  msg3._route_uri += ";username=6505550001%40homedomain;nonce=" + this->_reg_auth_params["nonce"];
+  this->inject_msg(msg3.get());
+
+  // Expect a 504 response.
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+  tdata = this->current_txdata();
+  RespMatcher(504).matches(tdata->msg);
+
+  AuthenticationMessage ack("ACK");
+  ack._cseq = msg3._cseq;
+  this->inject_msg(ack.get());
+}
+
+TYPED_TEST(AuthenticationDigestUEsTest, BadAuthResponse)
+{
+  pjsip_tx_data* tdata;
+  std::map<std::string, std::string> auth_params;
+  std::string auth;
+
+  // Send in a request with a Proxy-Authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg3("INVITE");
+  msg3._auth_hdr = false;
+  msg3._proxy_auth_hdr = false;
+  msg3._route_uri += ";username=6505550001%40homedomain;nonce=" + this->_reg_auth_params["nonce"];
+  this->inject_msg(msg3.get());
+
+  // Expect a 407 Proxy Authorization Required response.
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+  tdata = this->current_txdata();
+  RespMatcher(407).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the header.
+  auth = get_headers(tdata->msg, "Proxy-Authenticate");
+  auth_params.clear();
+  this->parse_www_authenticate(auth, auth_params);
+  EXPECT_NE("", auth_params["nonce"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("MD5", auth_params["algorithm"]);
+  this->free_txdata();
+
+  // ACK that response
+  AuthenticationMessage ack("ACK");
+  ack._cseq = msg3._cseq;
+  this->inject_msg(ack.get());
+
+  // Send a new request with an authentication header including the response.
+  AuthenticationMessage msg4("INVITE");
+  msg4._auth_hdr = false;
+  msg4._proxy_auth_hdr = true;
+  msg4._algorithm = "MD5";
+  msg4._key = "thisisclearlywrong";
+  msg4._nonce = auth_params["nonce"];
+  msg4._opaque = auth_params["opaque"];
+  msg4._nc = "00000001";
+  msg4._cnonce = "8765432187654321";
+  msg4._qop = "auth";
+  msg4._integ_prot = "ip-assoc-pending";
+  msg4._route_uri = msg3._route_uri;
+  this->inject_msg(msg4.get());
+
+  // Expect a 403 Forbidden response.
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+  tdata = this->current_txdata();
+  RespMatcher(403).matches(tdata->msg);
+
+  // ACK that response
+  AuthenticationMessage ack2("ACK");
+  ack2._cseq = msg4._cseq;
+  this->inject_msg(ack2.get());
+}
+
+TYPED_TEST(AuthenticationDigestUEsTest, NonceCountAttemptCausesRechallenge)
+{
+  pjsip_tx_data* tdata;
+  std::map<std::string, std::string> auth_params;
+  std::string auth;
+
+  // Send in a request with a Proxy-Authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg3("INVITE");
+  msg3._auth_hdr = false;
+  msg3._proxy_auth_hdr = false;
+  msg3._route_uri += ";username=6505550001%40homedomain;nonce=" + this->_reg_auth_params["nonce"];
+  this->inject_msg(msg3.get());
+
+  // Expect a 407 Proxy Authorization Required response.
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+  tdata = this->current_txdata();
+  RespMatcher(407).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the header.
+  auth = get_headers(tdata->msg, "Proxy-Authenticate");
+  auth_params.clear();
+  this->parse_www_authenticate(auth, auth_params);
+  EXPECT_NE("", auth_params["nonce"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("MD5", auth_params["algorithm"]);
+  this->free_txdata();
+
+  // ACK that response
+  AuthenticationMessage ack("ACK");
+  ack._cseq = msg3._cseq;
+  this->inject_msg(ack.get());
+
+  // Send a new request with an authentication header including the response.
+  AuthenticationMessage msg4("INVITE");
+  msg4._auth_hdr = false;
+  msg4._proxy_auth_hdr = true;
+  msg4._algorithm = "MD5";
+  msg4._key = "12345678123456781234567812345678";
+  msg4._nonce = auth_params["nonce"];
+  msg4._opaque = auth_params["opaque"];
+  msg4._nc = "00000001";
+  msg4._cnonce = "8765432187654321";
+  msg4._qop = "auth";
+  msg4._integ_prot = "ip-assoc-pending";
+  msg4._route_uri = msg3._route_uri;
+  this->inject_msg(msg4.get());
+
+  // Eat the 100 trying.
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+
+  ReqMatcher invite_matcher("INVITE");
+  invite_matcher.matches(this->current_txdata()->msg);
+  EXPECT_EQ(get_headers(this->current_txdata()->msg, "Proxy-Authorization"), "");
+
+  // The authentication module lets the request through.
+  this->auth_sproutlet_allows_request();
+
+  //
+  // Send another request that tries to use the same nonce as the first request.
+  //
+
+  // Send a new request with a nonce count of 2.
+  AuthenticationMessage msg5("INVITE");
+  msg5._auth_hdr = false;
+  msg5._proxy_auth_hdr = true;
+  msg5._algorithm = "MD5";
+  msg5._key = "12345678123456781234567812345678";
+  msg5._nonce = auth_params["nonce"];
+  msg5._opaque = auth_params["opaque"];
+  msg5._nc = "00000002";
+  msg5._cnonce = "8765432187654321";
+  msg5._qop = "auth";
+  msg5._integ_prot = "ip-assoc-pending";
+  msg5._route_uri = msg4._route_uri;
+  this->inject_msg(msg5.get());
+
+  // Expect a 407 Proxy Authorization Required response.
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+  tdata = this->current_txdata();
+  RespMatcher(407).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the header.
+  auth = get_headers(tdata->msg, "Proxy-Authenticate");
+  auth_params.clear();
+  this->parse_www_authenticate(auth, auth_params);
+  this->free_txdata();
+
+  // ACK that response
+  AuthenticationMessage ack2("ACK");
+  ack2._cseq = msg5._cseq;
+  this->inject_msg(ack2.get());
+
+  // Send a new request with an authentication header including the response.
+  AuthenticationMessage msg6("INVITE");
+  msg6._auth_hdr = false;
+  msg6._proxy_auth_hdr = true;
+  msg6._algorithm = "MD5";
+  msg6._key = "12345678123456781234567812345678";
+  msg6._nonce = auth_params["nonce"];
+  msg6._opaque = auth_params["opaque"];
+  msg6._nc = "00000001";
+  msg6._cnonce = "8765432187654321";
+  msg6._qop = "auth";
+  msg6._integ_prot = "ip-assoc-pending";
+  msg6._route_uri = msg5._route_uri;
+  this->inject_msg(msg6.get());
+
+  // The authentication module lets the request through.
+  this->auth_sproutlet_allows_request(true);
+}
+
+TYPED_TEST(AuthenticationDigestUEsTest, GrTest)
+{
+  pjsip_tx_data* tdata;
+  std::map<std::string, std::string> auth_params;
+  std::string auth;
+
+  // Start off by simulating a GR failure. To do this:
+  // - Swap the local store and the remote store's contents.
+  // - Delete the data from the backup store.
+  //
+  // After this point, it's like we're acting in the remote site.
+  this->_local_data_store->swap_dbs(this->_remote_data_stores[0]);
+  this->_remote_data_stores[0]->flush_all();
+
+  // Send in a request with a Proxy-Authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg3("INVITE");
+  msg3._auth_hdr = false;
+  msg3._proxy_auth_hdr = false;
+  msg3._route_uri += ";username=6505550001%40homedomain;nonce=" + this->_reg_auth_params["nonce"];
+  this->inject_msg(msg3.get());
+
+  // Expect a 407 Proxy Authorization Required response.
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+  tdata = this->current_txdata();
+  RespMatcher(407).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the header.
+  auth = get_headers(tdata->msg, "Proxy-Authenticate");
+  auth_params.clear();
+  this->parse_www_authenticate(auth, auth_params);
+  EXPECT_NE("", auth_params["nonce"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("MD5", auth_params["algorithm"]);
+  this->free_txdata();
+
+  // ACK that response
+  AuthenticationMessage ack("ACK");
+  ack._cseq = msg3._cseq;
+  this->inject_msg(ack.get());
+
+  // Send a new request with an authentication header including the response.
+  AuthenticationMessage msg4("INVITE");
+  msg4._auth_hdr = false;
+  msg4._proxy_auth_hdr = true;
+  msg4._algorithm = "MD5";
+  msg4._key = "12345678123456781234567812345678";
+  msg4._nonce = auth_params["nonce"];
+  msg4._opaque = auth_params["opaque"];
+  msg4._nc = "00000001";
+  msg4._cnonce = "8765432187654321";
+  msg4._qop = "auth";
+  msg4._integ_prot = "ip-assoc-pending";
+  msg4._route_uri = msg3._route_uri;
+  this->inject_msg(msg4.get());
+
+  // Eat the 100 trying.
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+
+  ReqMatcher invite_matcher("INVITE");
+  invite_matcher.matches(this->current_txdata()->msg);
+  EXPECT_EQ(get_headers(this->current_txdata()->msg, "Proxy-Authorization"), "");
+
+  // The authentication module lets the request through.
+  this->auth_sproutlet_allows_request();
+}
+
+TYPED_TEST(AuthenticationDigestUEsTest, GrTestReadRepair)
+{
+  pjsip_tx_data* tdata;
+  std::map<std::string, std::string> auth_params;
+  std::string auth;
+
+  // Start off by pretending that this site was not available when the UE
+  // registered (by flushing the local store).
+  this->_local_data_store->flush_all();
+
+  // Send in a request with a Proxy-Authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg3("INVITE");
+  msg3._auth_hdr = false;
+  msg3._proxy_auth_hdr = false;
+  msg3._route_uri += ";username=6505550001%40homedomain;nonce=" + this->_reg_auth_params["nonce"];
+  this->inject_msg(msg3.get());
+
+  // Expect a 407 Proxy Authorization Required response.
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+  tdata = this->current_txdata();
+  RespMatcher(407).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the header.
+  auth = get_headers(tdata->msg, "Proxy-Authenticate");
+  auth_params.clear();
+  this->parse_www_authenticate(auth, auth_params);
+  EXPECT_NE("", auth_params["nonce"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("MD5", auth_params["algorithm"]);
+  this->free_txdata();
+
+  // ACK that response
+  AuthenticationMessage ack("ACK");
+  ack._cseq = msg3._cseq;
+  this->inject_msg(ack.get());
+
+  // Send a new request with an authentication header including the response.
+  AuthenticationMessage msg4("INVITE");
+  msg4._auth_hdr = false;
+  msg4._proxy_auth_hdr = true;
+  msg4._algorithm = "MD5";
+  msg4._key = "12345678123456781234567812345678";
+  msg4._nonce = auth_params["nonce"];
+  msg4._opaque = auth_params["opaque"];
+  msg4._nc = "00000001";
+  msg4._cnonce = "8765432187654321";
+  msg4._qop = "auth";
+  msg4._integ_prot = "ip-assoc-pending";
+  msg4._route_uri = msg3._route_uri;
+  this->inject_msg(msg4.get());
+
+  // The authentication module lets the request through.
+  this->auth_sproutlet_allows_request(true);
+
+  // Flush the remote database and run another request through to check
+  // everything is still working.
+  this->_remote_data_stores[0]->flush_all();
+
+  AuthenticationMessage msg5("INVITE");
+  msg5._auth_hdr = false;
+  msg5._proxy_auth_hdr = false;
+  msg5._route_uri += ";username=6505550001%40homedomain;nonce=" + this->_reg_auth_params["nonce"];
+  this->inject_msg(msg5.get());
+
+  // Expect a 407 Proxy Authorization Required response.
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+  tdata = this->current_txdata();
+  RespMatcher(407).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the header.
+  auth = get_headers(tdata->msg, "Proxy-Authenticate");
+  auth_params.clear();
+  this->parse_www_authenticate(auth, auth_params);
+  EXPECT_NE("", auth_params["nonce"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("MD5", auth_params["algorithm"]);
+  this->free_txdata();
+
+  // ACK that response
+  AuthenticationMessage ack2("ACK");
+  ack2._cseq = msg5._cseq;
+  this->inject_msg(ack2.get());
+
+  // Send a new request with an authentication header including the response.
+  AuthenticationMessage msg6("INVITE");
+  msg6._auth_hdr = false;
+  msg6._proxy_auth_hdr = true;
+  msg6._algorithm = "MD5";
+  msg6._key = "12345678123456781234567812345678";
+  msg6._nonce = auth_params["nonce"];
+  msg6._opaque = auth_params["opaque"];
+  msg6._nc = "00000001";
+  msg6._cnonce = "8765432187654321";
+  msg6._qop = "auth";
+  msg6._integ_prot = "ip-assoc-pending";
+  msg6._route_uri = msg5._route_uri;
+  this->inject_msg(msg6.get());
+
+  // The authentication module lets the request through.
+  this->auth_sproutlet_allows_request(true);
+
+}
+
+//
+// Tests for authenticating non-REGISTER messages from a UE that authenticates
+// using SIP Digest, but with nonce counts supported.
+//
+// This is a typed test, parameterized over different values of the non-REGISTER
+// auth mode flag.
+//
+
+typedef ::testing::Types<
+  AuthenticationTestConfig<NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT, true>,
+  AuthenticationTestConfig<NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT |
+                             NonRegisterAuthentication::IF_PROXY_AUTHORIZATION_PRESENT, true>
+> DigestUEsNonceCountSupportedTypes;
+
+template <class T>
+using AuthenticationDigestUEsNonceCountSupportedTest = AuthenticationDigestUEsTest<T>;
+
+TYPED_TEST_CASE(AuthenticationDigestUEsNonceCountSupportedTest,
+                DigestUEsNonceCountSupportedTypes);
+
+// Check that a non-REGISTER request can be authenticated against the REGISTER
+// challenge.
+TYPED_TEST(AuthenticationDigestUEsNonceCountSupportedTest, NonRegAuthAgainstRegChallenge)
+{
+  // Send a new request with an authentication header including the response.
+  AuthenticationMessage msg4("INVITE");
+  msg4._auth_hdr = false;
+  msg4._proxy_auth_hdr = true;
+  msg4._algorithm = "MD5";
+  msg4._key = "12345678123456781234567812345678";
+  msg4._nonce = this->_reg_auth_params["nonce"];
+  msg4._opaque = this->_reg_auth_params["opaque"];
+  msg4._nc = "00000002";
+  msg4._cnonce = "8765432187654321";
+  msg4._qop = "auth";
+  msg4._integ_prot = "ip-assoc-pending";
+  msg4._route_uri += ";username=6505550001%40homedomain;nonce=" + this->_reg_auth_params["nonce"];
+  this->inject_msg(msg4.get());
+
+  // The authentication module lets the request through.
+  this->auth_sproutlet_allows_request(true);
+}
+
+
+// Test making two non-REGISTER requests a long time apart (where the second
+// has incremented the nonce count). The second SHOULD be challenged as
+// the challenge will have expired.
+TYPED_TEST(AuthenticationDigestUEsNonceCountSupportedTest, NonRegChalNotStored)
+{
+  pjsip_tx_data* tdata;
+  std::map<std::string, std::string> auth_params;
+  std::string auth;
+
+  // Send in a request with a Proxy-Authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg3("INVITE");
+  msg3._auth_hdr = false;
+  msg3._proxy_auth_hdr = false;
+  msg3._route_uri += ";username=6505550001%40homedomain;nonce=" + this->_reg_auth_params["nonce"];
+  this->inject_msg(msg3.get());
+
+  // Expect a 407 Proxy Authorization Required response.
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+  tdata = this->current_txdata();
+  RespMatcher(407).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the header.
+  auth = get_headers(tdata->msg, "Proxy-Authenticate");
+  auth_params.clear();
+  this->parse_www_authenticate(auth, auth_params);
+  EXPECT_NE("", auth_params["nonce"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("MD5", auth_params["algorithm"]);
+  this->free_txdata();
+
+  // ACK that response
+  AuthenticationMessage ack("ACK");
+  ack._cseq = msg3._cseq;
+  this->inject_msg(ack.get());
+
+  // Send a new request with an authentication header including the response.
+  AuthenticationMessage msg4("INVITE");
+  msg4._auth_hdr = false;
+  msg4._proxy_auth_hdr = true;
+  msg4._algorithm = "MD5";
+  msg4._key = "12345678123456781234567812345678";
+  msg4._nonce = auth_params["nonce"];
+  msg4._opaque = auth_params["opaque"];
+  msg4._nc = "00000001";
+  msg4._cnonce = "8765432187654321";
+  msg4._qop = "auth";
+  msg4._integ_prot = "ip-assoc-pending";
+  msg4._route_uri = msg3._route_uri;
+  this->inject_msg(msg4.get());
+
+  // Eat the 100 trying.
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+
+  ReqMatcher invite_matcher("INVITE");
+  invite_matcher.matches(this->current_txdata()->msg);
+  EXPECT_EQ(get_headers(this->current_txdata()->msg, "Proxy-Authorization"), "");
+
+  // The authentication module lets the request through.
+  this->auth_sproutlet_allows_request();
+
+  //
+  // Send another request that tries to use the same nonce as the first request.
+  //
+  // Note that because all challenges are stored for at least 40s (to allow the
+  // initial auth response flow to complete) we advance time by 60s first which
+  // makes the challenge expire and causes the request to be challenged.
+  //
+  cwtest_advance_time_ms(60 * 1000);
+
+  // Send a new request with a nonce count of 2.
+  AuthenticationMessage msg5("INVITE");
+  msg5._auth_hdr = false;
+  msg5._proxy_auth_hdr = true;
+  msg5._algorithm = "MD5";
+  msg5._key = "12345678123456781234567812345678";
+  msg5._nonce = auth_params["nonce"];
+  msg5._opaque = auth_params["opaque"];
+  msg5._nc = "00000002";
+  msg5._cnonce = "8765432187654321";
+  msg5._qop = "auth";
+  msg5._integ_prot = "ip-assoc-pending";
+  msg5._route_uri = msg4._route_uri;
+  this->inject_msg(msg5.get());
+
+  // Expect a 407 Proxy Authorization Required response.
+  ASSERT_EQ(2, this->txdata_count());
+  RespMatcher(100).matches(this->current_txdata()->msg);
+  this->free_txdata();
+  tdata = this->current_txdata();
+  RespMatcher(407).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the header.
+  auth = get_headers(tdata->msg, "Proxy-Authenticate");
+  auth_params.clear();
+  this->parse_www_authenticate(auth, auth_params);
+  this->free_txdata();
+
+  // ACK that response
+  AuthenticationMessage ack2("ACK");
+  ack2._cseq = msg5._cseq;
+  this->inject_msg(ack2.get());
+
+  // Send a new request with an authentication header including the response.
+  AuthenticationMessage msg6("INVITE");
+  msg6._auth_hdr = false;
+  msg6._proxy_auth_hdr = true;
+  msg6._algorithm = "MD5";
+  msg6._key = "12345678123456781234567812345678";
+  msg6._nonce = auth_params["nonce"];
+  msg6._opaque = auth_params["opaque"];
+  msg6._nc = "00000001";
+  msg6._cnonce = "8765432187654321";
+  msg6._qop = "auth";
+  msg6._integ_prot = "ip-assoc-pending";
+  msg6._route_uri = msg5._route_uri;
+  this->inject_msg(msg6.get());
+
+  // The authentication module lets the request through.
+  this->auth_sproutlet_allows_request(true);
 }

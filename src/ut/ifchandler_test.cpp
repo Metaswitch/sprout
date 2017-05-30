@@ -211,7 +211,7 @@ void IfcHandlerTest::doBaseTest(string description,
   std::shared_ptr<rapidxml::xml_document<> > root (new rapidxml::xml_document<>);
   char* cstr_ifc = strdup(ifc.c_str());
   root->parse<0>(cstr_ifc);
-  Ifcs* ifcs = new Ifcs(root, root->first_node("ServiceProfile"));
+  Ifcs* ifcs = new Ifcs(root, root->first_node("ServiceProfile"), NULL, 0);
   ifcs->interpret(sescase,
                   reg,
                   initial_registration,

@@ -35,6 +35,7 @@ using ::testing::SaveArg;
 using ::testing::SaveArgPointee;
 using ::testing::InSequence;
 using ::testing::ByRef;
+using ::testing::NiceMock;
 
 const std::string HSS_REG_STATE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
                                   "<ClearwaterRegData>"
@@ -499,7 +500,8 @@ TEST_F(AoRTimeoutTasksMockStoreTest, SubscriberDataManagerWritesFail)
 class DeregistrationTaskTest : public SipTest
 {
   MockSubscriberDataManager* _subscriber_data_manager;
-  MockImpiStore* _impi_store;
+  MockImpiStore* _local_impi_store;
+  MockImpiStore* _remote_impi_store;
   MockHttpStack* _httpstack;
   FakeHSSConnection* _hss;
   MockHttpStack::Request* _req;
@@ -514,7 +516,8 @@ class DeregistrationTaskTest : public SipTest
 
   void SetUp()
   {
-    _impi_store = new MockImpiStore();
+    _local_impi_store = new MockImpiStore();
+    _remote_impi_store = new NiceMock<MockImpiStore>();
     _httpstack = new MockHttpStack();
     _subscriber_data_manager = new MockSubscriberDataManager();
     _hss = new FakeHSSConnection();
@@ -527,7 +530,8 @@ class DeregistrationTaskTest : public SipTest
     delete _hss;
     delete _subscriber_data_manager;
     delete _httpstack;
-    delete _impi_store; _impi_store = NULL;
+    delete _local_impi_store; _local_impi_store = NULL;
+    delete _remote_impi_store; _remote_impi_store = NULL;
   }
 
   // Build the deregistration request
@@ -545,7 +549,8 @@ class DeregistrationTaskTest : public SipTest
                                           {},
                                           _hss,
                                           NULL,
-                                          _impi_store);
+                                          _local_impi_store,
+                                          {_remote_impi_store});
     _task = new DeregistrationTask(*_req, _cfg, 0);
   }
 
@@ -620,10 +625,14 @@ TEST_F(DeregistrationTaskTest, MainlineTest)
 
   expect_sdm_updates(aor_ids, aors);
 
-  // The IMPI is also deleted.
+  // The IMPI is also deleted from the local and remote stores.
   ImpiStore::Impi* impi = new ImpiStore::Impi("6505550231");
-  EXPECT_CALL(*_impi_store, get_impi("6505550231", _)).WillOnce(Return(impi));
-  EXPECT_CALL(*_impi_store, delete_impi(impi, _)).WillOnce(Return(Store::OK));
+  EXPECT_CALL(*_local_impi_store, get_impi("6505550231", _)).WillOnce(Return(impi));
+  EXPECT_CALL(*_local_impi_store, delete_impi(impi, _)).WillOnce(Return(Store::OK));
+
+  impi = new ImpiStore::Impi("6505550231");
+  EXPECT_CALL(*_remote_impi_store, get_impi("6505550231", _)).WillOnce(Return(impi));
+  EXPECT_CALL(*_remote_impi_store, delete_impi(impi, _)).WillOnce(Return(Store::OK));
 
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
@@ -829,8 +838,8 @@ TEST_F(DeregistrationTaskTest, ImpiClearedWhenBindingUnconditionallyDeregistered
 
   // The corresponding IMPI is also deleted.
   ImpiStore::Impi* impi = new ImpiStore::Impi("impi1");
-  EXPECT_CALL(*_impi_store, get_impi("impi1", _)).WillOnce(Return(impi));
-  EXPECT_CALL(*_impi_store, delete_impi(impi, _)).WillOnce(Return(Store::OK));
+  EXPECT_CALL(*_local_impi_store, get_impi("impi1", _)).WillOnce(Return(impi));
+  EXPECT_CALL(*_local_impi_store, delete_impi(impi, _)).WillOnce(Return(Store::OK));
 
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
@@ -905,12 +914,12 @@ TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
   ImpiStore::Impi* impi1 = new ImpiStore::Impi("impi1");
   ImpiStore::Impi* impi2 = new ImpiStore::Impi("impi2");
   ImpiStore::Impi* impi3 = new ImpiStore::Impi("impi3");
-  EXPECT_CALL(*_impi_store, get_impi("impi1", _)).WillOnce(Return(impi1));
-  EXPECT_CALL(*_impi_store, delete_impi(impi1, _)).WillOnce(Return(Store::OK));
-  EXPECT_CALL(*_impi_store, get_impi("impi2", _)).WillOnce(Return(impi2));
-  EXPECT_CALL(*_impi_store, delete_impi(impi2, _)).WillOnce(Return(Store::OK));
-  EXPECT_CALL(*_impi_store, get_impi("impi3", _)).WillOnce(Return(impi3));
-  EXPECT_CALL(*_impi_store, delete_impi(impi3, _)).WillOnce(Return(Store::OK));
+  EXPECT_CALL(*_local_impi_store, get_impi("impi1", _)).WillOnce(Return(impi1));
+  EXPECT_CALL(*_local_impi_store, delete_impi(impi1, _)).WillOnce(Return(Store::OK));
+  EXPECT_CALL(*_local_impi_store, get_impi("impi2", _)).WillOnce(Return(impi2));
+  EXPECT_CALL(*_local_impi_store, delete_impi(impi2, _)).WillOnce(Return(Store::OK));
+  EXPECT_CALL(*_local_impi_store, get_impi("impi3", _)).WillOnce(Return(impi3));
+  EXPECT_CALL(*_local_impi_store, delete_impi(impi3, _)).WillOnce(Return(Store::OK));
 
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
@@ -954,7 +963,7 @@ TEST_F(DeregistrationTaskTest, CannotFindImpiToDelete)
   // Simulate the IMPI not being found in the store. The handler does not go on
   // to try and delete the IMPI.
   ImpiStore::Impi* impi1 = NULL;
-  EXPECT_CALL(*_impi_store, get_impi("impi1", _)).WillOnce(Return(impi1));
+  EXPECT_CALL(*_local_impi_store, get_impi("impi1", _)).WillOnce(Return(impi1));
 
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
@@ -985,8 +994,8 @@ TEST_F(DeregistrationTaskTest, ImpiStoreFailure)
   // Simulate the IMPI store failing when deleting the IMPI. The handler does
   // not retry the delete.
   ImpiStore::Impi* impi1 = new ImpiStore::Impi("impi1");
-  EXPECT_CALL(*_impi_store, get_impi("impi1", _)).WillOnce(Return(impi1));
-  EXPECT_CALL(*_impi_store, delete_impi(impi1, _)).WillOnce(Return(Store::ERROR));
+  EXPECT_CALL(*_local_impi_store, get_impi("impi1", _)).WillOnce(Return(impi1));
+  EXPECT_CALL(*_local_impi_store, delete_impi(impi1, _)).WillOnce(Return(Store::ERROR));
 
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
@@ -1022,10 +1031,10 @@ TEST_F(DeregistrationTaskTest, ImpiStoreDataContention)
     // Simulate the IMPI store returning data contention on the first delete.
     // The handler tries again.
     InSequence s;
-    EXPECT_CALL(*_impi_store, get_impi("impi1", _)).WillOnce(Return(impi1));
-    EXPECT_CALL(*_impi_store, delete_impi(impi1, _)).WillOnce(Return(Store::DATA_CONTENTION));
-    EXPECT_CALL(*_impi_store, get_impi("impi1", _)).WillOnce(Return(impi1a));
-    EXPECT_CALL(*_impi_store, delete_impi(impi1a, _)).WillOnce(Return(Store::OK));
+    EXPECT_CALL(*_local_impi_store, get_impi("impi1", _)).WillOnce(Return(impi1));
+    EXPECT_CALL(*_local_impi_store, delete_impi(impi1, _)).WillOnce(Return(Store::DATA_CONTENTION));
+    EXPECT_CALL(*_local_impi_store, get_impi("impi1", _)).WillOnce(Return(impi1a));
+    EXPECT_CALL(*_local_impi_store, delete_impi(impi1a, _)).WillOnce(Return(Store::OK));
   }
 
   // Run the task

@@ -703,13 +703,14 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                     pjsip_msg_find_hdr_by_name(req, &STR_PATH, path_hdr->next);
   }
 
-  // Add the Service-Route header.  It isn't safe to do this with the
-  // pre-built header from the global pool because the chaining data
-  // structures in the header may get overwritten, but it is safe to do a
-  // shallow clone.
-  pjsip_hdr* clone = (pjsip_hdr*)
-                          pjsip_hdr_shallow_clone(get_pool(rsp), _registrar->_service_route);
-  pjsip_msg_insert_first_hdr(rsp, clone);
+  // Add the Service-Route header. We may modify this so need to do a full clone
+  // of the header.  Annoyingly this overwrites the custom name we set during
+  // module initialization, so reset it.
+  pjsip_routing_hdr* sr_hdr = (pjsip_routing_hdr*)
+    pjsip_hdr_clone(get_pool(rsp), _registrar->_service_route);
+  sr_hdr->name = STR_SERVICE_ROUTE;
+  sr_hdr->sname = pj_str((char*)"");
+  pjsip_msg_insert_first_hdr(rsp, (pjsip_hdr*)sr_hdr);
 
   // Log any URIs that have been left out of the P-Associated-URI because they
   // are barred.
