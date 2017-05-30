@@ -134,7 +134,7 @@ Ifcs non_matching_ifcs(int count, ...)
 
 TEST_F(AsChainTest, Basics)
 {
-  IFCConfiguration ifc_configuration(false, false, "", NULL, NULL);
+  IFCConfiguration ifc_configuration(false, false, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs1 = matching_ifcs(0);
   AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs1, NULL, NULL, ifc_configuration);
   AsChainLink as_chain_link(&as_chain, 0u);
@@ -166,7 +166,7 @@ TEST_F(AsChainTest, Basics)
 // those IFCs and no more.
 TEST_F(AsChainTest, MatchingStandardIFCs)
 {
-  IFCConfiguration ifc_configuration(false, false, "", NULL, NULL);
+  IFCConfiguration ifc_configuration(false, false, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = matching_ifcs(2, "sip:as1", "sip:as2");
   AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
   AsChainLink as_chain_link(&as_chain, 0u);
@@ -197,7 +197,7 @@ TEST_F(AsChainTest, MatchingStandardIFCs)
 // We shouldn't select any ASs.
 TEST_F(AsChainTest, NoMatchingStandardIFCs)
 {
-  IFCConfiguration ifc_configuration(false, false, "", NULL, NULL);
+  IFCConfiguration ifc_configuration(false, false, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = non_matching_ifcs(2, "sip:as1", "sip:as2");
   AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
   AsChainLink as_chain_link(&as_chain, 0u);
@@ -216,7 +216,7 @@ TEST_F(AsChainTest, NoMatchingStandardIFCs)
 // We should select the ASs from the standard IFCs
 TEST_F(AsChainTest, MatchingStandardIFCsRejectIfNone)
 {
-  IFCConfiguration ifc_configuration(false, true, "", NULL, NULL);
+  IFCConfiguration ifc_configuration(false, true, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = matching_ifcs(1, "sip:as1");
   AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
   AsChainLink as_chain_link(&as_chain, 0u);
@@ -235,7 +235,7 @@ TEST_F(AsChainTest, MatchingStandardIFCsRejectIfNone)
 // We shouldn't select any ASs, and we should have an error response.
 TEST_F(AsChainTest, NoMatchingStandardIFCsRejectIfNone)
 {
-  IFCConfiguration ifc_configuration(false, true, "", NULL, NULL);
+  IFCConfiguration ifc_configuration(false, true, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = non_matching_ifcs(2, "sip:as1", "sip:as2");
   AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
   AsChainLink as_chain_link(&as_chain, 0u);
@@ -253,7 +253,7 @@ TEST_F(AsChainTest, NoMatchingStandardIFCsRejectIfNone)
 // We should select the ASs from the standard IFCs
 TEST_F(AsChainTest, MatchingStandardIFCsWithMatchingDefaultIFCs)
 {
-  IFCConfiguration ifc_configuration(true, true, "", NULL, NULL);
+  IFCConfiguration ifc_configuration(true, true, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = matching_ifcs(2, "sip:as1", "sip:as2");
   Ifcs default_ifcs = matching_ifcs(2, "sip:default_as2", "sip:default_as2");
   AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
@@ -283,7 +283,7 @@ TEST_F(AsChainTest, MatchingStandardIFCsWithMatchingDefaultIFCs)
 // We should select the ASs from the default IFCs
 TEST_F(AsChainTest, NoMatchingStandardIFCsWithDefaultIFCs)
 {
-  IFCConfiguration ifc_configuration(true, true, "", NULL, NULL);
+  IFCConfiguration ifc_configuration(true, true, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = non_matching_ifcs(2, "sip:as1", "sip:as2");
   Ifcs default_ifcs = matching_ifcs(2, "sip:default_as1", "sip:default_as2");
   AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
@@ -313,7 +313,7 @@ TEST_F(AsChainTest, NoMatchingStandardIFCsWithDefaultIFCs)
 // We shouldn't select any ASs.
 TEST_F(AsChainTest, NoMatchingStandardOrDefaultIFCs)
 {
-  IFCConfiguration ifc_configuration(true, false, "", NULL, NULL);
+  IFCConfiguration ifc_configuration(true, false, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = non_matching_ifcs(2, "sip:as1", "sip:as2");
   Ifcs default_ifcs = non_matching_ifcs(2, "sip:default_as2", "sip:default_as2");
   AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
@@ -333,7 +333,7 @@ TEST_F(AsChainTest, NoMatchingStandardOrDefaultIFCs)
 // We shouldn't select any ASs, and we should have an error response.
 TEST_F(AsChainTest, NoMatchingStandardOrDefaultIFCsWithReject)
 {
-  IFCConfiguration ifc_configuration(true, true, "", NULL, NULL);
+  IFCConfiguration ifc_configuration(true, true, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = non_matching_ifcs(2, "sip:as1", "sip:as2");
   Ifcs default_ifcs = non_matching_ifcs(2, "sip:default_as2", "sip:default_as2");
   AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
@@ -357,7 +357,7 @@ TEST_F(AsChainTest, MatchingStandardIFCDummyAppServer)
 {
   // Create an Ifcs with three IFCs, pointing to AS1, AS2, and AS3, and create
   // the AS Chain with AS2 set up as a dummy application server.
-  IFCConfiguration ifc_configuration(false, false, "sip:AS2", NULL, NULL);
+  IFCConfiguration ifc_configuration(false, false, "sip:AS2", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = matching_ifcs(3, "sip:AS1", "sip:AS2", "sip:AS3");
   AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
   AsChainLink as_chain_link(&as_chain, 0u);
@@ -391,7 +391,7 @@ TEST_F(AsChainTest, MatchingStandardIFCOnlyDummyAppServer)
 {
   // Create an Ifcs with three IFCs, pointing to AS1, AS2, and AS3, and create
   // the AS Chain with AS2 set up as a dummy application server.
-  IFCConfiguration ifc_configuration(false, false, "sip:dummy_as", NULL, NULL);
+  IFCConfiguration ifc_configuration(false, false, "sip:dummy_as", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = matching_ifcs(1, "sip:dummy_as");
   AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
   AsChainLink as_chain_link(&as_chain, 0u);
@@ -412,7 +412,7 @@ TEST_F(AsChainTest, MatchingStandardIFCOnlyDummyAppServerWithReject)
 {
   // Create an Ifcs with three IFCs, pointing to AS1, AS2, and AS3, and create
   // the AS Chain with AS2 set up as a dummy application server.
-  IFCConfiguration ifc_configuration(false, true, "sip:dummy_as", NULL, NULL);
+  IFCConfiguration ifc_configuration(false, true, "sip:dummy_as", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = matching_ifcs(1, "sip:dummy_as");
   AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
   AsChainLink as_chain_link(&as_chain, 0u);
@@ -433,7 +433,7 @@ TEST_F(AsChainTest, MatchingStandardIFCOnlyDummyAppServerWithDefaultIFCs)
 {
   // Create an Ifcs with three IFCs, pointing to AS1, AS2, and AS3, and create
   // the AS Chain with AS2 set up as a dummy application server.
-  IFCConfiguration ifc_configuration(true, true, "sip:dummy_as", NULL, NULL);
+  IFCConfiguration ifc_configuration(true, true, "sip:dummy_as", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = matching_ifcs(1, "sip:dummy_as");
   Ifcs default_ifcs = matching_ifcs(1, "sip:default_as1");
   AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
