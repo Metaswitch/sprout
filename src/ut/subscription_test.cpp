@@ -115,9 +115,10 @@ public:
     b1->_emergency_registration = false;
 
     // Add the AoR record to the store.
-    std::vector<std::string> irs_impus;
-    irs_impus.push_back("sip:6505550231@homedomain");
-    _sdm->set_aor_data(irs_impus[0], irs_impus, aor_pair, 0);
+    std::string aor = "sip:6505550231@homedomain";
+    AssociatedURIs associated_uris = {};
+    associated_uris.add_uri(aor, false);
+    _sdm->set_aor_data(aor, &associated_uris, aor_pair, 0);
     delete aor_pair; aor_pair = NULL;
 
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
@@ -423,9 +424,10 @@ TEST_F(SubscriptionTest, SimpleMainlineWithTelURI)
   b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
-  std::vector<std::string> irs_impus;
-  irs_impus.push_back("tel:6505550231");
-  _sdm->set_aor_data(irs_impus[0], irs_impus, aor_pair, 0);
+  std::string aor = "tel:6505550231";
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri(aor, false);
+  _sdm->set_aor_data(aor, &associated_uris, aor_pair, 0);
   delete aor_pair; aor_pair = NULL;
 
   check_subscriptions("tel:6505550231", 0u);
@@ -729,9 +731,10 @@ TEST_F(SubscriptionTest, NonPrimaryAssociatedUri)
   b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
-  std::vector<std::string> irs_impus;
-  irs_impus.push_back("sip:6505550233@homedomain");
-  _sdm->set_aor_data(irs_impus[0], irs_impus, aor_pair, 0);
+  std::string aor = "sip:6505550233@homedomain";
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri(aor, false);
+  _sdm->set_aor_data(aor, &associated_uris, aor_pair, 0);
   delete aor_pair; aor_pair = NULL;
 
   SubscribeMessage msg;
@@ -794,9 +797,10 @@ TEST_F(SubscriptionTest, NoNotificationsForEmergencyRegistrations)
   b2->_emergency_registration = false;
 
   // Add the AoR record to the store.
-  std::vector<std::string> irs_impus;
-  irs_impus.push_back("sip:6505550231@homedomain");
-  _sdm->set_aor_data(irs_impus[0], irs_impus, aor_data1, 0);
+  std::string aor = "sip:6505550231@homedomain";
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri(aor, false);
+  _sdm->set_aor_data(aor, &associated_uris, aor_data1, 0);
   delete aor_data1; aor_data1 = NULL;
 
   check_subscriptions("sip:6505550231@homedomain", 0u);
@@ -906,9 +910,10 @@ TEST_F(SubscriptionTest, SubscriptionWithWildcard)
   b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
-  std::vector<std::string> irs_impus_aor;
-  irs_impus_aor.push_back("sip:6505551231@homedomain");
-  _sdm->set_aor_data(irs_impus_aor[0], irs_impus_aor, aor_pair, 0);
+  std::string aor = "sip:6505551231@homedomain";
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri(aor, false);
+  _sdm->set_aor_data(aor, &associated_uris, aor_pair, 0);
   delete aor_pair; aor_pair = NULL;
 
   _hss_connection->set_impu_result("sip:6505551231@homedomain", "", RegDataXMLUtils::STATE_REGISTERED,
@@ -964,9 +969,10 @@ TEST_F(SubscriptionTest, SubscriptionWithBarredIdentity)
   b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
-  std::vector<std::string> irs_impus_aor;
-  irs_impus_aor.push_back("sip:6505551231@homedomain");
-  _sdm->set_aor_data(irs_impus_aor[0], irs_impus_aor, aor_pair, 0);
+  std::string aor = "sip:6505551231@homedomain";
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri(aor, false);
+  _sdm->set_aor_data(aor, &associated_uris, aor_pair, 0);
   delete aor_pair; aor_pair = NULL;
 
   _hss_connection->set_impu_result("sip:6505551231@homedomain", "", RegDataXMLUtils::STATE_REGISTERED,
@@ -988,7 +994,7 @@ TEST_F(SubscriptionTest, SubscriptionWithBarredIdentity)
                            300)).Times(1);
   inject_msg(msg.get());
 
-  // The NOTIFY should only contain the barred IMPU.
+  // The NOTIFY should only contain the unbarred IMPUs.
   std::vector<std::pair<std::string, bool>> irs_impus;
   irs_impus.push_back(std::make_pair("sip:6505551231@homedomain", false));
 

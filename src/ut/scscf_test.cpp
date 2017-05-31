@@ -9585,9 +9585,9 @@ TEST_F(SCSCFTest, TestAddStoredPathHeader)
   binding->_expires = time(NULL) + 300;
   binding->_priority = 1000;
   binding->_emergency_registration = false;
-  std::vector<std::string> irs_impus;
-  irs_impus.push_back(uri);
-  bool ret = _sdm->set_aor_data(uri, irs_impus, aor, 0);
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri(uri, false);
+  bool ret = _sdm->set_aor_data(uri, &associated_uris, aor, 0);
   delete aor;
   EXPECT_TRUE(ret);
 
@@ -9616,9 +9616,9 @@ TEST_F(SCSCFTest, TestAddStoredPathURI)
   binding->_expires = time(NULL) + 300;
   binding->_priority = 1000;
   binding->_emergency_registration = false;
-  std::vector<std::string> irs_impus;
-  irs_impus.push_back(uri);
-  bool ret = _sdm->set_aor_data(uri, irs_impus, aor, 0);
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri(uri, false);
+  bool ret = _sdm->set_aor_data(uri, &associated_uris, aor, 0);
   delete aor;
   EXPECT_TRUE(ret);
 

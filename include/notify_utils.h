@@ -54,21 +54,23 @@ namespace NotifyUtils
   pj_status_t create_subscription_notify(pjsip_tx_data** tdata_notify,
                                          SubscriberDataManager::AoR::Subscription* s,
                                          std::string aor,
-                                         std::vector<std::string> irs_impus,
+                                         AssociatedURIs* associated_uris,
                                          SubscriberDataManager::AoR* aor_data,
                                          std::vector<BindingNotifyInformation*> bnis,
                                          NotifyUtils::RegistrationState reg_state,
-                                         int now);
+                                         int now,
+                                         SAS::TrailId trail);
 
   pj_status_t create_notify(pjsip_tx_data** tdata_notify,
                             SubscriberDataManager::AoR::Subscription* subscription,
                             std::string aor,
-                            std::vector<std::string> irs_impus,
+                            AssociatedURIs* associated_uris,
                             int cseq,
                             std::vector<BindingNotifyInformation*> bnis,
                             NotifyUtils::RegistrationState reg_state,
                             NotifyUtils::SubscriptionState subscription_state,
-                            int expiry);
+                            int expiry,
+                            SAS::TrailId trail);
 };
 
 #endif

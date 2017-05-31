@@ -100,8 +100,8 @@ protected:
   SubscriberDataManager::AoRPair* write_subscriptions_to_store(
                      SubscriberDataManager* primary_sdm,        ///<store to write to
                      std::string aor,                           ///<address of record to write to
-                     std::vector<std::string> unbarred_irs_impus,
-                                                                ///<Unbarred IMPUs in Implicit Registration Set
+                     AssociatedURIs* associated_uris,
+                                                                ///<IMPUs associated with this IRS
                      pjsip_msg* req,                            ///<received request to read headers from
                      int now,                                   ///<time now
                      SubscriberDataManager::AoRPair* backup_aor,///<backup data if no entry in store

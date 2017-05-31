@@ -222,6 +222,7 @@ private:
   SNMP::EventAccumulatorTable* _video_session_setup_time_tbl = NULL;
   SNMP::EventAccumulatorTable* _audio_session_setup_time_tbl = NULL;
   SNMP::CounterTable* _forked_invite_tbl = NULL;
+  SNMP::CounterTable* _barred_calls_tbl = NULL;
 
   AsCommunicationTracker* _sess_term_as_tracker;
   AsCommunicationTracker* _sess_cont_as_tracker;

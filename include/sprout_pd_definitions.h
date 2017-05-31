@@ -568,4 +568,24 @@ static const PDLog1<const char *> CL_SPROUT_DIFC_FILE_INVALID_PRIORITY
   "The default IFCs should be defined in /etc/clearwater/default_ifcs.xml. Populate this file according to the documentation."
 );
 
+static const PDLog1<const char *> CL_SPROUT_ORIG_PARTY_BARRED
+(
+  PDLogBase::CL_SPROUT_ID + 65,
+  LOG_NOTICE,
+  "An originating call has been barred",
+  "An originating call from subscriber (%s) has been rejected with a 403 Forbidden because they are barred.",
+  "Normal",
+  "None"
+);
+
+static const PDLog1<const char *> CL_SPROUT_TERM_PARTY_BARRED
+(
+  PDLogBase::CL_SPROUT_ID + 66,
+  LOG_NOTICE,
+  "An originating call has been barred",
+  "An originating call from subscriber (%s) has been rejected with a 404 Not Found because they are barred.",
+  "Normal",
+  "None"
+);
+
 #endif

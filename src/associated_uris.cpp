@@ -111,6 +111,22 @@ std::vector<std::string> AssociatedURIs::get_unbarred_uris()
   return unbarred_uris;
 }
 
+// Returns all barred associated URIs.
+std::vector<std::string> AssociatedURIs::get_barred_uris()
+{
+  std::vector<std::string> barred_uris;
+
+  for (std::string uri : _associated_uris)
+  {
+    if (_barred_map[uri])
+    {
+      barred_uris.push_back(uri);
+    }
+  }
+
+  return barred_uris;
+}
+
 // Returns all associated URIs.
 std::vector<std::string> AssociatedURIs::get_all_uris()
 {

@@ -11,6 +11,7 @@
  */
 
 #include "log.h"
+#include "sprout_pd_definitions.h"
 #include "sproutsasevent.h"
 #include "constants.h"
 #include "custom_headers.h"
@@ -83,6 +84,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
                                                                       "1.2.826.0.1.1578918.9.3.35");
   _forked_invite_tbl = SNMP::CounterTable::create("scscf_forked_invites",
                                                   "1.2.826.0.1.1578918.9.3.38");
+  _barred_calls_tbl = SNMP::CounterTable::create("scscf_barred_calls",
+                                                 "1.2.826.0.1.1578918.9.3.42");
 }
 
 
@@ -94,6 +97,7 @@ SCSCFSproutlet::~SCSCFSproutlet()
   delete _invites_cancelled_before_1xx_tbl;
   delete _invites_cancelled_after_1xx_tbl;
   delete _forked_invite_tbl;
+  delete _barred_calls_tbl;
   delete _audio_session_setup_time_tbl;
   delete _video_session_setup_time_tbl;
 }
@@ -592,6 +596,7 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
           std::string served_user = served_user_from_msg(req);
           event.add_var_param(served_user);
           SAS::report_event(event);
+          CL_SPROUT_ORIG_PARTY_BARRED.log(served_user.c_str());
         }
         else
         {
@@ -599,7 +604,10 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
           std::string served_user = served_user_from_msg(req);
           event.add_var_param(served_user);
           SAS::report_event(event);
+          CL_SPROUT_TERM_PARTY_BARRED.log(served_user.c_str());
         }
+
+        _scscf->_barred_calls_tbl->increment();
 
         send_response(rsp);
         free_msg(req);
