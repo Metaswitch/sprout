@@ -131,7 +131,7 @@ SubscriberDataManager::AoRPair* SubscriberDataManager::get_aor_data(
     AoR* aor_copy = new AoR(*aor_data);
     int now = time(NULL);
     AoRPair* aor_pair = new AoRPair(aor_data, aor_copy);
-    expire_aor_members(aor_pair, now);
+    expire_aor_members(aor_pair, now, trail);
     return aor_pair;
   }
   else
@@ -195,7 +195,7 @@ Store::Status SubscriberDataManager::set_aor_data(
   // This prevents a window condition where Chronos can return a binding to
   // expire, but memcached has already deleted the aor data (meaning that
   // no NOTIFYs could be sent)
-  int orig_max_expires = expire_aor_members(aor_pair, now);
+  int orig_max_expires = expire_aor_members(aor_pair, now, trail);
   int max_expires = orig_max_expires + 10;
 
   // expire_aor_members returns "now" if there are no remaining bindings,
@@ -368,14 +368,15 @@ void SubscriberDataManager::log_new_or_extended_bindings(ClassifiedBindings& cla
 }
 
 int SubscriberDataManager::expire_aor_members(AoRPair* aor_pair,
-                                              int now)
+                                              int now,
+                                              SAS::TrailId trail)
 {
-  int max_expires = expire_bindings(aor_pair->get_current(), now);
+  int max_expires = expire_bindings(aor_pair->get_current(), now, trail);
 
   // N.B. Subscriptions are not factored into the returned expiry time on the
   // store record because, according to 5.4.2.1.2/TS 24.229, all subscriptions
   // automatically expire when the last binding expires.
-  expire_subscriptions(aor_pair, now, (max_expires == now));
+  expire_subscriptions(aor_pair, now, (max_expires == now), trail);
 
   return max_expires;
 }
@@ -388,7 +389,8 @@ int SubscriberDataManager::expire_aor_members(AoRPair* aor_pair,
 /// @param force_expire  Whether we should always remove the subscriptions
 void SubscriberDataManager::expire_subscriptions(AoRPair* aor_pair,
                                                  int now,
-                                                 bool force_expire)
+                                                 bool force_expire,
+                                                 SAS::TrailId trail)
 {
   for (AoR::Subscriptions::iterator i =
          aor_pair->get_current()->_subscriptions.begin();
@@ -399,6 +401,15 @@ void SubscriberDataManager::expire_subscriptions(AoRPair* aor_pair,
 
     if ((force_expire) || (s->_expires <= now))
     {
+      if (trail != 0)
+      {
+        SAS::Event event(trail, SASEvent::REGSTORE_SUBSCRIPTION_EXPIRED, 0);
+        event.add_var_param(s->_from_uri);
+        event.add_static_param(force_expire);
+        event.add_static_param(s->_expires);
+        event.add_static_param(now);
+        SAS::report_event(event);
+      }
       // The subscription has expired, so remove it. This could be
       // a single one shot subscription though - if so pretend it was
       // part of the original AoR
@@ -428,8 +439,10 @@ void SubscriberDataManager::expire_subscriptions(AoRPair* aor_pair,
 /// @returns             The latest expiry time from all unexpired bindings.
 /// @param aor_data      The registration data record.
 /// @param now           The current time in seconds since the epoch.
+/// @param trail         SAS trail
 int SubscriberDataManager::expire_bindings(AoR* aor_data,
-                                           int now)
+                                           int now,
+                                           SAS::TrailId trail)
 {
   int max_expires = now;
   for (AoR::Bindings::iterator i = aor_data->_bindings.begin();
@@ -441,6 +454,17 @@ int SubscriberDataManager::expire_bindings(AoR* aor_data,
 
     if (b->_expires <= now)
     {
+      if (trail != 0)
+      {
+        SAS::Event event(trail, SASEvent::REGSTORE_BINDING_EXPIRED, 0);
+        event.add_var_param(b->_address_of_record);
+        event.add_var_param(b->_uri);
+        event.add_var_param(b->_cid);
+        event.add_static_param(b->_expires);
+        event.add_static_param(now);
+        SAS::report_event(event);
+      }
+
       delete i->second;
       aor_data->_bindings.erase(i++);
     }
