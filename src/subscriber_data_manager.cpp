@@ -428,7 +428,6 @@ void SubscriberDataManager::expire_subscriptions(AoRPair* aor_pair,
       if (trail != 0)
       {
         SAS::Event event(trail, SASEvent::REGSTORE_SUBSCRIPTION_EXPIRED, 0);
-        event.add_var_param(s->_req_uri);
         event.add_var_param(s->_from_uri);
         event.add_static_param(force_expire);
         event.add_static_param(s->_expires);

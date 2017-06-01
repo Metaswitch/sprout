@@ -150,8 +150,8 @@ public:
     class Subscription
     {
     public:
-      /// The Request URI for the subscription dialog (used in the contact
-      /// header of the NOTIFY)
+      /// The Contact URI for the subscription dialog (used as the Request URI
+      /// of the NOTIFY)
       std::string _req_uri;
 
       /// The From URI for the subscription dialog (used in the to header of
