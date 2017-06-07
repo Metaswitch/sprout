@@ -375,6 +375,7 @@ public:
     _enum_service = new JSONEnumService(string(UT_DIR).append("/test_stateful_proxy_enum.json"));
 
     _acr_factory = new ACRFactory();
+    _mmf_service = new MMFService(NULL, string(UT_DIR).append("/test_mmf.json"));
     _difc_service = new DIFCService(NULL, string(UT_DIR).append("/test_scscf_difc.xml"));
 
     // Schedule timers.
@@ -386,6 +387,7 @@ public:
     // Shut down the transaction module first, before we destroy the
     // objects that might handle any callbacks!
     pjsip_tsx_layer_destroy();
+    delete _mmf_service; _mmf_service = NULL;
     delete _difc_service; _difc_service = NULL;
     delete _sdm; _sdm = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
@@ -424,6 +426,7 @@ public:
                                           &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
                                           &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
                                           false,
+                                          _mmf_service,
                                           _difc_service,
                                           ifc_configuration,
                                           3000, // Session continue timeout - different from default
@@ -559,6 +562,7 @@ protected:
   static BgcfService* _bgcf_service;
   static EnumService* _enum_service;
   static ACRFactory* _acr_factory;
+  static MMFService* _mmf_service;
   static DIFCService* _difc_service;
   SCSCFSproutlet* _scscf_sproutlet;
   BGCFSproutlet* _bgcf_sproutlet;
@@ -602,6 +606,7 @@ FakeXDMConnection* SCSCFTest::_xdm_connection;
 BgcfService* SCSCFTest::_bgcf_service;
 EnumService* SCSCFTest::_enum_service;
 ACRFactory* SCSCFTest::_acr_factory;
+MMFService* SCSCFTest::_mmf_service;
 DIFCService* SCSCFTest::_difc_service;
 MockAsCommunicationTracker* SCSCFTest::_sess_term_comm_tracker;
 MockAsCommunicationTracker* SCSCFTest::_sess_cont_comm_tracker;
