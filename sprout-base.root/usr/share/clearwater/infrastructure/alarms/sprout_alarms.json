@@ -6,20 +6,20 @@
             "name": "SPROUT_PROCESS_FAIL",
             "levels": [
                 {
-                  "severity": "CLEARED",
-                  "details": "The local Sprout process has been restored to normal operation.",
-                  "description": "Sprout: Process failure cleared.",
-                  "cause": "The local Sprout process has been restored to normal operation. The previously issued alarm has been cleared.",
-                  "effect": "The Sprout process is functioning normally again.",
-                  "action": "No action."
+                    "severity": "CLEARED",
+                    "details": "The local Sprout process has been restored to normal operation.",
+                    "description": "Sprout: Process failure cleared.",
+                    "cause": "The local Sprout process has been restored to normal operation. The previously issued alarm has been cleared.",
+                    "effect": "The Sprout process is functioning normally again.",
+                    "action": "No action."
                 },
                 {
-                  "severity": "CRITICAL",
-                  "details": "Monit has detected that the local Sprout process has failed. A restart will automatically be attempted. If this alarm does not clear, the Sprout process may have been stopped or an unrecoverable failure may have occurred.",
-                  "description": "Sprout: Process failure.",
-                  "cause": "The system has detected that the Sprout process has failed.",
-                  "effect": "In progress I-CSCF, S-CSCF and BGCF SIP transactions are interrupted and SIP clients may be required to retransmit them. If only a small percentage of Sprout processes are failed simultaneously then in a typical deployment there will be no significant impact. However multiple simultaneous failures will result in an increasingly significant reduction in SIP processing capacity and will eventually result in service impacts. If all Sprout instances are failed then all future SIP registrations and call attemps will fail until such time as one or more Sprout instances recover.",
-                  "action": "Monitor for the alarm to clear and confirm the system is operating normally. If the failed Sprout process fails to return to service then contact your support representative."
+                    "severity": "CRITICAL",
+                    "details": "Monit has detected that the local Sprout process has failed. A restart will automatically be attempted. If this alarm does not clear, the Sprout process may have been stopped or an unrecoverable failure may have occurred.",
+                    "description": "Sprout: Process failure.",
+                    "cause": "The system has detected that the Sprout process has failed.",
+                    "effect": "In progress I-CSCF, S-CSCF and BGCF SIP transactions are interrupted and SIP clients may be required to retransmit them. If only a small percentage of Sprout processes are failed simultaneously then in a typical deployment there will be no significant impact. However multiple simultaneous failures will result in an increasingly significant reduction in SIP processing capacity and will eventually result in service impacts. If all Sprout instances are failed then all future SIP registrations and call attemps will fail until such time as one or more Sprout instances recover.",
+                    "action": "Monitor for the alarm to clear and confirm the system is operating normally. If the failed Sprout process fails to return to service then contact your support representative."
                 }
             ]
         },
@@ -33,7 +33,7 @@
                     "details": "Communication between the local Sprout process and the Homestead service has been restored.",
                     "description": "Sprout: Homestead communication error cleared.",
                     "cause": "Communication between the local Sprout process and the Homestead service has been restored.",
-                    "effect": "This Sprout node is providing full service again. If this alarm is now clear on all Sprout instances then full SIP processing capacity and availability has been restored.",
+                    "effect": "The local Sprout process can successfully contact the Homestead service.",
                     "action": "No action."
                 },
                 {
@@ -56,7 +56,7 @@
                     "details": "Communication between the local Sprout process and the Astaire service has been restored.",
                     "description": "Sprout: Astaire communication error cleared.",
                     "cause": "Communication between the local Sprout process and the Astaire service has been restored.",
-                    "effect": "This Sprout node is providing full service again. If this alarm is now clear on all Sprout instances then full SIP processing capacity and availability has been restored.",
+                    "effect": "The local Sprout process can successfully contact the Astaire service.",
                     "action": "No action."
                 },
                 {
@@ -79,7 +79,7 @@
                     "details": "Communication between the local Sprout process and the remote Astaire service has been restored.",
                     "description": "Sprout: Remote Astaire communication error cleared.",
                     "cause": "Communication between the local Sprout process and the remote Astaire service has been restored.",
-                    "effect": "This Sprout node is providing full service again. If this alarm is now clear on all Sprout instances then full SIP processing capacity and availability has been restored.",
+                    "effect": "The local Sprout process can successfully contact the remote Astaire service.",
                     "action": "No action."
                 },
                 {
@@ -102,7 +102,7 @@
                     "details": "Communication between the local Sprout process and the Chronos service has been restored.",
                     "description": "Sprout: Chronos communication error cleared.",
                     "cause": "Communication between the local Sprout process and the Chronos service has been restored.",
-                    "effect": "This Sprout node is providing full service again. If this alarm is clear on all Sprout nodes then full SIP processing capacity and availability has been restored.",
+                    "effect": "The local Sprout process can successfully contact the Chronos service.",
                     "action": "No action."
                 },
                 {
@@ -125,7 +125,7 @@
                     "details": "Communication between the local Sprout process and the Ralf service has been restored.",
                     "description": "Sprout: Ralf communication error cleared.",
                     "cause": "Communication between the local Sprout process and the Ralf service has been restored.",
-                    "effect": "This Sprout node is providing full service again. If this alarm is clear on all Sprout nodes then full SIP processing capacity and availability has been restored.",
+                    "effect": "The local Sprout process can successfully contact the Ralf service.",
                     "action": "No action."
                 },
                 {
@@ -134,7 +134,7 @@
                     "description": "Sprout: Ralf communication error.",
                     "cause": "The local Sprout process is unable to contact any Ralf processes. The likely cause depends on whether this is affecting all Sprout instances or just a subset. If the issue impacts just a subset of Sprout instances then it is likely to be due to a partial network outage or configuration issues on just those nodes. If it impacts all Sprout instances then it is likely to be due to a misconfiguration of the Ralf hostname in shared configuration, misconfiguration of the Ralf cluster DNS record, a significant network outage, or because all Ralf instances are currently failed.",
                     "effect": "Call detail event recording for offline billing is no longer operational for calls processed by this Sprout instance. Active calls are preserved and new calls are allowed but the service provider is no longer able to bill for the calls.",
-                    "action": "Investigate the issue that is preventing the local Sprout process from contacting Ralf. The Sprout process will periodically attempt to reconnect and this alarm will clear once connectivity has been restored. If you cannot determine the issue or the alarm fails to clear then contact your support representative. If this issue only impacts a small percentage of Sprout instances and cannot immediately be resolved then, if you have sufficient spare Sprout capacity in your deployment, you may wish to temporarily remove these Sprout instances from your cluster DNS records so that transactions will be directed to Sprout instances that do still have connectivity with Ralf."
+                    "action": "Investigate the issue that is preventing the local Sprout process from contacting Ralf. The Sprout process will periodically attempt to reconnect and this alarm will clear once connectivity has been restored. If you cannot determine the issue or the alarm fails to clear then contact your support representative. If this issue only impacts a small percentage of Sprout instances and cannot immediately be resolved then, if you have sufficient spare Sprout capacity in your deployment, you may wish to temporarily remove these Sprout instances from your Sprout DNS records so that transactions will be directed to Sprout instances that do still have connectivity with Ralf."
                 }
             ]
         },
@@ -148,7 +148,7 @@
                     "details": "Communication between the local Sprout process and the ENUM service has been restored.",
                     "description": "Sprout: ENUM communication error cleared.",
                     "cause": "Communication between the local Sprout process and the ENUM service has been restored.",
-                    "effect": "This Sprout node is providing full service again.",
+                    "effect": "The local Sprout process can successfully contact the ENUM service.",
                     "action": "No action."
                 },
                 {
@@ -157,7 +157,7 @@
                     "description": "Sprout: ENUM communication error.",
                     "cause": "The local Sprout process is unable to contact any ENUM servers. The likely cause depends on whether this is affecting all Sprout instances or just a subset. If the issue impacts just a subset of Sprout instances then it is likely to be due to a partial network outage or configuration issues on just those nodes. If it impacts all Sprout instances then it is likely to be due to a misconfiguration of the ENUM servers in shared configuration, misconfiguration of the ENUM DNS records, a significant network outage, or because all ENUM instances are currently failed.",
                     "effect": "Off-net calls processed by this Sprout instance will fail or be misrouted. Additionally, the I-CSCF function on this Sprout instance will be unable to make ENUM queries for tel URIs after a LIR request to the HSS has failed.",
-                    "action": "Investigate the issue that is preventing the local Sprout process from contacting your ENUM servers. The Sprout process will periodically attempt to reconnect and this alarm will clear once connectivity has been restored. If you cannot determine the issue or the alarm fails to clear then contact your support representative. If this issue only impacts a small percentage of Sprout instances and cannot immediately be resolved then, if you have sufficient spare Sprout capacity in your deployment, you may wish to temporarily remove these Sprout instances from your cluster DNS records so that transactions will be directed to Sprout instances that do still have connectivity with the ENUM service."
+                    "action": "Investigate the issue that is preventing the local Sprout process from contacting your ENUM servers. The Sprout process will periodically attempt to reconnect and this alarm will clear once connectivity has been restored. If you cannot determine the issue or the alarm fails to clear then contact your support representative. If this issue only impacts a small percentage of Sprout instances and cannot immediately be resolved then, if you have sufficient spare Sprout capacity in your deployment, you may wish to temporarily remove these Sprout instances from your Sprout DNS records so that transactions will be directed to Sprout instances that do still have connectivity with the ENUM service."
                 }
             ]
         },
