@@ -94,6 +94,7 @@ void SipTest::SetUpTestCase()
 
   stack_data.scscf_uri_str = {NULL, 0};
   stack_data.scscf_uri = NULL;
+  stack_data.scscf_contact = {NULL, 0};
   stack_data.pcscf_untrusted_port = 5060;
   stack_data.pcscf_trusted_port = 5058; // NB - pcscf trusted port must be the
   stack_data.scscf_port = 5058;         // same as the scscf port for the UTs
@@ -149,6 +150,15 @@ void SipTest::SetScscfUri(const std::string& scscf_uri)
 
   stack_data.scscf_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(scscf_uri.c_str(),
                                                                   stack_data.pool);
+
+  // Need a version of the SCSCF URI in angle brackets for use as contact header.
+  if (stack_data.scscf_contact.ptr)
+  {
+    free(stack_data.scscf_contact.ptr);
+  }
+
+  std::string contact_str = "<"+scscf_uri+">";
+  pj_cstr(&stack_data.scscf_contact, contact_str.c_str());
 }
 
 /// Automatically run once, after the last test.

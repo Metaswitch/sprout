@@ -54,6 +54,7 @@ struct stack_data_struct
   pj_str_t             cdf_domain;
   pj_str_t             scscf_uri_str;
   pjsip_sip_uri*       scscf_uri;
+  pj_str_t             scscf_contact;
 
   int                  addr_family;
 
