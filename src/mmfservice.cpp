@@ -133,7 +133,7 @@ void MMFService::read_config(std::map<std::string, MMFCfg::ptr>& mmf_config,
 
     for (std::string address : config->get_addresses())
     {
-      if (have_mmf_config(address))
+      if (has_config_for_address(address))
       {
         // This is a duplicate entry
         TRC_ERROR("Duplicate config present in the %s configuration file for"

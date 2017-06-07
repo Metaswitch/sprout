@@ -39,9 +39,33 @@ public:
     return _mmf_config.at(address);
   }
 
-  bool have_mmf_config(std::string address)
+  bool has_config_for_address(std::string address)
   {
     return _mmf_config.count(address);
+  }
+
+  bool apply_mmf_pre_as(std::string address)
+  {
+    if (has_config_for_address(address) && get_mmf_config(address)->apply_pre_as())
+    {
+      return true;
+    }
+    else
+    {
+      return false;
+    }
+  }
+
+  bool apply_mmf_post_as(std::string address)
+  {
+    if (has_config_for_address(address) && get_mmf_config(address)->apply_post_as())
+    {
+      return true;
+    }
+    else
+    {
+      return false;
+    }
   }
 
   boost::shared_mutex& get_mmf_rw_lock() {return _mmf_rw_lock;};

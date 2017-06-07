@@ -1534,6 +1534,11 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
   invoke_as.add_var_param(server_name);
   SAS::report_event(invoke_as);
 
+  if (_scscf->mmfservice()->apply_mmf_pre_as(server_name))
+  {
+    /// blahhh
+  }
+
   // Check that the AS URI is well-formed.
   pjsip_sip_uri* as_uri = (pjsip_sip_uri*)
                         PJUtils::uri_from_string(server_name, get_pool(req));
@@ -1570,10 +1575,22 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
       pj_strdup2(get_pool(req), &orig_param->value, "");
       pj_list_insert_after(&odi_uri->other_param, orig_param);
     }
+
     PJUtils::add_top_route_header(req, odi_uri, get_pool(req));
+
+    if (_scscf->mmfservice()->apply_mmf_post_as(server_name))
+    {
+      // insert addition of route header to route request via Houdini on
+      // the way back from the AS
+    }
 
     // Add the application server URI as the top Route header, per TS 24.229.
     PJUtils::add_top_route_header(req, as_uri, get_pool(req));
+
+    if (_scscf->mmfservice()->apply_mmf_pre_as(server_name))
+    {
+      // insert addition of route header to route request via Houdini
+    }
 
     // Set P-Served-User, including session case and registration
     // state, per RFC5502 and the extension in 3GPP TS 24.229
