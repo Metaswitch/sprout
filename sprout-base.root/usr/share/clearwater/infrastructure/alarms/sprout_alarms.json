@@ -298,6 +298,29 @@
                     "action": "Correct the configuration file at /etc/clearwater/default_ifcs.xml and upload it."
                 }
             ]
+        },
+        {
+            "index": 1013,
+            "name": "SPROUT_MMF_STATUS",
+            "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "The configuration file for MMF is valid.",
+                    "description": "sprout: The configuration file for default IFCs is valid.",
+                    "cause": "The configuration file at /etc/clearwater/default_ifcs.xml is valid.",
+                    "effect": "The S-CSCF will be able to correctly apply any default IFCs.",
+                    "action": "No action."
+                },
+                {
+                    "severity": "CRITICAL",
+                    "details": "There is at least one invalid entry in the configuration file for default IFCs.",
+                    "description": "sprout: The configuration file for default IFCs is invalid.",
+                    "cause": "The configuration file at /etc/clearwater/default_ifcs.xml has at least one invalid entry.",
+                    "effect": "The S-CSCF will not be able to correctly apply any default IFCs.",
+                    "action": "Correct the configuration file at /etc/clearwater/default_ifcs.xml and upload it."
+                }
+            ]
         }
     ]
 }
