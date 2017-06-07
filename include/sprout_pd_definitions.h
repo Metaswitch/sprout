@@ -78,7 +78,7 @@ static const PDLog CL_SPROUT_NO_SI_CSCF
   "Neither P-CSCF, S-CSCF nor I-CSCF functionality is enabled on this node.",
   "Neither a P-CSCF, a S-CSCF nor an I-CSCF was configured in "
   "/etc/clearwater/config.",
-  "Most Sprout nodes act as either a P-CSCF, a S-CSCF or an I-CSCF. "
+  "Most Sprout processes act as either a P-CSCF, a S-CSCF or an I-CSCF. "
   "None of P-CSCF, S-CSCF or I-CSCF functionality is enabled on this node.",
   "The P-CSCF is configured by setting the pcscf=<port> option. "
   "The S-CSCF is configured by setting the scscf=<port> option. "
@@ -89,7 +89,7 @@ static const PDLog CL_SPROUT_SI_CSCF_NO_HOMESTEAD
 (
   PDLogBase::CL_SPROUT_ID + 7,
   LOG_ERR,
-  "Fatal - S/I-CSCF enabled with no Homestead server specified in "
+  "Fatal - S/I-CSCF enabled with no Homestead hostname specified in "
   "/etc/clearwater/config.",
   "The S-CSCF and/or the I-CSCF options (scscf=<port>, icscf=<port>) "
   "were configured in the /etc/clearwater/config file but no Homestead "
@@ -103,7 +103,7 @@ static const PDLog CL_SPROUT_AUTH_NO_HOMESTEAD
 (
   PDLogBase::CL_SPROUT_ID + 8,
   LOG_ERR,
-  "Fatal - Authentication enabled, but no Homestead server specified in "
+  "Fatal - Authentication enabled, but no Homestead hostname specified in "
   "/etc/clearwater/config.",
   "The hs_hostname was not set in the /etc/clearwater/config file.",
   "The application will exit and restart until the problem is fixed.",
@@ -115,7 +115,7 @@ static const PDLog CL_SPROUT_XDM_NO_HOMESTEAD
 (
   PDLogBase::CL_SPROUT_ID + 9,
   LOG_ERR,
-  "Fatal - Homer XDM service is configured but no Homestead server specified "
+  "Fatal - Homer XDM service is configured but no Homestead hostname specified "
   "in /etc/clearwater/config.",
   "The hs_hostname was not set in the /etc/clearwater/config file.",
   "The application will exit and restart until the problem is fixed.",
