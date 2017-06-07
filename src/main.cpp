@@ -1443,6 +1443,7 @@ AnalyticsLogger* analytics_logger = NULL;
 ChronosConnection* chronos_connection = NULL;
 SIFCService* sifc_service = NULL;
 DIFCService* difc_service = NULL;
+MMFService* mmf_service = NULL;
 
 bool parse_multi_site_stores_arg(const std::vector<std::string>& stores_arg,
                                  const std::string& local_site_name,
@@ -2029,6 +2030,12 @@ int main(int argc, char* argv[])
                                            AlarmDef::SPROUT_DIFC_STATUS,
                                            AlarmDef::CRITICAL));
 
+  // JA4
+  mmf_service = new MMFService(new Alarm(alarm_manager,
+                                         "sprout",
+                                         AlarmDef::SPROUT_MMF_STATUS,
+                                         AlarmDef::CRITICAL));
+
   // Create ENUM service.
   if (!opt.enum_servers.empty())
   {
@@ -2516,6 +2523,8 @@ int main(int argc, char* argv[])
   delete http_stack_mgmt; http_stack_mgmt = NULL;
   delete chronos_connection;
   delete hss_connection;
+  // JA4
+  delete mmf_service;
   delete difc_service;
   delete sifc_service;
   delete quiescing_mgr;

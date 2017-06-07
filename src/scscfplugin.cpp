@@ -163,6 +163,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           _incoming_sip_transactions_tbl,
                                           _outgoing_sip_transactions_tbl,
                                           opt.override_npdi,
+                                          mmf_service,
                                           difc_service,
                                           IFCConfiguration(opt.apply_default_ifcs,
                                                            opt.reject_if_no_matching_ifcs,

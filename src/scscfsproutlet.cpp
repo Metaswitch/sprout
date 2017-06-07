@@ -22,6 +22,7 @@
 #include "uri_classifier.h"
 #include "wildcard_utils.h"
 #include "associated_uris.h"
+#include "mmfservice.h"
 
 // Constant indicating there is no served user for a request.
 const char* NO_SERVED_USER = "";
@@ -43,6 +44,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
                                SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
                                SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                                bool override_npdi,
+                               MMFService* mmfservice,
                                DIFCService* difcservice,
                                IFCConfiguration ifc_configuration,
                                int session_continued_timeout_ms,
@@ -61,6 +63,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
   _enum_service(enum_service),
   _acr_factory(acr_factory),
   _override_npdi(override_npdi),
+  _mmfservice(mmfservice),
   _difcservice(difcservice),
   _ifc_configuration(ifc_configuration),
   _session_continued_timeout_ms(session_continued_timeout_ms),
@@ -210,6 +213,11 @@ const pjsip_uri* SCSCFSproutlet::bgcf_uri() const
 AsChainTable* SCSCFSproutlet::as_chain_table() const
 {
   return _as_chain_table;
+}
+
+MMFService* SCSCFSproutlet::mmfservice() const
+{
+  return _mmfservice;
 }
 
 DIFCService* SCSCFSproutlet::difcservice() const
