@@ -76,19 +76,19 @@
             "levels": [
                 {
                     "severity": "CLEARED",
-                    "details": "Communication between the local Sprout process and the remote Astaire service has been restored.",
+                    "details": "The local Sprout process is able to successfully communicate with one or more Astaire processes in remote sites.",
                     "description": "Sprout: Remote Astaire communication error cleared.",
-                    "cause": "Communication between the local Sprout process and the remote Astaire service has been restored.",
+                    "cause": "The local Sprout process is able to successfully communicate with one or more remote Astaire instances.",
                     "effect": "The local Sprout process can successfully contact the remote Astaire service.",
                     "action": "No action."
                 },
                 {
                     "severity": "CRITICAL",
-                    "details": "The local Sprout process is unable to contact the Astaire service in a remote site.",
+                    "details": "The local Sprout process is unable to contact any Astaire instances in remote sites.",
                     "description": "Sprout: Remote Astaire communication error.",
-                    "cause": "The local Sprout process is unable to contact any Astaire processes in the remote site. The likely cause depends on whether this is affecting all Sprout instances or just a subset. If the issue impacts just a subset of Sprout instances then it is likely to be due to a partial network outage or configuration issues on just those nodes. If it impacts all Sprout instances then it is likely to be due to a misconfiguration of the remote Sprout registration store in shared configuration, misconfiguration of the Astaire cluster DNS record, a significant network outage, or because all Astaire instances are currently failed.",
-                    "effect": "The deployment is no longer geographically redundant because the S-CSCF cannot synchronize registration data to the remote site. If subscribers switch to the other geographic site they may have to re-register before becoming operational.",
-                    "action": "Investigate the issue that is preventing the local Sprout process from contacting the Astaire service in the remote site. The Sprout process will periodically attempt to reconnect and this alarm will clear once connectivity has been restored. If you cannot determine the issue or the alarm fails to clear then contact your support representative."
+                    "cause": "The local Sprout process is unable to contact any Astaire processes in remote sites. The likely cause depends on whether this is affecting all Sprout instances or just a subset. If the issue impacts just a subset of Sprout instances then it is likely to be due to a partial network outage or configuration issues on just those nodes. If it impacts all Sprout instances then it is likely to be due to a misconfiguration of the remote Sprout registration store in shared configuration, misconfiguration of the Astaire cluster DNS record, a significant network outage, or because all remote Astaire instances are currently failed.",
+                    "effect": "The deployment is no longer geographically redundant because the S-CSCF cannot synchronize registration data to remote sites. If subscribers switch to other geographic sites they may have to re-register before becoming operational.",
+                    "action": "Investigate the issue that is preventing the local Sprout process from contacting Astaire processes in remote sites. The Sprout process will periodically attempt to reconnect and this alarm will clear once connectivity has been restored. If you cannot determine the issue or the alarm fails to clear then contact your support representative."
                 }
             ]
         },
