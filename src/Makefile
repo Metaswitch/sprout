@@ -92,7 +92,8 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          associated_uris.cpp \
                          sifcservice.cpp \
                          difcservice.cpp \
-                         mmfservice.cpp
+                         mmfservice.cpp \
+                         mmf.cpp
 
 sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_counter_table.cpp \
