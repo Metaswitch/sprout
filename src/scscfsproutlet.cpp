@@ -1579,6 +1579,7 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     {
       // insert addition of route header to route request via Houdini on
       // the way back from the AS
+      // JA4 placeholder - code to come
     }
 
     // Add the application server URI as the top Route header, per TS 24.229.

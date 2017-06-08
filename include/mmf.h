@@ -15,6 +15,7 @@
 #include <iostream>
 #include <memory>
 #include "utils.h"
+#include "json_parse_utils.h"
 
 /// A representation of an entry in the mmf.json file
 class MMFCfg

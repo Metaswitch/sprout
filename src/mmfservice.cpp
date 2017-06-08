@@ -16,6 +16,7 @@
 #include "sprout_pd_definitions.h"
 #include "utils.h"
 #include "rapidjson/error/en.h"
+#include "json_parse_utils.h"
 
 MMFService::MMFService(Alarm* alarm,
                        std::string configuration):
