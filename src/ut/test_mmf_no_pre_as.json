@@ -1,0 +1,8 @@
+{
+    "mmf_nodes" : [
+        {   "context" : "Invalid",
+            "addresses" : ["invalid"],
+            "post-AS" : true
+        }
+    ]
+}

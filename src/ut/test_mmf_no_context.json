@@ -1,0 +1,9 @@
+{
+    "mmf_nodes" : [
+        {
+            "addresses" : ["invalid"],
+            "pre-AS" : false,
+            "post-AS" : true
+        }
+    ]
+}

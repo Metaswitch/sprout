@@ -1,7 +1,7 @@
 {
     "mmf_nodes" : [
         {   "context" : "TestAS",
-            "addresses" : ["as.test.domain", "10.231.0.2"],
+            "addresses" : "as.test.domain",
             "pre-AS" : true,
             "post-AS" : false
         }

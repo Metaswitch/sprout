@@ -24,6 +24,7 @@ void MMFCfg::parse_addresses(const rapidjson::Value& config)
 {
   if (config.HasMember("addresses") && config["addresses"].IsArray())
   {
+    TRC_DEBUG("Reading addresses");
     const rapidjson::Value& addresses = config["addresses"];
 
     for (rapidjson::Value::ConstValueIterator address_it = addresses.Begin();
@@ -32,6 +33,7 @@ void MMFCfg::parse_addresses(const rapidjson::Value& config)
     {
       if ((*address_it).IsString())
       {
+        TRC_DEBUG("Read address: %s", (*address_it).GetString());
         _addresses.push_back((*address_it).GetString());
       }
       else
@@ -52,8 +54,10 @@ void MMFCfg::parse_addresses(const rapidjson::Value& config)
 
 void MMFCfg::parse_context(const rapidjson::Value& config)
 {
+  TRC_DEBUG("Reading context");
   if (config.HasMember("context") && config["context"].IsString())
   {
+    TRC_DEBUG("Read context: %s", config["context"].GetString());
     _context = config["context"].GetString();
   }
   else
@@ -66,8 +70,10 @@ void MMFCfg::parse_context(const rapidjson::Value& config)
 
 void MMFCfg::parse_pre_as(const rapidjson::Value& config)
 {
+  TRC_DEBUG("Reading pre-AS");
   if (config.HasMember("pre-AS") && config["pre-AS"].IsBool())
   {
+    TRC_DEBUG("Read pre-AS: %d", config["pre-AS"].GetBool());
     _pre_as = config["pre-AS"].GetBool();
   }
   else
@@ -80,8 +86,10 @@ void MMFCfg::parse_pre_as(const rapidjson::Value& config)
 
 void MMFCfg::parse_post_as(const rapidjson::Value& config)
 {
+  TRC_DEBUG("Reading post-AS");
   if (config.HasMember("post-AS") && config["post-AS"].IsBool())
   {
+    TRC_DEBUG("Read post-AS: %d", config["post-AS"].GetBool());
     _post_as = config["post-AS"].GetBool();
   }
   else

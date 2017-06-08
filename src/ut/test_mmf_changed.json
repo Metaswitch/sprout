@@ -1,0 +1,9 @@
+{
+    "mmf_nodes" : [
+        {   "context" : "ChangedAS",
+            "addresses" : ["changed.domain", "10.231.0.2"],
+            "pre-AS" : false,
+            "post-AS" : false
+        }
+    ]
+}
