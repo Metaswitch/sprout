@@ -158,7 +158,7 @@ void SipTest::SetScscfUri(const std::string& scscf_uri)
   }
 
   std::string contact_str = "<"+scscf_uri+">";
-  pj_cstr(&stack_data.scscf_contact, contact_str.c_str());
+  stack_data.scscf_contact = pj_str(strdup(contact_str.c_str()));
 }
 
 /// Automatically run once, after the last test.
@@ -181,6 +181,10 @@ void SipTest::TearDownTestCase()
   if (stack_data.scscf_uri_str.ptr)
   {
     free(stack_data.scscf_uri_str.ptr);
+  }
+  if (stack_data.scscf_contact.ptr)
+  {
+    free(stack_data.scscf_contact.ptr);
   }
 }
 

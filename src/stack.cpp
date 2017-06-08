@@ -606,8 +606,8 @@ pj_status_t init_stack(const std::string& system_name,
   stack_data.cdf_domain = pj_str(cdf_domain_cstr);
 
   // Need a version of the SCSCF URI in angle brackets for use as contact header.
-  std::string contact_str = "<"+scscf_uri_str+">";
-  pj_cstr(&stack_data.scscf_contact, contact_str.c_str());
+  std::string contact_str = "<"+scscf_uri+">";
+  stack_data.scscf_contact = pj_str(strdup(contact_str.c_str()));
 
   // Build a set of home domains
   stack_data.home_domains = std::unordered_set<std::string>();
