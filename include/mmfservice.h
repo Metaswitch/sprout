@@ -1,5 +1,5 @@
 /**
- * @file difcservice.h Support for Default iFCs.
+ * @file mmfservice.h Support for MMF function.
  *
  * Copyright (C) Metaswitch Networks
  * If license terms are provided to you in a COPYING file in the root directory
@@ -32,9 +32,9 @@ public:
   void update_config();
 
   void read_config(std::map<std::string, MMFCfg::ptr>& mmf_config,
-                   rapidjson::Document&);
+                   rapidjson::Document& doc);
 
-  const MMFCfg::ptr get_mmf_config(std::string address)
+  const MMFCfg::ptr get_address_config(std::string address)
   {
     return _mmf_config.at(address);
   }
@@ -46,7 +46,7 @@ public:
 
   bool apply_mmf_pre_as(std::string address)
   {
-    if (has_config_for_address(address) && get_mmf_config(address)->apply_pre_as())
+    if (has_config_for_address(address) && get_address_config(address)->apply_pre_as())
     {
       return true;
     }
@@ -58,7 +58,7 @@ public:
 
   bool apply_mmf_post_as(std::string address)
   {
-    if (has_config_for_address(address) && get_mmf_config(address)->apply_post_as())
+    if (has_config_for_address(address) && get_address_config(address)->apply_post_as())
     {
       return true;
     }

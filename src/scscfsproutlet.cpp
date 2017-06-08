@@ -1534,11 +1534,6 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
   invoke_as.add_var_param(server_name);
   SAS::report_event(invoke_as);
 
-  if (_scscf->mmfservice()->apply_mmf_pre_as(server_name))
-  {
-    /// blahhh
-  }
-
   // Check that the AS URI is well-formed.
   pjsip_sip_uri* as_uri = (pjsip_sip_uri*)
                         PJUtils::uri_from_string(server_name, get_pool(req));
@@ -1578,6 +1573,8 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
 
     PJUtils::add_top_route_header(req, odi_uri, get_pool(req));
 
+    // If we are configured to apply MMF on requests forwarded on by the AS
+    // add the necessary route header
     if (_scscf->mmfservice()->apply_mmf_post_as(server_name))
     {
       // insert addition of route header to route request via Houdini on
@@ -1587,6 +1584,8 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     // Add the application server URI as the top Route header, per TS 24.229.
     PJUtils::add_top_route_header(req, as_uri, get_pool(req));
 
+    // If we are configured to apply MMF prior to forwarding the request to
+    // the AS, add the necessary route header
     if (_scscf->mmfservice()->apply_mmf_pre_as(server_name))
     {
       // insert addition of route header to route request via Houdini

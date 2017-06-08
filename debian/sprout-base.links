@@ -1,2 +1,3 @@
 /usr/share/clearwater/clearwater-config-manager/scripts/upload_scscf_json /usr/bin/cw-upload_scscf_json
+/usr/share/clearwater/clearwater-config-manager/scripts/upload_mmf_json /usr/bin/cw-upload_mmf_json
 /usr/share/clearwater/clearwater-config-manager/scripts/upload_enum_json /usr/bin/cw-upload_enum_json

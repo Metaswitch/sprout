@@ -23,7 +23,7 @@ MMFService::MMFService(Alarm* alarm,
   _configuration(configuration),
   _updater(NULL)
 {
-  // Create an updater to keep the default iFCs configured correctly.
+  // Create an updater to keep the invoking of MMF configured correctly.
   _updater = new Updater<void, MMFService>
                               (this, std::mem_fun(&MMFService::update_config));
 }
@@ -128,7 +128,7 @@ void MMFService::read_config(std::map<std::string, MMFCfg::ptr>& mmf_config,
        mmf_it != mmf_nodes.End();
        ++mmf_it)
   {
-    // Throws a JSON_FORMAT_ERROR if the config is invalid
+    // Throws a JsonFormatError if the config is invalid
     MMFCfg::ptr config(new MMFCfg(*mmf_it));
 
     for (std::string address : config->get_addresses())
@@ -137,7 +137,7 @@ void MMFService::read_config(std::map<std::string, MMFCfg::ptr>& mmf_config,
       {
         // This is a duplicate entry
         TRC_ERROR("Duplicate config present in the %s configuration file for"
-                  "the address: %s", _configuration.c_str(), address.c_str());
+                  "the address: '%s'", _configuration.c_str(), address.c_str());
         JSON_FORMAT_ERROR();
       }
 

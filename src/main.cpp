@@ -2030,7 +2030,6 @@ int main(int argc, char* argv[])
                                            AlarmDef::SPROUT_DIFC_STATUS,
                                            AlarmDef::CRITICAL));
 
-  // JA4
   mmf_service = new MMFService(new Alarm(alarm_manager,
                                          "sprout",
                                          AlarmDef::SPROUT_MMF_STATUS,
@@ -2523,7 +2522,6 @@ int main(int argc, char* argv[])
   delete http_stack_mgmt; http_stack_mgmt = NULL;
   delete chronos_connection;
   delete hss_connection;
-  // JA4
   delete mmf_service;
   delete difc_service;
   delete sifc_service;
