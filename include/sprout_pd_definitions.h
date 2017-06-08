@@ -75,11 +75,10 @@ static const PDLog CL_SPROUT_NO_SI_CSCF
 (
   PDLogBase::CL_SPROUT_ID + 6,
   LOG_NOTICE,
-  "Neither P-CSCF, S-CSCF nor I-CSCF functionality is enabled on this node.",
-  "Neither a P-CSCF, a S-CSCF nor an I-CSCF was configured in "
-  "/etc/clearwater/config.",
-  "Most Sprout processes act as either a P-CSCF, a S-CSCF or an I-CSCF. "
-  "None of P-CSCF, S-CSCF or I-CSCF functionality is enabled on this node.",
+  "The Sprout process is running but not providing I-CSCF, S-CSCF or P-SCSCF functionality.",
+  "None of P-CSCF, S-CSCF or I-CSCF were configured in /etc/clearwater/config.",
+  "Most Sprout processes act as either a P-CSCF, an S-CSCF or an I-CSCF. "
+  "None of P-CSCF, S-CSCF or I-CSCF functionality are enabled for this process.",
   "The P-CSCF is configured by setting the pcscf=<port> option. "
   "The S-CSCF is configured by setting the scscf=<port> option. "
   "The I-CSCF is configured by setting the icscf=<port> option."
