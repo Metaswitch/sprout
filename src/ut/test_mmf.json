@@ -1,7 +1,7 @@
 {
     "mmf_nodes" : [
-        {   "name" : "Memento",
-            "addresses" : ["memento.test.domain", "10.231.0.2"],
+        {   "name" : "TestAS",
+            "addresses" : ["as.test.domain", "10.231.0.2"],
             "pre-AS" : true,
             "post-AS" : false
         }

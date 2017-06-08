@@ -39,12 +39,12 @@ public:
     return _mmf_config.at(address);
   }
 
-  bool has_config_for_address(std::string address)
+  const bool has_config_for_address(std::string address)
   {
     return _mmf_config.count(address);
   }
 
-  bool apply_mmf_pre_as(std::string address)
+  const bool apply_mmf_pre_as(std::string address)
   {
     if (has_config_for_address(address) && get_address_config(address)->apply_pre_as())
     {
@@ -56,7 +56,7 @@ public:
     }
   }
 
-  bool apply_mmf_post_as(std::string address)
+  const bool apply_mmf_post_as(std::string address)
   {
     if (has_config_for_address(address) && get_address_config(address)->apply_post_as())
     {
