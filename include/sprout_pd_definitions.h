@@ -76,7 +76,7 @@ static const PDLog CL_SPROUT_NO_SI_CSCF
   PDLogBase::CL_SPROUT_ID + 6,
   LOG_NOTICE,
   "The Sprout process is running but not providing I-CSCF, S-CSCF or P-SCSCF functionality.",
-  "None of P-CSCF, S-CSCF or I-CSCF were configured in /etc/clearwater/config.",
+  "None of P-CSCF, S-CSCF or I-CSCF were configured in local or shared configuration.",
   "Most Sprout processes act as either a P-CSCF, an S-CSCF or an I-CSCF. "
   "None of P-CSCF, S-CSCF or I-CSCF functionality are enabled for this process.",
   "The P-CSCF is configured by setting the pcscf=<port> option. "
@@ -88,14 +88,13 @@ static const PDLog CL_SPROUT_SI_CSCF_NO_HOMESTEAD
 (
   PDLogBase::CL_SPROUT_ID + 7,
   LOG_ERR,
-  "Fatal - S/I-CSCF enabled with no Homestead hostname specified in "
-  "/etc/clearwater/config.",
-  "The S-CSCF and/or the I-CSCF options (scscf=<port>, icscf=<port>) "
-  "were configured in the /etc/clearwater/config file but no Homestead "
-  "was configured in the same file.",
+  "Fatal - S/I-CSCF enabled with no Homestead hostname specified in shared "
+  "configuration.",
+  "The S-CSCF and/or the I-CSCF options (scscf=<port>, icscf=<port>) were "
+  "configured in local or shared configuration but no Homestead was "
+  "configured.",
   "The application will exit and restart until the problem is fixed.",
-  "Set the hs_hostname=<hostname> option in the "
-  "/etc/clearwater/config file. "
+  "Set the hs_hostname=<hostname> option in shared configuration."
 );
 
 static const PDLog CL_SPROUT_AUTH_NO_HOMESTEAD
@@ -103,11 +102,10 @@ static const PDLog CL_SPROUT_AUTH_NO_HOMESTEAD
   PDLogBase::CL_SPROUT_ID + 8,
   LOG_ERR,
   "Fatal - Authentication enabled, but no Homestead hostname specified in "
-  "/etc/clearwater/config.",
-  "The hs_hostname was not set in the /etc/clearwater/config file.",
+  "shared configuration.",
+  "The hs_hostname was not set in /etc/clearwater/shared_config.",
   "The application will exit and restart until the problem is fixed.",
-  "Set the hs_hostname=<hostname> option in the "
-  "/etc/clearwater/config file. "
+  "Set the hs_hostname=<hostname> option in shared configuration."
 );
 
 static const PDLog CL_SPROUT_XDM_NO_HOMESTEAD
@@ -115,11 +113,10 @@ static const PDLog CL_SPROUT_XDM_NO_HOMESTEAD
   PDLogBase::CL_SPROUT_ID + 9,
   LOG_ERR,
   "Fatal - Homer XDM service is configured but no Homestead hostname specified "
-  "in /etc/clearwater/config.",
-  "The hs_hostname was not set in the /etc/clearwater/config file.",
+  "in shared configuration.",
+  "The hs_hostname was not set in /etc/clearwater/shared_config.",
   "The application will exit and restart until the problem is fixed.",
-  "Set the hs_hostname=<hostname> option in the "
-  "/etc/clearwater/config file. "
+  "Set the hs_hostname=<hostname> option in shared configuration. "
 );
 
 static const PDLog1<const char*> CL_SPROUT_SIP_INIT_INTERFACE_FAIL
