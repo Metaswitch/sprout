@@ -1980,6 +1980,9 @@ int main(int argc, char* argv[])
 
   if (opt.ralf_server != "")
   {
+    // TODO - Make this configurable
+    bool should_omit_body = true;
+
     // Create HttpConnection pool for Ralf Rf billing interface.
     ralf_connection = new HttpConnection(opt.ralf_server,
                                          false,
@@ -1987,7 +1990,9 @@ int main(int argc, char* argv[])
                                          NULL, // No SNMP table for connected Ralfs
                                          load_monitor,
                                          SASEvent::HttpLogLevel::PROTOCOL,
-                                         ralf_comm_monitor);
+                                         ralf_comm_monitor,
+                                         "http",
+                                         should_omit_body);
     ralf_processor = new RalfProcessor(ralf_connection,
                                        exception_handler,
                                        opt.ralf_threads);
