@@ -375,7 +375,7 @@ public:
     _enum_service = new JSONEnumService(string(UT_DIR).append("/test_stateful_proxy_enum.json"));
 
     _acr_factory = new ACRFactory();
-    _mmf_service = new MMFService(NULL, string(UT_DIR).append("/test_mmf.json"));
+    _mmf_service = new MMFService(NULL, string(UT_DIR).append("/test_mmf_targets.json"));
     _difc_service = new DIFCService(NULL, string(UT_DIR).append("/test_scscf_difc.xml"));
 
     // Schedule timers.
