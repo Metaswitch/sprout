@@ -33,9 +33,9 @@ public:
 
   void parse_post_as(const rapidjson::Value& config);
 
-  const bool apply_pre_as() const {return _pre_as;};
-  const bool apply_post_as() const {return _post_as;};
-  const std::vector<std::string>& get_addresses() {return _addresses;};
+  inline const bool apply_pre_as() const {return _pre_as;};
+  inline const bool apply_post_as() const {return _post_as;};
+  inline const std::vector<std::string>& get_addresses() {return _addresses;};
 
 private:
   MMFTarget(const MMFTarget&) = delete;  // Prevent implicit copying

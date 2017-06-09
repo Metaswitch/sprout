@@ -34,41 +34,20 @@ public:
   void read_config(std::map<std::string, MMFTarget::ptr>& mmf_config,
                    rapidjson::Document& doc);
 
-  const MMFTarget::ptr get_address_config(std::string address)
+  inline const MMFTarget::ptr get_address_config(std::string address)
   {
     return _mmf_config.at(address);
   }
 
-  const bool has_config_for_address(std::string address)
+  inline const bool has_config_for_address(std::string address)
   {
     return _mmf_config.count(address);
   }
 
-  const bool apply_mmf_pre_as(std::string address)
-  {
-    if (has_config_for_address(address) && get_address_config(address)->apply_pre_as())
-    {
-      return true;
-    }
-    else
-    {
-      return false;
-    }
-  }
+  const bool apply_mmf_pre_as(std::string address);
+  const bool apply_mmf_post_as(std::string address);
 
-  const bool apply_mmf_post_as(std::string address)
-  {
-    if (has_config_for_address(address) && get_address_config(address)->apply_post_as())
-    {
-      return true;
-    }
-    else
-    {
-      return false;
-    }
-  }
-
-  boost::shared_mutex& get_mmf_rw_lock() {return _mmf_rw_lock;};
+  inline boost::shared_mutex& get_mmf_rw_lock() {return _mmf_rw_lock;};
 
 private:
   MMFService(const MMFService&) = delete;  // Prevent implicit copying

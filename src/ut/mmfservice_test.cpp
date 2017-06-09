@@ -53,11 +53,12 @@ TEST_F(MMFServiceTest, ValidMMFFile)
   EXPECT_CALL(*_mock_alarm, clear()).Times(AtLeast(1));
   MMFService MMF(_mock_alarm, string(UT_DIR).append("/test_mmf_targets.json"));
 
-  EXPECT_TRUE(MMF.has_config_for_address("10.231.0.2"));
+  EXPECT_TRUE(MMF.has_config_for_address("10.10.0.2"));
   EXPECT_TRUE(MMF.has_config_for_address("as.test.domain"));
   EXPECT_FALSE(MMF.has_config_for_address("guff.address"));
   EXPECT_TRUE(MMF.apply_mmf_pre_as("as.test.domain"));
-  EXPECT_FALSE(MMF.apply_mmf_post_as("10.231.0.2"));
+  EXPECT_TRUE(MMF.apply_mmf_post_as("second.test.domain"));
+  EXPECT_FALSE(MMF.apply_mmf_post_as("10.10.0.2"));
 }
 
 // Test that reloading a valid MMF file with an invalid file doesn't cause the
@@ -75,11 +76,12 @@ TEST_F(MMFServiceTest, ReloadInvalidMMFFile)
   MMF._configuration = string(UT_DIR).append("/test_mmf_invalid.json");
   MMF.update_config();
 
-  EXPECT_TRUE(MMF.has_config_for_address("10.231.0.2"));
+  EXPECT_TRUE(MMF.has_config_for_address("10.10.0.2"));
   EXPECT_TRUE(MMF.has_config_for_address("as.test.domain"));
   EXPECT_FALSE(MMF.has_config_for_address("guff.address"));
   EXPECT_TRUE(MMF.apply_mmf_pre_as("as.test.domain"));
-  EXPECT_FALSE(MMF.apply_mmf_post_as("10.231.0.2"));
+  EXPECT_TRUE(MMF.apply_mmf_post_as("second.test.domain"));
+  EXPECT_FALSE(MMF.apply_mmf_post_as("10.10.0.2"));
 }
 
 

@@ -149,6 +149,30 @@ void MMFService::read_config(std::map<std::string, MMFTarget::ptr>& mmf_config,
   }
 }
 
+const bool MMFService::apply_mmf_pre_as(std::string address)
+{
+  if (has_config_for_address(address) && get_address_config(address)->apply_pre_as())
+  {
+    return true;
+  }
+  else
+  {
+    return false;
+  }
+}
+
+const bool MMFService::apply_mmf_post_as(std::string address)
+{
+  if (has_config_for_address(address) && get_address_config(address)->apply_post_as())
+  {
+    return true;
+  }
+  else
+  {
+    return false;
+  }
+}
+
 void MMFService::set_alarm()
 {
   if (_alarm)
