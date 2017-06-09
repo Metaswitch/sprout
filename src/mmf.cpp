@@ -14,6 +14,7 @@
 
 MMFCfg::MMFCfg(const rapidjson::Value& config)
 {
+  TRC_DEBUG("Creating MMFCfg");
   parse_context(config);
   parse_pre_as(config);
   parse_post_as(config);
