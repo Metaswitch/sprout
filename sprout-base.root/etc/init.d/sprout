@@ -195,7 +195,7 @@ get_daemon_args()
                      $apply_default_ifcs_arg
                      $reject_if_no_matching_ifcs_arg
                      $dummy_app_server_arg
-                     $http_acr_logging
+                     $http_acr_logging_arg
                      $global_only_lookups_arg
                      $override_npdi_arg
                      $exception_max_ttl_arg
