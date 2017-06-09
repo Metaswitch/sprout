@@ -156,6 +156,7 @@ get_daemon_args()
         [ -z "$chronos_hostname" ] || chronos_hostname_arg="--chronos-hostname=$chronos_hostname"
         [ -z "$sprout_chronos_callback_uri" ] || sprout_chronos_callback_uri_arg="--sprout-chronos-callback-uri=$sprout_chronos_callback_uri"
         [ -z "$dummy_app_server" ] || dummy_app_server_arg="--dummy-app-server=$dummy_app_server"
+        [ -z "$http_acr_logging" ] || http_acr_logging_arg="--http-acr-logging"
 
         DAEMON_ARGS="
                      --domain=$home_domain
@@ -194,6 +195,7 @@ get_daemon_args()
                      $apply_default_ifcs_arg
                      $reject_if_no_matching_ifcs_arg
                      $dummy_app_server_arg
+                     $http_acr_logging
                      $global_only_lookups_arg
                      $override_npdi_arg
                      $exception_max_ttl_arg
