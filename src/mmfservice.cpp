@@ -151,6 +151,8 @@ void MMFService::read_config(std::map<std::string, MMFTarget::ptr>& mmf_config,
 
 const bool MMFService::apply_mmf_pre_as(std::string address)
 {
+  boost::lock_guard<boost::shared_mutex> read_lock(get_mmf_rw_lock());
+
   if (has_config_for_address(address) && get_address_config(address)->apply_pre_as())
   {
     return true;
@@ -163,6 +165,8 @@ const bool MMFService::apply_mmf_pre_as(std::string address)
 
 const bool MMFService::apply_mmf_post_as(std::string address)
 {
+  boost::lock_guard<boost::shared_mutex> read_lock(get_mmf_rw_lock());
+
   if (has_config_for_address(address) && get_address_config(address)->apply_post_as())
   {
     return true;

@@ -1577,9 +1577,9 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     // add the necessary route header
     if (_scscf->mmfservice()->apply_mmf_post_as(server_name))
     {
-      // insert addition of route header to route request via Houdini on
-      // the way back from the AS
-      // JA4 placeholder - code to come
+      // This is a placeholder for code which is currently being written.
+      // This will involve the addition of route header to invoke MMF
+      // on the way back from the AS
     }
 
     // Add the application server URI as the top Route header, per TS 24.229.
@@ -1589,7 +1589,9 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     // the AS, add the necessary route header
     if (_scscf->mmfservice()->apply_mmf_pre_as(server_name))
     {
-      // insert addition of route header to route request via Houdini
+      // This is a placeholder for code which is currently being written.
+      // The will involve the addition of route header to invoke MMF on the
+      // way to the AS
     }
 
     // Set P-Served-User, including session case and registration
