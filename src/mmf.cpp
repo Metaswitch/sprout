@@ -1,5 +1,5 @@
 /**
- * @file mmf.cpp The MMF Config data type.
+ * @file mmf.cpp  class representing MMF Target configuration options
  *
  * Copyright (C) Metaswitch Networks 2017
  * If license terms are provided to you in a COPYING file in the root directory
@@ -12,16 +12,16 @@
 #include "mmf.h"
 
 
-MMFCfg::MMFCfg(const rapidjson::Value& config)
+MMFTarget::MMFTarget(const rapidjson::Value& config)
 {
-  TRC_DEBUG("Creating MMFCfg");
-  parse_context(config);
+  TRC_DEBUG("Creating MMFTarget");
+  parse_name(config);
   parse_pre_as(config);
   parse_post_as(config);
   parse_addresses(config);
 }
 
-void MMFCfg::parse_addresses(const rapidjson::Value& config)
+void MMFTarget::parse_addresses(const rapidjson::Value& config)
 {
   if (config.HasMember("addresses") && config["addresses"].IsArray())
   {
@@ -53,23 +53,23 @@ void MMFCfg::parse_addresses(const rapidjson::Value& config)
   }
 }
 
-void MMFCfg::parse_context(const rapidjson::Value& config)
+void MMFTarget::parse_name(const rapidjson::Value& config)
 {
-  TRC_DEBUG("Reading context");
-  if (config.HasMember("context") && config["context"].IsString())
+  TRC_DEBUG("Reading name");
+  if (config.HasMember("name") && config["name"].IsString())
   {
-    TRC_DEBUG("Read context: %s", config["context"].GetString());
-    _context = config["context"].GetString();
+    TRC_DEBUG("Read name: %s", config["name"].GetString());
+    _name = config["name"].GetString();
   }
   else
   {
-    TRC_ERROR("Invalid 'context' field in MMF configuration.  The 'context' "
+    TRC_ERROR("Invalid 'name' field in MMF configuration.  The 'name' "
               "field must be present, and must be a string");
     JSON_FORMAT_ERROR();
   }
 }
 
-void MMFCfg::parse_pre_as(const rapidjson::Value& config)
+void MMFTarget::parse_pre_as(const rapidjson::Value& config)
 {
   TRC_DEBUG("Reading pre-AS");
   if (config.HasMember("pre-AS") && config["pre-AS"].IsBool())
@@ -85,7 +85,7 @@ void MMFCfg::parse_pre_as(const rapidjson::Value& config)
   }
 }
 
-void MMFCfg::parse_post_as(const rapidjson::Value& config)
+void MMFTarget::parse_post_as(const rapidjson::Value& config)
 {
   TRC_DEBUG("Reading post-AS");
   if (config.HasMember("post-AS") && config["post-AS"].IsBool())

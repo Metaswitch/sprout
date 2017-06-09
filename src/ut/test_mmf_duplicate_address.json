@@ -1,11 +1,11 @@
 {
-    "mmf_nodes" : [
-        {   "context" : "FirstAS",
+    "mmf_targets" : [
+        {   "name" : "FirstAS",
             "addresses" : ["as.test.domain", "10.231.0.2"],
             "pre-AS" : true,
             "post-AS" : false
         },
-        {   "context" : "SecondAS",
+        {   "name" : "SecondAS",
             "addresses" : ["as.test.domain"],
             "pre-AS" : true,
             "post-AS" : false

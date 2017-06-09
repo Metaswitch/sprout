@@ -7,8 +7,8 @@
 # Otherwise no rights are granted except for those provided to you by
 # Metaswitch Networks in a separate written agreement.
 
-FILENAME=mmf.json
-KEY=mmf_json
+FILENAME=mmf_targets.json
+KEY=mmf_targets_json
 
 # Pass optional argument directly to upload_json, which checks for --allow-large
 # option that allows file upload larger than advisable

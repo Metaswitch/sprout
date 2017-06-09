@@ -1,6 +1,6 @@
 {
-    "mmf_nodes" : [
-        {   "context" : "TestAS",
+    "mmf_targets" : [
+        {   "name" : "TestAS",
             "addresses" : "as.test.domain",
             "pre-AS" : true,
             "post-AS" : false

@@ -1,6 +1,6 @@
 {
-    "mmf_nodes" : [
-        {   "context" : "Invalid",
+    "mmf_targets" : [
+        {   "name" : "Invalid",
             "addresses" : ["invalid"],
             "post-AS" : false
         }

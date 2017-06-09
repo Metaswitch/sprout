@@ -25,16 +25,16 @@ class MMFService
 {
 public:
   MMFService(Alarm* alarm,
-             std::string configuration = "/etc/clearwater/mmf.json");
+             std::string configuration = "/etc/clearwater/mmf_targets.json");
   ~MMFService();
 
   /// Updates the MMF AS Config
   void update_config();
 
-  void read_config(std::map<std::string, MMFCfg::ptr>& mmf_config,
+  void read_config(std::map<std::string, MMFTarget::ptr>& mmf_config,
                    rapidjson::Document& doc);
 
-  const MMFCfg::ptr get_address_config(std::string address)
+  const MMFTarget::ptr get_address_config(std::string address)
   {
     return _mmf_config.at(address);
   }
@@ -74,7 +74,7 @@ private:
   MMFService(const MMFService&) = delete;  // Prevent implicit copying
 
   Alarm* _alarm;
-  std::map<std::string, MMFCfg::ptr> _mmf_config;
+  std::map<std::string, MMFTarget::ptr> _mmf_config;
   std::string _configuration;
   Updater<void, MMFService>* _updater;
 

@@ -86,7 +86,9 @@ void MMFService::update_config()
       JSON_FORMAT_ERROR();
     }
 
-    std::map<std::string, MMFCfg::ptr> mmf_config;
+    std::map<std::string, MMFTarget::ptr> mmf_config;
+
+    // This throws a JsonFormatError if the MMF configuration data is invalid
     read_config(mmf_config, doc);
 
     TRC_DEBUG("Taking write lock on mmf config");
@@ -110,27 +112,27 @@ void MMFService::update_config()
   }
 }
 
-void MMFService::read_config(std::map<std::string, MMFCfg::ptr>& mmf_config,
+void MMFService::read_config(std::map<std::string, MMFTarget::ptr>& mmf_config,
                              rapidjson::Document& doc)
 {
   TRC_DEBUG("Reading MMF Config");
 
-  if (!doc.HasMember("mmf_nodes"))
+  if (!doc.HasMember("mmf_targets"))
   {
     TRC_STATUS("No MMF config present in the %s file.  Sprout will not apply "
                "MMF to any calls.", _configuration.c_str());
     return;
   }
 
-  const rapidjson::Value& mmf_nodes = doc["mmf_nodes"];
+  const rapidjson::Value& mmf_targets = doc["mmf_targets"];
 
-  // Iterate over MMF config in the config file
-  for (rapidjson::Value::ConstValueIterator mmf_it = mmf_nodes.Begin();
-       mmf_it != mmf_nodes.End();
+  // Iterate over MMF targets in the config file
+  for (rapidjson::Value::ConstValueIterator mmf_it = mmf_targets.Begin();
+       mmf_it != mmf_targets.End();
        ++mmf_it)
   {
     // Throws a JsonFormatError if the config is invalid
-    MMFCfg::ptr config(new MMFCfg(*mmf_it));
+    MMFTarget::ptr config(new MMFTarget(*mmf_it));
 
     for (std::string address : config->get_addresses())
     {

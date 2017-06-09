@@ -1,5 +1,5 @@
 /**
- * @file mmf.h The MMF Config data type.
+ * @file mmf.h  MMF target configuration options
  *
  * Copyright (C) Metaswitch Networks 2017
  * If license terms are provided to you in a COPYING file in the root directory
@@ -17,17 +17,17 @@
 #include "utils.h"
 #include "json_parse_utils.h"
 
-/// A representation of an entry in the mmf.json file
-class MMFCfg
+/// A representation of an entry in the mmf_targets.json file
+class MMFTarget
 {
 public:
-  typedef std::shared_ptr<MMFCfg> ptr;
+  typedef std::shared_ptr<MMFTarget> ptr;
 
-  MMFCfg(const rapidjson::Value& config);
+  MMFTarget(const rapidjson::Value& config);
 
   void parse_addresses(const rapidjson::Value& config);
 
-  void parse_context(const rapidjson::Value& config);
+  void parse_name(const rapidjson::Value& config);
 
   void parse_pre_as(const rapidjson::Value& config);
 
@@ -38,10 +38,10 @@ public:
   const std::vector<std::string>& get_addresses() {return _addresses;};
 
 private:
-  MMFCfg(const MMFCfg&) = delete;  // Prevent implicit copying
+  MMFTarget(const MMFTarget&) = delete;  // Prevent implicit copying
 
   std::vector<std::string> _addresses;
-  std::string _context;
+  std::string _name;
   bool _pre_as;
   bool _post_as;
 };

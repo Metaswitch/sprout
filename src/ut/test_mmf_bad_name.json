@@ -1,6 +1,6 @@
 {
-    "mmf_nodes" : [
-        {
+    "mmf_targets" : [
+        {   "name" : 3,
             "addresses" : ["invalid"],
             "pre-AS" : false,
             "post-AS" : true
