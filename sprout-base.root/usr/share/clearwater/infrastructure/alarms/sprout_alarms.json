@@ -306,18 +306,18 @@
             "levels": [
                 {
                     "severity": "CLEARED",
-                    "details": "The configuration file for MMF is valid.",
-                    "description": "sprout: The MMF configuration file is valid.",
+                    "details": "The targets file for MMF is valid.",
+                    "description": "sprout: The MMF targets file is valid.",
                     "cause": "The configuration file at /etc/clearwater/mmf_targets.json is valid.",
-                    "effect": "The S-CSCF will be able to apply the configured MMF rules to calls.",
+                    "effect": "The S-CSCF will be able to apply any configured MMF rules to calls.",
                     "action": "No action."
                 },
                 {
                     "severity": "CRITICAL",
-                    "details": "There is at least one invalid entry in the MMF configuration file.",
-                    "description": "sprout: The MMF configuration file is invalid.",
+                    "details": "There is at least one invalid entry in the MMF targets file.",
+                    "description": "sprout: The MMF targets file is invalid.",
                     "cause": "The configuration file at /etc/clearwater/mmf_targets.json has at least one invalid entry.",
-                    "effect": "The S-CSCF will not apply MMF to any calls.",
+                    "effect": "New config will not be loaded.  If good config was previously loaded, the SPN will continue to use it.",
                     "action": "Correct the configuration file at /etc/clearwater/mmf_targets.json and upload it."
                 }
             ]

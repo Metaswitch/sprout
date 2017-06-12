@@ -1,7 +1,7 @@
 /**
  * @file mmfservice.cpp The MMF Config handler.
  *
- * Copyright (C) Metaswitch Networks
+ * Copyright (C) Metaswitch Networks 2017
  * If license terms are provided to you in a COPYING file in the root directory
  * of the source code repository by which you are accessing this code, then
  * the license outlined in that COPYING file applies to your use.
@@ -136,7 +136,7 @@ void MMFService::read_config(std::map<std::string, MMFTarget::ptr>& mmf_config,
 
     for (std::string address : config->get_addresses())
     {
-      if (mmf_config.count(address))
+      if (mmf_config.count(address) > 0)
       {
         // This is a duplicate entry
         TRC_ERROR("Duplicate config present in the %s configuration file for"
@@ -153,28 +153,14 @@ const bool MMFService::apply_mmf_pre_as(std::string address)
 {
   boost::lock_guard<boost::shared_mutex> read_lock(get_mmf_rw_lock());
 
-  if (has_config_for_address(address) && get_address_config(address)->apply_pre_as())
-  {
-    return true;
-  }
-  else
-  {
-    return false;
-  }
+  return (has_config_for_address(address) && get_address_config(address)->apply_pre_as());
 }
 
 const bool MMFService::apply_mmf_post_as(std::string address)
 {
   boost::lock_guard<boost::shared_mutex> read_lock(get_mmf_rw_lock());
 
-  if (has_config_for_address(address) && get_address_config(address)->apply_post_as())
-  {
-    return true;
-  }
-  else
-  {
-    return false;
-  }
+  return (has_config_for_address(address) && get_address_config(address)->apply_post_as());
 }
 
 void MMFService::set_alarm()

@@ -1,7 +1,7 @@
 /**
  * @file mmfservice.h Support for MMF function.
  *
- * Copyright (C) Metaswitch Networks
+ * Copyright (C) Metaswitch Networks 2017
  * If license terms are provided to you in a COPYING file in the root directory
  * of the source code repository by which you are accessing this code, then
  * the license outlined in that COPYING file applies to your use.
@@ -61,7 +61,7 @@ private:
   Updater<void, MMFService>* _updater;
 
   // Mark as mutable to flag that this can be modified without affecting the
-  // external behaviour of the calss, allowing for locking in 'const' methods.
+  // external behaviour of the class, allowing for locking in 'const' methods.
   mutable boost::shared_mutex _mmf_rw_lock;
 
   // Helper functions to set/clear the alarm.
