@@ -271,7 +271,7 @@ pj_str_t PJUtils::domain_from_uri(const std::string& uri_str, pj_pool_t* pool)
 }
 
 /// Determine the served user for originating requests.
-pjsip_uri* PJUtils::orig_served_user(pjsip_msg* msg)
+pjsip_uri* PJUtils::orig_served_user(const pjsip_msg* msg)
 {
   // The served user for originating requests is determined from the
   // P-Served-User or P-Asserted-Identity headers.  For extra compatibility,
@@ -315,7 +315,7 @@ pjsip_uri* PJUtils::orig_served_user(pjsip_msg* msg)
 
 
 /// Determine the served user for terminating requests.
-pjsip_uri* PJUtils::term_served_user(pjsip_msg* msg)
+pjsip_uri* PJUtils::term_served_user(const pjsip_msg* msg)
 {
   // The served user for terminating requests is always determined from the
   // Request URI.
