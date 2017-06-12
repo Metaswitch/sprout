@@ -201,12 +201,12 @@ pjsip_status_code AsChainLink::on_initial_request(pjsip_msg* msg,
                               msg_trail);
 
   // Check if we should apply any fallback IFCs. We do this if:
-  //   - We haven't found any matching IFC (true if server_name is empty, and
-  //     got_dummy_as is false.
+  //   - We haven't found any matching IFC (true if server_name is empty and
+  //     we didn't find a dummy AS)
   //   - It's our first time through this function and we've run through
   //     every available standard IFC to check for a match
   //   - The config option to apply fallback IFCs is set.
-  if ((!(got_dummy_as) || (server_name != "")) &&
+  if (((!got_dummy_as) && (server_name == "")) &&
       ((first_pass_through_ifcs) && (complete())) &&
       (_as_chain->_ifc_configuration._apply_fallback_ifcs))
   {
@@ -233,10 +233,10 @@ pjsip_status_code AsChainLink::on_initial_request(pjsip_msg* msg,
   // Check if we should have applied fallback IFCs, but didn't find any. We
   // SAS log this, and increment a statistic.
   // We're in this case if:
-  //   - We haven't found any matching IFC (true if server_name is empty, and
-  //     got_dummy_as is false.
+  //   - We haven't found any matching IFC (true if server_name is empty and
+  //     we didn't find a dummy AS)
   //   - We're using fallback IFCs
-  if ((!(got_dummy_as) || (server_name != "")) &&
+  if (((!got_dummy_as) && (server_name == "")) &&
       ((!_as_chain->_using_standard_ifcs) &&
        (_as_chain->_ifc_configuration._apply_fallback_ifcs)))
   {
@@ -251,11 +251,11 @@ pjsip_status_code AsChainLink::on_initial_request(pjsip_msg* msg,
   }
 
   // Now check if we found any IFCs at all. We didn't find any if:
-  //   - We haven't found any matching IFC (true if server_name is empty, and
-  //     got_dummy_as is false.
+  //   - We haven't found any matching IFC (true if server_name is empty and
+  //     we didn't find a dummy AS)
   //   - It's our first time through this function and we've run through
   //     every available IFC to check for a match
-  if ((!(got_dummy_as) || (server_name != "")) &&
+  if (((!got_dummy_as) && (server_name == "")) &&
       ((first_pass_through_ifcs) && (complete())))
   {
     if (_as_chain->_ifc_configuration._no_matching_ifcs_tbl)
