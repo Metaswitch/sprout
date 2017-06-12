@@ -30,7 +30,7 @@ extern "C" {
 class UASTransaction;
 
 /// Structure that holds IFC configuration that isn't covered by the TS specs
-// (e.g. default and dummy IFCs).
+// (e.g. fallback and dummy IFCs).
 struct IFCConfiguration
 {
   bool _apply_fallback_ifcs;

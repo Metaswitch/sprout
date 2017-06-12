@@ -549,7 +549,7 @@ static const PDLog CL_SPROUT_FIFC_FILE_MISSING_FALLBACK_IFCS_SET
  PDLogBase::CL_SPROUT_ID + 63,
  LOG_ERR,
  "The fallback IFCs configuration file doesn't have the correct syntax.",
- "The S-CSCF supports fallback IFCs, but the configuration file for this doesn't match the expected syntax (no DefaultIFCsSet block).",
+ "The S-CSCF supports fallback IFCs, but the configuration file for this doesn't match the expected syntax (no FallbackIFCsSet block).",
  "The S-CSCF will not be able to correctly apply any fallback IFCs.",
  "The fallback IFCs should be defined in /etc/clearwater/fallback_ifcs.xml. Populate this file according to the documentation."
  );

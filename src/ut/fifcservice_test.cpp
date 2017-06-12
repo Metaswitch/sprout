@@ -154,7 +154,7 @@ TEST_F(FIFCServiceTest, ReloadChangedFIFCFile)
 // ideal as it's not using a public interface, but it's the only way to be sure
 // that no entries made it into the map.
 
-// Test that we log appropriately if the DiFC config file is mising.
+// Test that we log appropriately if the fallback config file is mising.
 TEST_F(FIFCServiceTest, MissingFile)
 {
   CapturingTestLogger log;
@@ -166,7 +166,7 @@ TEST_F(FIFCServiceTest, MissingFile)
   delete root; root = NULL;
 }
 
-// Test that we log appropriately if the DiFC config file is empty.
+// Test that we log appropriately if the fallback config file is empty.
 TEST_F(FIFCServiceTest, EmptyFile)
 {
   CapturingTestLogger log;
@@ -178,7 +178,7 @@ TEST_F(FIFCServiceTest, EmptyFile)
   delete root; root = NULL;
 }
 
-// Test that we log appropriately if the DiFC config file is unparseable.
+// Test that we log appropriately if the fallback config file is unparseable.
 TEST_F(FIFCServiceTest, ParseError)
 {
   CapturingTestLogger log;
@@ -190,7 +190,7 @@ TEST_F(FIFCServiceTest, ParseError)
   delete root; root = NULL;
 }
 
-// Test that we log appropriately if the DiFC config file has the wrong syntax.
+// Test that we log appropriately if the fallback config file has the wrong syntax.
 TEST_F(FIFCServiceTest, IncorrectSyntax)
 {
   CapturingTestLogger log;

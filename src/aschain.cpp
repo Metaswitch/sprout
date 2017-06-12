@@ -192,7 +192,7 @@ pjsip_status_code AsChainLink::on_initial_request(pjsip_msg* msg,
                                  (_as_chain->_using_standard_ifcs);
 
   // Attempt to get the next application server. This uses either the standard
-  // IFCs or the default IFCs depending on what's happened when we went through
+  // IFCs or the fallback IFCs depending on what's happened when we went through
   // this function previously.
   bool got_dummy_as = false;
   get_next_application_server(msg,
@@ -200,21 +200,21 @@ pjsip_status_code AsChainLink::on_initial_request(pjsip_msg* msg,
                               got_dummy_as,
                               msg_trail);
 
-  // Check if we should apply any default IFCs. We do this if:
+  // Check if we should apply any fallback IFCs. We do this if:
   //   - We haven't found any matching IFC (true if server_name is empty, and
   //     got_dummy_as is false.
   //   - It's our first time through this function and we've run through
   //     every available standard IFC to check for a match
-  //   - The config option to apply default IFCs is set.
+  //   - The config option to apply fallback IFCs is set.
   if ((!(got_dummy_as) || (server_name != "")) &&
       ((first_pass_through_ifcs) && (complete())) &&
       (_as_chain->_ifc_configuration._apply_fallback_ifcs))
   {
-    TRC_DEBUG("No IFCs apply to this message; looking up default IFCs");
-    SAS::Event event(msg_trail, SASEvent::STARTING_DEFAULT_IFCS_LOOKUP, 0);
+    TRC_DEBUG("No IFCs apply to this message; looking up fallback IFCs");
+    SAS::Event event(msg_trail, SASEvent::STARTING_FALLBACK_IFCS_LOOKUP, 0);
     SAS::report_event(event);
 
-    // Reset the AsChain IFCs given we've moving onto the default IFCs
+    // Reset the AsChain IFCs given we've moving onto the fallback IFCs
     _as_chain->_using_standard_ifcs = false;
     _index = 0;
     get_next_application_server(msg,
@@ -224,18 +224,18 @@ pjsip_status_code AsChainLink::on_initial_request(pjsip_msg* msg,
 
     if (server_name != "")
     {
-      TRC_DEBUG("We've found a matching default IFC - applying it");
-      SAS::Event event(msg_trail, SASEvent::FIRST_DEFAULT_IFC, 0);
+      TRC_DEBUG("We've found a matching fallback IFC - applying it");
+      SAS::Event event(msg_trail, SASEvent::FIRST_FALLBACK_IFC, 0);
       SAS::report_event(event);
     }
   }
 
-  // Check if we should have applied default IFCs, but didn't find any. We
+  // Check if we should have applied fallback IFCs, but didn't find any. We
   // SAS log this, and increment a statistic.
   // We're in this case if:
   //   - We haven't found any matching IFC (true if server_name is empty, and
   //     got_dummy_as is false.
-  //   - We're using default IFCs
+  //   - We're using fallback IFCs
   if ((!(got_dummy_as) || (server_name != "")) &&
       ((!_as_chain->_using_standard_ifcs) &&
        (_as_chain->_ifc_configuration._apply_fallback_ifcs)))
@@ -245,8 +245,8 @@ pjsip_status_code AsChainLink::on_initial_request(pjsip_msg* msg,
       _as_chain->_ifc_configuration._no_matching_fallback_ifcs_tbl->increment();
     }
 
-    TRC_DEBUG("Unable to apply default IFCs as no matching IFCs available");
-    SAS::Event event(msg_trail, SASEvent::NO_DEFAULT_IFCS, 0);
+    TRC_DEBUG("Unable to apply fallback IFCs as no matching IFCs available");
+    SAS::Event event(msg_trail, SASEvent::NO_FALLBACK_IFCS, 0);
     SAS::report_event(event);
   }
 

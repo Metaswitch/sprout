@@ -1,5 +1,5 @@
 /**
- * @file fifcservice.h Support for Default iFCs.
+ * @file fifcservice.h Support for fallback iFCs.
  *
  * Copyright (C) Metaswitch Networks
  * If license terms are provided to you in a COPYING file in the root directory
@@ -27,7 +27,7 @@ public:
               std::string configuration = "/etc/clearwater/fallback_ifcs.xml");
   ~FIFCService();
 
-  // Node names within the Default iFC configuration file.
+  // Node names within the fallback iFC configuration file.
   const char* const FALLBACK_IFCS_SET = "FallbackIFCsSet";
 
   /// Updates the fallback iFCs.
