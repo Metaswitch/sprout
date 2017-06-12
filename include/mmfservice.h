@@ -28,12 +28,12 @@ public:
              std::string configuration = "/etc/clearwater/mmf_targets.json");
   ~MMFService();
 
+  typedef std::map<std::string, MMFTarget::ptr> MMFMap;
+
   /// Updates the MMF Config
   void update_config();
 
-  void read_config(std::shared_ptr<std::map<std::string, MMFTarget::ptr>> mmf_config,
-                   rapidjson::Document& doc);
-
+  std::shared_ptr<MMFService::MMFMap> read_config(rapidjson::Document& doc);
 
   const bool apply_mmf_pre_as(std::string address);
   const bool apply_mmf_post_as(std::string address);
@@ -56,7 +56,7 @@ private:
   }
 
   Alarm* _alarm;
-  std::shared_ptr<std::map<std::string, MMFTarget::ptr>> _mmf_config;
+  std::shared_ptr<MMFService::MMFMap> _mmf_config;
   std::string _configuration;
   Updater<void, MMFService>* _updater;
 

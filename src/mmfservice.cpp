@@ -85,11 +85,10 @@ void MMFService::update_config()
       JSON_FORMAT_ERROR();
     }
 
-    std::shared_ptr<std::map<std::string, MMFTarget::ptr>> mmf_config(
-                                    new std::map<std::string, MMFTarget::ptr>);
+    std::shared_ptr<MMFService::MMFMap> mmf_config(nullptr);
 
     // This throws a JsonFormatError if the MMF configuration data is invalid
-    read_config(mmf_config, doc);
+    mmf_config = read_config(doc);
 
     TRC_DEBUG("Taking write lock on mmf config");
 
@@ -112,41 +111,45 @@ void MMFService::update_config()
   }
 }
 
-void MMFService::read_config(std::shared_ptr<std::map<std::string, MMFTarget::ptr>> mmf_config,
-                             rapidjson::Document& doc)
+std::shared_ptr<MMFService::MMFMap> MMFService::read_config(rapidjson::Document& doc)
 {
+  std::shared_ptr<MMFService::MMFMap> mmf_config(new MMFService::MMFMap);
+
   TRC_DEBUG("Reading MMF Config");
 
   if (!doc.HasMember("mmf_targets"))
   {
     TRC_STATUS("No MMF config present in the %s file.  Sprout will not apply "
                "MMF to any calls.", _configuration.c_str());
-    return;
   }
-
-  const rapidjson::Value& mmf_targets = doc["mmf_targets"];
-
-  // Iterate over MMF targets in the config file
-  for (rapidjson::Value::ConstValueIterator mmf_it = mmf_targets.Begin();
-       mmf_it != mmf_targets.End();
-       ++mmf_it)
+  else
   {
-    // Throws a JsonFormatError if the config is invalid
-    MMFTarget::ptr config(new MMFTarget(*mmf_it));
+    const rapidjson::Value& mmf_targets = doc["mmf_targets"];
 
-    for (std::string address : config->get_addresses())
+    // Iterate over MMF targets in the config file
+    for (rapidjson::Value::ConstValueIterator mmf_it = mmf_targets.Begin();
+         mmf_it != mmf_targets.End();
+         ++mmf_it)
     {
-      if (mmf_config->count(address) > 0)
-      {
-        // This is a duplicate entry
-        TRC_ERROR("Duplicate config present in the %s configuration file for"
-                  "the address: '%s'", _configuration.c_str(), address.c_str());
-        JSON_FORMAT_ERROR();
-      }
+      // Throws a JsonFormatError if the target is invalid
+      MMFTarget::ptr target(new MMFTarget(*mmf_it));
 
-      mmf_config->insert(std::make_pair(address, config));
+      for (std::string address : target->get_addresses())
+      {
+        if (mmf_config->count(address) > 0)
+        {
+          // This is a duplicate entry
+          TRC_ERROR("Duplicate config present in the %s configuration file for"
+                    "the address: '%s'", _configuration.c_str(), address.c_str());
+          JSON_FORMAT_ERROR();
+        }
+
+        mmf_config->insert(std::make_pair(address, target));
+      }
     }
   }
+
+  return mmf_config;
 }
 
 const bool MMFService::apply_mmf_pre_as(std::string address)
