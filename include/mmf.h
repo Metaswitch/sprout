@@ -25,12 +25,11 @@ public:
 
   MMFTarget(const rapidjson::Value& config);
 
+  /// The below methods parse the passed in rapidjson representation of an
+  /// MMFTarget, and either set the appropriate member variable or raise an error
   void parse_addresses(const rapidjson::Value& config);
-
   void parse_name(const rapidjson::Value& config);
-
   void parse_pre_as(const rapidjson::Value& config);
-
   void parse_post_as(const rapidjson::Value& config);
 
   inline const bool apply_pre_as() const {return _pre_as;};
@@ -40,9 +39,20 @@ public:
 private:
   MMFTarget(const MMFTarget&) = delete;  // Prevent implicit copying
 
+  /// The addresses associated with this MMF target, such as DNS A entries
+  /// resolving to a cluster of Application Servers
   std::vector<std::string> _addresses;
+
+  /// The name of this MMF target.  The 'mmfcontext' parameter value for any
+  /// invocation of MMF is set to this value.
   std::string _name;
+
+  /// Indicates whether we should invoke MMF prior to routing to the
+  /// MMF target
   bool _pre_as;
+
+  /// Indicates whether we should invoke MMF after routing to the
+  /// MMF target
   bool _post_as;
 };
 

@@ -28,14 +28,25 @@ public:
              std::string configuration = "/etc/clearwater/mmf_targets.json");
   ~MMFService();
 
+  /// A map from Application Server addresses, to the MMF configuration
+  /// associated with the address
   typedef std::map<std::string, MMFTarget::ptr> MMFMap;
 
   /// Updates the MMF Config
   void update_config();
 
-  std::shared_ptr<MMFService::MMFMap> read_config(rapidjson::Document& doc);
+  /// Read the rapidjson representation of the mmf_targets.json file, and
+  /// return an MMFMap representation of the config file.
+  ///
+  /// Raises an error if the passed in configuration is invalid
+  std::shared_ptr<MMFService::MMFMap> read_config(rapidjson::Document& config);
 
+  /// Return whether we should invoke MMF prior to routing a message to the
+  /// passed in Application Server
   const bool apply_mmf_pre_as(std::string address);
+
+  /// Return whether we should invoke MMF after routing a message to the
+  /// passed in Application Server
   const bool apply_mmf_post_as(std::string address);
 
   inline boost::shared_mutex& get_mmf_rw_lock() {return _mmf_rw_lock;};
@@ -43,8 +54,8 @@ public:
 private:
   MMFService(const MMFService&) = delete;  // Prevent implicit copying
 
-  // These methods are private to prevent access to the mmf config without
-  // first taking a read_lock
+  /// These methods are private to prevent access to the mmf config without
+  /// first taking a read lock
   inline const MMFTarget::ptr get_address_config(std::string address)
   {
     return _mmf_config->at(address);
@@ -52,7 +63,7 @@ private:
 
   inline const bool has_config_for_address(std::string address)
   {
-    return _mmf_config->count(address);
+    return (_mmf_config->count(address) > 0);
   }
 
   Alarm* _alarm;
@@ -60,11 +71,11 @@ private:
   std::string _configuration;
   Updater<void, MMFService>* _updater;
 
-  // Mark as mutable to flag that this can be modified without affecting the
-  // external behaviour of the class, allowing for locking in 'const' methods.
+  /// Mark as mutable to flag that this can be modified without affecting the
+  /// external behaviour of the class, allowing for locking in 'const' methods.
   mutable boost::shared_mutex _mmf_rw_lock;
 
-  // Helper functions to set/clear the alarm.
+  /// Helper functions to set/clear the alarm.
   void set_alarm();
   void clear_alarm();
 };
