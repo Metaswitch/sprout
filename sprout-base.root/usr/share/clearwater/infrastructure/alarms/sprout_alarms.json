@@ -278,24 +278,24 @@
         },
         {
             "index": 1012,
-            "name": "SPROUT_DIFC_STATUS",
+            "name": "SPROUT_FIFC_STATUS",
             "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
             "levels": [
                 {
                     "severity": "CLEARED",
-                    "details": "The configuration file for default IFCs is valid.",
-                    "description": "sprout: The configuration file for default IFCs is valid.",
-                    "cause": "The configuration file at /etc/clearwater/default_ifcs.xml is valid.",
-                    "effect": "The S-CSCF will be able to correctly apply any default IFCs.",
+                    "details": "The configuration file for fallback IFCs is valid.",
+                    "description": "sprout: The configuration file for fallback IFCs is valid.",
+                    "cause": "The configuration file at /etc/clearwater/fallback_ifcs.xml is valid.",
+                    "effect": "The S-CSCF will be able to correctly apply any fallback IFCs.",
                     "action": "No action."
                 },
                 {
                     "severity": "CRITICAL",
-                    "details": "There is at least one invalid entry in the configuration file for default IFCs.",
-                    "description": "sprout: The configuration file for default IFCs is invalid.",
-                    "cause": "The configuration file at /etc/clearwater/default_ifcs.xml has at least one invalid entry.",
-                    "effect": "The S-CSCF will not be able to correctly apply any default IFCs.",
-                    "action": "Correct the configuration file at /etc/clearwater/default_ifcs.xml and upload it."
+                    "details": "There is at least one invalid entry in the configuration file for fallback IFCs.",
+                    "description": "sprout: The configuration file for fallback IFCs is invalid.",
+                    "cause": "The configuration file at /etc/clearwater/fallback_ifcs.xml has at least one invalid entry.",
+                    "effect": "The S-CSCF will not be able to correctly apply any fallback IFCs.",
+                    "action": "Correct the configuration file at /etc/clearwater/fallback_ifcs.xml and upload it."
                 }
             ]
         }

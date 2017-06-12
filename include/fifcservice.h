@@ -1,5 +1,5 @@
 /**
- * @file difcservice.h Support for Default iFCs.
+ * @file fifcservice.h Support for Default iFCs.
  *
  * Copyright (C) Metaswitch Networks
  * If license terms are provided to you in a COPYING file in the root directory
@@ -17,30 +17,30 @@
 #include "ifc.h"
 #include "alarm.h"
 
-#ifndef DIFCSERVICE_H__
-#define DIFCSERVICE_H__
+#ifndef FIFCSERVICE_H__
+#define FIFCSERVICE_H__
 
-class DIFCService
+class FIFCService
 {
 public:
-  DIFCService(Alarm* alarm,
-              std::string configuration = "/etc/clearwater/default_ifcs.xml");
-  ~DIFCService();
+  FIFCService(Alarm* alarm,
+              std::string configuration = "/etc/clearwater/fallback_ifcs.xml");
+  ~FIFCService();
 
   // Node names within the Default iFC configuration file.
-  const char* const DEFAULT_IFCS_SET = "DefaultIFCsSet";
+  const char* const FALLBACK_IFCS_SET = "FallbackIFCsSet";
 
-  /// Updates the default iFCs.
-  void update_difcs();
+  /// Updates the fallback iFCs.
+  void update_fifcs();
 
-  /// Get the default IFCs
-  std::vector<Ifc> get_default_ifcs(rapidxml::xml_document<>* ifc_doc) const;
+  /// Get the fallback IFCs
+  std::vector<Ifc> get_fallback_ifcs(rapidxml::xml_document<>* ifc_doc) const;
 
 private:
   Alarm* _alarm;
-  std::vector<std::string> _default_ifcs;
+  std::vector<std::string> _fallback_ifcs;
   std::string _configuration;
-  Updater<void, DIFCService>* _updater;
+  Updater<void, FIFCService>* _updater;
 
   // Mark as mutable to flag that this can be modified without affecting the
   // external behaviour of the calss, allowing for locking in 'const' methods.

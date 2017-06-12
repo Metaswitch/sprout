@@ -62,7 +62,7 @@ public:
                  SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
                  SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                  bool override_npdi,
-                 DIFCService* difcservice,
+                 FIFCService* fifcservice,
                  IFCConfiguration ifc_configuration,
                  int session_continued_timeout = DEFAULT_SESSION_CONTINUED_TIMEOUT,
                  int session_terminated_timeout = DEFAULT_SESSION_TERMINATED_TIMEOUT,
@@ -109,7 +109,7 @@ private:
   /// Returns the configured BGCF URI for this system.
   const pjsip_uri* bgcf_uri() const;
 
-  DIFCService* difcservice() const;
+  FIFCService* fifcservice() const;
   IFCConfiguration ifc_configuration() const;
 
   /// Gets all bindings for the specified Address of Record from the local or
@@ -203,7 +203,7 @@ private:
   AsChainTable* _as_chain_table;
 
   bool _override_npdi;
-  DIFCService* _difcservice;
+  FIFCService* _fifcservice;
   IFCConfiguration _ifc_configuration;
 
   /// Timeouts related to default handling of unresponsive application servers.
