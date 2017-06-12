@@ -1,5 +1,5 @@
 /**
- * @file mmf.h  MMF target configuration options
+ * @file mmftargets.h  MMF target configuration options
  *
  * Copyright (C) Metaswitch Networks 2017
  * If license terms are provided to you in a COPYING file in the root directory
@@ -9,8 +9,8 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-#ifndef MMF_H__
-#define MMF_H__
+#ifndef MMFTARGETS_H__
+#define MMFTARGETS_H__
 
 #include <iostream>
 #include <memory>

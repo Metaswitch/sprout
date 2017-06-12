@@ -13,7 +13,7 @@
 #include <boost/thread.hpp>
 #include "rapidjson/document.h"
 
-#include "mmf.h"
+#include "mmftargets.h"
 #include "updater.h"
 #include "alarm.h"
 
