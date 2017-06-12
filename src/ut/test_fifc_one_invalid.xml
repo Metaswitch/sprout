@@ -1,7 +1,7 @@
 <?l version=1.0 encoding=UTF-8?>
-<DefaultIFCsSet>
+<FallbackIFCsSet>
   <InitialFilterCriteria>
-    <Priority>1</Priority>
+    <Priority>one</Priority>
     <TriggerPoint>
       <ConditionTypeCNF>0</ConditionTypeCNF>
       <SPT>
@@ -32,4 +32,4 @@
       <DefaultHandling>0</DefaultHandling>
     </ApplicationServer>
   </InitialFilterCriteria>
-</DefaultIFCsSet>
+</FallbackIFCsSet>

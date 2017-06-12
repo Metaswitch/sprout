@@ -141,7 +141,7 @@ get_daemon_args()
         [ "$force_third_party_reg_body" != "Y" ] || force_3pr_body_arg="--force-3pr-body"
         [ "$sas_use_signaling_interface" != "Y" ] || sas_signaling_if_arg="--sas-use-signaling-interface"
         [ "$disable_tcp_switch" != "Y" ] || disable_tcp_switch_arg="--disable-tcp-switch"
-        [ "$apply_default_ifcs" != "Y" ] || apply_default_ifcs_arg="--apply-default-ifcs"
+        [ "$apply_fallback_ifcs" != "Y" ] || apply_fallback_ifcs_arg="--apply-fallback-ifcs"
         [ "$reject_if_no_matching_ifcs" != "Y" ] || reject_if_no_matching_ifcs_arg="--reject-if-no-matching-ifcs"
 
         [ -z "$target_latency_us" ] || target_latency_us_arg="--target-latency-us=$target_latency_us"
@@ -191,7 +191,7 @@ get_daemon_args()
                      $user_phone_arg
                      $sas_signaling_if_arg
                      $disable_tcp_switch_arg
-                     $apply_default_ifcs_arg
+                     $apply_fallback_ifcs_arg
                      $reject_if_no_matching_ifcs_arg
                      $dummy_app_server_arg
                      $global_only_lookups_arg

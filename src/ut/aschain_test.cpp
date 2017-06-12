@@ -193,7 +193,7 @@ TEST_F(AsChainTest, MatchingStandardIFCs)
   EXPECT_EQ(rc, PJSIP_SC_OK);
 }
 
-// There are no matching standard IFCs, and we're not using default IFCs.
+// There are no matching standard IFCs, and we're not using fallback IFCs.
 // We shouldn't select any ASs.
 TEST_F(AsChainTest, NoMatchingStandardIFCs)
 {
@@ -211,7 +211,7 @@ TEST_F(AsChainTest, NoMatchingStandardIFCs)
   EXPECT_EQ(rc, PJSIP_SC_OK);
 }
 
-// There are matching standard IFCs, we're not using default IFCs, and we're
+// There are matching standard IFCs, we're not using fallback IFCs, and we're
 // rejecting when there's no matching IFCs.
 // We should select the ASs from the standard IFCs
 TEST_F(AsChainTest, MatchingStandardIFCsRejectIfNone)
@@ -230,7 +230,7 @@ TEST_F(AsChainTest, MatchingStandardIFCsRejectIfNone)
   EXPECT_EQ(rc, PJSIP_SC_OK);
 }
 
-// There are no matching standard IFCs, we're not using default IFCs, and we're
+// There are no matching standard IFCs, we're not using fallback IFCs, and we're
 // rejecting when there's no matching IFCs.
 // We shouldn't select any ASs, and we should have an error response.
 TEST_F(AsChainTest, NoMatchingStandardIFCsRejectIfNone)
@@ -249,15 +249,15 @@ TEST_F(AsChainTest, NoMatchingStandardIFCsRejectIfNone)
   EXPECT_EQ(rc, PJSIP_SC_BAD_REQUEST);
 }
 
-// There are matching standard IFCs and matching default IFCs.
+// There are matching standard IFCs and matching fallback IFCs.
 // We should select the ASs from the standard IFCs
-TEST_F(AsChainTest, MatchingStandardIFCsWithMatchingDefaultIFCs)
+TEST_F(AsChainTest, MatchingStandardIFCsWithMatchingFallbackIFCs)
 {
   IFCConfiguration ifc_configuration(true, true, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = matching_ifcs(2, "sip:as1", "sip:as2");
-  Ifcs default_ifcs = matching_ifcs(2, "sip:default_as2", "sip:default_as2");
+  Ifcs fallback_ifcs = matching_ifcs(2, "sip:fallback_as2", "sip:fallback_as2");
   AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
-  as_chain._default_ifcs = default_ifcs.ifcs_list();
+  as_chain._fallback_ifcs = fallback_ifcs.ifcs_list();
   AsChainLink as_chain_link(&as_chain, 0u);
 
   pjsip_tx_data* tdata = NULL;
@@ -279,15 +279,15 @@ TEST_F(AsChainTest, MatchingStandardIFCsWithMatchingDefaultIFCs)
   EXPECT_EQ(rc, PJSIP_SC_OK);
 }
 
-// There are no matching standard IFCs and matching default IFCs.
-// We should select the ASs from the default IFCs
-TEST_F(AsChainTest, NoMatchingStandardIFCsWithDefaultIFCs)
+// There are no matching standard IFCs and matching fallback IFCs.
+// We should select the ASs from the fallback IFCs
+TEST_F(AsChainTest, NoMatchingStandardIFCsWithFallbackIFCs)
 {
   IFCConfiguration ifc_configuration(true, true, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = non_matching_ifcs(2, "sip:as1", "sip:as2");
-  Ifcs default_ifcs = matching_ifcs(2, "sip:default_as1", "sip:default_as2");
+  Ifcs fallback_ifcs = matching_ifcs(2, "sip:fallback_as1", "sip:fallback_as2");
   AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
-  as_chain._default_ifcs = default_ifcs.ifcs_list();
+  as_chain._fallback_ifcs = fallback_ifcs.ifcs_list();
   AsChainLink as_chain_link(&as_chain, 0u);
 
   pjsip_tx_data* tdata = NULL;
@@ -295,12 +295,12 @@ TEST_F(AsChainTest, NoMatchingStandardIFCsWithDefaultIFCs)
   std::string server_name;
 
   pjsip_status_code rc = as_chain_link.on_initial_request(tdata->msg, server_name, 1u);
-  EXPECT_EQ(server_name, "sip:default_as1");
+  EXPECT_EQ(server_name, "sip:fallback_as1");
   EXPECT_EQ(rc, PJSIP_SC_OK);
 
   as_chain_link = as_chain_link.next();
   rc = as_chain_link.on_initial_request(tdata->msg, server_name, 1u);
-  EXPECT_EQ(server_name, "sip:default_as2");
+  EXPECT_EQ(server_name, "sip:fallback_as2");
   EXPECT_EQ(rc, PJSIP_SC_OK);
 
   as_chain_link = as_chain_link.next();
@@ -309,15 +309,15 @@ TEST_F(AsChainTest, NoMatchingStandardIFCsWithDefaultIFCs)
   EXPECT_EQ(rc, PJSIP_SC_OK);
 }
 
-// There are no matching standard IFCs and no matching default IFCs.
+// There are no matching standard IFCs and no matching fallback IFCs.
 // We shouldn't select any ASs.
-TEST_F(AsChainTest, NoMatchingStandardOrDefaultIFCs)
+TEST_F(AsChainTest, NoMatchingStandardOrFallbackIFCs)
 {
   IFCConfiguration ifc_configuration(true, false, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = non_matching_ifcs(2, "sip:as1", "sip:as2");
-  Ifcs default_ifcs = non_matching_ifcs(2, "sip:default_as2", "sip:default_as2");
+  Ifcs fallback_ifcs = non_matching_ifcs(2, "sip:fallback_as2", "sip:fallback_as2");
   AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
-  as_chain._default_ifcs = default_ifcs.ifcs_list();
+  as_chain._fallback_ifcs = fallback_ifcs.ifcs_list();
   AsChainLink as_chain_link(&as_chain, 0u);
 
   pjsip_tx_data* tdata = NULL;
@@ -329,15 +329,15 @@ TEST_F(AsChainTest, NoMatchingStandardOrDefaultIFCs)
   EXPECT_EQ(rc, PJSIP_SC_OK);
 }
 
-// There are no matching standard IFCs and no matching default IFCs.
+// There are no matching standard IFCs and no matching fallback IFCs.
 // We shouldn't select any ASs, and we should have an error response.
-TEST_F(AsChainTest, NoMatchingStandardOrDefaultIFCsWithReject)
+TEST_F(AsChainTest, NoMatchingStandardOrFallbackIFCsWithReject)
 {
   IFCConfiguration ifc_configuration(true, true, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = non_matching_ifcs(2, "sip:as1", "sip:as2");
-  Ifcs default_ifcs = non_matching_ifcs(2, "sip:default_as2", "sip:default_as2");
+  Ifcs fallback_ifcs = non_matching_ifcs(2, "sip:fallback_as2", "sip:fallback_as2");
   AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
-  as_chain._default_ifcs = default_ifcs.ifcs_list();
+  as_chain._fallback_ifcs = fallback_ifcs.ifcs_list();
   AsChainLink as_chain_link(&as_chain, 0u);
 
   pjsip_tx_data* tdata = NULL;
@@ -448,17 +448,17 @@ TEST_F(AsChainTest, MatchingStandardIFCOnlyDummyAppServerWithReject)
 }
 
 // There are matching standard IFCs, and all of these match the dummy
-// application server. There are also matching default IFCs.
+// application server. There are also matching fallback IFCs.
 // We shouldn't select any ASs. This is still a success response.
-TEST_F(AsChainTest, MatchingStandardIFCOnlyDummyAppServerWithDefaultIFCs)
+TEST_F(AsChainTest, MatchingStandardIFCOnlyDummyAppServerWithFallbackIFCs)
 {
   // Create an Ifcs with three IFCs, pointing to AS1, AS2, and AS3, and create
   // the AS Chain with AS2 set up as a dummy application server.
   IFCConfiguration ifc_configuration(true, true, "sip:dummy_as", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = matching_ifcs(1, "sip:dummy_as");
-  Ifcs default_ifcs = matching_ifcs(1, "sip:default_as1");
+  Ifcs fallback_ifcs = matching_ifcs(1, "sip:fallback_as1");
   AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
-  as_chain._default_ifcs = default_ifcs.ifcs_list();
+  as_chain._fallback_ifcs = fallback_ifcs.ifcs_list();
   AsChainLink as_chain_link(&as_chain, 0u);
 
   pjsip_tx_data* tdata = NULL;

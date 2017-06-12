@@ -43,7 +43,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
                                SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
                                SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                                bool override_npdi,
-                               DIFCService* difcservice,
+                               FIFCService* fifcservice,
                                IFCConfiguration ifc_configuration,
                                int session_continued_timeout_ms,
                                int session_terminated_timeout_ms,
@@ -61,7 +61,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
   _enum_service(enum_service),
   _acr_factory(acr_factory),
   _override_npdi(override_npdi),
-  _difcservice(difcservice),
+  _fifcservice(fifcservice),
   _ifc_configuration(ifc_configuration),
   _session_continued_timeout_ms(session_continued_timeout_ms),
   _session_terminated_timeout_ms(session_terminated_timeout_ms),
@@ -212,9 +212,9 @@ AsChainTable* SCSCFSproutlet::as_chain_table() const
   return _as_chain_table;
 }
 
-DIFCService* SCSCFSproutlet::difcservice() const
+FIFCService* SCSCFSproutlet::fifcservice() const
 {
-  return _difcservice;
+  return _fifcservice;
 }
 
 IFCConfiguration SCSCFSproutlet::ifc_configuration() const
@@ -1343,7 +1343,7 @@ AsChainLink SCSCFSproutletTsx::create_as_chain(Ifcs ifcs,
                                                  chain_trail,
                                                  ifcs,
                                                  acr,
-                                                 _scscf->difcservice(),
+                                                 _scscf->fifcservice(),
                                                  _scscf->ifc_configuration());
   acr = NULL;
   TRC_DEBUG("S-CSCF sproutlet transaction %p linked to AsChain %s",
