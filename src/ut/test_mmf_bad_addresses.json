@@ -2,8 +2,8 @@
     "mmf_targets" : [
         {   "name" : "TestAS",
             "addresses" : "as.test.domain",
-            "pre-AS" : true,
-            "post-AS" : false
+            "pre-as" : true,
+            "post-as" : false
         }
     ]
 }

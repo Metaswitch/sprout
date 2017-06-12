@@ -2,8 +2,8 @@
     "mmf_targets" : [
         {   "name" : "Invalid",
             "addresses" : ["invalid"],
-            "pre-AS" : "false",
-            "post-AS" : true
+            "pre-as" : "false",
+            "post-as" : true
         }
     ]
 }

@@ -31,7 +31,7 @@ public:
   /// Updates the MMF Config
   void update_config();
 
-  void read_config(std::map<std::string, MMFTarget::ptr>& mmf_config,
+  void read_config(std::shared_ptr<std::map<std::string, MMFTarget::ptr>> mmf_config,
                    rapidjson::Document& doc);
 
 
@@ -47,16 +47,16 @@ private:
   // first taking a read_lock
   inline const MMFTarget::ptr get_address_config(std::string address)
   {
-    return _mmf_config.at(address);
+    return _mmf_config->at(address);
   }
 
   inline const bool has_config_for_address(std::string address)
   {
-    return _mmf_config.count(address);
+    return _mmf_config->count(address);
   }
 
   Alarm* _alarm;
-  std::map<std::string, MMFTarget::ptr> _mmf_config;
+  std::shared_ptr<std::map<std::string, MMFTarget::ptr>> _mmf_config;
   std::string _configuration;
   Updater<void, MMFService>* _updater;
 

@@ -71,15 +71,15 @@ void MMFTarget::parse_name(const rapidjson::Value& config)
 
 void MMFTarget::parse_pre_as(const rapidjson::Value& config)
 {
-  TRC_DEBUG("Reading pre-AS");
-  if (config.HasMember("pre-AS") && config["pre-AS"].IsBool())
+  TRC_DEBUG("Reading pre-as");
+  if (config.HasMember("pre-as") && config["pre-as"].IsBool())
   {
-    TRC_DEBUG("Read pre-AS: %d", config["pre-AS"].GetBool());
-    _pre_as = config["pre-AS"].GetBool();
+    TRC_DEBUG("Read pre-as: %d", config["pre-as"].GetBool());
+    _pre_as = config["pre-as"].GetBool();
   }
   else
   {
-    TRC_ERROR("Invalid 'pre-AS' field in MMF configuration.  The 'pre-AS' "
+    TRC_ERROR("Invalid 'pre-as' field in MMF configuration.  The 'pre-as' "
               "field must be present, and must be a boolean");
     JSON_FORMAT_ERROR();
   }
@@ -87,15 +87,15 @@ void MMFTarget::parse_pre_as(const rapidjson::Value& config)
 
 void MMFTarget::parse_post_as(const rapidjson::Value& config)
 {
-  TRC_DEBUG("Reading post-AS");
-  if (config.HasMember("post-AS") && config["post-AS"].IsBool())
+  TRC_DEBUG("Reading post-as");
+  if (config.HasMember("post-as") && config["post-as"].IsBool())
   {
-    TRC_DEBUG("Read post-AS: %d", config["post-AS"].GetBool());
-    _post_as = config["post-AS"].GetBool();
+    TRC_DEBUG("Read post-as: %d", config["post-as"].GetBool());
+    _post_as = config["post-as"].GetBool();
   }
   else
   {
-    TRC_ERROR("Invalid 'post-AS' field in MMF configuration.  The 'post-AS' "
+    TRC_ERROR("Invalid 'post-as' field in MMF configuration.  The 'post-as' "
               "field must be present, and must be a boolean");
     JSON_FORMAT_ERROR();
   }

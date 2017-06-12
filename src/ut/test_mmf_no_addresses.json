@@ -1,8 +1,8 @@
 {
     "mmf_targets" : [
         {   "name" : "TestAS",
-            "pre-AS" : true,
-            "post-AS" : false
+            "pre-as" : true,
+            "post-as" : false
         }
     ]
 }

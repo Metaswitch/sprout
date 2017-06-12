@@ -2,8 +2,8 @@
     "mmf_targets" : [
         {   "name" : "ChangedAS",
             "addresses" : ["changed.domain", "10.231.0.2"],
-            "pre-AS" : false,
-            "post-AS" : false
+            "pre-as" : false,
+            "post-as" : false
         }
     ]
 }

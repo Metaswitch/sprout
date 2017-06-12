@@ -31,9 +31,8 @@ MMFService::MMFService(Alarm* alarm,
 
 MMFService::~MMFService()
 {
-  delete _updater; _updater = NULL;
-  _mmf_config.clear();
-  delete _alarm; _alarm = NULL;
+  delete _updater; _updater = nullptr;
+  delete _alarm; _alarm = nullptr;
 }
 
 void MMFService::update_config()
@@ -86,7 +85,8 @@ void MMFService::update_config()
       JSON_FORMAT_ERROR();
     }
 
-    std::map<std::string, MMFTarget::ptr> mmf_config;
+    std::shared_ptr<std::map<std::string, MMFTarget::ptr>> mmf_config(
+                                    new std::map<std::string, MMFTarget::ptr>);
 
     // This throws a JsonFormatError if the MMF configuration data is invalid
     read_config(mmf_config, doc);
@@ -112,7 +112,7 @@ void MMFService::update_config()
   }
 }
 
-void MMFService::read_config(std::map<std::string, MMFTarget::ptr>& mmf_config,
+void MMFService::read_config(std::shared_ptr<std::map<std::string, MMFTarget::ptr>> mmf_config,
                              rapidjson::Document& doc)
 {
   TRC_DEBUG("Reading MMF Config");
@@ -136,7 +136,7 @@ void MMFService::read_config(std::map<std::string, MMFTarget::ptr>& mmf_config,
 
     for (std::string address : config->get_addresses())
     {
-      if (mmf_config.count(address) > 0)
+      if (mmf_config->count(address) > 0)
       {
         // This is a duplicate entry
         TRC_ERROR("Duplicate config present in the %s configuration file for"
@@ -144,7 +144,7 @@ void MMFService::read_config(std::map<std::string, MMFTarget::ptr>& mmf_config,
         JSON_FORMAT_ERROR();
       }
 
-      mmf_config.insert(std::make_pair(address, config));
+      mmf_config->insert(std::make_pair(address, config));
     }
   }
 }
