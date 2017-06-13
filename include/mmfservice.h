@@ -62,8 +62,8 @@ private:
     return (_mmf_config->find(address) != _mmf_config->end());
   }
 
-  /// This raises an exception is the passed in address is not present in the
-  /// mmf_config map.  Any function calling this must handle this exception.
+  /// This raises an std::out_of_range error if the passed in address is not
+  /// present in the mmf_config map.  You must handle this
   inline const MMFTargetPtr get_address_config(std::string address)
   {
     return _mmf_config->at(address);
@@ -73,7 +73,12 @@ private:
   std::string _configuration;
   Updater<void, MMFService>* _updater;
 
-  /// The atomic properties of shared_ptr values prevent the need for locking
+  /// Locking of the mmf_config relies on the atomic nature of shared pointers.
+  /// The updater method replaces the config with an entire new map, and the
+  /// accessor methods take a shared_ptr to an MMFTarget.
+
+  /// This is never modified dynamically, nor read incrementally.  If you wish
+  /// to do either of the above, you must think about the locking consequences
   std::shared_ptr<MMFService::MMFMap> _mmf_config;
 
   /// Helper functions to set/clear the alarm.
