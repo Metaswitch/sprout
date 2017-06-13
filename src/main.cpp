@@ -228,7 +228,7 @@ const static struct pj_getopt_option long_opt[] =
   { "apply-default-ifcs",           no_argument,       0, OPT_APPLY_DEFAULT_IFCS},
   { "reject-if-no-matching-ifcs",   no_argument,       0, OPT_REJECT_IF_NO_MATCHING_IFCS},
   { "dummy-app-server",             required_argument, 0, OPT_DUMMY_APP_SERVER},
-  { "http-acr-logging",             required_argument, 0, OPT_HTTP_ACR_LOGGING},
+  { "http-acr-logging",             no_argument,       0, OPT_HTTP_ACR_LOGGING},
   { NULL,                           0,                 0, 0}
 };
 
