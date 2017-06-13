@@ -317,7 +317,7 @@
                     "details": "There is at least one invalid entry in the MMF targets file.",
                     "description": "sprout: The MMF targets file is invalid.",
                     "cause": "The configuration file at /etc/clearwater/mmf_targets.json has at least one invalid entry.",
-                    "effect": "New config will not be loaded.  If good config was previously loaded, the SPN will continue to use it.",
+                    "effect": "New config will not be loaded.  If good config was previously loaded, the S-CSCF will continue to use it.  However, if Sprout is restarted, the S-CSCF will lose previously loaded config, and will not apply MMF to any requests.",
                     "action": "Correct the configuration file at /etc/clearwater/mmf_targets.json and upload it."
                 }
             ]

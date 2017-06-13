@@ -594,8 +594,8 @@ static const PDLog CL_SPROUT_MMF_FILE_INVALID
   PDLogBase::CL_SPROUT_ID + 67,
   LOG_NOTICE,
   "The file detailing when to apply MMF is invalid.",
-  "The /etc/clearwater/mmf_targets.json file, defining when to apply MMF, is invalid due to invalid JSON or missing elements.",
-  "Sprout will not apply MMF to any calls.",
+  "The /etc/clearwater/mmf_targets.json file, defining when to apply MMF, is invalid.  This is either due to invalid JSON or missing/ invalid elements.",
+  "If valid configuration was previously loaded, Sprout will continue to use it.  However, if Sprout is restarted, or valid configuration was not previously loaded, Sprout will not apply MMF to any requests.",
   "Follow the documentation to create this file correctly."
 );
 
@@ -605,7 +605,7 @@ static const PDLog CL_SPROUT_MMF_FILE_MISSING
   LOG_NOTICE,
   "The file detailing when to apply MMF is not present.",
   "The /etc/clearwater/mmf_targets.json file, defining when to apply MMF, does not exist.",
-  "Sprout will not apply MMF to any calls.",
+  "If valid configuration was previously loaded, Sprout will continue to use it.  However, if Sprout is restarted, or valid configuration was not previously loaded, Sprout will not apply MMF to any requests.",
   "If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd.  If you are managing /etc/clearwater/mmf_targets.json manually, follow the documentation to create it."
 );
 
@@ -615,7 +615,7 @@ static const PDLog CL_SPROUT_MMF_FILE_EMPTY
   LOG_NOTICE,
   "The file detailing when to apply MMF is empty.",
   "The /etc/clearwater/mmf_targets.json file, defining when to apply MMF, is empty.",
-  "Sprout will not apply MMF to any calls.",
+  "If valid configuration was previously loaded, Sprout will continue to use it.  However, if Sprout is restarted, or valid configuration was not previously loaded, Sprout will not apply MMF to any requests.",
   "If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd.  If you are managing /etc/clearwater/mmf_targets.json manually, follow the documentation to create it."
 );
 
