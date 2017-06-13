@@ -448,7 +448,7 @@ static void usage(void)
        "     --dummy-app-server <app server URI>\n"
        "                            If any IFC has an application server that matches the one defined here, \n"
        "                            then the IFC is skipped over.\n"
-       "     --http_acr_logging     Whether to include the bodies of ACR HTTP requests when they are logged \n"
+       "     --http-acr-logging     Whether to include the bodies of ACR HTTP requests when they are logged \n"
        "                            to SAS\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
