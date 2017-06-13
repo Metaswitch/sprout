@@ -22,6 +22,7 @@
 #include "uri_classifier.h"
 #include "wildcard_utils.h"
 #include "associated_uris.h"
+#include "mmfservice.h"
 
 // Constant indicating there is no served user for a request.
 const char* NO_SERVED_USER = "";
@@ -43,6 +44,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
                                SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
                                SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                                bool override_npdi,
+                               MMFService* mmfservice,
                                FIFCService* fifcservice,
                                IFCConfiguration ifc_configuration,
                                int session_continued_timeout_ms,
@@ -61,6 +63,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
   _enum_service(enum_service),
   _acr_factory(acr_factory),
   _override_npdi(override_npdi),
+  _mmfservice(mmfservice),
   _fifcservice(fifcservice),
   _ifc_configuration(ifc_configuration),
   _session_continued_timeout_ms(session_continued_timeout_ms),
@@ -210,6 +213,11 @@ const pjsip_uri* SCSCFSproutlet::bgcf_uri() const
 AsChainTable* SCSCFSproutlet::as_chain_table() const
 {
   return _as_chain_table;
+}
+
+MMFService* SCSCFSproutlet::mmfservice() const
+{
+  return _mmfservice;
 }
 
 FIFCService* SCSCFSproutlet::fifcservice() const
@@ -1562,10 +1570,34 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
       pj_strdup2(get_pool(req), &orig_param->value, "");
       pj_list_insert_after(&odi_uri->other_param, orig_param);
     }
+
     PJUtils::add_top_route_header(req, odi_uri, get_pool(req));
+
+    // Obtain the domain of the AS, to check whether we are configured to
+    // perform MMF on the request.
+    pj_str_t server_domain = PJUtils::domain_from_uri(server_name, get_pool(req));
+    std::string server_domain_str = PJUtils::pj_str_to_string(&server_domain);
+
+    // If we are configured to apply MMF on requests forwarded on by the AS,
+    // add the necessary route header to the top of the request.
+    if (_scscf->mmfservice()->apply_mmf_post_as(server_domain_str))
+    {
+      // This is a placeholder for code which is currently being written.
+      // This will involve the addition of route header to invoke MMF
+      // on the way back from the AS
+    }
 
     // Add the application server URI as the top Route header, per TS 24.229.
     PJUtils::add_top_route_header(req, as_uri, get_pool(req));
+
+    // If we are configured to apply MMF prior to forwarding the request to
+    // the AS, add the necessary route header to the top of the request.
+    if (_scscf->mmfservice()->apply_mmf_pre_as(server_domain_str))
+    {
+      // This is a placeholder for code which is currently being written.
+      // The will involve the addition of route header to invoke MMF on the
+      // way to the AS
+    }
 
     // Set P-Served-User, including session case and registration
     // state, per RFC5502 and the extension in 3GPP TS 24.229

@@ -30,6 +30,7 @@ extern "C" {
 #include "stack.h"
 #include "sessioncase.h"
 #include "ifchandler.h"
+#include "mmfservice.h"
 #include "hssconnection.h"
 #include "aschain.h"
 #include "acr.h"
@@ -62,6 +63,7 @@ public:
                  SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
                  SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                  bool override_npdi,
+                 MMFService* mmfservice,
                  FIFCService* fifcservice,
                  IFCConfiguration ifc_configuration,
                  int session_continued_timeout = DEFAULT_SESSION_CONTINUED_TIMEOUT,
@@ -109,6 +111,7 @@ private:
   /// Returns the configured BGCF URI for this system.
   const pjsip_uri* bgcf_uri() const;
 
+  MMFService* mmfservice() const;
   FIFCService* fifcservice() const;
   IFCConfiguration ifc_configuration() const;
 
@@ -203,6 +206,7 @@ private:
   AsChainTable* _as_chain_table;
 
   bool _override_npdi;
+  MMFService* _mmfservice;
   FIFCService* _fifcservice;
   IFCConfiguration _ifc_configuration;
 

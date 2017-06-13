@@ -91,7 +91,9 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          ifc.cpp \
                          associated_uris.cpp \
                          sifcservice.cpp \
-                         fifcservice.cpp
+                         fifcservice.cpp \
+                         mmfservice.cpp \
+                         mmftargets.cpp
 
 sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_counter_table.cpp \
@@ -189,7 +191,8 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        pthread_cond_var_helper.cpp \
                        sifcservice_test.cpp \
                        mock_sifc_parser.cpp \
-                       fifcservice_test.cpp
+                       fifcservice_test.cpp \
+                       mmfservice_test.cpp
 
 COVERAGE_ROOT := ..
 sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include|^modules/memento-as/modules|^modules/memento-as/src/ut|^modules/memento-as/include

@@ -27,6 +27,7 @@
 #include "impistore.h"
 #include "analyticslogger.h"
 #include "fifcservice.h"
+#include "mmfservice.h"
 
 enum struct MemcachedWriteFormat
 {
@@ -169,5 +170,6 @@ extern AlarmManager* alarm_manager;
 extern AnalyticsLogger* analytics_logger;
 extern ChronosConnection* chronos_connection;
 extern FIFCService* fifc_service;
+extern MMFService* mmf_service;
 
 #endif
