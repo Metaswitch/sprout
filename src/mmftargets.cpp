@@ -73,16 +73,23 @@ void MMFTarget::parse_addresses(const rapidjson::Value& config)
 void MMFTarget::parse_pre_as(const rapidjson::Value& config)
 {
   TRC_DEBUG("Reading pre-as");
-  if (config.HasMember("pre-as") && config["pre-as"].IsBool())
+  if (config.HasMember("pre-as"))
   {
-    TRC_DEBUG("Read pre-as: %d", config["pre-as"].GetBool());
-    TRC_ERROR("Invalid 'pre-as' field in MMF configuration.  The 'pre-as' "
-              "field must be present, and must be a boolean");
-    _pre_as = config["pre-as"].GetBool();
+    if (config["pre-as"].IsBool())
+    {
+      TRC_DEBUG("Read pre-as: %d", config["pre-as"].GetBool());
+      _pre_as = config["pre-as"].GetBool();
+    }
+    else
+    {
+      TRC_ERROR("Invalid 'pre-as' field in MMF configuration.  The 'pre-as' "
+                "field must be present, and must be a boolean");
+      JSON_FORMAT_ERROR();
+    }
   }
   else
   {
-    TRC_STATUS("No 'pre-as' field present for the MMF target '%s'.  Defaulting"
+    TRC_STATUS("No 'pre-as' field present for the MMF target '%s'.  Defaulting "
                "to 'false'", _name.c_str());
   }
 }
@@ -90,14 +97,23 @@ void MMFTarget::parse_pre_as(const rapidjson::Value& config)
 void MMFTarget::parse_post_as(const rapidjson::Value& config)
 {
   TRC_DEBUG("Reading post-as");
-  if (config.HasMember("post-as") && config["post-as"].IsBool())
+  if (config.HasMember("post-as"))
   {
-    TRC_DEBUG("Read post-as: %d", config["post-as"].GetBool());
-    _post_as = config["post-as"].GetBool();
+    if (config["post-as"].IsBool())
+    {
+      TRC_DEBUG("Read post-as: %d", config["post-as"].GetBool());
+      _post_as = config["post-as"].GetBool();
+    }
+    else
+    {
+      TRC_ERROR("Invalid 'post-as' field in MMF configuration.  The 'post-as' "
+                "field must be present, and must be a boolean");
+      JSON_FORMAT_ERROR();
+    }
   }
   else
   {
-    TRC_STATUS("No 'post-as' field present for the MMF target '%s'.  Defaulting"
+    TRC_STATUS("No 'post-as' field present for the MMF target '%s'.  Defaulting "
                "to 'false'", _name.c_str());
   }
 }

@@ -22,7 +22,8 @@ MMFService::MMFService(Alarm* alarm,
                        std::string configuration):
   _alarm(alarm),
   _configuration(configuration),
-  _updater(NULL)
+  _updater(NULL),
+  _mmf_config(std::shared_ptr<MMFService::MMFMap>(new MMFService::MMFMap))
 {
   // Create an updater to keep the invoking of MMF configured correctly.
   _updater = new Updater<void, MMFService>
@@ -150,11 +151,11 @@ const bool MMFService::apply_mmf_pre_as(std::string address)
 {
   try
   {
-    return (get_address_config(address)->apply_post_as());
+    return (get_address_config(address)->apply_pre_as());
   }
   catch (std::out_of_range)
   {
-    // There is no MMF configuration for the passed in address
+    TRC_DEBUG("No MMF config for the address: %s", address.c_str());
     return false;
   }
 }
@@ -167,7 +168,7 @@ const bool MMFService::apply_mmf_post_as(std::string address)
   }
   catch (std::out_of_range)
   {
-    // There is no MMF configuration for the passed in address
+    TRC_DEBUG("No MMF config for the address: %s", address.c_str());
     return false;
   }
 }

@@ -97,6 +97,11 @@ TEST_F(MMFServiceTest, MissingFile)
   EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
   MMFService MMF(_mock_alarm, string(UT_DIR).append("/non_existent_file.json"));
   EXPECT_TRUE(_log.contains("No MMF configuration found (file"));
+
+  // Ensure Sprout doesn't crash if the SCSCF calls into the MMF config when
+  // none is present
+  EXPECT_FALSE(MMF.apply_mmf_post_as("10.10.0.2"));
+  EXPECT_FALSE(MMF.apply_mmf_pre_as("guff-address"));
 }
 
 // Test that we log appropriately if the MMF config file is empty.
@@ -132,9 +137,9 @@ TEST_F(MMFServiceTest, EmptyValidFile)
 TEST_F(MMFServiceTest, MissingPostAS)
 {
   CapturingTestLogger _log;
-  EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
+  EXPECT_CALL(*_mock_alarm, clear()).Times(AtLeast(1));
   MMFService MMF(_mock_alarm, string(UT_DIR).append("/test_mmf_no_post_as.json"));
-  EXPECT_TRUE(_log.contains("No 'post-as' field in MMF configuration"));
+  EXPECT_TRUE(_log.contains("No 'post-as' field present for the MMF target"));
 }
 
 // Test that we log appropriately if a set of MMF config has an invalid post-AS field.
@@ -151,9 +156,9 @@ TEST_F(MMFServiceTest, InvalidPostAS)
 TEST_F(MMFServiceTest, MissingPreAS)
 {
   CapturingTestLogger _log;
-  EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
+  EXPECT_CALL(*_mock_alarm, clear()).Times(AtLeast(1));
   MMFService MMF(_mock_alarm, string(UT_DIR).append("/test_mmf_no_pre_as.json"));
-  EXPECT_TRUE(_log.contains("No 'pre-as' field in MMF configuration"));
+  EXPECT_TRUE(_log.contains("No 'pre-as' field present for the MMF target"));
 }
 
 // Test that we log appropriately if a set of MMF config has an invalid pre-AS field.
