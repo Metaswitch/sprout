@@ -134,8 +134,7 @@ TEST_F(MMFServiceTest, MissingPostAS)
   CapturingTestLogger _log;
   EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
   MMFService MMF(_mock_alarm, string(UT_DIR).append("/test_mmf_no_post_as.json"));
-  EXPECT_TRUE(_log.contains("Invalid 'post-as' field in MMF configuration"));
-  check_invalid_config_log(_log);
+  EXPECT_TRUE(_log.contains("No 'post-as' field in MMF configuration"));
 }
 
 // Test that we log appropriately if a set of MMF config has an invalid post-AS field.
@@ -154,8 +153,7 @@ TEST_F(MMFServiceTest, MissingPreAS)
   CapturingTestLogger _log;
   EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
   MMFService MMF(_mock_alarm, string(UT_DIR).append("/test_mmf_no_pre_as.json"));
-  EXPECT_TRUE(_log.contains("Invalid 'pre-as' field in MMF configuration"));
-  check_invalid_config_log(_log);
+  EXPECT_TRUE(_log.contains("No 'pre-as' field in MMF configuration"));
 }
 
 // Test that we log appropriately if a set of MMF config has an invalid pre-AS field.

@@ -21,8 +21,6 @@
 class MMFTarget
 {
 public:
-  typedef std::shared_ptr<MMFTarget> ptr;
-
   MMFTarget(const rapidjson::Value& config);
 
   /// The below methods parse the passed in rapidjson representation of an

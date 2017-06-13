@@ -9,16 +9,33 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-#include "mmf.h"
+#include "mmftargets.h"
 
 
-MMFTarget::MMFTarget(const rapidjson::Value& config)
+MMFTarget::MMFTarget(const rapidjson::Value& config):
+  _pre_as(false),
+  _post_as(false)
 {
   TRC_DEBUG("Creating MMFTarget");
   parse_name(config);
+  parse_addresses(config);
   parse_pre_as(config);
   parse_post_as(config);
-  parse_addresses(config);
+}
+void MMFTarget::parse_name(const rapidjson::Value& config)
+{
+  TRC_DEBUG("Reading name");
+  if (config.HasMember("name") && config["name"].IsString())
+  {
+    TRC_DEBUG("Read name: %s", config["name"].GetString());
+    _name = config["name"].GetString();
+  }
+  else
+  {
+    TRC_ERROR("Invalid 'name' field in MMF configuration.  The 'name' "
+              "field must be present, and must be a string");
+    JSON_FORMAT_ERROR();
+  }
 }
 
 void MMFTarget::parse_addresses(const rapidjson::Value& config)
@@ -53,35 +70,20 @@ void MMFTarget::parse_addresses(const rapidjson::Value& config)
   }
 }
 
-void MMFTarget::parse_name(const rapidjson::Value& config)
-{
-  TRC_DEBUG("Reading name");
-  if (config.HasMember("name") && config["name"].IsString())
-  {
-    TRC_DEBUG("Read name: %s", config["name"].GetString());
-    _name = config["name"].GetString();
-  }
-  else
-  {
-    TRC_ERROR("Invalid 'name' field in MMF configuration.  The 'name' "
-              "field must be present, and must be a string");
-    JSON_FORMAT_ERROR();
-  }
-}
-
 void MMFTarget::parse_pre_as(const rapidjson::Value& config)
 {
   TRC_DEBUG("Reading pre-as");
   if (config.HasMember("pre-as") && config["pre-as"].IsBool())
   {
     TRC_DEBUG("Read pre-as: %d", config["pre-as"].GetBool());
+    TRC_ERROR("Invalid 'pre-as' field in MMF configuration.  The 'pre-as' "
+              "field must be present, and must be a boolean");
     _pre_as = config["pre-as"].GetBool();
   }
   else
   {
-    TRC_ERROR("Invalid 'pre-as' field in MMF configuration.  The 'pre-as' "
-              "field must be present, and must be a boolean");
-    JSON_FORMAT_ERROR();
+    TRC_STATUS("No 'pre-as' field present for the MMF target '%s'.  Defaulting"
+               "to 'false'", _name.c_str());
   }
 }
 
@@ -95,8 +97,7 @@ void MMFTarget::parse_post_as(const rapidjson::Value& config)
   }
   else
   {
-    TRC_ERROR("Invalid 'post-as' field in MMF configuration.  The 'post-as' "
-              "field must be present, and must be a boolean");
-    JSON_FORMAT_ERROR();
+    TRC_STATUS("No 'post-as' field present for the MMF target '%s'.  Defaulting"
+               "to 'false'", _name.c_str());
   }
 }

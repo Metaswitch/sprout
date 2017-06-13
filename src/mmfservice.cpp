@@ -90,11 +90,6 @@ void MMFService::update_config()
     // This throws a JsonFormatError if the MMF configuration data is invalid
     mmf_config = read_config(doc);
 
-    TRC_DEBUG("Taking write lock on mmf config");
-
-    // Take a write lock on the houdini config, in RAII style.
-    boost::lock_guard<boost::shared_mutex> write_lock(get_mmf_rw_lock());
-
     // Now that we have the mmf config lock, free the memory from the old
     // mmf config objects, and start pointing at the new ones.
     TRC_DEBUG("Delete old MMF config.");
@@ -132,13 +127,12 @@ std::shared_ptr<MMFService::MMFMap> MMFService::read_config(rapidjson::Document&
          ++mmf_it)
     {
       // Throws a JsonFormatError if the target is invalid
-      MMFTarget::ptr target(new MMFTarget(*mmf_it));
+      MMFTargetPtr target(new MMFTarget(*mmf_it));
 
       for (std::string address : target->get_addresses())
       {
-        if (mmf_config->count(address) > 0)
+        if (mmf_config->find(address) != mmf_config->end())
         {
-          // This is a duplicate entry
           TRC_ERROR("Duplicate config present in the %s configuration file for"
                     "the address: '%s'", _configuration.c_str(), address.c_str());
           JSON_FORMAT_ERROR();
@@ -154,16 +148,28 @@ std::shared_ptr<MMFService::MMFMap> MMFService::read_config(rapidjson::Document&
 
 const bool MMFService::apply_mmf_pre_as(std::string address)
 {
-  boost::lock_guard<boost::shared_mutex> read_lock(get_mmf_rw_lock());
-
-  return (has_config_for_address(address) && get_address_config(address)->apply_pre_as());
+  try
+  {
+    return (get_address_config(address)->apply_post_as());
+  }
+  catch (std::out_of_range)
+  {
+    // There is no MMF configuration for the passed in address
+    return false;
+  }
 }
 
 const bool MMFService::apply_mmf_post_as(std::string address)
 {
-  boost::lock_guard<boost::shared_mutex> read_lock(get_mmf_rw_lock());
-
-  return (has_config_for_address(address) && get_address_config(address)->apply_post_as());
+  try
+  {
+    return (get_address_config(address)->apply_post_as());
+  }
+  catch (std::out_of_range)
+  {
+    // There is no MMF configuration for the passed in address
+    return false;
+  }
 }
 
 void MMFService::set_alarm()

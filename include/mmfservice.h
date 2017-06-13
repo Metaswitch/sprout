@@ -28,9 +28,12 @@ public:
              std::string configuration = "/etc/clearwater/mmf_targets.json");
   ~MMFService();
 
+  /// Shared pointer to a piece of config in the mmf_targets.json file
+  typedef std::shared_ptr<MMFTarget> MMFTargetPtr;
+
   /// A map from Application Server addresses, to the MMF configuration
   /// associated with the address
-  typedef std::map<std::string, MMFTarget::ptr> MMFMap;
+  typedef std::map<std::string, MMFTargetPtr> MMFMap;
 
   /// Updates the MMF Config
   void update_config();
@@ -49,31 +52,29 @@ public:
   /// passed in Application Server
   const bool apply_mmf_post_as(std::string address);
 
-  inline boost::shared_mutex& get_mmf_rw_lock() {return _mmf_rw_lock;};
-
 private:
   MMFService(const MMFService&) = delete;  // Prevent implicit copying
 
-  /// These methods are private to prevent access to the mmf config without
-  /// first taking a read lock
-  inline const MMFTarget::ptr get_address_config(std::string address)
+  /// These methods are private as they are not part of the API.  You should
+  /// access the mmf config via the public 'apply_mmf_*' methods.
+  inline const bool has_config_for_address(std::string address)
+  {
+    return (_mmf_config->find(address) != _mmf_config->end());
+  }
+
+  /// This raises an exception is the passed in address is not present in the
+  /// mmf_config map.  Any function calling this must handle this exception.
+  inline const MMFTargetPtr get_address_config(std::string address)
   {
     return _mmf_config->at(address);
   }
 
-  inline const bool has_config_for_address(std::string address)
-  {
-    return (_mmf_config->count(address) > 0);
-  }
-
   Alarm* _alarm;
-  std::shared_ptr<MMFService::MMFMap> _mmf_config;
   std::string _configuration;
   Updater<void, MMFService>* _updater;
 
-  /// Mark as mutable to flag that this can be modified without affecting the
-  /// external behaviour of the class, allowing for locking in 'const' methods.
-  mutable boost::shared_mutex _mmf_rw_lock;
+  /// The atomic properties of shared_ptr values prevent the need for locking
+  std::shared_ptr<MMFService::MMFMap> _mmf_config;
 
   /// Helper functions to set/clear the alarm.
   void set_alarm();

@@ -1573,9 +1573,14 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
 
     PJUtils::add_top_route_header(req, odi_uri, get_pool(req));
 
-    // If we are configured to apply MMF on requests forwarded on by the AS
-    // add the necessary route header
-    if (_scscf->mmfservice()->apply_mmf_post_as(server_name))
+    // Obtain the domain of the AS, to check whether we are configured to
+    // perform MMF on the request.
+    pj_str_t server_domain = PJUtils::domain_from_uri(server_name, get_pool(req));
+    std::string server_domain_str = PJUtils::pj_str_to_string(&server_domain);
+
+    // If we are configured to apply MMF on requests forwarded on by the AS,
+    // add the necessary route header to the top of the request.
+    if (_scscf->mmfservice()->apply_mmf_post_as(server_domain_str))
     {
       // This is a placeholder for code which is currently being written.
       // This will involve the addition of route header to invoke MMF
@@ -1586,8 +1591,8 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     PJUtils::add_top_route_header(req, as_uri, get_pool(req));
 
     // If we are configured to apply MMF prior to forwarding the request to
-    // the AS, add the necessary route header
-    if (_scscf->mmfservice()->apply_mmf_pre_as(server_name))
+    // the AS, add the necessary route header to the top of the request.
+    if (_scscf->mmfservice()->apply_mmf_pre_as(server_domain_str))
     {
       // This is a placeholder for code which is currently being written.
       // The will involve the addition of route header to invoke MMF on the
