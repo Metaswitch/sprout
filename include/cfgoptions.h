@@ -26,7 +26,7 @@
 #include "sproutlet_options.h"
 #include "impistore.h"
 #include "analyticslogger.h"
-#include "difcservice.h"
+#include "fifcservice.h"
 #include "mmfservice.h"
 
 enum struct MemcachedWriteFormat
@@ -143,7 +143,7 @@ struct options
   bool                                 disable_tcp_switch;
   std::string                          chronos_hostname;
   std::string                          sprout_chronos_callback_uri;
-  bool                                 apply_default_ifcs;
+  bool                                 apply_fallback_ifcs;
   bool                                 reject_if_no_matching_ifcs;
   std::string                          dummy_app_server;
 };
@@ -169,7 +169,7 @@ extern ExceptionHandler* exception_handler;
 extern AlarmManager* alarm_manager;
 extern AnalyticsLogger* analytics_logger;
 extern ChronosConnection* chronos_connection;
-extern DIFCService* difc_service;
+extern FIFCService* fifc_service;
 extern MMFService* mmf_service;
 
 #endif

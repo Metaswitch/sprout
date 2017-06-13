@@ -376,7 +376,7 @@ public:
 
     _acr_factory = new ACRFactory();
     _mmf_service = new MMFService(NULL, string(UT_DIR).append("/test_mmf_targets.json"));
-    _difc_service = new DIFCService(NULL, string(UT_DIR).append("/test_scscf_difc.xml"));
+    _fifc_service = new FIFCService(NULL, string(UT_DIR).append("/test_scscf_fifc.xml"));
 
     // Schedule timers.
     SipTest::poll();
@@ -388,7 +388,7 @@ public:
     // objects that might handle any callbacks!
     pjsip_tsx_layer_destroy();
     delete _mmf_service; _mmf_service = NULL;
-    delete _difc_service; _difc_service = NULL;
+    delete _fifc_service; _fifc_service = NULL;
     delete _sdm; _sdm = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
     delete _local_data_store; _local_data_store = NULL;
@@ -427,7 +427,7 @@ public:
                                           &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
                                           false,
                                           _mmf_service,
-                                          _difc_service,
+                                          _fifc_service,
                                           ifc_configuration,
                                           3000, // Session continue timeout - different from default
                                           6000, // Session terminated timeout - different from default
@@ -563,7 +563,7 @@ protected:
   static EnumService* _enum_service;
   static ACRFactory* _acr_factory;
   static MMFService* _mmf_service;
-  static DIFCService* _difc_service;
+  static FIFCService* _fifc_service;
   SCSCFSproutlet* _scscf_sproutlet;
   BGCFSproutlet* _bgcf_sproutlet;
   Mmtel* _mmtel;
@@ -607,7 +607,7 @@ BgcfService* SCSCFTest::_bgcf_service;
 EnumService* SCSCFTest::_enum_service;
 ACRFactory* SCSCFTest::_acr_factory;
 MMFService* SCSCFTest::_mmf_service;
-DIFCService* SCSCFTest::_difc_service;
+FIFCService* SCSCFTest::_fifc_service;
 MockAsCommunicationTracker* SCSCFTest::_sess_term_comm_tracker;
 MockAsCommunicationTracker* SCSCFTest::_sess_cont_comm_tracker;
 
@@ -9817,12 +9817,12 @@ TEST_F(SCSCFTest, NoMatchingIFCsReject)
   free_txdata();
 }
 
-// Test that we use default IFCs if there are no matching IFCs, and that the
+// Test that we use fallback IFCs if there are no matching IFCs, and that the
 // application server flows are as expected.
-TEST_F(SCSCFTest, NoMatchingIFCsUseDefaultIFCs)
+TEST_F(SCSCFTest, NoMatchingIFCsUseFallbackFCs)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _scscf_sproutlet->_ifc_configuration._apply_default_ifcs = true;
+  _scscf_sproutlet->_ifc_configuration._apply_fallback_ifcs = true;
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
                                    "<IMSSubscription><ServiceProfile>\n"
                                    "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"

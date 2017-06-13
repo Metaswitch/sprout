@@ -75,11 +75,10 @@ static const PDLog CL_SPROUT_NO_SI_CSCF
 (
   PDLogBase::CL_SPROUT_ID + 6,
   LOG_NOTICE,
-  "Neither P-CSCF, S-CSCF nor I-CSCF functionality is enabled on this node.",
-  "Neither a P-CSCF, a S-CSCF nor an I-CSCF was configured in "
-  "/etc/clearwater/config.",
-  "Most Sprout nodes act as either a P-CSCF, a S-CSCF or an I-CSCF. "
-  "None of P-CSCF, S-CSCF or I-CSCF functionality is enabled on this node.",
+  "The Sprout process is running but not providing I-CSCF, S-CSCF or P-SCSCF functionality.",
+  "None of P-CSCF, S-CSCF or I-CSCF were configured in local or shared configuration.",
+  "Most Sprout processes act as either a P-CSCF, an S-CSCF or an I-CSCF. "
+  "None of P-CSCF, S-CSCF or I-CSCF functionality are enabled for this process.",
   "The P-CSCF is configured by setting the pcscf=<port> option. "
   "The S-CSCF is configured by setting the scscf=<port> option. "
   "The I-CSCF is configured by setting the icscf=<port> option."
@@ -89,38 +88,35 @@ static const PDLog CL_SPROUT_SI_CSCF_NO_HOMESTEAD
 (
   PDLogBase::CL_SPROUT_ID + 7,
   LOG_ERR,
-  "Fatal - S/I-CSCF enabled with no Homestead server specified in "
-  "/etc/clearwater/config.",
-  "The S-CSCF and/or the I-CSCF options (scscf=<port>, icscf=<port>) "
-  "were configured in the /etc/clearwater/config file but no Homestead "
-  "was configured in the same file.",
+  "Fatal - S/I-CSCF enabled with no Homestead hostname specified in shared "
+  "configuration.",
+  "The S-CSCF and/or the I-CSCF options (scscf=<port>, icscf=<port>) were "
+  "configured in local or shared configuration but no Homestead was "
+  "configured.",
   "The application will exit and restart until the problem is fixed.",
-  "Set the hs_hostname=<hostname> option in the "
-  "/etc/clearwater/config file. "
+  "Set the hs_hostname=<hostname> option in shared configuration."
 );
 
 static const PDLog CL_SPROUT_AUTH_NO_HOMESTEAD
 (
   PDLogBase::CL_SPROUT_ID + 8,
   LOG_ERR,
-  "Fatal - Authentication enabled, but no Homestead server specified in "
-  "/etc/clearwater/config.",
-  "The hs_hostname was not set in the /etc/clearwater/config file.",
+  "Fatal - Authentication enabled, but no Homestead hostname specified in "
+  "shared configuration.",
+  "The hs_hostname was not set in /etc/clearwater/shared_config.",
   "The application will exit and restart until the problem is fixed.",
-  "Set the hs_hostname=<hostname> option in the "
-  "/etc/clearwater/config file. "
+  "Set the hs_hostname=<hostname> option in shared configuration."
 );
 
 static const PDLog CL_SPROUT_XDM_NO_HOMESTEAD
 (
   PDLogBase::CL_SPROUT_ID + 9,
   LOG_ERR,
-  "Fatal - Homer XDM service is configured but no Homestead server specified "
-  "in /etc/clearwater/config.",
-  "The hs_hostname was not set in the /etc/clearwater/config file.",
+  "Fatal - Homer XDM service is configured but no Homestead hostname specified "
+  "in shared configuration.",
+  "The hs_hostname was not set in /etc/clearwater/shared_config.",
   "The application will exit and restart until the problem is fixed.",
-  "Set the hs_hostname=<hostname> option in the "
-  "/etc/clearwater/config file. "
+  "Set the hs_hostname=<hostname> option in shared configuration. "
 );
 
 static const PDLog1<const char*> CL_SPROUT_SIP_INIT_INTERFACE_FAIL
@@ -518,54 +514,54 @@ static const PDLog1<const char *> CL_SPROUT_SIFC_FILE_INVALID_PRIORITY
   "The shared IFC sets should be defined in /etc/clearwater/shared_ifcs.xml. Populate this file according to the documentation."
 );
 
-static const PDLog CL_SPROUT_DIFC_FILE_MISSING
+static const PDLog CL_SPROUT_FIFC_FILE_MISSING
 (
   PDLogBase::CL_SPROUT_ID + 60,
   LOG_ERR,
-  "The default IFCs configuration file is not present.",
-  "The S-CSCF supports default IFCs, but the configuration file for them does not exist.",
-  "The S-CSCF will not be able to correctly apply any default IFCs.",
-  "The default IFCs should be defined in /etc/clearwater/default_ifcs.xml. Create this file according to the documentation. If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd."
+  "The fallback IFCs configuration file is not present.",
+  "The S-CSCF supports fallback IFCs, but the configuration file for them does not exist.",
+  "The S-CSCF will not be able to correctly apply any fallback IFCs.",
+  "The fallback IFCs should be defined in /etc/clearwater/fallback_ifcs.xml. Create this file according to the documentation. If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd."
 );
 
-static const PDLog CL_SPROUT_DIFC_FILE_EMPTY
+static const PDLog CL_SPROUT_FIFC_FILE_EMPTY
 (
   PDLogBase::CL_SPROUT_ID + 61,
   LOG_ERR,
-  "The default IFCs configuration file is empty.",
-  "The S-CSCF supports default IFCs, but the configuration file for this is empty.",
-  "The S-CSCF will not be able to correctly apply any default IFCs.",
-  "The default IFCs should be defined in /etc/clearwater/default_ifcs.xml. Populate this file according to the documentation."
+  "The fallback IFCs configuration file is empty.",
+  "The S-CSCF supports fallback IFCs, but the configuration file for this is empty.",
+  "The S-CSCF will not be able to correctly apply any fallback IFCs.",
+  "The fallback IFCs should be defined in /etc/clearwater/fallback_ifcs.xml. Populate this file according to the documentation."
 );
 
-static const PDLog CL_SPROUT_DIFC_FILE_INVALID_XML
+static const PDLog CL_SPROUT_FIFC_FILE_INVALID_XML
 (
   PDLogBase::CL_SPROUT_ID + 62,
   LOG_ERR,
-  "The default IFCs configuration file contains invalid XML.",
-  "The S-CSCF supports default IFCs, but the configuration file for this is invalid.",
-  "The S-CSCF will not be able to correctly apply any default IFCs.",
-  "The default IFCs should be defined in /etc/clearwater/default_ifcs.xml. Populate this file according to the documentation."
+  "The fallback IFCs configuration file contains invalid XML.",
+  "The S-CSCF supports fallback IFCs, but the configuration file for this is invalid.",
+  "The S-CSCF will not be able to correctly apply any fallback IFCs.",
+  "The fallback IFCs should be defined in /etc/clearwater/fallback_ifcs.xml. Populate this file according to the documentation."
 );
 
-static const PDLog CL_SPROUT_DIFC_FILE_MISSING_DEFAULT_IFCS_SET
+static const PDLog CL_SPROUT_FIFC_FILE_MISSING_FALLBACK_IFCS_SET
 (
  PDLogBase::CL_SPROUT_ID + 63,
  LOG_ERR,
- "The default IFCs configuration file doesn't have the correct syntax.",
- "The S-CSCF supports default IFCs, but the configuration file for this doesn't match the expected syntax (no DefaultIFCsSet block).",
- "The S-CSCF will not be able to correctly apply any default IFCs.",
- "The default IFCs should be defined in /etc/clearwater/default_ifcs.xml. Populate this file according to the documentation."
+ "The fallback IFCs configuration file doesn't have the correct syntax.",
+ "The S-CSCF supports fallback IFCs, but the configuration file for this doesn't match the expected syntax (no FallbackIFCsSet block).",
+ "The S-CSCF will not be able to correctly apply any fallback IFCs.",
+ "The fallback IFCs should be defined in /etc/clearwater/fallback_ifcs.xml. Populate this file according to the documentation."
  );
 
-static const PDLog1<const char *> CL_SPROUT_DIFC_FILE_INVALID_PRIORITY
+static const PDLog1<const char *> CL_SPROUT_FIFC_FILE_INVALID_PRIORITY
 (
   PDLogBase::CL_SPROUT_ID + 64,
   LOG_ERR,
-  "An IFC in the default IFCs configuration file doesn't have the correct syntax; its Priority (%s) isn't an integer.",
-  "The S-CSCF supports default IFCs, but one of the default IFCs doesn't match the expected syntax (invalid Priority).",
-  "The S-CSCF will not be able to apply this default IFC.",
-  "The default IFCs should be defined in /etc/clearwater/default_ifcs.xml. Populate this file according to the documentation."
+  "An IFC in the fallback IFCs configuration file doesn't have the correct syntax; its Priority (%s) isn't an integer.",
+  "The S-CSCF supports fallback IFCs, but one of the fallback IFCs doesn't match the expected syntax (invalid Priority).",
+  "The S-CSCF will not be able to apply this fallback IFC.",
+  "The fallback IFCs should be defined in /etc/clearwater/fallback_ifcs.xml. Populate this file according to the documentation."
 );
 
 static const PDLog1<const char *> CL_SPROUT_ORIG_PARTY_BARRED

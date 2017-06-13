@@ -135,7 +135,7 @@ enum OptionTypes
   OPT_DEFAULT_TEL_URI_TRANSLATION,
   OPT_CHRONOS_HOSTNAME,
   OPT_SPROUT_CHRONOS_CALLBACK_URI,
-  OPT_APPLY_DEFAULT_IFCS,
+  OPT_APPLY_FALLBACK_IFCS,
   OPT_REJECT_IF_NO_MATCHING_IFCS,
   OPT_DUMMY_APP_SERVER,
 };
@@ -224,7 +224,7 @@ const static struct pj_getopt_option long_opt[] =
   { "disable-tcp-switch",           no_argument,       0, OPT_DISABLE_TCP_SWITCH},
   { "chronos-hostname",             required_argument, 0, OPT_CHRONOS_HOSTNAME},
   { "sprout-chronos-callback-uri",  required_argument, 0, OPT_SPROUT_CHRONOS_CALLBACK_URI},
-  { "apply-default-ifcs",           no_argument,       0, OPT_APPLY_DEFAULT_IFCS},
+  { "apply-fallback-ifcs",          no_argument,       0, OPT_APPLY_FALLBACK_IFCS},
   { "reject-if-no-matching-ifcs",   no_argument,       0, OPT_REJECT_IF_NO_MATCHING_IFCS},
   { "dummy-app-server",             required_argument, 0, OPT_DUMMY_APP_SERVER},
   { NULL,                           0,                 0, 0}
@@ -1267,8 +1267,8 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       TRC_INFO("Sprout Chronos callback uri set to %s", pj_optarg);
       break;
 
-    case OPT_APPLY_DEFAULT_IFCS:
-      options->apply_default_ifcs = true;
+    case OPT_APPLY_FALLBACK_IFCS:
+      options->apply_fallback_ifcs = true;
       TRC_INFO("Requests that have no matching IFCs will have some preconfigured IFCs applied");
       break;
 
@@ -1442,7 +1442,7 @@ AlarmManager* alarm_manager = NULL;
 AnalyticsLogger* analytics_logger = NULL;
 ChronosConnection* chronos_connection = NULL;
 SIFCService* sifc_service = NULL;
-DIFCService* difc_service = NULL;
+FIFCService* fifc_service = NULL;
 MMFService* mmf_service = NULL;
 
 bool parse_multi_site_stores_arg(const std::vector<std::string>& stores_arg,
@@ -1575,7 +1575,7 @@ int main(int argc, char* argv[])
   opt.scscf_node_uri = "";
   opt.sas_signaling_if = false;
   opt.disable_tcp_switch = false;
-  opt.apply_default_ifcs = false;
+  opt.apply_fallback_ifcs = false;
   opt.reject_if_no_matching_ifcs = false;
   opt.dummy_app_server = "";
 
@@ -2024,10 +2024,10 @@ int main(int argc, char* argv[])
                                        sifc_service);
   }
 
-  // Create DIFC service
-  difc_service = new DIFCService(new Alarm(alarm_manager,
+  // Create FIFC service
+  fifc_service = new FIFCService(new Alarm(alarm_manager,
                                            "sprout",
-                                           AlarmDef::SPROUT_DIFC_STATUS,
+                                           AlarmDef::SPROUT_FIFC_STATUS,
                                            AlarmDef::CRITICAL));
 
   mmf_service = new MMFService(new Alarm(alarm_manager,
@@ -2522,8 +2522,8 @@ int main(int argc, char* argv[])
   delete http_stack_mgmt; http_stack_mgmt = NULL;
   delete chronos_connection;
   delete hss_connection;
+  delete fifc_service;
   delete mmf_service;
-  delete difc_service;
   delete sifc_service;
   delete quiescing_mgr;
   delete exception_handler;

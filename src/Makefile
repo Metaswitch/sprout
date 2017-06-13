@@ -91,7 +91,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          ifc.cpp \
                          associated_uris.cpp \
                          sifcservice.cpp \
-                         difcservice.cpp \
+                         fifcservice.cpp \
                          mmfservice.cpp \
                          mmftargets.cpp
 
@@ -191,7 +191,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        pthread_cond_var_helper.cpp \
                        sifcservice_test.cpp \
                        mock_sifc_parser.cpp \
-                       difcservice_test.cpp \
+                       fifcservice_test.cpp \
                        mmfservice_test.cpp
 
 COVERAGE_ROOT := ..

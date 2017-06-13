@@ -7,19 +7,19 @@
             "levels": [
                 {
                     "severity": "CLEARED",
-                    "details": "The Sprout process has been restored to normal operation.",
+                    "details": "The local Sprout process has been restored to normal operation.",
                     "description": "Sprout: Process failure cleared.",
-                    "cause": "The Sprout process has been restored to normal operation. The previously issued alarm has been cleared.",
-                    "effect": "Normal Sprout I-CSCF, S-CSCF, and BGCF operation has been restored.",
+                    "cause": "The local Sprout process has been restored to normal operation. The previously issued alarm has been cleared.",
+                    "effect": "The Sprout process is functioning normally again.",
                     "action": "No action."
                 },
                 {
                     "severity": "CRITICAL",
-                    "details": "Monit has detected that the Sprout process has failed. Monit will automatically attempt to restart it. If this alarm does not clear, the Sprout process may have been stopped or an unrecoverable failure may have occurred.",
+                    "details": "Monit has detected that the local Sprout process has failed. A restart will automatically be attempted. If this alarm does not clear, the Sprout process may have been stopped or an unrecoverable failure may have occurred.",
                     "description": "Sprout: Process failure.",
-                    "cause": "The system has detected that the Sprout process has failed. Monit will automatically attempt to restart it. If this alarm does not clear, the Sprout process may have been stopped or an unrecoverable failure may have occurred.",
-                    "effect": "In progress I-CSCF, S-CSCF, and BGCF SIP transactions are interrupted and may require retransmission by the SIP clients. If a single Sprout process failed then there is no significant effect to traffic capacity. If multiple Sprout processes fail then calls will fail and traffic capacity will be reduced.",
-                    "action": "The process will automatically be restarted. Monitor for the alarm to clear and confirm that the I-CSCF, S-CSCF, and BGCF are operating normally. If the failed Sprout node fails to return to service then contact your support representative."
+                    "cause": "The system has detected that the Sprout process has failed.",
+                    "effect": "In progress I-CSCF, S-CSCF and BGCF SIP transactions are interrupted and SIP clients may be required to retransmit them. If only a small percentage of Sprout processes are failed simultaneously then in a typical deployment there will be no significant impact. However multiple simultaneous failures will result in an increasingly significant reduction in SIP processing capacity and will eventually result in service impacts. If all Sprout instances are failed then all future SIP registrations and call attemps will fail until such time as one or more Sprout instances recover.",
+                    "action": "Monitor for the alarm to clear and confirm the system is operating normally. If the failed Sprout process fails to return to service then contact your support representative."
                 }
             ]
         },
@@ -30,19 +30,19 @@
             "levels": [
                 {
                     "severity": "CLEARED",
-                    "details": "Sprout communication to at least one Homestead has been restored.",
+                    "details": "Communication between the local Sprout process and the Homestead service has been restored.",
                     "description": "Sprout: Homestead communication error cleared.",
-                    "cause": "Sprout communication to at least one Homestead has been restored. The previously issued alarm has been cleared.",
-                    "effect": "Normal HSS communications have been restored.",
+                    "cause": "Communication between the local Sprout process and the Homestead service has been restored.",
+                    "effect": "The local Sprout process can successfully contact the Homestead service.",
                     "action": "No action."
                 },
                 {
                     "severity": "CRITICAL",
-                    "details": "Sprout is unable to contact any Homesteads. It will periodically attempt to reconnect. If this alarm does not clear, ensure that at least one Homestead is operational and that network connectivity exists between it and Sprout.",
+                    "details": "The local Sprout process is unable to contact the Homestead service.",
                     "description": "Sprout: Homestead communication error.",
-                    "cause": "Sprout is unable to contact any Homesteads.",
-                    "effect": "If multiple Sprout processes have raised this alarm, then this is potentially a total service affecting failure since the I-CSCF and S-CSCF cannot communicate with the HSS, and all new initial SIP requests will fail and existing SIP transactions may not complete normally. Registrations will eventually timeout and subscribers cannot re-register.",
-                    "action": "Ensure that one or more Homestead nodes are operational and that network connectivity exists between them and Sprout. If this alarm does not clear, then contact your support representative."
+                    "cause": "The local Sprout process is unable to contact any Homestead processes. The likely cause depends on whether this is affecting all Sprout instances or just a subset. If the issue impacts just a subset of Sprout instances then it is likely to be due to a partial network outage or configuration issues on just those nodes. If it impacts all Sprout instances then it is likely to be due to a misconfiguration of the Homestead hostname in shared configuration, misconfiguration of the Homestead cluster DNS record, a significant network outage, or because all Homestead instances are currently failed.",
+                    "effect": "This is broadly equivalent to the local Sprout having failed. If only a small percentage of Sprout processes are failed simultaneously then in a typical deployment there will be no significant impact. However multiple simultaneous failures will result in an increasingly significant reduction in SIP processing capacity and will eventually result in service impacts. If all Sprout instances are failed then all future SIP registrations and call attemps will fail until such time as one or more Sprout instances recover.",
+                    "action": "Investigate the issue that is preventing the local Sprout process from contacting the Homestead service. The Sprout process will periodically attempt to reconnect and this alarm will clear once connectivity has been restored. If you cannot determine the issue or the alarm fails to clear then contact your support representative."
                 }
             ]
         },
@@ -53,19 +53,19 @@
             "levels": [
                 {
                     "severity": "CLEARED",
-                    "details": "Sprout communication to Astaire has been restored.",
+                    "details": "Communication between the local Sprout process and the Astaire service has been restored.",
                     "description": "Sprout: Astaire communication error cleared.",
-                    "cause": "Sprout communication to Astaire has been restored. The previously issued alarm has been cleared.",
-                    "effect": "Normal S-CSCF operation has been restored.",
+                    "cause": "Communication between the local Sprout process and the Astaire service has been restored.",
+                    "effect": "The local Sprout process can successfully contact the Astaire service.",
                     "action": "No action."
                 },
                 {
                     "severity": "CRITICAL",
-                    "details": "Sprout is unable to contact any Astaire processes. It will periodically attempt to reconnect. If this alarm does not clear, ensure that at least one Astaire is operational and that network connectivity exists between it and Sprout.",
+                    "details": "The local Sprout process is unable to contact the Astaire service.",
                     "description": "Sprout: Astaire communication error.",
-                    "cause": "Sprout is unable to contact any Astaire processes.",
-                    "effect": "If multiple Sprout processes have raised this alarm, then this is potentially a total service affecting failure because the S-CSCF cannot access the Astaire database for authentication vectors and registration data, meaning that all new SIP transactions will fail and existing SIP transactions may not complete normally.",
-                    "action": "Ensure that all Astaire processes are operational and that network connectivity exists between them and Sprout. If the alarm does not clear then contact your support representative."
+                    "cause": "The local Sprout process is unable to contact any Astaire processes. The likely cause depends on whether this is affecting all Sprout instances or just a subset. If the issue impacts just a subset of Sprout instances then it is likely to be due to a partial network outage or configuration issues on just those nodes. If it impacts all Sprout instances then it is likely to be due to a misconfiguration of the Sprout registration store in shared configuration, misconfiguration of the Astaire cluster DNS record, a significant network outage, or because all Astaire instances are currently failed.",
+                    "effect": "This is broadly equivalent to the local Sprout having failed. If only a small percentage of Sprout processes are failed simultaneously then in a typical deployment there will be no significant impact. However multiple simultaneous failures will result in an increasingly significant reduction in SIP processing capacity and will eventually result in service impacts. If all Sprout instances are failed then all future SIP registrations and call attemps will fail until such time as one or more Sprout instances recover.",
+                    "action": "Investigate the issue that is preventing the local Sprout process from contacting the Astaire service. The Sprout process will periodically attempt to reconnect and this alarm will clear once connectivity has been restored. If you cannot determine the issue or the alarm fails to clear then contact your support representative."
                 }
             ]
         },
@@ -76,19 +76,19 @@
             "levels": [
                 {
                     "severity": "CLEARED",
-                    "details": "Sprout communication to the remote Astaire site has been restored.",
+                    "details": "The local Sprout process is able to successfully communicate with one or more Astaire processes in remote sites.",
                     "description": "Sprout: Remote Astaire communication error cleared.",
-                    "cause": "Sprout communication to the remote Astaire site has been restored. The previously issued alarm has been cleared.",
-                    "effect": "Normal S-CSCF remote site synchronization has been restored.",
+                    "cause": "The local Sprout process is able to successfully communicate with one or more remote Astaire instances.",
+                    "effect": "The local Sprout process can successfully contact the remote Astaire service.",
                     "action": "No action."
                 },
                 {
                     "severity": "CRITICAL",
-                    "details": "Sprout is unable to contact any remote Astaire processes. It will periodically attempt to reconnect. If this alarm does not clear, ensure that at least one remote Astaire is operational and that network connectivity exists between it and Sprout.",
+                    "details": "The local Sprout process is unable to contact any Astaire instances in remote sites.",
                     "description": "Sprout: Remote Astaire communication error.",
-                    "cause": "Sprout is unable to contact any remote Astaire processes.",
-                    "effect": "The deployment is no longer geographically redundant because the S-CSCF cannot synchronize registration data to the remote site. If subscribers switch to the other geographic site they may have to re-register before becoming operational.",
-                    "action": "Ensure that all remote Astaire processes are operational and that network connectivity exists between them and Sprout. If the alarm does not clear then contact your support representative."
+                    "cause": "The local Sprout process is unable to contact any Astaire processes in remote sites. The likely cause depends on whether this is affecting all Sprout instances or just a subset. If the issue impacts just a subset of Sprout instances then it is likely to be due to a partial network outage or configuration issues on just those nodes. If it impacts all Sprout instances then it is likely to be due to a misconfiguration of the remote Sprout registration store in shared configuration, misconfiguration of the Astaire cluster DNS record, a significant network outage, or because all remote Astaire instances are currently failed.",
+                    "effect": "The deployment is no longer geographically redundant because the S-CSCF cannot synchronize registration data to remote sites. If subscribers switch to other geographic sites they may have to re-register before becoming operational.",
+                    "action": "Investigate the issue that is preventing the local Sprout process from contacting Astaire processes in remote sites. The Sprout process will periodically attempt to reconnect and this alarm will clear once connectivity has been restored. If you cannot determine the issue or the alarm fails to clear then contact your support representative."
                 }
             ]
         },
@@ -99,19 +99,19 @@
             "levels": [
                 {
                     "severity": "CLEARED",
-                    "details": "Sprout communication to the local Chronos has been restored.",
+                    "details": "Communication between the local Sprout process and the Chronos service has been restored.",
                     "description": "Sprout: Chronos communication error cleared.",
-                    "cause": "Sprout communication to the local Chronos has been restored. The previously issued alarm has been cleared.",
-                    "effect": "Normal S-CSCF timer operations have been restored.",
+                    "cause": "Communication between the local Sprout process and the Chronos service has been restored.",
+                    "effect": "The local Sprout process can successfully contact the Chronos service.",
                     "action": "No action."
                 },
                 {
                     "severity": "MAJOR",
-                    "details": "Sprout is unable to contact the local Chronos process. It will periodically attempt to reconnect. If this alarm does not clear, investigate the health of the Chronos cluster and ensure that the local Chronos is operational.",
+                    "details": "The local Sprout process is unable to contact the Chronos service.",
                     "description": "Sprout: Chronos communication error.",
-                    "cause": "Sprout is unable to contact the local Chronos process.",
-                    "effect": "Chronos failures will not cause any new requests to be rejected, but will mean that the appropriate notification messages (NOTIFYs, Server-Assignment-Requests to the HSS) will not be generated when registrations or subscriptions expire. Users will be able to re-register/re-subscribe later. From the HSS's point of view it will still regard the subscriber as registered (requests will be sent to the same S-CSCF, and unregistered services like voicemail will not be applied).",
-                    "action": "Ensure that the local Chronos is operational. If this alarm does not clear, then contact your support representative."
+                    "cause": "The local Sprout process is unable to contact any Chronos processes. The likely cause depends on whether this is affecting all Sprout instances or just a subset. If the issue impacts just a subset of Sprout instances then it is likely to be due to a partial network outage or configuration issues on just those nodes. If it impacts all Sprout instances then it is likely to be due to a misconfiguration of the Chronos hostname in shared configuration, misconfiguration of the Chronos cluster DNS record, a significant network outage, or because all Chronos instances are currently failed.",
+                    "effect": "This failure will not cause any new requests to be rejected, but will mean that the appropriate notification messages (NOTIFYs, Server-Assignment-Requests to the HSS) will not be generated when registrations or subscriptions expire. Users will be able to re-register/re-subscribe later. From the HSS's point of view it will still regard the subscriber as registered (requests will be sent to the same S-CSCF, and unregistered services like voicemail will not be applied).",
+                    "action": "Investigate the issue that is preventing the local Sprout process from contacting Chronos. The Sprout process will periodically attempt to reconnect and this alarm will clear once connectivity has been restored. If you cannot determine the issue or the alarm fails to clear then contact your support representative."
                 }
             ]
         },
@@ -122,19 +122,19 @@
             "levels": [
                 {
                     "severity": "CLEARED",
-                    "details": "Sprout communication to at least one Ralf has been restored.",
+                    "details": "Communication between the local Sprout process and the Ralf service has been restored.",
                     "description": "Sprout: Ralf communication error cleared.",
-                    "cause": "Sprout communication to at least one Ralf has been restored. The previously issued alarm has been cleared.",
-                    "effect": "Normal call detail event recording by the I-CSCF and the S-CSCF has been restored.",
+                    "cause": "Communication between the local Sprout process and the Ralf service has been restored.",
+                    "effect": "The local Sprout process can successfully contact the Ralf service.",
                     "action": "No action."
                 },
                 {
                     "severity": "MAJOR",
-                    "details": "Sprout is unable to contact any Ralfs. It will periodically attempt to reconnect. If this alarm does not clear, ensure that at least one Ralf is operational and that network connectivity exists between it and Sprout.",
+                    "details": "The local Sprout process is unable to contact the Ralf service.",
                     "description": "Sprout: Ralf communication error.",
-                    "cause": "Sprout is unable to contact any Ralfs.",
-                    "effect": "Call detail event recording by the I-CSCF and S-CSCF for offline billing is no longer operational. Active calls are preserved and new calls are allowed but the service provider is no longer able to bill for the calls.",
-                    "action": "Monitor for this alarm to clear. If this alarm does not clear, ensure that at least one Ralf is operational and that network connectivity exists between it and Sprout. If Ralf does not return to service then contact your support representative."
+                    "cause": "The local Sprout process is unable to contact any Ralf processes. The likely cause depends on whether this is affecting all Sprout instances or just a subset. If the issue impacts just a subset of Sprout instances then it is likely to be due to a partial network outage or configuration issues on just those nodes. If it impacts all Sprout instances then it is likely to be due to a misconfiguration of the Ralf hostname in shared configuration, misconfiguration of the Ralf cluster DNS record, a significant network outage, or because all Ralf instances are currently failed.",
+                    "effect": "Call detail event recording for offline billing is no longer operational for calls processed by this Sprout instance. Active calls are preserved and new calls are allowed but the service provider is no longer able to bill for the calls.",
+                    "action": "Investigate the issue that is preventing the local Sprout process from contacting Ralf. The Sprout process will periodically attempt to reconnect and this alarm will clear once connectivity has been restored. If you cannot determine the issue or the alarm fails to clear then contact your support representative. If this issue only impacts a small percentage of Sprout instances and cannot immediately be resolved then, if you have sufficient spare Sprout capacity in your deployment, you may wish to temporarily remove these Sprout instances from your Sprout DNS records so that transactions will be directed to Sprout instances that do still have connectivity with Ralf."
                 }
             ]
         },
@@ -145,19 +145,19 @@
             "levels": [
                 {
                     "severity": "CLEARED",
-                    "details": "Sprout communication to the ENUM server has been restored.",
+                    "details": "Communication between the local Sprout process and the ENUM service has been restored.",
                     "description": "Sprout: ENUM communication error cleared.",
-                    "cause": "Sprout communication to at least one ENUM server has been restored. The previously issued alarm has been cleared.",
-                    "effect": "Normal ENUM services have been restored.",
+                    "cause": "Communication between the local Sprout process and the ENUM service has been restored.",
+                    "effect": "The local Sprout process can successfully contact the ENUM service.",
                     "action": "No action."
                 },
                 {
                     "severity": "MAJOR",
-                    "details": "Sprout is unable to contact any ENUM servers. It will periodically attempt to reconnect. If this alarm does not clear, ensure that the ENUM servers are operational and that network connectivity exists between them and Sprout.",
+                    "details": "The local Sprout process is unable to contact the ENUM service.",
                     "description": "Sprout: ENUM communication error.",
-                    "cause": "Sprout is unable to contact any ENUM servers.",
-                    "effect": "If the ENUM servers are not contactable then off-net calls will fail or be misrouted. Additionally, the I-CSCF cannot make ENUM queries for tel URIs after a LIR request to the HSS has failed.",
-                    "action": "Monitor for this alarm to clear. If this alarm does not clear, ensure that an ENUM server is operational and that network connectivity exists between it and Sprout. Check the configuration file for correct configuration of the ENUM servers. If the ENUM servers do not return to service then you may need to contact your ENUM server vendor."
+                    "cause": "The local Sprout process is unable to contact any ENUM servers. The likely cause depends on whether this is affecting all Sprout instances or just a subset. If the issue impacts just a subset of Sprout instances then it is likely to be due to a partial network outage or configuration issues on just those nodes. If it impacts all Sprout instances then it is likely to be due to a misconfiguration of the ENUM servers in shared configuration, misconfiguration of the ENUM DNS records, a significant network outage, or because all ENUM instances are currently failed.",
+                    "effect": "Off-net calls processed by this Sprout instance will fail or be misrouted. Additionally, the I-CSCF function on this Sprout instance will be unable to make ENUM queries for tel URIs after a LIR request to the HSS has failed.",
+                    "action": "Investigate the issue that is preventing the local Sprout process from contacting your ENUM servers. The Sprout process will periodically attempt to reconnect and this alarm will clear once connectivity has been restored. If you cannot determine the issue or the alarm fails to clear then contact your support representative. If this issue only impacts a small percentage of Sprout instances and cannot immediately be resolved then, if you have sufficient spare Sprout capacity in your deployment, you may wish to temporarily remove these Sprout instances from your Sprout DNS records so that transactions will be directed to Sprout instances that do still have connectivity with the ENUM service."
                 }
             ]
         },
@@ -278,24 +278,24 @@
         },
         {
             "index": 1012,
-            "name": "SPROUT_DIFC_STATUS",
+            "name": "SPROUT_FIFC_STATUS",
             "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
             "levels": [
                 {
                     "severity": "CLEARED",
-                    "details": "The configuration file for default IFCs is valid.",
-                    "description": "sprout: The configuration file for default IFCs is valid.",
-                    "cause": "The configuration file at /etc/clearwater/default_ifcs.xml is valid.",
-                    "effect": "The S-CSCF will be able to correctly apply any default IFCs.",
+                    "details": "The configuration file for fallback IFCs is valid.",
+                    "description": "sprout: The configuration file for fallback IFCs is valid.",
+                    "cause": "The configuration file at /etc/clearwater/fallback_ifcs.xml is valid.",
+                    "effect": "The S-CSCF will be able to correctly apply any fallback IFCs.",
                     "action": "No action."
                 },
                 {
                     "severity": "CRITICAL",
-                    "details": "There is at least one invalid entry in the configuration file for default IFCs.",
-                    "description": "sprout: The configuration file for default IFCs is invalid.",
-                    "cause": "The configuration file at /etc/clearwater/default_ifcs.xml has at least one invalid entry.",
-                    "effect": "The S-CSCF will not be able to correctly apply any default IFCs.",
-                    "action": "Correct the configuration file at /etc/clearwater/default_ifcs.xml and upload it."
+                    "details": "There is at least one invalid entry in the configuration file for fallback IFCs.",
+                    "description": "sprout: The configuration file for fallback IFCs is invalid.",
+                    "cause": "The configuration file at /etc/clearwater/fallback_ifcs.xml has at least one invalid entry.",
+                    "effect": "The S-CSCF will not be able to correctly apply any fallback IFCs.",
+                    "action": "Correct the configuration file at /etc/clearwater/fallback_ifcs.xml and upload it."
                 }
             ]
         },
