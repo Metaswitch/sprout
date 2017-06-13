@@ -86,6 +86,9 @@ get_settings()
         signaling_dns_server=127.0.0.1
         scscf_node_uri=""
 
+        # Should we send to Ralf? Y, N, or X => base on ralf hostname
+        sprout_ralf_enabled=X
+
         # Enable no-ENUM TEL URI translation fallback by default for backwards compatibility
         default_tel_uri_translation="Y"
 
@@ -131,7 +134,11 @@ get_daemon_args()
           [ -z "$xdms_hostname" ] || xdms_hostname_arg="--xdms=$xdms_hostname"
         fi
 
-        [ -z "$ralf_hostname" ] || ralf_arg="--ralf=$ralf_hostname"
+        if [ "$sprout_ralf_enabled" == "Y" ] || \
+           [ "$sprout_ralf_enabled" == "X" -a -n "$ralf_hostname" ]
+        then
+          ralf_arg="--ralf=$ralf_hostname"
+        fi
 
         [ "$authentication" != "Y" ] || authentication_arg="--authentication"
 
