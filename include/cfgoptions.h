@@ -146,6 +146,7 @@ struct options
   bool                                 apply_fallback_ifcs;
   bool                                 reject_if_no_matching_ifcs;
   std::string                          dummy_app_server;
+  bool                                 http_acr_logging;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be

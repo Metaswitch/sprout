@@ -138,6 +138,7 @@ enum OptionTypes
   OPT_APPLY_FALLBACK_IFCS,
   OPT_REJECT_IF_NO_MATCHING_IFCS,
   OPT_DUMMY_APP_SERVER,
+  OPT_HTTP_ACR_LOGGING,
 };
 
 
@@ -227,6 +228,7 @@ const static struct pj_getopt_option long_opt[] =
   { "apply-fallback-ifcs",          no_argument,       0, OPT_APPLY_FALLBACK_IFCS},
   { "reject-if-no-matching-ifcs",   no_argument,       0, OPT_REJECT_IF_NO_MATCHING_IFCS},
   { "dummy-app-server",             required_argument, 0, OPT_DUMMY_APP_SERVER},
+  { "http-acr-logging",             no_argument,       0, OPT_HTTP_ACR_LOGGING},
   { NULL,                           0,                 0, 0}
 };
 
@@ -446,6 +448,8 @@ static void usage(void)
        "     --dummy-app-server <app server URI>\n"
        "                            If any IFC has an application server that matches the one defined here, \n"
        "                            then the IFC is skipped over.\n"
+       "     --http-acr-logging     Whether to include the bodies of ACR HTTP requests when they are logged \n"
+       "                            to SAS\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
        " -F, --log-file <directory>\n"
@@ -1282,6 +1286,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       TRC_INFO("Dummy application server set to %s", pj_optarg);
       break;
 
+    case OPT_HTTP_ACR_LOGGING:
+      options->http_acr_logging = true;
+      TRC_INFO("Bodies of ACR HTTP messages will be logged to SAS");
+      break;
+
     case OPT_LISTEN_PORT:
       {
         int listen_port;
@@ -1578,6 +1587,7 @@ int main(int argc, char* argv[])
   opt.apply_fallback_ifcs = false;
   opt.reject_if_no_matching_ifcs = false;
   opt.dummy_app_server = "";
+  opt.http_acr_logging = false;
 
   status = init_logging_options(argc, argv, &opt);
 
@@ -1988,7 +1998,9 @@ int main(int argc, char* argv[])
                                          NULL, // No SNMP table for connected Ralfs
                                          load_monitor,
                                          SASEvent::HttpLogLevel::PROTOCOL,
-                                         ralf_comm_monitor);
+                                         ralf_comm_monitor,
+                                         "http",
+                                         !opt.http_acr_logging);
     ralf_processor = new RalfProcessor(ralf_connection,
                                        exception_handler,
                                        opt.ralf_threads);

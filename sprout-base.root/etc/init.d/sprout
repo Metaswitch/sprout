@@ -143,6 +143,7 @@ get_daemon_args()
         [ "$disable_tcp_switch" != "Y" ] || disable_tcp_switch_arg="--disable-tcp-switch"
         [ "$apply_fallback_ifcs" != "Y" ] || apply_fallback_ifcs_arg="--apply-fallback-ifcs"
         [ "$reject_if_no_matching_ifcs" != "Y" ] || reject_if_no_matching_ifcs_arg="--reject-if-no-matching-ifcs"
+        [ "$http_acr_logging" != "Y" ] || http_acr_logging_arg="--http-acr-logging"
 
         [ -z "$target_latency_us" ] || target_latency_us_arg="--target-latency-us=$target_latency_us"
         [ -z "$cass_target_latency_us" ] || cass_target_latency_us_arg="--cass-target-latency-us=$cass_target_latency_us"
@@ -194,6 +195,7 @@ get_daemon_args()
                      $apply_fallback_ifcs_arg
                      $reject_if_no_matching_ifcs_arg
                      $dummy_app_server_arg
+                     $http_acr_logging_arg
                      $global_only_lookups_arg
                      $override_npdi_arg
                      $exception_max_ttl_arg
