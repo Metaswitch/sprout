@@ -107,7 +107,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     }
     else
     {
-      std::string node_host(stack_data.local_host.ptr, stack_data.public_host.slen);
+      std::string node_host(stack_data.local_host.ptr, stack_data.local_host.slen);
 
       if (Utils::parse_ip_address(node_host) == Utils::IPV6_ADDRESS)
       {
