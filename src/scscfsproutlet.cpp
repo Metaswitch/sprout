@@ -1586,13 +1586,11 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
                 _scscf->mmfservice()->get_config_for_server(server_domain_str);
 
 
-    std::cout << "\n\n\n\n\n";
-
     // If we are configured to apply MMF on requests forwarded on by the AS,
     // add the necessary route header to the top of the request.
     if (server_mmf_config && server_mmf_config->apply_mmf_post_as())
     {
-      add_mmf_post_as_route_header(req, server_mmf_config->get_mmfcontext());
+      add_mmf_post_as_route_header(req, server_mmf_config->get_mmfcontext(), as_uri->transport_param);
       // To ensure the request is routed back to this node for MMF, create a
       // URI resolving to the MMF process on this SPN node.
       // A lot of this is currently hard-coded; this will change in future
@@ -1650,7 +1648,7 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     // the AS, add the necessary route header to the top of the request.
     if (server_mmf_config && server_mmf_config->apply_mmf_pre_as())
     {
-      add_mmf_pre_as_route_header(req, server_mmf_config->get_mmfcontext());
+      add_mmf_pre_as_route_header(req, server_mmf_config->get_mmfcontext(), as_uri->transport_param);
     }
 
     // Set P-Served-User, including session case and registration
@@ -2464,7 +2462,8 @@ pjsip_msg* SCSCFSproutletTsx::get_base_request()
 
 
 void SCSCFSproutletTsx::add_mmf_pre_as_route_header(pjsip_msg* req,
-                                                    std::string mmfcontext)
+                                                    std::string mmfcontext,
+                                                    pj_str_t as_transport_param)
 {
   // Route the message to the MMF service running on this Sprout node
   // Use the MMF port as the identifier, as we do not have a separate
@@ -2481,7 +2480,7 @@ void SCSCFSproutletTsx::add_mmf_pre_as_route_header(pjsip_msg* req,
                                 pjsip_uri_clone(get_pool(req), mmf_pj_uri);
 
   // Use same transport as AS, in case it can only cope with one.
-  //pre_as_uri->transport_param = as_uri->transport_param;
+  pre_as_uri->transport_param = as_transport_param;
 
   // Insert the namespace parameter
   TRC_DEBUG("Adding namespace parameter 'mmf'");
@@ -2509,7 +2508,8 @@ void SCSCFSproutletTsx::add_mmf_pre_as_route_header(pjsip_msg* req,
 }
 
 void SCSCFSproutletTsx::add_mmf_post_as_route_header(pjsip_msg* req,
-                                                     std::string mmfcontext)
+                                                     std::string mmfcontext,
+                                                     pj_str_t as_transport_param)
 {
   // To ensure the request is routed back to this node for MMF, create a
   // URI resolving to the MMF process on this SPN node.
@@ -2534,7 +2534,7 @@ void SCSCFSproutletTsx::add_mmf_post_as_route_header(pjsip_msg* req,
                                 pjsip_uri_clone(get_pool(req), mmf_pj_uri);
 
   // Use same transport as AS, in case it can only cope with one.
-  // post_as_uri->transport_param = as_uri->transport_param;
+  post_as_uri->transport_param = as_transport_param;
 
   // Insert the namespace parameter
   TRC_DEBUG("Adding namespace parameter 'mmf'");

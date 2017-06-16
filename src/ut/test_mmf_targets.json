@@ -1,11 +1,11 @@
 {
     "mmf_targets" : [
         {   "name" : "FirstTarget",
-            "addresses" : ["test.mmf.server.name"],
+            "addresses" : ["as.test.domain", "10.10.0.2"],
             "pre-as" : true
         },
         {   "name" : "SecondTarget",
-            "addresses" : ["test.both.pre.post.mmf"],
+            "addresses" : ["second.test.domain"],
             "pre-as" : true,
             "post-as" : true
         }

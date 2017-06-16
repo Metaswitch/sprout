@@ -277,11 +277,11 @@ private:
 
   /// Adds a top route header, using the passed in mmfcontext URI parameter,
   /// to invoke MMF prior to routing to an Application Server.
-  void add_mmf_pre_as_route_header(pjsip_msg* req, std::string mmfcontext);
+  void add_mmf_pre_as_route_header(pjsip_msg* req, std::string mmfcontext, pj_str_t as_transport_param);
 
   /// Adds a top route header, using the passed in mmfcontext URI parameter,
   /// to invoke MMF after routing to an Application Server.
-  void add_mmf_post_as_route_header(pjsip_msg* req, std::string mmfcontext);
+  void add_mmf_post_as_route_header(pjsip_msg* req, std::string mmfcontext, pj_str_t as_transport_param);
 
   /// Route the request to an application server.
   void route_to_as(pjsip_msg* req,
