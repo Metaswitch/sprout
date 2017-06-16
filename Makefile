@@ -58,26 +58,49 @@ distclean: $(patsubst %, %_distclean, ${SUBMODULES}) sprout_distclean
 	rm -rf ${ROOT}/usr
 	rm -rf ${ROOT}/build
 
+#
+# Plugin handling.
+#
+
+# Generate a list of all the plugins available.
+PLUGINS := $(patsubst plugins/%,%,$(shell find plugins -mindepth 1 -maxdepth 1 -type d ))
+
+# Macro to define rules for building plugins.
+#
+# $1 - The name of the plugin to build.
+# $1 - The make target (e.g build, test, clean, ...)
+define plugin_template
+.PHONY: plugin-$1-$2
+
+# Note that the plugins are not required to have a 'build' target, but assume
+# the default target performs a build.
+plugin-$1-$2:
+	make -C plugins/$1 $$(filter-out build,$2)
+endef
+
 .PHONY: plugins-build
-plugins-build:
-	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} \;
+plugins-build: $(patsubst %,plugin-%-build,$(PLUGINS))
+$(foreach plugin,$(PLUGINS),$(eval $(call plugin_template,${plugin},build)))
 
 .PHONY: plugins-test
-plugins-test:
-	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} test \;
+plugins-test: $(patsubst %,plugin-%-test,$(PLUGINS))
+$(foreach plugin,$(PLUGINS),$(eval $(call plugin_template,${plugin},test)))
 
 .PHONY: plugins-clean
-plugins-clean:
-	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} clean \;
+plugins-clean: $(patsubst %,plugin-%-clean,$(PLUGINS))
+$(foreach plugin,$(PLUGINS),$(eval $(call plugin_template,${plugin},clean)))
 
 .PHONY: plugins-deb
-plugins-deb:
-	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} deb \;
+plugins-deb: $(patsubst %,plugin-%-deb,$(PLUGINS))
+$(foreach plugin,$(PLUGINS),$(eval $(call plugin_template,${plugin},deb)))
 
 .PHONY: plugins-deb-only
-plugins-deb-only:
-	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} deb-only \;
+plugins-deb-only: $(patsubst %,plugin-%-deb-only,$(PLUGINS))
+$(foreach plugin,$(PLUGINS),$(eval $(call plugin_template,${plugin},deb-only)))
 
+#
+# Debian file handling.
+#
 include build-infra/cw-deb.mk
 
 deb-only: plugins-deb-only
