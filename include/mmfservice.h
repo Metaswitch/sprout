@@ -44,30 +44,12 @@ public:
   /// Raises an error if the passed in configuration is invalid
   std::shared_ptr<MMFService::MMFMap> read_config(rapidjson::Document& config);
 
-  /// Return whether we should invoke MMF prior to routing a message to the
-  /// passed in Application Server
-  const bool apply_mmf_pre_as(std::string address);
-
-  /// Return whether we should invoke MMF after routing a message to the
-  /// passed in Application Server
-  const bool apply_mmf_post_as(std::string address);
+  /// Return a shared_ptr to the MMFTarget object for the passed in server.
+  /// Returns a nullptr if we don't have config for the server.
+  MMFTargetPtr get_config_for_server(std::string server_domain);
 
 private:
   MMFService(const MMFService&) = delete;  // Prevent implicit copying
-
-  /// These methods are private as they are not part of the API.  You should
-  /// access the mmf config via the public 'apply_mmf_*' methods.
-  inline const bool has_config_for_address(std::string address)
-  {
-    return (_mmf_config->find(address) != _mmf_config->end());
-  }
-
-  /// This raises an std::out_of_range error if the passed in address is not
-  /// present in the mmf_config map.  You must handle this
-  inline const MMFTargetPtr get_address_config(std::string address)
-  {
-    return _mmf_config->at(address);
-  }
 
   Alarm* _alarm;
   std::string _configuration;

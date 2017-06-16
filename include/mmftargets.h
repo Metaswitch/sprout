@@ -23,19 +23,20 @@ class MMFTarget
 public:
   MMFTarget(const rapidjson::Value& config);
 
+  inline const std::string get_mmfcontext() const {return _name;};
+  inline const bool apply_mmf_pre_as() const {return _pre_as;};
+  inline const bool apply_mmf_post_as() const {return _post_as;};
+  inline const std::vector<std::string>& get_addresses() {return _addresses;};
+
+private:
+  MMFTarget(const MMFTarget&) = delete;  // Prevent implicit copying
+
   /// The below methods parse the passed in rapidjson representation of an
   /// MMFTarget, and either set the appropriate member variable or raise an error
   void parse_addresses(const rapidjson::Value& config);
   void parse_name(const rapidjson::Value& config);
   void parse_pre_as(const rapidjson::Value& config);
   void parse_post_as(const rapidjson::Value& config);
-
-  inline const bool apply_pre_as() const {return _pre_as;};
-  inline const bool apply_post_as() const {return _post_as;};
-  inline const std::vector<std::string>& get_addresses() {return _addresses;};
-
-private:
-  MMFTarget(const MMFTarget&) = delete;  // Prevent implicit copying
 
   /// The addresses associated with this MMF target, such as DNS A entries
   /// resolving to a cluster of Application Servers

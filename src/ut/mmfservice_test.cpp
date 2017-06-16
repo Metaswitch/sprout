@@ -53,12 +53,12 @@ TEST_F(MMFServiceTest, ValidMMFFile)
   EXPECT_CALL(*_mock_alarm, clear()).Times(AtLeast(1));
   MMFService MMF(_mock_alarm, string(UT_DIR).append("/test_mmf_targets.json"));
 
-  EXPECT_TRUE(MMF.has_config_for_address("10.10.0.2"));
-  EXPECT_TRUE(MMF.has_config_for_address("as.test.domain"));
-  EXPECT_FALSE(MMF.has_config_for_address("guff.address"));
-  EXPECT_TRUE(MMF.apply_mmf_pre_as("as.test.domain"));
-  EXPECT_TRUE(MMF.apply_mmf_post_as("second.test.domain"));
-  EXPECT_FALSE(MMF.apply_mmf_post_as("10.10.0.2"));
+  EXPECT_NE(nullptr, MMF.get_config_for_server("10.10.0.2"));
+  EXPECT_NE(nullptr, MMF.get_config_for_server("as.test.domain"));
+  EXPECT_EQ(nullptr, MMF.get_config_for_server("guff.address"));
+  EXPECT_TRUE(MMF.get_config_for_server("as.test.domain")->apply_mmf_pre_as());
+  EXPECT_TRUE(MMF.get_config_for_server("second.test.domain")->apply_mmf_post_as());
+  EXPECT_FALSE(MMF.get_config_for_server("10.10.0.2")->apply_mmf_post_as());
 }
 
 // Test that reloading a valid MMF file with an invalid file doesn't cause the
@@ -76,12 +76,12 @@ TEST_F(MMFServiceTest, ReloadInvalidMMFFile)
   MMF._configuration = string(UT_DIR).append("/test_mmf_invalid.json");
   MMF.update_config();
 
-  EXPECT_TRUE(MMF.has_config_for_address("10.10.0.2"));
-  EXPECT_TRUE(MMF.has_config_for_address("as.test.domain"));
-  EXPECT_FALSE(MMF.has_config_for_address("guff.address"));
-  EXPECT_TRUE(MMF.apply_mmf_pre_as("as.test.domain"));
-  EXPECT_TRUE(MMF.apply_mmf_post_as("second.test.domain"));
-  EXPECT_FALSE(MMF.apply_mmf_post_as("10.10.0.2"));
+  EXPECT_NE(nullptr, MMF.get_config_for_server("10.10.0.2"));
+  EXPECT_NE(nullptr, MMF.get_config_for_server("as.test.domain"));
+  EXPECT_EQ(nullptr, MMF.get_config_for_server("guff.address"));
+  EXPECT_TRUE(MMF.get_config_for_server("as.test.domain")->apply_mmf_pre_as());
+  EXPECT_TRUE(MMF.get_config_for_server("second.test.domain")->apply_mmf_post_as());
+  EXPECT_FALSE(MMF.get_config_for_server("10.10.0.2")->apply_mmf_post_as());
 }
 
 
@@ -100,8 +100,8 @@ TEST_F(MMFServiceTest, MissingFile)
 
   // Ensure Sprout doesn't crash if the SCSCF calls into the MMF config when
   // none is present
-  EXPECT_FALSE(MMF.apply_mmf_post_as("10.10.0.2"));
-  EXPECT_FALSE(MMF.apply_mmf_pre_as("guff-address"));
+  EXPECT_EQ(nullptr, MMF.get_config_for_server("10.10.0.2"));
+  EXPECT_EQ(nullptr, MMF.get_config_for_server("guff-address"));
 }
 
 // Test that we log appropriately if the MMF config file is empty.
