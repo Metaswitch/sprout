@@ -65,38 +65,43 @@ distclean: $(patsubst %, %_distclean, ${SUBMODULES}) sprout_distclean
 # Generate a list of all the plugins available.
 PLUGINS := $(patsubst plugins/%,%,$(shell find plugins -mindepth 1 -maxdepth 1 -type d ))
 
-# Macro to define rules for building plugins.
+# Macro to define the rule for building a single target for a single plugin.
 #
-# $1 - The name of the plugin to build.
-# $1 - The make target (e.g build, test, clean, ...)
-define plugin_template
-.PHONY: plugin-$1-$2
-
+# Parameters:
+#   $1 - The name of the plugin to build.
+#   $2 - The make target (e.g build, test, clean, ...)
+#
 # Note that the plugins are not required to have a 'build' target, but assume
-# the default target performs a build.
+# the default target performs a build.  For this reason we never call "make
+# build" for a plugin, and always just call "make" instead.
+define plugin_name_target_template
+
+.PHONY: plugin-$1-$2
 plugin-$1-$2:
 	make -C plugins/$1 $$(filter-out build,$2)
+
 endef
 
-.PHONY: plugins-build
-plugins-build: $(patsubst %,plugin-%-build,$(PLUGINS))
-$(foreach plugin,$(PLUGINS),$(eval $(call plugin_template,${plugin},build)))
+# Macro to define the rules for building a single target for all plugins.
+#
+# Parameters:
+#   $1 - The make target (e.g. build, test, clean, ...)
+#
+# This template:
+#   - Defines the plugins-<target> rule.
+#   - Generates a rule for each plugin to build that target.
+define plugin_target_template
 
-.PHONY: plugins-test
-plugins-test: $(patsubst %,plugin-%-test,$(PLUGINS))
-$(foreach plugin,$(PLUGINS),$(eval $(call plugin_template,${plugin},test)))
+.PHONY: plugins-$1
+plugins-$1: $$(patsubst %,plugin-%-$1,$$(PLUGINS))
+$$(foreach plugin,$$(PLUGINS),$$(eval $$(call plugin_name_target_template,$$(plugin),$1)))
 
-.PHONY: plugins-clean
-plugins-clean: $(patsubst %,plugin-%-clean,$(PLUGINS))
-$(foreach plugin,$(PLUGINS),$(eval $(call plugin_template,${plugin},clean)))
+endef
 
-.PHONY: plugins-deb
-plugins-deb: $(patsubst %,plugin-%-deb,$(PLUGINS))
-$(foreach plugin,$(PLUGINS),$(eval $(call plugin_template,${plugin},deb)))
-
-.PHONY: plugins-deb-only
-plugins-deb-only: $(patsubst %,plugin-%-deb-only,$(PLUGINS))
-$(foreach plugin,$(PLUGINS),$(eval $(call plugin_template,${plugin},deb-only)))
+# Define the possible make targets for the plugins and generate the makefile
+# rules.
+PLUGIN_TARGETS := build test clean deb deb-only
+$(foreach target,$(PLUGIN_TARGETS),$(eval $(call plugin_target_template,$(target))))
 
 #
 # Debian file handling.
