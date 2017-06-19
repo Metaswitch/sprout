@@ -54,5 +54,4 @@ public:
   MOCK_METHOD1(on_timer_expiry, void(void*));
 };
 
-
 #endif

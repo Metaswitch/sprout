@@ -26,12 +26,12 @@ public:
   inline const std::string get_mmfcontext() const {return _name;};
   inline const std::vector<std::string>& get_addresses() const {return _addresses;};
 
-  /// Return whether we should invoke MMF prior to routing a message to the
-  /// passed in Application Server
+  /// Return whether we should invoke MMF prior to routing a message to any
+  /// Application Server associated to this MMFTarget
   inline const bool should_apply_mmf_pre_as() const {return _pre_as;};
 
-  /// Return whether we should invoke MMF after routing a message to the
-  /// passed in Application Server
+  /// Return whether we should invoke MMF after routing a message to any
+  /// Application Server associated to this MMFTarget
   inline const bool should_apply_mmf_post_as() const {return _post_as;};
 
 private:

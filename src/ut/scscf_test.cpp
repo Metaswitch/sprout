@@ -33,7 +33,6 @@
 #include "sproutletproxy.h"
 #include "fakesnmp.hpp"
 #include "mock_as_communication_tracker.h"
-#include "mockscscfsproutlettsx.h"
 
 using namespace std;
 using testing::StrEq;
@@ -44,7 +43,6 @@ using testing::Not;
 using testing::_;
 using testing::NiceMock;
 using testing::HasSubstr;
-using testing::Return;
 
 const std::string IMS_SUB_BARRED_MULTIPLE_WILDCARD =
                                "<IMSSubscription>\n"
