@@ -53,6 +53,8 @@ public:
                  const std::string& scscf_node_uri,
                  const std::string& icscf_uri,
                  const std::string& bgcf_uri,
+                 const std::string& mmf_cluster_uri,
+                 const std::string& mmf_node_uri,
                  int port,
                  const std::string& uri,
                  SubscriberDataManager* sdm,
@@ -110,6 +112,12 @@ private:
 
   /// Returns the configured BGCF URI for this system.
   const pjsip_uri* bgcf_uri() const;
+
+  /// Returns the configured MMF cluster URI for this system.
+  const pjsip_uri* mmf_cluster_uri() const;
+
+  /// Returns the configured MMF node URI for this system.
+  const pjsip_uri* mmf_node_uri() const;
 
   MMFService* mmfservice() const;
   FIFCService* fifcservice() const;
@@ -194,6 +202,14 @@ private:
   /// A URI which routes to the BGCF.
   pjsip_uri* _bgcf_uri;
 
+  /// A URI which routes to the MMF cluster.
+  pjsip_uri* _mmf_cluster_uri;
+
+  /// A URI which routes to this particular MMF node.  This must be
+  /// constructed using an IP address or a domain name which resolves to this
+  /// Sprout node only.
+  pjsip_uri* _mmf_node_uri;
+
   SubscriberDataManager* _sdm;
   std::vector<SubscriberDataManager*> _remote_sdms;
 
@@ -219,6 +235,8 @@ private:
   std::string _scscf_node_uri_str;
   std::string _icscf_uri_str;
   std::string _bgcf_uri_str;
+  std::string _mmf_cluster_uri_str;
+  std::string _mmf_node_uri_str;
 
   SNMP::CounterTable* _routed_by_preloaded_route_tbl = NULL;
   SNMP::CounterTable* _invites_cancelled_before_1xx_tbl = NULL;

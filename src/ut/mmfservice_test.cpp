@@ -56,9 +56,9 @@ TEST_F(MMFServiceTest, ValidMMFFile)
   EXPECT_NE(nullptr, MMF.get_config_for_server("10.10.0.2"));
   EXPECT_NE(nullptr, MMF.get_config_for_server("as.test.domain"));
   EXPECT_EQ(nullptr, MMF.get_config_for_server("guff.address"));
-  EXPECT_TRUE(MMF.get_config_for_server("as.test.domain")->apply_mmf_pre_as());
-  EXPECT_TRUE(MMF.get_config_for_server("second.test.domain")->apply_mmf_post_as());
-  EXPECT_FALSE(MMF.get_config_for_server("10.10.0.2")->apply_mmf_post_as());
+  EXPECT_TRUE(MMF.get_config_for_server("as.test.domain")->should_apply_mmf_pre_as());
+  EXPECT_TRUE(MMF.get_config_for_server("second.test.domain")->should_apply_mmf_post_as());
+  EXPECT_FALSE(MMF.get_config_for_server("10.10.0.2")->should_apply_mmf_post_as());
 }
 
 // Test that reloading a valid MMF file with an invalid file doesn't cause the
@@ -79,9 +79,9 @@ TEST_F(MMFServiceTest, ReloadInvalidMMFFile)
   EXPECT_NE(nullptr, MMF.get_config_for_server("10.10.0.2"));
   EXPECT_NE(nullptr, MMF.get_config_for_server("as.test.domain"));
   EXPECT_EQ(nullptr, MMF.get_config_for_server("guff.address"));
-  EXPECT_TRUE(MMF.get_config_for_server("as.test.domain")->apply_mmf_pre_as());
-  EXPECT_TRUE(MMF.get_config_for_server("second.test.domain")->apply_mmf_post_as());
-  EXPECT_FALSE(MMF.get_config_for_server("10.10.0.2")->apply_mmf_post_as());
+  EXPECT_TRUE(MMF.get_config_for_server("as.test.domain")->should_apply_mmf_pre_as());
+  EXPECT_TRUE(MMF.get_config_for_server("second.test.domain")->should_apply_mmf_post_as());
+  EXPECT_FALSE(MMF.get_config_for_server("10.10.0.2")->should_apply_mmf_post_as());
 }
 
 

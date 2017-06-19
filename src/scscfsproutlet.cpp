@@ -34,6 +34,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
                                const std::string& scscf_node_uri,
                                const std::string& icscf_uri,
                                const std::string& bgcf_uri,
+                               const std::string& mmf_cluster_uri,
+                               const std::string& mmf_node_uri,
                                int port,
                                const std::string& uri,
                                SubscriberDataManager* sdm,
@@ -57,6 +59,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
   _scscf_node_uri(NULL),
   _icscf_uri(NULL),
   _bgcf_uri(NULL),
+  _mmf_cluster_uri(NULL),
+  _mmf_node_uri(NULL),
   _sdm(sdm),
   _remote_sdms(remote_sdms),
   _hss(hss),
@@ -72,6 +76,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
   _scscf_node_uri_str(scscf_node_uri),
   _icscf_uri_str(icscf_uri),
   _bgcf_uri_str(bgcf_uri),
+  _mmf_cluster_uri_str(mmf_cluster_uri),
+  _mmf_node_uri_str(mmf_node_uri),
   _sess_term_as_tracker(sess_term_as_tracker),
   _sess_cont_as_tracker(sess_cont_as_tracker)
 {
@@ -112,6 +118,8 @@ bool SCSCFSproutlet::init()
   TRC_DEBUG("  S-CSCF node URI    = %s", _scscf_node_uri_str.c_str());
   TRC_DEBUG("  I-CSCF URI         = %s", _icscf_uri_str.c_str());
   TRC_DEBUG("  BGCF URI           = %s", _bgcf_uri_str.c_str());
+  TRC_DEBUG("  MMF cluster URI = %s", _mmf_cluster_uri_str.c_str());
+  TRC_DEBUG("  MMF node URI    = %s", _mmf_node_uri_str.c_str());
 
   bool init_success = true;
 
@@ -150,6 +158,22 @@ bool SCSCFSproutlet::init()
       TRC_ERROR("Invalid I-CSCF URI %s", _icscf_uri_str.c_str());
       init_success = false;
     }
+  }
+
+  _mmf_cluster_uri = PJUtils::uri_from_string(_mmf_cluster_uri_str, stack_data.pool, false);
+
+  if (_mmf_cluster_uri == NULL)
+  {
+    TRC_ERROR("Invalid MMF cluster URI %s", _mmf_cluster_uri_str.c_str());
+    init_success = false;
+  }
+
+  _mmf_node_uri = PJUtils::uri_from_string(_mmf_node_uri_str, stack_data.pool, false);
+
+  if (_mmf_node_uri == NULL)
+  {
+    TRC_ERROR("Invalid MMF node URI %s", _mmf_node_uri_str.c_str());
+    init_success = false;
   }
 
   // Create an AS Chain table for maintaining the mapping from ODI tokens to
@@ -205,6 +229,20 @@ const pjsip_uri* SCSCFSproutlet::icscf_uri() const
 const pjsip_uri* SCSCFSproutlet::bgcf_uri() const
 {
   return _bgcf_uri;
+}
+
+
+/// Returns the configured MMF cluster URI for this system.
+const pjsip_uri* SCSCFSproutlet::mmf_cluster_uri() const
+{
+  return _mmf_cluster_uri;
+}
+
+
+/// Returns the configured MMF node URI for this system.
+const pjsip_uri* SCSCFSproutlet::mmf_node_uri() const
+{
+  return _mmf_node_uri;
 }
 
 
@@ -1588,7 +1626,7 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
 
     // If we are configured to apply MMF on requests forwarded on by the AS,
     // add the necessary route header to the top of the request.
-    if (server_mmf_config && server_mmf_config->apply_mmf_post_as())
+    if (server_mmf_config && server_mmf_config->should_apply_mmf_post_as())
     {
       add_mmf_post_as_route_header(req,
                                    server_mmf_config->get_mmfcontext(),
@@ -1600,7 +1638,7 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
 
     // If we are configured to apply MMF prior to forwarding the request to
     // the AS, add the necessary route header to the top of the request.
-    if (server_mmf_config && server_mmf_config->apply_mmf_pre_as())
+    if (server_mmf_config && server_mmf_config->should_apply_mmf_pre_as())
     {
       add_mmf_pre_as_route_header(req,
                                   server_mmf_config->get_mmfcontext(),
@@ -2421,22 +2459,14 @@ void SCSCFSproutletTsx::add_mmf_pre_as_route_header(pjsip_msg* req,
                                                     std::string mmfcontext,
                                                     pj_str_t as_transport_param)
 {
-  // Route the message to the MMF service running on this Sprout node
-  // Use the MMF port as the identifier, as we do not have a separate
-  // MMF sproutlet.
-  // A lot of this is currently hard-coded; this will change in future
-  pj_str_t home_domain = stack_data.default_home_domain;
-  std::string mmf_uri = "sip:sprout." + PJUtils::pj_str_to_string(&home_domain) + ":5053";
-
-  pjsip_uri* mmf_pj_uri = PJUtils::uri_from_string(mmf_uri,
-                                                   stack_data.pool,
-                                                   false);
-
   pjsip_sip_uri* pre_as_uri = (pjsip_sip_uri*)
-                                pjsip_uri_clone(get_pool(req), mmf_pj_uri);
+                                pjsip_uri_clone(get_pool(req), _scscf->mmf_cluster_uri());
+
+  TRC_DEBUG("Created pjsip_sip URI");
 
   // Use same transport as AS, in case it can only cope with one.
   pre_as_uri->transport_param = as_transport_param;
+  TRC_DEBUG("Added transport param");
 
   add_mmf_uri_parameters(pre_as_uri, "mmf", mmfcontext, "pre-as", req);
 
@@ -2449,27 +2479,8 @@ void SCSCFSproutletTsx::add_mmf_post_as_route_header(pjsip_msg* req,
                                                      std::string mmfcontext,
                                                      pj_str_t as_transport_param)
 {
-  // To ensure the request is routed back to this node for MMF, create a
-  // URI resolving to the MMF process on this SPN node.
-  // A lot of this is currently hard-coded; this will change in future
-  std::string node_host(stack_data.local_host.ptr, stack_data.local_host.slen);
-
-  if (Utils::parse_ip_address(node_host) == Utils::IPV6_ADDRESS)
-  {
-    node_host = "[" + node_host + "]";
-  }
-
-  // Hard code the MMF port for the meantime
-  std::string mmf_node_uri = "sip:" + node_host + ":5053";
-
-  TRC_DEBUG("Created MMF node uri %s", mmf_node_uri.c_str());
-
-  pjsip_uri* mmf_pj_uri = PJUtils::uri_from_string(mmf_node_uri,
-                                                   stack_data.pool,
-                                                   false);
-
   pjsip_sip_uri* post_as_uri = (pjsip_sip_uri*)
-                                pjsip_uri_clone(get_pool(req), mmf_pj_uri);
+                                pjsip_uri_clone(get_pool(req), _scscf->mmf_node_uri());
 
   // Use same transport as AS, in case it can only cope with one.
   post_as_uri->transport_param = as_transport_param;

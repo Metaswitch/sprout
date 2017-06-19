@@ -33,6 +33,7 @@
 #include "sproutletproxy.h"
 #include "fakesnmp.hpp"
 #include "mock_as_communication_tracker.h"
+#include "mockscscfsproutlettsx.h"
 
 using namespace std;
 using testing::StrEq;
@@ -43,6 +44,7 @@ using testing::Not;
 using testing::_;
 using testing::NiceMock;
 using testing::HasSubstr;
+using testing::Return;
 
 const std::string IMS_SUB_BARRED_MULTIPLE_WILDCARD =
                                "<IMSSubscription>\n"
@@ -416,6 +418,8 @@ public:
                                           "sip:127.0.0.1:5058",
                                           "",
                                           "sip:bgcf@homedomain:5058",
+                                          "sip:sprout.homedomain:5053;transport=tcp",
+                                          "sip:127.0.0.1:5053;transport=tcp",
                                           5058,
                                           "sip:scscf.homedomain:5058;transport=tcp",
                                           _sdm,
@@ -10128,4 +10132,10 @@ TEST_F(SCSCFTest, MixedRealAndDummyApplicationServer)
   // more realistic test of AS communication tracking.
   send_response_back_through_dialog(respond_to_txdata(txdata, 200), 200, 2);
   pjsip_tx_data_dec_ref(txdata); txdata = NULL;
+}
+
+
+TEST_F(SCSCFTest, MMFPreAs)
+{
+
 }
