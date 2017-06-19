@@ -1623,6 +1623,9 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     MMFService::MMFTargetPtr server_mmf_config =
                 _scscf->mmfservice()->get_config_for_server(server_domain_str);
 
+
+    TRC_ERROR("\n\n\n\n\n\n\n");
+
     // If we are configured to apply MMF on requests forwarded on by the AS,
     // add the necessary route header to the top of the request.
     if (server_mmf_config && server_mmf_config->should_apply_mmf_post_as())

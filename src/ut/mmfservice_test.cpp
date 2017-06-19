@@ -54,11 +54,13 @@ TEST_F(MMFServiceTest, ValidMMFFile)
   MMFService MMF(_mock_alarm, string(UT_DIR).append("/test_mmf_targets.json"));
 
   EXPECT_NE(nullptr, MMF.get_config_for_server("10.10.0.2"));
-  EXPECT_NE(nullptr, MMF.get_config_for_server("as.test.domain"));
+  EXPECT_NE(nullptr, MMF.get_config_for_server("pre.as.only.mmf.test.server"));
+  EXPECT_NE(nullptr, MMF.get_config_for_server("post.as.only.mmf.test.server"));
   EXPECT_EQ(nullptr, MMF.get_config_for_server("guff.address"));
-  EXPECT_TRUE(MMF.get_config_for_server("as.test.domain")->should_apply_mmf_pre_as());
-  EXPECT_TRUE(MMF.get_config_for_server("second.test.domain")->should_apply_mmf_post_as());
+  EXPECT_TRUE(MMF.get_config_for_server("pre.as.only.mmf.test.server")->should_apply_mmf_pre_as());
+  EXPECT_TRUE(MMF.get_config_for_server("preandpost.mmf.test.server")->should_apply_mmf_post_as());
   EXPECT_FALSE(MMF.get_config_for_server("10.10.0.2")->should_apply_mmf_post_as());
+  EXPECT_FALSE(MMF.get_config_for_server("post.as.only.mmf.test.server")->should_apply_mmf_pre_as());
 }
 
 // Test that reloading a valid MMF file with an invalid file doesn't cause the
@@ -77,10 +79,10 @@ TEST_F(MMFServiceTest, ReloadInvalidMMFFile)
   MMF.update_config();
 
   EXPECT_NE(nullptr, MMF.get_config_for_server("10.10.0.2"));
-  EXPECT_NE(nullptr, MMF.get_config_for_server("as.test.domain"));
+  EXPECT_NE(nullptr, MMF.get_config_for_server("pre.as.only.mmf.test.server"));
   EXPECT_EQ(nullptr, MMF.get_config_for_server("guff.address"));
-  EXPECT_TRUE(MMF.get_config_for_server("as.test.domain")->should_apply_mmf_pre_as());
-  EXPECT_TRUE(MMF.get_config_for_server("second.test.domain")->should_apply_mmf_post_as());
+  EXPECT_TRUE(MMF.get_config_for_server("pre.as.only.mmf.test.server")->should_apply_mmf_pre_as());
+  EXPECT_TRUE(MMF.get_config_for_server("preandpost.mmf.test.server")->should_apply_mmf_post_as());
   EXPECT_FALSE(MMF.get_config_for_server("10.10.0.2")->should_apply_mmf_post_as());
 }
 

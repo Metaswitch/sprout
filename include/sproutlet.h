@@ -519,7 +519,7 @@ protected:
   /// @returns             - The pool corresponding to this message.
   /// @param  msg          - The message.
   ///
-  virtual pj_pool_t* get_pool(const pjsip_msg* msg)
+  pj_pool_t* get_pool(const pjsip_msg* msg)
     {return _helper->get_pool(msg);}
 
   /// Returns a brief one line summary of the message.
