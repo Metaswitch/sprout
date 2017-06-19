@@ -293,20 +293,9 @@ private:
   /// Apply terminating services for this request.
   void apply_terminating_services(pjsip_msg* req);
 
-  /// Adds a top route header, using the passed in mmfcontext URI parameter,
-  /// to invoke MMF prior to routing to an Application Server.
-  void add_mmf_pre_as_route_header(pjsip_msg* req,
-                                   std::string mmfcontext,
-                                   pj_str_t as_transport_param);
-
-  /// Adds a top route header, using the passed in mmfcontext URI parameter,
-  /// to invoke MMF after routing to an Application Server.
-  void add_mmf_post_as_route_header(pjsip_msg* req,
-                                    std::string mmfcontext,
-                                    pj_str_t as_transport_param);
-
   /// Adds the passed in MMF URI parameters to the passed in MMF uri.
   void add_mmf_uri_parameters(pjsip_sip_uri* mmf_uri,
+                              pj_str_t as_transport_param,
                               std::string namespace_param,
                               std::string mmfscope_param,
                               std::string mmfcontext_param,

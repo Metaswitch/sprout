@@ -118,8 +118,8 @@ bool SCSCFSproutlet::init()
   TRC_DEBUG("  S-CSCF node URI    = %s", _scscf_node_uri_str.c_str());
   TRC_DEBUG("  I-CSCF URI         = %s", _icscf_uri_str.c_str());
   TRC_DEBUG("  BGCF URI           = %s", _bgcf_uri_str.c_str());
-  TRC_DEBUG("  MMF cluster URI = %s", _mmf_cluster_uri_str.c_str());
-  TRC_DEBUG("  MMF node URI    = %s", _mmf_node_uri_str.c_str());
+  TRC_DEBUG("  MMF cluster URI    = %s", _mmf_cluster_uri_str.c_str());
+  TRC_DEBUG("  MMF node URI       = %s", _mmf_node_uri_str.c_str());
 
   bool init_success = true;
 
@@ -1623,14 +1623,23 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     MMFService::MMFTargetPtr server_mmf_config =
                 _scscf->mmfservice()->get_config_for_server(server_domain_str);
 
-
     // If we are configured to apply MMF on requests forwarded on by the AS,
     // add the necessary route header to the top of the request.
     if (server_mmf_config && server_mmf_config->should_apply_mmf_post_as())
     {
-      add_mmf_post_as_route_header(req,
-                                   server_mmf_config->get_mmfcontext(),
-                                   as_uri->transport_param);
+      TRC_DEBUG("Applying Post AS MMF config");
+      pjsip_sip_uri* post_as_uri = (pjsip_sip_uri*)
+                                pjsip_uri_clone(get_pool(req), _scscf->mmf_node_uri());
+
+      add_mmf_uri_parameters(post_as_uri,
+                             as_uri->transport_param,
+                             "mmf",
+                             server_mmf_config->get_mmfcontext(),
+                             "post-as",
+                             req);
+
+      TRC_DEBUG("Adding top route header for post-as MMF");
+      PJUtils::add_top_route_header(req, post_as_uri, get_pool(req));
     }
 
     // Add the application server URI as the top Route header, per TS 24.229.
@@ -1640,9 +1649,19 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     // the AS, add the necessary route header to the top of the request.
     if (server_mmf_config && server_mmf_config->should_apply_mmf_pre_as())
     {
-      add_mmf_pre_as_route_header(req,
-                                  server_mmf_config->get_mmfcontext(),
-                                  as_uri->transport_param);
+      TRC_DEBUG("Applying Pre AS MMF config");
+      pjsip_sip_uri* pre_as_uri = (pjsip_sip_uri*)
+                                pjsip_uri_clone(get_pool(req), _scscf->mmf_cluster_uri());
+
+      add_mmf_uri_parameters(pre_as_uri,
+                             as_uri->transport_param,
+                             "mmf",
+                             server_mmf_config->get_mmfcontext(),
+                             "pre-as",
+                             req);
+
+      TRC_DEBUG("Adding top route header for pre-as MMF");
+      PJUtils::add_top_route_header(req, pre_as_uri, get_pool(req));
     }
 
     // Set P-Served-User, including session case and registration
@@ -2455,49 +2474,16 @@ pjsip_msg* SCSCFSproutletTsx::get_base_request()
 }
 
 
-void SCSCFSproutletTsx::add_mmf_pre_as_route_header(pjsip_msg* req,
-                                                    std::string mmfcontext,
-                                                    pj_str_t as_transport_param)
-{
-  pjsip_sip_uri* pre_as_uri = (pjsip_sip_uri*)
-                                pjsip_uri_clone(get_pool(req), _scscf->mmf_cluster_uri());
-
-  TRC_DEBUG("Created pjsip_sip URI");
-
-  // Use same transport as AS, in case it can only cope with one.
-  pre_as_uri->transport_param = as_transport_param;
-  TRC_DEBUG("Added transport param");
-
-  add_mmf_uri_parameters(pre_as_uri, "mmf", mmfcontext, "pre-as", req);
-
-  TRC_DEBUG("Adding top route header for pre-as MMF");
-  PJUtils::add_top_route_header(req, pre_as_uri, get_pool(req));
-}
-
-
-void SCSCFSproutletTsx::add_mmf_post_as_route_header(pjsip_msg* req,
-                                                     std::string mmfcontext,
-                                                     pj_str_t as_transport_param)
-{
-  pjsip_sip_uri* post_as_uri = (pjsip_sip_uri*)
-                                pjsip_uri_clone(get_pool(req), _scscf->mmf_node_uri());
-
-  // Use same transport as AS, in case it can only cope with one.
-  post_as_uri->transport_param = as_transport_param;
-
-  add_mmf_uri_parameters(post_as_uri, "mmf", mmfcontext, "post-as", req);
-
-  TRC_DEBUG("Adding top route header for post-as MMF");
-  PJUtils::add_top_route_header(req, post_as_uri, get_pool(req));
-}
-
-
 void SCSCFSproutletTsx::add_mmf_uri_parameters(pjsip_sip_uri* mmf_uri,
+                                               pj_str_t as_transport_param,
                                                std::string namespace_param,
                                                std::string mmfscope_param,
                                                std::string mmfcontext_param,
                                                pjsip_msg* req)
 {
+  // Use same transport as AS, in case it can only cope with one.
+  mmf_uri->transport_param = as_transport_param;
+
   // Insert the namespace parameter
   TRC_DEBUG("Adding namespace parameter %s", namespace_param.c_str());
   pjsip_param* namespace_p = PJ_POOL_ALLOC_T(get_pool(req), pjsip_param);
