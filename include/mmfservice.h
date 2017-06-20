@@ -57,7 +57,7 @@ private:
 
   /// Locking of the mmf_config relies on the atomic nature of shared pointers.
   /// The updater method replaces the config with an entire new map, and the
-  /// accessor methods take a shared_ptr to an MMFTarget.
+  /// accessor methods take a shared_ptr to the MMFMap.
 
   /// This is never modified dynamically, nor read incrementally.  If you wish
   /// to do either of the above, you must think about the locking consequences

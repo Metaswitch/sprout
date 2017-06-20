@@ -149,11 +149,13 @@ std::shared_ptr<MMFService::MMFMap> MMFService::read_config(rapidjson::Document&
 
 MMFService::MMFTargetPtr MMFService::get_config_for_server(std::string server_domain)
 {
-  try
+  std::shared_ptr<MMFService::MMFMap> mmf_config = _mmf_config;
+
+  if (mmf_config->find(server_domain) != mmf_config->end())
   {
-    return _mmf_config->at(server_domain);
+    return mmf_config->at(server_domain);
   }
-  catch (std::out_of_range)
+  else
   {
     return nullptr;
   }

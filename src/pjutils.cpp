@@ -2166,21 +2166,22 @@ pjsip_uri* PJUtils::translate_sip_uri_to_tel_uri(const pjsip_sip_uri* sip_uri,
 }
 
 /// Takes a SIP URI, and adds a URI parameter using the passed in parameter
-/// name and parameter value.
+/// name, and adds a parameter value if non-empty
 ///
 /// @param sip_uri                A pointer to the URI object to amend
 /// @param name                   The name of the parameter to add
-/// @param value                  The value of the parameter to add
+/// @param value                  The value of the parameter to add.
+///                               If this is "", we add a parameter with no value
 /// @param pool                   A pool
-void PJUtils::add_parameter_value_pair_to_sip_uri(pjsip_sip_uri* sip_uri,
-                                                  const pj_str_t name,
-                                                  const char* value,
-                                                  pj_pool_t* pool)
+void PJUtils::add_parameter_to_sip_uri(pjsip_sip_uri* sip_uri,
+                                       const pj_str_t param_name,
+                                       const char* param_value,
+                                       pj_pool_t* pool)
 {
   pjsip_param* parameter = PJ_POOL_ALLOC_T(pool, pjsip_param);
-  pj_strdup(pool, &parameter->name, &name);
+  pj_strdup(pool, &parameter->name, &param_name);
   pj_list_insert_before(&sip_uri->other_param, parameter);
-  pj_strdup2(pool, &parameter->value, value);
+  pj_strdup2(pool, &parameter->value, param_value);
 }
 
 static const boost::regex CHARS_TO_STRIP = boost::regex("[.)(-]");
