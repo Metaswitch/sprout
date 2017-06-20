@@ -10227,20 +10227,24 @@ TEST_F(SCSCFTest, MMFPreAs)
 
   const pj_str_t STR_ROUTE = pj_str("Route");
 
-  // Ensure the pre-as header was added as expected
+  // Ensure the pre-as header was added as expected, and remove it
   pjsip_hdr* preas_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
   std::string preas_uri = PJUtils::get_header_value(preas_hdr);
-  EXPECT_EQ(preas_uri, "<sip:11.22.33.44:5053;transport=UDP;lr;namespace=mmf;mmfcontext=pre-as;mmfscope=PreASOnly>");
+  EXPECT_THAT(preas_uri, MatchesRegex(".*sip:11.22.33.44:5053.*"));
+  EXPECT_THAT(preas_uri, MatchesRegex(".*namespace=mmf.*"));
+  EXPECT_THAT(preas_uri, MatchesRegex(".*mmfcontext=pre-as.*"));
+  EXPECT_THAT(preas_uri, MatchesRegex(".*mmfscope=PreASOnly.*"));
   pj_list_erase(preas_hdr);
 
-  // Ensure the AS header was added as expected
+  // Ensure the AS header was added as expected, and remove it
   pjsip_hdr* as_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
   std::string as_uri = PJUtils::get_header_value(as_hdr);
-  EXPECT_EQ(as_uri, "<sip:pre.as.only.mmf.test.server:56789;transport=UDP;lr>");
+  EXPECT_THAT(as_uri, MatchesRegex(".*pre.as.only.mmf.test.server:56789.*"));
   pj_list_erase(as_hdr);
 
-  // Simulate the request being routed to the AS, and then routed from the AS
-  // back to the SCSCF
+  // We have removed route headers to simulate the request being routed from
+  // the MMF server to the AS.
+  // Simulate the request being routed from the AS back to the SCSCF
   inject_msg(out, &tpAS);
   free_txdata();
 
@@ -10358,20 +10362,24 @@ TEST_F(SCSCFTest, MMFPostAs)
 
   const pj_str_t STR_ROUTE = pj_str("Route");
 
-  // Ensure the AS header was added as expected
+  // Ensure the AS header was added as expected, and remove it
   pjsip_hdr* as_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
   std::string as_uri = PJUtils::get_header_value(as_hdr);
-  EXPECT_EQ(as_uri, "<sip:1.5.8.1:56789;transport=UDP;lr>");
+  EXPECT_THAT(as_uri, MatchesRegex(".*1.5.8.1:56789.*"));
   pj_list_erase(as_hdr);
 
-  // Ensure the post-as header was added as expected
+  // Ensure the post-as header was added as expected, and remove it
   pjsip_hdr* postas_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
   std::string postas_uri = PJUtils::get_header_value(postas_hdr);
-  EXPECT_EQ(postas_uri, "<sip:44.33.22.11:5053;transport=UDP;lr;namespace=mmf;mmfcontext=post-as;mmfscope=PostASOnly>");
+  EXPECT_THAT(postas_uri, MatchesRegex(".*sip:44.33.22.11:5053.*"));
+  EXPECT_THAT(postas_uri, MatchesRegex(".*namespace=mmf.*"));
+  EXPECT_THAT(postas_uri, MatchesRegex(".*mmfcontext=post-as.*"));
+  EXPECT_THAT(postas_uri, MatchesRegex(".*mmfscope=PostASOnly.*"));
   pj_list_erase(postas_hdr);
 
-  // Simulate the request being routed to MMF, and then routed from the MMF
-  // server back to the SCSCF
+  // We have removed route headers to simulate the request being routed to the
+  // AS, and then routed from the AS to our MMF server.
+  // Simulate the request being routed from the MMF server back to the SCSCF
   inject_msg(out, &tpMMFpostAS);
   free_txdata();
 
@@ -10492,23 +10500,31 @@ TEST_F(SCSCFTest, MMFPreAndPostAs)
   // Ensure the pre-as header was added as expected
   pjsip_hdr* preas_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
   std::string preas_uri = PJUtils::get_header_value(preas_hdr);
-  EXPECT_EQ(preas_uri, "<sip:11.22.33.44:5053;transport=UDP;lr;namespace=mmf;mmfcontext=pre-as;mmfscope=BothPreAndPost>");
+  //
+  EXPECT_THAT(preas_uri, MatchesRegex(".*sip:11.22.33.44:5053.*"));
+  EXPECT_THAT(preas_uri, MatchesRegex(".*namespace=mmf.*"));
+  EXPECT_THAT(preas_uri, MatchesRegex(".*mmfcontext=pre-as.*"));
+  EXPECT_THAT(preas_uri, MatchesRegex(".*mmfscope=BothPreAndPost.*"));
   pj_list_erase(preas_hdr);
 
-  // Ensure the AS header was added as expected
+  // Ensure the AS header was added as expected, and remove it
   pjsip_hdr* as_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
   std::string as_uri = PJUtils::get_header_value(as_hdr);
-  EXPECT_EQ(as_uri, "<sip:preandpost.mmf.test.server:56789;transport=UDP;lr>");
+  EXPECT_THAT(as_uri, MatchesRegex(".*preandpost.mmf.test.server:56789.*"));
   pj_list_erase(as_hdr);
 
-  // Ensure the post-as header was added as expected
+  // Ensure the post-as header was added as expected, and remove it
   pjsip_hdr* postas_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
   std::string postas_uri = PJUtils::get_header_value(postas_hdr);
-  EXPECT_EQ(postas_uri, "<sip:44.33.22.11:5053;transport=UDP;lr;namespace=mmf;mmfcontext=post-as;mmfscope=BothPreAndPost>");
+  EXPECT_THAT(postas_uri, MatchesRegex(".*sip:44.33.22.11:5053.*"));
+  EXPECT_THAT(postas_uri, MatchesRegex(".*namespace=mmf.*"));
+  EXPECT_THAT(postas_uri, MatchesRegex(".*mmfcontext=post-as.*"));
+  EXPECT_THAT(postas_uri, MatchesRegex(".*mmfscope=BothPreAndPost.*"));
   pj_list_erase(postas_hdr);
 
-  // Simulate the request being routed to the AS, and then routed from the AS
-  // to our MMF server, and then from the MMF server back to the SCSCF
+  // We have removed route headers to simulate the request being routed from
+  // the MMF server to the AS, then routed from the AS back to our MMF server.
+  // Simulate the request being routed from the MMF server back to the SCSCF
   inject_msg(out, &tpMMFpostAS);
   free_txdata();
 

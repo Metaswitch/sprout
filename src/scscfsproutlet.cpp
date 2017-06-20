@@ -1633,10 +1633,9 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
 
       add_mmf_uri_parameters(post_as_uri,
                              as_uri->transport_param,
-                             "mmf",
                              server_mmf_config->get_mmfcontext(),
                              "post-as",
-                             req);
+                             get_pool(req));
 
       TRC_DEBUG("Adding top route header for post-AS MMF");
       PJUtils::add_top_route_header(req, post_as_uri, get_pool(req));
@@ -1655,10 +1654,9 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
 
       add_mmf_uri_parameters(pre_as_uri,
                              as_uri->transport_param,
-                             "mmf",
                              server_mmf_config->get_mmfcontext(),
                              "pre-as",
-                             req);
+                             get_pool(req));
 
       TRC_DEBUG("Adding top route header for pre-as MMF");
       PJUtils::add_top_route_header(req, pre_as_uri, get_pool(req));
@@ -2476,32 +2474,28 @@ pjsip_msg* SCSCFSproutletTsx::get_base_request()
 
 void SCSCFSproutletTsx::add_mmf_uri_parameters(pjsip_sip_uri* mmf_uri,
                                                pj_str_t as_transport_param,
-                                               std::string namespace_param,
                                                std::string mmfscope_param,
                                                std::string mmfcontext_param,
-                                               pjsip_msg* req)
+                                               pj_pool_t* pool)
 {
   // Use same transport as AS, in case it can only cope with one.
   mmf_uri->transport_param = as_transport_param;
 
-  // Insert the namespace parameter
-  TRC_DEBUG("Adding namespace parameter %s", namespace_param.c_str());
-  pjsip_param* namespace_p = PJ_POOL_ALLOC_T(get_pool(req), pjsip_param);
-  pj_strdup(get_pool(req), &namespace_p->name, &STR_NAMESPACE);
-  pj_list_insert_before(&mmf_uri->other_param, namespace_p);
-  pj_strdup2(get_pool(req), &namespace_p->value, namespace_param.c_str());
+  TRC_DEBUG("Adding namespace parameter 'mmf'");
+  PJUtils::add_parameter_value_pair_to_sip_uri(mmf_uri,
+                                               STR_NAMESPACE,
+                                               "mmf",
+                                               pool);
 
-  // Insert the mmfcontext parameter
   TRC_DEBUG("Adding mmfcontext parameter %s", mmfcontext_param.c_str());
-  pjsip_param* mmfcontext_p = PJ_POOL_ALLOC_T(get_pool(req), pjsip_param);
-  pj_strdup(get_pool(req), &mmfcontext_p->name, &STR_MMFCONTEXT);
-  pj_list_insert_before(&mmf_uri->other_param, mmfcontext_p);
-  pj_strdup2(get_pool(req), &mmfcontext_p->value, mmfcontext_param.c_str());
+  PJUtils::add_parameter_value_pair_to_sip_uri(mmf_uri,
+                                               STR_MMFCONTEXT,
+                                               mmfcontext_param.c_str(),
+                                               pool);
 
-  // Insert the mmfscope parameter
   TRC_DEBUG("Adding mmfscope parameter %s", mmfscope_param.c_str());
-  pjsip_param* mmfscope_p = PJ_POOL_ALLOC_T(get_pool(req), pjsip_param);
-  pj_strdup(get_pool(req), &mmfscope_p->name, &STR_MMFSCOPE);
-  pj_list_insert_before(&mmf_uri->other_param, mmfscope_p);
-  pj_strdup2(get_pool(req), &mmfscope_p->value, mmfscope_param.c_str());
+  PJUtils::add_parameter_value_pair_to_sip_uri(mmf_uri,
+                                               STR_MMFSCOPE,
+                                               mmfscope_param.c_str(),
+                                               pool);
 }
