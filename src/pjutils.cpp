@@ -2166,7 +2166,7 @@ pjsip_uri* PJUtils::translate_sip_uri_to_tel_uri(const pjsip_sip_uri* sip_uri,
 }
 
 /// Takes a SIP URI, and adds a URI parameter using the passed in parameter
-/// name, and adds a parameter value if non-empty
+/// name, and adds a parameter value if non-empty.
 ///
 /// @param sip_uri                A pointer to the URI object to amend
 /// @param name                   The name of the parameter to add
