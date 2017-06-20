@@ -255,6 +255,11 @@ void add_pcfa_header(pjsip_msg* msg,
 pjsip_uri* translate_sip_uri_to_tel_uri(const pjsip_sip_uri* sip_uri,
                                         pj_pool_t* pool);
 
+void add_parameter_value_pair_to_sip_uri(pjsip_sip_uri* sip_uri,
+                                         const pj_str_t name,
+                                         const char* value,
+                                         pj_pool_t* pool);
+
 std::string remove_visual_separators(const std::string& user);
 std::string remove_visual_separators(const pj_str_t& number);
 
