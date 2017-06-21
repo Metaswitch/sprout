@@ -34,6 +34,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
                                const std::string& scscf_node_uri,
                                const std::string& icscf_uri,
                                const std::string& bgcf_uri,
+                               const std::string& mmf_cluster_uri,
+                               const std::string& mmf_node_uri,
                                int port,
                                const std::string& uri,
                                SubscriberDataManager* sdm,
@@ -57,6 +59,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
   _scscf_node_uri(NULL),
   _icscf_uri(NULL),
   _bgcf_uri(NULL),
+  _mmf_cluster_uri(NULL),
+  _mmf_node_uri(NULL),
   _sdm(sdm),
   _remote_sdms(remote_sdms),
   _hss(hss),
@@ -72,6 +76,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
   _scscf_node_uri_str(scscf_node_uri),
   _icscf_uri_str(icscf_uri),
   _bgcf_uri_str(bgcf_uri),
+  _mmf_cluster_uri_str(mmf_cluster_uri),
+  _mmf_node_uri_str(mmf_node_uri),
   _sess_term_as_tracker(sess_term_as_tracker),
   _sess_cont_as_tracker(sess_cont_as_tracker)
 {
@@ -112,6 +118,8 @@ bool SCSCFSproutlet::init()
   TRC_DEBUG("  S-CSCF node URI    = %s", _scscf_node_uri_str.c_str());
   TRC_DEBUG("  I-CSCF URI         = %s", _icscf_uri_str.c_str());
   TRC_DEBUG("  BGCF URI           = %s", _bgcf_uri_str.c_str());
+  TRC_DEBUG("  MMF cluster URI    = %s", _mmf_cluster_uri_str.c_str());
+  TRC_DEBUG("  MMF node URI       = %s", _mmf_node_uri_str.c_str());
 
   bool init_success = true;
 
@@ -150,6 +158,22 @@ bool SCSCFSproutlet::init()
       TRC_ERROR("Invalid I-CSCF URI %s", _icscf_uri_str.c_str());
       init_success = false;
     }
+  }
+
+  _mmf_cluster_uri = PJUtils::uri_from_string(_mmf_cluster_uri_str, stack_data.pool, false);
+
+  if (_mmf_cluster_uri == NULL)
+  {
+    TRC_ERROR("Invalid MMF cluster URI %s", _mmf_cluster_uri_str.c_str());
+    init_success = false;
+  }
+
+  _mmf_node_uri = PJUtils::uri_from_string(_mmf_node_uri_str, stack_data.pool, false);
+
+  if (_mmf_node_uri == NULL)
+  {
+    TRC_ERROR("Invalid MMF node URI %s", _mmf_node_uri_str.c_str());
+    init_success = false;
   }
 
   // Create an AS Chain table for maintaining the mapping from ODI tokens to
@@ -205,6 +229,20 @@ const pjsip_uri* SCSCFSproutlet::icscf_uri() const
 const pjsip_uri* SCSCFSproutlet::bgcf_uri() const
 {
   return _bgcf_uri;
+}
+
+
+/// Returns the configured MMF cluster URI for this system.
+const pjsip_uri* SCSCFSproutlet::mmf_cluster_uri() const
+{
+  return _mmf_cluster_uri;
+}
+
+
+/// Returns the configured MMF node URI for this system.
+const pjsip_uri* SCSCFSproutlet::mmf_node_uri() const
+{
+  return _mmf_node_uri;
 }
 
 
@@ -1557,11 +1595,10 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     pj_strdup2(get_pool(req), &odi_uri->user, odi_value.c_str());
     odi_uri->transport_param = as_uri->transport_param;  // Use same transport as AS, in case it can only cope with one.
 
-    pjsip_param* services_p = PJ_POOL_ALLOC_T(get_pool(req), pjsip_param);
-    pj_strdup(get_pool(req), &services_p->name, &STR_SERVICE);
-    pj_list_insert_before(&odi_uri->other_param, services_p);
-    std::string services = _scscf->scscf_service_name();
-    pj_strdup2(get_pool(req), &services_p->value, services.c_str());
+    PJUtils::add_parameter_to_sip_uri(odi_uri,
+                                      STR_SERVICE,
+                                      _scscf->scscf_service_name().c_str(),
+                                      get_pool(req));
 
     if (_session_case->is_originating())
     {
@@ -1578,13 +1615,29 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     pj_str_t server_domain = PJUtils::domain_from_uri(server_name, get_pool(req));
     std::string server_domain_str = PJUtils::pj_str_to_string(&server_domain);
 
+    TRC_DEBUG("Attempting to obtain MMF config for %s", server_domain_str.c_str());
+
+    // Try to obtain the MMF config for the server.
+    // Returns a nullptr if there is no config for the server.
+    MMFService::MMFTargetPtr server_mmf_config =
+                _scscf->mmfservice()->get_config_for_server(server_domain_str);
+
     // If we are configured to apply MMF on requests forwarded on by the AS,
     // add the necessary route header to the top of the request.
-    if (_scscf->mmfservice()->apply_mmf_post_as(server_domain_str))
+    if (server_mmf_config && server_mmf_config->should_apply_mmf_post_as())
     {
-      // This is a placeholder for code which is currently being written.
-      // This will involve the addition of route header to invoke MMF
-      // on the way back from the AS
+      TRC_DEBUG("Forming post-AS MMF uri");
+      pjsip_sip_uri* post_as_uri = (pjsip_sip_uri*)
+                        pjsip_uri_clone(get_pool(req), _scscf->mmf_node_uri());
+
+      add_mmf_uri_parameters(post_as_uri,
+                             as_uri->transport_param,
+                             server_mmf_config->get_mmfcontext(),
+                             "post-as",
+                             get_pool(req));
+
+      TRC_DEBUG("Adding top route header for post-AS MMF");
+      PJUtils::add_top_route_header(req, post_as_uri, get_pool(req));
     }
 
     // Add the application server URI as the top Route header, per TS 24.229.
@@ -1592,11 +1645,20 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
 
     // If we are configured to apply MMF prior to forwarding the request to
     // the AS, add the necessary route header to the top of the request.
-    if (_scscf->mmfservice()->apply_mmf_pre_as(server_domain_str))
+    if (server_mmf_config && server_mmf_config->should_apply_mmf_pre_as())
     {
-      // This is a placeholder for code which is currently being written.
-      // The will involve the addition of route header to invoke MMF on the
-      // way to the AS
+      TRC_DEBUG("Forming pre-AS MMF uri");
+      pjsip_sip_uri* pre_as_uri = (pjsip_sip_uri*)
+                                pjsip_uri_clone(get_pool(req), _scscf->mmf_cluster_uri());
+
+      add_mmf_uri_parameters(pre_as_uri,
+                             as_uri->transport_param,
+                             server_mmf_config->get_mmfcontext(),
+                             "pre-as",
+                             get_pool(req));
+
+      TRC_DEBUG("Adding top route header for pre-as MMF");
+      PJUtils::add_top_route_header(req, pre_as_uri, get_pool(req));
     }
 
     // Set P-Served-User, including session case and registration
@@ -2406,4 +2468,33 @@ pjsip_msg* SCSCFSproutletTsx::get_base_request()
   {
     return original_request();
   }
+}
+
+
+void SCSCFSproutletTsx::add_mmf_uri_parameters(pjsip_sip_uri* mmf_uri,
+                                               pj_str_t as_transport_param,
+                                               std::string mmfscope_param,
+                                               std::string mmfcontext_param,
+                                               pj_pool_t* pool)
+{
+  // Use same transport as AS, in case it can only cope with one.
+  mmf_uri->transport_param = as_transport_param;
+
+  TRC_DEBUG("Adding namespace parameter 'mmf'");
+  PJUtils::add_parameter_to_sip_uri(mmf_uri,
+                                    STR_NAMESPACE,
+                                    "mmf",
+                                    pool);
+
+  TRC_DEBUG("Adding mmfcontext parameter %s", mmfcontext_param.c_str());
+  PJUtils::add_parameter_to_sip_uri(mmf_uri,
+                                    STR_MMFCONTEXT,
+                                    mmfcontext_param.c_str(),
+                                    pool);
+
+  TRC_DEBUG("Adding mmfscope parameter %s", mmfscope_param.c_str());
+  PJUtils::add_parameter_to_sip_uri(mmf_uri,
+                                    STR_MMFSCOPE,
+                                    mmfscope_param.c_str(),
+                                    pool);
 }

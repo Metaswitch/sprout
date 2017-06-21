@@ -147,29 +147,17 @@ std::shared_ptr<MMFService::MMFMap> MMFService::read_config(rapidjson::Document&
   return mmf_config;
 }
 
-const bool MMFService::apply_mmf_pre_as(std::string address)
+MMFService::MMFTargetPtr MMFService::get_config_for_server(std::string server_domain)
 {
-  try
-  {
-    return (get_address_config(address)->apply_pre_as());
-  }
-  catch (std::out_of_range)
-  {
-    TRC_DEBUG("No MMF config for the address: %s", address.c_str());
-    return false;
-  }
-}
+  std::shared_ptr<MMFService::MMFMap> mmf_config = _mmf_config;
 
-const bool MMFService::apply_mmf_post_as(std::string address)
-{
-  try
+  if (mmf_config->find(server_domain) != mmf_config->end())
   {
-    return (get_address_config(address)->apply_post_as());
+    return mmf_config->at(server_domain);
   }
-  catch (std::out_of_range)
+  else
   {
-    TRC_DEBUG("No MMF config for the address: %s", address.c_str());
-    return false;
+    return nullptr;
   }
 }
 
