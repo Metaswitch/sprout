@@ -152,12 +152,15 @@ MMFService::MMFTargetPtr MMFService::get_config_for_server(std::string server_do
 {
   std::shared_ptr<MMFService::MMFMap> mmf_config = _mmf_config;
 
+  TRC_ERROR("JA4");
   if (mmf_config->find(server_domain) != mmf_config->end())
   {
+    TRC_ERROR("JA5");
     return mmf_config->at(server_domain);
   }
   else
   {
+    TRC_ERROR("JA6");
     return nullptr;
   }
 }

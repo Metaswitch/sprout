@@ -10,7 +10,10 @@
  */
 
 #include "mmftargets.h"
-
+#include <regex>
+#include <iostream>
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/regex.hpp>
 
 MMFTarget::MMFTarget(const rapidjson::Value& config):
   _pre_as(false),
@@ -31,17 +34,23 @@ void MMFTarget::parse_name(const rapidjson::Value& config)
     std::string name = config["name"].GetString();
     TRC_DEBUG("Read name: %s", name.c_str());
 
+    if (name.empty())
+    {
+      TRC_ERROR("Invalid 'name' field in MMF configuration.  The 'name' "
+                "must be a non-empty string");
+      JSON_FORMAT_ERROR();
+    }
+
+    const boost::regex allowed_chars = boost::regex("^[A-Za-z0-9_-]+$");
+
     // The _name is used as the mmfcontext URI parameter in requests sent for
     // MMF processing.  We only allow A-Z, a-z, 0-9, - and _.
-    for(char& s : name)
+    if (!boost::regex_match(name, allowed_chars))
     {
-      if(!(isalnum(s) || s == '_' || s == '-'))
-      {
-        TRC_ERROR("Invalid 'name' field: '%s' in MMF configuration.  The 'name' "
-                  "contains an invalid character.  It can only contain Alphanumerical"
-                  " characters, '-' and '_'", name.c_str());
-        JSON_FORMAT_ERROR();
-      }
+      TRC_ERROR("Invalid 'name' field: '%s' in MMF configuration.  The 'name' "
+                "contains an invalid character.  It can only contain Alphanumerical"
+                " characters, '-' and '_'", name.c_str());
+      JSON_FORMAT_ERROR();
     }
 
     _name = name;

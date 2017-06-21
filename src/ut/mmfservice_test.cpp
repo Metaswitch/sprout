@@ -175,6 +175,16 @@ TEST_F(MMFServiceTest, InvalidPreAS)
   check_invalid_config_log(_log);
 }
 
+// Test that we log appropriately if a set of MMF config has an empty name field.
+TEST_F(MMFServiceTest, EmptyName)
+{
+  CapturingTestLogger _log;
+  EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
+  MMFService MMF(_mock_alarm, string(UT_DIR).append("/test_mmf_empty_name.json"));
+  EXPECT_TRUE(_log.contains("The 'name' must be a non-empty string"));
+  check_invalid_config_log(_log);
+}
+
 // Test that we log appropriately if a set of MMF config has no name field.
 TEST_F(MMFServiceTest, MissingName)
 {
