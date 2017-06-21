@@ -101,7 +101,8 @@ void MMFService::update_config()
   }
   catch (JsonFormatError err)
   {
-    TRC_ERROR("Badly formed MMF configuration file - keep current config");
+    TRC_ERROR("Badly formed MMF targets configuration file. If good MMF targets "
+              "config was previously loaded, the S-CSCF will continue to use it.");
     CL_SPROUT_MMF_FILE_INVALID.log();
     set_alarm();
   }
