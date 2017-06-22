@@ -101,7 +101,8 @@ void MMFService::update_config()
   }
   catch (JsonFormatError err)
   {
-    TRC_ERROR("Badly formed MMF configuration file - keep current config");
+    TRC_ERROR("Badly formed MMF targets configuration file. If good MMF targets "
+              "config was previously loaded, the S-CSCF will continue to use it.");
     CL_SPROUT_MMF_FILE_INVALID.log();
     set_alarm();
   }
@@ -151,12 +152,15 @@ MMFService::MMFTargetPtr MMFService::get_config_for_server(std::string server_do
 {
   std::shared_ptr<MMFService::MMFMap> mmf_config = _mmf_config;
 
+  TRC_ERROR("JA4");
   if (mmf_config->find(server_domain) != mmf_config->end())
   {
+    TRC_ERROR("JA5");
     return mmf_config->at(server_domain);
   }
   else
   {
+    TRC_ERROR("JA6");
     return nullptr;
   }
 }

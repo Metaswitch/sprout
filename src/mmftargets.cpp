@@ -1,5 +1,5 @@
 /**
- * @file mmf.cpp  class representing MMF Target configuration options
+ * @file mmftargets.cpp  class representing MMF Target configuration options
  *
  * Copyright (C) Metaswitch Networks 2017
  * If license terms are provided to you in a COPYING file in the root directory
@@ -10,7 +10,10 @@
  */
 
 #include "mmftargets.h"
-
+#include <regex>
+#include <iostream>
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/regex.hpp>
 
 MMFTarget::MMFTarget(const rapidjson::Value& config):
   _pre_as(false),
@@ -25,10 +28,32 @@ MMFTarget::MMFTarget(const rapidjson::Value& config):
 void MMFTarget::parse_name(const rapidjson::Value& config)
 {
   TRC_DEBUG("Reading name");
+
   if (config.HasMember("name") && config["name"].IsString())
   {
-    TRC_DEBUG("Read name: %s", config["name"].GetString());
-    _name = config["name"].GetString();
+    std::string name = config["name"].GetString();
+    TRC_DEBUG("Read name: %s", name.c_str());
+
+    if (name.empty())
+    {
+      TRC_ERROR("Invalid 'name' field in MMF configuration.  The 'name' "
+                "must be a non-empty string");
+      JSON_FORMAT_ERROR();
+    }
+
+    const boost::regex allowed_chars = boost::regex("^[A-Za-z0-9_-]+$");
+
+    // The _name is used as the mmfcontext URI parameter in requests sent for
+    // MMF processing.  We only allow A-Z, a-z, 0-9, - and _.
+    if (!boost::regex_match(name, allowed_chars))
+    {
+      TRC_ERROR("Invalid 'name' field: '%s' in MMF configuration.  The 'name' "
+                "contains an invalid character.  It can only contain Alphanumerical"
+                " characters, '-' and '_'", name.c_str());
+      JSON_FORMAT_ERROR();
+    }
+
+    _name = name;
   }
   else
   {
@@ -77,8 +102,8 @@ void MMFTarget::parse_pre_as(const rapidjson::Value& config)
   {
     if (config["pre-as"].IsBool())
     {
-      TRC_DEBUG("Read pre-as: %d", config["pre-as"].GetBool());
       _pre_as = config["pre-as"].GetBool();
+      TRC_DEBUG("Read pre-as: %s", _pre_as ? "true" : "false");
     }
     else
     {
@@ -89,8 +114,8 @@ void MMFTarget::parse_pre_as(const rapidjson::Value& config)
   }
   else
   {
-    TRC_STATUS("No 'pre-as' field present for the MMF target '%s'.  Defaulting "
-               "to 'false'", _name.c_str());
+    TRC_DEBUG("No 'pre-as' field present for the MMF target '%s'.  Defaulting "
+              "to 'false'", _name.c_str());
   }
 }
 
@@ -101,8 +126,8 @@ void MMFTarget::parse_post_as(const rapidjson::Value& config)
   {
     if (config["post-as"].IsBool())
     {
-      TRC_DEBUG("Read post-as: %d", config["post-as"].GetBool());
       _post_as = config["post-as"].GetBool();
+      TRC_DEBUG("Read post-as: %s", _post_as ? "true" : "false");
     }
     else
     {
@@ -113,7 +138,7 @@ void MMFTarget::parse_post_as(const rapidjson::Value& config)
   }
   else
   {
-    TRC_STATUS("No 'post-as' field present for the MMF target '%s'.  Defaulting "
-               "to 'false'", _name.c_str());
+    TRC_DEBUG("No 'post-as' field present for the MMF target '%s'.  Defaulting "
+              "to 'false'", _name.c_str());
   }
 }

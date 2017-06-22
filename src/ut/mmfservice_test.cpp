@@ -43,7 +43,9 @@ class MMFServiceTest : public ::testing::Test
 
   void check_invalid_config_log(CapturingTestLogger& _log)
   {
-    EXPECT_TRUE(_log.contains("Badly formed MMF configuration file - keep current config"));
+    std::string errorlog("Badly formed MMF targets configuration file. If good MMF targets "
+                         "config was previously loaded, the S-CSCF will continue to use it.");
+    EXPECT_TRUE(_log.contains(errorlog.c_str()));
   }
 };
 
@@ -173,6 +175,16 @@ TEST_F(MMFServiceTest, InvalidPreAS)
   check_invalid_config_log(_log);
 }
 
+// Test that we log appropriately if a set of MMF config has an empty name field.
+TEST_F(MMFServiceTest, EmptyName)
+{
+  CapturingTestLogger _log;
+  EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
+  MMFService MMF(_mock_alarm, string(UT_DIR).append("/test_mmf_empty_name.json"));
+  EXPECT_TRUE(_log.contains("The 'name' must be a non-empty string"));
+  check_invalid_config_log(_log);
+}
+
 // Test that we log appropriately if a set of MMF config has no name field.
 TEST_F(MMFServiceTest, MissingName)
 {
@@ -180,6 +192,26 @@ TEST_F(MMFServiceTest, MissingName)
   EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
   MMFService MMF(_mock_alarm, string(UT_DIR).append("/test_mmf_no_name.json"));
   EXPECT_TRUE(_log.contains("Invalid 'name' field in MMF configuration"));
+  check_invalid_config_log(_log);
+}
+
+// Test that we log appropriately if we have whitespace in the name field
+TEST_F(MMFServiceTest, WhitespaceName)
+{
+  CapturingTestLogger _log;
+  EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
+  MMFService MMF(_mock_alarm, string(UT_DIR).append("/test_mmf_whitespace_name.json"));
+  EXPECT_TRUE(_log.contains("The 'name' contains an invalid character."));
+  check_invalid_config_log(_log);
+}
+
+// Test that we log appropriately if we have tab in the name field
+TEST_F(MMFServiceTest, TabName)
+{
+  CapturingTestLogger _log;
+  EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
+  MMFService MMF(_mock_alarm, string(UT_DIR).append("/test_mmf_tab_name.json"));
+  EXPECT_TRUE(_log.contains("The 'name' contains an invalid character."));
   check_invalid_config_log(_log);
 }
 
@@ -233,3 +265,4 @@ TEST_F(MMFServiceTest, DuplicateAddress)
   EXPECT_TRUE(_log.contains("Duplicate config present in the"));
   check_invalid_config_log(_log);
 }
+
