@@ -223,9 +223,6 @@ void MangelwurzelTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 /// - It can mangle the Record-Route headers URIs.
 void MangelwurzelTsx::on_rx_in_dialog_request(pjsip_msg* req)
 {
-  // Store off the unmodified request.
-  _unmodified_request = original_request();
-
   pj_pool_t* pool = get_pool(req);
 
   // Get the URI from the Route header. We use it in the SAS event logging that
