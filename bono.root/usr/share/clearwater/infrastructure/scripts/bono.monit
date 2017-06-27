@@ -23,7 +23,7 @@ check process bono_process with pidfile /var/run/bono/bono.pid
 
   # Check the service's resource usage, and abort the process if it's too high. This will
   # generate a core file and trigger diagnostics collection. 
-  if memory > 80% for 6 cycles then exec "/etc/init.d/bono abort"
+  if memory > 80% then exec "/etc/init.d/bono abort"
 
 # Check the SIP interface. This depends on the Bono process (and so won't run
 # unless the Bono process is running)
