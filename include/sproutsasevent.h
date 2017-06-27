@@ -215,6 +215,9 @@ namespace SASEvent
 
   const int SIFC_NO_SET_FOR_ID = SPROUT_BASE + 0x0150;
 
+  const int MMF_INVOKE_BEFORE_AS = SPROUT_BASE + 0x0200;
+  const int MMF_INVOKE_AFTER_AS = SPROUT_BASE + 0x0201;
+
 } //namespace SASEvent
 
 #endif

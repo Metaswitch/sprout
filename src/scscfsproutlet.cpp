@@ -1637,6 +1637,11 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
                              get_pool(req));
 
       TRC_DEBUG("Adding top route header for post-AS MMF");
+
+      SAS::Event invoke_mmf(trail(), SASEvent::MMF_INVOKE_AFTER_AS, 0);
+      invoke_mmf.add_var_param(server_mmf_config->get_mmfcontext());
+      SAS::report_event(invoke_mmf);
+
       PJUtils::add_top_route_header(req, post_as_uri, get_pool(req));
     }
 
@@ -1656,6 +1661,10 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
                              server_mmf_config->get_mmfcontext(),
                              "pre-as",
                              get_pool(req));
+
+      SAS::Event invoke_mmf(trail(), SASEvent::MMF_INVOKE_BEFORE_AS, 0);
+      invoke_mmf.add_var_param(server_mmf_config->get_mmfcontext());
+      SAS::report_event(invoke_mmf);
 
       TRC_DEBUG("Adding top route header for pre-as MMF");
       PJUtils::add_top_route_header(req, pre_as_uri, get_pool(req));
