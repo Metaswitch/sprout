@@ -459,6 +459,19 @@ TEST_F(MangelwurzelTest, InDialogReq)
   MangelwurzelTsx mangelwurzel_tsx(NULL, config);
   mangelwurzel_tsx.set_helper(_helper);
 
+  // Create the corresponding Route header for this config set. We expect
+  // mangelwurzel to request it when it Record-Routes itself.
+  pjsip_route_hdr* hdr = pjsip_rr_hdr_create(stack_data.pool);
+  hdr->name_addr.uri =
+    PJUtils::uri_from_string("sip:mangelwurzel.homedomain;dialog;req-uri;to;routes;change-domain;orig;ootb;mangalgorithm=rot13",
+                             stack_data.pool);
+  EXPECT_CALL(*_helper, route_hdr()).WillRepeatedly(Return(hdr));
+
+  // Trigger initial request processing in mangelwurzel and catch the request
+  // again when mangelwurzel sends it on.
+  EXPECT_CALL(*_helper, original_request()).WillOnce(Return(req));
+  EXPECT_CALL(*_helper, free_msg(req));
+
   // Trigger in dialog request processing in mangelwurzel and catch the request
   // again when mangelwurzel sends it on.
   EXPECT_CALL(*_helper, get_pool(req)).WillOnce(Return(stack_data.pool));
