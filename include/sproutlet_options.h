@@ -77,7 +77,7 @@
         else                                                                   \
         {                                                                      \
           CL_SPROUT_INVALID_PORT_SPROUTLET.log(NAME_AS_STR, pj_optarg);        \
-          TRC_ERROR(""#NAME_LOWER" port %s is invalid\n", pj_optarg);          \
+          TRC_ERROR(""#NAME_LOWER" port %s is invalid", pj_optarg);            \
           return -1;                                                           \
         }                                                                      \
         break;                                                                 \

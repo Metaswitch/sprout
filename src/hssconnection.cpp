@@ -144,7 +144,7 @@ HTTPCode HSSConnection::get_json_object(const std::string& path,
 
     if (json_object->HasParseError())
     {
-      TRC_INFO("Failed to parse Homestead response:\nPath: %s\nData: %s\nError: %s\n",
+      TRC_INFO("Failed to parse Homestead response:\nPath: %s\nData: %s\nError: %s",
                path.c_str(),
                json_data.c_str(),
                rapidjson::GetParseError_En(json_object->GetParseError()));
@@ -170,7 +170,7 @@ rapidxml::xml_document<>* HSSConnection::parse_xml(std::string raw_data, const s
   catch (rapidxml::parse_error& err)
   {
     // report to the user the failure and their locations in the document.
-    TRC_WARNING("Failed to parse Homestead response:\n %s\n %s\n %s\n", url.c_str(), raw_data.c_str(), err.what());
+    TRC_WARNING("Failed to parse Homestead response:\n %s\n %s\n %s", url.c_str(), raw_data.c_str(), err.what());
     delete root;
     root = NULL;
   }
