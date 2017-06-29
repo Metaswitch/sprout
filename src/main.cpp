@@ -2254,7 +2254,7 @@ int main(int argc, char* argv[])
   {
     CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
     closelog();
-    TRC_ERROR("Caught signaling HttpStack::Exception - %s - %d\n", e._func, e._rc);
+    TRC_ERROR("Caught signaling HttpStack::Exception - %s - %d", e._func, e._rc);
     return 1;
   }
 
@@ -2270,7 +2270,7 @@ int main(int argc, char* argv[])
   {
     CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
     closelog();
-    TRC_ERROR("Caught management HttpStack::Exception - %s - %d\n", e._func, e._rc);
+    TRC_ERROR("Caught management HttpStack::Exception - %s - %d", e._func, e._rc);
     return 1;
   }
 
@@ -2431,7 +2431,7 @@ int main(int argc, char* argv[])
     catch (HttpStack::Exception& e)
     {
       CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
-      TRC_ERROR("Caught signaling HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      TRC_ERROR("Caught signaling HttpStack::Exception - %s - %d", e._func, e._rc);
       return 1;
     }
 
@@ -2451,7 +2451,7 @@ int main(int argc, char* argv[])
     catch (HttpStack::Exception& e)
     {
       CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
-      TRC_ERROR("Caught management HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      TRC_ERROR("Caught management HttpStack::Exception - %s - %d", e._func, e._rc);
       return 1;
     }
   }
@@ -2480,7 +2480,7 @@ int main(int argc, char* argv[])
     catch (HttpStack::Exception& e)
     {
       CL_SPROUT_HTTP_INTERFACE_STOP_FAIL.log(e._func, e._rc);
-      TRC_ERROR("Caught signaling HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      TRC_ERROR("Caught signaling HttpStack::Exception - %s - %d", e._func, e._rc);
     }
 
     try
@@ -2491,7 +2491,7 @@ int main(int argc, char* argv[])
     catch (HttpStack::Exception& e)
     {
       CL_SPROUT_HTTP_INTERFACE_STOP_FAIL.log(e._func, e._rc);
-      TRC_ERROR("Caught management HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      TRC_ERROR("Caught management HttpStack::Exception - %s - %d", e._func, e._rc);
     }
   }
 
