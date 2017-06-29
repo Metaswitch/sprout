@@ -441,13 +441,13 @@ static void usage(void)
        "                            Specify the sprout hostname used for Chronos callbacks. If unset \n"
        "                            the default is to use the sprout-hostname.\n"
        "                            Ignored if chronos-hostname is not set.\n"
-       "     --apply-default-ifcs   Whether calls that don't have any matching IFCs should have some \n"
-       "                            preconfigured IFCs applied instead.\n"
+       "     --apply-default-ifcs   Whether calls that don't have any matching iFCs should have some \n"
+       "                            preconfigured iFCs applied instead.\n"
        "     --reject-if-no-matching-ifcs\n"
-       "                            Whether calls that don't have any matching IFCs should be rejected.\n"
+       "                            Whether calls that don't have any matching iFCs should be rejected.\n"
        "     --dummy-app-server <app server URI>\n"
-       "                            If any IFC has an application server that matches the one defined here, \n"
-       "                            then the IFC is skipped over.\n"
+       "                            If any iFC has an application server that matches the one defined here, \n"
+       "                            then the iFC is skipped over.\n"
        "     --http-acr-logging     Whether to include the bodies of ACR HTTP requests when they are logged \n"
        "                            to SAS\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
@@ -1273,12 +1273,12 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case OPT_APPLY_FALLBACK_IFCS:
       options->apply_fallback_ifcs = true;
-      TRC_INFO("Requests that have no matching IFCs will have some preconfigured IFCs applied");
+      TRC_INFO("Requests that have no matching iFCs will have some preconfigured iFCs applied");
       break;
 
     case OPT_REJECT_IF_NO_MATCHING_IFCS:
       options->reject_if_no_matching_ifcs = true;
-      TRC_INFO("Requests that have no matching IFCs will be rejected");
+      TRC_INFO("Requests that have no matching iFCs will be rejected");
       break;
 
     case OPT_DUMMY_APP_SERVER:

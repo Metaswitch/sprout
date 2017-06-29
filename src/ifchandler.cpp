@@ -84,7 +84,7 @@ Ifcs::Ifcs(std::shared_ptr<xml_document<> > ifc_doc,
         }
         catch (xml_error err)
         {
-          // Ignore a shared IFC set ID which can't be parsed, and keep
+          // Ignore a shared iFC set ID which can't be parsed, and keep
           // going with the rest.
           TRC_ERROR("SiFC evaluation error %s", err.what());
         }
@@ -153,7 +153,7 @@ void Ifcs::interpret(const SessionCase& session_case,  //< The session case
                      std::vector<AsInvocation>& application_servers, //< OUT: the list of application servers
                      SAS::TrailId trail) const  //< SAS trail
 {
-  TRC_DEBUG("Interpreting %s IFC information", session_case.to_string().c_str());
+  TRC_DEBUG("Interpreting %s iFC information", session_case.to_string().c_str());
   for (std::vector<Ifc>::const_iterator it = _ifcs.begin();
        it != _ifcs.end();
        ++it)

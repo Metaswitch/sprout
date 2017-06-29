@@ -33,7 +33,7 @@ public:
   /// Updates the fallback iFCs.
   void update_fifcs();
 
-  /// Get the fallback IFCs
+  /// Get the fallback iFCs
   std::vector<Ifc> get_fallback_ifcs(rapidxml::xml_document<>* ifc_doc) const;
 
 private:

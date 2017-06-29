@@ -29,7 +29,7 @@ SIFCService::SIFCService(Alarm* alarm,
   _configuration(configuration),
   _updater(NULL)
 {
-  // Create an updater to keep the shared IFC sets configured appropriately.
+  // Create an updater to keep the shared iFC sets configured appropriately.
   _updater = new Updater<void, SIFCService>
                                 (this, std::mem_fun(&SIFCService::update_sets));
 }
@@ -42,14 +42,14 @@ void SIFCService::update_sets()
   if ((stat(_configuration.c_str(), &s) != 0) &&
       (errno == ENOENT))
   {
-    TRC_STATUS("No shared IFCs configuration (file %s does not exist)",
+    TRC_STATUS("No shared iFCs configuration (file %s does not exist)",
                _configuration.c_str());
     CL_SPROUT_SIFC_FILE_MISSING.log();
     set_alarm();
     return;
   }
 
-  TRC_STATUS("Loading shared IFCs configuration from %s", _configuration.c_str());
+  TRC_STATUS("Loading shared iFCs configuration from %s", _configuration.c_str());
 
   // Read from the file
   std::ifstream fs(_configuration.c_str());
@@ -58,7 +58,7 @@ void SIFCService::update_sets()
 
   if (sifc_str == "")
   {
-    TRC_ERROR("Failed to read shared IFCs configuration data from %s",
+    TRC_ERROR("Failed to read shared iFCs configuration data from %s",
               _configuration.c_str());
     CL_SPROUT_SIFC_FILE_EMPTY.log();
     set_alarm();
@@ -74,7 +74,7 @@ void SIFCService::update_sets()
   }
   catch (rapidxml::parse_error& err)
   {
-    TRC_ERROR("Failed to parse the shared IFCs configuration data:\n %s\n %s",
+    TRC_ERROR("Failed to parse the shared iFCs configuration data:\n %s\n %s",
               sifc_str.c_str(),
               err.what());
     CL_SPROUT_SIFC_FILE_INVALID_XML.log();
@@ -85,14 +85,14 @@ void SIFCService::update_sets()
 
   if (!root->first_node(SIFCService::SHARED_IFCS_SETS))
   {
-    TRC_ERROR("Invalid shared IFCs configuration file - missing SharedIFCsSets block");
+    TRC_ERROR("Invalid shared iFCs configuration file - missing SharedIFCsSets block");
     CL_SPROUT_SIFC_FILE_MISSING_SHARED_IFCS_SETS.log();
     set_alarm();
     delete root; root = NULL;
     return;
   }
 
-  // At this point, we're definitely going to override the IFCs we've got.
+  // At this point, we're definitely going to override the iFCs we've got.
   // Update our map, taking a lock while we do so.
   boost::lock_guard<boost::shared_mutex> write_lock(_sets_rw_lock);
   _shared_ifc_sets.clear();
@@ -109,7 +109,7 @@ void SIFCService::update_sets()
 
     if (!set_id_node)
     {
-      TRC_ERROR("Invalid shared IFC block - missing SetID. Skipping this entry");
+      TRC_ERROR("Invalid shared iFC block - missing SetID. Skipping this entry");
       CL_SPROUT_SIFC_FILE_MISSING_SET_ID.log();
       any_errors = true;
       continue;
@@ -121,7 +121,7 @@ void SIFCService::update_sets()
 
     if (set_id_str != std::to_string(set_id))
     {
-      TRC_ERROR("Invalid shared IFC block - SetID (%s) isn't an int. Skipping this entry",
+      TRC_ERROR("Invalid shared iFC block - SetID (%s) isn't an int. Skipping this entry",
                 set_id_str.c_str());
       CL_SPROUT_SIFC_FILE_INVALID_SET_ID.log(set_id_str.c_str());
       any_errors = true;
@@ -130,7 +130,7 @@ void SIFCService::update_sets()
 
     if (_shared_ifc_sets.count(set_id) != 0)
     {
-      TRC_ERROR("Invalid shared IFC block - SetID (%d) is repeated. Skipping this entry",
+      TRC_ERROR("Invalid shared iFC block - SetID (%d) is repeated. Skipping this entry",
                 set_id);
       CL_SPROUT_SIFC_FILE_REPEATED_SET_ID.log(set_id_str.c_str());
       any_errors = true;
@@ -154,7 +154,7 @@ void SIFCService::update_sets()
 
         if (priority_str != std::to_string(priority))
         {
-          TRC_ERROR("Invalid shared IFC block - Priority (%s) isn't an int. Skipping this entry",
+          TRC_ERROR("Invalid shared iFC block - Priority (%s) isn't an int. Skipping this entry",
                     priority_str.c_str());
           CL_SPROUT_SIFC_FILE_INVALID_PRIORITY.log(priority_str.c_str());
           any_errors = true;
@@ -162,14 +162,15 @@ void SIFCService::update_sets()
         }
       }
 
-      // Creating the IFC always passes; we don't validate the IFC any further
-      // at this stage. This is a fairly complicated thing to do however.
+      // Creating the iFC always passes; we don't validate the iFC any further
+      // at this stage. We've validated this against a schema before allowing
+      // any upload though.
       std::string ifc_str;
       rapidxml::print(std::back_inserter(ifc_str), *ifc, 0);
       ifc_set.push_back(std::make_pair(priority, ifc_str));
     }
 
-    TRC_STATUS("Adding %lu IFCs for ID %d", ifc_set.size(), set_id);
+    TRC_STATUS("Adding %lu iFCs for ID %d", ifc_set.size(), set_id);
     _shared_ifc_sets.insert(std::make_pair(set_id, ifc_set));
   }
 
@@ -202,13 +203,13 @@ void SIFCService::get_ifcs_from_id(std::multimap<int32_t, Ifc>& ifc_map,
 
   for (int id : ids)
   {
-    TRC_DEBUG("Getting the shared IFCs for ID %d", id);
+    TRC_DEBUG("Getting the shared iFCs for ID %d", id);
     std::map<int, std::vector<std::pair<int32_t, std::string>>>::const_iterator i =
                                                       _shared_ifc_sets.find(id);
 
     if (i != _shared_ifc_sets.end())
     {
-      TRC_DEBUG("Found IFC set for ID %d", id);
+      TRC_DEBUG("Found iFC set for ID %d", id);
 
       for (std::pair<int32_t, std::string> ifc : i->second)
       {
@@ -217,7 +218,7 @@ void SIFCService::get_ifcs_from_id(std::multimap<int32_t, Ifc>& ifc_map,
     }
     else
     {
-      TRC_WARNING("No IFCs stored for ID %d", id);
+      TRC_WARNING("No iFCs stored for ID %d", id);
 
       if (_no_shared_ifcs_set_tbl)
       {

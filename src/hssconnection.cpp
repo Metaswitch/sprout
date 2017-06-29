@@ -809,8 +809,8 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
   }
 
   // Return whether the XML was successfully decoded. The XML can be decoded and
-  // not return any IFCs (when the subscriber isn't registered), so a successful
-  // response shouldn't be taken as a guarantee of IFCs.
+  // not return any iFCs (when the subscriber isn't registered), so a successful
+  // response shouldn't be taken as a guarantee of iFCs.
   std::vector<std::string> unused_aliases;
   return decode_homestead_xml(public_user_identity,
                               root,

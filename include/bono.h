@@ -224,7 +224,9 @@ private:
   std::list<AsChainLink> _as_chain_links; //< References to the AsChains this transaction is associated with.
                                           //< The last in the list is the chain currently controlling the
                                           //< transaction.
-  std::map<std::string, HSSCallInformation> cached_hss_data; // Maps public IDs to their associated URIs and IFC
+
+  // Maps public IDs to their associated URIs and iFC
+  std::map<std::string, HSSCallInformation> cached_hss_data;
 
   /// Pointer to ACR used for the upstream side of the transaction.  NULL if
   /// Rf not enabled.

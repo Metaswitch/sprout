@@ -3259,7 +3259,7 @@ TEST_F(SCSCFTest, SimpleISCTwoRouteHeaders)
   free_txdata();
 }
 
-// Test handling of IFC with a malformed AS URI.
+// Test handling of iFC with a malformed AS URI.
 TEST_F(SCSCFTest, ISCASURIMalformed)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
@@ -3313,7 +3313,7 @@ TEST_F(SCSCFTest, ISCASURIMalformed)
   free_txdata();
 }
 
-// Test handling of IFC with a AS Tel URI.
+// Test handling of iFC with a AS Tel URI.
 TEST_F(SCSCFTest, ISCASURITel)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
@@ -9421,7 +9421,7 @@ TEST_F(SCSCFTest, TestSessionExpiresWhenNoRecordRoute)
 }
 
 
-// Test that getting a 503 error from homestead when looking up IFCs results in
+// Test that getting a 503 error from homestead when looking up iFCs results in
 // sprout sending a 504 error.
 TEST_F(SCSCFTest, HSSTimeoutOnPutRegData)
 {
@@ -9448,7 +9448,7 @@ TEST_F(SCSCFTest, HSSTimeoutOnPutRegData)
 }
 
 
-// Test that a failure to get IFCs due to a 503 error from homestead during Call
+// Test that a failure to get iFCs due to a 503 error from homestead during Call
 // Diversion results in sprout sending a 504
 TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
 {
@@ -9564,7 +9564,7 @@ TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
   msg.set_route(out);
   free_txdata();
 
-  // Followed by a 504 (since the IFC lookup has got a 503)
+  // Followed by a 504 (since the iFC lookup has got a 503)
   out = current_txdata()->msg;
   RespMatcher(504).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
@@ -9767,8 +9767,8 @@ TEST_F(SCSCFTest, TestEmergencyMultipleBindings)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
-// Check that a request with no matching IFCs is rejected.
-TEST_F(SCSCFTest, NoMatchingIFCsReject)
+// Check that a request with no matching iFCs is rejected.
+TEST_F(SCSCFTest, NoMatchingiFCsReject)
 {
   _scscf_sproutlet->_ifc_configuration._reject_if_no_matching_ifcs = true;
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
@@ -9819,9 +9819,9 @@ TEST_F(SCSCFTest, NoMatchingIFCsReject)
   free_txdata();
 }
 
-// Test that we use fallback IFCs if there are no matching IFCs, and that the
+// Test that we use fallback iFCs if there are no matching iFCs, and that the
 // application server flows are as expected.
-TEST_F(SCSCFTest, NoMatchingIFCsUseFallbackFCs)
+TEST_F(SCSCFTest, NoMatchingiFCsUseFallbackFCs)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _scscf_sproutlet->_ifc_configuration._apply_fallback_ifcs = true;

@@ -1282,7 +1282,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         SAS::Event no_ifcs(trail(), SASEvent::IFC_GET_FAILURE, 1);
         SAS::report_event(no_ifcs);
 
-        // No IFC, so no AsChain, store the ACR locally.
+        // No iFC, so no AsChain, store the ACR locally.
         _failed_ood_acr = acr;
       }
     }
@@ -1419,7 +1419,7 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
 
   if (status_code != PJSIP_SC_OK)
   {
-    TRC_ERROR("Rejecting a request as there were no matching IFCs");
+    TRC_ERROR("Rejecting a request as there were no matching iFCs");
     SAS::Event event(trail(), SASEvent::REJECT_AS_NO_MATCHING_IFC, 0);
     SAS::report_event(event);
 
@@ -1514,7 +1514,7 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
 
   if (status_code != PJSIP_SC_OK)
   {
-    TRC_ERROR("Rejecting a request as there were no matching IFCs");
+    TRC_ERROR("Rejecting a request as there were no matching iFCs");
     SAS::Event event(trail(), SASEvent::REJECT_AS_NO_MATCHING_IFC, 1);
     SAS::report_event(event);
 

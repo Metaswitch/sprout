@@ -45,14 +45,14 @@ void FIFCService::update_fifcs()
   if ((stat(_configuration.c_str(), &s) != 0) &&
       (errno == ENOENT))
   {
-    TRC_STATUS("No fallback IFC configuration found (file %s does not exist)",
+    TRC_STATUS("No fallback iFC configuration found (file %s does not exist)",
                _configuration.c_str());
     CL_SPROUT_FIFC_FILE_MISSING.log();
     set_alarm();
     return;
   }
 
-  TRC_STATUS("Loading fallback IFC configuration from %s",
+  TRC_STATUS("Loading fallback iFC configuration from %s",
              _configuration.c_str());
 
   // Check whether the file is empty.
@@ -61,7 +61,7 @@ void FIFCService::update_fifcs()
                         std::istreambuf_iterator<char>());
   if (fifc_str == "")
   {
-    TRC_ERROR("Failed to read fallback IFC configuration data from %s",
+    TRC_ERROR("Failed to read fallback iFC configuration data from %s",
               _configuration.c_str());
     CL_SPROUT_FIFC_FILE_EMPTY.log();
     set_alarm();
@@ -78,7 +78,7 @@ void FIFCService::update_fifcs()
   }
   catch (rapidxml::parse_error& err)
   {
-    TRC_ERROR("Failed to parse the fallback IFC configuration data:\n %s\n %s",
+    TRC_ERROR("Failed to parse the fallback iFC configuration data:\n %s\n %s",
               fifc_str.c_str(),
               err.what());
     CL_SPROUT_FIFC_FILE_INVALID_XML.log();
@@ -90,7 +90,7 @@ void FIFCService::update_fifcs()
   // Finally, check the "FallbackIFCsSet" node is present.
   if (!root->first_node(FIFCService::FALLBACK_IFCS_SET))
   {
-    TRC_ERROR("Failed to parse the fallback IFC configuration file as it is "
+    TRC_ERROR("Failed to parse the fallback iFC configuration file as it is "
               "invalid (missing FallbackIFCsSet block)");
     CL_SPROUT_FIFC_FILE_MISSING_FALLBACK_IFCS_SET.log();
     set_alarm();
@@ -124,8 +124,8 @@ void FIFCService::update_fifcs()
 
       if (priority_str != std::to_string(priority))
       {
-        TRC_ERROR("Failed to parse one fallback IFC, as its Priority (%s) isn't an "
-                  "int. This IFC will not be included in the fallback IFC list",
+        TRC_ERROR("Failed to parse one fallback iFC, as its Priority (%s) isn't an "
+                  "int. This iFC will not be included in the fallback iFC list",
                   priority_str.c_str());
         CL_SPROUT_FIFC_FILE_INVALID_PRIORITY.log(priority_str.c_str());
         any_errors = true;
@@ -145,7 +145,7 @@ void FIFCService::update_fifcs()
     ifcs_vec.push_back(ifc_pair.second);
   }
 
-  TRC_DEBUG("Adding %lu fallback IFC(s)", ifcs_vec.size());
+  TRC_DEBUG("Adding %lu fallback iFC(s)", ifcs_vec.size());
   _fallback_ifcs = ifcs_vec;
 
   if (any_errors)
