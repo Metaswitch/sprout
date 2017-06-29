@@ -1055,7 +1055,7 @@ TEST_F(HssWithSifcTest, NonIntegerSifc)
   EXPECT_TRUE(ifcs_map.begin()->second.size() == 0);
 }
 
-// Check that shared IFCs are read out from all Extensions present in the XML.
+// Check that shared iFCs are read out from all Extensions present in the XML.
 TEST_F(HssWithSifcTest, MultipleExtensions)
 {
   AssociatedURIs uris;

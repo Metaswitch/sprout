@@ -29,8 +29,8 @@ extern "C" {
 // Forward declarations.
 class UASTransaction;
 
-/// Structure that holds IFC configuration that isn't covered by the TS specs
-// (e.g. fallback and dummy IFCs).
+/// Structure that holds iFC configuration that isn't covered by the TS specs
+// (e.g. fallback and dummy iFCs).
 struct IFCConfiguration
 {
   bool _apply_fallback_ifcs;
@@ -183,7 +183,7 @@ private:
   /// A pointer to the ACR for this chain if Rf billing is enabled.
   ACR* _acr;
 
-  /// Member variables covering the IFCs for the ASChain.
+  /// Member variables covering the iFCs for the ASChain.
   std::vector<Ifc> _fallback_ifcs;
   IFCConfiguration _ifc_configuration;
   bool _using_standard_ifcs;

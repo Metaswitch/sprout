@@ -2141,8 +2141,8 @@ TEST_F(RegistrarTest, AppServersWithNoExtension)
   free_txdata();
 }
 
-/// Test for issue 358 - IFCs match on SDP but REGISTER doesn't have any - should be no match
-TEST_F(RegistrarTest, AppServersWithSDPIFCs)
+/// Test for issue 358 - iFCs match on SDP but REGISTER doesn't have any - should be no match
+TEST_F(RegistrarTest, AppServersWithSDPiFCs)
 {
   _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED,
                               "<IMSSubscription><ServiceProfile>\n"

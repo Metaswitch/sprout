@@ -160,7 +160,7 @@ TEST_F(FIFCServiceTest, MissingFile)
   CapturingTestLogger log;
   EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
   FIFCService fifc(_mock_alarm, string(UT_DIR).append("/non_existent_file.xml"));
-  EXPECT_TRUE(log.contains("No fallback IFC configuration found"));
+  EXPECT_TRUE(log.contains("No fallback iFC configuration found"));
   rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
   EXPECT_TRUE(fifc.get_fallback_ifcs(root).empty());
   delete root; root = NULL;
@@ -172,7 +172,7 @@ TEST_F(FIFCServiceTest, EmptyFile)
   CapturingTestLogger log;
   EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
   FIFCService fifc(_mock_alarm, string(UT_DIR).append("/test_fifc_empty_file.xml"));
-  EXPECT_TRUE(log.contains("Failed to read fallback IFC configuration data"));
+  EXPECT_TRUE(log.contains("Failed to read fallback iFC configuration data"));
   rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
   EXPECT_TRUE(fifc.get_fallback_ifcs(root).empty());
   delete root; root = NULL;
@@ -184,7 +184,7 @@ TEST_F(FIFCServiceTest, ParseError)
   CapturingTestLogger log;
   EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
   FIFCService fifc(_mock_alarm, string(UT_DIR).append("/test_fifc_invalid.xml"));
-  EXPECT_TRUE(log.contains("Failed to parse the fallback IFC configuration data"));
+  EXPECT_TRUE(log.contains("Failed to parse the fallback iFC configuration data"));
   rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
   EXPECT_TRUE(fifc.get_fallback_ifcs(root).empty());
   delete root; root = NULL;
@@ -196,7 +196,7 @@ TEST_F(FIFCServiceTest, IncorrectSyntax)
   CapturingTestLogger log;
   EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
   FIFCService fifc(_mock_alarm, string(UT_DIR).append("/test_fifc_missing_node.xml"));
-  EXPECT_TRUE(log.contains("Failed to parse the fallback IFC configuration file as it is invalid (missing FallbackIFCsSet block)"));
+  EXPECT_TRUE(log.contains("Failed to parse the fallback iFC configuration file as it is invalid (missing FallbackIFCsSet block)"));
   rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
   EXPECT_TRUE(fifc.get_fallback_ifcs(root).empty());
   delete root; root = NULL;
@@ -232,7 +232,7 @@ TEST_F(FIFCServiceTest, SingleInvalidIfc)
   EXPECT_CALL(*_mock_alarm, set()).Times(AtLeast(1));
   FIFCService fifc(_mock_alarm, string(UT_DIR).append("/test_fifc_one_invalid.xml"));
 
-  EXPECT_TRUE(log.contains("Failed to parse one fallback IFC"));
+  EXPECT_TRUE(log.contains("Failed to parse one fallback iFC"));
 
   rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
   std::vector<Ifc> fifc_list = fifc.get_fallback_ifcs(root);

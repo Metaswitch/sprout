@@ -591,7 +591,7 @@ AsInvocation Ifc::as_invocation() const
   {
     // If the DefaultHandling attribute isn't present, or is malformed, default
     // to SESSION_CONTINUED.
-    TRC_WARNING("Badly formed DefaultHandling element in IFC (%s), defaulting to SESSION_CONTINUED",
+    TRC_WARNING("Badly formed DefaultHandling element in iFC (%s), defaulting to SESSION_CONTINUED",
                 default_handling.c_str());
     as_invocation.default_handling = SESSION_CONTINUED;
   }

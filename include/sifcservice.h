@@ -32,15 +32,15 @@ public:
               std::string configuration = "./shared_ifcs.xml");
   virtual ~SIFCService();
 
-  // Node names within the Shared IFC configuration file.
+  // Node names within the Shared iFC configuration file.
   const char* const SHARED_IFCS_SETS = "SharedIFCsSets";
   const char* const SHARED_IFCS_SET = "SharedIFCsSet";
   const char* const SET_ID = "SetID";
 
-  /// Updates the shared IFC sets
+  /// Updates the shared iFC sets
   void update_sets();
 
-  /// Get the IFCs that belong to a set of IDs
+  /// Get the iFCs that belong to a set of IDs
   virtual void get_ifcs_from_id(std::multimap<int32_t, Ifc>& ifc_map,
                                 const std::set<int32_t>& id,
                                 std::shared_ptr<xml_document<> > ifc_doc,
