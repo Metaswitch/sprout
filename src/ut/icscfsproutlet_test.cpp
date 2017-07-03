@@ -353,88 +353,8 @@ protected:
     EXPECT_EQ(network_successes, session_network_table->_successes);
     EXPECT_EQ(network_failures, session_network_table->_failures);
   }
-
-  void test_route_terminating_sip_uri_helper(const char* to_uri);
 };
 
-
-void ICSCFSproutletTest::test_route_terminating_sip_uri_helper(const char* to_uri)
-{
-  pjsip_tx_data* tdata;
-
-  // Create a TCP connection to the I-CSCF listening port.
-  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        ICSCF_PORT,
-                                        "1.2.3.4",
-                                        49152);
-
-  // Set up the HSS responses for the terminating location query.
-  _hss_connection->set_result("/impu/tel%3A%2B16505551234/location",
-                              "{\"result-code\": 2001,"
-                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
-
-  // Inject an INVITE request to a sip URI representing a telephone number with a
-  // P-Served-User header.
-  //
-  // Add NP data to the SIP URI - it should be ignored for the purposes of SIP -> Tel URI
-  // conversion
-  Message msg1;
-  msg1._method = "INVITE";
-  msg1._requri = "sip:+16505551234;npdi;rn=567@homedomain";
-  msg1._to = to_uri;
-  msg1._via = tp->to_string(false);
-  msg1._extra = "Contact: sip:6505551000@" +
-                tp->to_string(true) +
-                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
-  msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
-  msg1._route = "Route: <sip:homedomain>";
-  inject_msg(msg1.get_request(), tp);
-
-  // Expecting 100 Trying and forwarded INVITE
-  ASSERT_EQ(2, txdata_count());
-
-  // Check the 100 Trying.
-  tdata = current_txdata();
-  RespMatcher(100).matches(tdata->msg);
-  tp->expect_target(tdata);
-  free_txdata();
-
-  // INVITE request should be forwarded to the server named in the HSS
-  // response, scscf1.homedomain.
-  tdata = current_txdata();
-  expect_target("TCP", "10.10.10.1", 5058, tdata);
-  ReqMatcher r1("INVITE");
-  r1.matches(tdata->msg);
-
-  // Verify that the user parameters were carried through the SIP to Tel URI conversion successfully
-  ASSERT_EQ("tel:+16505551234;npdi;rn=567", str_uri(tdata->msg->line.req.uri));
-
-  // Check that a Route header has been added routing the INVITE to the
-  // selected S-CSCF.  This must include the orig parameter.
-  string route = get_headers(tdata->msg, "Route");
-  ASSERT_EQ("Route: <sip:scscf1.homedomain:5058;transport=TCP;lr>", route);
-
-  // Check that no Record-Route headers have been added.
-  string rr = get_headers(tdata->msg, "Record-Route");
-  ASSERT_EQ("", rr);
-
-  // Send a 200 OK response.
-  inject_msg(respond_to_current_txdata(200));
-
-  // Check the response is forwarded back to the source.
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  tp->expect_target(tdata);
-  RespMatcher r2(200);
-  r2.matches(tdata->msg);
-  free_txdata();
-
-  test_session_establishment_stats(1, 0, 1, 0);
-
-  _hss_connection->delete_result("/impu/sip%3A6505551234%40homedomain/location");
-
-  delete tp;
-}
 
 
 TEST_F(ICSCFSproutletTest, RouteRegisterHSSServerName)
@@ -3284,16 +3204,82 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteLocalUserPhoneSuccess)
   delete tp;
 }
 
-
 TEST_F(ICSCFSproutletTest, RouteTermInviteNumericSIPURI)
 {
-  test_route_terminating_sip_uri_helper("+16505551234");
-}
+  pjsip_tx_data* tdata;
 
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        ICSCF_PORT,
+                                        "1.2.3.4",
+                                        49152);
 
-TEST_F(ICSCFSproutletTest, RouteTermInviteNumericSIPURIWithStarHashToURI)
-{
-  test_route_terminating_sip_uri_helper("*1234#");
+  // Set up the HSS responses for the terminating location query.
+  _hss_connection->set_result("/impu/tel%3A%2B16505551234/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+
+  // Inject an INVITE request to a sip URI representing a telephone number with a
+  // P-Served-User header.
+  //
+  // Add NP data to the SIP URI - it should be ignored for the purposes of SIP -> Tel URI
+  // conversion
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:+16505551234;npdi;rn=567@homedomain";
+  msg1._to = "+16505551234";
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
+  msg1._route = "Route: <sip:homedomain>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // INVITE request should be forwarded to the server named in the HSS
+  // response, scscf1.homedomain.
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.1", 5058, tdata);
+  ReqMatcher r1("INVITE");
+  r1.matches(tdata->msg);
+
+  // Verify that the user parameters were carried through the SIP to Tel URI conversion successfully
+  ASSERT_EQ("tel:+16505551234;npdi;rn=567", str_uri(tdata->msg->line.req.uri));
+
+  // Check that a Route header has been added routing the INVITE to the
+  // selected S-CSCF.  This must include the orig parameter.
+  string route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("Route: <sip:scscf1.homedomain:5058;transport=TCP;lr>", route);
+
+  // Check that no Record-Route headers have been added.
+  string rr = get_headers(tdata->msg, "Record-Route");
+  ASSERT_EQ("", rr);
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher r2(200);
+  r2.matches(tdata->msg);
+  free_txdata();
+
+  test_session_establishment_stats(1, 0, 1, 0);
+
+  _hss_connection->delete_result("/impu/sip%3A6505551234%40homedomain/location");
+
+  delete tp;
 }
 
 
