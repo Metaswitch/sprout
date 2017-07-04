@@ -1632,15 +1632,15 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
 
       add_mmf_uri_parameters(post_as_uri,
                              as_uri->transport_param,
-                             server_mmf_config->get_mmfcontext(),
                              "post-as",
+                             server_mmf_config->get_target_name(),
                              get_pool(req));
 
       TRC_DEBUG("Adding top route header for post-AS MMF");
 
       SAS::Event invoke_mmf(trail(), SASEvent::MMF_INVOKE_AFTER_AS, 0);
       invoke_mmf.add_var_param(server_domain_str);
-      invoke_mmf.add_var_param(server_mmf_config->get_mmfcontext());
+      invoke_mmf.add_var_param(server_mmf_config->get_target_name());
       SAS::report_event(invoke_mmf);
 
       PJUtils::add_top_route_header(req, post_as_uri, get_pool(req));
@@ -1659,13 +1659,13 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
 
       add_mmf_uri_parameters(pre_as_uri,
                              as_uri->transport_param,
-                             server_mmf_config->get_mmfcontext(),
                              "pre-as",
+                             server_mmf_config->get_target_name(),
                              get_pool(req));
 
       SAS::Event invoke_mmf(trail(), SASEvent::MMF_INVOKE_BEFORE_AS, 0);
       invoke_mmf.add_var_param(server_domain_str);
-      invoke_mmf.add_var_param(server_mmf_config->get_mmfcontext());
+      invoke_mmf.add_var_param(server_mmf_config->get_target_name());
       SAS::report_event(invoke_mmf);
 
       TRC_DEBUG("Adding top route header for pre-as MMF");
@@ -2485,7 +2485,7 @@ pjsip_msg* SCSCFSproutletTsx::get_base_request()
 void SCSCFSproutletTsx::add_mmf_uri_parameters(pjsip_sip_uri* mmf_uri,
                                                pj_str_t as_transport_param,
                                                std::string mmfscope_param,
-                                               std::string mmfcontext_param,
+                                               std::string mmftarget_param,
                                                pj_pool_t* pool)
 {
   // Use same transport as AS, in case it can only cope with one.
@@ -2497,10 +2497,10 @@ void SCSCFSproutletTsx::add_mmf_uri_parameters(pjsip_sip_uri* mmf_uri,
                                     "mmf",
                                     pool);
 
-  TRC_DEBUG("Adding mmfcontext parameter %s", mmfcontext_param.c_str());
+  TRC_DEBUG("Adding mmftarget parameter %s", mmftarget_param.c_str());
   PJUtils::add_parameter_to_sip_uri(mmf_uri,
-                                    STR_MMFCONTEXT,
-                                    mmfcontext_param.c_str(),
+                                    STR_MMFTARGET,
+                                    mmftarget_param.c_str(),
                                     pool);
 
   TRC_DEBUG("Adding mmfscope parameter %s", mmfscope_param.c_str());
