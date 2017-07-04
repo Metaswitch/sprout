@@ -1,5 +1,6 @@
 /**
- * @file custom_headers_test.cpp UT for custom header parsers.
+ * @file sip_parser_test.cpp UT for SIP parser testing. This checks custom
+ * header parsing, and other specific parser functionality.
  *
  * Copyright (C) Metaswitch Networks 2017
  * If license terms are provided to you in a COPYING file in the root directory
@@ -21,8 +22,8 @@ using namespace std;
 
 #define EXPECT_PJEQ(X, Y) EXPECT_EQ(PJUtils::pj_str_to_string(&X), string(Y))
 
-/// Fixture for Custom Header testing
-class CustomHeadersTest : public SipTest
+/// Fixture for SIP Parser testing
+class SipParserTest : public SipTest
 {
 public:
   static void SetUpTestCase()
@@ -36,7 +37,7 @@ public:
   }
 };
 
-TEST_F(CustomHeadersTest, PChargingVector)
+TEST_F(SipParserTest, PChargingVector)
 {
   string str("INVITE sip:6505554321@homedomain SIP/2.0\n"
              "Via: SIP/2.0/TCP 10.0.0.1:5060;rport;branch=z9hG4bKPjPtKqxhkZnvVKI2LUEWoZVFjFaqo.cOzf;alias\n"
@@ -97,7 +98,7 @@ TEST_F(CustomHeadersTest, PChargingVector)
   EXPECT_STREQ("P-Charging-Vector: icid-value=\"4815162542\";orig-ioi=homedomain;term-ioi=remotedomain;icid-generated-at=edge.proxy.net;other-param=test-value", buf);
 }
 
-TEST_F(CustomHeadersTest, PChargingVectorQuotedIcidValue)
+TEST_F(SipParserTest, PChargingVectorQuotedIcidValue)
 {
   string str("INVITE sip:6505554321@homedomain SIP/2.0\n"
              "Via: SIP/2.0/TCP 10.0.0.1:5060;rport;branch=z9hG4bKPjPtKqxhkZnvVKI2LUEWoZVFjFaqo.cOzf;alias\n"
@@ -143,7 +144,7 @@ TEST_F(CustomHeadersTest, PChargingVectorQuotedIcidValue)
   EXPECT_STREQ("P-Charging-Vector: icid-value=\"a2bb639b437cd5827a8f54fe39f3987c0:0:0:0:0:0:0:0\";orig-ioi=homedomain;term-ioi=remotedomain;icid-generated-at=edge.proxy.net;other-param=test-value", buf);
 }
 
-TEST_F(CustomHeadersTest, PChargingVectorHostnameIcidValue)
+TEST_F(SipParserTest, PChargingVectorHostnameIcidValue)
 {
   string str("INVITE sip:6505554321@homedomain SIP/2.0\n"
              "Via: SIP/2.0/TCP 10.0.0.1:5060;rport;branch=z9hG4bKPjPtKqxhkZnvVKI2LUEWoZVFjFaqo.cOzf;alias\n"
@@ -188,7 +189,7 @@ TEST_F(CustomHeadersTest, PChargingVectorHostnameIcidValue)
   EXPECT_STREQ("P-Charging-Vector: icid-value=\"subdomain.example.com\";orig-ioi=homedomain;term-ioi=remotedomain;icid-generated-at=edge.proxy.net;other-param=test-value", buf);
 }
 
-TEST_F(CustomHeadersTest, PChargingVectorIPv6IcidValue)
+TEST_F(SipParserTest, PChargingVectorIPv6IcidValue)
 {
   string str("INVITE sip:6505554321@homedomain SIP/2.0\n"
              "Via: SIP/2.0/TCP 10.0.0.1:5060;rport;branch=z9hG4bKPjPtKqxhkZnvVKI2LUEWoZVFjFaqo.cOzf;alias\n"
@@ -233,7 +234,7 @@ TEST_F(CustomHeadersTest, PChargingVectorIPv6IcidValue)
   EXPECT_STREQ("P-Charging-Vector: icid-value=\"[::1]\";orig-ioi=homedomain;term-ioi=remotedomain;icid-generated-at=edge.proxy.net;other-param=test-value", buf);
 }
 
-TEST_F(CustomHeadersTest, PChargingVectorEmptyIcidValue)
+TEST_F(SipParserTest, PChargingVectorEmptyIcidValue)
 {
   string str("INVITE sip:6505554321@homedomain SIP/2.0\n"
              "Via: SIP/2.0/TCP 10.0.0.1:5060;rport;branch=z9hG4bKPjPtKqxhkZnvVKI2LUEWoZVFjFaqo.cOzf;alias\n"
@@ -278,7 +279,7 @@ TEST_F(CustomHeadersTest, PChargingVectorEmptyIcidValue)
   EXPECT_STREQ("P-Charging-Vector: icid-value=\"\";orig-ioi=homedomain;term-ioi=remotedomain;icid-generated-at=edge.proxy.net;other-param=test-value", buf);
 }
 
-TEST_F(CustomHeadersTest, PChargingFunctionAddresses)
+TEST_F(SipParserTest, PChargingFunctionAddresses)
 {
   string str("INVITE sip:6505554321@homedomain SIP/2.0\n"
              "Via: SIP/2.0/TCP 10.0.0.1:5060;rport;branch=z9hG4bKPjPtKqxhkZnvVKI2LUEWoZVFjFaqo.cOzf;alias\n"
@@ -333,7 +334,7 @@ TEST_F(CustomHeadersTest, PChargingFunctionAddresses)
   EXPECT_STREQ("P-Charging-Function-Addresses: ccf=10.0.0.2;ccf=10.0.0.4;ecf=10.0.0.1;ecf=10.0.0.3;other-param=test-value", buf);
 }
 
-TEST_F(CustomHeadersTest, PChargingFunctionAddressesIPv6)
+TEST_F(SipParserTest, PChargingFunctionAddressesIPv6)
 {
   string str("INVITE sip:6505554321@homedomain SIP/2.0\n"
              "Via: SIP/2.0/TCP 10.0.0.1:5060;rport;branch=z9hG4bKPjPtKqxhkZnvVKI2LUEWoZVFjFaqo.cOzf;alias\n"
@@ -388,7 +389,7 @@ TEST_F(CustomHeadersTest, PChargingFunctionAddressesIPv6)
   EXPECT_STREQ("P-Charging-Function-Addresses: ccf=10.22.42.18;ccf=[FD5F:5D21:845:1C27:FF00::42:105]", buf);
 }
 
-TEST_F(CustomHeadersTest, PChargingFunctionAddressesOneIPv6)
+TEST_F(SipParserTest, PChargingFunctionAddressesOneIPv6)
 {
   string str("INVITE sip:6505554321@homedomain SIP/2.0\n"
              "Via: SIP/2.0/TCP 10.0.0.1:5060;rport;branch=z9hG4bKPjPtKqxhkZnvVKI2LUEWoZVFjFaqo.cOzf;alias\n"
@@ -444,7 +445,7 @@ TEST_F(CustomHeadersTest, PChargingFunctionAddressesOneIPv6)
 }
 
 
-TEST_F(CustomHeadersTest, SessionExpires)
+TEST_F(SipParserTest, SessionExpires)
 {
   string str("INVITE sip:6505554321@homedomain SIP/2.0\n"
              "Via: SIP/2.0/TCP 10.0.0.1:5060;rport;branch=z9hG4bKPjPtVFjqo;alias\n"
@@ -493,7 +494,7 @@ TEST_F(CustomHeadersTest, SessionExpires)
   EXPECT_STREQ("Session-Expires: 600;refresher=uas;other-param=10;more-param=42", buf);
 }
 
-TEST_F(CustomHeadersTest, SessionExpiresUAC)
+TEST_F(SipParserTest, SessionExpiresUAC)
 {
   string str("INVITE sip:6505554321@homedomain SIP/2.0\n"
              "Via: SIP/2.0/TCP 10.0.0.1:5060;rport;branch=z9hG4bKPjPtVFjqo;alias\n"
@@ -542,7 +543,7 @@ TEST_F(CustomHeadersTest, SessionExpiresUAC)
   EXPECT_STREQ("Session-Expires: 600;refresher=uac;other-param=10;more-param=42", buf);
 }
 
-TEST_F(CustomHeadersTest, AcceptContact)
+TEST_F(SipParserTest, AcceptContact)
 {
   pj_pool_t *main_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
                                                  PJSIP_POOL_RDATA_LEN,
@@ -625,7 +626,7 @@ TEST_F(CustomHeadersTest, AcceptContact)
   pj_pool_release(main_pool);
 }
 
-TEST_F(CustomHeadersTest, RejectContact)
+TEST_F(SipParserTest, RejectContact)
 {
   pj_pool_t *main_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
                                                  PJSIP_POOL_RDATA_LEN,
@@ -678,7 +679,7 @@ TEST_F(CustomHeadersTest, RejectContact)
   pj_pool_release(clone_pool);
 }
 
-TEST_F(CustomHeadersTest, PAssociatedURI)
+TEST_F(SipParserTest, PAssociatedURI)
 {
   pj_pool_t *main_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
                                                  PJSIP_POOL_RDATA_LEN,
@@ -748,7 +749,7 @@ TEST_F(CustomHeadersTest, PAssociatedURI)
   pj_pool_release(clone_pool);
 }
 
-TEST_F(CustomHeadersTest, PAssertedIdentity)
+TEST_F(SipParserTest, PAssertedIdentity)
 {
   pj_pool_t *main_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
                                                  PJSIP_POOL_RDATA_LEN,
@@ -820,7 +821,7 @@ TEST_F(CustomHeadersTest, PAssertedIdentity)
 
 // Test that you can create a P-Profile-Key header, parse it and clone it
 // without any issues
-TEST_F(CustomHeadersTest, PProfileKey)
+TEST_F(SipParserTest, PProfileKey)
 {
   pj_pool_t *main_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
                                                  PJSIP_POOL_RDATA_LEN,
@@ -870,7 +871,7 @@ TEST_F(CustomHeadersTest, PProfileKey)
   pj_pool_release(clone_pool);
 }
 
-TEST_F(CustomHeadersTest, ServiceRoute)
+TEST_F(SipParserTest, ServiceRoute)
 {
   pj_pool_t *main_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
                                                  PJSIP_POOL_RDATA_LEN,
@@ -925,7 +926,7 @@ TEST_F(CustomHeadersTest, ServiceRoute)
   EXPECT_STREQ("Service-Route: <sip:sprout.example.com:5054;transport=TCP;lr;orig>;x=2;y=3", buf);
 }
 
-TEST_F(CustomHeadersTest, Path)
+TEST_F(SipParserTest, Path)
 {
   pj_pool_t *main_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
                                                  PJSIP_POOL_RDATA_LEN,
@@ -980,7 +981,7 @@ TEST_F(CustomHeadersTest, Path)
   EXPECT_STREQ("Path: <sip:12345678@example.com:5054;transport=TCP;lr>;x=2;y=3", buf);
 }
 
-TEST_F(CustomHeadersTest, MinSE)
+TEST_F(SipParserTest, MinSE)
 {
   pj_pool_t *main_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
                                                  PJSIP_POOL_RDATA_LEN,
@@ -1027,4 +1028,36 @@ TEST_F(CustomHeadersTest, MinSE)
     i++;
   }
   EXPECT_STREQ("Min-SE: 300;other-param=other-param-value", buf);
+}
+
+TEST_F(SipParserTest, StarHashToHeader)
+{
+  pj_pool_t *main_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
+                                                 PJSIP_POOL_RDATA_LEN,
+                                                 PJSIP_POOL_RDATA_INC);
+
+  string str("INVITE sip:6505554321@homedomain SIP/2.0\n"
+             "Via: SIP/2.0/TCP 10.0.0.1:5060;rport;branch=z9hG4bKPjPtVFjqo;alias\n"
+             "Max-Forwards: 63\n"
+             "From: <sip:6505551234@homedomain>;tag=1234\n"
+             "To: <sip:*1234#@homedomain>\n"
+             "Contact: <sip:6505551234@10.0.0.1:5060;transport=TCP;ob>\n"
+             "Call-ID: 1-13919@10.151.20.48\n"
+             "CSeq: 1 INVITE\n"
+             "Content-Length: 0\n\n");
+
+  pjsip_rx_data* rdata = build_rxdata(str, _tp_default, main_pool);
+  parse_rxdata(rdata);
+
+  pj_str_t header_name = pj_str("To");
+  pjsip_to_hdr* hdr =
+      (pjsip_to_hdr*)pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+                                                &header_name,
+                                                NULL);
+  EXPECT_NE(hdr, (pjsip_to_hdr*)NULL);
+  pjsip_name_addr* uri = (pjsip_name_addr*) hdr->uri;
+  pjsip_sip_uri* sip_uri = (pjsip_sip_uri*) uri->uri;
+  pj_str_t* user = &(sip_uri->user);
+  pj_str_t goal = pj_str("*1234#");
+  EXPECT_EQ(pj_strcmp(user, &goal), 0);
 }

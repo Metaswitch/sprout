@@ -145,7 +145,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        aschain_test.cpp \
                        sessioncase_test.cpp \
                        ifchandler_test.cpp \
-                       custom_headers_test.cpp \
+                       sip_parser_test.cpp \
                        connection_tracker_test.cpp \
                        quiescing_manager_test.cpp \
                        dialog_tracker_test.cpp \
