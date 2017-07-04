@@ -9,8 +9,12 @@
 
 FILENAME=enum.json
 KEY=enum_json
+SCHEMA=/usr/share/clearwater/clearwater-config-manager/scripts/config_validation/enum_schema.json
 
 . /usr/share/clearwater/utils/check-root-permissions 1
+
+# Validate config json against schema for syntactic errors
+python /usr/share/clearwater/clearwater-config-manager/scripts/validate_config.py $SCHEMA $FILENAME 
 
 # Pass optional argument directly to upload_json, which checks for --allow-large
 # option that allows file upload larger than advisable
