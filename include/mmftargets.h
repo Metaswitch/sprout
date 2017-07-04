@@ -23,7 +23,7 @@ class MMFTarget
 public:
   MMFTarget(const rapidjson::Value& config);
 
-  inline const std::string get_mmfcontext() const {return _name;};
+  inline const std::string get_target_name() const {return _name;};
   inline const std::vector<std::string>& get_addresses() const {return _addresses;};
 
   /// Return whether we should invoke MMF prior to routing a message to any

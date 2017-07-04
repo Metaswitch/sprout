@@ -10232,8 +10232,8 @@ TEST_F(SCSCFTest, MMFPreAs)
   std::string preas_uri = PJUtils::get_header_value(preas_hdr);
   EXPECT_THAT(preas_uri, MatchesRegex(".*sip:11.22.33.44:5053.*"));
   EXPECT_THAT(preas_uri, MatchesRegex(".*namespace=mmf.*"));
-  EXPECT_THAT(preas_uri, MatchesRegex(".*mmfcontext=pre-as.*"));
-  EXPECT_THAT(preas_uri, MatchesRegex(".*mmfscope=PreASOnly.*"));
+  EXPECT_THAT(preas_uri, MatchesRegex(".*mmfscope=pre-as.*"));
+  EXPECT_THAT(preas_uri, MatchesRegex(".*mmftarget=PreASOnly.*"));
   pj_list_erase(preas_hdr);
 
   // Ensure the AS header was added as expected, and remove it
@@ -10373,8 +10373,8 @@ TEST_F(SCSCFTest, MMFPostAs)
   std::string postas_uri = PJUtils::get_header_value(postas_hdr);
   EXPECT_THAT(postas_uri, MatchesRegex(".*sip:44.33.22.11:5053.*"));
   EXPECT_THAT(postas_uri, MatchesRegex(".*namespace=mmf.*"));
-  EXPECT_THAT(postas_uri, MatchesRegex(".*mmfcontext=post-as.*"));
-  EXPECT_THAT(postas_uri, MatchesRegex(".*mmfscope=PostASOnly.*"));
+  EXPECT_THAT(postas_uri, MatchesRegex(".*mmfscope=post-as.*"));
+  EXPECT_THAT(postas_uri, MatchesRegex(".*mmftarget=PostASOnly.*"));
   pj_list_erase(postas_hdr);
 
   // We have removed route headers to simulate the request being routed to the
@@ -10503,8 +10503,8 @@ TEST_F(SCSCFTest, MMFPreAndPostAs)
   //
   EXPECT_THAT(preas_uri, MatchesRegex(".*sip:11.22.33.44:5053.*"));
   EXPECT_THAT(preas_uri, MatchesRegex(".*namespace=mmf.*"));
-  EXPECT_THAT(preas_uri, MatchesRegex(".*mmfcontext=pre-as.*"));
-  EXPECT_THAT(preas_uri, MatchesRegex(".*mmfscope=BothPreAndPost.*"));
+  EXPECT_THAT(preas_uri, MatchesRegex(".*mmfscope=pre-as.*"));
+  EXPECT_THAT(preas_uri, MatchesRegex(".*mmftarget=BothPreAndPost.*"));
   pj_list_erase(preas_hdr);
 
   // Ensure the AS header was added as expected, and remove it
@@ -10518,8 +10518,8 @@ TEST_F(SCSCFTest, MMFPreAndPostAs)
   std::string postas_uri = PJUtils::get_header_value(postas_hdr);
   EXPECT_THAT(postas_uri, MatchesRegex(".*sip:44.33.22.11:5053.*"));
   EXPECT_THAT(postas_uri, MatchesRegex(".*namespace=mmf.*"));
-  EXPECT_THAT(postas_uri, MatchesRegex(".*mmfcontext=post-as.*"));
-  EXPECT_THAT(postas_uri, MatchesRegex(".*mmfscope=BothPreAndPost.*"));
+  EXPECT_THAT(postas_uri, MatchesRegex(".*mmfscope=post-as.*"));
+  EXPECT_THAT(postas_uri, MatchesRegex(".*mmftarget=BothPreAndPost.*"));
   pj_list_erase(postas_hdr);
 
   // We have removed route headers to simulate the request being routed from

@@ -112,7 +112,7 @@ const pj_str_t STR_SERVICE = pj_str((char*)"service");
 const pj_str_t STR_USERNAME = pj_str((char*)"username");
 const pj_str_t STR_NONCE = pj_str((char*)"nonce");
 const pj_str_t STR_NAMESPACE = pj_str((char*)"namespace");
-const pj_str_t STR_MMFCONTEXT = pj_str((char*)"mmfcontext");
+const pj_str_t STR_MMFTARGET = pj_str((char*)"mmftarget");
 const pj_str_t STR_MMFSCOPE = pj_str((char*)"mmfscope");
 
 /// Prefix of ODI tokens we generate.

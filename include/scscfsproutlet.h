@@ -297,7 +297,7 @@ private:
   void add_mmf_uri_parameters(pjsip_sip_uri* mmf_uri,
                               pj_str_t as_transport_param,
                               std::string mmfscope_param,
-                              std::string mmfcontext_param,
+                              std::string mmftarget_param,
                               pj_pool_t* pool);
 
   /// Route the request to an application server.
