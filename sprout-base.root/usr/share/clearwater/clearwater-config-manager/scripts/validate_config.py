@@ -31,5 +31,6 @@ if error_list:
     print "{} fails the following format check against {}:".format(config_file,
             schema_file)
     for error in error_list:
-        print "     {},     {}".format(error.message, error.schema_path)
+        print "        {}    found in {}".format(error.message, 
+                " -> ".join(error.schema_path))
     sys.exit(1)
