@@ -10,7 +10,8 @@
         "properties": {
           "server": {
             "type": "string",
-            "format": "uri"
+            "format": "uri",
+            "regex": "^sip:"
           },
           "priority": {
             "type": "integer",
