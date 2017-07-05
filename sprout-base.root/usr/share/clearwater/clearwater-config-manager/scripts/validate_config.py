@@ -1,5 +1,3 @@
-#!/bin/bash
-
 # Copyright (C) Metaswitch Networks 2017
 # If license terms are provided to you in a COPYING file in the root directory
 # of the source code repository by which you are accessing this code, then
@@ -17,18 +15,21 @@ config_file = sys.argv[2]
 try:
     schema = json.load(open(schema_file))
 except ValueError:
-    print "Uploading {} is aborted: {} is not valid json".format(config_file, schema_file)
+    print "{} is not valid json".format(schema_file)
+    sys.exit(1)
 
 try:
     config = json.load(open(config_file))
 except ValueError:
-    print "Uploading {} is aborted: it is not valid json".format(config_file)
+    print "{} is not valid json".format(config_file)
+    sys.exit(1)
 
 validator = jsonschema.Draft3Validator(schema)
 error_list = validator.iter_errors(config)
 
-if error_list is not None:
-    print "Uploading {} is aborted as the file fails the following format check:".format(config_file)
+if error_list:
+    print "{} fails the following format check against {}:".format(config_file,
+            schema_file)
     for error in error_list:
-        print "     {}".format(error.message)
-
+        print "     {},     {}".format(error.message, error.schema_path)
+    sys.exit(1)
