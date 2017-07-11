@@ -208,16 +208,6 @@ static const PDLog2<const char*, int> CL_SPROUT_HTTP_INTERFACE_STOP_FAIL
   "None."
 );
 
-static const PDLog2<const char*, const char*> CL_SPROUT_SIP_SEND_REQUEST_ERR
-(
-  PDLogBase::CL_SPROUT_ID + 23,
-  LOG_ERR,
-  "Failed to send SIP request to %s with error %s.",
-  "An attempt to send a SIP request failed.",
-  "This may cause a call to fail.",
-  "If the problem persists check the network connectivity."
-);
-
 static const PDLog CL_SPROUT_SIP_DEADLOCK
 (
   PDLogBase::CL_SPROUT_ID + 24,
