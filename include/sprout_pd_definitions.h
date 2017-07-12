@@ -420,7 +420,7 @@ static const PDLog2<const char *, const char*> CL_SPROUT_SESS_CONT_AS_COMM_FAILU
   LOG_ERR,
   "Sprout is currently unable to successfully communicate with an Application Server that uses session continued default handling. The server's URI is %s. Failure reason: %s",
   "Communication is failing to an Application server",
-  "Probable minor degradation of service, or loss of a supplemental service. The precise impact will vary depending on the role of the Application Server in the deployment.",
+  "Probable minor degradation of service, loss of a supplemental service or increased call setup time. The precise impact will vary depending on the role of the Application Server in the deployment.",
   "Investigate why communication to this Application Server is failing. It might be due to failure of the AS, misconfiguration of Initial Filter Criteria, or network / DNS problems"
 );
 
