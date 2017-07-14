@@ -248,7 +248,7 @@
                     "details": "Sprout cannot successfully communicate with one or more Application Servers that use session continued default handling. Check that all ASs are operational, they have network connectivity to Sprout, and iFCs are properly configured.",
                     "description": "Sprout: Communication error to session continued Application Server.",
                     "cause": "Sprout is unable to successfully communicate with at least one active Application Server that uses session continued iFC default handling.",
-                    "effect": "Probable minor degradation of service, loss of a supplemental service or increased call setup time. The precise impact will vary depending on the role of Application Servers in the deployment.",
+                    "effect": "The service(s) provided by this Application Server will be unavailable until communication is restored. In addition, call setup time will likely be increased for all subscribers configured to use this Application Server.",
                     "action": "Use ENT logs to identify which Application Servers cannot be successfully communicated with and investigate the cause. It might be due to failure of an AS, misconfiguration of Initial Filter Criteria, or network / DNS problems. Once the issue has been resolved this alarm will clear after approximately 5-10 minutes."
                 }
             ]
