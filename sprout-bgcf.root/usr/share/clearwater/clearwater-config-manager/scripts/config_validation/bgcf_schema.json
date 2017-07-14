@@ -13,7 +13,7 @@
           },
           "domain": {
             "type": "string",
-            "description": "SIP trunk IP address or domain name"
+            "description": "SIP trunk IP address or domain name",
             "maxLength": 253
           },
           "number": {
@@ -25,8 +25,7 @@
             "type": "array",
             "items": {
               "type": "string",
-              "format": "uri",
-              "regex": "^sip:",
+              "pattern": "^sip:",
               "minItems": 1
             }
           }
