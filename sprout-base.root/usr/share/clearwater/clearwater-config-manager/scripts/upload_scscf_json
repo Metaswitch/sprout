@@ -9,20 +9,17 @@
 
 FILENAME=s-cscf.json
 KEY=scscf_json
-SCHEMA=/usr/share/clearwater/clearwater-config-manager/scripts/scscf_schema.json
+SCHEMA=/usr/share/clearwater/clearwater-config-manager/scripts/config_validation/scscf_schema.json
 
 . /usr/share/clearwater/utils/check-root-permissions 1
 
-# Validate config json against schema for syntactic errors
-python /usr/share/clearwater/clearwater-config-manager/scripts/validate_config.py $SCHEMA $FILENAME 
-
-# Abort uploading and warn user if validation fails
-rc=$?
-if [[ $rc != 0 ]]; then
-  echo "Abort uploading $FILENAME, pls fix the syntax and upload again"
-  return $rc
-fi
-
 # Pass optional argument directly to upload_json, which checks for --allow-large
 # option that allows file upload larger than advisable
-/usr/share/clearwater/clearwater-config-manager/scripts/upload_json $FILENAME $KEY $1
+/usr/share/clearwater/clearwater-config-manager/scripts/upload_generic_json $FILENAME $KEY $SCHEMA $@
+
+rc=$?
+if [[ $rc == 0 ]]; then
+  echo "Successfully uploaded the new S-CSCF configuration"
+fi
+
+exit $rc

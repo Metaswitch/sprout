@@ -11,7 +11,7 @@
           "server": {
             "type": "string",
             "format": "uri",
-            "regex": "^sip:"
+            "pattern": "^sip:"
           },
           "priority": {
             "type": "integer",
@@ -27,7 +27,9 @@
             "description": "Each number represents a capability, as defined by the operator",
             "type": "array",
             "items": {
-              "type": "integer"
+              "type": "integer",
+              "maximum": 4294967295,
+              "minimum": 0
             }
           }
         },
