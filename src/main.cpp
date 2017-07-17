@@ -2394,14 +2394,34 @@ int main(int argc, char* argv[])
                                             hss_connection);
   AuthTimeoutTask::Config auth_timeout_config(local_impi_store,
                                               hss_connection);
+
+  // These tasks can cause a request to be sent to an application server
+  // relating to a third party registration, which may cause fallback iFCs to
+  // be invoked. We don't increment any statistics relating to the fallback
+  // iFCs in these flows though (as they should only be used on initial
+  // registration).
   DeregistrationTask::Config deregistration_config(local_sdm,
                                                    remote_sdms,
                                                    hss_connection,
+                                                   fifc_service,
+                                                   IFCConfiguration(opt.apply_fallback_ifcs,
+                                                                    opt.reject_if_no_matching_ifcs,
+                                                                    opt.dummy_app_server,
+                                                                    NULL,
+                                                                    NULL),
                                                    sip_resolver,
                                                    local_impi_store,
                                                    remote_impi_stores);
   GetCachedDataTask::Config get_cached_data_config(local_sdm, remote_sdms);
-  DeleteImpuTask::Config delete_impu_config(local_sdm, remote_sdms, hss_connection);
+  DeleteImpuTask::Config delete_impu_config(local_sdm,
+                                            remote_sdms,
+                                            hss_connection,
+                                            fifc_service,
+                                            IFCConfiguration(opt.apply_fallback_ifcs,
+                                                             opt.reject_if_no_matching_ifcs,
+                                                             opt.dummy_app_server,
+                                                             NULL,
+                                                             NULL));
 
   // The AoRTimeoutTask and AuthTimeoutTask both handle
   // chronos requests, so use the ChronosHandler.

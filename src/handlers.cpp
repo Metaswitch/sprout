@@ -478,6 +478,8 @@ HTTPCode DeregistrationTask::handle_request()
     SubscriberDataManager::AoRPair* aor_pair =
       deregister_bindings(_cfg->_sdm,
                           _cfg->_hss,
+                          _cfg->_fifc_service,
+                          _cfg->_ifc_configuration,
                           it->first,
                           it->second,
                           NULL,
@@ -499,6 +501,8 @@ HTTPCode DeregistrationTask::handle_request()
           SubscriberDataManager::AoRPair* remote_aor_pair =
             deregister_bindings(*sdm,
                                 _cfg->_hss,
+                                _cfg->_fifc_service,
+                                _cfg->_ifc_configuration,
                                 it->first,
                                 it->second,
                                 aor_pair,
@@ -568,6 +572,8 @@ void DeregistrationTask::delete_impi_from_store(ImpiStore* store,
 SubscriberDataManager::AoRPair* DeregistrationTask::deregister_bindings(
                                         SubscriberDataManager* current_sdm,
                                         HSSConnection* hss,
+                                        FIFCService* fifc_service,
+                                        IFCConfiguration ifc_configuration,
                                         std::string aor_id,
                                         std::string private_id,
                                         SubscriberDataManager::AoRPair* previous_aor_pair,
@@ -648,6 +654,8 @@ SubscriberDataManager::AoRPair* DeregistrationTask::deregister_bindings(
     if (got_ifcs)
     {
       RegistrationUtils::deregister_with_application_servers(ifc_map[aor_id],
+                                                             fifc_service,
+                                                             ifc_configuration,
                                                              current_sdm,
                                                              remote_sdms,
                                                              hss,
@@ -890,6 +898,8 @@ void DeleteImpuTask::run()
     RegistrationUtils::remove_bindings(_cfg->_sdm,
                                        _cfg->_remote_sdms,
                                        _cfg->_hss,
+                                       _cfg->_fifc_service,
+                                       _cfg->_ifc_configuration,
                                        impu,
                                        "*",
                                        HSSConnection::DEREG_ADMIN,

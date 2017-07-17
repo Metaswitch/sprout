@@ -55,7 +55,9 @@ RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
                                        int cfg_max_expires,
                                        bool force_original_register_inclusion,
                                        SNMP::RegistrationStatsTables* reg_stats_tbls,
-                                       SNMP::RegistrationStatsTables* third_party_reg_stats_tbls):
+                                       SNMP::RegistrationStatsTables* third_party_reg_stats_tbls,
+                                       FIFCService* fifc_service,
+                                       IFCConfiguration ifc_configuration) :
   Sproutlet(name, port, uri),
   _sdm(reg_sdm),
   _remote_sdms(reg_remote_sdms),
@@ -65,6 +67,8 @@ RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
   _force_original_register_inclusion(force_original_register_inclusion),
   _reg_stats_tbls(reg_stats_tbls),
   _third_party_reg_stats_tbls(third_party_reg_stats_tbls),
+  _fifc_service(fifc_service),
+  _ifc_configuration(ifc_configuration),
   _next_hop_service(next_hop_service)
 {
 }
@@ -130,7 +134,10 @@ SproutletTsx* RegistrarSproutlet::get_tsx(SproutletHelper* helper,
        (uri_class == HOME_DOMAIN_SIP_URI)) &&
       (PJUtils::check_route_headers(req)))
   {
-    return (SproutletTsx*)new RegistrarSproutletTsx(this, _next_hop_service);
+    return (SproutletTsx*)new RegistrarSproutletTsx(this,
+                                                    _next_hop_service,
+                                                    _fifc_service,
+                                                    _ifc_configuration);
   }
 
   // We're not interested in the message so create a next hop URI.
@@ -144,9 +151,13 @@ SproutletTsx* RegistrarSproutlet::get_tsx(SproutletHelper* helper,
 }
 
 RegistrarSproutletTsx::RegistrarSproutletTsx(RegistrarSproutlet* registrar,
-                                             const std::string& next_hop_service) :
+                                             const std::string& next_hop_service,
+                                             FIFCService* fifc_service,
+                                             IFCConfiguration ifc_configuration) :
   ForwardingSproutletTsx(registrar, next_hop_service),
-  _registrar(registrar)
+  _registrar(registrar),
+  _fifc_service(fifc_service),
+  _ifc_configuration(ifc_configuration)
 {
   TRC_DEBUG("Registrar Transaction (%p) created", this);
 }
@@ -433,6 +444,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                                                 _registrar->_remote_sdms,
                                                 private_id_for_binding,
                                                 all_bindings_expired);
+
   if (all_bindings_expired)
   {
     TRC_DEBUG("All bindings have expired - triggering deregistration at the HSS");
@@ -816,6 +828,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     }
 
     RegistrationUtils::register_with_application_servers(ifc_map[public_id],
+                                                         _registrar->_fifc_service,
+                                                         _registrar->_ifc_configuration,
                                                          _registrar->_sdm,
                                                          _registrar->_remote_sdms,
                                                          _registrar->_hss,

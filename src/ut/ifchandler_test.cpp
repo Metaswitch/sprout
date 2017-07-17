@@ -21,6 +21,7 @@
 #include "fakechronosconnection.hpp"
 
 #include "ifchandler.h"
+#include "registration_utils.h"
 
 using namespace std;
 
@@ -212,12 +213,17 @@ void IfcHandlerTest::doBaseTest(string description,
   char* cstr_ifc = strdup(ifc.c_str());
   root->parse<0>(cstr_ifc);
   Ifcs* ifcs = new Ifcs(root, root->first_node("ServiceProfile"), NULL, 0);
-  ifcs->interpret(sescase,
-                  reg,
-                  initial_registration,
-                  msg,
-                  application_servers,
-                  0);
+  bool found_match;
+  RegistrationUtils::interpret_ifcs(*ifcs,
+                                    {},
+                                    IFCConfiguration(false,false,"",NULL,NULL),
+                                    sescase,
+                                    reg,
+                                    initial_registration,
+                                    msg,
+                                    application_servers,
+                                    found_match,
+                                    0);
   delete ifcs;
   free(cstr_ifc);
   EXPECT_EQ(expected ? 1u : 0u, application_servers.size());

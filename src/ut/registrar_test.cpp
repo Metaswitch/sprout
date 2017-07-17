@@ -14,6 +14,7 @@
 #include "gtest/gtest.h"
 
 #include "siptest.hpp"
+#include "test_utils.hpp"
 #include "utils.h"
 #include "stack.h"
 #include "registrarsproutlet.h"
@@ -164,6 +165,7 @@ public:
     _remote_sdms = {_remote_sdm};
     _acr_factory = new ACRFactory();
     _hss_connection = new FakeHSSConnection();
+    _fifc_service = new FIFCService(NULL, string(UT_DIR).append("/test_registrar_fifc.xml"));
   }
 
   static void TearDownTestCase()
@@ -171,6 +173,7 @@ public:
     // Shut down the transaction module first, before we destroy the
     // objects that might handle any callbacks!
     pjsip_tsx_layer_destroy();
+    delete _fifc_service; _fifc_service = NULL;
     delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _remote_sdm; _remote_sdm = NULL;
@@ -212,6 +215,11 @@ public:
     _local_data_store->flush_all();  // start from a clean slate on each test
     _remote_data_store->flush_all();
 
+    IFCConfiguration ifc_configuration(false,
+                                       false,
+                                       "sip:dummyas",
+                                       &SNMP::FAKE_COUNTER_TABLE,
+                                       &SNMP::FAKE_COUNTER_TABLE);
     _registrar_sproutlet = new RegistrarSproutlet("registrar",
                                                   5058,
                                                   "sip:registrar.homedomain:5058;transport=tcp",
@@ -223,7 +231,9 @@ public:
                                                   300,
                                                   false,
                                                   &SNMP::FAKE_REGISTRATION_STATS_TABLES,
-                                                  &SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES);
+                                                  &SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES,
+                                                  _fifc_service,
+                                                  ifc_configuration);
 
     EXPECT_TRUE(_registrar_sproutlet->init());
 
@@ -324,6 +334,7 @@ public:
 protected:
   static LocalStore* _local_data_store;
   static LocalStore* _remote_data_store;
+  static FIFCService* _fifc_service;
   static SubscriberDataManager* _sdm;
   static SubscriberDataManager* _remote_sdm;
   static std::vector<SubscriberDataManager*> _remote_sdms;
@@ -668,6 +679,7 @@ FakeHSSConnection* RegistrarTest::_hss_connection;
 FakeHSSConnection* RegistrarObservedHssTest::_observed_hss_connection;
 MockHSSConnection* RegistrarObservedHssTest::_hss_connection_observer;
 FakeChronosConnection* RegistrarTest::_chronos_connection;
+FIFCService* RegistrarTest::_fifc_service;
 
 TEST_F(RegistrarTest, NotRegister)
 {
@@ -1436,6 +1448,8 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
   RegistrationUtils::remove_bindings(_sdm,
                                      _remote_sdms,
                                      _hss_connection,
+                                     NULL,
+                                     IFCConfiguration(false, false, "", NULL, NULL),
                                      user,
                                      "*",
                                      HSSConnection::DEREG_ADMIN,
@@ -1877,6 +1891,211 @@ TEST_F(RegistrarTest, AssociatedUrisNotFound)
   EXPECT_EQ("Forbidden", str_pj(out->line.status.reason));
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_attempts);
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.de_reg_tbl)->_failures);
+}
+
+// Test that application servers that match the dummy application server don't
+// get forwarded registrations
+TEST_F(RegistrarTest, AppServersInitialRegistrationDummyAppServer)
+{
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "    <Priority>1</Priority>\n"
+                                   "    <TriggerPoint>\n"
+                                   "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                   "    <SPT>\n"
+                                   "      <ConditionNegated>0</ConditionNegated>\n"
+                                   "      <Group>0</Group>\n"
+                                   "      <Method>REGISTER</Method>\n"
+                                   "      <Extension><RegistrationType>0</RegistrationType></Extension>\n"
+                                   "    </SPT>\n"
+                                   "  </TriggerPoint>\n"
+                                   "  <ApplicationServer>\n"
+                                   "    <ServerName>sip:dummyas</ServerName>\n"
+                                   "    <DefaultHandling>0</DefaultHandling>\n"
+                                   "  </ApplicationServer>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  Message msg;
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  ReqMatcher r1("REGISTER");
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
+  free_txdata();
+}
+
+// Test that fallback iFCs are applied if there are no matching standard iFCs
+// and fallback iFCs are enabled.
+TEST_F(RegistrarTest, FallbackiFCs)
+{
+  _registrar_sproutlet->_ifc_configuration._apply_fallback_ifcs = true;
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+
+  SCOPED_TRACE("REGISTER (1)");
+  Message msg;
+  msg._expires = "Expires: 800";
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  SCOPED_TRACE("REGISTER (about to inject)");
+  inject_msg(msg.get());
+  SCOPED_TRACE("REGISTER (injected)");
+  ASSERT_EQ(2, txdata_count());
+  SCOPED_TRACE("REGISTER (forwarded)");
+  // REGISTER passed on to AS
+  pjsip_msg* out = current_txdata()->msg;
+  ReqMatcher r1("REGISTER");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  EXPECT_EQ(NULL, out->body);
+
+  tpAS.expect_target(current_txdata(), false);
+  inject_msg(respond_to_current_txdata(200));
+
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
+
+  SCOPED_TRACE("REGISTER (200 OK)");
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
+  free_txdata();
+}
+
+// Test that fallback iFCs aren't applied if there are no matching standard iFCs
+// but fallback iFCs aren't enabled.
+TEST_F(RegistrarTest, FallbackiFCsNotEnabled)
+{
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  Message msg;
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
+  free_txdata();
+}
+
+// Test that fallback iFCs aren't applied if they match a dummy AS
+TEST_F(RegistrarTest, FallbackiFCsDummyAS)
+{
+  _registrar_sproutlet->_ifc_configuration._apply_fallback_ifcs = true;
+  _registrar_sproutlet->_ifc_configuration._dummy_as = "sip:1.2.3.4:56789;transport=UDP";
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  Message msg;
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
+  free_txdata();
+}
+
+// Test that fallback iFCs aren't applied if they don't match
+TEST_F(RegistrarTest, FallbackiFCsNoMatching)
+{
+  _registrar_sproutlet->_ifc_configuration._apply_fallback_ifcs = true;
+  _hss_connection->set_impu_result("sip:6505551111@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  Message msg;
+  msg._user = "6505551111";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
+  free_txdata();
+}
+
+// Test that fallback iFCs aren't applied if they match a dummy AS, but that
+// we don't then tear down the registration
+TEST_F(RegistrarTest, FallbackiFCsMatchingDummyReject)
+{
+  _registrar_sproutlet->_ifc_configuration._apply_fallback_ifcs = true;
+  _registrar_sproutlet->_ifc_configuration._dummy_as = "sip:1.2.3.4:56789;transport=UDP";
+  _registrar_sproutlet->_ifc_configuration._reject_if_no_matching_ifcs = true;
+
+  _hss_connection->set_impu_result("sip:6505551111@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  Message msg;
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
+  free_txdata();
+}
+
+// Test that if there are no matching fallback iFCs we tear down the registration
+TEST_F(RegistrarTest, FallbackiFCsNoMatchingReject)
+{
+  _registrar_sproutlet->_ifc_configuration._apply_fallback_ifcs = true;
+  _registrar_sproutlet->_ifc_configuration._reject_if_no_matching_ifcs = true;
+  _hss_connection->set_impu_result("sip:6505551111@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  Message msg;
+  msg._user = "6505551111";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
+  free_txdata();
+}
+
+// Test that if there are no matching iFCs and we're not using fallback iFCs we tear down the registration
+TEST_F(RegistrarTest, iFCsNoMatchingReject)
+{
+  _registrar_sproutlet->_ifc_configuration._reject_if_no_matching_ifcs = true;
+  _hss_connection->set_impu_result("sip:6505551111@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  Message msg;
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
+  free_txdata();
 }
 
 /// Homestead fails associated URI request
@@ -2940,6 +3159,7 @@ public:
     _chronos_connection->set_result("", HTTP_OK);
     _chronos_connection->set_result("post_identity", HTTP_OK);
 
+    IFCConfiguration ifc_configuration(false ,false, "", NULL, NULL);
     _registrar_sproutlet = new RegistrarSproutlet("registrar",
                                                   5058,
                                                   "sip:registrar.homedomain:5058;transport=tcp",
@@ -2951,7 +3171,9 @@ public:
                                                   300,
                                                   false,
                                                   &SNMP::FAKE_REGISTRATION_STATS_TABLES,
-                                                  &SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES);
+                                                  &SNMP::FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES,
+                                                  NULL,
+                                                  ifc_configuration);
 
     _registrar_sproutlet->init();
 
