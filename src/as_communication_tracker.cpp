@@ -24,7 +24,11 @@ AsCommunicationTracker::AsCommunicationTracker(Alarm* alarm,
   // Clear the alarm on startup so we don't get alarms hanging over from a
   // previous run. If an AS is actually in error, we'll alarm as soon as we
   // detect a failure.
-  _alarm->clear();
+  // Wrapped in if test as _alarm is NULL in UTs
+  if (_alarm)
+  {
+    _alarm->clear();
+  }
 }
 
 
