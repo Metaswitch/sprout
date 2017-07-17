@@ -138,36 +138,6 @@ Ifcs::~Ifcs()
 {
 }
 
-
-/// Get the list of application servers that should apply to this
-// message, given a list of iFCs to consider.
-//
-// Only for use in third-party registration; in the normal case, an
-// iFC should be evaluated according to the message as processed by
-// all ASs so far, rather than the initial message as it arrived at
-// Sprout.  See 3GPP TS 23.218, especially s5.2 and s6.
-void Ifcs::interpret(const SessionCase& session_case,  //< The session case
-                     bool is_registered,               //< Whether the served user is registered
-                     bool is_initial_registration,
-                     pjsip_msg* msg,                   //< The message starting the dialog
-                     std::vector<AsInvocation>& application_servers, //< OUT: the list of application servers
-                     SAS::TrailId trail) const  //< SAS trail
-{
-  TRC_DEBUG("Interpreting %s iFC information", session_case.to_string().c_str());
-  for (std::vector<Ifc>::const_iterator it = _ifcs.begin();
-       it != _ifcs.end();
-       ++it)
-  {
-    if (it->filter_matches(session_case, is_registered, is_initial_registration, msg, trail))
-    {
-      application_servers.push_back(it->as_invocation());
-    }
-  }
-
-  // TODO - waiting on spec finalization for third party registrations
-}
-
-
 /// Extracts the served user from a SIP message.  Behaviour depends on
 /// the session case.
 //
