@@ -20,6 +20,11 @@ AsCommunicationTracker::AsCommunicationTracker(Alarm* alarm,
   _as_ok_log(as_ok_log)
 {
   pthread_mutex_init(&_lock, NULL);
+
+  // Clear the alarm on startup so we don't get alarms hanging over from a
+  // previous run. If an AS is actually in error, we'll alarm as soon as we
+  // detect a failure.
+  _alarm->clear();
 }
 
 
