@@ -240,6 +240,29 @@ pj_xml_node* notify_create_reg_state_xml(
                  &gruu,
                  Utils::xml_escape((*bni)->_b->pub_gruu_str(pool)).c_str());
 
+      // Add all 'unknown parameters' from the contact header into the element
+      // as <unknown-param> elements.
+      for (const std::pair<std::string, std::string>& param: (*bni)->_b->_params)
+      {
+        // RFC 3680 defines unknown parameters as any parameter not defined in
+        // RFC 3261. RFC 3261 defines 'q' and 'expires' so don't add these.
+        if ((param.first != "q") && (param.first != "expires"))
+        {
+          // Add the parameter value as the element content, and the parameter
+          // name as the 'name' attribute.
+          pj_xml_node* unknown_param_node = pj_xml_node_new(pool, &STR_UNKNOWN_PARAM);
+          std::string escaped_value = Utils::xml_check_escape(param.second);
+          pj_strdup2(pool, &unknown_param_node->content, escaped_value.c_str());
+
+          pj_str_t param_name;
+          pj_strdup2(pool, &param_name, param.first.c_str());
+          pj_xml_attr* name_attr = pj_xml_attr_new(pool, &STR_NAME, &param_name);
+          pj_xml_add_attr(unknown_param_node, name_attr);
+
+          pj_xml_add_node(contact_node, unknown_param_node);
+        }
+      }
+
       if (gruu.slen != 0)
       {
         TRC_DEBUG("Create pub-gruu node");
