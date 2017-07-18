@@ -18,6 +18,7 @@
 #include <list>
 
 #include "basicproxy.h"
+#include "pjutils.h"
 #include "sproutlet.h"
 #include "snmp_sip_request_types.h"
 #include "sproutlet_options.h"
@@ -112,6 +113,16 @@ protected:
     SproutletProxy::UASTsx* uas_tsx;
     SproutletWrapper* sproutlet_wrapper;
     void* context;
+  };
+
+  // The timer callback object, which is run on a worker thread
+  class SproutletTimerCallback : public PJUtils::Callback
+  {
+    pj_timer_entry* _timer_entry;
+
+  public:
+    SproutletTimerCallback(pj_timer_entry* timer);
+    void run() override;
   };
 
   bool schedule_timer(pj_timer_entry* tentry, int duration);
@@ -225,6 +236,7 @@ protected:
     std::set<pj_timer_entry*> _pending_timers;
 
     friend class SproutletWrapper;
+    friend class SproutletTimerCallback;
   };
 
   pjsip_sip_uri* _root_uri;

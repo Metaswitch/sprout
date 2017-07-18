@@ -24,6 +24,7 @@ extern "C" {
 #include "sproutsasevent.h"
 #include "sproutletproxy.h"
 #include "snmp_sip_request_types.h"
+#include "thread_dispatcher.h"
 
 const pj_str_t SproutletProxy::STR_SERVICE = {"service", 7};
 
@@ -35,6 +36,16 @@ enum SPROUTLET_SELECTION_TYPES
   DOMAIN_PART,
   USER_PART,
 };
+
+SproutletProxy::SproutletTimerCallback::SproutletTimerCallback(pj_timer_entry* timer) :
+_timer_entry(timer)
+{
+}
+
+void SproutletProxy::SproutletTimerCallback::run()
+{
+  ((SproutletTimerCallbackData*)_timer_entry->user_data)->uas_tsx->process_timer_pop(_timer_entry);
+}
 
 /// Constructor.
 SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
@@ -998,7 +1009,22 @@ void SproutletProxy::UASTsx::on_timer_pop(pj_timer_heap_t* th,
                                           pj_timer_entry* tentry)
 {
   TRC_DEBUG("Sproutlet timer popped, id = %ld", (TimerID)tentry);
-  ((SproutletTimerCallbackData*)tentry->user_data)->uas_tsx->process_timer_pop(tentry);
+
+  SproutletTimerCallback* callback = new SproutletTimerCallback(tentry);
+#ifndef UNIT_TEST
+  if (is_pjsip_transport_thread())
+  {
+    // Timer pops happen on the main pjsip transport thread, but we want to
+    // handle them on a worker thread
+    add_callback_to_queue(callback);
+  }
+  else
+#endif
+  {
+    // The UTs have a different threading model, so we run the callback directly
+    callback->run();
+    delete callback; callback = NULL;
+  }
 }
 
 
