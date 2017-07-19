@@ -243,6 +243,19 @@ string SubscribeMessage::get()
   char buf[16384];
 
   std::string branch = _branch.empty() ? "Pjmo1aimuq33BAI4rjhgQgBr4sY" + std::to_string(_unique) : _branch;
+  std::string from_uri;
+  std::string to_uri;
+
+  if (_scheme == "tel")
+  {
+    from_uri = string(_scheme).append(":").append(_subscribing_user); 
+    to_uri = string(_scheme).append(":").append(_user);
+  }
+  else
+  {
+    from_uri = string(_scheme).append(":").append(_subscribing_user).append("@").append(_domain);
+    to_uri = string(_scheme).append(":").append(_user).append("@").append(_domain);
+  }
 
   int n = snprintf(buf, sizeof(buf),
                    "%1$s sip:%3$s SIP/2.0\r\n"
@@ -272,7 +285,7 @@ string SubscribeMessage::get()
                    "%6$s",
 
                    /*  1 */ _method.c_str(),
-                   /*  2 */ (_scheme == "tel") ? string(_scheme).append(":").append(_user).c_str() : string(_scheme).append(":").append(_user).append("@").append(_domain).c_str(),
+                   /*  2 */ to_uri.c_str(),
                    /*  3 */ _domain.c_str(),
                    /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
                    /*  5 */ (int)_body.length(),
@@ -287,7 +300,7 @@ string SubscribeMessage::get()
                    /* 14 */ _to_tag.empty() ? "": string(";tag=").append(_to_tag).c_str(),
                    /* 15 */ branch.c_str(),
                    /* 16 */ _unique,
-                   /* 17 */ (_scheme == "tel") ? string(_scheme).append(":").append(_subscribing_user).c_str() : string(_scheme).append(":").append(_subscribing_user).append("@").append(_domain).c_str()
+                   /* 17 */ from_uri.c_str()
     );
 
   EXPECT_LT(n, (int)sizeof(buf));
@@ -1031,7 +1044,7 @@ TEST_F(SubscriptionTest, NoDefaultID)
 }
 
 // Check that if the UE and then the P-CSCF both subscribe both subscribe to
-// the UE's registration state, the UE only gets one NOTIFY, not two
+// the UE's registration state, the UE only gets one NOTIFY, not two.
 TEST_F(SubscriptionTest, NoDuplicateNotifyOnPCSCFSubscribe)
 {
   check_subscriptions("sip:6505550231@homedomain", 0u);
@@ -1051,7 +1064,7 @@ TEST_F(SubscriptionTest, NoDuplicateNotifyOnPCSCFSubscribe)
   msg._unique++;
   inject_msg(msg.get());  
 
-  std::string to_tag = check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
   check_subscriptions("sip:6505550231@homedomain", 2u);
 }
 
@@ -1179,7 +1192,6 @@ std::string SubscriptionTest::check_OK_and_NOTIFY(std::string reg_state,
 
   return to_tag;
 }
-
 
 /// Fixture for Subscription tests that use a mock store instead of a fake one.
 /// Also use a real analyticslogger to get UT coverage of that.

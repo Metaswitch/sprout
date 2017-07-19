@@ -588,9 +588,6 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
       // Update/create the subscription.
       subscription->_req_uri = contact_uri;
 
-      pjsip_cseq_hdr* cseq_hdr = (pjsip_cseq_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_CSEQ, NULL);
-      subscription->_last_cseq = cseq_hdr->cseq;
-
       subscription->_route_uris.clear();
       pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(req,
                                                                         PJSIP_H_RECORD_ROUTE,
@@ -614,6 +611,7 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
       subscription->_to_tag = subscription_id;
       subscription->_from_uri = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, from->uri);
       subscription->_from_tag = PJUtils::pj_str_to_string(&from->tag);
+      subscription->_refreshed = true;
 
       // Calculate the expiry period for the subscription.
       expiry = (expires != NULL) ?

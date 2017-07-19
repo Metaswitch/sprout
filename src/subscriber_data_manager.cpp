@@ -1017,7 +1017,6 @@ void SubscriberDataManager::AoR::Subscription::
     writer.String(JSON_TO_URI); writer.String(_to_uri.c_str());
     writer.String(JSON_TO_TAG); writer.String(_to_tag.c_str());
     writer.String(JSON_CID); writer.String(_cid.c_str());
-    writer.String(JSON_LAST_CSEQ); writer.Int(_last_cseq);
 
     writer.String(JSON_ROUTES);
     writer.StartArray();
@@ -1046,14 +1045,6 @@ void SubscriberDataManager::AoR::Subscription::from_json(const rapidjson::Value&
   JSON_GET_STRING_MEMBER(s_obj, JSON_TO_URI, _to_uri);
   JSON_GET_STRING_MEMBER(s_obj, JSON_TO_TAG, _to_tag);
   JSON_GET_STRING_MEMBER(s_obj, JSON_CID, _cid);
-  if (s_obj.HasMember(JSON_LAST_CSEQ))
-  {
-    JSON_GET_INT_MEMBER(s_obj, JSON_LAST_CSEQ, _last_cseq);
-  }
-  else
-  {
-    _last_cseq = -1;
-  }
 
   JSON_ASSERT_CONTAINS(s_obj, JSON_ROUTES);
   JSON_ASSERT_ARRAY(s_obj[JSON_ROUTES]);
@@ -1607,7 +1598,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
                                SAS::TrailId trail)
 {
   std::vector<std::string> expired_binding_uris;  
-  std::vector<NotifyUtils::BindingNotifyInformation*> all_bnis;  
+  ClassifiedBindings binding_info_to_notify;  
   bool bindings_changed = false;
 
   // Iterate over the bindings in the original AoR. Find any that aren't in the current
@@ -1615,20 +1606,21 @@ void SubscriberDataManager::NotifySender::send_notifys(
   for (std::pair<std::string, SubscriberDataManager::AoR::Binding*> aor_orig_b :
          aor_pair->get_orig()->bindings())
   {
-    SubscriberDataManager::AoR::Binding* b = aor_orig_b.second;
+    SubscriberDataManager::AoR::Binding* binding = aor_orig_b.second;
     std::string b_id = aor_orig_b.first;
 
     // Compare the original and current lists to see whether this binding has expired.
-    if ((!b->_emergency_registration) &&
+    // Emergency bindings are excluded from notifications.
+    if ((!binding->_emergency_registration) &&
         (aor_pair->get_current()->bindings().find(b_id) == aor_pair->get_current()->bindings().end()))
     {
-      TRC_DEBUG("Binding %s has expired", b_id);
-      expired_binding_uris.push_back(b->_uri);
+      TRC_DEBUG("Binding %s has expired", b_id.c_str());
+      expired_binding_uris.push_back(binding->_uri);
       NotifyUtils::BindingNotifyInformation* bni =
                new NotifyUtils::BindingNotifyInformation(b_id,
-                                                         b,
+                                                         binding,
                                                          NotifyUtils::ContactEvent::EXPIRED);      
-      all_bnis.push_back(bni);
+      binding_info_to_notify.push_back(bni);
       bindings_changed = true;
     }
   }
@@ -1638,10 +1630,10 @@ void SubscriberDataManager::NotifySender::send_notifys(
   for (std::pair<std::string, SubscriberDataManager::AoR::Binding*> aor_current_b :
          aor_pair->get_current()->bindings())
   {
-    SubscriberDataManager::AoR::Binding* b = aor_current_b.second;
+    SubscriberDataManager::AoR::Binding* binding = aor_current_b.second;
     std::string b_id = aor_current_b.first;
 
-    if (!b->_emergency_registration)
+    if (!binding->_emergency_registration)
     {
       // If the binding is only in the current AoR, mark it as created
       SubscriberDataManager::AoR::Bindings::const_iterator aor_orig_b_match =
@@ -1652,9 +1644,9 @@ void SubscriberDataManager::NotifySender::send_notifys(
         TRC_DEBUG("Binding %s has been created", aor_current_b.first.c_str());
         NotifyUtils::BindingNotifyInformation* bni =
               new NotifyUtils::BindingNotifyInformation(b_id,
-                                                        b,
+                                                        binding,
                                                         NotifyUtils::ContactEvent::CREATED);        
-        all_bnis.push_back(bni);       
+        binding_info_to_notify.push_back(bni);       
         bindings_changed = true;
       }
       else
@@ -1662,13 +1654,13 @@ void SubscriberDataManager::NotifySender::send_notifys(
         // The binding is in both AoRs. Check if the expiry time has changed at all
         NotifyUtils::ContactEvent event;
 
-        if (aor_orig_b_match->second->_expires < b->_expires)
+        if (aor_orig_b_match->second->_expires < binding->_expires)
         {
           TRC_DEBUG("Binding %s has been refreshed", b_id.c_str());
           event = NotifyUtils::ContactEvent::REFRESHED;
           bindings_changed = true;
         }
-        else if (aor_orig_b_match->second->_expires > b->_expires)
+        else if (aor_orig_b_match->second->_expires > binding->_expires)
         {
           TRC_DEBUG("Binding %s has been shortened", b_id.c_str());
           event = NotifyUtils::ContactEvent::SHORTENED;
@@ -1682,9 +1674,9 @@ void SubscriberDataManager::NotifySender::send_notifys(
 
         NotifyUtils::BindingNotifyInformation* bni =
               new NotifyUtils::BindingNotifyInformation(b_id,
-                                                        b,
+                                                        binding,
                                                         event);        
-        all_bnis.push_back(bni);
+        binding_info_to_notify.push_back(bni);
       }
     }    
   }
@@ -1692,9 +1684,9 @@ void SubscriberDataManager::NotifySender::send_notifys(
   // Iterate over the subscriptions in the original AoR, and send NOTIFYs for
   // any subscriptions that aren't in the current AoR. 
   send_notifys_for_expired_subscriptions(aor_id, 
-                                         irs_impus,
+                                         associated_uris,
                                          aor_pair,
-                                         all_bnis,
+                                         binding_info_to_notify,
                                          expired_binding_uris,                                         
                                          now,
                                          trail);
@@ -1707,7 +1699,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
       current_sub != aor_pair->get_current()->subscriptions().end();
       ++current_sub)
   {
-    SubscriberDataManager::AoR::Subscription* s = current_sub->second;
+    SubscriberDataManager::AoR::Subscription* subscription = current_sub->second;
     std::string s_id = current_sub->first;
 
     // Find the subscription in the original AoR to determine if the current subscription
@@ -1716,27 +1708,55 @@ void SubscriberDataManager::NotifySender::send_notifys(
       aor_pair->get_orig()->subscriptions().find(s_id);
     bool sub_created = (orig_sub == aor_pair->get_orig()->subscriptions().end());
 
-    if (bindings_changed ||
-        sub_created ||
-        (orig_sub->second->_last_cseq != s->_last_cseq))
+    // If the subscription has just been created then orig_sub won't be valid,
+    // so don't try to check whether it's been refreshed.
+    bool sub_refreshed = (!sub_created) && subscription->_refreshed;
+
+    if (bindings_changed || sub_created || sub_refreshed)
     {
+      std::string reasons;
+
+      if (bindings_changed) 
+      {
+        reasons += "bindings_changed ";
+      }
+
+      if (sub_created)
+      {
+        reasons += "subscription_created ";
+      }
+
+      if (sub_refreshed)
+      {
+        reasons += "subscription_refreshed ";
+      }
+
+      TRC_DEBUG("Sending NOTIFY for subscription %s: reason(s) %s",
+                s_id.c_str(),
+                reasons.c_str());
+
       pjsip_tx_data* tdata_notify = NULL;
       pj_status_t status = NotifyUtils::create_subscription_notify(
                                             &tdata_notify,
-                                            s,
+                                            subscription,
                                             aor_id,
-                                            irs_impus,
+                                            associated_uris,
                                             aor_pair->get_orig(),
-                                            all_bnis,
+                                            binding_info_to_notify,
                                             NotifyUtils::RegistrationState::ACTIVE,
-                                            now);
+                                            now,
+                                            trail);
 
       if (status == PJ_SUCCESS)
       {
         set_trail(tdata_notify, trail);
         status = PJUtils::send_request(tdata_notify, 0, NULL, NULL, true);
 
-        if (status != PJ_SUCCESS)
+        if (status == PJ_SUCCESS)
+        {
+          subscription->_refreshed = false;
+        }
+        else
         {
           // LCOV_EXCL_START
           SAS::Event event(trail, SASEvent::NOTIFICATION_FAILED, 0);
@@ -1750,14 +1770,14 @@ void SubscriberDataManager::NotifySender::send_notifys(
     }
   }  
   
-  delete_bindings(all_bnis);    
+  delete_bindings(binding_info_to_notify);    
 }
 
 void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions(
                                const std::string& aor_id,
                                AssociatedURIs* associated_uris,
                                SubscriberDataManager::AoRPair* aor_pair,
-                               std::vector<NotifyUtils::BindingNotifyInformation*> all_bnis,
+                               std::vector<NotifyUtils::BindingNotifyInformation*> binding_info_to_notify,
                                std::vector<std::string> expired_binding_uris,                               
                                int now,
                                SAS::TrailId trail)
@@ -1812,7 +1832,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
                                           aor_id,
                                           associated_uris,
                                           aor_pair->get_orig(),
-                                          all_bnis,
+                                          binding_info_to_notify,
                                           reg_state,
                                           now,
                                           trail);
@@ -1822,7 +1842,11 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
         set_trail(tdata_notify, trail);
         status = PJUtils::send_request(tdata_notify, 0, NULL, NULL, true);
 
-        if (status != PJ_SUCCESS)
+        if (status == PJ_SUCCESS)
+        {
+          s->_refreshed = false;
+        }
+        else
         {
           // LCOV_EXCL_START
           SAS::Event event(trail, SASEvent::NOTIFICATION_FAILED, 0);
@@ -1830,7 +1854,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
                                        PJUtils::pj_status_to_string(status);
           event.add_var_param(error_msg);
           SAS::report_event(event);
-         // LCOV_EXCL_STOP
+          // LCOV_EXCL_STOP
         }
       }      
     }

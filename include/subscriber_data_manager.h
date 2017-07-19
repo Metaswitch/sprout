@@ -126,6 +126,8 @@ public:
     class Subscription
     {
     public:
+      Subscription(): _refreshed(false) {};
+
       /// The Contact URI for the subscription dialog (used as the Request URI
       /// of the NOTIFY)
       std::string _req_uri;
@@ -146,9 +148,8 @@ public:
       /// The call ID for the subscription dialog.
       std::string _cid;
 
-      /// The CSeq number of the last received SUBSCRIBE for this subscription.
-      /// A value of -1 means that no CSeq has yet been received.
-      int _last_cseq;
+      /// Whether the subscription has been refreshed since the last NOTIFY.
+      bool _refreshed;
 
       /// The list of Record Route URIs from the subscription dialog.
       std::list<std::string> _route_uris;
@@ -489,7 +490,8 @@ public:
     // @param associated_uris
     //                     The IMPUs associated with this IRS
     // @param aor_pair     The AoR pair to send NOTIFYs for
-    // @param all_bnis     The list of bindings to include on the NOTIFY
+    // @param binding_info_to_notify
+    //                     The list of bindings to include on the NOTIFY
     // @param expired_binding_uris
     //                     A list of URIs of expired bindings    
     // @param now          The current time
@@ -498,7 +500,7 @@ public:
                                    const std::string& aor_id,
                                    AssociatedURIs* associated_uris,
                                    SubscriberDataManager::AoRPair* aor_pair,
-                                   std::vector<NotifyUtils::BindingNotifyInformation*> all_bnis,
+                                   std::vector<NotifyUtils::BindingNotifyInformation*> binding_info_to_notify,
                                    std::vector<std::string> expired_binding_uris,                                  
                                    int now,
                                    SAS::TrailId trail);
