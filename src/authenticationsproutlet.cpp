@@ -1154,7 +1154,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     // No authorization information in request, or no authentication vector
     // found in the store (so request is likely stale), so must issue
     // challenge.
-    TRC_DEBUG("No authentication information in request or stale nonce, so reject with challenge");
+    TRC_DEBUG("No authentication information in request or stale nonce, so reject with challenge (status %d)", status);
     pj_bool_t stale = (status == PJSIP_EAUTHACCNOTFOUND);
 
     if (stale)
