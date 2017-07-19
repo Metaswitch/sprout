@@ -1157,6 +1157,12 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     TRC_DEBUG("No authentication information in request or stale nonce, so reject with challenge");
     pj_bool_t stale = (status == PJSIP_EAUTHACCNOTFOUND);
 
+    if (stale)
+    {
+      SAS::Event event(trail(), SASEvent::AUTHENTICATION_FAILED_STALE_NONCE, 0);
+      SAS::report_event(event);
+    }
+
     sc = unauth_sc;
 
     if (stale && auth_stats_table != NULL)
