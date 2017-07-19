@@ -375,7 +375,8 @@ public:
     _enum_service = new JSONEnumService(string(UT_DIR).append("/test_stateful_proxy_enum.json"));
 
     _acr_factory = new ACRFactory();
-    _difc_service = new DIFCService(NULL, string(UT_DIR).append("/test_scscf_difc.xml"));
+    _mmf_service = new MMFService(NULL, string(UT_DIR).append("/test_mmf_targets.json"));
+    _fifc_service = new FIFCService(NULL, string(UT_DIR).append("/test_scscf_fifc.xml"));
 
     // Schedule timers.
     SipTest::poll();
@@ -386,7 +387,8 @@ public:
     // Shut down the transaction module first, before we destroy the
     // objects that might handle any callbacks!
     pjsip_tsx_layer_destroy();
-    delete _difc_service; _difc_service = NULL;
+    delete _mmf_service; _mmf_service = NULL;
+    delete _fifc_service; _fifc_service = NULL;
     delete _sdm; _sdm = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
     delete _local_data_store; _local_data_store = NULL;
@@ -414,6 +416,8 @@ public:
                                           "sip:127.0.0.1:5058",
                                           "",
                                           "sip:bgcf@homedomain:5058",
+                                          "sip:11.22.33.44:5053;transport=tcp",
+                                          "sip:44.33.22.11:5053;transport=tcp",
                                           5058,
                                           "sip:scscf.homedomain:5058;transport=tcp",
                                           _sdm,
@@ -424,7 +428,8 @@ public:
                                           &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
                                           &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
                                           false,
-                                          _difc_service,
+                                          _mmf_service,
+                                          _fifc_service,
                                           ifc_configuration,
                                           3000, // Session continue timeout - different from default
                                           6000, // Session terminated timeout - different from default
@@ -559,7 +564,8 @@ protected:
   static BgcfService* _bgcf_service;
   static EnumService* _enum_service;
   static ACRFactory* _acr_factory;
-  static DIFCService* _difc_service;
+  static MMFService* _mmf_service;
+  static FIFCService* _fifc_service;
   SCSCFSproutlet* _scscf_sproutlet;
   BGCFSproutlet* _bgcf_sproutlet;
   Mmtel* _mmtel;
@@ -602,7 +608,8 @@ FakeXDMConnection* SCSCFTest::_xdm_connection;
 BgcfService* SCSCFTest::_bgcf_service;
 EnumService* SCSCFTest::_enum_service;
 ACRFactory* SCSCFTest::_acr_factory;
-DIFCService* SCSCFTest::_difc_service;
+MMFService* SCSCFTest::_mmf_service;
+FIFCService* SCSCFTest::_fifc_service;
 MockAsCommunicationTracker* SCSCFTest::_sess_term_comm_tracker;
 MockAsCommunicationTracker* SCSCFTest::_sess_cont_comm_tracker;
 
@@ -3252,7 +3259,7 @@ TEST_F(SCSCFTest, SimpleISCTwoRouteHeaders)
   free_txdata();
 }
 
-// Test handling of IFC with a malformed AS URI.
+// Test handling of iFC with a malformed AS URI.
 TEST_F(SCSCFTest, ISCASURIMalformed)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
@@ -3306,7 +3313,7 @@ TEST_F(SCSCFTest, ISCASURIMalformed)
   free_txdata();
 }
 
-// Test handling of IFC with a AS Tel URI.
+// Test handling of iFC with a AS Tel URI.
 TEST_F(SCSCFTest, ISCASURITel)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
@@ -9414,7 +9421,7 @@ TEST_F(SCSCFTest, TestSessionExpiresWhenNoRecordRoute)
 }
 
 
-// Test that getting a 503 error from homestead when looking up IFCs results in
+// Test that getting a 503 error from homestead when looking up iFCs results in
 // sprout sending a 504 error.
 TEST_F(SCSCFTest, HSSTimeoutOnPutRegData)
 {
@@ -9441,7 +9448,7 @@ TEST_F(SCSCFTest, HSSTimeoutOnPutRegData)
 }
 
 
-// Test that a failure to get IFCs due to a 503 error from homestead during Call
+// Test that a failure to get iFCs due to a 503 error from homestead during Call
 // Diversion results in sprout sending a 504
 TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
 {
@@ -9557,7 +9564,7 @@ TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
   msg.set_route(out);
   free_txdata();
 
-  // Followed by a 504 (since the IFC lookup has got a 503)
+  // Followed by a 504 (since the iFC lookup has got a 503)
   out = current_txdata()->msg;
   RespMatcher(504).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
@@ -9760,8 +9767,8 @@ TEST_F(SCSCFTest, TestEmergencyMultipleBindings)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
-// Check that a request with no matching IFCs is rejected.
-TEST_F(SCSCFTest, NoMatchingIFCsReject)
+// Check that a request with no matching iFCs is rejected.
+TEST_F(SCSCFTest, NoMatchingiFCsReject)
 {
   _scscf_sproutlet->_ifc_configuration._reject_if_no_matching_ifcs = true;
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
@@ -9812,12 +9819,12 @@ TEST_F(SCSCFTest, NoMatchingIFCsReject)
   free_txdata();
 }
 
-// Test that we use default IFCs if there are no matching IFCs, and that the
+// Test that we use fallback iFCs if there are no matching iFCs, and that the
 // application server flows are as expected.
-TEST_F(SCSCFTest, NoMatchingIFCsUseDefaultIFCs)
+TEST_F(SCSCFTest, NoMatchingStandardiFCsUseFallbackiFCs)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _scscf_sproutlet->_ifc_configuration._apply_default_ifcs = true;
+  _scscf_sproutlet->_ifc_configuration._apply_fallback_ifcs = true;
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
                                    "<IMSSubscription><ServiceProfile>\n"
                                    "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
@@ -9837,6 +9844,109 @@ TEST_F(SCSCFTest, NoMatchingIFCsUseDefaultIFCs)
                                    "      <DefaultHandling>0</DefaultHandling>\n"
                                    "    </ApplicationServer>\n"
                                    "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.5", 56789);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  free_txdata();
+
+  // INVITE passed on to AS1
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS1.expect_target(current_txdata(), false);
+
+  // ---------- AS1 sends a 100 Trying to indicate it has received the request.
+  string fresp = respond_to_txdata(current_txdata(), 100);
+  inject_msg(fresp, &tpAS1);
+
+  // ---------- AS1 turns it around (acting as proxy)
+  const pj_str_t STR_ROUTE = pj_str("Route");
+  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS1);
+  free_txdata();
+
+  // 100 Trying goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS1
+  out = current_txdata()->msg;
+  ReqMatcher r2("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r2.matches(out));
+
+  tpAS1.expect_target(current_txdata(), false);
+
+  // ---------- AS1 sends a 100 Trying to indicate it has received the request.
+  fresp = respond_to_txdata(current_txdata(), 100);
+  inject_msg(fresp, &tpAS1);
+
+  // ---------- AS1 turns it around (acting as proxy)
+  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS1);
+  free_txdata();
+
+  // 100 Trying goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to final destination
+  out = current_txdata()->msg;
+  ReqMatcher r3("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r3.matches(out));
+
+  tpBono.expect_target(current_txdata(), false);
+
+  // Target sends back 100 Trying
+  inject_msg(respond_to_txdata(current_txdata(), 100), &tpBono);
+  pjsip_tx_data* txdata = pop_txdata();
+
+  // Send a 200 ringing back down the chain to finish the transaction. This is a
+  // more realistic test of AS communication tracking.
+  send_response_back_through_dialog(respond_to_txdata(txdata, 200), 200, 2);
+  pjsip_tx_data_dec_ref(txdata); txdata = NULL;
+}
+
+// Test that we use fallback iFCs if there are no matching iFCs, and that the
+// application server flows are as expected. In this case we don't have any
+// standard iFCs at all.
+TEST_F(SCSCFTest, NoStandardiFCsUseFallbackiFCs)
+{
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _scscf_sproutlet->_ifc_configuration._apply_fallback_ifcs = true;
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
                                    "</ServiceProfile></IMSSubscription>");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -10103,6 +10213,425 @@ TEST_F(SCSCFTest, MixedRealAndDummyApplicationServer)
   free_txdata();
 
   // 100 Trying goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to final destination
+  out = current_txdata()->msg;
+  ReqMatcher r2("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r2.matches(out));
+
+  tpBono.expect_target(current_txdata(), false);
+
+  // Target sends back 100 Trying
+  inject_msg(respond_to_txdata(current_txdata(), 100), &tpBono);
+  pjsip_tx_data* txdata = pop_txdata();
+
+  // Send a 200 ringing back down the chain to finish the transaction. This is a
+  // more realistic test of AS communication tracking.
+  send_response_back_through_dialog(respond_to_txdata(txdata, 200), 200, 2);
+  pjsip_tx_data_dec_ref(txdata); txdata = NULL;
+}
+
+
+// These MMF tests are essentially the MixedRealAndDummyApplicationServer test,
+// but with simulated MMF processing between the SCSCF and the AS
+TEST_F(SCSCFTest, MMFPreAs)
+{
+  TRC_DEBUG("TEst");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>0</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:DUMMY_AS</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:pre.as.only.mmf.test.server:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>2</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:DUMMY_AS</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+
+  TransportFlow tpMMFpreAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "11.22.33.44", 5053);
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "pre.as.only.mmf.test.server", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+
+  // Send the INVITE
+  Message msg;
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  TRC_DEBUG("inject");
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to MMF
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  tpMMFpreAS.expect_target(current_txdata(), false);
+
+  // MMF sends a 100 Trying
+  string fresp = respond_to_txdata(current_txdata(), 100);
+  inject_msg(fresp, &tpMMFpreAS);
+
+  const pj_str_t STR_ROUTE = pj_str("Route");
+
+  // Ensure the pre-as header was added as expected, and remove it
+  pjsip_hdr* preas_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  std::string preas_uri = PJUtils::get_header_value(preas_hdr);
+  EXPECT_THAT(preas_uri, MatchesRegex(".*sip:11.22.33.44:5053.*"));
+  EXPECT_THAT(preas_uri, MatchesRegex(".*namespace=mmf.*"));
+  EXPECT_THAT(preas_uri, MatchesRegex(".*mmfscope=pre-as.*"));
+  EXPECT_THAT(preas_uri, MatchesRegex(".*mmftarget=PreASOnly.*"));
+  pj_list_erase(preas_hdr);
+
+  // Ensure the AS header was added as expected, and remove it
+  pjsip_hdr* as_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  std::string as_uri = PJUtils::get_header_value(as_hdr);
+  EXPECT_THAT(as_uri, MatchesRegex(".*pre.as.only.mmf.test.server:56789.*"));
+  pj_list_erase(as_hdr);
+
+  // We have removed route headers to simulate the request being routed from
+  // the MMF server to the AS.
+  // Simulate the request being routed from the AS back to the SCSCF
+  inject_msg(out, &tpAS);
+  free_txdata();
+
+  // 100 Trying goes back to the AS
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to final destination
+  out = current_txdata()->msg;
+  ReqMatcher r2("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r2.matches(out));
+
+  tpBono.expect_target(current_txdata(), false);
+
+  // Target sends back 100 Trying
+  inject_msg(respond_to_txdata(current_txdata(), 100), &tpBono);
+  pjsip_tx_data* txdata = pop_txdata();
+
+  // Send a 200 ringing back down the chain to finish the transaction. This is a
+  // more realistic test of AS communication tracking.
+  send_response_back_through_dialog(respond_to_txdata(txdata, 200), 200, 2);
+  pjsip_tx_data_dec_ref(txdata); txdata = NULL;
+}
+
+
+TEST_F(SCSCFTest, MMFPostAs)
+{
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>0</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:DUMMY_AS</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.5.8.1:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>2</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:DUMMY_AS</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+
+  TransportFlow tpMMFpostAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "44.33.22.11", 5053);
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.5.8.1", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+
+  // Send the INVITE
+  Message msg;
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  tpAS.expect_target(current_txdata(), false);
+
+  // AS sends a 100 Trying
+  string fresp = respond_to_txdata(current_txdata(), 100);
+  inject_msg(fresp, &tpAS);
+
+  const pj_str_t STR_ROUTE = pj_str("Route");
+
+  // Ensure the AS header was added as expected, and remove it
+  pjsip_hdr* as_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  std::string as_uri = PJUtils::get_header_value(as_hdr);
+  EXPECT_THAT(as_uri, MatchesRegex(".*1.5.8.1:56789.*"));
+  pj_list_erase(as_hdr);
+
+  // Ensure the post-as header was added as expected, and remove it
+  pjsip_hdr* postas_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  std::string postas_uri = PJUtils::get_header_value(postas_hdr);
+  EXPECT_THAT(postas_uri, MatchesRegex(".*sip:44.33.22.11:5053.*"));
+  EXPECT_THAT(postas_uri, MatchesRegex(".*namespace=mmf.*"));
+  EXPECT_THAT(postas_uri, MatchesRegex(".*mmfscope=post-as.*"));
+  EXPECT_THAT(postas_uri, MatchesRegex(".*mmftarget=PostASOnly.*"));
+  pj_list_erase(postas_hdr);
+
+  // We have removed route headers to simulate the request being routed to the
+  // AS, and then routed from the AS to our MMF server.
+  // Simulate the request being routed from the MMF server back to the SCSCF
+  inject_msg(out, &tpMMFpostAS);
+  free_txdata();
+
+  // 100 Trying goes back to MMF
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to final destination
+  out = current_txdata()->msg;
+  ReqMatcher r2("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r2.matches(out));
+
+  tpBono.expect_target(current_txdata(), false);
+
+  // Target sends back 100 Trying
+  inject_msg(respond_to_txdata(current_txdata(), 100), &tpBono);
+  pjsip_tx_data* txdata = pop_txdata();
+
+  // Send a 200 ringing back down the chain to finish the transaction. This is a
+  // more realistic test of AS communication tracking.
+  send_response_back_through_dialog(respond_to_txdata(txdata, 200), 200, 2);
+  pjsip_tx_data_dec_ref(txdata); txdata = NULL;
+}
+
+
+TEST_F(SCSCFTest, MMFPreAndPostAs)
+{
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>0</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:DUMMY_AS</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:preandpost.mmf.test.server:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>2</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:DUMMY_AS</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+
+  TransportFlow tpMMFpreAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "11.22.33.44", 5053);
+  TransportFlow tpMMFpostAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "44.33.22.11", 5053);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+
+  // Send the INVITE
+  Message msg;
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to MMF
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  tpMMFpreAS.expect_target(current_txdata(), false);
+
+  // MMF sends a 100 Trying
+  string fresp = respond_to_txdata(current_txdata(), 100);
+  inject_msg(fresp, &tpMMFpreAS);
+
+  const pj_str_t STR_ROUTE = pj_str("Route");
+
+  // Ensure the pre-as header was added as expected
+  pjsip_hdr* preas_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  std::string preas_uri = PJUtils::get_header_value(preas_hdr);
+  //
+  EXPECT_THAT(preas_uri, MatchesRegex(".*sip:11.22.33.44:5053.*"));
+  EXPECT_THAT(preas_uri, MatchesRegex(".*namespace=mmf.*"));
+  EXPECT_THAT(preas_uri, MatchesRegex(".*mmfscope=pre-as.*"));
+  EXPECT_THAT(preas_uri, MatchesRegex(".*mmftarget=BothPreAndPost.*"));
+  pj_list_erase(preas_hdr);
+
+  // Ensure the AS header was added as expected, and remove it
+  pjsip_hdr* as_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  std::string as_uri = PJUtils::get_header_value(as_hdr);
+  EXPECT_THAT(as_uri, MatchesRegex(".*preandpost.mmf.test.server:56789.*"));
+  pj_list_erase(as_hdr);
+
+  // Ensure the post-as header was added as expected, and remove it
+  pjsip_hdr* postas_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  std::string postas_uri = PJUtils::get_header_value(postas_hdr);
+  EXPECT_THAT(postas_uri, MatchesRegex(".*sip:44.33.22.11:5053.*"));
+  EXPECT_THAT(postas_uri, MatchesRegex(".*namespace=mmf.*"));
+  EXPECT_THAT(postas_uri, MatchesRegex(".*mmfscope=post-as.*"));
+  EXPECT_THAT(postas_uri, MatchesRegex(".*mmftarget=BothPreAndPost.*"));
+  pj_list_erase(postas_hdr);
+
+  // We have removed route headers to simulate the request being routed from
+  // the MMF server to the AS, then routed from the AS back to our MMF server.
+  // Simulate the request being routed from the MMF server back to the SCSCF
+  inject_msg(out, &tpMMFpostAS);
+  free_txdata();
+
+  // 100 Trying goes back to MMF
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   msg.set_route(out);

@@ -1,5 +1,5 @@
 <?l version=1.0 encoding=UTF-8?>
-<DefaultIFCsSet>
+<FallbackIFCsSet>
   <InitialFilterCriteria>
     <Priority>1</Priority>
     <TriggerPoint>
@@ -12,7 +12,7 @@
       </SPT>
     </TriggerPoint>
     <ApplicationServer>
-      <ServerName>example_two.com</ServerName>
+      <ServerName>example.com</ServerName>
       <DefaultHandling>0</DefaultHandling>
     </ApplicationServer>
   </InitialFilterCriteria>
@@ -28,8 +28,8 @@
       </SPT>
     </TriggerPoint>
     <ApplicationServer>
-      <ServerName>example_one.com</ServerName>
+      <ServerName>example_two.com</ServerName>
       <DefaultHandling>0</DefaultHandling>
     </ApplicationServer>
   </InitialFilterCriteria>
-</DefaultIFCsSet>
+</FallbackIFCsSet>

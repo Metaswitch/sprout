@@ -24,33 +24,10 @@ extern "C" {
 #include "sessioncase.h"
 #include "ifchandler.h"
 #include "acr.h"
-#include "difcservice.h"
+#include "fifcservice.h"
 
 // Forward declarations.
 class UASTransaction;
-
-/// Structure that holds IFC configuration that isn't covered by the TS specs
-// (e.g. default and dummy IFCs).
-struct IFCConfiguration
-{
-  bool _apply_default_ifcs;
-  bool _reject_if_no_matching_ifcs;
-  std::string _dummy_as;
-  SNMP::CounterTable* _no_matching_ifcs_tbl;
-  SNMP::CounterTable* _no_matching_default_ifcs_tbl;
-
-  IFCConfiguration(bool apply_default_ifcs,
-                   bool reject_if_no_matching_ifcs,
-                   std::string dummy_as,
-                   SNMP::CounterTable* no_matching_ifcs_tbl,
-                   SNMP::CounterTable* no_matching_default_ifcs_tbl) :
-    _apply_default_ifcs(apply_default_ifcs),
-    _reject_if_no_matching_ifcs(reject_if_no_matching_ifcs),
-    _dummy_as(dummy_as),
-    _no_matching_ifcs_tbl(no_matching_ifcs_tbl),
-    _no_matching_default_ifcs_tbl(no_matching_default_ifcs_tbl)
-  {}
-};
 
 /// Short-lived data structure holding the details of a calculated target.
 struct Target
@@ -114,7 +91,7 @@ private:
           SAS::TrailId trail,
           Ifcs& ifcs,
           ACR* acr,
-          DIFCService* difc_service,
+          FIFCService* fifc_service,
           IFCConfiguration ifc_configuration);
   ~AsChain();
 
@@ -144,12 +121,13 @@ private:
     }
   }
 
+  void reset_chain(bool using_standard_ifcs);
   std::string to_string(size_t index) const;
   const SessionCase& session_case() const;
   size_t size() const;
   SAS::TrailId trail() const;
   ACR* acr() const;
-  std::vector<Ifc> default_ifcs() const;
+  std::vector<Ifc> fallback_ifcs() const;
   IFCConfiguration ifc_configuration() const;
   bool using_standard_ifcs() const;
 
@@ -183,8 +161,8 @@ private:
   /// A pointer to the ACR for this chain if Rf billing is enabled.
   ACR* _acr;
 
-  /// Member variables covering the IFCs for the ASChain.
-  std::vector<Ifc> _default_ifcs;
+  /// Member variables covering the iFCs for the ASChain.
+  std::vector<Ifc> _fallback_ifcs;
   IFCConfiguration _ifc_configuration;
   bool _using_standard_ifcs;
   rapidxml::xml_document<>* _root;
@@ -341,7 +319,7 @@ public:
                                      SAS::TrailId trail,
                                      Ifcs& ifcs,
                                      ACR* acr,
-                                     DIFCService* difc_service,
+                                     FIFCService* fifc_service,
                                      IFCConfiguration ifc_configuration);
 
   pjsip_status_code on_initial_request(pjsip_msg* msg,

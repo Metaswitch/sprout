@@ -146,7 +146,7 @@ long FakeHSSConnection::get_json_object(const std::string& path,
     else
     {
       // report to the user the failure and their locations in the document.
-      TRC_ERROR("Failed to parse Homestead response:\n %s\n %s.\n Error offset: %d\n",
+      TRC_ERROR("Failed to parse Homestead response:\n %s\n %s.\n Error offset: %d",
                 path.c_str(),
                 i->second.c_str(),
                 object->GetErrorOffset());
@@ -200,7 +200,7 @@ long FakeHSSConnection::get_xml_object(const std::string& path,
              path.c_str(),
              i->second.c_str(),
              err.what());
-      TRC_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n",
+      TRC_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s",
                 path.c_str(),
                 i->second.c_str(),
                 err.what());

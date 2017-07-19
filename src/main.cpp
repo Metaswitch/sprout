@@ -135,9 +135,10 @@ enum OptionTypes
   OPT_DEFAULT_TEL_URI_TRANSLATION,
   OPT_CHRONOS_HOSTNAME,
   OPT_SPROUT_CHRONOS_CALLBACK_URI,
-  OPT_APPLY_DEFAULT_IFCS,
+  OPT_APPLY_FALLBACK_IFCS,
   OPT_REJECT_IF_NO_MATCHING_IFCS,
   OPT_DUMMY_APP_SERVER,
+  OPT_HTTP_ACR_LOGGING,
 };
 
 
@@ -224,9 +225,10 @@ const static struct pj_getopt_option long_opt[] =
   { "disable-tcp-switch",           no_argument,       0, OPT_DISABLE_TCP_SWITCH},
   { "chronos-hostname",             required_argument, 0, OPT_CHRONOS_HOSTNAME},
   { "sprout-chronos-callback-uri",  required_argument, 0, OPT_SPROUT_CHRONOS_CALLBACK_URI},
-  { "apply-default-ifcs",           no_argument,       0, OPT_APPLY_DEFAULT_IFCS},
+  { "apply-fallback-ifcs",          no_argument,       0, OPT_APPLY_FALLBACK_IFCS},
   { "reject-if-no-matching-ifcs",   no_argument,       0, OPT_REJECT_IF_NO_MATCHING_IFCS},
   { "dummy-app-server",             required_argument, 0, OPT_DUMMY_APP_SERVER},
+  { "http-acr-logging",             no_argument,       0, OPT_HTTP_ACR_LOGGING},
   { NULL,                           0,                 0, 0}
 };
 
@@ -439,13 +441,15 @@ static void usage(void)
        "                            Specify the sprout hostname used for Chronos callbacks. If unset \n"
        "                            the default is to use the sprout-hostname.\n"
        "                            Ignored if chronos-hostname is not set.\n"
-       "     --apply-default-ifcs   Whether calls that don't have any matching IFCs should have some \n"
-       "                            preconfigured IFCs applied instead.\n"
+       "     --apply-default-ifcs   Whether calls that don't have any matching iFCs should have some \n"
+       "                            preconfigured iFCs applied instead.\n"
        "     --reject-if-no-matching-ifcs\n"
-       "                            Whether calls that don't have any matching IFCs should be rejected.\n"
+       "                            Whether calls that don't have any matching iFCs should be rejected.\n"
        "     --dummy-app-server <app server URI>\n"
-       "                            If any IFC has an application server that matches the one defined here, \n"
-       "                            then the IFC is skipped over.\n"
+       "                            If any iFC has an application server that matches the one defined here, \n"
+       "                            then the iFC is skipped over.\n"
+       "     --http-acr-logging     Whether to include the bodies of ACR HTTP requests when they are logged \n"
+       "                            to SAS\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
        " -F, --log-file <directory>\n"
@@ -1267,19 +1271,24 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       TRC_INFO("Sprout Chronos callback uri set to %s", pj_optarg);
       break;
 
-    case OPT_APPLY_DEFAULT_IFCS:
-      options->apply_default_ifcs = true;
-      TRC_INFO("Requests that have no matching IFCs will have some preconfigured IFCs applied");
+    case OPT_APPLY_FALLBACK_IFCS:
+      options->apply_fallback_ifcs = true;
+      TRC_INFO("Requests that have no matching iFCs will have some preconfigured iFCs applied");
       break;
 
     case OPT_REJECT_IF_NO_MATCHING_IFCS:
       options->reject_if_no_matching_ifcs = true;
-      TRC_INFO("Requests that have no matching IFCs will be rejected");
+      TRC_INFO("Requests that have no matching iFCs will be rejected");
       break;
 
     case OPT_DUMMY_APP_SERVER:
       options->dummy_app_server = std::string(pj_optarg);
       TRC_INFO("Dummy application server set to %s", pj_optarg);
+      break;
+
+    case OPT_HTTP_ACR_LOGGING:
+      options->http_acr_logging = true;
+      TRC_INFO("Bodies of ACR HTTP messages will be logged to SAS");
       break;
 
     case OPT_LISTEN_PORT:
@@ -1442,7 +1451,8 @@ AlarmManager* alarm_manager = NULL;
 AnalyticsLogger* analytics_logger = NULL;
 ChronosConnection* chronos_connection = NULL;
 SIFCService* sifc_service = NULL;
-DIFCService* difc_service = NULL;
+FIFCService* fifc_service = NULL;
+MMFService* mmf_service = NULL;
 
 bool parse_multi_site_stores_arg(const std::vector<std::string>& stores_arg,
                                  const std::string& local_site_name,
@@ -1574,9 +1584,10 @@ int main(int argc, char* argv[])
   opt.scscf_node_uri = "";
   opt.sas_signaling_if = false;
   opt.disable_tcp_switch = false;
-  opt.apply_default_ifcs = false;
+  opt.apply_fallback_ifcs = false;
   opt.reject_if_no_matching_ifcs = false;
   opt.dummy_app_server = "";
+  opt.http_acr_logging = false;
 
   status = init_logging_options(argc, argv, &opt);
 
@@ -1987,7 +1998,9 @@ int main(int argc, char* argv[])
                                          NULL, // No SNMP table for connected Ralfs
                                          load_monitor,
                                          SASEvent::HttpLogLevel::PROTOCOL,
-                                         ralf_comm_monitor);
+                                         ralf_comm_monitor,
+                                         "http",
+                                         !opt.http_acr_logging);
     ralf_processor = new RalfProcessor(ralf_connection,
                                        exception_handler,
                                        opt.ralf_threads);
@@ -2023,11 +2036,16 @@ int main(int argc, char* argv[])
                                        sifc_service);
   }
 
-  // Create DIFC service
-  difc_service = new DIFCService(new Alarm(alarm_manager,
+  // Create FIFC service
+  fifc_service = new FIFCService(new Alarm(alarm_manager,
                                            "sprout",
-                                           AlarmDef::SPROUT_DIFC_STATUS,
+                                           AlarmDef::SPROUT_FIFC_STATUS,
                                            AlarmDef::CRITICAL));
+
+  mmf_service = new MMFService(new Alarm(alarm_manager,
+                                         "sprout",
+                                         AlarmDef::SPROUT_MMF_STATUS,
+                                         AlarmDef::CRITICAL));
 
   // Create ENUM service.
   if (!opt.enum_servers.empty())
@@ -2236,7 +2254,7 @@ int main(int argc, char* argv[])
   {
     CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
     closelog();
-    TRC_ERROR("Caught signaling HttpStack::Exception - %s - %d\n", e._func, e._rc);
+    TRC_ERROR("Caught signaling HttpStack::Exception - %s - %d", e._func, e._rc);
     return 1;
   }
 
@@ -2252,7 +2270,7 @@ int main(int argc, char* argv[])
   {
     CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
     closelog();
-    TRC_ERROR("Caught management HttpStack::Exception - %s - %d\n", e._func, e._rc);
+    TRC_ERROR("Caught management HttpStack::Exception - %s - %d", e._func, e._rc);
     return 1;
   }
 
@@ -2376,14 +2394,34 @@ int main(int argc, char* argv[])
                                             hss_connection);
   AuthTimeoutTask::Config auth_timeout_config(local_impi_store,
                                               hss_connection);
+
+  // These tasks can cause a request to be sent to an application server
+  // relating to a third party registration, which may cause fallback iFCs to
+  // be invoked. We don't increment any statistics relating to the fallback
+  // iFCs in these flows though (as they should only be used on initial
+  // registration).
   DeregistrationTask::Config deregistration_config(local_sdm,
                                                    remote_sdms,
                                                    hss_connection,
+                                                   fifc_service,
+                                                   IFCConfiguration(opt.apply_fallback_ifcs,
+                                                                    opt.reject_if_no_matching_ifcs,
+                                                                    opt.dummy_app_server,
+                                                                    NULL,
+                                                                    NULL),
                                                    sip_resolver,
                                                    local_impi_store,
                                                    remote_impi_stores);
   GetCachedDataTask::Config get_cached_data_config(local_sdm, remote_sdms);
-  DeleteImpuTask::Config delete_impu_config(local_sdm, remote_sdms, hss_connection);
+  DeleteImpuTask::Config delete_impu_config(local_sdm,
+                                            remote_sdms,
+                                            hss_connection,
+                                            fifc_service,
+                                            IFCConfiguration(opt.apply_fallback_ifcs,
+                                                             opt.reject_if_no_matching_ifcs,
+                                                             opt.dummy_app_server,
+                                                             NULL,
+                                                             NULL));
 
   // The AoRTimeoutTask and AuthTimeoutTask both handle
   // chronos requests, so use the ChronosHandler.
@@ -2413,7 +2451,7 @@ int main(int argc, char* argv[])
     catch (HttpStack::Exception& e)
     {
       CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
-      TRC_ERROR("Caught signaling HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      TRC_ERROR("Caught signaling HttpStack::Exception - %s - %d", e._func, e._rc);
       return 1;
     }
 
@@ -2433,7 +2471,7 @@ int main(int argc, char* argv[])
     catch (HttpStack::Exception& e)
     {
       CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
-      TRC_ERROR("Caught management HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      TRC_ERROR("Caught management HttpStack::Exception - %s - %d", e._func, e._rc);
       return 1;
     }
   }
@@ -2462,7 +2500,7 @@ int main(int argc, char* argv[])
     catch (HttpStack::Exception& e)
     {
       CL_SPROUT_HTTP_INTERFACE_STOP_FAIL.log(e._func, e._rc);
-      TRC_ERROR("Caught signaling HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      TRC_ERROR("Caught signaling HttpStack::Exception - %s - %d", e._func, e._rc);
     }
 
     try
@@ -2473,7 +2511,7 @@ int main(int argc, char* argv[])
     catch (HttpStack::Exception& e)
     {
       CL_SPROUT_HTTP_INTERFACE_STOP_FAIL.log(e._func, e._rc);
-      TRC_ERROR("Caught management HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      TRC_ERROR("Caught management HttpStack::Exception - %s - %d", e._func, e._rc);
     }
   }
 
@@ -2516,7 +2554,8 @@ int main(int argc, char* argv[])
   delete http_stack_mgmt; http_stack_mgmt = NULL;
   delete chronos_connection;
   delete hss_connection;
-  delete difc_service;
+  delete fifc_service;
+  delete mmf_service;
   delete sifc_service;
   delete quiescing_mgr;
   delete exception_handler;

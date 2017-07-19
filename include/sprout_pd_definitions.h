@@ -75,11 +75,10 @@ static const PDLog CL_SPROUT_NO_SI_CSCF
 (
   PDLogBase::CL_SPROUT_ID + 6,
   LOG_NOTICE,
-  "Neither P-CSCF, S-CSCF nor I-CSCF functionality is enabled on this node.",
-  "Neither a P-CSCF, a S-CSCF nor an I-CSCF was configured in "
-  "/etc/clearwater/config.",
-  "Most Sprout nodes act as either a P-CSCF, a S-CSCF or an I-CSCF. "
-  "None of P-CSCF, S-CSCF or I-CSCF functionality is enabled on this node.",
+  "The Sprout process is running but not providing I-CSCF, S-CSCF or P-SCSCF functionality.",
+  "None of P-CSCF, S-CSCF or I-CSCF were configured in local or shared configuration.",
+  "Most Sprout processes act as either a P-CSCF, an S-CSCF or an I-CSCF. "
+  "None of P-CSCF, S-CSCF or I-CSCF functionality are enabled for this process.",
   "The P-CSCF is configured by setting the pcscf=<port> option. "
   "The S-CSCF is configured by setting the scscf=<port> option. "
   "The I-CSCF is configured by setting the icscf=<port> option."
@@ -89,38 +88,35 @@ static const PDLog CL_SPROUT_SI_CSCF_NO_HOMESTEAD
 (
   PDLogBase::CL_SPROUT_ID + 7,
   LOG_ERR,
-  "Fatal - S/I-CSCF enabled with no Homestead server specified in "
-  "/etc/clearwater/config.",
-  "The S-CSCF and/or the I-CSCF options (scscf=<port>, icscf=<port>) "
-  "were configured in the /etc/clearwater/config file but no Homestead "
-  "was configured in the same file.",
+  "Fatal - S/I-CSCF enabled with no Homestead hostname specified in shared "
+  "configuration.",
+  "The S-CSCF and/or the I-CSCF options (scscf=<port>, icscf=<port>) were "
+  "configured in local or shared configuration but no Homestead was "
+  "configured.",
   "The application will exit and restart until the problem is fixed.",
-  "Set the hs_hostname=<hostname> option in the "
-  "/etc/clearwater/config file. "
+  "Set the hs_hostname=<hostname> option in shared configuration."
 );
 
 static const PDLog CL_SPROUT_AUTH_NO_HOMESTEAD
 (
   PDLogBase::CL_SPROUT_ID + 8,
   LOG_ERR,
-  "Fatal - Authentication enabled, but no Homestead server specified in "
-  "/etc/clearwater/config.",
-  "The hs_hostname was not set in the /etc/clearwater/config file.",
+  "Fatal - Authentication enabled, but no Homestead hostname specified in "
+  "shared configuration.",
+  "The hs_hostname was not set in /etc/clearwater/shared_config.",
   "The application will exit and restart until the problem is fixed.",
-  "Set the hs_hostname=<hostname> option in the "
-  "/etc/clearwater/config file. "
+  "Set the hs_hostname=<hostname> option in shared configuration."
 );
 
 static const PDLog CL_SPROUT_XDM_NO_HOMESTEAD
 (
   PDLogBase::CL_SPROUT_ID + 9,
   LOG_ERR,
-  "Fatal - Homer XDM service is configured but no Homestead server specified "
-  "in /etc/clearwater/config.",
-  "The hs_hostname was not set in the /etc/clearwater/config file.",
+  "Fatal - Homer XDM service is configured but no Homestead hostname specified "
+  "in shared configuration.",
+  "The hs_hostname was not set in /etc/clearwater/shared_config.",
   "The application will exit and restart until the problem is fixed.",
-  "Set the hs_hostname=<hostname> option in the "
-  "/etc/clearwater/config file. "
+  "Set the hs_hostname=<hostname> option in shared configuration. "
 );
 
 static const PDLog1<const char*> CL_SPROUT_SIP_INIT_INTERFACE_FAIL
@@ -210,16 +206,6 @@ static const PDLog2<const char*, int> CL_SPROUT_HTTP_INTERFACE_STOP_FAIL
   "down the HTTP stack.",
   "Not critical as the application is exiting anyway.",
   "None."
-);
-
-static const PDLog2<const char*, const char*> CL_SPROUT_SIP_SEND_REQUEST_ERR
-(
-  PDLogBase::CL_SPROUT_ID + 23,
-  LOG_ERR,
-  "Failed to send SIP request to %s with error %s.",
-  "An attempt to send a SIP request failed.",
-  "This may cause a call to fail.",
-  "If the problem persists check the network connectivity."
 );
 
 static const PDLog CL_SPROUT_SIP_DEADLOCK
@@ -423,8 +409,8 @@ static const PDLog2<const char *, const char*> CL_SPROUT_SESS_CONT_AS_COMM_FAILU
   PDLogBase::CL_SPROUT_ID + 50,
   LOG_ERR,
   "Sprout is currently unable to successfully communicate with an Application Server that uses session continued default handling. The server's URI is %s. Failure reason: %s",
-  "Communication is failing to <URI>",
-  "Probable minor degradation of service, or loss of a supplemental service. The precise impact will vary depending on the role of the Application Server in the deployment.",
+  "Communication is failing to an Application server",
+  "The service(s) provided by this Application Server will be unavailable until communication is restored. In addition, call setup time will likely be increased for all subscribers configured to use this Application Server.",
   "Investigate why communication to this Application Server is failing. It might be due to failure of the AS, misconfiguration of Initial Filter Criteria, or network / DNS problems"
 );
 
@@ -442,130 +428,130 @@ static const PDLog CL_SPROUT_SIFC_FILE_MISSING
 (
   PDLogBase::CL_SPROUT_ID + 52,
   LOG_ERR,
-  "The shared IFC sets file is not present.",
-  "The S-CSCF supports shared IFC sets, but the configuration file for this does not exist.",
+  "The shared iFC sets file is not present.",
+  "The S-CSCF supports shared iFC sets, but the configuration file for this does not exist.",
   "The S-CSCF will not be able to correctly translate IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
-  "The shared IFC sets should be defined in /etc/clearwater/shared_ifcs.xml. Create this file according to the documentation. If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd."
+  "The shared iFC sets should be defined in /etc/clearwater/shared_ifcs.xml. Create this file according to the documentation. If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd."
 );
 
 static const PDLog CL_SPROUT_SIFC_FILE_EMPTY
 (
   PDLogBase::CL_SPROUT_ID + 53,
   LOG_ERR,
-  "The shared IFC sets file is empty.",
-  "The S-CSCF supports shared IFC sets, but the configuration file for this is empty.",
+  "The shared iFC sets file is empty.",
+  "The S-CSCF supports shared iFC sets, but the configuration file for this is empty.",
   "The S-CSCF will not be able to correctly translate IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
-  "The shared IFC sets should be defined in /etc/clearwater/shared_ifcs.xml. Populate this file according to the documentation."
+  "The shared iFC sets should be defined in /etc/clearwater/shared_ifcs.xml. Populate this file according to the documentation."
 );
 
 static const PDLog CL_SPROUT_SIFC_FILE_INVALID_XML
 (
   PDLogBase::CL_SPROUT_ID + 54,
   LOG_ERR,
-  "The shared IFC sets file contains invalid XML.",
-  "The S-CSCF supports shared IFC sets, but the configuration file for this is invalid.",
+  "The shared iFC sets file contains invalid XML.",
+  "The S-CSCF supports shared iFC sets, but the configuration file for this is invalid.",
   "The S-CSCF will not be able to correctly translate IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
-  "The shared IFC sets should be defined in /etc/clearwater/shared_ifcs.xml. Populate this file according to the documentation."
+  "The shared iFC sets should be defined in /etc/clearwater/shared_ifcs.xml. Populate this file according to the documentation."
 );
 
 static const PDLog CL_SPROUT_SIFC_FILE_MISSING_SHARED_IFCS_SETS
 (
   PDLogBase::CL_SPROUT_ID + 55,
   LOG_ERR,
-  "The shared IFCs file doesn't have the correct syntax.",
-  "The S-CSCF supports shared IFC sets, but the configuration file for this doesn't match the expected syntax (no SharedIFCsSets block).",
+  "The shared iFCs file doesn't have the correct syntax.",
+  "The S-CSCF supports shared iFC sets, but the configuration file for this doesn't match the expected syntax (no SharedIFCsSets block).",
   "The S-CSCF will not be able to correctly translate IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
-  "The shared IFCs should be defined in /etc/clearwater/shared_ifcs.xml. Populate this file according to the documentation."
+  "The shared iFCs should be defined in /etc/clearwater/shared_ifcs.xml. Populate this file according to the documentation."
 );
 
 static const PDLog CL_SPROUT_SIFC_FILE_MISSING_SET_ID
 (
   PDLogBase::CL_SPROUT_ID + 56,
   LOG_ERR,
-  "An entry in the shared IFC file doesn't have the correct syntax; it's missing the SetID.",
-  "The S-CSCF supports shared IFC sets, but one of the shared IFC sets in the configuration file for this doesn't match the expected syntax (no SetID).",
+  "An entry in the shared iFC file doesn't have the correct syntax; it's missing the SetID.",
+  "The S-CSCF supports shared iFC sets, but one of the shared iFC sets in the configuration file for this doesn't match the expected syntax (no SetID).",
   "The S-CSCF will not be able to correctly translate some IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
-  "The shared IFCs should be defined in /etc/clearwater/shared_ifcs.xml. Populate this file according to the documentation."
+  "The shared iFCs should be defined in /etc/clearwater/shared_ifcs.xml. Populate this file according to the documentation."
 );
 
 static const PDLog1<const char *> CL_SPROUT_SIFC_FILE_INVALID_SET_ID
 (
   PDLogBase::CL_SPROUT_ID + 57,
   LOG_ERR,
-  "An entry in the shared IFCs file doesn't have the correct syntax; its SetID (%s) isn't an integer.",
-  "The S-CSCF supports shared IFC sets, but one of the shared IFC sets in the configuration file for this doesn't match the expected syntax (invalid SetID).",
+  "An entry in the shared iFCs file doesn't have the correct syntax; its SetID (%s) isn't an integer.",
+  "The S-CSCF supports shared iFC sets, but one of the shared iFC sets in the configuration file for this doesn't match the expected syntax (invalid SetID).",
   "The S-CSCF will not be able to correctly translate some IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
-  "The shared IFCs should be defined in /etc/clearwater/shared_ifcs.xml. Populate this file according to the documentation."
+  "The shared iFCs should be defined in /etc/clearwater/shared_ifcs.xml. Populate this file according to the documentation."
 );
 
 static const PDLog1<const char *> CL_SPROUT_SIFC_FILE_REPEATED_SET_ID
 (
   PDLogBase::CL_SPROUT_ID + 58,
   LOG_ERR,
-  "Multiple entries in the shared IFC sets file use the same SetID (%s)(",
-  "The S-CSCF supports shared IFC sets, but the configuration file for this has multiple entries for one ID.",
+  "Multiple entries in the shared iFC sets file use the same SetID (%s)(",
+  "The S-CSCF supports shared iFC sets, but the configuration file for this has multiple entries for one ID.",
   "The S-CSCF will not be able to correctly translate some IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
-  "The shared IFC sets should be defined in /etc/clearwater/shared_ifcs.xml. Populate this file according to the documentation."
+  "The shared iFC sets should be defined in /etc/clearwater/shared_ifcs.xml. Populate this file according to the documentation."
 );
 
 static const PDLog1<const char *> CL_SPROUT_SIFC_FILE_INVALID_PRIORITY
 (
   PDLogBase::CL_SPROUT_ID + 59,
   LOG_ERR,
-  "An entry in the shared IFC sets file doesn't have the correct syntax; its Priority (%s) isn't an integer.",
-  "The S-CSCF supports shared IFC sets, but one of the shared IFC sets in the configuration file for this doesn't match the expected syntax (invalid Priority).",
+  "An entry in the shared iFC sets file doesn't have the correct syntax; its Priority (%s) isn't an integer.",
+  "The S-CSCF supports shared iFC sets, but one of the shared iFC sets in the configuration file for this doesn't match the expected syntax (invalid Priority).",
   "The S-CSCF will not be able to correctly translate some IDs in Service Profiles sent from the HSS into Initial Filter Criteria.",
-  "The shared IFC sets should be defined in /etc/clearwater/shared_ifcs.xml. Populate this file according to the documentation."
+  "The shared iFC sets should be defined in /etc/clearwater/shared_ifcs.xml. Populate this file according to the documentation."
 );
 
-static const PDLog CL_SPROUT_DIFC_FILE_MISSING
+static const PDLog CL_SPROUT_FIFC_FILE_MISSING
 (
   PDLogBase::CL_SPROUT_ID + 60,
   LOG_ERR,
-  "The default IFCs configuration file is not present.",
-  "The S-CSCF supports default IFCs, but the configuration file for them does not exist.",
-  "The S-CSCF will not be able to correctly apply any default IFCs.",
-  "The default IFCs should be defined in /etc/clearwater/default_ifcs.xml. Create this file according to the documentation. If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd."
+  "The fallback iFCs configuration file is not present.",
+  "The S-CSCF supports fallback iFCs, but the configuration file for them does not exist.",
+  "The S-CSCF will not be able to correctly apply any fallback iFCs.",
+  "The fallback iFCs should be defined in /etc/clearwater/fallback_ifcs.xml. Create this file according to the documentation. If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd."
 );
 
-static const PDLog CL_SPROUT_DIFC_FILE_EMPTY
+static const PDLog CL_SPROUT_FIFC_FILE_EMPTY
 (
   PDLogBase::CL_SPROUT_ID + 61,
   LOG_ERR,
-  "The default IFCs configuration file is empty.",
-  "The S-CSCF supports default IFCs, but the configuration file for this is empty.",
-  "The S-CSCF will not be able to correctly apply any default IFCs.",
-  "The default IFCs should be defined in /etc/clearwater/default_ifcs.xml. Populate this file according to the documentation."
+  "The fallback iFCs configuration file is empty.",
+  "The S-CSCF supports fallback iFCs, but the configuration file for this is empty.",
+  "The S-CSCF will not be able to correctly apply any fallback iFCs.",
+  "The fallback iFCs should be defined in /etc/clearwater/fallback_ifcs.xml. Populate this file according to the documentation."
 );
 
-static const PDLog CL_SPROUT_DIFC_FILE_INVALID_XML
+static const PDLog CL_SPROUT_FIFC_FILE_INVALID_XML
 (
   PDLogBase::CL_SPROUT_ID + 62,
   LOG_ERR,
-  "The default IFCs configuration file contains invalid XML.",
-  "The S-CSCF supports default IFCs, but the configuration file for this is invalid.",
-  "The S-CSCF will not be able to correctly apply any default IFCs.",
-  "The default IFCs should be defined in /etc/clearwater/default_ifcs.xml. Populate this file according to the documentation."
+  "The fallback iFCs configuration file contains invalid XML.",
+  "The S-CSCF supports fallback iFCs, but the configuration file for this is invalid.",
+  "The S-CSCF will not be able to correctly apply any fallback iFCs.",
+  "The fallback iFCs should be defined in /etc/clearwater/fallback_ifcs.xml. Populate this file according to the documentation."
 );
 
-static const PDLog CL_SPROUT_DIFC_FILE_MISSING_DEFAULT_IFCS_SET
+static const PDLog CL_SPROUT_FIFC_FILE_MISSING_FALLBACK_IFCS_SET
 (
  PDLogBase::CL_SPROUT_ID + 63,
  LOG_ERR,
- "The default IFCs configuration file doesn't have the correct syntax.",
- "The S-CSCF supports default IFCs, but the configuration file for this doesn't match the expected syntax (no DefaultIFCsSet block).",
- "The S-CSCF will not be able to correctly apply any default IFCs.",
- "The default IFCs should be defined in /etc/clearwater/default_ifcs.xml. Populate this file according to the documentation."
+ "The fallback iFCs configuration file doesn't have the correct syntax.",
+ "The S-CSCF supports fallback iFCs, but the configuration file for this doesn't match the expected syntax (no FallbackIFCsSet block).",
+ "The S-CSCF will not be able to correctly apply any fallback iFCs.",
+ "The fallback iFCs should be defined in /etc/clearwater/fallback_ifcs.xml. Populate this file according to the documentation."
  );
 
-static const PDLog1<const char *> CL_SPROUT_DIFC_FILE_INVALID_PRIORITY
+static const PDLog1<const char *> CL_SPROUT_FIFC_FILE_INVALID_PRIORITY
 (
   PDLogBase::CL_SPROUT_ID + 64,
   LOG_ERR,
-  "An IFC in the default IFCs configuration file doesn't have the correct syntax; its Priority (%s) isn't an integer.",
-  "The S-CSCF supports default IFCs, but one of the default IFCs doesn't match the expected syntax (invalid Priority).",
-  "The S-CSCF will not be able to apply this default IFC.",
-  "The default IFCs should be defined in /etc/clearwater/default_ifcs.xml. Populate this file according to the documentation."
+  "An iFC in the fallback iFCs configuration file doesn't have the correct syntax; its Priority (%s) isn't an integer.",
+  "The S-CSCF supports fallback iFCs, but one of the fallback iFCs doesn't match the expected syntax (invalid Priority).",
+  "The S-CSCF will not be able to apply this fallback iFC.",
+  "The fallback iFCs should be defined in /etc/clearwater/fallback_ifcs.xml. Populate this file according to the documentation."
 );
 
 static const PDLog1<const char *> CL_SPROUT_ORIG_PARTY_BARRED
@@ -586,6 +572,37 @@ static const PDLog1<const char *> CL_SPROUT_TERM_PARTY_BARRED
   "An originating call from subscriber (%s) has been rejected with a 404 Not Found because they are barred.",
   "Normal",
   "None"
+);
+
+
+static const PDLog CL_SPROUT_MMF_FILE_INVALID
+(
+  PDLogBase::CL_SPROUT_ID + 67,
+  LOG_NOTICE,
+  "The file detailing when to apply MMF is invalid.",
+  "The /etc/clearwater/mmf_targets.json file, defining when to apply MMF, is invalid.  This is either due to invalid JSON or missing/ invalid elements.",
+  "If valid configuration was previously loaded, Sprout will continue to use it.  However, if Sprout is restarted, or valid configuration was not previously loaded, Sprout will not apply MMF to any requests.",
+  "Follow the documentation to create this file correctly."
+);
+
+static const PDLog CL_SPROUT_MMF_FILE_MISSING
+(
+  PDLogBase::CL_SPROUT_ID + 68,
+  LOG_NOTICE,
+  "The file detailing when to apply MMF is not present.",
+  "The /etc/clearwater/mmf_targets.json file, defining when to apply MMF, does not exist.",
+  "If valid configuration was previously loaded, Sprout will continue to use it.  However, if Sprout is restarted, or valid configuration was not previously loaded, Sprout will not apply MMF to any requests.",
+  "If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd.  If you are managing /etc/clearwater/mmf_targets.json manually, follow the documentation to create it."
+);
+
+static const PDLog CL_SPROUT_MMF_FILE_EMPTY
+(
+  PDLogBase::CL_SPROUT_ID + 69,
+  LOG_NOTICE,
+  "The file detailing when to apply MMF is empty.",
+  "The /etc/clearwater/mmf_targets.json file, defining when to apply MMF, is empty.",
+  "If valid configuration was previously loaded, Sprout will continue to use it.  However, if Sprout is restarted, or valid configuration was not previously loaded, Sprout will not apply MMF to any requests.",
+  "If you are expecting clearwater-config-manager to be managing this file, check that it is running and that there are no ENT logs relating to it or clearwater-etcd.  If you are managing /etc/clearwater/mmf_targets.json manually, follow the documentation to create it."
 );
 
 #endif

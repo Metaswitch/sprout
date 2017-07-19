@@ -32,7 +32,7 @@ AsChain::AsChain(AsChainTable* as_chain_table,
                  SAS::TrailId trail,
                  Ifcs& ifcs,
                  ACR* acr,
-                 DIFCService* difc_service,
+                 FIFCService* fifc_service,
                  IFCConfiguration ifc_configuration) :
   _as_chain_table(as_chain_table),
   _refs(1),  // for the initial chain link being returned
@@ -45,12 +45,12 @@ AsChain::AsChain(AsChainTable* as_chain_table,
   _trail(trail),
   _ifcs(ifcs),
   _acr(acr),
-  _default_ifcs({}),
+  _fallback_ifcs({}),
   _ifc_configuration(ifc_configuration),
   _using_standard_ifcs(true),
   _root(NULL)
 {
-  TRC_DEBUG("Creating AsChain %p with %d IFCs and adding to map", this, ifcs.size());
+  TRC_DEBUG("Creating AsChain %p with %d iFCs and adding to map", this, ifcs.size());
   _as_chain_table->register_(this, _odi_tokens);
   TRC_DEBUG("Attached ACR (%p) to chain", _acr);
 
@@ -63,10 +63,10 @@ AsChain::AsChain(AsChainTable* as_chain_table,
     *it = false;
   }
 
-  if ((difc_service) && (_ifc_configuration._apply_default_ifcs))
+  if ((fifc_service) && (_ifc_configuration._apply_fallback_ifcs))
   {
     _root = new rapidxml::xml_document<>;
-    _default_ifcs = difc_service->get_default_ifcs(_root);
+    _fallback_ifcs = fifc_service->get_fallback_ifcs(_root);
   }
 }
 
@@ -120,7 +120,7 @@ const SessionCase& AsChain::session_case() const
 /// @returns the number of elements in this chain
 size_t AsChain::size() const
 {
-  return _using_standard_ifcs ? _ifcs.size() : _default_ifcs.size();
+  return _using_standard_ifcs ? _ifcs.size() : _fallback_ifcs.size();
 }
 
 
@@ -150,7 +150,7 @@ AsChainLink AsChainLink::create_as_chain(AsChainTable* as_chain_table,
                                          SAS::TrailId trail,
                                          Ifcs& ifcs,
                                          ACR* acr,
-                                         DIFCService* difc_service,
+                                         FIFCService* fifc_service,
                                          IFCConfiguration ifc_configuration)
 {
   AsChain* as_chain = new AsChain(as_chain_table,
@@ -160,7 +160,7 @@ AsChainLink AsChainLink::create_as_chain(AsChainTable* as_chain_table,
                                   trail,
                                   ifcs,
                                   acr,
-                                  difc_service,
+                                  fifc_service,
                                   ifc_configuration);
   return AsChainLink(as_chain, 0u);
 }
@@ -192,7 +192,7 @@ pjsip_status_code AsChainLink::on_initial_request(pjsip_msg* msg,
                                  (_as_chain->_using_standard_ifcs);
 
   // Attempt to get the next application server. This uses either the standard
-  // IFCs or the default IFCs depending on what's happened when we went through
+  // iFCs or the fallback iFCs depending on what's happened when we went through
   // this function previously.
   bool got_dummy_as = false;
   get_next_application_server(msg,
@@ -200,22 +200,22 @@ pjsip_status_code AsChainLink::on_initial_request(pjsip_msg* msg,
                               got_dummy_as,
                               msg_trail);
 
-  // Check if we should apply any default IFCs. We do this if:
-  //   - We haven't found any matching IFC (true if server_name is empty, and
-  //     got_dummy_as is false.
+  // Check if we should apply any fallback iFCs. We do this if:
+  //   - We haven't found any matching iFC (true if server_name is empty and
+  //     we didn't find a dummy AS)
   //   - It's our first time through this function and we've run through
-  //     every available standard IFC to check for a match
-  //   - The config option to apply default IFCs is set.
-  if ((!(got_dummy_as) || (server_name != "")) &&
+  //     every available standard iFC to check for a match
+  //   - The config option to apply fallback iFCs is set.
+  if (((!got_dummy_as) && (server_name == "")) &&
       ((first_pass_through_ifcs) && (complete())) &&
-      (_as_chain->_ifc_configuration._apply_default_ifcs))
+      (_as_chain->_ifc_configuration._apply_fallback_ifcs))
   {
-    TRC_DEBUG("No IFCs apply to this message; looking up default IFCs");
-    SAS::Event event(msg_trail, SASEvent::STARTING_DEFAULT_IFCS_LOOKUP, 0);
+    TRC_DEBUG("No iFCs apply to this message; looking up fallback iFCs");
+    SAS::Event event(msg_trail, SASEvent::STARTING_FALLBACK_IFCS_LOOKUP, 0);
     SAS::report_event(event);
 
-    // Reset the AsChain IFCs given we've moving onto the default IFCs
-    _as_chain->_using_standard_ifcs = false;
+    // Reset the AsChain iFCs given we've moving onto the fallback iFCs
+    _as_chain->reset_chain(false);
     _index = 0;
     get_next_application_server(msg,
                                 server_name,
@@ -224,38 +224,39 @@ pjsip_status_code AsChainLink::on_initial_request(pjsip_msg* msg,
 
     if (server_name != "")
     {
-      TRC_DEBUG("We've found a matching default IFC - applying it");
-      SAS::Event event(msg_trail, SASEvent::FIRST_DEFAULT_IFC, 0);
+      TRC_DEBUG("We've found a matching fallback iFC - applying it");
+      SAS::Event event(msg_trail, SASEvent::FIRST_FALLBACK_IFC, 0);
       SAS::report_event(event);
     }
   }
 
-  // Check if we should have applied default IFCs, but didn't find any. We
+  // Check if we should have applied fallback iFCs, but didn't find any. We
   // SAS log this, and increment a statistic.
   // We're in this case if:
-  //   - We haven't found any matching IFC (true if server_name is empty, and
-  //     got_dummy_as is false.
-  //   - We're using default IFCs
-  if ((!(got_dummy_as) || (server_name != "")) &&
+  //   - We haven't found any matching iFC (true if server_name is empty and
+  //     we didn't find a dummy AS)
+  //   - We're using fallback iFCs
+  if (((!got_dummy_as) && (server_name == "")) &&
+      ((first_pass_through_ifcs) && (complete())) &&
       ((!_as_chain->_using_standard_ifcs) &&
-       (_as_chain->_ifc_configuration._apply_default_ifcs)))
+       (_as_chain->_ifc_configuration._apply_fallback_ifcs)))
   {
-    if (_as_chain->_ifc_configuration._no_matching_default_ifcs_tbl)
+    if (_as_chain->_ifc_configuration._no_matching_fallback_ifcs_tbl)
     {
-      _as_chain->_ifc_configuration._no_matching_default_ifcs_tbl->increment();
+      _as_chain->_ifc_configuration._no_matching_fallback_ifcs_tbl->increment();
     }
 
-    TRC_DEBUG("Unable to apply default IFCs as no matching IFCs available");
-    SAS::Event event(msg_trail, SASEvent::NO_DEFAULT_IFCS, 0);
+    TRC_DEBUG("Unable to apply fallback iFCs as no matching iFCs available");
+    SAS::Event event(msg_trail, SASEvent::NO_FALLBACK_IFCS, 0);
     SAS::report_event(event);
   }
 
-  // Now check if we found any IFCs at all. We didn't find any if:
-  //   - We haven't found any matching IFC (true if server_name is empty, and
-  //     got_dummy_as is false.
+  // Now check if we found any iFCs at all. We didn't find any if:
+  //   - We haven't found any matching iFC (true if server_name is empty and
+  //     we didn't find a dummy AS)
   //   - It's our first time through this function and we've run through
-  //     every available IFC to check for a match
-  if ((!(got_dummy_as) || (server_name != "")) &&
+  //     every available iFC to check for a match
+  if (((!got_dummy_as) && (server_name == "")) &&
       ((first_pass_through_ifcs) && (complete())))
   {
     if (_as_chain->_ifc_configuration._no_matching_ifcs_tbl)
@@ -280,7 +281,7 @@ void AsChainLink::get_next_application_server(pjsip_msg* msg,
 {
   std::vector<Ifc> ifcs = _as_chain->_using_standard_ifcs ?
                           _as_chain->_ifcs.ifcs_list() :
-                          _as_chain->_default_ifcs;
+                          _as_chain->_fallback_ifcs;
   got_dummy_as = false;
 
   while (!complete())
@@ -312,7 +313,7 @@ void AsChainLink::get_next_application_server(pjsip_msg* msg,
       }
       else
       {
-        TRC_DEBUG("Ignoring this IFC as it matches a dummy AS (%s)",
+        TRC_DEBUG("Ignoring this iFC as it matches a dummy AS (%s)",
                   application_server.server_name.c_str());
         SAS::Event event(msg_trail, SASEvent::IFC_MATCHED_DUMMY_AS, 0);
         event.add_var_param(_as_chain->_ifc_configuration._dummy_as);
@@ -387,6 +388,36 @@ void AsChainTable::unregister(std::vector<std::string>& tokens)
   }
 
   pthread_mutex_unlock(&_lock);
+}
+
+
+void AsChain::reset_chain(bool using_standard_ifcs)
+{
+  // We need to replace the AsChainLinks as we're changing
+  // what iFCs we're going to use. Clear out the data
+  // structures, change over what iFC we're using, then
+  // recreate the data structures.
+  _as_chain_table->unregister(_odi_tokens);
+  _as_info.clear();
+  _responsive.clear();
+  _odi_tokens.clear();
+
+  _using_standard_ifcs = using_standard_ifcs;
+
+  uint32_t ifcs_size = ((_using_standard_ifcs) ?
+                         _ifcs.ifcs_list() :
+                         _fallback_ifcs).size();
+  _responsive = std::vector<bool>(ifcs_size + 1);
+
+  for (std::vector<bool>::iterator it = _responsive.begin();
+       it != _responsive.end();
+       ++it)
+  {
+    *it = false;
+  }
+
+  _as_info = std::vector<AsInformation>(ifcs_size + 1);
+  _as_chain_table->register_(this, _odi_tokens);
 }
 
 

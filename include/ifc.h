@@ -26,8 +26,35 @@ extern "C" {
 
 #include "sas.h"
 #include "xml_utils.h"
+#include "snmp_counter_table.h"
 
 typedef enum {SESSION_CONTINUED=0, SESSION_TERMINATED=1} DefaultHandling;
+
+/// Structure that holds iFC configuration that isn't covered by the TS specs
+// (e.g. fallback and dummy iFCs).
+struct IFCConfiguration
+{
+  bool _apply_fallback_ifcs;
+  bool _reject_if_no_matching_ifcs;
+  std::string _dummy_as;
+  SNMP::CounterTable* _no_matching_ifcs_tbl;
+  SNMP::CounterTable* _no_matching_fallback_ifcs_tbl;
+
+  IFCConfiguration()
+  {}
+
+  IFCConfiguration(bool apply_fallback_ifcs,
+                   bool reject_if_no_matching_ifcs,
+                   std::string dummy_as,
+                   SNMP::CounterTable* no_matching_ifcs_tbl,
+                   SNMP::CounterTable* no_matching_fallback_ifcs_tbl) :
+    _apply_fallback_ifcs(apply_fallback_ifcs),
+    _reject_if_no_matching_ifcs(reject_if_no_matching_ifcs),
+    _dummy_as(dummy_as),
+    _no_matching_ifcs_tbl(no_matching_ifcs_tbl),
+    _no_matching_fallback_ifcs_tbl(no_matching_fallback_ifcs_tbl)
+  {}
+};
 
 /// An invocation of an AS - the result of a matching iFC.
 //
@@ -50,7 +77,7 @@ public:
   {
   }
 
-  /// This constructor creates an IFC and makes sure that all of its
+  /// This constructor creates an Ifc and makes sure that all of its
   // associated memory is owned by the passed in XML document.
   Ifc(std::string ifc_str,
       rapidxml::xml_document<>* ifc_doc);

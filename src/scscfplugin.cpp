@@ -50,7 +50,7 @@ private:
   SNMP::RegistrationStatsTables third_party_reg_stats_tbls = {nullptr, nullptr, nullptr};
   SNMP::AuthenticationStatsTables auth_stats_tbls = {nullptr, nullptr, nullptr};
   SNMP::CounterTable* _no_matching_ifcs_tbl;
-  SNMP::CounterTable* _no_matching_default_ifcs_tbl;
+  SNMP::CounterTable* _no_matching_fallback_ifcs_tbl;
 };
 
 /// Export the plug-in using the magic symbol "sproutlet_plugin"
@@ -65,7 +65,7 @@ SCSCFPlugin::SCSCFPlugin() :
   _incoming_sip_transactions_tbl(NULL),
   _outgoing_sip_transactions_tbl(NULL),
   _no_matching_ifcs_tbl(NULL),
-  _no_matching_default_ifcs_tbl(NULL)
+  _no_matching_fallback_ifcs_tbl(NULL)
 {
 }
 
@@ -74,7 +74,7 @@ SCSCFPlugin::~SCSCFPlugin()
   delete _incoming_sip_transactions_tbl;
   delete _outgoing_sip_transactions_tbl;
   delete _no_matching_ifcs_tbl;
-  delete _no_matching_default_ifcs_tbl;
+  delete _no_matching_fallback_ifcs_tbl;
 }
 
 /// Loads the S-CSCF plug-in, returning the supported Sproutlets.
@@ -89,8 +89,8 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                                                                     "1.2.826.0.1.1578918.9.3.20");
   _outgoing_sip_transactions_tbl = SNMP::SuccessFailCountByRequestTypeTable::create("scscf_outgoing_sip_transactions",
                                                                                     "1.2.826.0.1.1578918.9.3.21");
-  _no_matching_default_ifcs_tbl = SNMP::CounterTable::create("no_matching_default_ifcs",
-                                                             "1.2.826.0.1.1578918.9.3.39");
+  _no_matching_fallback_ifcs_tbl = SNMP::CounterTable::create("no_matching_fallback_ifcs",
+                                                              "1.2.826.0.1.1578918.9.3.39");
   _no_matching_ifcs_tbl = SNMP::CounterTable::create("no_matching_ifcs",
                                                      "1.2.826.0.1.1578918.9.3.41");
 
@@ -107,7 +107,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     }
     else
     {
-      std::string node_host(stack_data.local_host.ptr, stack_data.public_host.slen);
+      std::string node_host(stack_data.local_host.ptr, stack_data.local_host.slen);
 
       if (Utils::parse_ip_address(node_host) == Utils::IPV6_ADDRESS)
       {
@@ -127,6 +127,21 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     {
       icscf_uri = opt.external_icscf_uri;
     }
+
+    // Create the MMF cluster uri.  As this is not a separate sproutlet, use
+    // the sprout hostname, and specify the port (currently the BGCF port)
+    std::string mmf_cluster_uri = "sip:" + opt.sprout_hostname + ":" + std::to_string(opt.port_bgcf);
+
+    // As there is not currently a shared_config option for this, form the
+    // MMF node uri manually, specifying the port (currently the BGCF port)
+    std::string node_host(stack_data.local_host.ptr, stack_data.local_host.slen);
+
+    if (Utils::parse_ip_address(node_host) == Utils::IPV6_ADDRESS)
+    {
+      node_host = "[" + node_host + "]";
+    }
+
+    std::string mmf_node_uri = "sip:" + node_host + ":" + std::to_string(opt.port_bgcf);
 
     // Create Application Server communication trackers.
     _sess_term_as_alarm = new Alarm(alarm_manager,
@@ -153,6 +168,8 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           scscf_node_uri,
                                           icscf_uri,
                                           opt.uri_bgcf,
+                                          mmf_cluster_uri,
+                                          mmf_node_uri,
                                           0,
                                           "",
                                           local_sdm,
@@ -163,12 +180,13 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                           _incoming_sip_transactions_tbl,
                                           _outgoing_sip_transactions_tbl,
                                           opt.override_npdi,
-                                          difc_service,
-                                          IFCConfiguration(opt.apply_default_ifcs,
+                                          mmf_service,
+                                          fifc_service,
+                                          IFCConfiguration(opt.apply_fallback_ifcs,
                                                            opt.reject_if_no_matching_ifcs,
                                                            opt.dummy_app_server,
                                                            _no_matching_ifcs_tbl,
-                                                           _no_matching_default_ifcs_tbl),
+                                                           _no_matching_fallback_ifcs_tbl),
                                           opt.session_continued_timeout_ms,
                                           opt.session_terminated_timeout_ms,
                                           sess_term_as_tracker,
@@ -214,7 +232,14 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                                   opt.reg_max_expires,
                                                   opt.force_third_party_register_body,
                                                   &reg_stats_tbls,
-                                                  &third_party_reg_stats_tbls);
+                                                  &third_party_reg_stats_tbls,
+                                                  fifc_service,
+                                                  IFCConfiguration(opt.apply_fallback_ifcs,
+                                                                   opt.reject_if_no_matching_ifcs,
+                                                                   opt.dummy_app_server,
+                                                                   _no_matching_ifcs_tbl,
+                                                                   _no_matching_fallback_ifcs_tbl));
+
 
     ok = ok && _registrar_sproutlet->init();
     sproutlets.push_front(_registrar_sproutlet);

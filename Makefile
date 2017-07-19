@@ -58,32 +58,60 @@ distclean: $(patsubst %, %_distclean, ${SUBMODULES}) sprout_distclean
 	rm -rf ${ROOT}/usr
 	rm -rf ${ROOT}/build
 
-.PHONY: plugins-build
-plugins-build:
-	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} \;
+#
+# Plugin handling.
+#
 
-.PHONY: plugins-test
-plugins-test:
-	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} test \;
+# Generate a list of all the plugins available.
+PLUGINS := $(patsubst plugins/%,%,$(shell find plugins -mindepth 1 -maxdepth 1 -type d ))
 
-.PHONY: plugins-clean
-plugins-clean:
-	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} clean \;
+# Macro to define the rule for building a single target for a single plugin.
+#
+# Parameters:
+#   $1 - The name of the plugin to build.
+#   $2 - The make target (e.g build, test, clean, ...)
+#
+# Note that the plugins are not required to have a 'build' target, but assume
+# the default target performs a build.  For this reason we never call "make
+# build" for a plugin, and always just call "make" instead.
+define plugin_name_target_template
 
-.PHONY: plugins-deb
-plugins-deb:
-	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} deb \;
+.PHONY: plugin-$1-$2
+plugin-$1-$2:
+	make -C plugins/$1 $$(filter-out build,$2)
 
-.PHONY: plugins-deb-only
-plugins-deb-only:
-	find plugins -mindepth 1 -maxdepth 1 -type d -exec ${MAKE} -C {} deb-only \;
+endef
 
+# Macro to define the rules for building a single target for all plugins.
+#
+# Parameters:
+#   $1 - The make target (e.g. build, test, clean, ...)
+#
+# This template:
+#   - Defines the plugins-<target> rule.
+#   - Generates a rule for each plugin to build that target.
+define plugin_target_template
+
+.PHONY: plugins-$1
+plugins-$1: $$(patsubst %,plugin-%-$1,$$(PLUGINS))
+$$(foreach plugin,$$(PLUGINS),$$(eval $$(call plugin_name_target_template,$$(plugin),$1)))
+
+endef
+
+# Define the possible make targets for the plugins and generate the makefile
+# rules.
+PLUGIN_TARGETS := build test clean deb deb-only
+$(foreach target,$(PLUGIN_TARGETS),$(eval $(call plugin_target_template,$(target))))
+
+#
+# Debian file handling.
+#
 include build-infra/cw-deb.mk
 
 deb-only: plugins-deb-only
 
 .PHONY: deb
-deb: build deb-only plugins-deb
+deb: build plugins-deb deb-only
 
 .PHONY: all build test clean distclean
 

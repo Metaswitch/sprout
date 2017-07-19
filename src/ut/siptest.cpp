@@ -722,7 +722,7 @@ void SipTest::poll()
   do
   {
     pj_status_t status = pjsip_endpt_handle_events2(stack_data.endpt, &delay, &count);
-    TRC_INFO("Poll found %d events, status %d\n", (int)count, (int)status);
+    TRC_INFO("Poll found %d events, status %d", (int)count, (int)status);
   }
   while (count != 0);
 }

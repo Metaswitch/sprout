@@ -24,6 +24,7 @@ extern "C" {
 #include "ifchandler.h"
 #include "hssconnection.h"
 #include "snmp_success_fail_count_table.h"
+#include "fifcservice.h"
 
 namespace RegistrationUtils {
 
@@ -33,29 +34,45 @@ void init(SNMP::RegistrationStatsTables* third_party_reg_stats_tables_arg,
 bool remove_bindings(SubscriberDataManager* sdm,
                      std::vector<SubscriberDataManager*> remote_sdms,
                      HSSConnection* hss,
+                     FIFCService* fifc_service,
+                     IFCConfiguration ifc_configuration,
                      const std::string& aor,
                      const std::string& binding_id,
                      const std::string& dereg_type,
                      SAS::TrailId trail,
                      HTTPCode* hss_status_code = nullptr);
 
+void deregister_with_application_servers(Ifcs& ifcs,
+                                         FIFCService* fifc_service,
+                                         IFCConfiguration ifc_configuration,
+                                         SubscriberDataManager* sdm,
+                                         std::vector<SubscriberDataManager*> remote_sdms,
+                                         HSSConnection* hss,
+                                         const std::string& served_user,
+                                         SAS::TrailId trail);
 void register_with_application_servers(Ifcs& ifcs,
+                                       FIFCService* fifc_service,
+                                       IFCConfiguration ifc_configuration,
                                        SubscriberDataManager* sdm,
                                        std::vector<SubscriberDataManager*> remote_sdms,
                                        HSSConnection* hss,
-                                       pjsip_msg* received_register_msg,
-                                       pjsip_msg* ok_response_msg,
+                                       pjsip_msg *received_register_msg,
+                                       pjsip_msg *ok_response_msg,
                                        int expires,
                                        bool is_initial_registration,
                                        const std::string& served_user,
                                        SAS::TrailId trail);
 
-void deregister_with_application_servers(Ifcs&,
-                                         SubscriberDataManager* sdm,
-                                         std::vector<SubscriberDataManager*> remote_sdms,
-                                         HSSConnection* hss,
-                                         const std::string&,
-                                         SAS::TrailId trail);
+void interpret_ifcs(Ifcs& ifcs,
+                    std::vector<Ifc> fallback_ifcs,
+                    IFCConfiguration ifc_configuration,
+                    const SessionCase& session_case,
+                    bool is_registered,
+                    bool is_initial_registration,
+                    pjsip_msg* msg,
+                    std::vector<AsInvocation>& application_servers,
+                    bool& found_match,
+                    SAS::TrailId trail);
 }
 
 #endif

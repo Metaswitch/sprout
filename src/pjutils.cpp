@@ -271,7 +271,7 @@ pj_str_t PJUtils::domain_from_uri(const std::string& uri_str, pj_pool_t* pool)
 }
 
 /// Determine the served user for originating requests.
-pjsip_uri* PJUtils::orig_served_user(pjsip_msg* msg)
+pjsip_uri* PJUtils::orig_served_user(const pjsip_msg* msg)
 {
   // The served user for originating requests is determined from the
   // P-Served-User or P-Asserted-Identity headers.  For extra compatibility,
@@ -315,7 +315,7 @@ pjsip_uri* PJUtils::orig_served_user(pjsip_msg* msg)
 
 
 /// Determine the served user for terminating requests.
-pjsip_uri* PJUtils::term_served_user(pjsip_msg* msg)
+pjsip_uri* PJUtils::term_served_user(const pjsip_msg* msg)
 {
   // The served user for terminating requests is always determined from the
   // Request URI.
@@ -1276,10 +1276,6 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
   {
     // Failed to resolve the destination or failed to create a PJSIP UAC
     // transaction.
-    CL_SPROUT_SIP_SEND_REQUEST_ERR.log(PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                       PJUtils::next_hop(tdata->msg)).c_str(),
-                                       PJUtils::pj_status_to_string(status).c_str());
-
     TRC_ERROR("Failed to send request to %s",
               PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                      PJUtils::next_hop(tdata->msg)).c_str());
@@ -1407,9 +1403,6 @@ pj_status_t PJUtils::send_request_stateless(pjsip_tx_data* tdata, int retries)
     // and the request here.  Also, this would be an unexpected error rather
     // than an indication that the selected destination server is down, so we
     // don't blacklist.
-    CL_SPROUT_SIP_SEND_REQUEST_ERR.log(PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                       PJUtils::next_hop(tdata->msg)).c_str(),
-                                       PJUtils::pj_status_to_string(status).c_str());
     TRC_ERROR("Failed to send request to %s",
               PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                      PJUtils::next_hop(tdata->msg)).c_str());
@@ -2163,6 +2156,25 @@ pjsip_uri* PJUtils::translate_sip_uri_to_tel_uri(const pjsip_sip_uri* sip_uri,
   }
 
   return (pjsip_uri*)tel_uri;
+}
+
+/// Takes a SIP URI, and adds a URI parameter using the passed in parameter
+/// name, and adds a parameter value if non-empty.
+///
+/// @param sip_uri                A pointer to the URI object to amend
+/// @param name                   The name of the parameter to add
+/// @param value                  The value of the parameter to add.
+///                               If this is "", we add a parameter with no value
+/// @param pool                   A pool
+void PJUtils::add_parameter_to_sip_uri(pjsip_sip_uri* sip_uri,
+                                       const pj_str_t param_name,
+                                       const char* param_value,
+                                       pj_pool_t* pool)
+{
+  pjsip_param* parameter = PJ_POOL_ALLOC_T(pool, pjsip_param);
+  pj_strdup(pool, &parameter->name, &param_name);
+  pj_list_insert_before(&sip_uri->other_param, parameter);
+  pj_strdup2(pool, &parameter->value, param_value);
 }
 
 static const boost::regex CHARS_TO_STRIP = boost::regex("[.)(-]");

@@ -1,0 +1,19 @@
+<?l version=1.0 encoding=UTF-8?>
+<FallbackIFCsSet>
+  <InitialFilterCriteria>
+    <Priority>1</Priority>
+    <TriggerPoint>
+      <ConditionTypeCNF>0</ConditionTypeCNF>
+      <SPT>
+        <ConditionNegated>0</ConditionNegated>
+        <Group>0</Group>
+        <Method>INVITE</Method>
+        <Extension></Extension>
+      </SPT>
+    </TriggerPoint>
+    <ApplicationServer>
+      <ServerName>sip:1.2.3.5:56789;transport=UDP</ServerName>
+      <DefaultHandling>0</DefaultHandling>
+    </ApplicationServer>
+  </InitialFilterCriteria>
+</FallbackIFCsSet>

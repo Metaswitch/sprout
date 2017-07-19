@@ -1723,7 +1723,6 @@ void BasicProxy::UACTsx::send_request()
     // Failed to send the request.  This is an unexpected error rather than
     // an indication that the selected destination is down, so we do not
     // attempt a retry and do not blacklist the selected destination.
-    //LCOV_EXCL_START
     TRC_DEBUG("Failed to send request (%d %s)",
               status, PJUtils::pj_status_to_string(status).c_str());
     pjsip_tx_data_dec_ref(_tdata);
@@ -1739,7 +1738,8 @@ void BasicProxy::UACTsx::send_request()
       PJUtils::remove_top_via(_tdata);
       _uas_tsx->on_client_not_responding(this, PJSIP_EVENT_TRANSPORT_ERROR);
     }
-    //LCOV_EXCL_STOP
+
+    _pending_destroy = true;
   }
 
   exit_context();

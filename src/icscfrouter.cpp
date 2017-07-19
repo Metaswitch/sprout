@@ -233,7 +233,7 @@ int ICSCFRouter::parse_hss_response(rapidjson::Document*& rsp, bool queried_caps
                                  _hss_rsp.optional_caps)))
         {
           // Failed to parse capabilities, so reject with 480 response.
-          TRC_INFO("Malformed required capabilities returned by HSS\n");
+          TRC_INFO("Malformed required capabilities returned by HSS");
           status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
         }
       }

@@ -70,9 +70,9 @@ std::string default_private_id_from_uri(const pjsip_uri* uri);
 
 pj_str_t domain_from_uri(const std::string& uri_str, pj_pool_t* pool);
 
-pjsip_uri* orig_served_user(pjsip_msg* msg);
+pjsip_uri* orig_served_user(const pjsip_msg* msg);
 
-pjsip_uri* term_served_user(pjsip_msg* msg);
+pjsip_uri* term_served_user(const pjsip_msg* msg);
 
 typedef enum {NO, YES, TLS_YES, TLS_PENDING, IP_ASSOC_YES, IP_ASSOC_PENDING, AUTH_DONE} Integrity;
 void add_integrity_protected_indication(pjsip_tx_data* tdata, PJUtils::Integrity integrity);
@@ -254,6 +254,11 @@ void add_pcfa_header(pjsip_msg* msg,
 
 pjsip_uri* translate_sip_uri_to_tel_uri(const pjsip_sip_uri* sip_uri,
                                         pj_pool_t* pool);
+
+void add_parameter_to_sip_uri(pjsip_sip_uri* sip_uri,
+                              const pj_str_t param_name,
+                              const char* param_value,
+                              pj_pool_t* pool);
 
 std::string remove_visual_separators(const std::string& user);
 std::string remove_visual_separators(const pj_str_t& number);

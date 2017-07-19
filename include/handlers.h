@@ -19,6 +19,7 @@
 #include "subscriber_data_manager.h"
 #include "sipresolver.h"
 #include "impistore.h"
+#include "fifcservice.h"
 
 /// Common factory for all handlers that deal with chronos timer pops. This is
 /// a subclass of SpawningHandler that requests HTTP flows to be
@@ -87,12 +88,16 @@ public:
     Config(SubscriberDataManager* sdm,
            std::vector<SubscriberDataManager*> remote_sdms,
            HSSConnection* hss,
+           FIFCService* fifc_service,
+           IFCConfiguration ifc_configuration,
            SIPResolver* sipresolver,
            ImpiStore* local_impi_store,
            std::vector<ImpiStore*> remote_impi_stores) :
       _sdm(sdm),
       _remote_sdms(remote_sdms),
       _hss(hss),
+      _fifc_service(fifc_service),
+      _ifc_configuration(ifc_configuration),
       _sipresolver(sipresolver),
       _local_impi_store(local_impi_store),
       _remote_impi_stores(remote_impi_stores)
@@ -100,6 +105,8 @@ public:
     SubscriberDataManager* _sdm;
     std::vector<SubscriberDataManager*> _remote_sdms;
     HSSConnection* _hss;
+    FIFCService* _fifc_service;
+    IFCConfiguration _ifc_configuration;
     SIPResolver* _sipresolver;
     ImpiStore* _local_impi_store;
     std::vector<ImpiStore*> _remote_impi_stores;
@@ -118,6 +125,8 @@ public:
   SubscriberDataManager::AoRPair* deregister_bindings(
                     SubscriberDataManager* current_sdm,
                     HSSConnection* hss,
+                    FIFCService* fifc_service,
+                    IFCConfiguration ifc_configuration,
                     std::string aor_id,
                     std::string private_id,
                     SubscriberDataManager::AoRPair* previous_aor_data,
@@ -224,13 +233,21 @@ public:
   {
     Config(SubscriberDataManager* sdm,
            std::vector<SubscriberDataManager*> remote_sdms,
-           HSSConnection* hss) :
-      _sdm(sdm), _remote_sdms(remote_sdms), _hss(hss)
+           HSSConnection* hss,
+           FIFCService* fifc_service,
+           IFCConfiguration ifc_configuration) :
+      _sdm(sdm),
+      _remote_sdms(remote_sdms),
+      _hss(hss),
+      _fifc_service(fifc_service),
+      _ifc_configuration(ifc_configuration)
     {}
 
     SubscriberDataManager* _sdm;
     std::vector<SubscriberDataManager*> _remote_sdms;
     HSSConnection* _hss;
+    FIFCService* _fifc_service;
+    IFCConfiguration _ifc_configuration;
   };
 
   DeleteImpuTask(HttpStack::Request& req, const Config* cfg, SAS::TrailId trail) :
