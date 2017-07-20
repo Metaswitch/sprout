@@ -9,7 +9,15 @@
 
 FILENAME=mmf_targets.json
 KEY=mmf_targets_json
+SCHEMA=/usr/share/clearwater/clearwater-config-manager/scripts/config_validation/mmf_targets_schema.json
 
 # Pass optional argument directly to upload_json, which checks for --allow-large
 # option that allows file upload larger than advisable
-/usr/share/clearwater/clearwater-config-manager/scripts/upload_json $FILENAME $KEY $1
+/usr/share/clearwater/clearwater-config-manager/scripts/upload_generic_json $FILENAME $KEY $SCHEMA $@
+
+rc=$?
+if [[ $rc == 0 ]]; then
+  echo "Successfully uploaded the new MMF targets configuration"
+fi
+
+exit $rc

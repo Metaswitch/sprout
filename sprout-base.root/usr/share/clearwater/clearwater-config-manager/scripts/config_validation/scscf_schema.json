@@ -1,0 +1,47 @@
+{
+  "title": "All S-CSCF servers",
+  "type": "object",
+  "properties": {
+    "s-cscfs": {
+      "type": "array",
+      "items": {
+        "title": "Each S-CSCF server",
+        "type": "object",
+        "properties": {
+          "server": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^sip:"
+          },
+          "priority": {
+            "type": "integer",
+            "maximum": 100,
+            "minimum": 0
+          },
+          "weight": {
+            "type": "integer",
+            "maximum": 100,
+            "minimum": 0
+          },
+          "capabilities": {
+            "description": "Each number represents a capability, as defined by the operator",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "maximum": 4294967295,
+              "minimum": 0
+            }
+          }
+        },
+        "required": [
+          "server",
+          "priority",
+          "weight",
+          "capabilities"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
