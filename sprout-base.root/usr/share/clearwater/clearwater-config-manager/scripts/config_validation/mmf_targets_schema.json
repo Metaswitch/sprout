@@ -26,7 +26,7 @@
                         "minItems": 1
                     },
                     "pre-as": {"type": "boolean", "default": false},
-                    "post-as": {"type": "boolean", "default": false},
+                    "post-as": {"type": "boolean", "default": false}
                 },
                 "additionalProperties": false,
                 "required": ["name", "addresses"]
