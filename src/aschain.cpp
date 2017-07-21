@@ -215,7 +215,7 @@ pjsip_status_code AsChainLink::on_initial_request(pjsip_msg* msg,
     SAS::report_event(event);
 
     // Reset the AsChain iFCs given we've moving onto the fallback iFCs
-    _as_chain->_using_standard_ifcs = false;
+    _as_chain->reset_chain(false);
     _index = 0;
     get_next_application_server(msg,
                                 server_name,
@@ -237,6 +237,7 @@ pjsip_status_code AsChainLink::on_initial_request(pjsip_msg* msg,
   //     we didn't find a dummy AS)
   //   - We're using fallback iFCs
   if (((!got_dummy_as) && (server_name == "")) &&
+      ((first_pass_through_ifcs) && (complete())) &&
       ((!_as_chain->_using_standard_ifcs) &&
        (_as_chain->_ifc_configuration._apply_fallback_ifcs)))
   {
@@ -387,6 +388,36 @@ void AsChainTable::unregister(std::vector<std::string>& tokens)
   }
 
   pthread_mutex_unlock(&_lock);
+}
+
+
+void AsChain::reset_chain(bool using_standard_ifcs)
+{
+  // We need to replace the AsChainLinks as we're changing
+  // what iFCs we're going to use. Clear out the data
+  // structures, change over what iFC we're using, then
+  // recreate the data structures.
+  _as_chain_table->unregister(_odi_tokens);
+  _as_info.clear();
+  _responsive.clear();
+  _odi_tokens.clear();
+
+  _using_standard_ifcs = using_standard_ifcs;
+
+  uint32_t ifcs_size = ((_using_standard_ifcs) ?
+                         _ifcs.ifcs_list() :
+                         _fallback_ifcs).size();
+  _responsive = std::vector<bool>(ifcs_size + 1);
+
+  for (std::vector<bool>::iterator it = _responsive.begin();
+       it != _responsive.end();
+       ++it)
+  {
+    *it = false;
+  }
+
+  _as_info = std::vector<AsInformation>(ifcs_size + 1);
+  _as_chain_table->register_(this, _odi_tokens);
 }
 
 

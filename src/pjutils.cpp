@@ -1293,10 +1293,6 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
   {
     // Failed to resolve the destination or failed to create a PJSIP UAC
     // transaction.
-    CL_SPROUT_SIP_SEND_REQUEST_ERR.log(PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                       PJUtils::next_hop(tdata->msg)).c_str(),
-                                       PJUtils::pj_status_to_string(status).c_str());
-
     TRC_ERROR("Failed to send request to %s",
               PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                      PJUtils::next_hop(tdata->msg)).c_str());
@@ -1424,9 +1420,6 @@ pj_status_t PJUtils::send_request_stateless(pjsip_tx_data* tdata, int retries)
     // and the request here.  Also, this would be an unexpected error rather
     // than an indication that the selected destination server is down, so we
     // don't blacklist.
-    CL_SPROUT_SIP_SEND_REQUEST_ERR.log(PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                       PJUtils::next_hop(tdata->msg)).c_str(),
-                                       PJUtils::pj_status_to_string(status).c_str());
     TRC_ERROR("Failed to send request to %s",
               PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                      PJUtils::next_hop(tdata->msg)).c_str());

@@ -34,8 +34,9 @@ extern "C" {
 
 static SNMP::RegistrationStatsTables* third_party_reg_stats_tables;
 
-// Should we always send the access-side REGISTER and 200 OK in the body of third-party REGISTER
-// messages to application servers, even if the iFCs don't tell us to?
+// Should we always send the access-side REGISTER and 200 OK in the body
+// of third-party REGISTER messages to application servers, even if the
+// iFCs don't tell us to?
 static bool force_third_party_register_body;
 
 /// Temporary data structure maintained while transmitting a third-party
@@ -45,6 +46,8 @@ struct ThirdPartyRegData
   SubscriberDataManager* sdm;
   std::vector<SubscriberDataManager*> remote_sdms;
   HSSConnection* hss;
+  FIFCService* fifc_service;
+  IFCConfiguration ifc_configuration;
   std::string public_id;
   DefaultHandling default_handling;
   SAS::TrailId trail;
@@ -83,6 +86,8 @@ public:
       RegistrationUtils::remove_bindings(_reg_data->sdm,
                                          _reg_data->remote_sdms,
                                          _reg_data->hss,
+                                         _reg_data->fifc_service,
+                                         _reg_data->ifc_configuration,
                                          _reg_data->public_id,
                                          "*",
                                          HSSConnection::DEREG_ADMIN,
@@ -137,6 +142,8 @@ public:
 static void send_register_to_as(SubscriberDataManager* sdm,
                                 std::vector<SubscriberDataManager*> remote_sdms,
                                 HSSConnection* hss,
+                                FIFCService* fifc_service,
+                                IFCConfiguration ifc_configuration,
                                 pjsip_msg* received_register_msg,
                                 pjsip_msg* ok_response_msg,
                                 AsInvocation& as,
@@ -152,113 +159,209 @@ void RegistrationUtils::init(SNMP::RegistrationStatsTables* third_party_reg_stat
   force_third_party_register_body = force_third_party_register_body_arg;
 }
 
+void RegistrationUtils::interpret_ifcs(Ifcs& ifcs,
+                                       std::vector<Ifc> fallback_ifcs,
+                                       IFCConfiguration ifc_configuration,
+                                       const SessionCase& session_case,
+                                       bool is_registered,
+                                       bool is_initial_registration,
+                                       pjsip_msg* msg,
+                                       std::vector<AsInvocation>& application_servers,
+                                       bool& found_match,
+                                       SAS::TrailId trail)
+{
+  found_match = false;
+
+  for (Ifc ifc : ifcs.ifcs_list())
+  {
+    // As per TS 24.229, section 5.4.1.7, note 1, we don't fill in any
+    // P-Associated-URI details.
+    if (ifc.filter_matches(session_case,
+                           is_registered,
+                           is_initial_registration,
+                           msg,
+                           trail))
+    {
+      if ((ifc.as_invocation().server_name) ==
+          (ifc_configuration._dummy_as))
+      {
+        TRC_DEBUG("Ignoring this iFC as it matches a dummy AS (%s)",
+                  ifc_configuration._dummy_as.c_str());
+        SAS::Event event(trail, SASEvent::IFC_MATCHED_DUMMY_AS, 1);
+        event.add_var_param(ifc_configuration._dummy_as);
+        SAS::report_event(event);
+        found_match = true;
+      }
+      else
+      {
+        application_servers.push_back(ifc.as_invocation());
+      }
+    }
+  }
+
+  // Check if we should apply any fallback iFCs. We do this if:
+  //   - We haven't found any matching iFC (true if application_servers
+  //      is empty and we didn't find a dummy AS
+  //   - The config option to apply fallback iFCs is set.
+  // should be using them.
+  if (((application_servers.empty()) && (!found_match)) &&
+      (ifc_configuration._apply_fallback_ifcs))
+  {
+    TRC_DEBUG("No iFCs apply to this message; looking up fallback iFCs");
+    SAS::Event event(trail, SASEvent::STARTING_FALLBACK_IFCS_LOOKUP, 1);
+    SAS::report_event(event);
+
+    for (Ifc ifc : fallback_ifcs)
+    {
+      if (ifc.filter_matches(SessionCase::Originating,
+                             true,
+                             is_initial_registration,
+                             msg,
+                             trail))
+      {
+        if ((ifc.as_invocation().server_name) ==
+             (ifc_configuration._dummy_as))
+        {
+          TRC_DEBUG("Ignoring this fallback iFC as it matches a dummy AS (%s)",
+                    ifc_configuration._dummy_as.c_str());
+          SAS::Event event(trail, SASEvent::IFC_MATCHED_DUMMY_AS, 2);
+          event.add_var_param(ifc_configuration._dummy_as);
+          SAS::report_event(event);
+          found_match = true;
+        }
+        else
+        {
+          // SAS log if we're going to apply fallback iFCs - we only log this
+          // the first time through.
+          if (application_servers.empty())
+          {
+            TRC_DEBUG("We've found a matching fallback iFC - applying it");
+            SAS::Event event(trail, SASEvent::FIRST_FALLBACK_IFC, 1);
+            SAS::report_event(event);
+          }
+
+          application_servers.push_back(ifc.as_invocation());
+        }
+      }
+    }
+
+    // Check if we should have applied fallback iFCs, but didn't find any. We
+    // SAS log this, and increment a statistic.
+    //   - We haven't found any matching iFC (true if application_servers
+    //      is empty and we didn't find a dummy AS
+    //   - The config option to apply fallback iFCs is set.
+    if (((application_servers.empty()) && (!found_match)) &&
+        (ifc_configuration._apply_fallback_ifcs))
+    {
+      if (ifc_configuration._no_matching_fallback_ifcs_tbl)
+      {
+        ifc_configuration._no_matching_fallback_ifcs_tbl->increment();
+      }
+
+      TRC_DEBUG("Unable to apply fallback iFCs as no matching iFCs available");
+      SAS::Event event(trail, SASEvent::NO_FALLBACK_IFCS, 1);
+      SAS::report_event(event);
+    }
+  }
+}
+
 void RegistrationUtils::deregister_with_application_servers(Ifcs& ifcs,
+                                                            FIFCService* fifc_service,
+                                                            IFCConfiguration ifc_configuration,
                                                             SubscriberDataManager* sdm,
                                                             std::vector<SubscriberDataManager*> remote_sdms,
                                                             HSSConnection* hss,
                                                             const std::string& served_user,
                                                             SAS::TrailId trail)
 {
-  RegistrationUtils::register_with_application_servers(ifcs,
-                                                       sdm,
-                                                       remote_sdms,
-                                                       hss,
-                                                       NULL,
-                                                       NULL,
-                                                       0,
-                                                       false,
-                                                       served_user,
-                                                       trail);
+  pj_status_t status;
+  pjsip_method method;
+  pjsip_method_set(&method, PJSIP_REGISTER_METHOD);
+  pjsip_tx_data *tdata;
+
+  std::string served_user_uri_string = "<"+served_user+">";
+  const pj_str_t served_user_uri = pj_str(const_cast<char *>(served_user_uri_string.c_str()));
+
+  TRC_INFO("Generating a fake REGISTER to send to IfcHandler using AOR %s", served_user.c_str());
+
+  SAS::Event event(trail, SASEvent::REGISTER_AS_START, 0);
+  event.add_var_param(served_user);
+  SAS::report_event(event);
+
+  status = pjsip_endpt_create_request(stack_data.endpt,
+                                      &method,                   // Method
+                                      &stack_data.scscf_uri_str, // Target
+                                      &served_user_uri,          // From
+                                      &served_user_uri,          // To
+                                      &served_user_uri,          // Contact
+                                      NULL,                      // Auto-generate Call-ID
+                                      1,                         // CSeq
+                                      NULL,                      // No body
+                                      &tdata);                   // OUT
+
+  if (status != PJ_SUCCESS)
+  {
+    TRC_DEBUG("Unable to create third party registration for %s",
+              served_user.c_str());
+    SAS::Event event(trail, SASEvent::DEREGISTER_AS_FAILED, 0);
+    event.add_var_param(served_user);
+    SAS::report_event(event);
+  }
+  else
+  {
+    RegistrationUtils::register_with_application_servers(ifcs,
+                                                         fifc_service,
+                                                         ifc_configuration,
+                                                         sdm,
+                                                         remote_sdms,
+                                                         hss,
+                                                         tdata->msg,
+                                                         NULL,
+                                                         0,
+                                                         false,
+                                                         served_user,
+                                                         trail);
+  }
 }
 
 void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
+                                                          FIFCService* fifc_service,
+                                                          IFCConfiguration ifc_configuration,
                                                           SubscriberDataManager* sdm,
                                                           std::vector<SubscriberDataManager*> remote_sdms,
                                                           HSSConnection* hss,
-                                                          pjsip_msg *received_register_msg,
-                                                          pjsip_msg *ok_response_msg, // Can only be NULL if received_register_msg is
+                                                          pjsip_msg* register_msg,
+                                                          pjsip_msg* response_msg,
                                                           int expires,
                                                           bool is_initial_registration,
                                                           const std::string& served_user,
                                                           SAS::TrailId trail)
 {
-  // Function preconditions
-  if (received_register_msg == NULL)
+  bool found_match;
+
+  std::vector<Ifc> fallback_ifcs;
+  rapidxml::xml_document<>* root = NULL;
+
+  if ((fifc_service) && (ifc_configuration._apply_fallback_ifcs))
   {
-    // We should have both messages or neither
-    assert(ok_response_msg == NULL);
-  }
-  else
-  {
-    // We should have both messages or neither
-    assert(ok_response_msg != NULL);
+    root = new rapidxml::xml_document<>;
+    fallback_ifcs = fifc_service->get_fallback_ifcs(root);
   }
 
   std::vector<AsInvocation> as_list;
-  // Choice of SessionCase::Originating is not arbitrary - we don't expect iFCs to specify SessionCase
-  // constraints for REGISTER messages, but we only get the served user from the From address in an
-  // Originating message, otherwise we use the Request-URI. We need to use the From for REGISTERs.
-  // See 3GPP TS 23.218 s5.2.1 note 2: "REGISTER is considered part of the UE-originating".
+  interpret_ifcs(ifcs,
+                 fallback_ifcs,
+                 ifc_configuration,
+                 SessionCase::Originating,
+                 true,
+                 is_initial_registration,
+                 register_msg,
+                 as_list,
+                 found_match,
+                 trail);
 
-  if (received_register_msg == NULL)
-  {
-    pj_status_t status;
-    pjsip_method method;
-    pjsip_method_set(&method, PJSIP_REGISTER_METHOD);
-    pjsip_tx_data *tdata;
-
-    std::string served_user_uri_string = "<"+served_user+">";
-    const pj_str_t served_user_uri = pj_str(const_cast<char *>(served_user_uri_string.c_str()));
-
-    TRC_INFO("Generating a fake REGISTER to send to IfcHandler using AOR %s", served_user.c_str());
-
-    SAS::Event event(trail, SASEvent::REGISTER_AS_START, 0);
-    event.add_var_param(served_user);
-    SAS::report_event(event);
-
-    status = pjsip_endpt_create_request(stack_data.endpt,
-                                        &method,                   // Method
-                                        &stack_data.scscf_uri_str, // Target
-                                        &served_user_uri,          // From
-                                        &served_user_uri,          // To
-                                        &served_user_uri,          // Contact
-                                        NULL,                      // Auto-generate Call-ID
-                                        1,                         // CSeq
-                                        NULL,                      // No body
-                                        &tdata);                   // OUT
-
-    if (status == PJ_SUCCESS)
-    {
-      // As per TS 24.229, section 5.4.1.7, note 1, we don't fill in any
-      // P-Associated-URI details.
-      ifcs.interpret(SessionCase::Originating,
-                     true,
-                     is_initial_registration,
-                     tdata->msg,
-                     as_list,
-                     trail);
-      pjsip_tx_data_dec_ref(tdata);
-    }
-    else
-    {
-      TRC_DEBUG("Unable to create third party registration for %s",
-                served_user.c_str());
-      SAS::Event event(trail, SASEvent::DEREGISTER_AS_FAILED, 0);
-      event.add_var_param(served_user);
-      SAS::report_event(event);
-    }
-  }
-  else
-  {
-    ifcs.interpret(SessionCase::Originating, true, is_initial_registration, received_register_msg, as_list, trail);
-  }
-
-  TRC_INFO("Found %d Application Servers", as_list.size());
-
-  // Loop through the as_list
-  for (std::vector<AsInvocation>::iterator as_iter = as_list.begin();
-       as_iter != as_list.end();
-       as_iter++)
+  // Loop through the application servers and send the registers.
+  for (AsInvocation as : as_list)
   {
     if (third_party_reg_stats_tables != NULL)
     {
@@ -275,11 +378,52 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
         third_party_reg_stats_tables->re_reg_tbl->increment_attempts();
       }
     }
-    send_register_to_as(sdm, remote_sdms, hss, received_register_msg, ok_response_msg, *as_iter, expires, is_initial_registration, served_user, trail);
+    send_register_to_as(sdm,
+                        remote_sdms,
+                        hss,
+                        fifc_service,
+                        ifc_configuration,
+                        register_msg,
+                        response_msg,
+                        as,
+                        expires,
+                        is_initial_registration,
+                        served_user,
+                        trail);
   }
+
+  // Check if we found any iFCs at all. We didn't find any if:
+  //   - We haven't found any matching iFC (true if application_servers
+  //      is empty and we didn't find a dummy AS
+  //   - It's an initial registration
+  if (((as_list.empty()) && (!found_match)) &&
+      (is_initial_registration))
+  {
+    if (ifc_configuration._no_matching_ifcs_tbl)
+    {
+      ifc_configuration._no_matching_ifcs_tbl->increment();
+    }
+
+    if (ifc_configuration._reject_if_no_matching_ifcs)
+    {
+      TRC_DEBUG("Deregistering the subscriber as no matching iFCs were found");
+      RegistrationUtils::remove_bindings(sdm,
+                                         remote_sdms,
+                                         hss,
+                                         fifc_service,
+                                         ifc_configuration,
+                                         served_user,
+                                         "*",
+                                         HSSConnection::DEREG_ADMIN,
+                                         trail);
+    }
+  }
+
+  delete root; root = NULL;
 }
 
-static PJUtils::Callback* build_register_cb(void* token, pjsip_event* event)
+static PJUtils::Callback* build_register_cb(void* token,
+                                            pjsip_event* event)
 {
   RegisterCallback* cb = new RegisterCallback(token, event);
   return cb;
@@ -288,6 +432,8 @@ static PJUtils::Callback* build_register_cb(void* token, pjsip_event* event)
 static void send_register_to_as(SubscriberDataManager* sdm,
                                 std::vector<SubscriberDataManager*> remote_sdms,
                                 HSSConnection* hss,
+                                FIFCService* fifc_service,
+                                IFCConfiguration ifc_configuration,
                                 pjsip_msg *received_register_msg,
                                 pjsip_msg *ok_response_msg,
                                 AsInvocation& as,
@@ -412,7 +558,6 @@ static void send_register_to_as(SubscriberDataManager* sdm,
     }
 
     tdata->msg->body = final_body;
-
   }
 
   // Set the SAS trail on the request.
@@ -424,6 +569,8 @@ static void send_register_to_as(SubscriberDataManager* sdm,
   tsxdata->sdm = sdm;
   tsxdata->remote_sdms = remote_sdms;
   tsxdata->hss = hss;
+  tsxdata->fifc_service = fifc_service;
+  tsxdata->ifc_configuration = ifc_configuration;
   tsxdata->default_handling = as.default_handling;
   tsxdata->trail = trail;
   tsxdata->public_id = served_user;
@@ -497,6 +644,8 @@ static bool expire_bindings(SubscriberDataManager *sdm,
 bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
                                         std::vector<SubscriberDataManager*> remote_sdms,
                                         HSSConnection* hss,
+                                        FIFCService* fifc_service,
+                                        IFCConfiguration ifc_configuration,
                                         const std::string& aor,
                                         const std::string& binding_id,
                                         const std::string& dereg_type,
@@ -557,7 +706,14 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
     {
       // Note that 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 doesn't specify that any binding information
       // should be passed on the REGISTER message, so we don't need the binding ID.
-      deregister_with_application_servers(ifc_map[aor], sdm, remote_sdms, hss, aor, trail);
+      deregister_with_application_servers(ifc_map[aor],
+                                          fifc_service,
+                                          ifc_configuration,
+                                          sdm,
+                                          remote_sdms,
+                                          hss,
+                                          aor,
+                                          trail);
       notify_application_servers();
     }
 

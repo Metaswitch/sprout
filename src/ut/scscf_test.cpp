@@ -9872,7 +9872,7 @@ TEST_F(SCSCFTest, NoMatchingiFCsReject)
 
 // Test that we use fallback iFCs if there are no matching iFCs, and that the
 // application server flows are as expected.
-TEST_F(SCSCFTest, NoMatchingiFCsUseFallbackFCs)
+TEST_F(SCSCFTest, NoMatchingStandardiFCsUseFallbackiFCs)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _scscf_sproutlet->_ifc_configuration._apply_fallback_ifcs = true;
@@ -9905,6 +9905,109 @@ TEST_F(SCSCFTest, NoMatchingiFCsUseFallbackFCs)
   Message msg;
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  free_txdata();
+
+  // INVITE passed on to AS1
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS1.expect_target(current_txdata(), false);
+
+  // ---------- AS1 sends a 100 Trying to indicate it has received the request.
+  string fresp = respond_to_txdata(current_txdata(), 100);
+  inject_msg(fresp, &tpAS1);
+
+  // ---------- AS1 turns it around (acting as proxy)
+  const pj_str_t STR_ROUTE = pj_str("Route");
+  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS1);
+  free_txdata();
+
+  // 100 Trying goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS1
+  out = current_txdata()->msg;
+  ReqMatcher r2("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r2.matches(out));
+
+  tpAS1.expect_target(current_txdata(), false);
+
+  // ---------- AS1 sends a 100 Trying to indicate it has received the request.
+  fresp = respond_to_txdata(current_txdata(), 100);
+  inject_msg(fresp, &tpAS1);
+
+  // ---------- AS1 turns it around (acting as proxy)
+  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS1);
+  free_txdata();
+
+  // 100 Trying goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to final destination
+  out = current_txdata()->msg;
+  ReqMatcher r3("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r3.matches(out));
+
+  tpBono.expect_target(current_txdata(), false);
+
+  // Target sends back 100 Trying
+  inject_msg(respond_to_txdata(current_txdata(), 100), &tpBono);
+  pjsip_tx_data* txdata = pop_txdata();
+
+  // Send a 200 ringing back down the chain to finish the transaction. This is a
+  // more realistic test of AS communication tracking.
+  send_response_back_through_dialog(respond_to_txdata(txdata, 200), 200, 2);
+  pjsip_tx_data_dec_ref(txdata); txdata = NULL;
+}
+
+// Test that we use fallback iFCs if there are no matching iFCs, and that the
+// application server flows are as expected. In this case we don't have any
+// standard iFCs at all.
+TEST_F(SCSCFTest, NoStandardiFCsUseFallbackiFCs)
+{
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _scscf_sproutlet->_ifc_configuration._apply_fallback_ifcs = true;
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.5", 56789);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
   msg._todomain = "";
   msg._requri = "sip:6505551234@homedomain";
 

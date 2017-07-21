@@ -312,6 +312,8 @@ void SCSCFSproutlet::remove_binding(const std::string& aor,
   RegistrationUtils::remove_bindings(_sdm,
                                      _remote_sdms,
                                      _hss,
+                                     _fifcservice,
+                                     _ifc_configuration,
                                      aor,
                                      binding_id,
                                      HSSConnection::DEREG_TIMEOUT,
@@ -1478,8 +1480,6 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
     SAS::Event event(trail(), SASEvent::REJECT_AS_NO_MATCHING_IFC, 0);
     SAS::report_event(event);
 
-    // TODO - add stat (waiting on spec finalization).
-
     pjsip_msg* rsp = create_response(req, status_code);
     send_response(rsp);
     free_msg(req);
@@ -1572,8 +1572,6 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
     TRC_ERROR("Rejecting a request as there were no matching iFCs");
     SAS::Event event(trail(), SASEvent::REJECT_AS_NO_MATCHING_IFC, 1);
     SAS::report_event(event);
-
-    // TODO - add stat (waiting on spec finalization).
 
     pjsip_msg* rsp = create_response(req, status_code);
     send_response(rsp);

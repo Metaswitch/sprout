@@ -56,13 +56,6 @@ public:
     return _ifcs;
   }
 
-  void interpret(const SessionCase& session_case,
-                 bool is_registered,
-                 bool is_initial_registration,
-                 pjsip_msg *msg,
-                 std::vector<AsInvocation>& application_servers,
-                 SAS::TrailId trail) const;
-
 private:
   std::shared_ptr<rapidxml::xml_document<> > _ifc_doc;
   std::vector<Ifc> _ifcs;

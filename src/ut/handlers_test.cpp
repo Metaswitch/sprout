@@ -545,10 +545,13 @@ class DeregistrationTaskTest : public SipTest
          "send-notifications=" + notify,
          body,
          method);
-    _cfg = new DeregistrationTask::Config(_subscriber_data_manager,
-                                          {},
-                                          _hss,
-                                          NULL,
+     IFCConfiguration ifc_configuration(false, false, "", NULL, NULL);
+     _cfg = new DeregistrationTask::Config(_subscriber_data_manager,
+                                           {},
+                                           _hss,
+                                           NULL,
+                                           ifc_configuration,
+                                           NULL,
                                           _local_impi_store,
                                           {_remote_impi_store});
     _task = new DeregistrationTask(*_req, _cfg, 0);
@@ -1548,7 +1551,8 @@ class DeleteImpuTaskTest : public TestWithMockSdms
       remote_stores.push_back(remote_store1);
     }
 
-    cfg = new DeleteImpuTask::Config(store, remote_stores, mock_hss);
+    IFCConfiguration ifc_configuration(false, false, "", NULL, NULL);
+    cfg = new DeleteImpuTask::Config(store, remote_stores, mock_hss, NULL, ifc_configuration);
     task = new DeleteImpuTask(*req, cfg, 0);
   }
 };

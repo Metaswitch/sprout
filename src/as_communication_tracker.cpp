@@ -20,6 +20,15 @@ AsCommunicationTracker::AsCommunicationTracker(Alarm* alarm,
   _as_ok_log(as_ok_log)
 {
   pthread_mutex_init(&_lock, NULL);
+
+  // Clear the alarm on startup so we don't get alarms hanging over from a
+  // previous run. If an AS is actually in error, we'll alarm as soon as we
+  // detect a failure.
+  // Wrapped in if test as _alarm is NULL in UTs
+  if (_alarm)
+  {
+    _alarm->clear();
+  }
 }
 
 
@@ -101,6 +110,9 @@ void AsCommunicationTracker::check_for_healthy_app_servers()
       std::map<std::string, int>::iterator curr_as = _as_failures.begin();
       std::map<std::string, int>::iterator next_as;
 
+      // We build this string for logging which ASs are in failure.
+      std::string failed_as_string;
+
       while (curr_as != _as_failures.end())
       {
         next_as = std::next(curr_as);
@@ -113,6 +125,12 @@ void AsCommunicationTracker::check_for_healthy_app_servers()
         }
         else
         {
+          if (failed_as_string != "")
+          {
+            failed_as_string += ", ";
+          }
+
+          failed_as_string += curr_as->first;
           curr_as->second = 0;
         }
 
@@ -124,6 +142,12 @@ void AsCommunicationTracker::check_for_healthy_app_servers()
         TRC_DEBUG("All ASs OK - clear the alarm");
         // No ASs are currently failed. Clear the alarm.
         _alarm->clear();
+      }
+      else
+      {
+        TRC_WARNING("Not clearing the alarm as failures detected for the "
+                    "following ASs: %s. Next recheck will be in %ums.",
+                    failed_as_string.c_str(), NEXT_CHECK_INTERVAL_MS);
       }
     }
 

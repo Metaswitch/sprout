@@ -208,16 +208,6 @@ static const PDLog2<const char*, int> CL_SPROUT_HTTP_INTERFACE_STOP_FAIL
   "None."
 );
 
-static const PDLog2<const char*, const char*> CL_SPROUT_SIP_SEND_REQUEST_ERR
-(
-  PDLogBase::CL_SPROUT_ID + 23,
-  LOG_ERR,
-  "Failed to send SIP request to %s with error %s.",
-  "An attempt to send a SIP request failed.",
-  "This may cause a call to fail.",
-  "If the problem persists check the network connectivity."
-);
-
 static const PDLog CL_SPROUT_SIP_DEADLOCK
 (
   PDLogBase::CL_SPROUT_ID + 24,
@@ -420,7 +410,7 @@ static const PDLog2<const char *, const char*> CL_SPROUT_SESS_CONT_AS_COMM_FAILU
   LOG_ERR,
   "Sprout is currently unable to successfully communicate with an Application Server that uses session continued default handling. The server's URI is %s. Failure reason: %s",
   "Communication is failing to an Application server",
-  "Probable minor degradation of service, or loss of a supplemental service. The precise impact will vary depending on the role of the Application Server in the deployment.",
+  "The service(s) provided by this Application Server will be unavailable until communication is restored. In addition, call setup time will likely be increased for all subscribers configured to use this Application Server.",
   "Investigate why communication to this Application Server is failing. It might be due to failure of the AS, misconfiguration of Initial Filter Criteria, or network / DNS problems"
 );
 

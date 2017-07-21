@@ -45,7 +45,9 @@ public:
                      int cfg_max_expires,
                      bool force_original_register_inclusion,
                      SNMP::RegistrationStatsTables* reg_stats_tbls,
-                     SNMP::RegistrationStatsTables* third_party_reg_stats_tbls);
+                     SNMP::RegistrationStatsTables* third_party_reg_stats_tbls,
+                     FIFCService* fifcservice,
+                     IFCConfiguration ifc_configuration);
   ~RegistrarSproutlet();
 
   bool init();
@@ -83,6 +85,10 @@ private:
   SNMP::RegistrationStatsTables* _reg_stats_tbls;
   SNMP::RegistrationStatsTables* _third_party_reg_stats_tbls;
 
+  // Fallback IFCs service
+  FIFCService* _fifc_service;
+  IFCConfiguration _ifc_configuration;
+
   // The next service to route requests onto if the sproutlet does not handle
   // them itself.
   std::string _next_hop_service;
@@ -93,7 +99,9 @@ class RegistrarSproutletTsx : public ForwardingSproutletTsx
 {
 public:
   RegistrarSproutletTsx(RegistrarSproutlet* registrar,
-                        const std::string& next_hop_service);
+                        const std::string& next_hop_service,
+                        FIFCService* fifc_service,
+                        IFCConfiguration ifc_configuration);
   ~RegistrarSproutletTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req);
@@ -128,6 +136,10 @@ protected:
   // The local hostname for this transaction. This is the local hostname part
   // of the S-CSCF URI and is used in the Service Route header.
   pj_str_t _local_hostname;
+
+  /// Member variables covering the IFCs.
+  FIFCService* _fifc_service;
+  IFCConfiguration _ifc_configuration;
 };
 
 #endif
