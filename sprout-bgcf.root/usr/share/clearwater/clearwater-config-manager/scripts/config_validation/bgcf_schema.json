@@ -1,0 +1,46 @@
+{
+  "title": "All BGCF routes",
+  "type": "object",
+  "properties": {
+    "routes": {
+      "type": "array",
+      "items": {
+        "title": "Each BGCF route",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string",
+            "description": "SIP trunk IP address or domain name",
+            "maxLength": 253
+          },
+          "number": {
+            "type": "string",
+            "description": "Telephone number",
+            "pattern": "^\\+{0,1}[0-9]*$"
+          },
+          "route": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^sip:",
+              "minItems": 1
+            }
+          }
+        },
+        "required": [
+          "name",
+          "route"
+        ],
+        "oneOf": [
+          { "required": [ "domain" ] },
+          { "required": [ "number" ] }
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
