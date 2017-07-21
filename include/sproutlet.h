@@ -256,7 +256,22 @@ public:
   /// Constructs the next URI for the Sproutlet
   virtual pjsip_sip_uri* next_hop_uri(const std::string& service,
                                       const pjsip_route_hdr* route,
-                                      pj_pool_t* pool) const = 0;
+                                      pj_pool_t* pool) = 0;
+
+  /// Get the local hostname and (possible) service name part of a SIP URI.
+  ///
+  /// @returns            - Whether this operation was successful.
+  ///
+  /// @param uri          - The SIP URI.
+  /// @param hostname     - Return parameter that contains the local hostname
+  ///                       part of the URI.
+  /// @param service_name - Return parameter that contains the service name
+  ///                       part of the URI (optional).
+  /// @param pool         - The pool of memory used for the return parameter.
+  virtual bool get_local_hostname(const pjsip_sip_uri* uri,
+                                  pj_str_t& hostname,
+                                  pj_str_t& service_name,
+                                  pj_pool_t* pool) = 0;
 };
 
 
@@ -577,9 +592,27 @@ protected:
   /// @param pool         - Pool to allocate the URI in.
   pjsip_sip_uri* next_hop_uri(const std::string& service,
                               const pjsip_route_hdr* route,
-                              pj_pool_t* pool) const
+                              pj_pool_t* pool)
   {
     return _helper->next_hop_uri(service, route, pool);
+  }
+
+  /// Get the local hostname and (possible) service name part of a SIP URI.
+  ///
+  /// @returns            - Whether this operation was successful.
+  ///
+  /// @param uri          - The SIP URI.
+  /// @param hostname     - Return parameter that contains the local hostname
+  ///                       part of the URI.
+  /// @param service_name - Return parameter that contains the service name
+  ///                       part of the URI (optional).
+  /// @param pool         - The pool of memory used for the return parameter.
+  bool get_local_hostname(const pjsip_sip_uri* uri,
+                          pj_str_t& hostname,
+                          pj_str_t& service_name,
+                          pj_pool_t* pool)
+  {
+    return _helper->get_local_hostname(uri, hostname, service_name, pool);
   }
 
 private:
@@ -605,7 +638,7 @@ public:
   /// request.
   virtual pjsip_sip_uri* next_hop_uri(const std::string& service,
                                       const pjsip_route_hdr* route,
-                                      pj_pool_t* pool) const = 0;
+                                      pj_pool_t* pool) = 0;
 
   /// Check if a given URI would be routed to the current Sproutlet if it was
   /// recieved as the top Route header on a request.  This can be used to

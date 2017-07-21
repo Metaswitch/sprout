@@ -447,6 +447,7 @@ static bool expire_bindings(SubscriberDataManager *sdm,
                             const std::string& aor,
                             AssociatedURIs* associated_uris,
                             const std::string& binding_id,
+                            std::string& scscf_uri,
                             SAS::TrailId trail)
 {
   // We need the retry loop to handle the store's compare-and-swap.
@@ -461,6 +462,10 @@ static bool expire_bindings(SubscriberDataManager *sdm,
     {
       break;  // LCOV_EXCL_LINE No UT for lookup failure.
     }
+
+    // Get the S-CSCF URI off the AoR to put on the SAR to the HSS.
+    SubscriberDataManager::AoR* aor_data = aor_pair->get_current();
+    scscf_uri = aor_data->_scscf_uri;
 
     if (binding_id == "*")
     {
@@ -528,7 +533,9 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
     }
   }
 
-  if (expire_bindings(sdm, aor, &associated_uris, binding_id, trail))
+  std::string scscf_uri;
+
+  if (expire_bindings(sdm, aor, &associated_uris, binding_id, scscf_uri, trail))
   {
     // All bindings have been expired, so do deregistration processing for the
     // IMPU.
@@ -541,6 +548,7 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
     HTTPCode http_code = hss->update_registration_state(aor,
                                                         "",
                                                         dereg_type,
+                                                        scscf_uri,
                                                         ifc_map,
                                                         associated_uris,
                                                         trail);
@@ -568,7 +576,7 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
        remote_sdm != remote_sdms.end();
        ++remote_sdm)
   {
-    (void) expire_bindings(*remote_sdm, aor, &associated_uris, binding_id, trail);
+    (void) expire_bindings(*remote_sdm, aor, &associated_uris, binding_id, scscf_uri, trail);
   }
 
   return all_bindings_expired;

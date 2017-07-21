@@ -79,6 +79,7 @@ public:
       nonce_count(INITIAL_NONCE_COUNT),
       expires(_expires),
       correlator(),
+      scscf_uri(),
       _cas(0) {};
 
     /// Destructor must be virtual as we're going to extend this class.
@@ -100,6 +101,10 @@ public:
     /// Correlator between original challenge and responses.
     std::string correlator;
 
+    /// URI of the SCSCF that issued the challenge. This is the server name
+    /// used on the SAR if the authentication times out.
+    std::string scscf_uri;
+
   private:
     /// Constructor.
     /// @param _type         Type of authentication challenge.
@@ -109,6 +114,7 @@ public:
       nonce_count(0),
       expires(0),
       correlator(),
+      scscf_uri(),
       _cas(0) {};
 
     /// Write to JSON writer (IMPI format).

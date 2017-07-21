@@ -323,6 +323,7 @@ void SCSCFSproutlet::remove_binding(const std::string& aor,
 long SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                    const std::string& private_id,
                                    const std::string& req_type,
+                                   const std::string& scscf_uri,
                                    bool cache_allowed,
                                    bool& registered,
                                    bool& barred,
@@ -343,6 +344,7 @@ long SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                                    private_id,
                                                    req_type,
                                                    regstate,
+                                                   scscf_uri,
                                                    ifc_map,
                                                    associated_uris,
                                                    aliases,
@@ -466,7 +468,8 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SCSCFSproutlet* scscf,
   _auto_reg(false),
   _wildcard(""),
   _se_helper(stack_data.default_session_expires),
-  _base_req(nullptr)
+  _base_req(nullptr),
+  _scscf_uri()
 {
   TRC_DEBUG("S-CSCF Transaction (%p) created", this);
 }
@@ -561,6 +564,59 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       _wildcard = _wildcard.substr(1, _wildcard.size() - 2);
     }
   }
+
+  // Construct the S-CSCF URI for this transaction. Use the configured S-CSCF
+  // URI as a starting point.
+  pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), _scscf->_scscf_cluster_uri);
+
+  // Get the local hostname part of the URI that routed to this Sproutlet. We
+  // will use this in the S-CSCF URI.
+  //
+  // This is so that we preserve the URI of the S-CSCF that we originally tried
+  // to route to so that we then send it on the SAR to the HSS.
+  const pjsip_route_hdr* original_route = route_hdr();
+  pjsip_sip_uri* original_uri;
+  if (original_route != NULL)
+  {
+    original_uri = (pjsip_sip_uri*)original_route->name_addr.uri;
+  }
+  else
+  {
+    original_uri = (pjsip_sip_uri*)req->line.req.uri;
+  }
+
+  pj_str_t local_hostname, unused_service_name;
+  bool success = get_local_hostname(original_uri, local_hostname, unused_service_name, get_pool(req));
+
+  // If there are any failures in this step, we will use the configured S-CSCF
+  // URI.
+  if (success)
+  {
+    // Replace the local hostname part of the configured S-CSCF URI with the
+    // local hostname part of the URI that caused us to be routed here.
+    pj_str_t unused_local_hostname, service_name;
+    success = get_local_hostname(scscf_uri, unused_local_hostname, service_name, get_pool(req));
+
+    if (success)
+    {
+      pj_str_t hostname;
+      if (pj_strcmp2(&service_name, ""))
+      {
+        pj_str_t period = pj_str((char*)".");
+        pj_strdup(get_pool(req), &hostname, &service_name);
+        PJUtils::pj_str_concatenate(&hostname, &period, get_pool(req));
+        PJUtils::pj_str_concatenate(&hostname, &local_hostname, get_pool(req));
+      }
+      else
+      {
+        pj_strdup(get_pool(req), &hostname, &local_hostname);
+      }
+
+      scscf_uri->host = hostname;
+    }
+  }
+
+  _scscf_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)scscf_uri);
 
   // Determine the session case and the served user.  This will link to
   // an AsChain object (creating it if necessary), if we need to provide
@@ -1040,7 +1096,6 @@ void SCSCFSproutletTsx::retrieve_odi_and_sesscase(pjsip_msg* req)
     TRC_DEBUG("No S-CSCF Route header, so treat as terminating request");
     _session_case = &SessionCase::Terminating;
   }
-
 }
 
 bool SCSCFSproutletTsx::is_retarget(std::string new_served_user)
@@ -1998,6 +2053,7 @@ long SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
     http_code = _scscf->read_hss_data(public_id,
                                       _impi,
                                       req_type,
+                                      _scscf_uri,
                                       cache_allowed,
                                       _registered,
                                       _barred,

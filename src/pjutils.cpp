@@ -97,6 +97,23 @@ std::string PJUtils::uri_to_string(pjsip_uri_context_e context,
 }
 
 
+void PJUtils::pj_str_concatenate(pj_str_t* dst,
+                                 pj_str_t* src,
+                                 pj_pool_t* pool)
+{
+  // Store off the destination so that we can reallocate memory
+  char* tmp = dst->ptr;
+  if (src->slen)
+  {
+    dst->ptr = (char*)pj_pool_alloc(pool, dst->slen + src->slen);
+    pj_memcpy(dst->ptr, tmp, dst->slen);
+    pj_memcpy(dst->ptr + dst->slen, src->ptr, src->slen);
+  }
+
+  dst->slen = dst->slen + src->slen;
+}
+
+
 std::string PJUtils::strip_uri_scheme(const std::string& uri)
 {
   std::string s(uri);

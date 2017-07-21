@@ -245,6 +245,10 @@ public:
     // Chronos Timer ID
     std::string _timer_id;
 
+    /// S-CSCF URI name for this AoR. This is used on the SAR if the
+    /// registration expires.
+    std::string _scscf_uri;
+
   private:
     /// Map holding the bindings for a particular AoR indexed by binding ID.
     Bindings _bindings;

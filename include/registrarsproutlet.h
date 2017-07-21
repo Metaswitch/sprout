@@ -120,6 +120,14 @@ protected:
   void log_bindings(const std::string& aor_name, SubscriberDataManager::AoR* aor_data);
 
   RegistrarSproutlet* _registrar;
+
+  // The S-CSCF URI for this transaction. This is used on any SAR that is sent
+  // to the HSS.
+  std::string _scscf_uri;
+
+  // The local hostname for this transaction. This is the local hostname part
+  // of the S-CSCF URI and is used in the Service Route header.
+  pj_str_t _local_hostname;
 };
 
 #endif

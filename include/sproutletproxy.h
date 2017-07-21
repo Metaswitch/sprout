@@ -52,7 +52,7 @@ public:
   /// request.
   pjsip_sip_uri* next_hop_uri(const std::string& service,
                               const pjsip_route_hdr* route,
-                              pj_pool_t* pool) const;
+                              pj_pool_t* pool);
 
 protected:
   /// Pre-declaration
@@ -88,7 +88,7 @@ protected:
   /// @param existing_uri - An existing URI to base the new URI on.
   pjsip_sip_uri* create_internal_sproutlet_uri(pj_pool_t* pool,
                                                const std::string& name,
-                                               pjsip_sip_uri* existing_uri) const;
+                                               pjsip_sip_uri* existing_uri);
 
   Sproutlet* service_from_host(pjsip_sip_uri* uri);
   Sproutlet* service_from_user(pjsip_sip_uri* uri);
@@ -101,6 +101,10 @@ protected:
                                         SAS::TrailId trail);
 
   bool is_uri_local(const pjsip_uri* uri);
+  bool get_local_hostname(const pjsip_sip_uri* uri,
+                          pj_str_t& hostname,
+                          pj_str_t& service_name,
+                          pj_pool_t* pool);
   bool is_host_local(const pj_str_t* host);
   bool is_uri_reflexive(const pjsip_uri* uri,
                         Sproutlet* sproutlet,
@@ -293,7 +297,11 @@ public:
   pjsip_sip_uri* get_reflexive_uri(pj_pool_t*) const;
   pjsip_sip_uri* next_hop_uri(const std::string& service,
                               const pjsip_route_hdr* route,
-                              pj_pool_t* pool) const;
+                              pj_pool_t* pool);
+  bool get_local_hostname(const pjsip_sip_uri* uri,
+                          pj_str_t& hostname,
+                          pj_str_t& service_name,
+                          pj_pool_t* pool);
 
 private:
   void rx_request(pjsip_tx_data* req);

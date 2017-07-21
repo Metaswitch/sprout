@@ -390,7 +390,7 @@ Sproutlet* SproutletProxy::match_sproutlet_from_uri(const pjsip_uri* uri,
 
 pjsip_sip_uri* SproutletProxy::next_hop_uri(const std::string& service,
                                             const pjsip_route_hdr* route,
-                                            pj_pool_t* pool) const
+                                            pj_pool_t* pool)
 {
   pjsip_sip_uri* base_uri = (pjsip_sip_uri*)(route ? route->name_addr.uri : nullptr);
   pjsip_sip_uri* next_hop = create_internal_sproutlet_uri(pool,
@@ -430,13 +430,27 @@ pjsip_sip_uri* SproutletProxy::create_sproutlet_uri(pj_pool_t* pool,
 
 pjsip_sip_uri* SproutletProxy::create_internal_sproutlet_uri(pj_pool_t* pool,
                                                              const std::string& name,
-                                                             pjsip_sip_uri* existing_uri) const
+                                                             pjsip_sip_uri* existing_uri)
 {
   TRC_DEBUG("Creating URI for service %s", name.c_str());
 
   pjsip_sip_uri* base_uri = ((existing_uri != nullptr) ? existing_uri : _root_uri);
   pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, base_uri);
-  pj_strdup(pool, &uri->host, &_root_uri->host);
+
+  // Replace the hostname part of the base URI with the local hostname part of
+  // the URI that routed to us. If this doesn't work, then fall back to using
+  // the root URI.
+  pj_str_t local_hostname, unused_service_name;
+  bool success = get_local_hostname(uri, local_hostname, unused_service_name, pool);
+  if (success)
+  {
+    pj_strdup(pool, &uri->host, &local_hostname);
+  }
+  else
+  {
+    pj_strdup(pool, &uri->host, &_root_uri->host); // LCOV_EXCL_LINE
+  }
+
   uri->port = 0;
   uri->lr_param = 1;
 
@@ -496,6 +510,42 @@ bool SproutletProxy::is_uri_local(const pjsip_uri* uri)
   //LCOV_EXCL_STOP
 }
 
+bool SproutletProxy::get_local_hostname(const pjsip_sip_uri* uri,
+                                        pj_str_t& hostname,
+                                        pj_str_t& service_name,
+                                        pj_pool_t* pool)
+{
+  pj_strdup(pool, &hostname, &uri->host);
+  if (!is_host_local(&hostname))
+  {
+    char* sep = pj_strchr(&hostname, '.');
+
+    if (sep != NULL)
+    {
+      // Set the service name string.
+      service_name.ptr = hostname.ptr;
+      service_name.slen = sep - hostname.ptr;
+
+      // Remove the service name part and the period from the hostname.
+      hostname.slen -= (sep - hostname.ptr + 1);
+      hostname.ptr = sep + 1;
+
+      if (!is_host_local(&hostname))
+      {
+        // It shouldn't be possible for us not to have found a local hostname
+        // yet.
+        return false;
+      }
+    }
+    else
+    {
+      // There has to be a separator if the full hostname is not local.
+      return false;
+    }
+  }
+
+  return true;
+}
 
 bool SproutletProxy::is_host_local(const pj_str_t* host)
 {
@@ -1166,7 +1216,6 @@ SproutletTsx* SproutletProxy::UASTsx::get_sproutlet_tsx(pjsip_tx_data* req,
     }
 
     // Remove the top route header if there is one and it refers to us.
-
     pjsip_route_hdr* route = (pjsip_route_hdr*)pjsip_msg_find_hdr(req->msg,
                                                                   PJSIP_H_ROUTE,
                                                                   NULL);
@@ -1713,9 +1762,17 @@ pjsip_sip_uri* SproutletWrapper::get_reflexive_uri(pj_pool_t* pool) const
 
 pjsip_sip_uri* SproutletWrapper::next_hop_uri(const std::string& service,
                                               const pjsip_route_hdr* route,
-                                              pj_pool_t* pool) const
+                                              pj_pool_t* pool)
 {
   return _proxy->next_hop_uri(service, route, pool);
+}
+
+bool SproutletWrapper::get_local_hostname(const pjsip_sip_uri* uri,
+                                          pj_str_t& hostname,
+                                          pj_str_t& service_name,
+                                          pj_pool_t* pool)
+{
+  return _proxy->get_local_hostname(uri, hostname, service_name, pool);
 }
 
 void SproutletWrapper::rx_request(pjsip_tx_data* req)

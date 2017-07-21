@@ -254,6 +254,10 @@ protected:
 
   // Whether the user has authenticated using the SIP digest mechanism.
   bool _authenticated_using_sip_digest;
+
+  // The S-CSCF URI for this transaction. This is used on the SAR sent to the
+  // HSS.
+  std::string _scscf_uri;
 };
 
 #endif

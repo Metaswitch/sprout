@@ -279,7 +279,8 @@ AuthenticationSproutletTsx::AuthenticationSproutletTsx(AuthenticationSproutlet* 
                                                        const std::string& next_hop_service) :
   ForwardingSproutletTsx(authentication, next_hop_service),
   _authentication(authentication),
-  _authenticated_using_sip_digest(false)
+  _authenticated_using_sip_digest(false),
+  _scscf_uri()
 {
 }
 
@@ -801,6 +802,11 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     // the IMPI at the end of the loop.
     std::string nonce = auth_challenge->nonce;
 
+    // Set the site-specific server name for the S-CSCF that issued this
+    // challenge. This is so that if the authentication timer pops in a remote
+    // site, we can use the same server name on the SAR.
+    auth_challenge->scscf_uri = _scscf_uri;
+
     // Write the challenge back to the store.
     status = _authentication->write_challenge(impi, auth_challenge, impi_obj, trail());
 
@@ -876,6 +882,59 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   const int unauth_sc = is_register ? PJSIP_SC_UNAUTHORIZED : PJSIP_SC_PROXY_AUTHENTICATION_REQUIRED;
   int sc = unauth_sc;
   status = PJ_SUCCESS;
+
+  // Construct the S-CSCF URI for this transaction. Use the configured S-CSCF
+  // URI as a starting point.
+  pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), stack_data.scscf_uri);
+
+  // Get the local hostname part of the URI that routed to this Sproutlet. We
+  // will use this in the S-CSCF URI.
+  //
+  // This is so that we preserve the URI of the S-CSCF that we originally tried
+  // to route to so that we then send it on the SAR to the HSS.
+  const pjsip_route_hdr* original_route = route_hdr();
+  pjsip_sip_uri* original_uri;
+  if (original_route != NULL)
+  {
+    original_uri = (pjsip_sip_uri*)original_route->name_addr.uri;
+  }
+  else
+  {
+    original_uri = (pjsip_sip_uri*)req->line.req.uri;
+  }
+
+  pj_str_t local_hostname, unused_service_name;
+  bool success = get_local_hostname(original_uri, local_hostname, unused_service_name, get_pool(req));
+
+  // If there are any failures in this step, we will use the configured S-CSCF
+  // URI.
+  if (success)
+  {
+    // Replace the local hostname part of the S-CSCF URI with the local hostname
+    // part of the URI that caused us to be routed here.
+    pj_str_t unused_local_hostname, service_name;
+    success = get_local_hostname(scscf_uri, unused_local_hostname, service_name, get_pool(req));
+
+    if (success)
+    {
+      pj_str_t hostname;
+      if (pj_strcmp2(&service_name, ""))
+      {
+        pj_str_t period = pj_str((char*)".");
+        pj_strdup(get_pool(req), &hostname, &service_name);
+        PJUtils::pj_str_concatenate(&hostname, &period, get_pool(req));
+        PJUtils::pj_str_concatenate(&hostname, &local_hostname, get_pool(req));
+      }
+      else
+      {
+        pj_strdup(get_pool(req), &hostname, &local_hostname);
+      }
+
+      scscf_uri->host = hostname;
+    }
+  }
+
+  _scscf_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)scscf_uri);
 
   pjsip_digest_credential* credentials = get_credentials(req);
 
@@ -1192,6 +1251,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       _authentication->_hss->update_registration_state(impu,
                                                   impi,
                                                   HSSConnection::AUTH_FAIL,
+                                                  _scscf_uri,
                                                   trail());
     }
 
