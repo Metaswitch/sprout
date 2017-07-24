@@ -23,6 +23,7 @@
 #include "wildcard_utils.h"
 #include "associated_uris.h"
 #include "mmfservice.h"
+#include "scscf_utils.h"
 
 // Constant indicating there is no served user for a request.
 const char* NO_SERVED_USER = "";
@@ -570,54 +571,11 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   // Construct the S-CSCF URI for this transaction. Use the configured S-CSCF
   // URI as a starting point.
   pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), _scscf->_scscf_cluster_uri);
-
-  // Get the local hostname part of the URI that routed to this Sproutlet. We
-  // will use this in the S-CSCF URI.
-  //
-  // This is so that we preserve the URI of the S-CSCF that we originally tried
-  // to route to so that we then send it on the SAR to the HSS.
-  const pjsip_route_hdr* original_route = route_hdr();
-  pjsip_sip_uri* original_uri;
-  if (original_route != NULL)
-  {
-    original_uri = (pjsip_sip_uri*)original_route->name_addr.uri;
-  }
-  else
-  {
-    original_uri = (pjsip_sip_uri*)req->line.req.uri;
-  }
-
-  pj_str_t local_hostname, unused_service_name;
-  bool success = get_local_hostname(original_uri, local_hostname, unused_service_name, get_pool(req));
-
-  // If there are any failures in this step, we will use the configured S-CSCF
-  // URI.
-  if (success)
-  {
-    // Replace the local hostname part of the configured S-CSCF URI with the
-    // local hostname part of the URI that caused us to be routed here.
-    pj_str_t unused_local_hostname, service_name;
-    success = get_local_hostname(scscf_uri, unused_local_hostname, service_name, get_pool(req));
-
-    if (success)
-    {
-      pj_str_t hostname;
-      if (pj_strcmp2(&service_name, ""))
-      {
-        pj_str_t period = pj_str((char*)".");
-        pj_strdup(get_pool(req), &hostname, &service_name);
-        PJUtils::pj_str_concatenate(&hostname, &period, get_pool(req));
-        PJUtils::pj_str_concatenate(&hostname, &local_hostname, get_pool(req));
-      }
-      else
-      {
-        pj_strdup(get_pool(req), &hostname, &local_hostname);
-      }
-
-      scscf_uri->host = hostname;
-    }
-  }
-
+  pj_str_t unused_local_hostname;
+  SCSCFUtils::get_scscf_uri(req,
+                            scscf_uri,
+                            &unused_local_hostname,
+                            this->_helper);
   _scscf_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)scscf_uri);
 
   // Determine the session case and the served user.  This will link to

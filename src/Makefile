@@ -192,7 +192,8 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        sifcservice_test.cpp \
                        mock_sifc_parser.cpp \
                        fifcservice_test.cpp \
-                       mmfservice_test.cpp
+                       mmfservice_test.cpp \
+                       scscf_utils.cpp
 
 COVERAGE_ROOT := ..
 sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include|^modules/memento-as/modules|^modules/memento-as/src/ut|^modules/memento-as/include
@@ -287,7 +288,7 @@ sprout_mmtel_as.so_SOURCES := mmtel.cpp sproutletappserver.cpp mmtelasplugin.cpp
 sprout_mmtel_as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -Wno-write-strings
 sprout_mmtel_as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
-sprout_scscf.so_SOURCES := authenticationsproutlet.cpp registrarsproutlet.cpp subscriptionsproutlet.cpp scscfsproutlet.cpp scscfplugin.cpp forwardingsproutlet.cpp
+sprout_scscf.so_SOURCES := authenticationsproutlet.cpp registrarsproutlet.cpp subscriptionsproutlet.cpp scscfsproutlet.cpp scscfplugin.cpp forwardingsproutlet.cpp scscf_utils.cpp
 sprout_scscf.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS}
 sprout_scscf.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 

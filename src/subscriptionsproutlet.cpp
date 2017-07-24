@@ -84,6 +84,7 @@ SproutletTsx* SubscriptionSproutlet::get_tsx(SproutletHelper* helper,
 
   next_hop = helper->next_hop_uri(_next_hop_service,
                                   route,
+                                  req,
                                   pool);
   return NULL;
 }

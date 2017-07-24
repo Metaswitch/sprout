@@ -15,6 +15,7 @@
 #include "json_parse_utils.h"
 #include <openssl/hmac.h>
 #include "base64.h"
+#include "scscf_utils.h"
 
 // Configuring PJSIP with a realm of "*" means that all realms are considered.
 const pj_str_t WILDCARD_REALM = pj_str((char*)"*");
@@ -121,6 +122,7 @@ SproutletTsx* AuthenticationSproutlet::get_tsx(SproutletHelper* helper,
 
   next_hop = helper->next_hop_uri(_next_hop_service,
                                   route,
+                                  req,
                                   pool);
   return NULL;
 }
@@ -886,54 +888,11 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   // Construct the S-CSCF URI for this transaction. Use the configured S-CSCF
   // URI as a starting point.
   pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), stack_data.scscf_uri);
-
-  // Get the local hostname part of the URI that routed to this Sproutlet. We
-  // will use this in the S-CSCF URI.
-  //
-  // This is so that we preserve the URI of the S-CSCF that we originally tried
-  // to route to so that we then send it on the SAR to the HSS.
-  const pjsip_route_hdr* original_route = route_hdr();
-  pjsip_sip_uri* original_uri;
-  if (original_route != NULL)
-  {
-    original_uri = (pjsip_sip_uri*)original_route->name_addr.uri;
-  }
-  else
-  {
-    original_uri = (pjsip_sip_uri*)req->line.req.uri;
-  }
-
-  pj_str_t local_hostname, unused_service_name;
-  bool success = get_local_hostname(original_uri, local_hostname, unused_service_name, get_pool(req));
-
-  // If there are any failures in this step, we will use the configured S-CSCF
-  // URI.
-  if (success)
-  {
-    // Replace the local hostname part of the S-CSCF URI with the local hostname
-    // part of the URI that caused us to be routed here.
-    pj_str_t unused_local_hostname, service_name;
-    success = get_local_hostname(scscf_uri, unused_local_hostname, service_name, get_pool(req));
-
-    if (success)
-    {
-      pj_str_t hostname;
-      if (pj_strcmp2(&service_name, ""))
-      {
-        pj_str_t period = pj_str((char*)".");
-        pj_strdup(get_pool(req), &hostname, &service_name);
-        PJUtils::pj_str_concatenate(&hostname, &period, get_pool(req));
-        PJUtils::pj_str_concatenate(&hostname, &local_hostname, get_pool(req));
-      }
-      else
-      {
-        pj_strdup(get_pool(req), &hostname, &local_hostname);
-      }
-
-      scscf_uri->host = hostname;
-    }
-  }
-
+  pj_str_t unused_local_hostname;
+  SCSCFUtils::get_scscf_uri(req,
+                            scscf_uri,
+                            &unused_local_hostname,
+                            this->_helper);
   _scscf_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)scscf_uri);
 
   pjsip_digest_credential* credentials = get_credentials(req);

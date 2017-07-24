@@ -21,8 +21,10 @@ ForwardingSproutletTsx::ForwardingSproutletTsx(Sproutlet* sproutlet,
 void ForwardingSproutletTsx::forward_request(pjsip_msg* req)
 {
   const pjsip_route_hdr* route = route_hdr();
+
   pjsip_sip_uri* uri = next_hop_uri(_upstream_service_name,
                                     route,
+                                    req,
                                     get_pool(req));
   PJUtils::add_top_route_header(req, uri, get_pool(req));
   send_request(req);

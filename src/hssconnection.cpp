@@ -706,11 +706,6 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
   // to it, so we want to delete the underlying document when they all go out
   // of scope.
 
-  /*if (server_name == "")
-  {
-    server_name = _scscf_uri;
-  }*/
-
   rapidxml::xml_document<>* root_underlying_ptr = NULL;
   std::string json_wildcard =
         (wildcard != "") ? ", \"wildcard_identity\": \"" + wildcard + "\"" : "";
@@ -718,8 +713,6 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                           ", \"server_name\": \"" + server_name + "\"" +
                           json_wildcard +
                           "}";
-
-  TRC_DEBUG("Request body: %s", req_body.c_str());
   HTTPCode http_code = put_for_xml_object(path,
                                           req_body,
                                           cache_allowed,

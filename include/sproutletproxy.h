@@ -52,6 +52,7 @@ public:
   /// request.
   pjsip_sip_uri* next_hop_uri(const std::string& service,
                               const pjsip_route_hdr* route,
+                              const pjsip_msg* req,
                               pj_pool_t* pool);
 
 protected:
@@ -102,8 +103,8 @@ protected:
 
   bool is_uri_local(const pjsip_uri* uri);
   bool get_local_hostname(const pjsip_sip_uri* uri,
-                          pj_str_t& hostname,
-                          pj_str_t& service_name,
+                          pj_str_t* hostname,
+                          pj_str_t* service_name,
                           pj_pool_t* pool);
   bool is_host_local(const pj_str_t* host);
   bool is_uri_reflexive(const pjsip_uri* uri,
@@ -297,10 +298,11 @@ public:
   pjsip_sip_uri* get_reflexive_uri(pj_pool_t*) const;
   pjsip_sip_uri* next_hop_uri(const std::string& service,
                               const pjsip_route_hdr* route,
+                              const pjsip_msg* req,
                               pj_pool_t* pool);
   bool get_local_hostname(const pjsip_sip_uri* uri,
-                          pj_str_t& hostname,
-                          pj_str_t& service_name,
+                          pj_str_t* hostname,
+                          pj_str_t* service_name,
                           pj_pool_t* pool);
 
 private:

@@ -390,9 +390,19 @@ Sproutlet* SproutletProxy::match_sproutlet_from_uri(const pjsip_uri* uri,
 
 pjsip_sip_uri* SproutletProxy::next_hop_uri(const std::string& service,
                                             const pjsip_route_hdr* route,
+                                            const pjsip_msg* req,
                                             pj_pool_t* pool)
 {
-  pjsip_sip_uri* base_uri = (pjsip_sip_uri*)(route ? route->name_addr.uri : nullptr);
+  pjsip_sip_uri* base_uri = NULL;
+  if (route != NULL)
+  {
+    base_uri = (pjsip_sip_uri*)route->name_addr.uri;
+  }
+  else
+  {
+    base_uri = (pjsip_sip_uri*)req->line.req.uri;
+  }
+
   pjsip_sip_uri* next_hop = create_internal_sproutlet_uri(pool,
                                                           service,
                                                           base_uri);
@@ -440,8 +450,9 @@ pjsip_sip_uri* SproutletProxy::create_internal_sproutlet_uri(pj_pool_t* pool,
   // Replace the hostname part of the base URI with the local hostname part of
   // the URI that routed to us. If this doesn't work, then fall back to using
   // the root URI.
-  pj_str_t local_hostname, unused_service_name;
-  bool success = get_local_hostname(uri, local_hostname, unused_service_name, pool);
+  pj_str_t local_hostname;
+  pj_str_t unused_service_name;
+  bool success = get_local_hostname(uri, &local_hostname, &unused_service_name, pool);
   if (success)
   {
     pj_strdup(pool, &uri->host, &local_hostname);
@@ -511,35 +522,34 @@ bool SproutletProxy::is_uri_local(const pjsip_uri* uri)
 }
 
 bool SproutletProxy::get_local_hostname(const pjsip_sip_uri* uri,
-                                        pj_str_t& hostname,
-                                        pj_str_t& service_name,
+                                        pj_str_t* hostname,
+                                        pj_str_t* service_name,
                                         pj_pool_t* pool)
 {
-  pj_strdup(pool, &hostname, &uri->host);
-  if (!is_host_local(&hostname))
+  pj_strdup(pool, hostname, &uri->host);
+  pj_strdup(pool, service_name, &uri->host);
+  if (!is_host_local(hostname))
   {
-    char* sep = pj_strchr(&hostname, '.');
+    char* sep = pj_strchr(hostname, '.');
 
     if (sep != NULL)
     {
-      // Set the service name string.
-      service_name.ptr = hostname.ptr;
-      service_name.slen = sep - hostname.ptr;
+      // Set the service name.
+      service_name->slen = sep - hostname->ptr;
 
       // Remove the service name part and the period from the hostname.
-      hostname.slen -= (sep - hostname.ptr + 1);
-      hostname.ptr = sep + 1;
+      hostname->slen -= (sep - hostname->ptr + 1);
+      hostname->ptr = sep + 1;
 
-      if (!is_host_local(&hostname))
+      if (!is_host_local(hostname))
       {
-        // It shouldn't be possible for us not to have found a local hostname
-        // yet.
+        pj_strdup2(pool, service_name, "");
         return false;
       }
     }
     else
     {
-      // There has to be a separator if the full hostname is not local.
+      pj_strdup2(pool, service_name, "");
       return false;
     }
   }
@@ -1762,14 +1772,15 @@ pjsip_sip_uri* SproutletWrapper::get_reflexive_uri(pj_pool_t* pool) const
 
 pjsip_sip_uri* SproutletWrapper::next_hop_uri(const std::string& service,
                                               const pjsip_route_hdr* route,
+                                              const pjsip_msg* req,
                                               pj_pool_t* pool)
 {
-  return _proxy->next_hop_uri(service, route, pool);
+  return _proxy->next_hop_uri(service, route, req, pool);
 }
 
 bool SproutletWrapper::get_local_hostname(const pjsip_sip_uri* uri,
-                                          pj_str_t& hostname,
-                                          pj_str_t& service_name,
+                                          pj_str_t* hostname,
+                                          pj_str_t* service_name,
                                           pj_pool_t* pool)
 {
   return _proxy->get_local_hostname(uri, hostname, service_name, pool);
