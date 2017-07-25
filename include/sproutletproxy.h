@@ -105,10 +105,7 @@ protected:
   Sproutlet* service_from_params(pjsip_sip_uri* uri);
 
   bool is_uri_local(const pjsip_uri* uri);
-  void get_local_hostname(const pjsip_sip_uri* uri,
-                          pj_str_t* hostname,
-                          pj_str_t* service_name,
-                          pj_pool_t* pool);
+  std::string get_local_hostname(const pjsip_sip_uri* uri);
   bool is_host_local(const pj_str_t* host);
   bool is_uri_reflexive(const pjsip_uri* uri,
                         Sproutlet* sproutlet,
@@ -303,10 +300,7 @@ public:
                               const pjsip_route_hdr* route,
                               const pjsip_msg* req,
                               pj_pool_t* pool);
-  void get_local_hostname(const pjsip_sip_uri* uri,
-                          pj_str_t* hostname,
-                          pj_str_t* service_name,
-                          pj_pool_t* pool);
+  std::string get_local_hostname(const pjsip_sip_uri* uri);
 
 private:
   void rx_request(pjsip_tx_data* req);

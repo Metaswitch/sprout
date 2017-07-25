@@ -141,7 +141,7 @@ protected:
 
   // The local hostname for this transaction. This is the local hostname part
   // of the S-CSCF URI and is used in the Service Route header.
-  pj_str_t _local_hostname;
+  std::string _local_hostname;
 
   /// Member variables covering the IFCs.
   FIFCService* _fifc_service;

@@ -748,12 +748,11 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // Replace the local hostname part of the Service route URI with the local
   // hostname part of the URI that routed to this sproutlet.
   pjsip_sip_uri* sr_uri = (pjsip_sip_uri*)sr_hdr->name_addr.uri;
-  pj_str_t hostname, unused_local_hostname, service_name;
-  get_local_hostname(sr_uri, &unused_local_hostname, &service_name, get_pool(rsp));
-  if (_local_hostname.slen)
+  std::string sr_local_hostname = get_local_hostname(sr_uri);
+  if (!_local_hostname.empty())
   {
-    SCSCFUtils::construct_hostname(get_pool(rsp), &service_name, &_local_hostname, &hostname);
-    sr_uri->host = hostname;
+    std::string new_scscf_hostname = SCSCFUtils::construct_hostname(_local_hostname, sr_local_hostname, &sr_uri->host);
+    pj_strdup2(get_pool(rsp), &sr_uri->host, new_scscf_hostname.c_str());
   }
 
   pjsip_msg_insert_first_hdr(rsp, (pjsip_hdr*)sr_hdr);

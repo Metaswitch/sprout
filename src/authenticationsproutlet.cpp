@@ -888,7 +888,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   // Construct the S-CSCF URI for this transaction. Use the configured S-CSCF
   // URI as a starting point.
   pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), stack_data.scscf_uri);
-  pj_str_t unused_local_hostname;
+  std::string unused_local_hostname;
   SCSCFUtils::get_scscf_uri(req,
                             scscf_uri,
                             &unused_local_hostname,

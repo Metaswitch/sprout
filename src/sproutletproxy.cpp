@@ -443,9 +443,8 @@ pjsip_sip_uri* SproutletProxy::create_internal_sproutlet_uri(pj_pool_t* pool,
   // Replace the hostname part of the base URI with the local hostname part of
   // the URI that routed to us. If this doesn't work, then fall back to using
   // the root URI.
-  pj_str_t local_hostname, unused_service_name;
-  get_local_hostname(uri, &local_hostname, &unused_service_name, pool);
-  pj_strdup(pool, &uri->host, &local_hostname);
+  std::string local_hostname = get_local_hostname(uri);
+  pj_strdup2(pool, &uri->host, local_hostname.c_str());
 
   uri->port = 0;
   uri->lr_param = 1;
@@ -492,31 +491,24 @@ bool SproutletProxy::is_uri_local(const pjsip_uri* uri)
   //LCOV_EXCL_STOP
 }
 
-void SproutletProxy::get_local_hostname(const pjsip_sip_uri* uri,
-                                        pj_str_t* hostname,
-                                        pj_str_t* service_name,
-                                        pj_pool_t* pool)
+std::string SproutletProxy::get_local_hostname(const pjsip_sip_uri* uri)
 {
-  std::string alias, local_hostname;
+  std::string unused_alias, local_hostname;
   SPROUTLET_SELECTION_TYPES unused_selection_type = UNKNOWN;
   (void*)match_sproutlet_from_uri((pjsip_uri*)uri,
-                                  alias,
+                                  unused_alias,
                                   local_hostname,
                                   unused_selection_type);
 
-  if (!local_hostname.empty())
-  {
-    pj_strdup2(pool, hostname, local_hostname.c_str());
-  }
-  else
+  if (local_hostname.empty())
   {
     // This code is only executed if:
     //  - We receive a request that doesn't match a Sproutlet, or
     //  - We receive a request that matches a Sproutlet based on the port.
-    pj_strdup(pool, hostname, &uri->host);
+    local_hostname = PJUtils::pj_str_to_string(&uri->host);
   }
 
-  pj_strdup2(pool, service_name, alias.c_str());
+  return local_hostname;
 }
 
 bool SproutletProxy::is_host_local(const pj_str_t* host)
@@ -1743,12 +1735,9 @@ pjsip_sip_uri* SproutletWrapper::next_hop_uri(const std::string& service,
   return _proxy->next_hop_uri(service, route, req, pool);
 }
 
-void SproutletWrapper::get_local_hostname(const pjsip_sip_uri* uri,
-                                          pj_str_t* hostname,
-                                          pj_str_t* service_name,
-                                          pj_pool_t* pool)
+std::string SproutletWrapper::get_local_hostname(const pjsip_sip_uri* uri)
 {
-  return _proxy->get_local_hostname(uri, hostname, service_name, pool);
+  return _proxy->get_local_hostname(uri);
 }
 
 void SproutletWrapper::rx_request(pjsip_tx_data* req)

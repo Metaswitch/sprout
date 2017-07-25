@@ -44,10 +44,6 @@ pj_str_t uri_to_pj_str(pjsip_uri_context_e context,
 std::string uri_to_string(pjsip_uri_context_e context,
                           const pjsip_uri* uri);
 
-void pj_str_concatenate(pj_str_t* dst,
-                        pj_str_t* src,
-                        pj_pool_t* pool);
-
 std::string strip_uri_scheme(const std::string& uri);
 
 pjsip_uri* uri_from_string(const std::string& uri_s,
