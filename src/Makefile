@@ -298,6 +298,9 @@ mangelwurzel-as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
 VPATH = ../modules/cpp-common/src ../modules/cpp-common/test_utils ../modules/app-servers/test ../modules/gemini/src ../modules/gemini/src/ut ../modules/memento-as/src ../modules/memento-as/src/ut ../modules/memento-as/modules/memento-common/src mangelwurzel mangelwurzel/ut ut
 
+# Use valgrind suppression file for UT
+sprout_test_VALGRIND_ARGS := --suppressions=ut/sprout_test.supp
+
 include ../build-infra/cpp.mk
 
 # Special extra objects for sprout_test
