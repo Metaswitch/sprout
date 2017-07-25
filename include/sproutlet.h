@@ -270,7 +270,7 @@ public:
   /// @param service_name - Return parameter that contains the service name
   ///                       part of the URI (optional).
   /// @param pool         - The pool of memory used for the return parameter.
-  virtual bool get_local_hostname(const pjsip_sip_uri* uri,
+  virtual void get_local_hostname(const pjsip_sip_uri* uri,
                                   pj_str_t* hostname,
                                   pj_str_t* service_name,
                                   pj_pool_t* pool) = 0;
@@ -611,7 +611,7 @@ protected:
   /// @param service_name - Return parameter that contains the service name
   ///                       part of the URI (optional).
   /// @param pool         - The pool of memory used for the return parameter.
-  bool get_local_hostname(const pjsip_sip_uri* uri,
+  void get_local_hostname(const pjsip_sip_uri* uri,
                           pj_str_t* hostname,
                           pj_str_t* service_name,
                           pj_pool_t* pool)

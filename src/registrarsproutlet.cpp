@@ -49,6 +49,7 @@ RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
                                        int port,
                                        const std::string& uri,
                                        const std::string& next_hop_service,
+                                       const std::list<std::string>& aliases,
                                        SubscriberDataManager* reg_sdm,
                                        std::vector<SubscriberDataManager*> reg_remote_sdms,
                                        HSSConnection* hss_connection,
@@ -70,7 +71,8 @@ RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
   _third_party_reg_stats_tbls(third_party_reg_stats_tbls),
   _fifc_service(fifc_service),
   _ifc_configuration(ifc_configuration),
-  _next_hop_service(next_hop_service)
+  _next_hop_service(next_hop_service),
+  _aliases(aliases)
 {
 }
 
@@ -150,6 +152,11 @@ SproutletTsx* RegistrarSproutlet::get_tsx(SproutletHelper* helper,
                                   req,
                                   pool);
   return NULL;
+}
+
+const std::list<std::string> RegistrarSproutlet::aliases() const
+{
+  return { _aliases };
 }
 
 RegistrarSproutletTsx::RegistrarSproutletTsx(RegistrarSproutlet* registrar,
@@ -742,21 +749,10 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // hostname part of the URI that routed to this sproutlet.
   pjsip_sip_uri* sr_uri = (pjsip_sip_uri*)sr_hdr->name_addr.uri;
   pj_str_t hostname, unused_local_hostname, service_name;
-  success = get_local_hostname(sr_uri, &unused_local_hostname, &service_name, get_pool(rsp));
-  if (success && _local_hostname.slen)
+  get_local_hostname(sr_uri, &unused_local_hostname, &service_name, get_pool(rsp));
+  if (_local_hostname.slen)
   {
-    if (pj_strcmp2(&service_name, ""))
-    {
-      pj_str_t period = pj_str((char*)".");
-      pj_strdup(get_pool(rsp), &hostname, &service_name);
-      PJUtils::pj_str_concatenate(&hostname, &period, get_pool(rsp));
-      PJUtils::pj_str_concatenate(&hostname, &_local_hostname, get_pool(rsp));
-    }
-    else
-    {
-      pj_strdup(get_pool(rsp), &hostname, &_local_hostname);
-    }
-
+    SCSCFUtils::construct_hostname(get_pool(rsp), &service_name, &_local_hostname, &hostname);
     sr_uri->host = hostname;
   }
 

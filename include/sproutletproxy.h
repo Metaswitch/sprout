@@ -55,6 +55,14 @@ public:
                               const pjsip_msg* req,
                               pj_pool_t* pool);
 
+  enum SPROUTLET_SELECTION_TYPES
+  {
+    SERVICE_NAME=0,
+    DOMAIN_PART,
+    USER_PART,
+    UNKNOWN,
+  };
+
 protected:
   /// Pre-declaration
   class UASTsx;
@@ -75,7 +83,8 @@ protected:
   /// Return the sproutlet that matches the URI supplied.
   Sproutlet* match_sproutlet_from_uri(const pjsip_uri* uri,
                                       std::string& alias,
-                                      SAS::TrailId trail);
+                                      std::string& local_hostname,
+                                      SPROUTLET_SELECTION_TYPES& selection_type);
 
   /// Create a URI that routes to a given Sproutlet.
   pjsip_sip_uri* create_sproutlet_uri(pj_pool_t* pool,
@@ -95,14 +104,8 @@ protected:
   Sproutlet* service_from_user(pjsip_sip_uri* uri);
   Sproutlet* service_from_params(pjsip_sip_uri* uri);
 
-  void report_sproutlet_selection_event(int selection_type,
-                                        std::string service_name,
-                                        std::string value,
-                                        std::string uri_str,
-                                        SAS::TrailId trail);
-
   bool is_uri_local(const pjsip_uri* uri);
-  bool get_local_hostname(const pjsip_sip_uri* uri,
+  void get_local_hostname(const pjsip_sip_uri* uri,
                           pj_str_t* hostname,
                           pj_str_t* service_name,
                           pj_pool_t* pool);
@@ -300,7 +303,7 @@ public:
                               const pjsip_route_hdr* route,
                               const pjsip_msg* req,
                               pj_pool_t* pool);
-  bool get_local_hostname(const pjsip_sip_uri* uri,
+  void get_local_hostname(const pjsip_sip_uri* uri,
                           pj_str_t* hostname,
                           pj_str_t* service_name,
                           pj_pool_t* pool);

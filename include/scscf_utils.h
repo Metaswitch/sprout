@@ -22,6 +22,10 @@ void get_scscf_uri(pjsip_msg* req,
                    pj_str_t* local_hostname,
                    SproutletTsxHelper* tsx);
 
+void construct_hostname(pj_pool_t* pool,
+                        pj_str_t* service_name,
+                        pj_str_t* local_hostname,
+                        pj_str_t* hostname);
 }
 
 #endif

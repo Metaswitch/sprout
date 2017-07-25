@@ -32,36 +32,35 @@ void SCSCFUtils::get_scscf_uri(pjsip_msg* req,
     original_uri = (pjsip_sip_uri*)req->line.req.uri;
   }
 
+  // Get the local hostname part of the URI that routed the request here.
   pj_pool_t* pool = tsx->get_pool(req);
   pj_str_t unused_service_name;
-  bool success = tsx->get_local_hostname(original_uri, local_hostname, &unused_service_name, pool);
+  tsx->get_local_hostname(original_uri, local_hostname, &unused_service_name, pool);
 
-  // If there are any failures in this step, we will use the configured S-CSCF
-  // URI.
-  if (success)
-  {
-    // Replace the local hostname part of the configured S-CSCF URI with the
-    // local hostname part of the URI that caused us to be routed here.
-    pj_str_t unused_local_hostname, service_name;
-    success = tsx->get_local_hostname(scscf_uri, &unused_local_hostname, &service_name, pool);
+  // Replace the local hostname part of the configured S-CSCF URI with the
+  // local hostname part of the URI that caused us to be routed here.
+  pj_str_t unused_local_hostname, service_name;
+  tsx->get_local_hostname(scscf_uri, &unused_local_hostname, &service_name, pool);
 
-    if (success)
-    {
-      pj_str_t hostname;
-      if (pj_strcmp2(&service_name, ""))
-      {
-        pj_str_t period = pj_str((char*)".");
-        pj_strdup(pool, &hostname, &service_name);
-        PJUtils::pj_str_concatenate(&hostname, &period, pool);
-        PJUtils::pj_str_concatenate(&hostname, local_hostname, pool);
-      }
-      else
-      {
-        pj_strdup(pool, &hostname, local_hostname);
-      }
-
-      scscf_uri->host = hostname;
-    }
-  }
+  pj_str_t hostname;
+  construct_hostname(pool, &service_name, local_hostname, &hostname);
+  scscf_uri->host = hostname;
 }
 
+void SCSCFUtils::construct_hostname(pj_pool_t* pool,
+                                    pj_str_t* service_name,
+                                    pj_str_t* local_hostname,
+                                    pj_str_t* hostname)
+{
+  if (pj_strcmp2(service_name, ""))
+  {
+    pj_str_t period = pj_str((char*)".");
+    pj_strdup(pool, hostname, service_name);
+    PJUtils::pj_str_concatenate(hostname, &period, pool);
+    PJUtils::pj_str_concatenate(hostname, local_hostname, pool);
+  }
+  else
+  {
+    pj_strdup(pool, hostname, local_hostname); // LCOV_EXCL_LINE
+  }
+}

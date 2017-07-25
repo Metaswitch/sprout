@@ -97,6 +97,7 @@ string Message::get()
   }
 
   std::string branch = _branch.empty() ? "Pjmo1aimuq33BAI4rjhgQgBr4sY" + std::to_string(_unique) : _branch;
+  std::string route = _route.empty() ? "" : "Route: <sip:" + _route + ";transport=tcp;lr;service=registrar>\r\n";
 
   n = snprintf(buf, sizeof(buf),
                "%1$s sip:%3$s SIP/2.0\r\n"
@@ -113,7 +114,7 @@ string Message::get()
                "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
                "%9$s"
                "%7$s"
-               "Route: <sip:%12$s;transport=tcp;lr;service=registrar>\r\n"
+               "%12$s"
                "P-Access-Network-Info: DUMMY\r\n"
                "P-Visited-Network-ID: DUMMY\r\n"
                "P-Charging-Vector: icid-value=100\r\n"
@@ -133,7 +134,7 @@ string Message::get()
                /*  9 */ _expires.empty() ? "" : string(_expires).append("\r\n").c_str(),
                /* 10 */ _auth.empty() ? "" : string(_auth).append("\r\n").c_str(),
                /* 11 */ _cseq.c_str(),
-               /* 12 */ _route.c_str(),
+               /* 12 */ route.c_str(),
                /* 13 */ _gruu_support ? ", gruu" : "",
                /* 14 */ branch.c_str(),
                /* 15 */ _unique
@@ -224,6 +225,7 @@ public:
                                                   5058,
                                                   "sip:registrar.homedomain:5058;transport=tcp",
                                                   "subscription",
+                                                  { "scscf" },
                                                   _sdm,
                                                   _remote_sdms,
                                                   hss_connection,
@@ -806,6 +808,56 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
   EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
+
+TEST_F(RegistrarTest, SimpleMainlineAuthHeaderNoRoute)
+{
+  // We have a private ID in this test, so set up the expect response
+  // to the query.
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, "", "?private_id=Alice");
+
+  Message msg;
+  msg._route = "";
+  msg._expires = "Expires: 300";
+  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
+            get_headers(out, "Contact"));
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:scscf.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
+  free_txdata();
+
+  // Fetch this binding by sending in the same request with no Contact header
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "", RegDataXMLUtils::STATE_REGISTERED, "", "?private_id=Alice");
+
+  msg._contact = "";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
+            get_headers(out, "Contact"));
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:scscf.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
+  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
+  free_txdata();
+}
+
 
 /// Simple correct example with Authorization header and Tel URIs
 TEST_F(RegistrarTest, SimpleMainlineAuthHeaderWithTelURI)
@@ -3220,6 +3272,7 @@ public:
                                                   5058,
                                                   "sip:registrar.homedomain:5058;transport=tcp",
                                                   "subscription",
+                                                  { "scscf" },
                                                   _sdm,
                                                   {},
                                                   _hss_connection,

@@ -38,6 +38,7 @@ public:
                      int port,
                      const std::string& uri,
                      const std::string& next_hop_service,
+                     const std::list<std::string>& aliases,
                      SubscriberDataManager* reg_sdm,
                      std::vector<SubscriberDataManager*> reg_remote_sdms,
                      HSSConnection* hss_connection,
@@ -58,6 +59,8 @@ public:
                         pjsip_sip_uri*& next_hop,
                         pj_pool_t* pool,
                         SAS::TrailId trail) override;
+
+  const std::list<std::string> aliases() const override;
 
   int expiry_for_binding(pjsip_contact_hdr* contact,
                          pjsip_expires_hdr* expires);
@@ -92,6 +95,9 @@ private:
   // The next service to route requests onto if the sproutlet does not handle
   // them itself.
   std::string _next_hop_service;
+
+  // Aliases that this sproutlet registers for.
+  const std::list<std::string> _aliases;
 };
 
 
