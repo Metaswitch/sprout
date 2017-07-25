@@ -139,10 +139,6 @@ protected:
   // to the HSS.
   std::string _scscf_uri;
 
-  // The local hostname for this transaction. This is the local hostname part
-  // of the S-CSCF URI and is used in the Service Route header.
-  std::string _local_hostname;
-
   /// Member variables covering the IFCs.
   FIFCService* _fifc_service;
   IFCConfiguration _ifc_configuration;

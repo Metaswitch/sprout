@@ -18,13 +18,9 @@
 namespace SCSCFUtils {
 
 void get_scscf_uri(pjsip_msg* req,
+                   pj_pool_t* pool,
                    pjsip_sip_uri* scscf_uri,
-                   std::string* local_hostname,
                    SproutletTsxHelper* tsx);
-
-std::string construct_hostname(std::string received_local_hostname,
-                               std::string scscf_local_hostname,
-                               pj_str_t* scscf_hostname);
 }
 
 #endif

@@ -571,10 +571,9 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   // Construct the S-CSCF URI for this transaction. Use the configured S-CSCF
   // URI as a starting point.
   pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), _scscf->_scscf_cluster_uri);
-  std::string unused_local_hostname;
   SCSCFUtils::get_scscf_uri(req,
+                            get_pool(req),
                             scscf_uri,
-                            &unused_local_hostname,
                             this->_helper);
   _scscf_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)scscf_uri);
 

@@ -12,8 +12,8 @@
 #include "scscf_utils.h"
 
 void SCSCFUtils::get_scscf_uri(pjsip_msg* req,
+                               pj_pool_t* pool,
                                pjsip_sip_uri* scscf_uri,
-                               std::string* local_hostname,
                                SproutletTsxHelper* tsx)
 {
   // Get the local hostname part of the URI that routed to this Sproutlet. We
@@ -32,28 +32,18 @@ void SCSCFUtils::get_scscf_uri(pjsip_msg* req,
     original_uri = (pjsip_sip_uri*)req->line.req.uri;
   }
 
-  pj_pool_t* pool = tsx->get_pool(req);
-
   // Get the local hostname part of the URI that routed the request here.
-  *local_hostname = tsx->get_local_hostname(original_uri);
+  std::string received_local_hostname = tsx->get_local_hostname(original_uri);
 
   // Get the local hostname part of the S-CSCF URI;
   std::string scscf_local_hostname = tsx->get_local_hostname(scscf_uri);
 
-  std::string new_scscf_hostname = construct_hostname(*local_hostname, scscf_local_hostname, &scscf_uri->host);
-  pj_strdup2(pool, &scscf_uri->host, new_scscf_hostname.c_str());
-}
-
-std::string SCSCFUtils::construct_hostname(std::string received_local_hostname,
-                                           std::string scscf_local_hostname,
-                                           pj_str_t* scscf_hostname)
-{
-  std::string new_scscf_hostname = PJUtils::pj_str_to_string(scscf_hostname);
 
   // Replace the local hostname part of the configured S-CSCF URI with the
   // local hostname part of the URI that caused us to be routed here.
+  std::string new_scscf_hostname = PJUtils::pj_str_to_string(&scscf_uri->host);
   size_t pos = new_scscf_hostname.rfind(scscf_local_hostname);
   new_scscf_hostname.replace(pos, scscf_local_hostname.length(), received_local_hostname);
 
-  return new_scscf_hostname;
+  pj_strdup2(pool, &scscf_uri->host, new_scscf_hostname.c_str());
 }
