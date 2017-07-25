@@ -112,7 +112,11 @@ public:
     b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
     b1->_params["reg-id"] = "1";
     b1->_params["+sip.ice"] = "";
+    b1->_params["+g.3gpp.smsip"] = "";
     b1->_emergency_registration = false;
+
+    // Save off the contact params for testing later.
+    _contact_params = b1->_params;
 
     // Add the AoR record to the store.
     std::string aor = "sip:6505550231@homedomain";
@@ -155,14 +159,14 @@ public:
     ::testing::Mock::VerifyAndClearExpectations(_analytics);
   }
 
-void subscription_sproutlet_handle_200()
-{
-  ASSERT_EQ(1, txdata_count());
-  inject_msg(respond_to_current_txdata(200));
-  ASSERT_EQ(1, txdata_count());
-  EXPECT_EQ(200, current_txdata()->msg->line.status.code);
-  free_txdata();
-}
+  void subscription_sproutlet_handle_200()
+  {
+    ASSERT_EQ(1, txdata_count());
+    inject_msg(respond_to_current_txdata(200));
+    ASSERT_EQ(1, txdata_count());
+    EXPECT_EQ(200, current_txdata()->msg->line.status.code);
+    free_txdata();
+  }
 
 protected:
   static LocalStore* _local_data_store;
@@ -175,6 +179,7 @@ protected:
   static FakeChronosConnection* _chronos_connection;
   SubscriptionSproutlet* _subscription_sproutlet;
   SproutletProxy* _subscription_proxy;
+  std::map<std::string, std::string> _contact_params;
 
   void check_subscriptions(std::string aor, uint32_t expected);
   std::string check_OK_and_NOTIFY(std::string reg_state,
@@ -182,6 +187,16 @@ protected:
                                   std::vector<std::pair<std::string, bool>> irs_impus,
                                   bool terminated = false,
                                   std::string reason = "");
+
+  std::string do_OK_NOTIFY_flow(std::string* body = nullptr,
+                                bool terminated = false,
+                                std::string reason = "");
+
+  void check_NOTIFY_body(std::string& body,
+                         std::string reg_state,
+                         std::pair<std::string, std::string> contact_values,
+                         std::vector<std::pair<std::string, bool>> irs_impus);
+
 };
 
 LocalStore* SubscriptionTest::_local_data_store;
@@ -285,7 +300,7 @@ string SubscribeMessage::get()
                    /* 14 */ _to_tag.empty() ? "": string(";tag=").append(_to_tag).c_str(),
                    /* 15 */ branch.c_str(),
                    /* 16 */ _unique
-    );
+  );
 
   EXPECT_LT(n, (int)sizeof(buf));
 
@@ -1027,6 +1042,60 @@ TEST_F(SubscriptionTest, NoDefaultID)
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
+/// Simple correct example
+TEST_F(SubscriptionTest, ExtraContactParams)
+{
+  check_subscriptions("sip:6505550231@homedomain", 0u);
+
+  // Set up a single subscription - this should generate a 200 OK then
+  // a NOTIFY
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
+  SubscribeMessage msg;
+  inject_msg(msg.get());
+
+  std::vector<std::pair<std::string, bool>> irs_impus;
+  irs_impus.push_back(std::make_pair("sip:6505550231@homedomain", false));
+
+  std::string body;
+  std::string to_tag = do_OK_NOTIFY_flow(&body);
+
+  // Check the contact parameters are present and correct.
+  rapidxml::xml_document<> doc;
+  char* xml_str = doc.allocate_string(body.c_str());
+
+  try
+  {
+    doc.parse<rapidxml::parse_strip_xml_namespaces>(xml_str);
+  }
+  catch (rapidxml::parse_error err)
+  {
+    printf("Parse error in NOTIFY: %s\n\n%s", err.what(), body.c_str());
+    doc.clear();
+  }
+
+  // Check that the contact parameters are correctly included in the XML
+  // document as `unknown-param` elements.
+  rapidxml::xml_node<>* reg_info = doc.first_node("reginfo");
+  rapidxml::xml_node<>* registration = reg_info->first_node("registration");
+  rapidxml::xml_node<>* contact = registration->first_node("contact");
+
+  std::map<std::string, std::string> params;
+  for (rapidxml::xml_node<>* unknown_param = contact->first_node("unknown-param");
+       unknown_param != nullptr;
+       unknown_param = unknown_param->next_sibling("unknown-param"))
+  {
+    params[unknown_param->first_attribute("name")->value()] = unknown_param->value();
+  }
+
+  EXPECT_EQ(params, _contact_params);
+
+  check_subscriptions("sip:6505550231@homedomain", 1u);
+}
+
 
 void SubscriptionTest::check_subscriptions(std::string aor, uint32_t expected)
 {
@@ -1037,11 +1106,9 @@ void SubscriptionTest::check_subscriptions(std::string aor, uint32_t expected)
   delete aor_data; aor_data = NULL;
 }
 
-std::string SubscriptionTest::check_OK_and_NOTIFY(std::string reg_state,
-                                                  std::pair<std::string, std::string> contact_values,
-                                                  std::vector<std::pair<std::string, bool>> irs_impus,
-                                                  bool terminated,
-                                                  std::string reason)
+std::string SubscriptionTest::do_OK_NOTIFY_flow(std::string* body,
+                                                bool terminated,
+                                                std::string reason)
 {
   EXPECT_EQ(2, txdata_count());
   pjsip_msg* out = current_txdata()->msg;
@@ -1057,10 +1124,50 @@ std::string SubscriptionTest::check_OK_and_NOTIFY(std::string reg_state,
     EXPECT_EQ("Subscription-State: active;expires=300", get_headers(out, "Subscription-State"));
   }
 
-  char buf[16384];
-  int n = out->body->print_body(out->body, buf, sizeof(buf));
-  string body(buf, n);
+  if (body != nullptr)
+  {
+    char buf[16384];
+    int n = out->body->print_body(out->body, buf, sizeof(buf));
+    body->assign(buf, n);
+  }
 
+  EXPECT_THAT(get_headers(out, "To"), testing::MatchesRegex("To: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));
+
+  // Store off From header for later.
+  std::string from_hdr = get_headers(out, "From");
+  inject_msg(respond_to_current_txdata(200));
+
+  out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_THAT(get_headers(out, "From"), testing::MatchesRegex("From: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));
+
+  // Pull out the to tag on the OK - check later that this matches the from tag on the Notify
+  std::vector<std::string> to_params;
+  Utils::split_string(get_headers(out, "To"), ';', to_params, 0, true);
+  std::string to_tag = "No to tag in 200 OK";
+
+  for (unsigned ii = 0; ii < to_params.size(); ii++)
+  {
+    if (to_params[ii].find("tag=") != string::npos)
+    {
+      to_tag = to_params[ii].substr(4);
+    }
+  }
+
+  EXPECT_EQ("P-Charging-Vector: icid-value=\"100\"", get_headers(out, "P-Charging-Vector"));
+  EXPECT_EQ("P-Charging-Function-Addresses: ccf=1.2.3.4;ecf=5.6.7.8", get_headers(out, "P-Charging-Function-Addresses"));
+
+  EXPECT_THAT(from_hdr, testing::MatchesRegex(string(".*tag=").append(to_tag)));
+
+  return to_tag;
+}
+
+void SubscriptionTest::check_NOTIFY_body(std::string& body,
+                                         std::string reg_state,
+                                         std::pair<std::string, std::string> contact_values,
+                                         std::vector<std::pair<std::string, bool>> irs_impus)
+{
   // Parse the XML document, saving off the passed in string first (as parsing
   // is destructive)
   rapidxml::xml_document<> doc;
@@ -1120,39 +1227,19 @@ std::string SubscriptionTest::check_OK_and_NOTIFY(std::string reg_state,
 
   // We should have found one registration element for each IMPU
   EXPECT_EQ(irs_impus.size(), num_reg);
-
-  EXPECT_THAT(get_headers(out, "To"), testing::MatchesRegex("To: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));
-
-  // Store off From header for later.
-  std::string from_hdr = get_headers(out, "From");
-  inject_msg(respond_to_current_txdata(200));
-
-  out = pop_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_THAT(get_headers(out, "From"), testing::MatchesRegex("From: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));
-
-  // Pull out the to tag on the OK - check later that this matches the from tag on the Notify
-  std::vector<std::string> to_params;
-  Utils::split_string(get_headers(out, "To"), ';', to_params, 0, true);
-  std::string to_tag = "No to tag in 200 OK";
-
-  for (unsigned ii = 0; ii < to_params.size(); ii++)
-  {
-    if (to_params[ii].find("tag=") != string::npos)
-    {
-      to_tag = to_params[ii].substr(4);
-    }
-  }
-
-  EXPECT_EQ("P-Charging-Vector: icid-value=\"100\"", get_headers(out, "P-Charging-Vector"));
-  EXPECT_EQ("P-Charging-Function-Addresses: ccf=1.2.3.4;ecf=5.6.7.8", get_headers(out, "P-Charging-Function-Addresses"));
-
-  EXPECT_THAT(from_hdr, testing::MatchesRegex(string(".*tag=").append(to_tag)));
-
-  return to_tag;
 }
 
+std::string SubscriptionTest::check_OK_and_NOTIFY(std::string reg_state,
+                                                  std::pair<std::string, std::string> contact_values,
+                                                  std::vector<std::pair<std::string, bool>> irs_impus,
+                                                  bool terminated,
+                                                  std::string reason)
+{
+  std::string body;
+  std::string to_tag = do_OK_NOTIFY_flow(&body, terminated, reason);
+  check_NOTIFY_body(body, reg_state, contact_values, irs_impus);
+  return to_tag;
+}
 
 /// Fixture for Subscription tests that use a mock store instead of a fake one.
 /// Also use a real analyticslogger to get UT coverage of that.
