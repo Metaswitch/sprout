@@ -166,7 +166,6 @@ RegistrarSproutletTsx::RegistrarSproutletTsx(RegistrarSproutlet* registrar,
   ForwardingSproutletTsx(registrar, next_hop_service),
   _registrar(registrar),
   _scscf_uri(),
-  _local_hostname(),
   _fifc_service(fifc_service),
   _ifc_configuration(ifc_configuration)
 {
@@ -337,8 +336,8 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // URI as a starting point.
   pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), stack_data.scscf_uri);
   SCSCFUtils::get_scscf_uri(req,
+                            get_pool(req),
                             scscf_uri,
-                            &_local_hostname,
                             this->_helper);
   _scscf_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)scscf_uri);
 
@@ -748,13 +747,10 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   // Replace the local hostname part of the Service route URI with the local
   // hostname part of the URI that routed to this sproutlet.
   pjsip_sip_uri* sr_uri = (pjsip_sip_uri*)sr_hdr->name_addr.uri;
-  pj_str_t hostname, unused_local_hostname, service_name;
-  get_local_hostname(sr_uri, &unused_local_hostname, &service_name, get_pool(rsp));
-  if (_local_hostname.slen)
-  {
-    SCSCFUtils::construct_hostname(get_pool(rsp), &service_name, &_local_hostname, &hostname);
-    sr_uri->host = hostname;
-  }
+  SCSCFUtils::get_scscf_uri(req,
+                            get_pool(rsp),
+                            sr_uri,
+                            this->_helper);
 
   pjsip_msg_insert_first_hdr(rsp, (pjsip_hdr*)sr_hdr);
 

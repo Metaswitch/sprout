@@ -260,20 +260,12 @@ public:
                                       const pjsip_msg* req,
                                       pj_pool_t* pool) = 0;
 
-  /// Get the local hostname and (possible) service name part of a SIP URI.
+  /// Get the local hostname part of a SIP URI.
   ///
-  /// @returns            - Whether this operation was successful.
+  /// @returns            - The local hostname part of the URI.
   ///
   /// @param uri          - The SIP URI.
-  /// @param hostname     - Return parameter that contains the local hostname
-  ///                       part of the URI.
-  /// @param service_name - Return parameter that contains the service name
-  ///                       part of the URI (optional).
-  /// @param pool         - The pool of memory used for the return parameter.
-  virtual void get_local_hostname(const pjsip_sip_uri* uri,
-                                  pj_str_t* hostname,
-                                  pj_str_t* service_name,
-                                  pj_pool_t* pool) = 0;
+  virtual std::string get_local_hostname(const pjsip_sip_uri* uri) = 0;
 };
 
 
@@ -601,22 +593,14 @@ protected:
     return _helper->next_hop_uri(service, route, req, pool);
   }
 
-  /// Get the local hostname and (possible) service name part of a SIP URI.
+  /// Get the local hostname part of a SIP URI.
   ///
-  /// @returns            - Whether this operation was successful.
+  /// @returns            - The local hostname part of the URI.
   ///
   /// @param uri          - The SIP URI.
-  /// @param hostname     - Return parameter that contains the local hostname
-  ///                       part of the URI.
-  /// @param service_name - Return parameter that contains the service name
-  ///                       part of the URI (optional).
-  /// @param pool         - The pool of memory used for the return parameter.
-  void get_local_hostname(const pjsip_sip_uri* uri,
-                          pj_str_t* hostname,
-                          pj_str_t* service_name,
-                          pj_pool_t* pool)
+  std::string get_local_hostname(const pjsip_sip_uri* uri)
   {
-    return _helper->get_local_hostname(uri, hostname, service_name, pool);
+    return _helper->get_local_hostname(uri);
   }
 
 protected:

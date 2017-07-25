@@ -12,8 +12,8 @@
 #include "scscf_utils.h"
 
 void SCSCFUtils::get_scscf_uri(pjsip_msg* req,
+                               pj_pool_t* pool,
                                pjsip_sip_uri* scscf_uri,
-                               pj_str_t* local_hostname,
                                SproutletTsxHelper* tsx)
 {
   // Get the local hostname part of the URI that routed to this Sproutlet. We
@@ -33,34 +33,17 @@ void SCSCFUtils::get_scscf_uri(pjsip_msg* req,
   }
 
   // Get the local hostname part of the URI that routed the request here.
-  pj_pool_t* pool = tsx->get_pool(req);
-  pj_str_t unused_service_name;
-  tsx->get_local_hostname(original_uri, local_hostname, &unused_service_name, pool);
+  std::string received_local_hostname = tsx->get_local_hostname(original_uri);
+
+  // Get the local hostname part of the S-CSCF URI;
+  std::string scscf_local_hostname = tsx->get_local_hostname(scscf_uri);
+
 
   // Replace the local hostname part of the configured S-CSCF URI with the
   // local hostname part of the URI that caused us to be routed here.
-  pj_str_t unused_local_hostname, service_name;
-  tsx->get_local_hostname(scscf_uri, &unused_local_hostname, &service_name, pool);
+  std::string new_scscf_hostname = PJUtils::pj_str_to_string(&scscf_uri->host);
+  size_t pos = new_scscf_hostname.rfind(scscf_local_hostname);
+  new_scscf_hostname.replace(pos, scscf_local_hostname.length(), received_local_hostname);
 
-  pj_str_t hostname;
-  construct_hostname(pool, &service_name, local_hostname, &hostname);
-  scscf_uri->host = hostname;
-}
-
-void SCSCFUtils::construct_hostname(pj_pool_t* pool,
-                                    pj_str_t* service_name,
-                                    pj_str_t* local_hostname,
-                                    pj_str_t* hostname)
-{
-  if (pj_strcmp2(service_name, ""))
-  {
-    pj_str_t period = pj_str((char*)".");
-    pj_strdup(pool, hostname, service_name);
-    PJUtils::pj_str_concatenate(hostname, &period, pool);
-    PJUtils::pj_str_concatenate(hostname, local_hostname, pool);
-  }
-  else
-  {
-    pj_strdup(pool, hostname, local_hostname); // LCOV_EXCL_LINE
-  }
+  pj_strdup2(pool, &scscf_uri->host, new_scscf_hostname.c_str());
 }

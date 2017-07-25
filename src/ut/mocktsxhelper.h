@@ -51,10 +51,7 @@ public:
                                             const pjsip_route_hdr* route,
                                             const pjsip_msg* req,
                                             pj_pool_t* pool));
-  MOCK_METHOD4(get_local_hostname, void(const pjsip_sip_uri* uri,
-                                        pj_str_t* hostname,
-                                        pj_str_t* service_name,
-                                        pj_pool_t* pool));
+  MOCK_METHOD1(get_local_hostname, std::string(const pjsip_sip_uri* uri));
 };
 
 #endif
