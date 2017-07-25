@@ -140,6 +140,7 @@ private:
   long read_hss_data(const std::string& public_id,
                      const std::string& private_id,
                      const std::string& req_type,
+                     const std::string& scscf_uri,
                      bool cache_allowed,
                      bool& registered,
                      bool& barred,
@@ -495,6 +496,10 @@ private:
 
   /// Get the base request that the S-CSCF should use when retrying a request.
   pjsip_msg* get_base_request();
+
+  /// The S-CSCF URI for this transaction. This is used in the SAR sent to the
+  /// HSS.
+  std::string _scscf_uri;
 };
 
 #endif

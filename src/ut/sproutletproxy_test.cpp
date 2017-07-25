@@ -694,10 +694,12 @@ public:
   std::string match_sproutlet_from_uri(pjsip_uri* uri)
   {
     std::string service_name;
-    std::string unused_alias;
+    std::string unused_alias, unused_local_hostname;
+    SproutletProxy::SPROUTLET_SELECTION_TYPES unused_selection_type = SproutletProxy::SPROUTLET_SELECTION_TYPES::UNKNOWN;
     Sproutlet* sproutlet = _proxy->match_sproutlet_from_uri(uri,
                                                             unused_alias,
-                                                            0);
+                                                            unused_local_hostname,
+                                                            unused_selection_type);
     if (sproutlet != NULL)
     {
       service_name = sproutlet->service_name();

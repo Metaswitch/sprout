@@ -15,6 +15,7 @@
 #include "json_parse_utils.h"
 #include <openssl/hmac.h>
 #include "base64.h"
+#include "scscf_utils.h"
 
 // Configuring PJSIP with a realm of "*" means that all realms are considered.
 const pj_str_t WILDCARD_REALM = pj_str((char*)"*");
@@ -121,6 +122,7 @@ SproutletTsx* AuthenticationSproutlet::get_tsx(SproutletHelper* helper,
 
   next_hop = helper->next_hop_uri(_next_hop_service,
                                   route,
+                                  req,
                                   pool);
   return NULL;
 }
@@ -279,7 +281,8 @@ AuthenticationSproutletTsx::AuthenticationSproutletTsx(AuthenticationSproutlet* 
                                                        const std::string& next_hop_service) :
   ForwardingSproutletTsx(authentication, next_hop_service),
   _authentication(authentication),
-  _authenticated_using_sip_digest(false)
+  _authenticated_using_sip_digest(false),
+  _scscf_uri()
 {
 }
 
@@ -801,6 +804,11 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     // the IMPI at the end of the loop.
     std::string nonce = auth_challenge->nonce;
 
+    // Set the site-specific server name for the S-CSCF that issued this
+    // challenge. This is so that if the authentication timer pops in a remote
+    // site, we can use the same server name on the SAR.
+    auth_challenge->scscf_uri = _scscf_uri;
+
     // Write the challenge back to the store.
     status = _authentication->write_challenge(impi, auth_challenge, impi_obj, trail());
 
@@ -876,6 +884,16 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   const int unauth_sc = is_register ? PJSIP_SC_UNAUTHORIZED : PJSIP_SC_PROXY_AUTHENTICATION_REQUIRED;
   int sc = unauth_sc;
   status = PJ_SUCCESS;
+
+  // Construct the S-CSCF URI for this transaction. Use the configured S-CSCF
+  // URI as a starting point.
+  pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), stack_data.scscf_uri);
+  pj_str_t unused_local_hostname;
+  SCSCFUtils::get_scscf_uri(req,
+                            scscf_uri,
+                            &unused_local_hostname,
+                            this->_helper);
+  _scscf_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)scscf_uri);
 
   pjsip_digest_credential* credentials = get_credentials(req);
 
@@ -1198,6 +1216,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       _authentication->_hss->update_registration_state(impu,
                                                   impi,
                                                   HSSConnection::AUTH_FAIL,
+                                                  _scscf_uri,
                                                   trail());
     }
 

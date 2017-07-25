@@ -70,6 +70,7 @@ static const char* const JSON_AV_QOP = "qop";
 static const char* const JSON_AV_HA1 = "ha1";
 static const char* const JSON_AV_RESPONSE = "response";
 static const char* const JSON_AV_TOMBSTONE = "tombstone";
+static const char* const JSON_SCSCF_URI = "scscf-uri";
 
 ImpiStore::AuthChallenge* ImpiStore::Impi::get_auth_challenge(const std::string& nonce)
 {
@@ -100,6 +101,7 @@ void ImpiStore::AuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuf
   {
     writer->String(JSON_CORRELATOR); writer->String(correlator.c_str());
   }
+  writer->String(JSON_SCSCF_URI); writer->String(scscf_uri.c_str());
   // We don't serialize the CAS - this is passed to the store on the set_data call.
 }
 
@@ -135,6 +137,7 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* 
       JSON_SAFE_GET_UINT_MEMBER(*json, JSON_NONCE_COUNT, auth_challenge->nonce_count);
       JSON_SAFE_GET_INT_MEMBER(*json, JSON_EXPIRES, auth_challenge->expires);
       JSON_SAFE_GET_STRING_MEMBER(*json, JSON_CORRELATOR, auth_challenge->correlator);
+      JSON_SAFE_GET_STRING_MEMBER(*json, JSON_SCSCF_URI, auth_challenge->scscf_uri);
 
       if (auth_challenge->nonce_count == 0)
       {

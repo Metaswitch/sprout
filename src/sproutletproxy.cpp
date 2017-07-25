@@ -29,13 +29,6 @@ const pj_str_t SproutletProxy::STR_SERVICE = {"service", 7};
 
 const ForkState NULL_FORK_STATE = {PJSIP_TSX_STATE_NULL, NONE};
 
-enum SPROUTLET_SELECTION_TYPES
-{
-  SERVICE_NAME=0,
-  DOMAIN_PART,
-  USER_PART,
-};
-
 /// Constructor.
 SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
                                int priority,
@@ -203,9 +196,22 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
 
     TRC_DEBUG("Found next routable URI: %s", uri_str.c_str());
 
+    std::string local_hostname_unused;
+    SPROUTLET_SELECTION_TYPES selection_type = UNKNOWN;
     sproutlet = match_sproutlet_from_uri((pjsip_uri*)uri,
                                          alias,
-                                         trail);
+                                         local_hostname_unused,
+                                         selection_type);
+
+    if (selection_type != UNKNOWN)
+    {
+      SAS::Event event(trail, SASEvent::SPROUTLET_SELECTION_URI, 0);
+      event.add_static_param(selection_type);
+      event.add_var_param(sproutlet->service_name());
+      event.add_var_param(alias);
+      event.add_var_param(uri_str);
+      SAS::report_event(event);
+    }
 
     if ((port == 0) &&
         (PJSIP_URI_SCHEME_IS_SIP(uri)) &&
@@ -264,7 +270,8 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
 
 Sproutlet* SproutletProxy::match_sproutlet_from_uri(const pjsip_uri* uri,
                                                     std::string& alias,
-                                                    SAS::TrailId trail)
+                                                    std::string& local_hostname,
+                                                    SPROUTLET_SELECTION_TYPES& selection_type)
 {
   Sproutlet* sproutlet = NULL;
 
@@ -301,12 +308,8 @@ Sproutlet* SproutletProxy::match_sproutlet_from_uri(const pjsip_uri* uri,
       {
         sproutlet = it->second;
         alias = service_name;
-        std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri);
-        report_sproutlet_selection_event(SERVICE_NAME,
-                                         sproutlet->service_name(),
-                                         alias,
-                                         uri_str,
-                                         trail);
+        local_hostname = PJUtils::pj_str_to_string(&sip_uri->host);
+        selection_type = SERVICE_NAME;
       }
     }
   }
@@ -345,13 +348,8 @@ Sproutlet* SproutletProxy::match_sproutlet_from_uri(const pjsip_uri* uri,
         {
           sproutlet = it->second;
           alias = service_name;
-          std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri);
-
-          report_sproutlet_selection_event(DOMAIN_PART,
-                                           sproutlet->service_name(),
-                                           alias,
-                                           uri_str,
-                                           trail);
+          local_hostname = PJUtils::pj_str_to_string(&hostname);
+          selection_type = DOMAIN_PART;
         }
       }
     }
@@ -373,13 +371,8 @@ Sproutlet* SproutletProxy::match_sproutlet_from_uri(const pjsip_uri* uri,
       {
         sproutlet = it->second;
         alias = service_name;
-        std::string uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri);
-
-        report_sproutlet_selection_event(USER_PART,
-                                         sproutlet->service_name(),
-                                         alias,
-                                         uri_str,
-                                         trail);
+        local_hostname = PJUtils::pj_str_to_string(&sip_uri->host);
+        selection_type = USER_PART;
       }
     }
   }
@@ -390,9 +383,19 @@ Sproutlet* SproutletProxy::match_sproutlet_from_uri(const pjsip_uri* uri,
 
 pjsip_sip_uri* SproutletProxy::next_hop_uri(const std::string& service,
                                             const pjsip_route_hdr* route,
-                                            pj_pool_t* pool) const
+                                            const pjsip_msg* req,
+                                            pj_pool_t* pool)
 {
-  pjsip_sip_uri* base_uri = (pjsip_sip_uri*)(route ? route->name_addr.uri : nullptr);
+  pjsip_sip_uri* base_uri = NULL;
+  if (route != NULL)
+  {
+    base_uri = (pjsip_sip_uri*)route->name_addr.uri;
+  }
+  else
+  {
+    base_uri = (pjsip_sip_uri*)req->line.req.uri; // LCOV_EXCL_LINE
+  }
+
   pjsip_sip_uri* next_hop = create_internal_sproutlet_uri(pool,
                                                           service,
                                                           base_uri);
@@ -430,13 +433,20 @@ pjsip_sip_uri* SproutletProxy::create_sproutlet_uri(pj_pool_t* pool,
 
 pjsip_sip_uri* SproutletProxy::create_internal_sproutlet_uri(pj_pool_t* pool,
                                                              const std::string& name,
-                                                             pjsip_sip_uri* existing_uri) const
+                                                             pjsip_sip_uri* existing_uri)
 {
   TRC_DEBUG("Creating URI for service %s", name.c_str());
 
   pjsip_sip_uri* base_uri = ((existing_uri != nullptr) ? existing_uri : _root_uri);
   pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, base_uri);
-  pj_strdup(pool, &uri->host, &_root_uri->host);
+
+  // Replace the hostname part of the base URI with the local hostname part of
+  // the URI that routed to us. If this doesn't work, then fall back to using
+  // the root URI.
+  pj_str_t local_hostname, unused_service_name;
+  get_local_hostname(uri, &local_hostname, &unused_service_name, pool);
+  pj_strdup(pool, &uri->host, &local_hostname);
+
   uri->port = 0;
   uri->lr_param = 1;
 
@@ -455,20 +465,6 @@ pjsip_sip_uri* SproutletProxy::create_internal_sproutlet_uri(pj_pool_t* pool,
               PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)uri).c_str());
 
   return uri;
-}
-
-void SproutletProxy::report_sproutlet_selection_event(int selection_type,
-                                                      std::string service_name,
-                                                      std::string value,
-                                                      std::string uri_str,
-                                                      SAS::TrailId trail)
-{
-  SAS::Event event(trail, SASEvent::SPROUTLET_SELECTION_URI, 0);
-  event.add_static_param(selection_type);
-  event.add_var_param(service_name);
-  event.add_var_param(value);
-  event.add_var_param(uri_str);
-  SAS::report_event(event);
 }
 
 bool SproutletProxy::is_uri_local(const pjsip_uri* uri)
@@ -496,6 +492,32 @@ bool SproutletProxy::is_uri_local(const pjsip_uri* uri)
   //LCOV_EXCL_STOP
 }
 
+void SproutletProxy::get_local_hostname(const pjsip_sip_uri* uri,
+                                        pj_str_t* hostname,
+                                        pj_str_t* service_name,
+                                        pj_pool_t* pool)
+{
+  std::string alias, local_hostname;
+  SPROUTLET_SELECTION_TYPES unused_selection_type = UNKNOWN;
+  (void*)match_sproutlet_from_uri((pjsip_uri*)uri,
+                                  alias,
+                                  local_hostname,
+                                  unused_selection_type);
+
+  if (!local_hostname.empty())
+  {
+    pj_strdup2(pool, hostname, local_hostname.c_str());
+  }
+  else
+  {
+    // This code is only executed if:
+    //  - We receive a request that doesn't match a Sproutlet, or
+    //  - We receive a request that matches a Sproutlet based on the port.
+    pj_strdup(pool, hostname, &uri->host);
+  }
+
+  pj_strdup2(pool, service_name, alias.c_str());
+}
 
 bool SproutletProxy::is_host_local(const pj_str_t* host)
 {
@@ -524,9 +546,12 @@ bool SproutletProxy::is_uri_reflexive(const pjsip_uri* uri,
                                       SAS::TrailId trail)
 {
   std::string alias_unused;
+  std::string local_hostname_unused;
+  SPROUTLET_SELECTION_TYPES selection_type_unused = UNKNOWN;
   Sproutlet* matched_sproutlet = match_sproutlet_from_uri(uri,
                                                           alias_unused,
-                                                          trail);
+                                                          local_hostname_unused,
+                                                          selection_type_unused);
 
   return (sproutlet == matched_sproutlet);
 }
@@ -1166,7 +1191,6 @@ SproutletTsx* SproutletProxy::UASTsx::get_sproutlet_tsx(pjsip_tx_data* req,
     }
 
     // Remove the top route header if there is one and it refers to us.
-
     pjsip_route_hdr* route = (pjsip_route_hdr*)pjsip_msg_find_hdr(req->msg,
                                                                   PJSIP_H_ROUTE,
                                                                   NULL);
@@ -1713,9 +1737,18 @@ pjsip_sip_uri* SproutletWrapper::get_reflexive_uri(pj_pool_t* pool) const
 
 pjsip_sip_uri* SproutletWrapper::next_hop_uri(const std::string& service,
                                               const pjsip_route_hdr* route,
-                                              pj_pool_t* pool) const
+                                              const pjsip_msg* req,
+                                              pj_pool_t* pool)
 {
-  return _proxy->next_hop_uri(service, route, pool);
+  return _proxy->next_hop_uri(service, route, req, pool);
+}
+
+void SproutletWrapper::get_local_hostname(const pjsip_sip_uri* uri,
+                                          pj_str_t* hostname,
+                                          pj_str_t* service_name,
+                                          pj_pool_t* pool)
+{
+  return _proxy->get_local_hostname(uri, hostname, service_name, pool);
 }
 
 void SproutletWrapper::rx_request(pjsip_tx_data* req)

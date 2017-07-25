@@ -52,7 +52,16 @@ public:
   /// request.
   pjsip_sip_uri* next_hop_uri(const std::string& service,
                               const pjsip_route_hdr* route,
-                              pj_pool_t* pool) const;
+                              const pjsip_msg* req,
+                              pj_pool_t* pool);
+
+  enum SPROUTLET_SELECTION_TYPES
+  {
+    SERVICE_NAME=0,
+    DOMAIN_PART,
+    USER_PART,
+    UNKNOWN,
+  };
 
 protected:
   /// Pre-declaration
@@ -74,7 +83,8 @@ protected:
   /// Return the sproutlet that matches the URI supplied.
   Sproutlet* match_sproutlet_from_uri(const pjsip_uri* uri,
                                       std::string& alias,
-                                      SAS::TrailId trail);
+                                      std::string& local_hostname,
+                                      SPROUTLET_SELECTION_TYPES& selection_type);
 
   /// Create a URI that routes to a given Sproutlet.
   pjsip_sip_uri* create_sproutlet_uri(pj_pool_t* pool,
@@ -88,19 +98,17 @@ protected:
   /// @param existing_uri - An existing URI to base the new URI on.
   pjsip_sip_uri* create_internal_sproutlet_uri(pj_pool_t* pool,
                                                const std::string& name,
-                                               pjsip_sip_uri* existing_uri) const;
+                                               pjsip_sip_uri* existing_uri);
 
   Sproutlet* service_from_host(pjsip_sip_uri* uri);
   Sproutlet* service_from_user(pjsip_sip_uri* uri);
   Sproutlet* service_from_params(pjsip_sip_uri* uri);
 
-  void report_sproutlet_selection_event(int selection_type,
-                                        std::string service_name,
-                                        std::string value,
-                                        std::string uri_str,
-                                        SAS::TrailId trail);
-
   bool is_uri_local(const pjsip_uri* uri);
+  void get_local_hostname(const pjsip_sip_uri* uri,
+                          pj_str_t* hostname,
+                          pj_str_t* service_name,
+                          pj_pool_t* pool);
   bool is_host_local(const pj_str_t* host);
   bool is_uri_reflexive(const pjsip_uri* uri,
                         Sproutlet* sproutlet,
@@ -293,7 +301,12 @@ public:
   pjsip_sip_uri* get_reflexive_uri(pj_pool_t*) const;
   pjsip_sip_uri* next_hop_uri(const std::string& service,
                               const pjsip_route_hdr* route,
-                              pj_pool_t* pool) const;
+                              const pjsip_msg* req,
+                              pj_pool_t* pool);
+  void get_local_hostname(const pjsip_sip_uri* uri,
+                          pj_str_t* hostname,
+                          pj_str_t* service_name,
+                          pj_pool_t* pool);
 
 private:
   void rx_request(pjsip_tx_data* req);

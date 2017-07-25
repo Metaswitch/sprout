@@ -225,6 +225,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                                   0,
                                                   "",
                                                   SUBSCRIPTION_SERVICE_NAME,
+                                                  {},
                                                   local_sdm,
                                                   remote_sdms,
                                                   hss_connection,

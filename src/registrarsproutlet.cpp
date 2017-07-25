@@ -42,12 +42,14 @@ extern "C" {
 #include "notify_utils.h"
 #include "uri_classifier.h"
 #include "associated_uris.h"
+#include "scscf_utils.h"
 
 // RegistrarSproutlet constructor.
 RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
                                        int port,
                                        const std::string& uri,
                                        const std::string& next_hop_service,
+                                       const std::list<std::string>& aliases,
                                        SubscriberDataManager* reg_sdm,
                                        std::vector<SubscriberDataManager*> reg_remote_sdms,
                                        HSSConnection* hss_connection,
@@ -69,7 +71,8 @@ RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
   _third_party_reg_stats_tbls(third_party_reg_stats_tbls),
   _fifc_service(fifc_service),
   _ifc_configuration(ifc_configuration),
-  _next_hop_service(next_hop_service)
+  _next_hop_service(next_hop_service),
+  _aliases(aliases)
 {
 }
 
@@ -146,8 +149,14 @@ SproutletTsx* RegistrarSproutlet::get_tsx(SproutletHelper* helper,
 
   next_hop = helper->next_hop_uri(_next_hop_service,
                                   route,
+                                  req,
                                   pool);
   return NULL;
+}
+
+const std::list<std::string> RegistrarSproutlet::aliases() const
+{
+  return { _aliases };
 }
 
 RegistrarSproutletTsx::RegistrarSproutletTsx(RegistrarSproutlet* registrar,
@@ -156,6 +165,8 @@ RegistrarSproutletTsx::RegistrarSproutletTsx(RegistrarSproutlet* registrar,
                                              IFCConfiguration ifc_configuration) :
   ForwardingSproutletTsx(registrar, next_hop_service),
   _registrar(registrar),
+  _scscf_uri(),
+  _local_hostname(),
   _fifc_service(fifc_service),
   _ifc_configuration(ifc_configuration)
 {
@@ -322,6 +333,15 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     SAS::report_event(event);
   }
 
+  // Construct the S-CSCF URI for this transaction. Use the configured S-CSCF
+  // URI as a starting point.
+  pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), stack_data.scscf_uri);
+  SCSCFUtils::get_scscf_uri(req,
+                            scscf_uri,
+                            &_local_hostname,
+                            this->_helper);
+  _scscf_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)scscf_uri);
+
   std::string regstate;
   std::deque<std::string> ccfs;
   std::deque<std::string> ecfs;
@@ -329,6 +349,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
                                                                    private_id,
                                                                    HSSConnection::REG,
                                                                    regstate,
+                                                                   _scscf_uri,
                                                                    ifc_map,
                                                                    associated_uris,
                                                                    ccfs,
@@ -451,6 +472,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     _registrar->_hss->update_registration_state(aor,
                                                 "",
                                                 HSSConnection::DEREG_USER,
+                                                _scscf_uri,
                                                 trail());
   }
 
@@ -722,6 +744,18 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
     pjsip_hdr_clone(get_pool(rsp), _registrar->_service_route);
   sr_hdr->name = STR_SERVICE_ROUTE;
   sr_hdr->sname = pj_str((char*)"");
+
+  // Replace the local hostname part of the Service route URI with the local
+  // hostname part of the URI that routed to this sproutlet.
+  pjsip_sip_uri* sr_uri = (pjsip_sip_uri*)sr_hdr->name_addr.uri;
+  pj_str_t hostname, unused_local_hostname, service_name;
+  get_local_hostname(sr_uri, &unused_local_hostname, &service_name, get_pool(rsp));
+  if (_local_hostname.slen)
+  {
+    SCSCFUtils::construct_hostname(get_pool(rsp), &service_name, &_local_hostname, &hostname);
+    sr_uri->host = hostname;
+  }
+
   pjsip_msg_insert_first_hdr(rsp, (pjsip_hdr*)sr_hdr);
 
   // Log any URIs that have been left out of the P-Associated-URI because they
@@ -1074,6 +1108,10 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
       }
       contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_CONTACT, contact->next);
     }
+
+    // Set the S-CSCF URI on the AoR.
+    SubscriberDataManager::AoR* aor_data = aor_pair->get_current();
+    aor_data->_scscf_uri = _scscf_uri;
 
     if (changed_bindings > 0)
     {

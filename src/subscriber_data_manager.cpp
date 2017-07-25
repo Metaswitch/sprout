@@ -63,6 +63,7 @@ static const char* const JSON_TO_URI = "to_uri";
 static const char* const JSON_TO_TAG = "to_tag";
 static const char* const JSON_ROUTES = "routes";
 static const char* const JSON_NOTIFY_CSEQ = "notify_cseq";
+static const char* const JSON_SCSCF_URI = "scscf-uri";
 
 /// Helper to delete vectors of bindings safely
 void delete_bindings(ClassifiedBindings& cbs)
@@ -700,6 +701,7 @@ void SubscriberDataManager::AoR::common_constructor(const AoR& other)
   _timer_id = other._timer_id;
   _cas = other._cas;
   _uri = other._uri;
+  _scscf_uri = other._scscf_uri;
 }
 
 /// Clear all the bindings and subscriptions from this object.
@@ -1398,6 +1400,10 @@ SubscriberDataManager::AoR* SubscriberDataManager::JsonSerializerDeserializer::
          ((doc.HasMember(JSON_TIMER_ID)) && ((doc[JSON_TIMER_ID]).IsString()) ?
                                              (doc[JSON_TIMER_ID].GetString()) :
                                               "");
+    aor->_scscf_uri =
+         ((doc.HasMember(JSON_SCSCF_URI)) && ((doc[JSON_SCSCF_URI]).IsString()) ?
+                                                (doc[JSON_SCSCF_URI].GetString()) :
+                                                 "");
   }
   catch(JsonFormatError err)
   {
@@ -1452,6 +1458,7 @@ std::string SubscriberDataManager::JsonSerializerDeserializer::serialize_aor(AoR
     // Notify Cseq flag
     writer.String(JSON_NOTIFY_CSEQ); writer.Int(aor_data->_notify_cseq);
     writer.String(JSON_TIMER_ID); writer.String(aor_data->_timer_id.c_str());
+    writer.String(JSON_SCSCF_URI); writer.String(aor_data->_scscf_uri.c_str());
   }
   writer.EndObject();
 
