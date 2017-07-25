@@ -240,8 +240,19 @@ pj_xml_node* notify_create_reg_state_xml(
                  &gruu,
                  Utils::xml_escape((*bni)->_b->pub_gruu_str(pool)).c_str());
 
-      // Add all 'unknown parameters' from the contact header into the element
-      // as <unknown-param> elements.
+      // Add all 'unknown parameters' from the contact header into the contact
+      // element as <unknown-param> elements. For example, a contact header that
+      // looks like this:
+      //
+      //     Contact: <sip:alice@example.com;p1=v1>;expires=3600;p2;p3=v3
+      //
+      // Would result in the following unknown param elements being added.
+      //
+      //     <unknown-param name="p2" />
+      //     <unknown-param name="p3">v3<unknown-param>
+      //
+      // Note that p1 is not included (as it's a URI parameter) and expires is
+      // not included (as it is defined in RFC 3261 so is a 'known' parameter).
       for (const std::pair<std::string, std::string>& param: (*bni)->_b->_params)
       {
         // RFC 3680 defines unknown parameters as any parameter not defined in
