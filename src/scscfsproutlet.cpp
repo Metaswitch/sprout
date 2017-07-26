@@ -95,7 +95,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
                                                   "1.2.826.0.1.1578918.9.3.38");
   _barred_calls_tbl = SNMP::CounterTable::create("scscf_barred_calls",
                                                  "1.2.826.0.1.1578918.9.3.42");
-  _as_latency_table = SNMP::TimeAndStringBasedEventTable::create("per_as_sip_latencies", "1.2.826.0.1.1578918.9.3.43");
+  _as_latency_table = SNMP::TimeAndStringBasedEventTable::create("per_as_sip_latencies",
+                                                                 "1.2.826.0.1.1578918.9.3.43");
 }
 
 
