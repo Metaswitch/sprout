@@ -89,6 +89,7 @@ class TestWithMockSdms : public SipTest
     {
       build_subscription(aor, now);
     }
+    aor->_scscf_uri = "sip:scscf.sprout.homedomain:5058;transport=TCP";
     SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
     SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
 
@@ -344,6 +345,7 @@ TEST_F(AoRTimeoutTasksTest, NoBindingsTest)
   std::string aor_id = "sip:6505550231@homedomain";
   // Set up AoRs with no bindings
   SubscriberDataManager::AoR* aor1 = new SubscriberDataManager::AoR(aor_id);
+  aor1->_scscf_uri = "sip:scscf.sprout.homedomain:5058;transport=TCP";
   SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor1);
   SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor1, aor2);
 
@@ -392,7 +394,7 @@ TEST_F(AoRTimeoutTasksTest, NoBindingsTest)
       EXPECT_CALL(*remote_store2, set_aor_data(aor_id, _, remote2_aor_pair2, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
                                                                                                    SetArgReferee<4>(true),
                                                                                                    Return(Store::OK)));
-      EXPECT_CALL(*mock_hss, update_registration_state(aor_id, "", HSSConnection::DEREG_TIMEOUT, _, 0));
+      EXPECT_CALL(*mock_hss, update_registration_state(aor_id, "", HSSConnection::DEREG_TIMEOUT, "sip:scscf.sprout.homedomain:5058;transport=TCP", 0));
   }
 
   handler->run();
@@ -1577,7 +1579,7 @@ TEST_F(DeleteImpuTaskTest, Mainline)
       EXPECT_CALL(*store, set_aor_data(impu, _, EmptyAoR(), _, _))
         .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings are expired.
                         Return(Store::OK)));
-      EXPECT_CALL(*mock_hss, update_registration_state(impu, _, "dereg-admin", _, _, _, _))
+      EXPECT_CALL(*mock_hss, update_registration_state(impu, _, "dereg-admin", "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _))
         .WillOnce(Return(200));
       EXPECT_CALL(*stack, send_reply(_, 200, _));
   }
@@ -1621,7 +1623,7 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith404)
       EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _))
         .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
                         Return(Store::OK)));
-      EXPECT_CALL(*mock_hss, update_registration_state(impu, _,_, _, _, _, _))
+      EXPECT_CALL(*mock_hss, update_registration_state(impu, _, _, "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _))
         .WillOnce(Return(404));
       EXPECT_CALL(*stack, send_reply(_, 404, _));
   }
@@ -1644,7 +1646,7 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith5xx)
       EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _))
         .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
                         Return(Store::OK)));
-      EXPECT_CALL(*mock_hss, update_registration_state(impu, _,_, _, _, _, _))
+      EXPECT_CALL(*mock_hss, update_registration_state(impu, _, _, "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _))
         .WillOnce(Return(500));
       EXPECT_CALL(*stack, send_reply(_, 502, _));
   }
@@ -1667,7 +1669,7 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith4xx)
       EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _))
         .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
                         Return(Store::OK)));
-      EXPECT_CALL(*mock_hss, update_registration_state(impu, _,_, _, _, _, _))
+      EXPECT_CALL(*mock_hss, update_registration_state(impu, _, _, "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _))
         .WillOnce(Return(400));
       EXPECT_CALL(*stack, send_reply(_, 400, _));
   }
@@ -1691,7 +1693,7 @@ TEST_F(DeleteImpuTaskTest, WritingToRemoteStores)
       EXPECT_CALL(*store, set_aor_data(impu, _, EmptyAoR(), _, _))
         .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
                         Return(Store::OK)));
-      EXPECT_CALL(*mock_hss, update_registration_state(impu, _, _, _, _, _, _))
+      EXPECT_CALL(*mock_hss, update_registration_state(impu, _, _, "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _))
         .WillOnce(Return(200));
 
       EXPECT_CALL(*remote_store1, get_aor_data(impu, _)).WillOnce(Return(remote_aor));

@@ -256,7 +256,8 @@ protected:
   bool _authenticated_using_sip_digest;
 
   // The S-CSCF URI for this transaction. This is used on the SAR sent to the
-  // HSS.
+  // HSS. This field should not be changed once it has been set by the
+  // on_rx_intial_request() call.
   std::string _scscf_uri;
 };
 

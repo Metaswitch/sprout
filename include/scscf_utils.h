@@ -17,10 +17,18 @@
 
 namespace SCSCFUtils {
 
-void get_scscf_uri(pjsip_msg* req,
-                   pj_pool_t* pool,
-                   pjsip_sip_uri* scscf_uri,
-                   SproutletTsxHelper* tsx);
+/// Creates an S-CSCF URI for the request provided.
+///
+/// @param  pool       - The pool to allocate the S-CSCF URI in.
+/// @param  received_local_hostname
+///                    - The local hostname part of the received request.
+/// @param scscf_local_hostname
+///                    - The local hostname part of the configured S-CSCF URI.
+/// @param  scscf_uri  - Return parameter containing the S-CSCF URI.
+void get_scscf_uri(pj_pool_t* pool,
+                   std::string received_local_hostname,
+                   std::string scscf_local_hostname,
+                   pjsip_sip_uri* scscf_uri);
 }
 
 #endif

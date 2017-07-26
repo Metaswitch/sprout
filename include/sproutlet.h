@@ -244,28 +244,31 @@ public:
   ///
   virtual SAS::TrailId trail() const = 0;
 
+  /// Get the URI that caused us to be routed to this Sproutlet.
+  ///
+  /// @returns            - The URI that routed to this Sproutlet.
+  ///
+  /// @param req          - The request we are handling.
+  virtual pjsip_sip_uri* get_routing_uri(const pjsip_msg* req) const = 0;
+
   /// Get a URI that routes to the given named service.
   ///
   /// @returns            - The new URI.
   ///
   /// @param service      - Name of the service to route to.
-  /// @param route        - An existing Route to use as a base for the new one.
-  ///                       Parameters from this URI will be preserved if
-  ///                       possible.
-  /// @param req          - The request the URI will be added to.
+  /// @param base_uri     - The URI to use as a base when building the next hop
+  ///                       URI.
   /// @param pool         - Pool to allocate the URI in.
-  /// Constructs the next URI for the Sproutlet
   virtual pjsip_sip_uri* next_hop_uri(const std::string& service,
-                                      const pjsip_route_hdr* route,
-                                      const pjsip_msg* req,
-                                      pj_pool_t* pool) = 0;
+                                      const pjsip_sip_uri* base_uri,
+                                      pj_pool_t* pool) const = 0;
 
   /// Get the local hostname part of a SIP URI.
   ///
   /// @returns            - The local hostname part of the URI.
   ///
   /// @param uri          - The SIP URI.
-  virtual std::string get_local_hostname(const pjsip_sip_uri* uri) = 0;
+  virtual std::string get_local_hostname(const pjsip_sip_uri* uri) const = 0;
 };
 
 
@@ -575,22 +578,29 @@ protected:
   SAS::TrailId trail() const
     {return _helper->trail();}
 
+  /// Get the URI that caused us to be routed to this Sproutlet.
+  ///
+  /// @returns            - The URI that routed to this Sproutlet.
+  ///
+  /// @param req          - The request we are handling.
+  virtual pjsip_sip_uri* get_routing_uri(const pjsip_msg* req) const
+  {
+    return _helper->get_routing_uri(req);
+  }
+
   /// Get a URI that routes to the given named service.
   ///
   /// @returns            - The new URI.
   ///
   /// @param service      - Name of the service to route to.
-  /// @param route        - An existing Route to use as a base for the new one.
-  ///                       Parameters from this URI will be preserved if
-  ///                       possible.
-  /// @param req          - The request the URI will be added to.
+  /// @param base_uri     - The URI to use as a base when building the next hop
+  ///                       URI.
   /// @param pool         - Pool to allocate the URI in.
   pjsip_sip_uri* next_hop_uri(const std::string& service,
-                              const pjsip_route_hdr* route,
-                              const pjsip_msg* req,
-                              pj_pool_t* pool)
+                              const pjsip_sip_uri* base_uri,
+                              pj_pool_t* pool) const
   {
-    return _helper->next_hop_uri(service, route, req, pool);
+    return _helper->next_hop_uri(service, base_uri, pool);
   }
 
   /// Get the local hostname part of a SIP URI.
@@ -598,7 +608,7 @@ protected:
   /// @returns            - The local hostname part of the URI.
   ///
   /// @param uri          - The SIP URI.
-  std::string get_local_hostname(const pjsip_sip_uri* uri)
+  std::string get_local_hostname(const pjsip_sip_uri* uri) const
   {
     return _helper->get_local_hostname(uri);
   }
@@ -625,12 +635,14 @@ public:
   /// Virtual descrustor.
   virtual ~SproutletHelper() {}
 
+  /// Gets the URI that caused this request to be routed to this Sproutlet.
+  virtual pjsip_sip_uri* get_routing_uri(const pjsip_msg* req) const = 0;
+
   /// Constructs the next URI for the Sproutlet that doesn't want to handle a
   /// request.
   virtual pjsip_sip_uri* next_hop_uri(const std::string& service,
-                                      const pjsip_route_hdr* route,
-                                      const pjsip_msg* req,
-                                      pj_pool_t* pool) = 0;
+                                      const pjsip_sip_uri* base_uri,
+                                      pj_pool_t* pool) const = 0;
 
   /// Check if a given URI would be routed to the current Sproutlet if it was
   /// recieved as the top Route header on a request.  This can be used to

@@ -47,11 +47,11 @@ public:
   MOCK_METHOD3(schedule_timer, bool(void*, TimerID&, int));
   MOCK_METHOD1(cancel_timer, void(TimerID));
   MOCK_METHOD1(timer_running, bool(TimerID));
-  MOCK_METHOD4(next_hop_uri, pjsip_sip_uri*(const std::string& service,
-                                            const pjsip_route_hdr* route,
-                                            const pjsip_msg* req,
-                                            pj_pool_t* pool));
-  MOCK_METHOD1(get_local_hostname, std::string(const pjsip_sip_uri* uri));
+  MOCK_CONST_METHOD1(get_routing_uri, pjsip_sip_uri*(const pjsip_msg* req));
+  MOCK_CONST_METHOD3(next_hop_uri, pjsip_sip_uri*(const std::string& service,
+                                                  const pjsip_sip_uri* base_uri,
+                                                  pj_pool_t* pool));
+  MOCK_CONST_METHOD1(get_local_hostname, std::string(const pjsip_sip_uri* uri));
 };
 
 #endif

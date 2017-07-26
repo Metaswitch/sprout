@@ -52,7 +52,6 @@ class HssConnectionTest : public BaseTest
          &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
          &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
          &_cm,
-         "server_name",
          NULL)
     {
     fakecurl_responses.clear();
@@ -153,6 +152,13 @@ class HssConnectionTest : public BaseTest
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
         "<RegistrationState>NOT_REGISTERED</RegistrationState>"
+        "<IMSSubscription>"
+        "</IMSSubscription>"
+      "</ClearwaterRegData>";
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid51/reg-data", "{\"reqtype\": \"call\", \"server_name\": \"sip:scscf.sprout.homedomain;transport=TCP\"}")] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<ClearwaterRegData>"
+        "<RegistrationState>REGISTERED</RegistrationState>"
         "<IMSSubscription>"
         "</IMSSubscription>"
       "</ClearwaterRegData>";
@@ -419,6 +425,16 @@ TEST_F(HssConnectionTest, SimpleChargingAddrs)
   _hss.update_registration_state("pubid42", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, ccfs, ecfs, 0);
   EXPECT_EQ(actual_ccfs, ccfs);
   EXPECT_EQ(actual_ecfs, ecfs);
+}
+
+TEST_F(HssConnectionTest, ServerName)
+{
+  // Checks that we can request a different server name.
+  AssociatedURIs uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+  _hss.update_registration_state("pubid51", "", HSSConnection::CALL, regstate, "sip:scscf.sprout.homedomain;transport=TCP", ifcs_map, uris, 0);
+  EXPECT_EQ("REGISTERED", regstate);
 }
 
 TEST_F(HssConnectionTest, Barring)
@@ -710,7 +726,6 @@ class HssWithSifcTest : public BaseTest
               &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
               &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
               NULL,
-              "server_name",
               &_sifc_service)
   {
     fakecurl_responses.clear();

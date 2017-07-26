@@ -30,7 +30,6 @@ public:
                                       &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
                                       &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
                                       NULL,
-                                      "sip:scscf.homedomain;transport=TCP",
                                       NULL) {};
   virtual ~MockHSSConnection() {};
 

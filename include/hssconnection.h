@@ -42,7 +42,6 @@ public:
                 SNMP::EventAccumulatorTable* homestead_uar_latency_tbl,
                 SNMP::EventAccumulatorTable* homestead_lir_latency_tbl,
                 CommunicationMonitor* comm_monitor,
-                std::string scscf_uri,
                 SIFCService* sifc_service);
   virtual ~HSSConnection();
 
@@ -150,7 +149,6 @@ private:
   SNMP::EventAccumulatorTable* _sar_latency_tbl;
   SNMP::EventAccumulatorTable* _uar_latency_tbl;
   SNMP::EventAccumulatorTable* _lir_latency_tbl;
-  std::string _scscf_uri;
   SIFCService* _sifc_service;
 };
 

@@ -695,7 +695,7 @@ public:
   {
     std::string service_name;
     std::string unused_alias, unused_local_hostname;
-    SproutletProxy::SPROUTLET_SELECTION_TYPES unused_selection_type = SproutletProxy::SPROUTLET_SELECTION_TYPES::UNKNOWN;
+    SproutletProxy::SPROUTLET_SELECTION_TYPES unused_selection_type = SproutletProxy::SPROUTLET_SELECTION_TYPES::NONE_SELECTED;
     Sproutlet* sproutlet = _proxy->match_sproutlet_from_uri(uri,
                                                             unused_alias,
                                                             unused_local_hostname,

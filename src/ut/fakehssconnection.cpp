@@ -33,7 +33,6 @@ FakeHSSConnection::FakeHSSConnection(MockHSSConnection* hss_connection_observer)
                 &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
                 &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
                 NULL,
-                "sip:scscf.sprout.homedomain:5058;transport=TCP",
                 NULL)
 {
   _hss_connection_observer = hss_connection_observer;
@@ -84,14 +83,6 @@ void FakeHSSConnection::set_impu_result(const std::string& impu,
   std::string result = ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                         "<ClearwaterRegData><RegistrationState>" + state + "</RegistrationState>"
                         + subxml + chargingaddrsxml + "</ClearwaterRegData>");
-
-  std::string body = "\"reqtype\": \"" + type + "\"" +
-                     ", \"server_name\": \"" +_scscf_uri +"\"";
-
-  if (wildcard != "")
-  {
-    body += ", \"wildcard_identity\": \"" + wildcard + "\"";
-  }
 
   _results[url] = result;
 }

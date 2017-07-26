@@ -210,7 +210,7 @@ namespace SP
       _first_hop(false),
       _via("10.83.18.38:36530"),
       _branch(""),
-      _route("Route: <sip:scscf.sprout.homedomain>"),
+      _route("Route: <sip:sprout.homedomain;service=scscf>"),
       _cseq(16567),
       _in_dialog(false)
     {
@@ -1409,18 +1409,11 @@ TEST_F(SCSCFTest, TestSimpleMainlineRemoteSite)
   Message msg;
   msg._route = "Route: <sip:scscf.sprout-site2.homedomain;transport=tcp;lr>";
   list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Record-Route", "Record-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;billing-role=charge-term>"));
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 
   // Make sure that the HTTP request sent to homestead contains the correct S-CSCF URI.
   EXPECT_TRUE(_hss_connection->url_was_requested("/impu/sip%3A6505551234%40homedomain/reg-data", "{\"reqtype\": \"call\", \"server_name\": \"sip:scscf.sprout-site2.homedomain:5058;transport=TCP\"}"));
-
-  // This is a terminating call so should not result in a session setup time
-  // getting tracked.
-  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
-  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
-
-  // It also shouldn't result in any forked INVITEs
-  EXPECT_EQ(0, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_invite_tbl)->_count);
 }
 
 // Send a request where the URI is for the same port as a Sproutlet,
