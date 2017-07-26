@@ -25,6 +25,7 @@ extern "C" {
 #include "ifchandler.h"
 #include "acr.h"
 #include "fifcservice.h"
+#include "utils.h"
 
 // Forward declarations.
 class UASTransaction;
@@ -166,6 +167,9 @@ private:
   IFCConfiguration _ifc_configuration;
   bool _using_standard_ifcs;
   rapidxml::xml_document<>* _root;
+
+  /// A vector of timers used to track the latency to each AS in the chain
+  std::vector<Utils::StopWatch> _timers;
 };
 
 
@@ -337,6 +341,24 @@ public:
   std::string uri()
   {
     return is_set() ? _as_chain->_as_info[_index].as_uri : "";
+  }
+
+  /// Starts the latency timer for the next AS hop
+  void start_next_timer()
+  {
+    _as_chain->_timers[_index].start();
+  }
+
+  /// Reads the timer for the previous AS hop
+  bool read_last_timer(unsigned long& latency)
+  {
+    return _as_chain->_timers[_index - 1].read(latency);
+  }
+
+  /// Returns the URI of the previous AS in the chain
+  std::string previous_uri()
+  {
+    return _as_chain->_as_info[_index - 1].as_uri;
   }
 
 private:

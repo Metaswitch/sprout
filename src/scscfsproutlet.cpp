@@ -95,6 +95,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
                                                   "1.2.826.0.1.1578918.9.3.38");
   _barred_calls_tbl = SNMP::CounterTable::create("scscf_barred_calls",
                                                  "1.2.826.0.1.1578918.9.3.42");
+  _as_latency_table = SNMP::TimeAndStringBasedEventTable::create("per_as_sip_latencies", "1.2.826.0.1.1578918.9.3.43");
 }
 
 
@@ -995,6 +996,13 @@ void SCSCFSproutletTsx::retrieve_odi_and_sesscase(pjsip_msg* req)
                  uri->user.slen, uri->user.ptr,
                  _as_chain_link.to_string().c_str());
         _session_case = &_as_chain_link.session_case();
+
+        // Record the AS latency
+        unsigned long latency = 0;
+        if (_as_chain_link.read_last_timer(latency))
+        {
+          _scscf->_as_latency_table->accumulate(_as_chain_link.previous_uri(), latency);
+        }
       }
       else
       {
@@ -1729,6 +1737,7 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
         TRC_WARNING("Failed to start liveness timer");
       }
     }
+    _as_chain_link.start_next_timer();
   }
   else
   {

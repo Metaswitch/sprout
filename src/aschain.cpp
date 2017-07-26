@@ -48,7 +48,8 @@ AsChain::AsChain(AsChainTable* as_chain_table,
   _fallback_ifcs({}),
   _ifc_configuration(ifc_configuration),
   _using_standard_ifcs(true),
-  _root(NULL)
+  _root(NULL),
+  _timers(ifcs.size())
 {
   TRC_DEBUG("Creating AsChain %p with %d iFCs and adding to map", this, ifcs.size());
   _as_chain_table->register_(this, _odi_tokens);
@@ -417,6 +418,7 @@ void AsChain::reset_chain(bool using_standard_ifcs)
   }
 
   _as_info = std::vector<AsInformation>(ifcs_size + 1);
+  _timers = std::vector<Utils::StopWatch>(ifcs_size);
   _as_chain_table->register_(this, _odi_tokens);
 }
 
@@ -445,6 +447,10 @@ AsChainLink AsChainTable::lookup(const std::string& token)
       // effectively responded.
       as_chain_link._as_chain->_responsive[as_chain_link._index - 1] = true;
       pthread_mutex_unlock(&_lock);
+
+      // Stop the timer for hop that has now completed (it will be read later)
+      as_chain_link._as_chain->_timers[as_chain_link._index - 1].stop();
+
       return as_chain_link;
     } else {
       // Failed to increment the count - AS chain must be in the process of

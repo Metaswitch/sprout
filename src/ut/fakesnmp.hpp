@@ -21,6 +21,7 @@
 #include "snmp_ip_count_table.h"
 #include "snmp_success_fail_count_table.h"
 #include "snmp_success_fail_count_by_request_type_table.h"
+#include "snmp_time_and_string_based_event_table.h"
 
 namespace SNMP
 {
@@ -122,6 +123,16 @@ public:
   void increment_failures(SIPRequestTypes type) {};
 };
 
+class FakeTimeAndStringBasedEventTable : public TimeAndStringBasedEventTable
+{
+public:
+  std::vector<std::pair<std::string, uint32_t>> _stats;
+  FakeTimeAndStringBasedEventTable() {};
+  void accumulate(std::string str_index, uint32_t sample) override
+  {
+    _stats.push_back(std::pair<std::string, uint32_t>(str_index, sample));
+  };
+};
 
 extern FakeIPCountTable FAKE_IP_COUNT_TABLE;
 extern FakeCounterTable FAKE_COUNTER_TABLE;
@@ -142,6 +153,7 @@ extern RegistrationStatsTables FAKE_THIRD_PARTY_REGISTRATION_STATS_TABLES;
 extern AuthenticationStatsTables FAKE_AUTHENTICATION_STATS_TABLES;
 extern FakeSuccessFailCountByRequestTypeTable FAKE_INCOMING_SIP_TRANSACTIONS_TABLE;
 extern FakeSuccessFailCountByRequestTypeTable FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE;
+extern FakeTimeAndStringBasedEventTable FAKE_TIME_AND_STRING_BASED_EVENT_TABLE;
 }
 
 #endif

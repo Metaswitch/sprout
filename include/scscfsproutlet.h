@@ -38,6 +38,7 @@ extern "C" {
 #include "snmp_counter_table.h"
 #include "session_expires_helper.h"
 #include "as_communication_tracker.h"
+#include "snmp_time_and_string_based_event_table.h"
 
 class SCSCFSproutletTsx;
 
@@ -245,6 +246,7 @@ private:
   SNMP::EventAccumulatorTable* _audio_session_setup_time_tbl = NULL;
   SNMP::CounterTable* _forked_invite_tbl = NULL;
   SNMP::CounterTable* _barred_calls_tbl = NULL;
+  SNMP::TimeAndStringBasedEventTable* _as_latency_table = NULL;
 
   AsCommunicationTracker* _sess_term_as_tracker;
   AsCommunicationTracker* _sess_cont_as_tracker;

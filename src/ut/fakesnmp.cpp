@@ -34,6 +34,7 @@ FakeSuccessFailCountTable FAKE_IMS_AKA_AUTH_TABLE;
 FakeSuccessFailCountTable FAKE_NON_REG_AUTH_TABLE;
 FakeSuccessFailCountByRequestTypeTable FAKE_INCOMING_SIP_TRANSACTIONS_TABLE;
 FakeSuccessFailCountByRequestTypeTable FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE;
+FakeTimeAndStringBasedEventTable FAKE_TIME_AND_STRING_BASED_EVENT_TABLE;
 
 RegistrationStatsTables FAKE_REGISTRATION_STATS_TABLES =
 {
@@ -80,6 +81,12 @@ SuccessFailCountTable* SuccessFailCountTable::create(std::string name, std::stri
 {
   return new FakeSuccessFailCountTable();
 };
+
+TimeAndStringBasedEventTable* TimeAndStringBasedEventTable::create(std::string name, std::string oid)
+{
+  FAKE_TIME_AND_STRING_BASED_EVENT_TABLE._stats = std::vector<std::pair<std::string, uint32_t>>();
+  return &FAKE_TIME_AND_STRING_BASED_EVENT_TABLE;
+}
 
 } // Namespace SNMP ends
 
