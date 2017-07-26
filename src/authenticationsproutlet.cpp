@@ -117,12 +117,9 @@ SproutletTsx* AuthenticationSproutlet::get_tsx(SproutletHelper* helper,
   }
 
   // We're not interested in the message so create a next hop URI.
-  pjsip_route_hdr* route = (pjsip_route_hdr*)
-                              pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
-
+  pjsip_sip_uri* base_uri = helper->get_routing_uri(req);
   next_hop = helper->next_hop_uri(_next_hop_service,
-                                  route,
-                                  req,
+                                  base_uri,
                                   pool);
   return NULL;
 }
@@ -888,10 +885,11 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   // Construct the S-CSCF URI for this transaction. Use the configured S-CSCF
   // URI as a starting point.
   pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), stack_data.scscf_uri);
-  SCSCFUtils::get_scscf_uri(req,
-                            get_pool(req),
-                            scscf_uri,
-                            this->_helper);
+  pjsip_sip_uri* routing_uri = get_routing_uri(req);
+  SCSCFUtils::get_scscf_uri(get_pool(req),
+                            get_local_hostname(routing_uri),
+                            get_local_hostname(scscf_uri),
+                            scscf_uri);
   _scscf_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)scscf_uri);
 
   pjsip_digest_credential* credentials = get_credentials(req);

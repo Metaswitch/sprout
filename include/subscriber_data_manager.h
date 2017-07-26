@@ -246,7 +246,8 @@ public:
     std::string _timer_id;
 
     /// S-CSCF URI name for this AoR. This is used on the SAR if the
-    /// registration expires.
+    /// registration expires. This field should not be changed once the
+    /// registration has been created.
     std::string _scscf_uri;
 
   private:

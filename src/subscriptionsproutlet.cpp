@@ -79,12 +79,9 @@ SproutletTsx* SubscriptionSproutlet::get_tsx(SproutletHelper* helper,
   }
 
   // We're not interested in the message so create a next hop URI.
-  pjsip_route_hdr* route = (pjsip_route_hdr*)
-                              pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
-
+  pjsip_sip_uri* base_uri = helper->get_routing_uri(req);
   next_hop = helper->next_hop_uri(_next_hop_service,
-                                  route,
-                                  req,
+                                  base_uri,
                                   pool);
   return NULL;
 }

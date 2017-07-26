@@ -646,6 +646,7 @@ SubscriberDataManager::AoR* SubscriberDataManager::Connector::deserialize_aor(
 SubscriberDataManager::AoR::AoR(std::string sip_uri) :
   _notify_cseq(1),
   _timer_id(""),
+  _scscf_uri(""),
   _bindings(),
   _subscriptions(),
   _cas(0),

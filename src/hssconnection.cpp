@@ -43,7 +43,6 @@ HSSConnection::HSSConnection(const std::string& server,
                              SNMP::EventAccumulatorTable* homestead_uar_latency_tbl,
                              SNMP::EventAccumulatorTable* homestead_lir_latency_tbl,
                              CommunicationMonitor* comm_monitor,
-                             std::string scscf_uri,
                              SIFCService* sifc_service) :
   _http(new HttpConnection(server,
                            false,
@@ -57,7 +56,6 @@ HSSConnection::HSSConnection(const std::string& server,
   _sar_latency_tbl(homestead_sar_latency_tbl),
   _uar_latency_tbl(homestead_uar_latency_tbl),
   _lir_latency_tbl(homestead_lir_latency_tbl),
-  _scscf_uri(scscf_uri),
   _sifc_service(sifc_service)
 {
 }
