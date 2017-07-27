@@ -603,6 +603,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
                                                                 impu_for_hss,
                                                                 auth_type,
                                                                 resync,
+                                                                _scscf_uri,
                                                                 doc,
                                                                 trail());
     av_source_unavailable = ((http_code == HTTP_SERVER_UNAVAILABLE) ||
