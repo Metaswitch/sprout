@@ -48,7 +48,8 @@ public:
   HTTPCode get_auth_vector(const std::string& private_user_id,
                            const std::string& public_user_id,
                            const std::string& auth_type,
-                           const std::string& autn,
+                           const std::string& resync_auth,
+                           const std::string& server_name,
                            rapidjson::Document*& object,
                            SAS::TrailId trail);
   HTTPCode get_user_auth_status(const std::string& private_user_identity,
