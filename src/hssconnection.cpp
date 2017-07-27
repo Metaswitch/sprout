@@ -108,7 +108,7 @@ HTTPCode HSSConnection::get_auth_vector(const std::string& private_user_identity
   if (!server_name.empty())
   {
     path += (public_user_identity.empty() && resync_auth.empty()) ? "?" : "&";
-    path += "server_name=" + Utils::url_escape(server_name);
+    path += "server-name=" + Utils::url_escape(server_name);
   }
 
   HTTPCode rc = get_json_object(path, av, trail);
