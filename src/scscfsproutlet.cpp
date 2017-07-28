@@ -54,7 +54,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
                                int session_terminated_timeout_ms,
                                AsCommunicationTracker* sess_term_as_tracker,
                                AsCommunicationTracker* sess_cont_as_tracker) :
-  Sproutlet(name, port, uri, "", incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl),
+  Sproutlet(name, port, uri, "", {}, incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl),
   _scscf_name(scscf_name),
   _scscf_cluster_uri(NULL),
   _scscf_node_uri(NULL),
