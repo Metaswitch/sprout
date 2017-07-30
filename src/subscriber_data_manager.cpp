@@ -1764,7 +1764,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
                                         PJUtils::pj_status_to_string(status);
           event.add_var_param(error_msg);
           SAS::report_event(event);
-        // LCOV_EXCL_STOP
+          // LCOV_EXCL_STOP
         }
       }      
     }
@@ -1777,7 +1777,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
                                const std::string& aor_id,
                                AssociatedURIs* associated_uris,
                                SubscriberDataManager::AoRPair* aor_pair,
-                               std::vector<NotifyUtils::BindingNotifyInformation*> binding_info_to_notify,
+                               ClassifiedBindings binding_info_to_notify,
                                std::vector<std::string> expired_binding_uris,                               
                                int now,
                                SAS::TrailId trail)

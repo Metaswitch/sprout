@@ -243,18 +243,32 @@ string SubscribeMessage::get()
   char buf[16384];
 
   std::string branch = _branch.empty() ? "Pjmo1aimuq33BAI4rjhgQgBr4sY" + std::to_string(_unique) : _branch;
-  std::string from_uri;
-  std::string to_uri;
+  char from_uri[256];
+  char to_uri[256];
 
   if (_scheme == "tel")
   {
-    from_uri = string(_scheme).append(":").append(_subscribing_user); 
-    to_uri = string(_scheme).append(":").append(_user);
+    snprintf(from_uri, sizeof(from_uri),
+             "%s:%s",
+             _scheme.c_str(),
+             _subscribing_user.c_str());
+    snprintf(to_uri, sizeof(to_uri),
+             "%s:%s",
+             _scheme.c_str(),
+             _user.c_str());
   }
   else
   {
-    from_uri = string(_scheme).append(":").append(_subscribing_user).append("@").append(_domain);
-    to_uri = string(_scheme).append(":").append(_user).append("@").append(_domain);
+    snprintf(from_uri, sizeof(from_uri),
+             "%s:%s@%s",
+             _scheme.c_str(),
+             _subscribing_user.c_str(),
+             _domain.c_str());
+    snprintf(to_uri, sizeof(to_uri),
+             "%s:%s@%s",
+             _scheme.c_str(),
+             _user.c_str(),
+             _domain.c_str());
   }
 
   int n = snprintf(buf, sizeof(buf),
@@ -285,7 +299,7 @@ string SubscribeMessage::get()
                    "%6$s",
 
                    /*  1 */ _method.c_str(),
-                   /*  2 */ to_uri.c_str(),
+                   /*  2 */ to_uri,
                    /*  3 */ _domain.c_str(),
                    /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
                    /*  5 */ (int)_body.length(),
@@ -300,7 +314,7 @@ string SubscribeMessage::get()
                    /* 14 */ _to_tag.empty() ? "": string(";tag=").append(_to_tag).c_str(),
                    /* 15 */ branch.c_str(),
                    /* 16 */ _unique,
-                   /* 17 */ from_uri.c_str()
+                   /* 17 */ from_uri
     );
 
   EXPECT_LT(n, (int)sizeof(buf));

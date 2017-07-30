@@ -500,7 +500,7 @@ public:
                                    const std::string& aor_id,
                                    AssociatedURIs* associated_uris,
                                    SubscriberDataManager::AoRPair* aor_pair,
-                                   std::vector<NotifyUtils::BindingNotifyInformation*> binding_info_to_notify,
+                                   ClassifiedBindings binding_info_to_notify,
                                    std::vector<std::string> expired_binding_uris,                                  
                                    int now,
                                    SAS::TrailId trail);
