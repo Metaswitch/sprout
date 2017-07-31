@@ -90,6 +90,7 @@ static SNMP::EventAccumulatorByScopeTable* latency_table = NULL;
 static LoadMonitor* load_monitor = NULL;
 static SNMP::EventAccumulatorByScopeTable* queue_size_table = NULL;
 static ExceptionHandler* exception_handler = NULL;
+static unsigned long request_on_queue_timeout_us = 1;
 
 static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata);
 
@@ -144,67 +145,112 @@ static int worker_thread(void* p)
       {
         TRC_DEBUG("Worker thread dequeue message %p", rdata);
 
-        CW_TRY
-        {
-          pjsip_endpt_process_rx_data(stack_data.endpt, rdata, &rp, NULL);
-        }
-        CW_EXCEPT(exception_handler)
-        {
-          // Dump details about the exception.  Be defensive about reading these
-          // as we don't know much about the state we're in.
-          TRC_ERROR("Exception SAS Trail: %llu (maybe)", get_trail(rdata));
-          if (rdata->msg_info.cid != NULL)
-          {
-            TRC_ERROR("Exception Call-Id: %.*s (maybe)",
-                      ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.slen,
-                      ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.ptr);
-          }
-          if (rdata->msg_info.cseq != NULL)
-          {
-            TRC_ERROR("Exception CSeq: %ld %.*s (maybe)",
-                      ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->cseq,
-                      ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.slen,
-                      ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.ptr);
-          }
-
-          // Make a 500 response to the rdata with a retry-after header of
-          // 10 mins if it's a request other than an ACK
-
-          if ((rdata->msg_info.msg->type == PJSIP_REQUEST_MSG) &&
-             (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD))
-          {
-            TRC_DEBUG("Returning 500 response following exception");
-            pjsip_retry_after_hdr* retry_after =
-                           pjsip_retry_after_hdr_create(rdata->tp_info.pool, 600);
-            PJUtils::respond_stateless(stack_data.endpt,
-                                     rdata,
-                                     PJSIP_SC_INTERNAL_SERVER_ERROR,
-                                     NULL,
-                                     (pjsip_hdr*)retry_after,
-                                     NULL);
-          }
-
-          if (num_worker_threads == 1)
-          {
-            // There's only one worker thread, so we can't sensibly proceed.
-            exit(1);
-          }
-        }
-        CW_END
-
-        TRC_DEBUG("Worker thread completed processing message %p", rdata);
-        pjsip_rx_data_free_cloned(rdata);
-
         unsigned long latency_us = 0;
         if (me->stop_watch.read(latency_us))
         {
-          TRC_DEBUG("Request latency = %ldus", latency_us);
-          latency_table->accumulate(latency_us);
-          load_monitor->request_complete(latency_us);
+          TRC_DEBUG("Request latency so far = %ldus", latency_us);
         }
         else
         {
-          TRC_ERROR("Failed to get done timestamp: %s", strerror(errno));
+          TRC_ERROR("Failed to get timestamp: %s", strerror(errno));
+        }
+
+        if ((latency_us > (request_on_queue_timeout_us)) &&
+            (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG))
+        {
+          if (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD)
+          {
+            // Discard non-ACK requests if the request has been on the queue for
+            // too long.
+            // Respond statelessly with a 503 Service Unavailable, including a
+            // Retry-After header with a zero length timeout.
+            TRC_DEBUG("Request has been on the queue too long (%dus, max is %dus)");
+
+            SAS::TrailId trail = get_trail(rdata);
+            SAS::Marker start_marker(trail, MARKER_ID_START, 2u);
+            SAS::report_marker(start_marker);
+
+            SAS::Event event(trail, SASEvent::SIP_TOO_LONG_IN_QUEUE, 0);
+            event.add_static_param(latency_us);
+            event.add_static_param(request_on_queue_timeout_us);
+            SAS::report_event(event);
+
+            SAS::Marker end_marker(trail, MARKER_ID_END, 2u);
+            SAS::report_marker(end_marker);
+
+            pjsip_retry_after_hdr* retry_after =
+                           pjsip_retry_after_hdr_create(rdata->tp_info.pool, 0);
+            PJUtils::respond_stateless(stack_data.endpt,
+                                       rdata,
+                                       PJSIP_SC_SERVICE_UNAVAILABLE,
+                                       NULL,
+                                       (pjsip_hdr*)retry_after,
+                                       NULL);
+            pjsip_rx_data_free_cloned(rdata);
+          }
+        }
+        else
+        {
+          CW_TRY
+          {
+            pjsip_endpt_process_rx_data(stack_data.endpt, rdata, &rp, NULL);
+          }
+          CW_EXCEPT(exception_handler)
+          {
+            // Dump details about the exception.  Be defensive about reading these
+            // as we don't know much about the state we're in.
+            TRC_ERROR("Exception SAS Trail: %llu (maybe)", get_trail(rdata));
+            if (rdata->msg_info.cid != NULL)
+            {
+              TRC_ERROR("Exception Call-Id: %.*s (maybe)",
+                        ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.slen,
+                        ((pjsip_cid_hdr*)rdata->msg_info.cid)->id.ptr);
+            }
+            if (rdata->msg_info.cseq != NULL)
+            {
+              TRC_ERROR("Exception CSeq: %ld %.*s (maybe)",
+                        ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->cseq,
+                        ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.slen,
+                        ((pjsip_cseq_hdr*)rdata->msg_info.cseq)->method.name.ptr);
+            }
+
+            // Make a 500 response to the rdata with a retry-after header of
+            // 10 mins if it's a request other than an ACK
+            if ((rdata->msg_info.msg->type == PJSIP_REQUEST_MSG) &&
+               (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD))
+            {
+              TRC_DEBUG("Returning 500 response following exception");
+              pjsip_retry_after_hdr* retry_after =
+                             pjsip_retry_after_hdr_create(rdata->tp_info.pool, 600);
+              PJUtils::respond_stateless(stack_data.endpt,
+                                       rdata,
+                                       PJSIP_SC_INTERNAL_SERVER_ERROR,
+                                       NULL,
+                                       (pjsip_hdr*)retry_after,
+                                       NULL);
+            }
+
+            if (num_worker_threads == 1)
+            {
+              // There's only one worker thread, so we can't sensibly proceed.
+              exit(1);
+            }
+          }
+          CW_END
+
+          TRC_DEBUG("Worker thread completed processing message %p", rdata);
+          pjsip_rx_data_free_cloned(rdata);
+
+          if (me->stop_watch.read(latency_us))
+          {
+            TRC_DEBUG("Request latency = %ldus", latency_us);
+            latency_table->accumulate(latency_us);
+            load_monitor->request_complete(latency_us);
+          }
+          else
+          {
+            TRC_ERROR("Failed to get done timestamp: %s", strerror(errno));
+          }
         }
       }
       delete me; me = NULL;
@@ -283,7 +329,8 @@ pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
                                    SNMP::EventAccumulatorByScopeTable* latency_table_arg,
                                    SNMP::EventAccumulatorByScopeTable* queue_size_table_arg,
                                    LoadMonitor* load_monitor_arg,
-                                   ExceptionHandler* exception_handler_arg)
+                                   ExceptionHandler* exception_handler_arg,
+                                   unsigned long request_on_queue_timeout_ms_arg)
 {
   // Set up the vectors of threads.  The threads don't get created until
   // start_worker_threads is called.
@@ -297,6 +344,7 @@ pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
   queue_size_table = queue_size_table_arg;
   load_monitor = load_monitor_arg;
   exception_handler = exception_handler_arg;
+  request_on_queue_timeout_us = request_on_queue_timeout_ms_arg * 1000;
 
   // Register the PJSIP module.
   pjsip_endpt_register_module(stack_data.endpt, &mod_thread_dispatcher);

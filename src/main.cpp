@@ -139,6 +139,7 @@ enum OptionTypes
   OPT_REJECT_IF_NO_MATCHING_IFCS,
   OPT_DUMMY_APP_SERVER,
   OPT_HTTP_ACR_LOGGING,
+  OPT_REQUEST_ON_QUEUE_TIMEOUT
 };
 
 
@@ -229,6 +230,7 @@ const static struct pj_getopt_option long_opt[] =
   { "reject-if-no-matching-ifcs",   no_argument,       0, OPT_REJECT_IF_NO_MATCHING_IFCS},
   { "dummy-app-server",             required_argument, 0, OPT_DUMMY_APP_SERVER},
   { "http-acr-logging",             no_argument,       0, OPT_HTTP_ACR_LOGGING},
+  { "request-on-queue-timeout",     required_argument, 0, OPT_REQUEST_ON_QUEUE_TIMEOUT},
   { NULL,                           0,                 0, 0}
 };
 
@@ -1309,6 +1311,14 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
+    case OPT_REQUEST_ON_QUEUE_TIMEOUT:
+      {
+        VALIDATE_INT_PARAM(options->request_on_queue_timeout,
+                           request_on_queue_timeout,
+                           Maximum time (in ms) a request can wait to be processed);
+      }
+      break;
+
     SPROUTLET_MACRO(SPROUTLET_OPTIONS)
 
     case 'h':
@@ -1588,6 +1598,7 @@ int main(int argc, char* argv[])
   opt.reject_if_no_matching_ifcs = false;
   opt.dummy_app_server = "";
   opt.http_acr_logging = false;
+  opt.request_on_queue_timeout = 4000; // TODO decide on actual default
 
   status = init_logging_options(argc, argv, &opt);
 
@@ -2370,7 +2381,8 @@ int main(int argc, char* argv[])
                          latency_table,
                          queue_size_table,
                          load_monitor,
-                         exception_handler);
+                         exception_handler,
+                         opt.request_on_queue_timeout);
 
   // Create worker threads first as they take work from the PJSIP threads so
   // need to be ready.
