@@ -2043,7 +2043,6 @@ int main(int argc, char* argv[])
                                        homestead_uar_latency_table,
                                        homestead_lir_latency_table,
                                        hss_comm_monitor,
-                                       opt.uri_scscf,
                                        sifc_service);
   }
 

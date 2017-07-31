@@ -498,7 +498,8 @@ private:
   pjsip_msg* get_base_request();
 
   /// The S-CSCF URI for this transaction. This is used in the SAR sent to the
-  /// HSS.
+  /// HSS. This field should not be changed once it has been set by the
+  /// on_rx_intial_request() call.
   std::string _scscf_uri;
 };
 

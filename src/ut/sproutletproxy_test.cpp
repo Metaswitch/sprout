@@ -42,28 +42,14 @@ public:
                 std::string alias = "",
                 SNMP::FakeSuccessFailCountByRequestTypeTable* fake_inc_tbl = NULL,
                 SNMP::FakeSuccessFailCountByRequestTypeTable* fake_out_tbl = NULL) :
-    Sproutlet(service_name, port, uri, service_host, fake_inc_tbl, fake_out_tbl)
+    Sproutlet(service_name, port, uri, service_host, { alias }, fake_inc_tbl, fake_out_tbl)
   {
-    // Only one sproutlet loaded can own each alias.
-    if (alias != "")
-    {
-      _aliases.push_back(alias);
-    }
   }
 
   SproutletTsx* get_tsx(SproutletHelper* helper, const std::string& alias, pjsip_msg* req, pjsip_sip_uri*& next_hop, pj_pool_t* pool, SAS::TrailId trail)
   {
     return (SproutletTsx*)new T(this);
   }
-
-  const std::list<std::string> aliases() const
-  {
-    return _aliases;
-  }
-
-private:
-
-  std::list<std::string> _aliases;
 };
 
 template <int S>
@@ -695,7 +681,7 @@ public:
   {
     std::string service_name;
     std::string unused_alias, unused_local_hostname;
-    SproutletProxy::SPROUTLET_SELECTION_TYPES unused_selection_type = SproutletProxy::SPROUTLET_SELECTION_TYPES::UNKNOWN;
+    SproutletProxy::SPROUTLET_SELECTION_TYPES unused_selection_type = SproutletProxy::SPROUTLET_SELECTION_TYPES::NONE_SELECTED;
     Sproutlet* sproutlet = _proxy->match_sproutlet_from_uri(uri,
                                                             unused_alias,
                                                             unused_local_hostname,

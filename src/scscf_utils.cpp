@@ -11,34 +11,23 @@
 
 #include "scscf_utils.h"
 
-void SCSCFUtils::get_scscf_uri(pjsip_msg* req,
-                               pj_pool_t* pool,
-                               pjsip_sip_uri* scscf_uri,
-                               SproutletTsxHelper* tsx)
+// This function creates an S-CSCF URI for the request that has been received.
+// This URI is based on the configured S-CSCF URI and is allocated in the
+// provided pool. Its purpose is to maintain the local hostname part of the URI
+// that caused the request to be routed here on the S-CSCF URI that it returns.
+// This ensures that the URI that we send on the SAR to the HSS matches the
+// site-specific URI that the request was originally routed to.
+//
+// For example, if the configured S-CSCF URI is "scscf.sprout-site2.homedomain"
+// and the routing URI is "sprout-site1.homedonain;service=scscf-proxy", then
+// the we will construct the S-CSCF URI "scscf.sprout-site1.homedomain". This
+// is so that a re-registration through a different site to the original
+// registration will work.
+void SCSCFUtils::get_scscf_uri(pj_pool_t* pool,
+                               std::string received_local_hostname,
+                               std::string scscf_local_hostname,
+                               pjsip_sip_uri* scscf_uri)
 {
-  // Get the local hostname part of the URI that routed to this Sproutlet. We
-  // will use this in the S-CSCF URI.
-  //
-  // This is so that we preserve the URI of the S-CSCF that we originally tried
-  // to route to so that we then send it on the SAR to the HSS.
-  const pjsip_route_hdr* original_route = tsx->route_hdr();
-  pjsip_sip_uri* original_uri;
-  if (original_route != NULL)
-  {
-    original_uri = (pjsip_sip_uri*)original_route->name_addr.uri;
-  }
-  else
-  {
-    original_uri = (pjsip_sip_uri*)req->line.req.uri;
-  }
-
-  // Get the local hostname part of the URI that routed the request here.
-  std::string received_local_hostname = tsx->get_local_hostname(original_uri);
-
-  // Get the local hostname part of the S-CSCF URI;
-  std::string scscf_local_hostname = tsx->get_local_hostname(scscf_uri);
-
-
   // Replace the local hostname part of the configured S-CSCF URI with the
   // local hostname part of the URI that caused us to be routed here.
   std::string new_scscf_hostname = PJUtils::pj_str_to_string(&scscf_uri->host);

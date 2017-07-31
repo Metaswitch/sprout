@@ -54,7 +54,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
                                int session_terminated_timeout_ms,
                                AsCommunicationTracker* sess_term_as_tracker,
                                AsCommunicationTracker* sess_cont_as_tracker) :
-  Sproutlet(name, port, uri, "", incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl),
+  Sproutlet(name, port, uri, "", {}, incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl),
   _scscf_name(scscf_name),
   _scscf_cluster_uri(NULL),
   _scscf_node_uri(NULL),
@@ -571,10 +571,11 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   // Construct the S-CSCF URI for this transaction. Use the configured S-CSCF
   // URI as a starting point.
   pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), _scscf->_scscf_cluster_uri);
-  SCSCFUtils::get_scscf_uri(req,
-                            get_pool(req),
-                            scscf_uri,
-                            this->_helper);
+pjsip_sip_uri* routing_uri = get_routing_uri(req);
+  SCSCFUtils::get_scscf_uri(get_pool(req),
+                            get_local_hostname(routing_uri),
+                            get_local_hostname(scscf_uri),
+                            scscf_uri);
   _scscf_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)scscf_uri);
 
   // Determine the session case and the served user.  This will link to

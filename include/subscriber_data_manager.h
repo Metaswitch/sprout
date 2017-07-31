@@ -126,6 +126,8 @@ public:
     class Subscription
     {
     public:
+      Subscription(): _refreshed(false) {};
+
       /// The Contact URI for the subscription dialog (used as the Request URI
       /// of the NOTIFY)
       std::string _req_uri;
@@ -145,6 +147,9 @@ public:
 
       /// The call ID for the subscription dialog.
       std::string _cid;
+
+      /// Whether the subscription has been refreshed since the last NOTIFY.
+      bool _refreshed;
 
       /// The list of Record Route URIs from the subscription dialog.
       std::list<std::string> _route_uris;
@@ -246,7 +251,8 @@ public:
     std::string _timer_id;
 
     /// S-CSCF URI name for this AoR. This is used on the SAR if the
-    /// registration expires.
+    /// registration expires. This field should not be changed once the
+    /// registration has been created.
     std::string _scscf_uri;
 
   private:
@@ -489,29 +495,20 @@ public:
     // @param associated_uris
     //                     The IMPUs associated with this IRS
     // @param aor_pair     The AoR pair to send NOTIFYs for
+    // @param binding_info_to_notify
+    //                     The list of bindings to include on the NOTIFY
+    // @param expired_binding_uris
+    //                     A list of URIs of expired bindings    
     // @param now          The current time
     // @param trail        SAS trail
     void send_notifys_for_expired_subscriptions(
                                    const std::string& aor_id,
                                    AssociatedURIs* associated_uris,
                                    SubscriberDataManager::AoRPair* aor_pair,
+                                   ClassifiedBindings binding_info_to_notify,
+                                   std::vector<std::string> expired_binding_uris,                                  
                                    int now,
                                    SAS::TrailId trail);
-
-    // Create and send any appropriate NOTIFYs for any current subscriptions
-    //
-    // @param aor_id       The AoR ID
-    // @param associated_uris
-    //                     The IMPUs associated with this IRS
-    // @param aor_pair     The AoR pair to send NOTIFYs for
-    // @param now          The current time
-    // @param trail        SAS trail
-    void send_notifys_for_current_subscriptions(
-                                      const std::string& aor_id,
-                                      AssociatedURIs* associated_uris,
-                                      SubscriberDataManager::AoRPair* aor_pair,
-                                      int now,
-                                      SAS::TrailId trail);
   };
 
   /// Tags to use when setting timers for nothing, for registration and for subscription.

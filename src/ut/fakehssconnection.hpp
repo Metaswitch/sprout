@@ -40,7 +40,7 @@ public:
                        const std::string&,
                        std::string,
                        std::string = "",
-                       const std::string& = "");
+                       const std::string& wildcard = "");
   void delete_result(const std::string& url);
   void set_rc(const std::string& url, long rc);
   void delete_rc(const std::string& url);

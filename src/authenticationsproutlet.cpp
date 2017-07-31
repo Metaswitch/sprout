@@ -59,7 +59,7 @@ AuthenticationSproutlet::AuthenticationSproutlet(const std::string& name,
                                                  SNMP::AuthenticationStatsTables* auth_stats_tbls,
                                                  bool nonce_count_supported_arg,
                                                  get_expiry_for_binding_fn get_expiry_for_binding_arg) :
-  Sproutlet(name, port, uri),
+  Sproutlet(name, port, uri, "", aliases),
   _aka_realm((realm_name != "") ?
     pj_strdup3(stack_data.pool, realm_name.c_str()) :
     stack_data.local_host),
@@ -73,8 +73,7 @@ AuthenticationSproutlet::AuthenticationSproutlet(const std::string& name,
   _nonce_count_supported(nonce_count_supported_arg),
   _get_expiry_for_binding(get_expiry_for_binding_arg),
   _non_register_auth_mode(non_register_auth_mode_param),
-  _next_hop_service(next_hop_service),
-  _aliases(aliases)
+  _next_hop_service(next_hop_service)
 {
 }
 
@@ -117,20 +116,11 @@ SproutletTsx* AuthenticationSproutlet::get_tsx(SproutletHelper* helper,
   }
 
   // We're not interested in the message so create a next hop URI.
-  pjsip_route_hdr* route = (pjsip_route_hdr*)
-                              pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
-
+  pjsip_sip_uri* base_uri = helper->get_routing_uri(req);
   next_hop = helper->next_hop_uri(_next_hop_service,
-                                  route,
-                                  req,
+                                  base_uri,
                                   pool);
   return NULL;
-}
-
-
-const std::list<std::string> AuthenticationSproutlet::aliases() const
-{
-  return { _aliases };
 }
 
 // Determine whether this request should be challenged (and SAS log appropriately).
@@ -606,6 +596,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
                                                                 impu_for_hss,
                                                                 auth_type,
                                                                 resync,
+                                                                _scscf_uri,
                                                                 doc,
                                                                 trail());
     av_source_unavailable = ((http_code == HTTP_SERVER_UNAVAILABLE) ||
@@ -888,10 +879,11 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   // Construct the S-CSCF URI for this transaction. Use the configured S-CSCF
   // URI as a starting point.
   pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), stack_data.scscf_uri);
-  SCSCFUtils::get_scscf_uri(req,
-                            get_pool(req),
-                            scscf_uri,
-                            this->_helper);
+  pjsip_sip_uri* routing_uri = get_routing_uri(req);
+  SCSCFUtils::get_scscf_uri(get_pool(req),
+                            get_local_hostname(routing_uri),
+                            get_local_hostname(scscf_uri),
+                            scscf_uri);
   _scscf_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)scscf_uri);
 
   pjsip_digest_credential* credentials = get_credentials(req);

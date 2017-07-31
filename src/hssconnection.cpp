@@ -43,7 +43,6 @@ HSSConnection::HSSConnection(const std::string& server,
                              SNMP::EventAccumulatorTable* homestead_uar_latency_tbl,
                              SNMP::EventAccumulatorTable* homestead_lir_latency_tbl,
                              CommunicationMonitor* comm_monitor,
-                             std::string scscf_uri,
                              SIFCService* sifc_service) :
   _http(new HttpConnection(server,
                            false,
@@ -57,7 +56,6 @@ HSSConnection::HSSConnection(const std::string& server,
   _sar_latency_tbl(homestead_sar_latency_tbl),
   _uar_latency_tbl(homestead_uar_latency_tbl),
   _lir_latency_tbl(homestead_lir_latency_tbl),
-  _scscf_uri(scscf_uri),
   _sifc_service(sifc_service)
 {
 }
@@ -74,6 +72,7 @@ HTTPCode HSSConnection::get_auth_vector(const std::string& private_user_identity
                                         const std::string& public_user_identity,
                                         const std::string& auth_type,
                                         const std::string& resync_auth,
+                                        const std::string& server_name,
                                         rapidjson::Document*& av,
                                         SAS::TrailId trail)
 {
@@ -104,6 +103,12 @@ HTTPCode HSSConnection::get_auth_vector(const std::string& private_user_identity
   {
     path += public_user_identity.empty() ? "?" : "&";
     path += "resync-auth=" + Utils::url_escape(resync_auth);
+  }
+
+  if (!server_name.empty())
+  {
+    path += (public_user_identity.empty() && resync_auth.empty()) ? "?" : "&";
+    path += "server-name=" + Utils::url_escape(server_name);
   }
 
   HTTPCode rc = get_json_object(path, av, trail);

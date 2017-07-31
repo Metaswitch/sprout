@@ -45,7 +45,7 @@ ICSCFSproutlet::ICSCFSproutlet(const std::string& icscf_name,
                                SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
                                SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                                bool override_npdi) :
-  Sproutlet(icscf_name, port, uri, "", incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl),
+  Sproutlet(icscf_name, port, uri, "", {}, incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl),
   _bgcf_uri(NULL),
   _hss(hss),
   _scscf_selector(scscf_selector),

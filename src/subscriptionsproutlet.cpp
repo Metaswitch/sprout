@@ -79,12 +79,9 @@ SproutletTsx* SubscriptionSproutlet::get_tsx(SproutletHelper* helper,
   }
 
   // We're not interested in the message so create a next hop URI.
-  pjsip_route_hdr* route = (pjsip_route_hdr*)
-                              pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
-
+  pjsip_sip_uri* base_uri = helper->get_routing_uri(req);
   next_hop = helper->next_hop_uri(_next_hop_service,
-                                  route,
-                                  req,
+                                  base_uri,
                                   pool);
   return NULL;
 }
@@ -575,7 +572,7 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
       if (subscription_id == "")
       {
         // If there's no to tag, generate an unique one
-        // TODO: Should use unique depolyment and instance IDs here.
+        // TODO: Should use unique deployment and instance IDs here.
         subscription_id = std::to_string(Utils::generate_unique_integer(0, 0));
       }
 
@@ -612,6 +609,7 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
       subscription->_to_tag = subscription_id;
       subscription->_from_uri = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, from->uri);
       subscription->_from_tag = PJUtils::pj_str_to_string(&from->tag);
+      subscription->_refreshed = true;
 
       // Calculate the expiry period for the subscription.
       expiry = (expires != NULL) ?

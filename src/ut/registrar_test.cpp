@@ -156,7 +156,7 @@ public:
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
-    SipTest::SetScscfUri("sip:scscf.sprout.homedomain:5058;transport=TCP");//"sip:scscf.sprout.homedomain:5058;transport=TCP");
+    SipTest::SetScscfUri("sip:scscf.sprout.homedomain:5058;transport=TCP");
 
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
@@ -809,6 +809,7 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
   free_txdata();
 }
 
+// Check that something sensible happens if there is not route header on the request.
 TEST_F(RegistrarTest, SimpleMainlineAuthHeaderNoRoute)
 {
   // We have a private ID in this test, so set up the expect response
@@ -858,7 +859,6 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeaderNoRoute)
   free_txdata();
 }
 
-
 /// Simple correct example with Authorization header and Tel URIs
 TEST_F(RegistrarTest, SimpleMainlineAuthHeaderWithTelURI)
 {
@@ -888,7 +888,8 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeaderWithTelURI)
   free_txdata();
 }
 
-/// Simple correct example with Authorization header
+/// Make sure that if the route header identifies a site, that the site-specific
+/// URI is preserved in the service route and the SAR.
 TEST_F(RegistrarTest, SimpleMainlineAuthHeaderRemoteSite)
 {
   // We have a private ID in this test, so set up the expect response
@@ -906,37 +907,10 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeaderRemoteSite)
   out = pop_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
-            get_headers(out, "Contact"));
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:scscf.sprout-site2.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
+
   // Make sure that the HTTP request sent to homestead contains the correct S-CSCF URI.
   EXPECT_TRUE(_hss_connection->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=Alice", "{\"reqtype\": \"reg\", \"server_name\": \"sip:scscf.sprout-site2.homedomain:5058;transport=TCP\"}"));
-  free_txdata();
-
-  // Fetch this binding by sending in the same request with no Contact header
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "", RegDataXMLUtils::STATE_REGISTERED, "", "?private_id=Alice");
-
-  msg._contact = "";
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  out = pop_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
-            get_headers(out, "Contact"));
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:scscf.sprout-site2.homedomain:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_attempts);
-  EXPECT_EQ(1,((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_REGISTRATION_STATS_TABLES.init_reg_tbl)->_successes);
   free_txdata();
 }
 
@@ -1682,7 +1656,6 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
                                 "</ServiceProfile></IMSSubscription>");
 
   _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, xml);
-  //_hss_connection->set_impu_result("sip:6505550231@homedomain", "dereg-admin", RegDataXMLUtils::STATE_NOT_REGISTERED, xml);
 
   // We add two identical IP addresses so that we hit the retry behaviour,
   // but we don't have to worry about which IP address is selected first.
@@ -1776,7 +1749,6 @@ TEST_F(RegistrarTest, AppServersDeRegistrationFailure)
                                 "</ServiceProfile></IMSSubscription>");
 
   _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", RegDataXMLUtils::STATE_REGISTERED, xml);
-  //_hss_connection->set_impu_result("sip:6505550231@homedomain", "dereg-admin", RegDataXMLUtils::STATE_NOT_REGISTERED, xml);
 
   // We add two identical IP addresses so that we hit the retry behaviour,
   // but we don't have to worry about which IP address is selected first.

@@ -60,8 +60,6 @@ public:
                         pj_pool_t* pool,
                         SAS::TrailId trail) override;
 
-  const std::list<std::string> aliases() const override;
-
   int expiry_for_binding(pjsip_contact_hdr* contact,
                          pjsip_expires_hdr* expires);
 
@@ -95,9 +93,6 @@ private:
   // The next service to route requests onto if the sproutlet does not handle
   // them itself.
   std::string _next_hop_service;
-
-  // Aliases that this sproutlet registers for.
-  const std::list<std::string> _aliases;
 };
 
 
@@ -136,7 +131,8 @@ protected:
   RegistrarSproutlet* _registrar;
 
   // The S-CSCF URI for this transaction. This is used on any SAR that is sent
-  // to the HSS.
+  // to the HSS. This field should not be changed once it has been set by the
+  // on_rx_intial_request() call.
   std::string _scscf_uri;
 
   /// Member variables covering the IFCs.

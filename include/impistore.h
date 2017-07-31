@@ -101,8 +101,9 @@ public:
     /// Correlator between original challenge and responses.
     std::string correlator;
 
-    /// URI of the SCSCF that issued the challenge. This is the server name
-    /// used on the SAR if the authentication times out.
+    /// URI of the S-CSCF that issued the challenge. This is the server name
+    /// used on the SAR if the authentication times out. This field should not
+    /// be changed once the challenge has been created.
     std::string scscf_uri;
 
   private:
