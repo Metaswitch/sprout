@@ -213,6 +213,7 @@ class SubscribeMessage
 public:
   string _method;
   string _user;
+  string _subscribing_user;
   string _domain;
   string _content_type;
   string _body;
@@ -231,6 +232,7 @@ public:
   SubscribeMessage() :
     _method("SUBSCRIBE"),
     _user("6505550231"),
+    _subscribing_user("6505550231"),
     _domain("homedomain"),
     _contact("sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob"),
     _event("Event: reg"),
@@ -256,12 +258,39 @@ string SubscribeMessage::get()
   char buf[16384];
 
   std::string branch = _branch.empty() ? "Pjmo1aimuq33BAI4rjhgQgBr4sY" + std::to_string(_unique) : _branch;
+  char from_uri[256];
+  char to_uri[256];
+
+  if (_scheme == "tel")
+  {
+    snprintf(from_uri, sizeof(from_uri),
+             "%s:%s",
+             _scheme.c_str(),
+             _subscribing_user.c_str());
+    snprintf(to_uri, sizeof(to_uri),
+             "%s:%s",
+             _scheme.c_str(),
+             _user.c_str());
+  }
+  else
+  {
+    snprintf(from_uri, sizeof(from_uri),
+             "%s:%s@%s",
+             _scheme.c_str(),
+             _subscribing_user.c_str(),
+             _domain.c_str());
+    snprintf(to_uri, sizeof(to_uri),
+             "%s:%s@%s",
+             _scheme.c_str(),
+             _user.c_str(),
+             _domain.c_str());
+  }
 
   int n = snprintf(buf, sizeof(buf),
                    "%1$s sip:%3$s SIP/2.0\r\n"
                    "Via: SIP/2.0/TCP 10.83.18.38:36530;rport;branch=z9hG4bK%15$s\r\n"
                    "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n"
-                   "From: <%2$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
+                   "From: <%17$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
                    "To: <%2$s>%14$s\r\n"
                    "Max-Forwards: 68\r\n"
                    "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%16$04dohntC@10.114.61.213\r\n"
@@ -285,7 +314,7 @@ string SubscribeMessage::get()
                    "%6$s",
 
                    /*  1 */ _method.c_str(),
-                   /*  2 */ (_scheme == "tel") ? string(_scheme).append(":").append(_user).c_str() : string(_scheme).append(":").append(_user).append("@").append(_domain).c_str(),
+                   /*  2 */ to_uri,
                    /*  3 */ _domain.c_str(),
                    /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
                    /*  5 */ (int)_body.length(),
@@ -299,8 +328,9 @@ string SubscribeMessage::get()
                    /* 13 */ _record_route.empty() ? "" : string(_record_route).append("\r\n").c_str(),
                    /* 14 */ _to_tag.empty() ? "": string(";tag=").append(_to_tag).c_str(),
                    /* 15 */ branch.c_str(),
-                   /* 16 */ _unique
-  );
+                   /* 16 */ _unique,
+                   /* 17 */ from_uri
+    );
 
   EXPECT_LT(n, (int)sizeof(buf));
 
@@ -1096,6 +1126,30 @@ TEST_F(SubscriptionTest, ExtraContactParams)
   check_subscriptions("sip:6505550231@homedomain", 1u);
 }
 
+// Check that if the UE and then the P-CSCF both subscribe both subscribe to
+// the UE's registration state, the UE only gets one NOTIFY, not two.
+TEST_F(SubscriptionTest, NoDuplicateNotifyOnPCSCFSubscribe)
+{
+  check_subscriptions("sip:6505550231@homedomain", 0u);
+
+  // First the UE subscribes
+  SubscribeMessage msg;
+  inject_msg(msg.get());
+
+  std::vector<std::pair<std::string, bool>> irs_impus;
+  irs_impus.push_back(std::make_pair("sip:6505550231@homedomain", false));
+
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
+  check_subscriptions("sip:6505550231@homedomain", 1u);
+
+  // Next the P-CSCF subscribes  
+  msg._subscribing_user = "pcscf";
+  msg._unique++;
+  inject_msg(msg.get());  
+
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
+  check_subscriptions("sip:6505550231@homedomain", 2u);
+}
 
 void SubscriptionTest::check_subscriptions(std::string aor, uint32_t expected)
 {
