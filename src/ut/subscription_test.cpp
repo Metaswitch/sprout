@@ -1134,6 +1134,13 @@ TEST_F(SubscriptionTest, NoDuplicateNotifyOnPCSCFSubscribe)
 
   // First the UE subscribes
   SubscribeMessage msg;
+
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
+
   inject_msg(msg.get());
 
   std::vector<std::pair<std::string, bool>> irs_impus;
@@ -1145,6 +1152,13 @@ TEST_F(SubscriptionTest, NoDuplicateNotifyOnPCSCFSubscribe)
   // Next the P-CSCF subscribes  
   msg._subscribing_user = "pcscf";
   msg._unique++;
+
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
+
   inject_msg(msg.get());  
 
   check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
