@@ -1151,6 +1151,42 @@ TEST_F(SubscriptionTest, NoDuplicateNotifyOnPCSCFSubscribe)
   check_subscriptions("sip:6505550231@homedomain", 2u);
 }
 
+TEST_F(SubscriptionTest, Resubscribe)
+{
+  check_subscriptions("sip:6505550231@homedomain", 0u);
+
+  // Subscribe
+  SubscribeMessage msg;
+
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
+
+  inject_msg(msg.get());
+
+  std::vector<std::pair<std::string, bool>> irs_impus;
+  irs_impus.push_back(std::make_pair("sip:6505550231@homedomain", false));
+
+  std::string to_tag = check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
+  check_subscriptions("sip:6505550231@homedomain", 1u);
+
+  // Resubscribe
+  EXPECT_CALL(*(this->_analytics),
+              subscription("sip:6505550231@homedomain",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
+
+  msg._to_tag = to_tag;
+  msg._unique += 1;
+  inject_msg(msg.get());
+
+  check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
+  check_subscriptions("sip:6505550231@homedomain", 1u);
+}
+
 void SubscriptionTest::check_subscriptions(std::string aor, uint32_t expected)
 {
   // Check that we registered the correct URI (0233, not 0234).
