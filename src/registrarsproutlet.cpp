@@ -60,7 +60,7 @@ RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
                                        SNMP::RegistrationStatsTables* third_party_reg_stats_tbls,
                                        FIFCService* fifc_service,
                                        IFCConfiguration ifc_configuration) :
-  Sproutlet(name, port, uri),
+  Sproutlet(name, port, uri, "", aliases),
   _sdm(reg_sdm),
   _remote_sdms(reg_remote_sdms),
   _hss(hss_connection),
@@ -71,8 +71,7 @@ RegistrarSproutlet::RegistrarSproutlet(const std::string& name,
   _third_party_reg_stats_tbls(third_party_reg_stats_tbls),
   _fifc_service(fifc_service),
   _ifc_configuration(ifc_configuration),
-  _next_hop_service(next_hop_service),
-  _aliases(aliases)
+  _next_hop_service(next_hop_service)
 {
 }
 
@@ -149,11 +148,6 @@ SproutletTsx* RegistrarSproutlet::get_tsx(SproutletHelper* helper,
                                   base_uri,
                                   pool);
   return NULL;
-}
-
-const std::list<std::string> RegistrarSproutlet::aliases() const
-{
-  return { _aliases };
 }
 
 RegistrarSproutletTsx::RegistrarSproutletTsx(RegistrarSproutlet* registrar,

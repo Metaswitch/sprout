@@ -59,7 +59,7 @@ AuthenticationSproutlet::AuthenticationSproutlet(const std::string& name,
                                                  SNMP::AuthenticationStatsTables* auth_stats_tbls,
                                                  bool nonce_count_supported_arg,
                                                  get_expiry_for_binding_fn get_expiry_for_binding_arg) :
-  Sproutlet(name, port, uri),
+  Sproutlet(name, port, uri, "", aliases),
   _aka_realm((realm_name != "") ?
     pj_strdup3(stack_data.pool, realm_name.c_str()) :
     stack_data.local_host),
@@ -73,8 +73,7 @@ AuthenticationSproutlet::AuthenticationSproutlet(const std::string& name,
   _nonce_count_supported(nonce_count_supported_arg),
   _get_expiry_for_binding(get_expiry_for_binding_arg),
   _non_register_auth_mode(non_register_auth_mode_param),
-  _next_hop_service(next_hop_service),
-  _aliases(aliases)
+  _next_hop_service(next_hop_service)
 {
 }
 
@@ -122,12 +121,6 @@ SproutletTsx* AuthenticationSproutlet::get_tsx(SproutletHelper* helper,
                                   base_uri,
                                   pool);
   return NULL;
-}
-
-
-const std::list<std::string> AuthenticationSproutlet::aliases() const
-{
-  return { _aliases };
 }
 
 // Determine whether this request should be challenged (and SAS log appropriately).

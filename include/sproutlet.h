@@ -718,7 +718,7 @@ public:
 
   /// Returns the aliases of this service.
   virtual const std::list<std::string> aliases() const
-    { return std::list<std::string>(); }
+    { return _aliases; }
 
 protected:
   /// Constructor.
@@ -726,6 +726,7 @@ protected:
             int port,
             const std::string& uri,
             const std::string& service_host="",
+            const std::list<std::string> aliases={},
             SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl = NULL,
             SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl = NULL) :
     _incoming_sip_transactions_tbl(incoming_sip_transactions_tbl),
@@ -733,7 +734,8 @@ protected:
     _service_name(service_name),
     _port(port),
     _uri(uri),
-    _service_host(service_host)
+    _service_host(service_host),
+    _aliases(aliases)
   {
   }
 
@@ -749,6 +751,9 @@ private:
 
   /// The host name of this service.
   const std::string _service_host;
+
+  /// The aliases for this service
+  const std::list<std::string> _aliases;
 };
 
 #endif

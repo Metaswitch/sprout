@@ -26,7 +26,7 @@ BGCFSproutlet::BGCFSproutlet(const std::string& bgcf_name,
                              SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
                              SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                              bool override_npdi) :
-  Sproutlet(bgcf_name, port, uri, "", incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl),
+  Sproutlet(bgcf_name, port, uri, "", {}, incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl),
   _bgcf_service(bgcf_service),
   _enum_service(enum_service),
   _acr_factory(acr_factory),
