@@ -13,24 +13,15 @@
 #ifndef _BASICPROXY_H__
 #define _BASICPROXY_H__
 
-extern "C" {
-#include <pjsip.h>
-#include <pjlib-util.h>
-#include <pjlib.h>
-#include <stdint.h>
-}
-
 #include <utility>
 #include <vector>
 #include <list>
 #include <set>
 
+#include "sproutlet.h"
 #include "stack.h"
 #include "pjmodule.h"
 #include "acr.h"
-
-#include "sproutlet.h" //@TODO - Hack to get ForkErrorState - need to discuss
-
 
 /// Class implementing basic SIP proxy functionality.  Various methods in
 /// this class can be overriden to implement different proxy behaviours.
