@@ -48,6 +48,7 @@ void SIPResolver::resolve(const std::string& name,
                           int transport,
                           int retries,
                           std::vector<AddrInfo>& targets,
+                          int allowed_host_state,
                           SAS::TrailId trail)
 {
   int dummy_ttl = 0;
@@ -76,6 +77,9 @@ void SIPResolver::resolve(const std::string& name,
     // The name is already an IP address, so no DNS resolution is possible.
     // Use specified transport and port or defaults if not specified.
     TRC_DEBUG("Target is an IP address - default port/transport if required");
+
+    // @TODO - Add code to check blacklisting and allowed_host_state
+
     ai.transport = (transport != -1) ? transport : IPPROTO_UDP;
     ai.port = (port != 0) ? port : 5060;
     targets.push_back(ai);
@@ -264,7 +268,7 @@ void SIPResolver::resolve(const std::string& name,
         SAS::report_event(event);
       }
 
-      srv_resolve(srv_name, af, transport, retries, targets, dummy_ttl, trail);
+      srv_resolve(srv_name, af, transport, retries, targets, dummy_ttl, trail, allowed_host_state);
     }
     else
     {
@@ -282,7 +286,7 @@ void SIPResolver::resolve(const std::string& name,
         SAS::report_event(event);
       }
 
-      a_resolve(a_name, af, port, transport, retries, targets, dummy_ttl, trail);
+      a_resolve(a_name, af, port, transport, retries, targets, dummy_ttl, trail, allowed_host_state);
     }
   }
 

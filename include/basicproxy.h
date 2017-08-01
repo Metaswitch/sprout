@@ -29,6 +29,8 @@ extern "C" {
 #include "pjmodule.h"
 #include "acr.h"
 
+#include "sproutlet.h" //@TODO - Hack to get ForkErrorState - need to discuss
+
 
 /// Class implementing basic SIP proxy functionality.  Various methods in
 /// this class can be overriden to implement different proxy behaviours.
@@ -99,7 +101,7 @@ protected:
 
     /// Notification that an client transaction is not responding.
     virtual void on_client_not_responding(UACTsx* uac_tsx,
-                                          pjsip_event_id_e event);
+                                          ForkErrorState fork_error);
 
     /// Notification that a response is being transmitted on this transaction.
     virtual void on_tx_response(pjsip_tx_data* tdata);
@@ -148,7 +150,9 @@ protected:
     virtual void set_req_target(pjsip_tx_data* tdata, BasicProxy::Target* target);
 
     /// Allocates and initializes a UAC transaction.
-    virtual pj_status_t allocate_uac(pjsip_tx_data* tdata, size_t& index);
+    virtual pj_status_t allocate_uac(pjsip_tx_data* tdata,
+                                     size_t& index,
+                                     int allowed_host_state);
 
     /// Forwards a request, allocating and initializing the transaction.
     virtual pj_status_t forward_request(pjsip_tx_data* tdata, size_t& index);
@@ -253,7 +257,7 @@ protected:
     inline int index() { return _index; }
 
     /// Initializes a UAC transaction.
-    virtual pj_status_t init(pjsip_tx_data* tdata);
+    virtual pj_status_t init(pjsip_tx_data* tdata, int allowed_host_state);
 
     /// Sends the initial request on this UAC transaction.
     virtual void send_request();
