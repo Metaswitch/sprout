@@ -1910,14 +1910,7 @@ void SproutletWrapper::rx_fork_error(ForkErrorState fork_error, int fork_id)
   {
     // This fork has not already been terminated, so record the error in the
     // fork state.
-    if (fork_error == ForkErrorState::TIMEOUT)
-    {
-      _forks[fork_id].state.error_state = TIMEOUT;
-    }
-    else if (fork_error == ForkErrorState::TRANSPORT_ERROR)
-    {
-      _forks[fork_id].state.error_state = TRANSPORT_ERROR;
-    }
+    _forks[fork_id].state.error_state = fork_error;
 
     // Create a response for the error.
     int status_code = (fork_error == ForkErrorState::TIMEOUT) ?
