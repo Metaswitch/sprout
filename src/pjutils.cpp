@@ -1215,7 +1215,7 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
   if (tdata->tp_sel.type != PJSIP_TPSELECTOR_TRANSPORT)
   {
     // No transport determined, so resolve the next hop for the message.
-    resolve_next_hop(tdata, retries, sss->servers, get_trail(tdata), BaseResolver::ALL_LISTS);
+    resolve_next_hop(tdata, retries, sss->servers, BaseResolver::ALL_LISTS, get_trail(tdata));
 
     if (!sss->servers.empty())
     {
