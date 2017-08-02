@@ -104,12 +104,13 @@ void SIPResolver::resolve(const std::string& name,
     if (trail != 0)
     {
       SAS::Event event(trail, SASEvent::SIPRESOLVE_IP_ADDRESS, 0);
-      event.add_static_param(addr_rejected);
       event.add_var_param(name);
+      event.add_static_param(addr_rejected);
       std::string port_str = std::to_string(ai.port);
       std::string transport_str = get_transport_str(ai.transport);
       event.add_var_param(transport_str);
       event.add_var_param(port_str);
+      event.add_static_param(addr_blacklisted);
       SAS::report_event(event);
     }
   }
