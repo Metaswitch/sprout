@@ -118,7 +118,7 @@ public:
     std::vector<AddrInfo> targets;
     std::string output;
 
-    _resolver.resolve(_name, _af, _port, _transport, 1, targets, 0);
+    _resolver.resolve(_name, _af, _port, _transport, 1, targets, BaseResolver::ALL_LISTS, 0);
     if (!targets.empty())
     {
       // Successful, so render AddrInfo as a string.
