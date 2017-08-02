@@ -1376,7 +1376,7 @@ pj_status_t PJUtils::send_request_stateless(pjsip_tx_data* tdata, int retries)
   if (tdata->tp_sel.type != PJSIP_TPSELECTOR_TRANSPORT)
   {
     // No transport pre-selected so resolve the next hop to a set of servers.
-    resolve_next_hop(tdata, retries, sss->servers, get_trail(tdata), BaseResolver::ALL_LISTS);
+    resolve_next_hop(tdata, retries, sss->servers, BaseResolver::ALL_LISTS, get_trail(tdata));
 
     if (!sss->servers.empty())
     {
