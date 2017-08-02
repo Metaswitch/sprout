@@ -78,15 +78,33 @@ void SIPResolver::resolve(const std::string& name,
     // Use specified transport and port or defaults if not specified.
     TRC_DEBUG("Target is an IP address - default port/transport if required");
 
-    // @TODO - Add code to check blacklisting and allowed_host_state
+    // Check which host states are permitted.
+    bool whitelisted_allowed, blacklisted_allowed;
+    get_allowed_host_states(
+                allowed_host_state, whitelisted_allowed, blacklisted_allowed);
 
     ai.transport = (transport != -1) ? transport : IPPROTO_UDP;
     ai.port = (port != 0) ? port : 5060;
-    targets.push_back(ai);
+
+    bool addr_blacklisted = blacklisted(ai);
+    bool addr_rejected = false;
+
+    if ( (!addr_blacklisted && whitelisted_allowed ) ||
+         ( addr_blacklisted && blacklisted_allowed ) )
+    {
+      targets.push_back(ai);
+    }
+    else
+    {
+      TRC_DEBUG("IP address rejected as host state %s was not allowed",
+                          (addr_blacklisted) ? "blacklisted" : "whitelisted");
+      addr_rejected = true;
+    }
 
     if (trail != 0)
     {
       SAS::Event event(trail, SASEvent::SIPRESOLVE_IP_ADDRESS, 0);
+      event.add_static_param(addr_rejected);
       event.add_var_param(name);
       std::string port_str = std::to_string(ai.port);
       std::string transport_str = get_transport_str(ai.transport);
