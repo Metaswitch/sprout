@@ -1666,6 +1666,7 @@ TEST_F(SCSCFTest, TestMultipleServiceProfiles)
                                    "call",
                                    "REGISTERED",
                                    subscription.return_sub());
+
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -1732,6 +1733,7 @@ TEST_F(SCSCFTest, TestMultipleAmbiguousServiceProfiles)
                                    "call",
                                    "REGISTERED",
                                    subscription.return_sub());
+
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 

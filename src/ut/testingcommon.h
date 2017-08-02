@@ -51,7 +51,7 @@ std::string end_node(std::string node)
 
 // Returns the text for a complete node.
 std::string add_node(std::string node_name,
-                                          std::string node_value)
+                     std::string node_value)
 {
   return("<" + node_name + ">" + node_value + "</" + node_name + ">");
 }
