@@ -221,7 +221,6 @@ std::string SubscriptionBuilder::return_sub()
     sub += service_prof;
   }
   sub += end_node(IMS_SUBSCRIPTION);
-  printf("sub is:\n%s\n", sub.c_str());
   return sub;
 }
 
