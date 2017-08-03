@@ -1739,9 +1739,9 @@ void BasicProxy::UACTsx::send_request()
       // case the request is used to build an error response.
       PJUtils::remove_top_via(_tdata);
 
-      ForkErrorState fork_error = (_servers.size() == 0)
-                                  ? ForkErrorState::NO_ADDRESSES
-                                  : ForkErrorState::TRANSPORT_ERROR;
+      ForkErrorState fork_error = (_servers.size() == 0) ?
+                                    ForkErrorState::NO_ADDRESSES :
+                                    ForkErrorState::TRANSPORT_ERROR;
 
       _uas_tsx->on_client_not_responding(this, fork_error);
     }

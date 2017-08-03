@@ -63,14 +63,6 @@ public:
   };
 
 protected:
-  // A struct to wrap tx_data and allowed_host_state in a convenient bundle
-  // to pass over interfaces when sending a request.
-  typedef struct
-  {
-    pjsip_tx_data* tx_data;
-    int allowed_host_state;
-  } SendRequest;
-
   /// Pre-declaration
   class UASTsx;
 
@@ -126,6 +118,14 @@ protected:
     SproutletWrapper* sproutlet_wrapper;
     void* context;
   };
+
+  // A struct to wrap tx_data and allowed_host_state in a convenient bundle
+  // to pass over interfaces when sending a request.
+  typedef struct
+  {
+    pjsip_tx_data* tx_data;
+    int allowed_host_state;
+  } SendRequest;
 
   bool schedule_timer(pj_timer_entry* tentry, int duration);
   bool cancel_timer(pj_timer_entry* tentry);

@@ -36,29 +36,10 @@ class SproutletProxy;
 typedef intptr_t TimerID;
 
 typedef enum {NONE, TIMEOUT, TRANSPORT_ERROR, NO_ADDRESSES} ForkErrorState;
-
-inline const std::string fork_error_to_str(const ForkErrorState fork_error)
-{
-  std::string err_str;
-
-  switch (fork_error)
-  {
-    case ForkErrorState::NONE:
-      err_str = "NONE";
-      break;
-    case ForkErrorState::TIMEOUT:
-      err_str = "TIMER";
-      break;
-    case ForkErrorState::TRANSPORT_ERROR:
-      err_str = "TRANSPORT_ERROR";
-      break;
-    case ForkErrorState::NO_ADDRESSES:
-      err_str = "NO_ADDRESSES";
-      break;
-  }
-
-  return err_str;
-};
+const char* const FORK_ERROR_STATE_VALUES[] = {
+  "NONE", "TIMER", "TRANSPORT_ERROR", "NO_ADDRESSES"};
+inline const char* fork_error_to_str(const ForkErrorState fork_error)
+  { return FORK_ERROR_STATE_VALUES[fork_error]; };
 
 struct ForkState
 {
@@ -174,6 +155,8 @@ public:
   ///
   /// @param  req          - The request message to use for forwarding.  If NULL
   ///                        the original request message is used.
+  /// @param  allowed_host_state - Permitted state of hosts when resolving
+  ///                        addresses. Values are defined in BaseResolver.
   ///
   virtual int send_request(pjsip_msg*& req, int allowed_host_state) = 0;
 
@@ -496,6 +479,8 @@ protected:
   ///
   /// @returns             - The ID of this forwarded request
   /// @param  req          - The request message to use for forwarding.
+  /// @param  allowed_host_state - Permitted state of hosts when resolving
+  ///                        addresses. Values are defined in BaseResolver.
   ///
   int send_request(pjsip_msg*& req,
                    int allowed_host_state=BaseResolver::ALL_LISTS)

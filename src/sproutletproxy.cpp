@@ -792,7 +792,7 @@ void SproutletProxy::UASTsx::on_client_not_responding(UACTsx* uac_tsx,
 
     TRC_VERBOSE("Notifying upstream sproutlet %s of client failure: %s",
                  upstream_sproutlet->service_name().c_str(),
-                 fork_error_to_str(fork_error).c_str());
+                 fork_error_to_str(fork_error));
 
     upstream_sproutlet->rx_fork_error(fork_error, upstream_fork);
 
@@ -1903,7 +1903,7 @@ void SproutletWrapper::rx_error(int status_code)
 void SproutletWrapper::rx_fork_error(ForkErrorState fork_error, int fork_id)
 {
   TRC_VERBOSE("%s received error %s on fork %d, state = %s",
-              _id.c_str(), fork_error_to_str(fork_error).c_str(),
+              _id.c_str(), fork_error_to_str(fork_error),
               fork_id, pjsip_tsx_state_str(_forks[fork_id].state.tsx_state));
 
   if (_forks[fork_id].state.tsx_state != PJSIP_TSX_STATE_TERMINATED)
