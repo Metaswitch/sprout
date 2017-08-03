@@ -83,8 +83,8 @@ SubscriberDataManager::SubscriberDataManager(Store* data_store,
                                              bool is_primary) :
   _primary_sdm(is_primary)
 {
-  SerializerDeserializer* serializer = new JsonSerializerDeserializer();
-  std::vector<SerializerDeserializer*> deserializers = { new JsonSerializerDeserializer() };
+  JsonSerializerDeserializer* serializer = new JsonSerializerDeserializer();
+  std::vector<JsonSerializerDeserializer*> deserializers = { new JsonSerializerDeserializer() };
 
   _connector = new Connector(data_store, serializer, deserializers);
   _chronos_timer_request_sender = new ChronosTimerRequestSender(chronos_connection);
@@ -470,8 +470,8 @@ int SubscriberDataManager::expire_bindings(AoR* aor_data,
 /// SubscriberDataManager::Connector Methods
 
 SubscriberDataManager::Connector::Connector(Store* data_store,
-                               SerializerDeserializer*& serializer,
-                               std::vector<SerializerDeserializer*>& deserializers) :
+                               JsonSerializerDeserializer*& serializer,
+                               std::vector<JsonSerializerDeserializer*>& deserializers) :
   _data_store(data_store),
   _serializer(serializer),
   _deserializers(deserializers)
@@ -485,7 +485,7 @@ SubscriberDataManager::Connector::~Connector()
 {
   delete _serializer; _serializer = NULL;
 
-  for (SerializerDeserializer* ds : _deserializers)
+  for (JsonSerializerDeserializer* ds : _deserializers)
   {
     delete ds; ds = NULL;
   }
@@ -602,7 +602,7 @@ SubscriberDataManager::AoR* SubscriberDataManager::Connector::deserialize_aor(
 {
   AoR* aor = NULL;
 
-  for (SerializerDeserializer* deserializer : _deserializers)
+  for (JsonSerializerDeserializer* deserializer : _deserializers)
   {
     TRC_DEBUG("Try to deserialize record for %s with JSON deserializer",
               aor_id.c_str());

@@ -321,22 +321,19 @@ public:
     friend class SubscriberDataManager;
   };
 
-  /// Interface used by the SubscriberDataManager to serialize AoRs from C++ objects to the
-  /// format used in the store, and deserialize them.
-  ///
-  /// This interface allows multiple (de)serializers to be defined and for the
-  /// SubscriberDataManager to use them in a pluggable fashion.
-  class SerializerDeserializer
+  /// Class used by the SubscriberDataManager to serialize AoRs from C++
+  /// objects to the JSON format used in the store, and deserialize them.
+  class JsonSerializerDeserializer
   {
   public:
-    /// Virtual destructor.
-    virtual ~SerializerDeserializer() {};
+    /// Destructor.
+    ~JsonSerializerDeserializer() {}
 
     /// Serialize an AoR object to the format used in the store.
     ///
     /// @param aor_data - The AoR object to serialize.
     /// @return         - The serialized form.
-    virtual std::string serialize_aor(AoR* aor_data) = 0;
+    std::string serialize_aor(AoR* aor_data);
 
     /// Deserialize some data from the store into an AoR object.
     ///
@@ -346,17 +343,6 @@ public:
     ///
     /// @return       - An AoR object, or NULL if the data could not be
     ///                 deserialized (e.g. because it is corrupt).
-    virtual AoR* deserialize_aor(const std::string& aor_id,
-                                 const std::string& s) = 0;
-  };
-
-  /// A (de)serializer for the JSON format.
-  class JsonSerializerDeserializer : public SerializerDeserializer
-  {
-  public:
-    ~JsonSerializerDeserializer() {}
-
-    std::string serialize_aor(AoR* aor_data);
     AoR* deserialize_aor(const std::string& aor_id,
                          const std::string& s);
   };
@@ -368,8 +354,8 @@ public:
   class Connector
   {
     Connector(Store* data_store,
-              SerializerDeserializer*& serializer,
-              std::vector<SerializerDeserializer*>& deserializers);
+              JsonSerializerDeserializer*& serializer,
+              std::vector<JsonSerializerDeserializer*>& deserializers);
 
     ~Connector();
 
@@ -391,8 +377,8 @@ public:
     friend class SubscriberDataManager;
 
   private:
-    SerializerDeserializer* _serializer;
-    std::vector<SerializerDeserializer*> _deserializers;
+    JsonSerializerDeserializer* _serializer;
+    std::vector<JsonSerializerDeserializer*> _deserializers;
   };
 
   /// @class SubscriberDataManager::ChronosTimerRequestSender
