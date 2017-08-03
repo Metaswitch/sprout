@@ -57,10 +57,9 @@ public:
     SipTest::SetUpTestCase();
 
     _local_data_store = new LocalStore();
-    _impi_store = new ImpiStore(_local_data_store, ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI);
+    _impi_store = new ImpiStore(_local_data_store);
     _remote_data_stores.push_back(new LocalStore());
-    _remote_impi_stores.push_back(new ImpiStore(_remote_data_stores[0],
-                                                ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI));
+    _remote_impi_stores.push_back(new ImpiStore(_remote_data_stores[0]));
     _hss_connection = new FakeHSSConnection();
     _chronos_connection = new FakeChronosConnection();
     _analytics = new AnalyticsLogger();

@@ -511,7 +511,7 @@ AuthenticationVector* AuthenticationSproutletTsx::get_av_from_store(const std::s
 {
   AuthenticationVector* av = nullptr;
 
-  ImpiStore::Impi* impi_obj = _authentication->read_impi(impi, nonce, trail());
+  ImpiStore::Impi* impi_obj = _authentication->read_impi(impi, trail());
 
   if (impi_obj != nullptr)
   {
@@ -894,7 +894,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   {
     std::string impi = PJUtils::pj_str_to_string(&credentials->username);
     std::string nonce = PJUtils::pj_str_to_string(&credentials->nonce);
-    impi_obj = _authentication->read_impi(impi, nonce, trail());
+    impi_obj = _authentication->read_impi(impi, trail());
     ImpiStore::AuthChallenge* auth_challenge = NULL;
     if (impi_obj != NULL)
     {
@@ -1303,8 +1303,8 @@ Store::Status AuthenticationSproutlet::
   {
     if (current_impi_obj == NULL)
     {
-      TRC_DEBUG("Lookup IMPI %s (with nonce %s)", impi.c_str(), nonce.c_str());
-      current_impi_obj = store->get_impi_with_nonce(impi, nonce, trail);
+      TRC_DEBUG("Lookup IMPI %s", impi.c_str());
+      current_impi_obj = store->get_impi(impi, trail);
       if (current_impi_obj == NULL)
       {
         // LCOV_EXCL_START in practise this branch is only hit during data
@@ -1371,11 +1371,10 @@ Store::Status AuthenticationSproutlet::
 }
 
 ImpiStore::Impi* AuthenticationSproutlet::read_impi(const std::string& impi,
-                                                    const std::string& nonce,
                                                     SAS::TrailId trail)
 {
-  TRC_DEBUG("Lookup IMPI object: impi=%s, nonce=%s", impi.c_str(), nonce.c_str());
-  ImpiStore::Impi* impi_obj = _impi_store->get_impi_with_nonce(impi, nonce, trail);
+  TRC_DEBUG("Lookup IMPI object: impi=%s", impi.c_str());
+  ImpiStore::Impi* impi_obj = _impi_store->get_impi(impi, trail);
 
   if ((impi_obj != NULL) &&
       impi_obj->auth_challenges.empty() &&
@@ -1387,7 +1386,7 @@ ImpiStore::Impi* AuthenticationSproutlet::read_impi(const std::string& impi,
     for (ImpiStore* store: _remote_impi_stores)
     {
       TRC_DEBUG("Try to get IMPI from backup store");
-      ImpiStore::Impi* backup_impi_obj = store->get_impi_with_nonce(impi, nonce, trail);
+      ImpiStore::Impi* backup_impi_obj = store->get_impi(impi, trail);
 
       if (backup_impi_obj != NULL)
       {

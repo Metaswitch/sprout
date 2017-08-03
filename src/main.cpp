@@ -123,7 +123,6 @@ enum OptionTypes
   OPT_SPROUT_HOSTNAME,
   OPT_LISTEN_PORT,
   SPROUTLET_MACRO(SPROUTLET_OPTION_TYPES)
-  OPT_IMPI_STORE_MODE,
   OPT_NONCE_COUNT_SUPPORTED,
   OPT_LOCAL_SITE_NAME,
   OPT_REGISTRATION_STORES,
@@ -216,7 +215,6 @@ const static struct pj_getopt_option long_opt[] =
   { "sprout-hostname",              required_argument, 0, OPT_SPROUT_HOSTNAME},
   { "listen-port",                  required_argument, 0, OPT_LISTEN_PORT},
   SPROUTLET_MACRO(SPROUTLET_CFG_PJ_STRUCT)
-  { "impi-store-mode",              required_argument, 0, OPT_IMPI_STORE_MODE},
   { "nonce-count-supported",        no_argument,       0, OPT_NONCE_COUNT_SUPPORTED},
   { "scscf-node-uri",               required_argument, 0, OPT_SCSCF_NODE_URI},
   { "sas-use-signaling-interface",  no_argument,       0, OPT_SAS_USE_SIGNALING_IF},
@@ -413,9 +411,6 @@ static void usage(void)
        "     --force-3pr-body       Always include the original REGISTER and 200 OK in the body of\n"
        "                            third-party REGISTER messages to application servers, even if the\n"
        "                            User-Data doesn't specify it\n"
-       "     --impi-store-mode (av-impi|impi)\n"
-       "                            Whether to run the IMPI store in AV and IMPI mode (historical) or\n"
-       "                            IMPI-only (forward-looking) mode\n"
        "     --nonce-count-supported\n"
        "                            Whether sprout accepts authentication responses with a nonce count\n"
        "                            greater than 1\n"
@@ -1160,23 +1155,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       TRC_INFO("Pidfile set to %s", pj_optarg);
       break;
 
-    case OPT_IMPI_STORE_MODE:
-      if (stricmp(pj_optarg, "av-impi") == 0)
-      {
-        options->impi_store_mode = ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI;
-        TRC_INFO("IMPI store mode set to: av-impi");
-      }
-      else if (stricmp(pj_optarg, "impi") == 0)
-      {
-        options->impi_store_mode = ImpiStore::Mode::READ_IMPI_WRITE_IMPI;
-        TRC_INFO("IMPI store mode set to: impi");
-      }
-      else
-      {
-        TRC_ERROR("Unknown IMPI store mode: %s", pj_optarg);
-      }
-      break;
-
     case OPT_NONCE_COUNT_SUPPORTED:
       options->nonce_count_supported = true;
       TRC_INFO("Nonce counts supported");
@@ -1532,7 +1510,6 @@ int main(int argc, char* argv[])
   opt.force_third_party_register_body = false;
   opt.listen_port = 0;
   SPROUTLET_MACRO(SPROUTLET_CFG_OPTIONS_DEFAULT_VALUES)
-  opt.impi_store_mode = ImpiStore::Mode::READ_IMPI_WRITE_IMPI;
   opt.nonce_count_supported = false;
   opt.scscf_node_uri = "";
   opt.sas_signaling_if = false;
@@ -2219,7 +2196,7 @@ int main(int argc, char* argv[])
                                                                       astaire_resolver,
                                                                       false,
                                                                       astaire_comm_monitor);
-    local_impi_store = new ImpiStore(local_impi_data_store, opt.impi_store_mode);
+    local_impi_store = new ImpiStore(local_impi_data_store);
 
     // Only set up remote IMPI stores if some have been configured, and we need
     // the IMPI store to be GR.
@@ -2238,7 +2215,7 @@ int main(int argc, char* argv[])
                                                                              true,
                                                                              remote_astaire_comm_monitor);
         remote_impi_data_stores.push_back(remote_data_store);
-        remote_impi_stores.push_back(new ImpiStore(remote_data_store, opt.impi_store_mode));
+        remote_impi_stores.push_back(new ImpiStore(remote_data_store));
       }
     }
   }
@@ -2247,7 +2224,7 @@ int main(int argc, char* argv[])
     // Use local store.
     TRC_STATUS("Using local store");
     local_impi_data_store = (Store*)new LocalStore();
-    local_impi_store = new ImpiStore(local_data_store, opt.impi_store_mode);
+    local_impi_store = new ImpiStore(local_data_store);
   }
 
   // Load the sproutlet plugins.

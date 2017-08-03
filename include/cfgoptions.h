@@ -130,7 +130,6 @@ struct options
   int                                  listen_port;
   std::set<int>                        sproutlet_ports;
   SPROUTLET_MACRO(SPROUTLET_CFG_OPTIONS)
-  ImpiStore::Mode                      impi_store_mode;
   bool                                 nonce_count_supported;
   std::string                          scscf_node_uri;
   bool                                 sas_signaling_if;
