@@ -161,7 +161,7 @@ public:
 TEST_F(AoRTimeoutTasksTest, MainlineTest)
 {
   // Build request
-  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"notavalidID\"}";
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
   build_timeout_request(body, htp_method_POST);
 
   // Set up subscriber_data_manager expectations
@@ -202,7 +202,7 @@ TEST_F(AoRTimeoutTasksTest, MainlineTest)
 // Test that an invalid HTTP method fails with HTTP_BADMETHOD
 TEST_F(AoRTimeoutTasksTest, InvalidHTTPMethodTest)
 {
-  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"notavalidID\"}";
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
   build_timeout_request(body, htp_method_PUT);
 
   EXPECT_CALL(*stack, send_reply(_, 405, _));
@@ -215,7 +215,7 @@ TEST_F(AoRTimeoutTasksTest, InvalidJSONTest)
 {
   CapturingTestLogger log(5);
 
-  std::string body = "{\"aor_id\" \"aor_id\", \"binding_id\": \"notavalidID\"}";
+  std::string body = "{\"aor_id\" \"aor_id\"}";
   build_timeout_request(body, htp_method_POST);
 
   EXPECT_CALL(*stack, send_reply(_, 400, _));
@@ -230,7 +230,7 @@ TEST_F(AoRTimeoutTasksTest, MissingAorJSONTest)
 {
   CapturingTestLogger log(5);
 
-  std::string body = "{\"binding_id\": \"notavalidID\"}";
+  std::string body = "{}";
   build_timeout_request(body, htp_method_POST);
 
   EXPECT_CALL(*stack, send_reply(_, 400, _));
@@ -243,7 +243,7 @@ TEST_F(AoRTimeoutTasksTest, MissingAorJSONTest)
 // Test with a remote AoR with no bindings
 TEST_F(AoRTimeoutTasksTest, RemoteAoRNoBindingsTest)
 {
-  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"notavalidID\"}";
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
   build_timeout_request(body, htp_method_POST);
 
   // Set up subscriber_data_manager expectations
@@ -289,7 +289,7 @@ TEST_F(AoRTimeoutTasksTest, RemoteAoRNoBindingsTest)
 // Test with a remote store, and a local AoR with no bindings
 TEST_F(AoRTimeoutTasksTest, LocalAoRNoBindingsTest)
 {
-  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"notavalidID\"}";
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
   build_timeout_request(body, htp_method_POST);
 
   // Set up subscriber_data_manager expectations
@@ -405,7 +405,7 @@ TEST_F(AoRTimeoutTasksTest, NullAoRTest)
 {
   CapturingTestLogger log(5);
 
-  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"notavalidID\"}";
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
   build_timeout_request(body, htp_method_POST);
 
   // Set up subscriber_data_manager expectations
@@ -491,7 +491,7 @@ TEST_F(AoRTimeoutTasksMockStoreTest, SubscriberDataManagerWritesFail)
                                                                   Return(Store::ERROR)));
 
   // Parse and handle the request
-  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"notavalidID\"}";
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
   int status = handler->parse_response(body);
 
   ASSERT_EQ(status, 200);

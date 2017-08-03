@@ -1319,9 +1319,7 @@ void SubscriberDataManager::ChronosTimerRequestSender::set_timer(
 {
   std::string temp_timer_id = "";
   HTTPCode status;
-  // Previous versions of handlers.cpp asserted timers contain a "binding_id".
-  // We no longer want this information, but it is included to simplify upgrade.
-  std::string opaque = "{\"aor_id\": \"" + aor_id + "\", \"binding_id\": \"notavalidID\"}";
+  std::string opaque = "{\"aor_id\": \"" + aor_id + "\"}";
   std::string callback_uri = "/timers";
 
   // If a timer has been previously set for this binding, send a PUT.
