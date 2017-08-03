@@ -348,21 +348,6 @@ public:
     ///                 deserialized (e.g. because it is corrupt).
     virtual AoR* deserialize_aor(const std::string& aor_id,
                                  const std::string& s) = 0;
-
-    /// @return the name of this (de)serializer.
-    virtual std::string name() = 0;
-  };
-
-  /// A (de)serializer for the (deprecated) custom binary format.
-  class BinarySerializerDeserializer : public SerializerDeserializer
-  {
-  public:
-    ~BinarySerializerDeserializer() {}
-
-    std::string serialize_aor(AoR* aor_data);
-    AoR* deserialize_aor(const std::string& aor_id,
-                         const std::string& s);
-    std::string name();
   };
 
   /// A (de)serializer for the JSON format.
@@ -374,7 +359,6 @@ public:
     std::string serialize_aor(AoR* aor_data);
     AoR* deserialize_aor(const std::string& aor_id,
                          const std::string& s);
-    std::string name();
   };
 
   /// Provides the interface to the data store. This is responsible for
@@ -498,7 +482,7 @@ public:
     // @param binding_info_to_notify
     //                     The list of bindings to include on the NOTIFY
     // @param expired_binding_uris
-    //                     A list of URIs of expired bindings    
+    //                     A list of URIs of expired bindings
     // @param now          The current time
     // @param trail        SAS trail
     void send_notifys_for_expired_subscriptions(
@@ -506,7 +490,7 @@ public:
                                    AssociatedURIs* associated_uris,
                                    SubscriberDataManager::AoRPair* aor_pair,
                                    ClassifiedBindings binding_info_to_notify,
-                                   std::vector<std::string> expired_binding_uris,                                  
+                                   std::vector<std::string> expired_binding_uris,
                                    int now,
                                    SAS::TrailId trail);
   };
@@ -516,40 +500,17 @@ public:
   static const std::vector<std::string> TAGS_REG;
   static const std::vector<std::string> TAGS_SUB;
 
-  /// SubscriberDataManager constructor that allows the user to specify which serializer and
-  /// deserializers to use.
+  /// SubscriberDataManager constructor.
   ///
   /// @param data_store         - Pointer to the underlying data store.
-  /// @param serializer         - The serializer to use when writing records.
-  ///                             The SubscriberDataManager takes ownership of it.
-  /// @param deserializer       - A vector of deserializers to when reading
-  ///                             records. The order of this vector is
-  ///                             important - each deserializer is
-  ///                             tried in turn until one successfully parses
-  ///                             the record. The SubscriberDataManager takes ownership of
-  ///                             the entries in the vector.
   /// @param chronos_connection - Chronos connection used to set timers for
   ///                             expiring registrations and subscriptions.
   /// @param analytics_logger   - AnalyticsLogger for reporting registration events.
   /// @param is_primary         - Whether the underlying data store is the local
-  ///                             store or remote.
-  SubscriberDataManager(Store* data_store,
-                        SerializerDeserializer*& serializer,
-                        std::vector<SerializerDeserializer*>& deserializers,
-                        ChronosConnection* chronos_connection,
-                        AnalyticsLogger* analytics_logger,
-                        bool is_primary);
-
-  /// Alternative SubscriberDataManager constructor that creates a SubscriberDataManager using just the
-  /// default (de)serializer.
-  ///
-  /// @param data_store         - Pointer to the underlying data store.
-  /// @param chronos_connection - Chronos connection used to set timers for
-  ///                             expiring registrations and subscriptions.
-  /// @param is_primary         - Whether the underlying data store is the local
   ///                             store or remote
   SubscriberDataManager(Store* data_store,
                         ChronosConnection* chronos_connection,
+                        AnalyticsLogger* analytics_logger,
                         bool is_primary);
 
   /// Destructor.

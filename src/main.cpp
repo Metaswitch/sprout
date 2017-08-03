@@ -97,7 +97,6 @@ enum OptionTypes
   OPT_CALL_LIST_TTL,
   OPT_DNS_SERVER,
   OPT_TARGET_LATENCY_US,
-  OPT_MEMCACHED_WRITE_FORMAT,
   OPT_OVERRIDE_NPDI,
   OPT_MAX_TOKENS,
   OPT_INIT_TOKEN_RATE,
@@ -192,7 +191,6 @@ const static struct pj_getopt_option long_opt[] =
   { "daemon",                       no_argument,       0, 'd'},
   { "interactive",                  no_argument,       0, 't'},
   { "help",                         no_argument,       0, 'h'},
-  { "memcached-write-format",       required_argument, 0, OPT_MEMCACHED_WRITE_FORMAT},
   { "override-npdi",                no_argument,       0, OPT_OVERRIDE_NPDI},
   { "max-tokens",                   required_argument, 0, OPT_MAX_TOKENS},
   { "init-token-rate",              required_argument, 0, OPT_INIT_TOKEN_RATE},
@@ -365,9 +363,6 @@ static void usage(void)
        "     --memento-notify-url <url>\n"
        "                            URL Memento should notify when call lists change.\n"
        "     --alarms-enabled       Whether SNMP alarms are enabled (default: false)\n"
-       "     --memcached-write-format\n"
-       "                            The data format to use when writing registration and subscription data\n"
-       "                            to memcached. Valid values are 'binary' and 'json' (default is 'json')\n"
        "     --override-npdi        Whether the deployment should check for number portability data on \n"
        "                            requests that already have the 'npdi' indicator (default: false)\n"
        "     --exception-max-ttl <secs>\n"
@@ -884,27 +879,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
-    case OPT_MEMCACHED_WRITE_FORMAT:
-      if (strcmp(pj_optarg, "binary") == 0)
-      {
-        TRC_INFO("Memcached write format set to 'binary'");
-        options->memcached_write_format = MemcachedWriteFormat::BINARY;
-      }
-      else if (strcmp(pj_optarg, "json") == 0)
-      {
-        TRC_INFO("Memcached write format set to 'json'");
-        options->memcached_write_format = MemcachedWriteFormat::JSON;
-      }
-      else
-      {
-        TRC_WARNING("Invalid value for memcached-write-format, using '%s'."
-                    "Got '%s', valid vales are 'json' and 'binary'",
-                    ((options->memcached_write_format == MemcachedWriteFormat::JSON) ?
-                     "json" : "binary"),
-                    pj_optarg);
-      }
-      break;
-
     case 'W':
       {
         VALIDATE_INT_PARAM_NON_ZERO(options->worker_threads,
@@ -1409,26 +1383,6 @@ void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
   }
 }
 
-
-void create_sdm_plugins(SubscriberDataManager::SerializerDeserializer*& serializer,
-                        std::vector<SubscriberDataManager::SerializerDeserializer*>& deserializers,
-                        MemcachedWriteFormat write_format)
-{
-  deserializers.clear();
-  deserializers.push_back(new SubscriberDataManager::JsonSerializerDeserializer());
-  deserializers.push_back(new SubscriberDataManager::BinarySerializerDeserializer());
-
-  if (write_format == MemcachedWriteFormat::JSON)
-  {
-    serializer = new SubscriberDataManager::JsonSerializerDeserializer();
-  }
-  else
-  {
-    serializer = new SubscriberDataManager::BinarySerializerDeserializer();
-  }
-}
-
-
 // Objects that must be shared with dynamically linked sproutlets must be
 // globally scoped.
 LoadMonitor* load_monitor = NULL;
@@ -1562,7 +1516,6 @@ int main(int argc, char* argv[])
   opt.log_level = 0;
   opt.daemon = PJ_FALSE;
   opt.interactive = PJ_FALSE;
-  opt.memcached_write_format = MemcachedWriteFormat::JSON;
   opt.override_npdi = PJ_FALSE;
   opt.exception_max_ttl = 600;
   opt.sip_blacklist_duration = SIPResolver::DEFAULT_BLACKLIST_DURATION;
@@ -2205,19 +2158,7 @@ int main(int argc, char* argv[])
   }
 
   // Create local and optionally remote registration data stores.
-  //
-  // It is fine to reuse these variables for creating both stores, as
-  // ownership of the objects they point to is transferred to the store when
-  // it is constructed.
-  SubscriberDataManager::SerializerDeserializer* serializer;
-  std::vector<SubscriberDataManager::SerializerDeserializer*> deserializers;
-
-  create_sdm_plugins(serializer,
-                     deserializers,
-                     opt.memcached_write_format);
   local_sdm = new SubscriberDataManager(local_data_store,
-                                        serializer,
-                                        deserializers,
                                         chronos_connection,
                                         analytics_logger,
                                         true);
@@ -2227,12 +2168,7 @@ int main(int argc, char* argv[])
        it != remote_data_stores.end();
        ++it)
   {
-    create_sdm_plugins(serializer,
-                       deserializers,
-                       opt.memcached_write_format);
     SubscriberDataManager* remote_sdm = new SubscriberDataManager(*it,
-                                                                  serializer,
-                                                                  deserializers,
                                                                   chronos_connection,
                                                                   NULL,
                                                                   false);

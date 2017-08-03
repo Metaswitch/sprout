@@ -29,11 +29,6 @@
 #include "fifcservice.h"
 #include "mmfservice.h"
 
-enum struct MemcachedWriteFormat
-{
-  BINARY, JSON
-};
-
 // Struct containing the possible values for non-REGISTER authentication. These
 // are a set of flags that indicate different conditions that may cause a
 // non-REGISTER to be authenticated. They are represented as a bitmask where
@@ -109,7 +104,6 @@ struct options
   int                                  log_level;
   bool                                 interactive;
   bool                                 daemon;
-  MemcachedWriteFormat                 memcached_write_format;
   bool                                 override_npdi;
   int                                  max_tokens;
   float                                init_token_rate;
