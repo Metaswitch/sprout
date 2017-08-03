@@ -23,6 +23,7 @@
 #include "wildcard_utils.h"
 #include "associated_uris.h"
 #include "mmfservice.h"
+#include "scscf_utils.h"
 
 // Constant indicating there is no served user for a request.
 const char* NO_SERVED_USER = "";
@@ -53,7 +54,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& name,
                                int session_terminated_timeout_ms,
                                AsCommunicationTracker* sess_term_as_tracker,
                                AsCommunicationTracker* sess_cont_as_tracker) :
-  Sproutlet(name, port, uri, "", incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl),
+  Sproutlet(name, port, uri, "", {}, incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl),
   _scscf_name(scscf_name),
   _scscf_cluster_uri(NULL),
   _scscf_node_uri(NULL),
@@ -325,6 +326,7 @@ void SCSCFSproutlet::remove_binding(const std::string& aor,
 long SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                    const std::string& private_id,
                                    const std::string& req_type,
+                                   const std::string& scscf_uri,
                                    bool cache_allowed,
                                    bool& registered,
                                    bool& barred,
@@ -345,6 +347,7 @@ long SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                                    private_id,
                                                    req_type,
                                                    regstate,
+                                                   scscf_uri,
                                                    ifc_map,
                                                    associated_uris,
                                                    aliases,
@@ -468,7 +471,8 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SCSCFSproutlet* scscf,
   _auto_reg(false),
   _wildcard(""),
   _se_helper(stack_data.default_session_expires),
-  _base_req(nullptr)
+  _base_req(nullptr),
+  _scscf_uri()
 {
   TRC_DEBUG("S-CSCF Transaction (%p) created", this);
 }
@@ -563,6 +567,16 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       _wildcard = _wildcard.substr(1, _wildcard.size() - 2);
     }
   }
+
+  // Construct the S-CSCF URI for this transaction. Use the configured S-CSCF
+  // URI as a starting point.
+  pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), _scscf->_scscf_cluster_uri);
+pjsip_sip_uri* routing_uri = get_routing_uri(req);
+  SCSCFUtils::get_scscf_uri(get_pool(req),
+                            get_local_hostname(routing_uri),
+                            get_local_hostname(scscf_uri),
+                            scscf_uri);
+  _scscf_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)scscf_uri);
 
   // Determine the session case and the served user.  This will link to
   // an AsChain object (creating it if necessary), if we need to provide
@@ -1042,7 +1056,6 @@ void SCSCFSproutletTsx::retrieve_odi_and_sesscase(pjsip_msg* req)
     TRC_DEBUG("No S-CSCF Route header, so treat as terminating request");
     _session_case = &SessionCase::Terminating;
   }
-
 }
 
 bool SCSCFSproutletTsx::is_retarget(std::string new_served_user)
@@ -1996,6 +2009,7 @@ long SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
     http_code = _scscf->read_hss_data(public_id,
                                       _impi,
                                       req_type,
+                                      _scscf_uri,
                                       cache_allowed,
                                       _registered,
                                       _barred,

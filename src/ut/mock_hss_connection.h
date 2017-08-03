@@ -30,32 +30,34 @@ public:
                                       &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
                                       &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
                                       NULL,
-                                      "sip:scscf.sprout.homedomain:5058;transport=TCP",
                                       NULL) {};
   virtual ~MockHSSConnection() {};
 
-  MOCK_METHOD4(update_registration_state,
+  MOCK_METHOD5(update_registration_state,
                HTTPCode(const std::string& public_user_identity,
                         const std::string& private_user_identity,
                         const std::string& type,
+                        std::string server_name,
                         SAS::TrailId trail));
-  MOCK_METHOD6(update_registration_state,
+  MOCK_METHOD7(update_registration_state,
                HTTPCode(const std::string& public_user_identity,
                         const std::string& private_user_identity,
                         const std::string& type,
+                        std::string server_name,
                         std::map<std::string, Ifcs >& service_profiles,
                         AssociatedURIs& associated_uris,
                         SAS::TrailId trail));
-  MOCK_METHOD9(update_registration_state,
-               HTTPCode(const std::string& public_user_identity,
-                        const std::string& private_user_identity,
-                        const std::string& type,
-                        std::string& regstate,
-                        std::map<std::string, Ifcs >& ifcs_map,
-                        AssociatedURIs& associated_uris,
-                        std::deque<std::string>& ccfs,
-                        std::deque<std::string>& ecfs,
-                        SAS::TrailId trail));
+  MOCK_METHOD10(update_registration_state,
+                HTTPCode(const std::string& public_user_identity,
+                         const std::string& private_user_identity,
+                         const std::string& type,
+                         std::string& regstate,
+                         std::string server_name,
+                         std::map<std::string, Ifcs >& ifcs_map,
+                         AssociatedURIs& associated_uris,
+                         std::deque<std::string>& ccfs,
+                         std::deque<std::string>& ecfs,
+                         SAS::TrailId trail));
 
   MOCK_METHOD5(get_registration_data,
                HTTPCode(const std::string& public_user_identity,
@@ -63,6 +65,7 @@ public:
                         std::map<std::string, Ifcs >& ifcs_map,
                         AssociatedURIs& associated_uris,
                         SAS::TrailId trail));
+
 };
 
 #endif

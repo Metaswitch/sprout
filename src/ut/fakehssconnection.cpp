@@ -33,7 +33,6 @@ FakeHSSConnection::FakeHSSConnection(MockHSSConnection* hss_connection_observer)
                 &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
                 &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
                 NULL,
-                "sip:scscf.sprout.homedomain:5058;transport=TCP",
                 NULL)
 {
   _hss_connection_observer = hss_connection_observer;
@@ -54,7 +53,7 @@ void FakeHSSConnection::flush_all()
 void FakeHSSConnection::set_result(const std::string& url,
                                    const std::string& result)
 {
-  _results[UrlBody(url, "")] = result;
+  _results[url] = result;
 }
 
 void FakeHSSConnection::set_impu_result(const std::string& impu,
@@ -85,21 +84,13 @@ void FakeHSSConnection::set_impu_result(const std::string& impu,
                         "<ClearwaterRegData><RegistrationState>" + state + "</RegistrationState>"
                         + subxml + chargingaddrsxml + "</ClearwaterRegData>");
 
-  std::string body = "\"reqtype\": \"" + type + "\"" +
-                     ", \"server_name\": \"" +_scscf_uri +"\"";
-
-  if (wildcard != "")
-  {
-    body += ", \"wildcard_identity\": \"" + wildcard + "\"";
-  }
-
-  _results[UrlBody(url, (type.empty() ? "" : "{" + body + "}"))] = result;
+  _results[url] = result;
 }
 
 
 void FakeHSSConnection::delete_result(const std::string& url)
 {
-  _results.erase(UrlBody(url, ""));
+  _results.erase(url);
 }
 
 long FakeHSSConnection::put_for_xml_object(const std::string& path, std::string body, bool cache_allowed, rapidxml::xml_document<>*& root, SAS::TrailId trail)
@@ -131,7 +122,7 @@ long FakeHSSConnection::get_json_object(const std::string& path,
   _calls.insert(UrlBody(path, ""));
   HTTPCode http_code = HTTP_NOT_FOUND;
 
-  std::map<UrlBody, std::string>::const_iterator i = _results.find(UrlBody(path, ""));
+  std::map<std::string, std::string>::const_iterator i = _results.find(path);
 
   if (i != _results.end())
   {
@@ -183,7 +174,7 @@ long FakeHSSConnection::get_xml_object(const std::string& path,
   _calls.insert(UrlBody(path, body));
   HTTPCode http_code = HTTP_NOT_FOUND;
 
-  std::map<UrlBody, std::string>::const_iterator i = _results.find(UrlBody(path, body));
+  std::map<std::string, std::string>::const_iterator i = _results.find(path);
 
   if (i != _results.end())
   {
@@ -212,11 +203,11 @@ long FakeHSSConnection::get_xml_object(const std::string& path,
   {
     TRC_ERROR("Failed to find XML result for URL %s", path.c_str());
 
-    for(std::map<UrlBody, std::string>::const_iterator it = _results.begin();
+    for(std::map<std::string, std::string>::const_iterator it = _results.begin();
         it != _results.end();
         ++it)
     {
-      TRC_DEBUG(  "Have: (%s, %s)", it->first.first.c_str(), it->first.second.c_str());
+      TRC_DEBUG(  "Have: (%s)", it->first.c_str());
     }
   }
 
@@ -237,6 +228,7 @@ bool FakeHSSConnection::url_was_requested(const std::string& url, const std::str
 HTTPCode FakeHSSConnection::update_registration_state(const std::string& public_user_identity,
                                                       const std::string& private_user_identity,
                                                       const std::string& type,
+                                                      std::string server_name,
                                                       SAS::TrailId trail)
 {
   if (_hss_connection_observer != NULL)
@@ -244,12 +236,14 @@ HTTPCode FakeHSSConnection::update_registration_state(const std::string& public_
     _hss_connection_observer->update_registration_state(public_user_identity,
                                                         private_user_identity,
                                                         type,
+                                                        server_name,
                                                         trail);
   }
 
   return HSSConnection::update_registration_state(public_user_identity,
                                                   private_user_identity,
                                                   type,
+                                                  server_name,
                                                   trail);
 }
 
@@ -257,6 +251,7 @@ HTTPCode FakeHSSConnection::update_registration_state(const std::string& public_
                                                       const std::string& private_user_identity,
                                                       const std::string& type,
                                                       std::string& regstate,
+                                                      std::string server_name,
                                                       std::map<std::string, Ifcs >& ifcs_map,
                                                       AssociatedURIs& associated_uris,
                                                       std::deque<std::string>& ccfs,
@@ -269,6 +264,7 @@ HTTPCode FakeHSSConnection::update_registration_state(const std::string& public_
                                                         private_user_identity,
                                                         type,
                                                         regstate,
+                                                        server_name,
                                                         ifcs_map,
                                                         associated_uris,
                                                         ccfs,
@@ -280,6 +276,7 @@ HTTPCode FakeHSSConnection::update_registration_state(const std::string& public_
                                                   private_user_identity,
                                                   type,
                                                   regstate,
+                                                  server_name,
                                                   ifcs_map,
                                                   associated_uris,
                                                   ccfs,

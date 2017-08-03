@@ -93,7 +93,8 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          sifcservice.cpp \
                          fifcservice.cpp \
                          mmfservice.cpp \
-                         mmftargets.cpp
+                         mmftargets.cpp \
+                         event_statistic_accumulator.cpp
 
 sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_counter_table.cpp \
@@ -192,7 +193,8 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        sifcservice_test.cpp \
                        mock_sifc_parser.cpp \
                        fifcservice_test.cpp \
-                       mmfservice_test.cpp
+                       mmfservice_test.cpp \
+                       scscf_utils.cpp
 
 COVERAGE_ROOT := ..
 sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include|^modules/memento-as/modules|^modules/memento-as/src/ut|^modules/memento-as/include
@@ -287,7 +289,7 @@ sprout_mmtel_as.so_SOURCES := mmtel.cpp sproutletappserver.cpp mmtelasplugin.cpp
 sprout_mmtel_as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -Wno-write-strings
 sprout_mmtel_as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
-sprout_scscf.so_SOURCES := authenticationsproutlet.cpp registrarsproutlet.cpp subscriptionsproutlet.cpp scscfsproutlet.cpp scscfplugin.cpp forwardingsproutlet.cpp
+sprout_scscf.so_SOURCES := authenticationsproutlet.cpp registrarsproutlet.cpp subscriptionsproutlet.cpp scscfsproutlet.cpp scscfplugin.cpp forwardingsproutlet.cpp scscf_utils.cpp
 sprout_scscf.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS}
 sprout_scscf.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
@@ -296,6 +298,9 @@ mangelwurzel-as.so_CPPFLAGS := ${PLUGIN_COMMON_CPPFLAGS} -I../include/mangelwurz
 mangelwurzel-as.so_LDFLAGS := ${PLUGIN_COMMON_LDFLAGS}
 
 VPATH = ../modules/cpp-common/src ../modules/cpp-common/test_utils ../modules/app-servers/test ../modules/gemini/src ../modules/gemini/src/ut ../modules/memento-as/src ../modules/memento-as/src/ut ../modules/memento-as/modules/memento-common/src mangelwurzel mangelwurzel/ut ut
+
+# Use valgrind suppression file for UT
+sprout_test_VALGRIND_ARGS := --suppressions=ut/sprout_test.supp
 
 include ../build-infra/cpp.mk
 

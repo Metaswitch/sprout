@@ -83,6 +83,8 @@ SipTest::~SipTest()
 SipTest::TransportFlow* SipTest::_tp_default;
 SipTest* SipTest::_current_instance;
 pj_str_t scscf_domain = pj_str("scscf.proxy1.homedomain");
+pj_str_t sprout_hostname = pj_str("sprout.homedomain");
+pj_str_t sprout_site2_hostname = pj_str("sprout-site2.homedomain");
 
 /// Automatically run once, before the first test.
 void SipTest::SetUpTestCase()
@@ -101,8 +103,12 @@ void SipTest::SetUpTestCase()
   stack_data.local_host = pj_str("127.0.0.1");
   stack_data.public_host = pj_str("127.0.0.1");
   stack_data.home_domains.insert("homedomain");
+  stack_data.home_domains.insert("sprout.homedomain");
+  stack_data.home_domains.insert("sprout-site2.homedomain");
   stack_data.default_home_domain = pj_str("homedomain");
   URIClassifier::home_domains.push_back(&stack_data.default_home_domain);
+  URIClassifier::home_domains.push_back(&sprout_hostname);
+  URIClassifier::home_domains.push_back(&sprout_site2_hostname);
   URIClassifier::home_domains.push_back(&scscf_domain);
   stack_data.cdf_domain = pj_str("cdfdomain");
   stack_data.name = {stack_data.local_host, stack_data.public_host, pj_str("sprout.homedomain")};

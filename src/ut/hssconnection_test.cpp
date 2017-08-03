@@ -52,7 +52,6 @@ class HssConnectionTest : public BaseTest
          &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
          &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
          &_cm,
-         "server_name",
          NULL)
     {
     fakecurl_responses.clear();
@@ -153,6 +152,13 @@ class HssConnectionTest : public BaseTest
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
         "<RegistrationState>NOT_REGISTERED</RegistrationState>"
+        "<IMSSubscription>"
+        "</IMSSubscription>"
+      "</ClearwaterRegData>";
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid51/reg-data", "{\"reqtype\": \"call\", \"server_name\": \"sip:scscf.sprout.homedomain;transport=TCP\"}")] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<ClearwaterRegData>"
+        "<RegistrationState>REGISTERED</RegistrationState>"
         "<IMSSubscription>"
         "</IMSSubscription>"
       "</ClearwaterRegData>";
@@ -385,7 +391,7 @@ TEST_F(HssConnectionTest, SimpleUnregistered)
   AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("pubid50", "", HSSConnection::CALL, regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("pubid50", "", HSSConnection::CALL, regstate, "server_name", ifcs_map, uris, 0);
   EXPECT_EQ("UNREGISTERED", regstate);
 }
 
@@ -394,7 +400,7 @@ TEST_F(HssConnectionTest, SimpleNotRegisteredUpdate)
   AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("pubid50", "", HSSConnection::DEREG_ADMIN, regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("pubid50", "", HSSConnection::DEREG_ADMIN, regstate, "server_name", ifcs_map, uris, 0);
   EXPECT_EQ("NOT_REGISTERED", regstate);
 }
 
@@ -403,7 +409,7 @@ TEST_F(HssConnectionTest, SimpleIfc)
   AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("pubid42", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("pubid42", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
   EXPECT_FALSE(ifcs_map.empty());
 }
 
@@ -416,9 +422,19 @@ TEST_F(HssConnectionTest, SimpleChargingAddrs)
   std::deque<std::string> actual_ccfs = {"ccf1", "ccf2"};
   std::deque<std::string> ecfs;
   std::deque<std::string> actual_ecfs = {"ecf1", "ecf2"};
-  _hss.update_registration_state("pubid42", "", HSSConnection::REG, regstate, ifcs_map, uris, ccfs, ecfs, 0);
+  _hss.update_registration_state("pubid42", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, ccfs, ecfs, 0);
   EXPECT_EQ(actual_ccfs, ccfs);
   EXPECT_EQ(actual_ecfs, ecfs);
+}
+
+TEST_F(HssConnectionTest, ServerName)
+{
+  // Checks that we can request a different server name.
+  AssociatedURIs uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+  _hss.update_registration_state("pubid51", "", HSSConnection::CALL, regstate, "sip:scscf.sprout.homedomain;transport=TCP", ifcs_map, uris, 0);
+  EXPECT_EQ("REGISTERED", regstate);
 }
 
 TEST_F(HssConnectionTest, Barring)
@@ -427,7 +443,7 @@ TEST_F(HssConnectionTest, Barring)
   AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("pubid47", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("pubid47", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
   EXPECT_EQ("REGISTERED", regstate);
   ASSERT_EQ(1u, uris.get_unbarred_uris().size());
   EXPECT_FALSE(uris.is_impu_barred("sip:123@example.com"));
@@ -440,7 +456,7 @@ TEST_F(HssConnectionTest, BadXML)
   AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("pubid42_malformed", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("pubid42_malformed", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
   EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Failed to parse Homestead response"));
 }
@@ -452,7 +468,7 @@ TEST_F(HssConnectionTest, BadXML2)
   AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("pubid43_malformed", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("pubid43_malformed", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
   EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
 }
@@ -463,7 +479,7 @@ TEST_F(HssConnectionTest, BadXML_MissingServiceProfile)
   AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("missingelement4", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("missingelement4", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
   EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
 }
@@ -474,7 +490,7 @@ TEST_F(HssConnectionTest, BadXML_MissingPublicIdentity)
   AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("missingelement5", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("missingelement5", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
   EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed ServiceProfile XML"));
 }
@@ -485,7 +501,7 @@ TEST_F(HssConnectionTest, BadXML_MissingIdentity)
   AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("missingelement6", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("missingelement6", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
   EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed PublicIdentity XML"));
 }
@@ -496,7 +512,7 @@ TEST_F(HssConnectionTest, BadXML_MissingRegistrationState)
   AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("missingelement1", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("missingelement1", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
   EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed Homestead XML"));
 }
@@ -507,7 +523,7 @@ TEST_F(HssConnectionTest, BadXML_MissingClearwaterRegData)
   AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("missingelement3", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("missingelement3", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
   EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed Homestead XML"));
 }
@@ -518,7 +534,7 @@ TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription)
   AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("missingelement2", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("missingelement2", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
   EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
 }
@@ -530,7 +546,7 @@ TEST_F(HssConnectionTest, ServerFailure)
   AssociatedURIs uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
-  _hss.update_registration_state("pubid44", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  _hss.update_registration_state("pubid44", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
   EXPECT_EQ("", regstate);
   EXPECT_TRUE(uris.get_unbarred_uris().empty());
   EXPECT_TRUE(log.contains("http://narcissus/impu/pubid44/reg-data failed"));
@@ -624,6 +640,7 @@ TEST_F(HssConnectionTest, SimpleAliases)
                                  "",
                                  HSSConnection::CALL,
                                  regstate,
+                                 "server_name",
                                  ifcs_map,
                                  unused_uris,
                                  aliases,
@@ -649,6 +666,7 @@ TEST_F(HssConnectionTest, CacheNotAllowed)
                                                "a-private-id",
                                                HSSConnection::REG,
                                                regstate,
+                                               "server_name",
                                                ifcs_map,
                                                unused_uris,
                                                aliases,
@@ -708,7 +726,6 @@ class HssWithSifcTest : public BaseTest
               &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
               &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
               NULL,
-              "server_name",
               &_sifc_service)
   {
     fakecurl_responses.clear();
@@ -1018,7 +1035,7 @@ TEST_F(HssWithSifcTest, SimpleSiFC)
     .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifcs_from_id)));
 
   // Send in a message, and check that two iFCs are now present in the map.
-  _sifc_hss.update_registration_state("onesifc", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  _sifc_hss.update_registration_state("onesifc", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
   EXPECT_TRUE(ifcs_map.begin()->second.size() == 2);
 }
 
@@ -1039,7 +1056,7 @@ TEST_F(HssWithSifcTest, SifcWithIfc)
 
   // Send in a message, and check that three iFCs are now present in the map,
   // two from the SiFC set, and one regular iFC.
-  _sifc_hss.update_registration_state("sifcandifc", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  _sifc_hss.update_registration_state("sifcandifc", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
   EXPECT_TRUE(ifcs_map.begin()->second.size() == 3);
 }
 
@@ -1051,7 +1068,7 @@ TEST_F(HssWithSifcTest, NonIntegerSifc)
   std::string regstate;
 
   // Send in a message, and check that the iFC map is still empty.
-  _sifc_hss.update_registration_state("invalidsifc", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  _sifc_hss.update_registration_state("invalidsifc", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
   EXPECT_TRUE(ifcs_map.begin()->second.size() == 0);
 }
 
@@ -1082,7 +1099,7 @@ TEST_F(HssWithSifcTest, MultipleExtensions)
     .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifc_list_two)));
 
   // Send in a message, and check that three iFCs are now in the iFC map.
-  _sifc_hss.update_registration_state("multipleextensions", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  _sifc_hss.update_registration_state("multipleextensions", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
   EXPECT_TRUE(ifcs_map.begin()->second.size() == 3);
 }
 
@@ -1102,7 +1119,7 @@ TEST_F(HssWithSifcTest, MultipleSifcs)
     .WillOnce(SetArgReferee<0>(std::multimap<int32_t, Ifc>(ifcs_from_id)));
 
   // Send in a message, and check that two iFCs are now in the iFC map.
-  _sifc_hss.update_registration_state("multiplesifc", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  _sifc_hss.update_registration_state("multiplesifc", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
   EXPECT_TRUE(ifcs_map.begin()->second.size() == 2);
 }
 
@@ -1131,7 +1148,7 @@ TEST_F(HssWithSifcTest, MultiplePubIdsWithSifcs)
   // are the lists of iFCs that correspond to that public id.
   // Send in a message, and loop through the map checking that the correct
   // number of iFCs are present for each public id.
-  _sifc_hss.update_registration_state("multiplepubids", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  _sifc_hss.update_registration_state("multiplepubids", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
   for(std::pair<std::string, Ifcs> elem : ifcs_map)
   {
     EXPECT_TRUE(elem.second.size() == 2);
@@ -1160,7 +1177,7 @@ TEST_F(HssWithSifcTest, ComplexSifcIfcMix)
   // 6 distinct iFCs with priorities 1, 1, 2, 3, 3 and 4 should be returned.
   // Additionally 3 iFCs from shared iFCs with priorities 1, 2 and 2 should be
   // returned.
-  _sifc_hss.update_registration_state("sifcifcmix", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  _sifc_hss.update_registration_state("sifcifcmix", "", HSSConnection::REG, regstate, "server_name", ifcs_map, uris, 0);
   int32_t map_size = ifcs_map.begin()->second.size();
   EXPECT_TRUE(map_size == 9);
   std::vector<int32_t> priorities;

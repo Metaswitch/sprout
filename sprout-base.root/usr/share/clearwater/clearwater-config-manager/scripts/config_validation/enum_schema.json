@@ -1,0 +1,32 @@
+{
+  "title": "All ENUM Entries",
+  "type": "object",
+  "properties": {
+    "number_blocks": {
+      "type": "array",
+      "items": {
+        "title": "Each number block",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string",
+            "pattern": "^\\+{0,1}[0-9]*$"
+          },
+          "regex": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "prefix",
+          "regex"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

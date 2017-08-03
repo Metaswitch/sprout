@@ -15,6 +15,7 @@
 #include "json_parse_utils.h"
 #include <openssl/hmac.h>
 #include "base64.h"
+#include "scscf_utils.h"
 
 // Configuring PJSIP with a realm of "*" means that all realms are considered.
 const pj_str_t WILDCARD_REALM = pj_str((char*)"*");
@@ -58,7 +59,7 @@ AuthenticationSproutlet::AuthenticationSproutlet(const std::string& name,
                                                  SNMP::AuthenticationStatsTables* auth_stats_tbls,
                                                  bool nonce_count_supported_arg,
                                                  get_expiry_for_binding_fn get_expiry_for_binding_arg) :
-  Sproutlet(name, port, uri),
+  Sproutlet(name, port, uri, "", aliases),
   _aka_realm((realm_name != "") ?
     pj_strdup3(stack_data.pool, realm_name.c_str()) :
     stack_data.local_host),
@@ -72,8 +73,7 @@ AuthenticationSproutlet::AuthenticationSproutlet(const std::string& name,
   _nonce_count_supported(nonce_count_supported_arg),
   _get_expiry_for_binding(get_expiry_for_binding_arg),
   _non_register_auth_mode(non_register_auth_mode_param),
-  _next_hop_service(next_hop_service),
-  _aliases(aliases)
+  _next_hop_service(next_hop_service)
 {
 }
 
@@ -116,19 +116,11 @@ SproutletTsx* AuthenticationSproutlet::get_tsx(SproutletHelper* helper,
   }
 
   // We're not interested in the message so create a next hop URI.
-  pjsip_route_hdr* route = (pjsip_route_hdr*)
-                              pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
-
+  pjsip_sip_uri* base_uri = helper->get_routing_uri(req);
   next_hop = helper->next_hop_uri(_next_hop_service,
-                                  route,
+                                  base_uri,
                                   pool);
   return NULL;
-}
-
-
-const std::list<std::string> AuthenticationSproutlet::aliases() const
-{
-  return { _aliases };
 }
 
 // Determine whether this request should be challenged (and SAS log appropriately).
@@ -279,7 +271,8 @@ AuthenticationSproutletTsx::AuthenticationSproutletTsx(AuthenticationSproutlet* 
                                                        const std::string& next_hop_service) :
   ForwardingSproutletTsx(authentication, next_hop_service),
   _authentication(authentication),
-  _authenticated_using_sip_digest(false)
+  _authenticated_using_sip_digest(false),
+  _scscf_uri()
 {
 }
 
@@ -603,6 +596,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
                                                                 impu_for_hss,
                                                                 auth_type,
                                                                 resync,
+                                                                _scscf_uri,
                                                                 doc,
                                                                 trail());
     av_source_unavailable = ((http_code == HTTP_SERVER_UNAVAILABLE) ||
@@ -801,6 +795,11 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     // the IMPI at the end of the loop.
     std::string nonce = auth_challenge->nonce;
 
+    // Set the site-specific server name for the S-CSCF that issued this
+    // challenge. This is so that if the authentication timer pops in a remote
+    // site, we can use the same server name on the SAR.
+    auth_challenge->scscf_uri = _scscf_uri;
+
     // Write the challenge back to the store.
     status = _authentication->write_challenge(impi, auth_challenge, impi_obj, trail());
 
@@ -876,6 +875,16 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   const int unauth_sc = is_register ? PJSIP_SC_UNAUTHORIZED : PJSIP_SC_PROXY_AUTHENTICATION_REQUIRED;
   int sc = unauth_sc;
   status = PJ_SUCCESS;
+
+  // Construct the S-CSCF URI for this transaction. Use the configured S-CSCF
+  // URI as a starting point.
+  pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), stack_data.scscf_uri);
+  pjsip_sip_uri* routing_uri = get_routing_uri(req);
+  SCSCFUtils::get_scscf_uri(get_pool(req),
+                            get_local_hostname(routing_uri),
+                            get_local_hostname(scscf_uri),
+                            scscf_uri);
+  _scscf_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)scscf_uri);
 
   pjsip_digest_credential* credentials = get_credentials(req);
 
@@ -1154,8 +1163,14 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     // No authorization information in request, or no authentication vector
     // found in the store (so request is likely stale), so must issue
     // challenge.
-    TRC_DEBUG("No authentication information in request or stale nonce, so reject with challenge");
+    TRC_DEBUG("No authentication information in request or stale nonce, so reject with challenge (status %d)", status);
     pj_bool_t stale = (status == PJSIP_EAUTHACCNOTFOUND);
+
+    if (stale)
+    {
+      SAS::Event event(trail(), SASEvent::AUTHENTICATION_FAILED_STALE_NONCE, 0);
+      SAS::report_event(event);
+    }
 
     sc = unauth_sc;
 
@@ -1192,6 +1207,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       _authentication->_hss->update_registration_state(impu,
                                                   impi,
                                                   HSSConnection::AUTH_FAIL,
+                                                  _scscf_uri,
                                                   trail());
     }
 

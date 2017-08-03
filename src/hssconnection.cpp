@@ -43,7 +43,6 @@ HSSConnection::HSSConnection(const std::string& server,
                              SNMP::EventAccumulatorTable* homestead_uar_latency_tbl,
                              SNMP::EventAccumulatorTable* homestead_lir_latency_tbl,
                              CommunicationMonitor* comm_monitor,
-                             std::string scscf_uri,
                              SIFCService* sifc_service) :
   _http(new HttpConnection(server,
                            false,
@@ -57,7 +56,6 @@ HSSConnection::HSSConnection(const std::string& server,
   _sar_latency_tbl(homestead_sar_latency_tbl),
   _uar_latency_tbl(homestead_uar_latency_tbl),
   _lir_latency_tbl(homestead_lir_latency_tbl),
-  _scscf_uri(scscf_uri),
   _sifc_service(sifc_service)
 {
 }
@@ -74,6 +72,7 @@ HTTPCode HSSConnection::get_auth_vector(const std::string& private_user_identity
                                         const std::string& public_user_identity,
                                         const std::string& auth_type,
                                         const std::string& resync_auth,
+                                        const std::string& server_name,
                                         rapidjson::Document*& av,
                                         SAS::TrailId trail)
 {
@@ -104,6 +103,12 @@ HTTPCode HSSConnection::get_auth_vector(const std::string& private_user_identity
   {
     path += public_user_identity.empty() ? "?" : "&";
     path += "resync-auth=" + Utils::url_escape(resync_auth);
+  }
+
+  if (!server_name.empty())
+  {
+    path += (public_user_identity.empty() && resync_auth.empty()) ? "?" : "&";
+    path += "server-name=" + Utils::url_escape(server_name);
   }
 
   HTTPCode rc = get_json_object(path, av, trail);
@@ -568,6 +573,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                                   const std::string& private_user_identity,
                                                   const std::string& type,
                                                   std::string& regstate,
+                                                  std::string server_name,
                                                   std::map<std::string, Ifcs >& ifcs_map,
                                                   AssociatedURIs& associated_uris,
                                                   SAS::TrailId trail)
@@ -579,6 +585,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                    private_user_identity,
                                    type,
                                    regstate,
+                                   server_name,
                                    ifcs_map,
                                    associated_uris,
                                    unused_aliases,
@@ -592,6 +599,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
 HTTPCode HSSConnection::update_registration_state(const std::string& public_user_identity,
                                                   const std::string& private_user_identity,
                                                   const std::string& type,
+                                                  std::string server_name,
                                                   std::map<std::string, Ifcs >& ifcs_map,
                                                   AssociatedURIs& associated_uris,
                                                   SAS::TrailId trail)
@@ -604,6 +612,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                    private_user_identity,
                                    type,
                                    unused_regstate,
+                                   server_name,
                                    ifcs_map,
                                    associated_uris,
                                    unused_aliases,
@@ -617,6 +626,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
 HTTPCode HSSConnection::update_registration_state(const std::string& public_user_identity,
                                                   const std::string& private_user_identity,
                                                   const std::string& type,
+                                                  std::string server_name,
                                                   SAS::TrailId trail)
 {
   std::map<std::string, Ifcs > ifcs_map;
@@ -629,6 +639,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                    private_user_identity,
                                    type,
                                    unused_regstate,
+                                   server_name,
                                    ifcs_map,
                                    associated_uris,
                                    unused_aliases,
@@ -643,6 +654,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                                   const std::string& private_user_identity,
                                                   const std::string& type,
                                                   std::string& regstate,
+                                                  std::string server_name,
                                                   std::map<std::string, Ifcs >& ifcs_map,
                                                   AssociatedURIs& associated_uris,
                                                   std::deque<std::string>& ccfs,
@@ -654,6 +666,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                    private_user_identity,
                                    type,
                                    regstate,
+                                   server_name,
                                    ifcs_map,
                                    associated_uris,
                                    unused_aliases,
@@ -668,6 +681,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                                   const std::string& private_user_identity,
                                                   const std::string& type,
                                                   std::string& regstate,
+                                                  std::string server_name,
                                                   std::map<std::string, Ifcs >& ifcs_map,
                                                   AssociatedURIs& associated_uris,
                                                   std::vector<std::string>& aliases,
@@ -701,7 +715,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
   std::string json_wildcard =
         (wildcard != "") ? ", \"wildcard_identity\": \"" + wildcard + "\"" : "";
   std::string req_body = "{\"reqtype\": \"" + type + "\"" +
-                          ", \"server_name\": \"" +_scscf_uri + "\"" +
+                          ", \"server_name\": \"" + server_name + "\"" +
                           json_wildcard +
                           "}";
   HTTPCode http_code = put_for_xml_object(path,

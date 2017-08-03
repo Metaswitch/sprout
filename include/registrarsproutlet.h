@@ -38,6 +38,7 @@ public:
                      int port,
                      const std::string& uri,
                      const std::string& next_hop_service,
+                     const std::list<std::string>& aliases,
                      SubscriberDataManager* reg_sdm,
                      std::vector<SubscriberDataManager*> reg_remote_sdms,
                      HSSConnection* hss_connection,
@@ -128,6 +129,11 @@ protected:
   void log_bindings(const std::string& aor_name, SubscriberDataManager::AoR* aor_data);
 
   RegistrarSproutlet* _registrar;
+
+  // The S-CSCF URI for this transaction. This is used on any SAR that is sent
+  // to the HSS. This field should not be changed once it has been set by the
+  // on_rx_intial_request() call.
+  std::string _scscf_uri;
 
   /// Member variables covering the IFCs.
   FIFCService* _fifc_service;

@@ -325,7 +325,10 @@ void AoRTimeoutTask::handle_response()
       event.add_var_param(_aor_id);
       SAS::report_event(event);
 
-      _cfg->_hss->update_registration_state(_aor_id, "", HSSConnection::DEREG_TIMEOUT, trail());
+      // Get the S-CSCF URI off the AoR to put on the SAR.
+      SubscriberDataManager::AoR* aor = aor_pair->get_current();
+
+      _cfg->_hss->update_registration_state(_aor_id, "", HSSConnection::DEREG_TIMEOUT, aor->_scscf_uri, trail());
     }
     else
     {
@@ -730,7 +733,7 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
       // If either of these operations fail, we return a 500 Internal
       // Server Error - this will trigger Chronos to try a different
       // Sprout, which may have better connectivity to Homestead or Memcached.
-      HTTPCode hss_query = _cfg->_hss->update_registration_state(_impu, _impi, HSSConnection::AUTH_TIMEOUT, trail());
+      HTTPCode hss_query = _cfg->_hss->update_registration_state(_impu, _impi, HSSConnection::AUTH_TIMEOUT, auth_challenge->scscf_uri, trail());
 
       if (hss_query == HTTP_OK)
       {
