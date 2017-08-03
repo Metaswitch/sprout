@@ -46,7 +46,6 @@ using testing::NiceMock;
 using testing::HasSubstr;
 using ::testing::Return;
 
-
 namespace SP
 {
   class Message
@@ -3590,7 +3589,6 @@ TEST_F(SCSCFTest, DISABLED_DefaultHandlingTerminateTimeout)
     .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, 1);
   SubscriptionBuilder subscription = SubscriptionBuilder()
     .addServiceProfile(service_profile);
-
   _hss_connection->set_impu_result("sip:6505551000@homedomain",
                                    "call",
                                    "UNREGISTERED",

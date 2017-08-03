@@ -55,6 +55,9 @@ std::string ServiceProfileBuilder::return_profile()
     {
       service_profile += Common::add_node(Common::BARRING_INDICATION, it->barring_indication);
     }
+    // If a wildcarded identity is present, both the identity type and
+    // wildcarded IMPU should have been set. Check if this is the case, and if
+    // so, add the wildcard info to the XML string.
     if((it->identity_type != Common::NO_ID_TYPE) && (it->wildcard_impu != Common::NO_WILDCARD_IMPU))
     {
       // The number of extensions here is correct.
@@ -80,8 +83,10 @@ std::string ServiceProfileBuilder::return_profile()
 }
 
 // Add an identity to the list of identities. This identity is always added with
-// "none" set for the BarringIndication. If the BarringIndication node is
-// required, the addBarringIndication function should be used.
+// "none" set for the BarringIndication, IdentityType and WildcardedIMPU.
+// If the BarringIndication node is required, the addBarringIndication function
+// should be used.
+// If wildcard info is required, the addWildcard function should be used.
 ServiceProfileBuilder& ServiceProfileBuilder::addIdentity(std::string identity)
 {
   IdentityStruct new_identity;
@@ -94,13 +99,14 @@ ServiceProfileBuilder& ServiceProfileBuilder::addIdentity(std::string identity)
   return *this;
 }
 
-// Add an extension to a public identity.
+// Add wildcard information (identity type of 3, and the wildcarded impu) to a
+// public identity.
 ServiceProfileBuilder& ServiceProfileBuilder::addWildcard(std::string identity,
                                                           int identity_type,
                                                           std::string wildcard_impu)
 {
   // Locate the specified identity in the list of identities, and apply the
-  // given extenstion information to it.
+  // given wildcard information to it.
   for (std::vector<IdentityStruct>::iterator it = _identities.begin();
        it != _identities.end();
        ++it)
@@ -135,8 +141,9 @@ ServiceProfileBuilder& ServiceProfileBuilder::addBarringIndication(std::string i
   return *this;
 }
 
-// Add the text for an iFC, which includes no DefaultHandling field, to the list
-// of iFCs.
+// Add a new iFC, which includes no DefaultHandling field, to the list of iFCs.
+// Note: This is an incorrect form!! We are using the for error handling
+// testing only.
 ServiceProfileBuilder& ServiceProfileBuilder::addIfcNoDefHandling(int priority,
                                                                   std::vector<std::string> triggers,
                                                                   std::string app_serv_name,
@@ -153,8 +160,8 @@ ServiceProfileBuilder& ServiceProfileBuilder::addIfcNoDefHandling(int priority,
   return *this;
 }
 
-// Add the text for an iFC, where the value in the DefaultHandling field is
-// malformed.
+// Add a new iFC, where the value in the DefaultHandling field is malformed, to
+// the list of iFCs.
 ServiceProfileBuilder& ServiceProfileBuilder::addIfcBadDefField(int priority,
                                                                 std::vector<std::string> triggers,
                                                                 std::string app_serv_name,
@@ -172,7 +179,7 @@ ServiceProfileBuilder& ServiceProfileBuilder::addIfcBadDefField(int priority,
   return *this;
 }
 
-// Add the info for an iFC to the list of iFCs.
+// Add a new iFC to the list of iFCs.
 ServiceProfileBuilder& ServiceProfileBuilder::addIfc(int priority,
                                                      std::vector<std::string> triggers,
                                                      std::string app_serv_name,
