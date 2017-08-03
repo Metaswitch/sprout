@@ -79,8 +79,8 @@ void SIPResolver::resolve(const std::string& name,
     TRC_DEBUG("Target is an IP address - default port/transport if required");
 
     // Check which host states are permitted.
-    bool whitelisted_allowed = ( allowed_host_state & BaseResolver::WHITELISTED );
-    bool blacklisted_allowed = ( allowed_host_state & BaseResolver::BLACKLISTED );
+    const bool whitelisted_allowed = allowed_host_state & BaseResolver::WHITELISTED;
+    const bool blacklisted_allowed = allowed_host_state & BaseResolver::BLACKLISTED;
 
     ai.transport = (transport != -1) ? transport : IPPROTO_UDP;
     ai.port = (port != 0) ? port : 5060;
