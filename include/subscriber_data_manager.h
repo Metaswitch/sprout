@@ -93,9 +93,6 @@ public:
       /// value.  E.g., "+sip.ice" -> "".
       std::map<std::string, std::string> _params;
 
-      /// The timer ID provided by Chronos.
-      std::string _timer_id;
-
       /// The private ID this binding was registered with.
       std::string _private_id;
 
@@ -157,9 +154,6 @@ public:
       /// The time (in seconds since the epoch) at which this subscription
       /// should expire.
       int _expires;
-
-      /// The timer ID provided by Chronos.
-      std::string _timer_id;
 
       /// Serialize the subscription as a JSON object.
       ///

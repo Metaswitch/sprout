@@ -1430,7 +1430,6 @@ TEST_F(GetSubscriptionsTest, OneSubscription)
   EXPECT_TRUE(subscription.HasMember("cid"));
   EXPECT_TRUE(subscription.HasMember("routes"));
   EXPECT_TRUE(subscription.HasMember("expires"));
-  EXPECT_TRUE(subscription.HasMember("timer_id"));
 
   // Do check the subscription ID and URI as a representative test.
   EXPECT_EQ(id, subscription_id.GetString());

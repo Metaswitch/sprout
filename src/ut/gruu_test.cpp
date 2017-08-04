@@ -54,7 +54,6 @@ public:
     };
     binding._params["+sip.boolean"] = "";
     binding._params["methods"] = "invite,options";
-    binding._timer_id = "";
     binding._private_id = "user@domain.com";
     binding._emergency_registration = false;
   }

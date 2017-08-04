@@ -106,7 +106,6 @@ TEST_F(BasicSubscriberDataManagerTest, BindingTests)
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
   b1->_expires = now + 300;
-  b1->_timer_id = "shouldbecomeDeprecated";
   b1->_priority = 0;
   b1->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
   b1->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
@@ -141,7 +140,6 @@ TEST_F(BasicSubscriberDataManagerTest, BindingTests)
   EXPECT_EQ(17038, b1->_cseq);
   EXPECT_EQ(now + 300, b1->_expires);
   EXPECT_EQ(0, b1->_priority);
-  EXPECT_EQ(std::string("Deprecated"), b1->_timer_id);
   EXPECT_EQ(1u, b1->_path_headers.size());
   EXPECT_EQ(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"), b1->_path_headers.front());
   EXPECT_EQ(3u, b1->_params.size());
@@ -241,7 +239,6 @@ TEST_F(BasicSubscriberDataManagerTest, SubscriptionTests)
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
   b1->_expires = now + 300;
-  b1->_timer_id = "shouldbecomeDeprecated";
   b1->_priority = 0;
   b1->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
   b1->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
@@ -287,7 +284,6 @@ TEST_F(BasicSubscriberDataManagerTest, SubscriptionTests)
   s1->_cid = std::string("xyzabc@192.91.191.29");
   s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
   s1->_expires = now + 300;
-  s1->_timer_id = "shouldbecomeDeprecated";
 
   // Write the record back to the store.
   rc = this->_store->set_aor_data(aor, &associated_uris, aor_data1, 0);
@@ -311,7 +307,6 @@ TEST_F(BasicSubscriberDataManagerTest, SubscriptionTests)
   EXPECT_EQ(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"), s1->_route_uris.front());
   EXPECT_EQ(now + 300, s1->_expires);
   EXPECT_EQ(3, aor_data1->get_current()->_notify_cseq);
-  EXPECT_EQ("Deprecated", s1->_timer_id);
 
   // Remove the subscription.
   aor_data1->get_current()->remove_subscription(std::string("1234"));
@@ -342,7 +337,6 @@ TEST_F(BasicSubscriberDataManagerTest, CopyTests)
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
   b1->_expires = now + 300;
-  b1->_timer_id = "shouldbecomeDeprecated";
   b1->_priority = 0;
   b1->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.homedomain;lr"));
   b1->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.homedomain;lr>;tag=6ht7"));
@@ -417,7 +411,6 @@ TEST_F(BasicSubscriberDataManagerTest, ExpiryTests)
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
   b1->_expires = now + 100;
-  b1->_timer_id = "shouldbecomeDeprecated";
   b1->_priority = 0;
   b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
   b1->_params["reg-id"] = "1";
@@ -430,7 +423,6 @@ TEST_F(BasicSubscriberDataManagerTest, ExpiryTests)
   b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b2->_cseq = 17038;
   b2->_expires = now + 200;
-  b2->_timer_id = "shouldbecomeDeprecated";
   b2->_priority = 0;
   b2->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
   b2->_params["reg-id"] = "2";
@@ -450,7 +442,6 @@ TEST_F(BasicSubscriberDataManagerTest, ExpiryTests)
   s1->_cid = std::string("xyzabc@192.91.191.29");
   s1->_route_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
   s1->_expires = now + 150;
-  s1->_timer_id = "shouldbecomeDeprecated";
   s2 = aor_data1->get_current()->get_subscription("5678");
   EXPECT_EQ(2u, aor_data1->get_current()->subscriptions().size());
   s2->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
@@ -461,7 +452,6 @@ TEST_F(BasicSubscriberDataManagerTest, ExpiryTests)
   s2->_cid = std::string("xyzabc@192.91.191.29");
   s2->_route_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
   s2->_expires = now + 300;
-  s2->_timer_id = "shouldbecomeDeprecated";
 
   // Write the record to the store.
   std::string aor = "5102175698@cw-ngv.com";
@@ -645,7 +635,6 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, BasicAoRTimerTest)
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
   b1->_expires = now + 300;
-  b1->_timer_id = "shouldbecomeDeprecated";
   b1->_priority = 0;
   b1->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
   b1->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
@@ -719,7 +708,6 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, UpdateAoRTimerTest)
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
   b1->_expires = now + 300;
-  b1->_timer_id = "shouldbecomeDeprecated";
   b1->_priority = 0;
   b1->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
   b1->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
@@ -779,7 +767,6 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, UpdateAoRTimerTest)
   b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b2->_cseq = 17038;
   b2->_expires = now + 300;
-  b2->_timer_id = "shouldbecomeDeprecated";
   b2->_priority = 0;
   b2->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
   b2->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
@@ -823,7 +810,6 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRChangeNoUpdateTimerTest)
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
   b1->_expires = now + 300;
-  b1->_timer_id = "shouldbecomeDeprecated";
   b1->_priority = 0;
   b1->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
   b1->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
@@ -871,7 +857,6 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRChangeNoUpdateTimerTest)
   b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b2->_cseq = 17038;
   b2->_expires = now + 300;
-  b2->_timer_id = "shouldbecomeDeprecated";
   b2->_priority = 0;
   b2->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
   b2->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
@@ -941,7 +926,6 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
   b1->_expires = now + 300;
-  b1->_timer_id = "shouldbecomeDeprecated";
   b1->_priority = 0;
   b1->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
   b1->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
@@ -1041,7 +1025,6 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRTimerBadRequestNoIDTest)
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
   b1->_expires = now + 300;
-  b1->_timer_id = "shouldbecomeDeprecated";
   b1->_priority = 0;
   b1->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
   b1->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));

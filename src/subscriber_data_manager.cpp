@@ -926,7 +926,6 @@ void SubscriberDataManager::AoR::Binding::
     }
     writer.EndArray();
 
-    writer.String(JSON_TIMER_ID); writer.String("Deprecated");
     writer.String(JSON_PRIVATE_ID); writer.String(_private_id.c_str());
     writer.String(JSON_EMERGENCY_REG); writer.Bool(_emergency_registration);
   }
@@ -982,11 +981,6 @@ void SubscriberDataManager::AoR::Binding::from_json(const rapidjson::Value& b_ob
     }
   }
 
-  _timer_id =
-    ((b_obj.HasMember(JSON_TIMER_ID)) && ((b_obj[JSON_TIMER_ID]).IsString()) ?
-     (b_obj[JSON_TIMER_ID].GetString()) :
-     "");
-  //      JSON_GET_STRING_MEMBER(b_obj, JSON_TIMER_ID, _timer_id);
   JSON_GET_STRING_MEMBER(b_obj, JSON_PRIVATE_ID, _private_id);
   JSON_GET_BOOL_MEMBER(b_obj, JSON_EMERGENCY_REG, _emergency_registration);
 }
@@ -1016,8 +1010,6 @@ void SubscriberDataManager::AoR::Subscription::
     writer.EndArray();
 
     writer.String(JSON_EXPIRES); writer.Int(_expires);
-    writer.String(JSON_TIMER_ID); writer.String("Deprecated");
-
   }
   writer.EndObject();
 }
@@ -1044,10 +1036,6 @@ void SubscriberDataManager::AoR::Subscription::from_json(const rapidjson::Value&
   }
 
   JSON_GET_INT_MEMBER(s_obj, JSON_EXPIRES, _expires);
-  _timer_id =
-    ((s_obj.HasMember(JSON_TIMER_ID)) && ((s_obj[JSON_TIMER_ID]).IsString()) ?
-     (s_obj[JSON_TIMER_ID].GetString()) :
-     "");
 }
 
 // Utility function to return the expiry time of the binding or subscription due
