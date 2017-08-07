@@ -72,11 +72,18 @@ std::string ServiceProfileBuilder::return_profile()
     }
     service_profile += Common::end_node(Common::PUBLIC_ID);
   }
-  for(std::vector<IfcStruct>::iterator ifc = _ifcs.begin();
-      ifc != _ifcs.end();
-      ++ifc)
+  if (_ifcs.empty())
   {
-    service_profile += create_ifc(*ifc);
+    service_profile += Common::add_node(Common::IFC, "");
+  }
+  else
+  {
+    for(std::vector<IfcStruct>::iterator ifc = _ifcs.begin();
+        ifc != _ifcs.end();
+        ++ifc)
+    {
+      service_profile += create_ifc(*ifc);
+    }
   }
   service_profile += Common::end_node(Common::SERVICE_PROFILE);
   return service_profile;
@@ -251,7 +258,6 @@ std::string SubscriptionBuilder::return_sub()
     sub += service_prof;
   }
   sub += Common::end_node(Common::IMS_SUBSCRIPTION);
-  printf("sub is:\n%s\n", sub.c_str());
   return sub;
 }
 

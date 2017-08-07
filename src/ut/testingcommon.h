@@ -76,7 +76,7 @@ namespace Common
 //         </Extension>
 //       </Extension>
 //     </PublicIdentity>
-//     <InitialFilterCriteria>                 There can be multiple of this node.
+//     <InitialFilterCriteria>                 There can be multiple of this node. If a service profile has no iFCs, this node is present but empty.
 //       <Priority>1</Priority>                This can be set to 1 or 2.
 //       <TriggerPoint>
 //         <ConditionTypeCNF>
