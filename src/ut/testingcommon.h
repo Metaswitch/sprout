@@ -192,6 +192,7 @@ namespace TestingCommon
     std::string _route;
     int _cseq;
     bool _in_dialog;
+    bool _contentlength;
 
     Message();
     ~Message();

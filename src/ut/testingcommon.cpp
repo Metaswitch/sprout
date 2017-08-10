@@ -290,6 +290,7 @@ Message::Message()
 //  _route = "Route: <sip:sprout.homedomain;service=scscf>";
   _cseq = 16567;
   _in_dialog = false;
+  _contentlength = true;
 
   static int unique = 1042;
   _unique = unique;
@@ -339,6 +340,9 @@ std::string Message::get_request()
   // Default branch parameter if it's not supplied.
   std::string branch = _branch.empty() ? "Pjmo1aimuq33BAI4rjhgQgBr4sY" + std::to_string(_unique) : _branch;
 
+  char content_length[128];
+  snprintf(content_length, sizeof(content_length), "Content-Length: %d\r\n", (int)_body.length());
+
   int n = snprintf(buf, sizeof(buf),
                    "%1$s %9$s SIP/2.0\r\n"
                    "Via: SIP/2.0/TCP %13$s;rport;branch=z9hG4bK%16$s\r\n"
@@ -353,14 +357,14 @@ std::string Message::get_request()
                    "%4$s"
                    "%7$s"
                    "%14$s"
-                   "Content-Length: %5$d\r\n"
+                   "%5$s"
                    "\r\n"
                    "%6$s",
                    /*  1 */ _method.c_str(),
                    /*  2 */ _from.c_str(),
                    /*  3 */ _fromdomain.c_str(),
                    /*  4 */ _content_type.empty() ? "" : std::string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
-                   /*  5 */ (int)_body.length(),
+                   /*  5 */ _contentlength ? content_length : "",
                    /*  6 */ _body.c_str(),
                    /*  7 */ _extra.empty() ? "" : std::string(_extra).append("\r\n").c_str(),
                    /*  8 */ _forwards,

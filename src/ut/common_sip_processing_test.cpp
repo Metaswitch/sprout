@@ -23,6 +23,7 @@
 #include "common_sip_processing.h"
 #include "counter.h"
 #include "fakesnmp.hpp"
+#include "testingcommon.h"
 
 using namespace std;
 
@@ -98,156 +99,6 @@ public:
     pjsip_tsx_layer_instance()->stop();
     pjsip_tsx_layer_instance()->start();
   }
-
-  class Message
-  {
-  public:
-    string _method;
-    string _requri; //< overrides toscheme:to@todomain
-    string _toscheme;
-    string _status;
-    string _from;
-    string _fromdomain;
-    string _to;
-    string _todomain;
-    string _content_type;
-    string _body;
-    string _extra;
-    int _forwards;
-    int _unique; //< unique to this dialog; inserted into Call-ID
-    string _via;
-    string _route;
-    int _cseq;
-    bool _contentlength;
-
-    Message() :
-      _method("INVITE"),
-      _toscheme("sip"),
-      _status("200 OK"),
-      _from("6505551000"),
-      _fromdomain("homedomain"),
-      _to("6505551234"),
-      _todomain("homedomain"),
-      _content_type("application/sdp"),
-      _forwards(68),
-      _via("10.83.18.38:36530"),
-      _cseq(16567),
-      _contentlength(true)
-    {
-      static int unique = 1042;
-      _unique = unique;
-      unique += 10; // leave room for manual increments
-    }
-
-    void set_route(pjsip_msg* msg)
-    {
-      string route = get_headers(msg, "Record-Route");
-      if (route != "")
-      {
-        // Convert to a Route set by replacing all instances of Record-Route: with Route:
-        for (size_t n = 0; (n = route.find("Record-Route:", n)) != string::npos;)
-        {
-          route.replace(n, 13, "Route:");
-        }
-      }
-      _route = route;
-    }
-
-    string get_request()
-    {
-      char buf[16384];
-
-      // The remote target.
-      string target = string(_toscheme).append(":").append(_to);
-      if (!_todomain.empty())
-      {
-        target.append("@").append(_todomain);
-      }
-
-      string requri = target;
-      string route = _route.empty() ? "" : _route + "\r\n";
-      char   content_length[128];
-      snprintf(content_length, sizeof(content_length), "Content-Length: %d\r\n", (int)_body.length());
-
-      int n = snprintf(buf, sizeof(buf),
-                       "%1$s %9$s SIP/2.0\r\n"
-                       "Via: SIP/2.0/TCP %12$s;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY%11$04dSPI\r\n"
-                       "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
-                       "To: <%10$s>\r\n"
-                       "Max-Forwards: %8$d\r\n"
-                       "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%11$04dohntC@10.114.61.213\r\n"
-                       "CSeq: %14$d %1$s\r\n"
-                       "User-Agent: Accession 2.0.0.0\r\n"
-                       "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
-                       "%4$s"
-                       "%7$s"
-                       "%13$s"
-                       "%5$s"
-                       "\r\n"
-                       "%6$s",
-                       /*  1 */ _method.c_str(),
-                       /*  2 */ _from.c_str(),
-                       /*  3 */ _fromdomain.c_str(),
-                       /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
-                       /*  5 */ _contentlength ? content_length : "",
-                       /*  6 */ _body.c_str(),
-                       /*  7 */ _extra.empty() ? "" : string(_extra).append("\r\n").c_str(),
-                       /*  8 */ _forwards,
-                       /*  9 */ _requri.empty() ? requri.c_str() : _requri.c_str(),
-                       /* 10 */ target.c_str(),
-                       /* 11 */ _unique,
-                       /* 12 */ _via.c_str(),
-                       /* 13 */ route.c_str(),
-                       /* 14 */ _cseq
-        );
-
-      EXPECT_LT(n, (int)sizeof(buf));
-
-      string ret(buf, n);
-      // cout << ret <<endl;
-      return ret;
-    }
-
-    string get_response()
-    {
-      char buf[16384];
-
-      int n = snprintf(buf, sizeof(buf),
-                       "SIP/2.0 %9$s\r\n"
-                       "Via: SIP/2.0/TCP %13$s;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY%11$04dSPI\r\n"
-                       "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
-                       "To: <sip:%7$s%8$s>\r\n"
-                       "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%11$04dohntC@10.114.61.213\r\n"
-                       "CSeq: %12$d %1$s\r\n"
-                       "User-Agent: Accession 2.0.0.0\r\n"
-                       "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
-                       "%4$s"
-                       "%10$s"
-                       "Content-Length: %5$d\r\n"
-                       "\r\n"
-                       "%6$s",
-                       /*  1 */ _method.c_str(),
-                       /*  2 */ _from.c_str(),
-                       /*  3 */ _fromdomain.c_str(),
-                       /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
-                       /*  5 */ (int)_body.length(),
-                       /*  6 */ _body.c_str(),
-                       /*  7 */ _to.c_str(),
-                       /*  8 */ _todomain.empty() ? "" : string("@").append(_todomain).c_str(),
-                       /*  9 */ _status.c_str(),
-                       /* 10 */ _extra.empty() ? "" : string(_extra).append("\r\n").c_str(),
-                       /* 11 */ _unique,
-                       /* 12 */ _cseq,
-                       /* 13 */ _via.c_str()
-        );
-
-      EXPECT_LT(n, (int)sizeof(buf));
-
-      string ret(buf, n);
-      // cout << ret <<endl;
-      return ret;
-    }
-  };
 
 protected:
   TransportFlow* _tp;
@@ -329,6 +180,9 @@ static pjsip_module mod_reject =
 };
 
 
+using TestingCommon::Message;
+
+
 TEST_F(CommonProcessingTest, RequestAllowed)
 {
   // Tests that, when there is a token in the load monitor's bucket, a
@@ -336,6 +190,7 @@ TEST_F(CommonProcessingTest, RequestAllowed)
 
   // Inject a request.
   Message msg1;
+  msg1._first_hop = true;
   inject_msg(msg1.get_request(), _tp);
 
   // As only the common processing module is loaded (and not anything
@@ -355,6 +210,7 @@ TEST_F(CommonProcessingTest, RequestRejectedWithOverload)
 
   // Inject a request.
   Message msg1;
+  msg1._first_hop = true;
   inject_msg(msg1.get_request(), _tp);
 
   // Expect a 503 response code.
@@ -376,6 +232,7 @@ TEST_F(CommonProcessingTest, AckRequestAlwaysAllowed)
 
   // Inject an ACK request.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "ACK";
   inject_msg(msg1.get_request(), _tp);
 
@@ -391,6 +248,7 @@ TEST_F(CommonProcessingTest, BadRequestRejected)
 
   // Inject a request with an invalid Contact.
   Message msg1;
+  msg1._first_hop = true;
   msg1._extra = "Contact: ;;";
   inject_msg(msg1.get_request(), _tp);
 
@@ -411,6 +269,7 @@ TEST_F(CommonProcessingTest, BadAckRequestDropped)
 
   // Inject an ACK request with an invalid Contact.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "ACK";
   msg1._extra = "Contact: ;;";
   inject_msg(msg1.get_request(), _tp);
@@ -429,6 +288,7 @@ TEST_F(CommonProcessingTest, BadResponseDropped)
 
   // Inject a response with an invalid Contact.
   Message msg1;
+  msg1._first_hop = true;
   msg1._extra = "Contact: ;;";
   inject_msg(msg1.get_response(), _tp);
 
@@ -438,9 +298,9 @@ TEST_F(CommonProcessingTest, BadResponseDropped)
 
 TEST_F(CommonProcessingTest, SupportedHeaderWithCommas)
 {
-  // Tests that a variety of Supported headers are accepted 
+  // Tests that a variety of Supported headers are accepted
   // including ones with trailing commas.
-    std::vector<std::string> headers = { 
+    std::vector<std::string> headers = {
       "Supported: ",
       "Supported: \n ",
       "Supported: timer",
@@ -458,7 +318,7 @@ TEST_F(CommonProcessingTest, SupportedHeaderWithCommas)
       "Supported: ,,,,,,",
       "Supported: ,,,\n ,,,",
   };
-  
+
   // Set up a new Load monitor with enough tokens for each test.
   delete(_lm);
   _lm = new LoadMonitor(0, headers.size(), 0, 0);
@@ -470,6 +330,7 @@ TEST_F(CommonProcessingTest, SupportedHeaderWithCommas)
     SCOPED_TRACE(h);
     // Inject a request with the latest header.
     Message msg1;
+    msg1._first_hop = true;
     msg1._extra = h;
     inject_msg(msg1.get_request(), _tp);
 
@@ -497,6 +358,7 @@ TEST_F(CommonProcessingTest, DeathTest_MissingResponseFailsHealthCheck)
 
   // Inject a message.
   Message msg1;
+  msg1._first_hop = true;
   inject_msg(msg1.get_request(), _tp);
 
   // Expect it to just vanish.
@@ -514,6 +376,7 @@ TEST_F(CommonProcessingTest, MissingResponseWithoutExceptionPassesHealthCheck)
 {
   // Inject a message.
   Message msg1;
+  msg1._first_hop = true;
   inject_msg(msg1.get_request(), _tp);
 
   // Expect it to just vanish.
@@ -536,6 +399,7 @@ TEST_F(CommonProcessingTest, Invite200PassesHealthCheck)
 
   // Inject a message.
   Message msg1;
+  msg1._first_hop = true;
   inject_msg(msg1.get_request(), _tp);
 
   // Expect a response from mod_ok.
@@ -560,6 +424,7 @@ TEST_F(CommonProcessingTest, DeathTest_Invite400FailsHealthCheck)
 
   // Inject a message.
   Message msg1;
+  msg1._first_hop = true;
   inject_msg(msg1.get_request(), _tp);
 
   // Expect a response from mod_reject.
@@ -583,6 +448,7 @@ TEST_F(CommonProcessingTest, DeathTest_Message200FailsHealthCheck)
 
   // Inject a message.
   Message msg1;
+  msg1._first_hop = true;
   msg1._method = "MESSAGE";
   inject_msg(msg1.get_request(), _tp);
 
@@ -599,6 +465,7 @@ TEST_F(CommonProcessingTest, NoContentLengthDropped)
 
   // Inject a request with no content length header.
   Message msg1;
+  msg1._first_hop = true;
   msg1._contentlength = false;
   inject_msg_failure(msg1.get_request(), _tp, -PJSIP_EMISSINGHDR);
 
