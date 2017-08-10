@@ -9,27 +9,28 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-#include <testingcommon.h>
+#include "testingcommon.h"
 
 // Returns the text marking the start of a node.
-std::string Common::start_node(std::string node)
+std::string TestingCommon::start_node(std::string node)
 {
   return("<" + node + ">");
 }
 
 // Returns the text marking the end of the node.
-std::string Common::end_node(std::string node)
+std::string TestingCommon::end_node(std::string node)
 {
   return("</" + node + ">");
 }
 
 // Returns the text for a complete node.
-std::string Common::add_node(std::string node_name,
+std::string TestingCommon::add_node(std::string node_name,
                              std::string node_value)
 {
   return("<" + node_name + ">" + node_value + "</" + node_name + ">");
 }
 
+using namespace TestingCommon;
 
 ServiceProfileBuilder::ServiceProfileBuilder()
 {
@@ -43,38 +44,38 @@ ServiceProfileBuilder::~ServiceProfileBuilder()
 std::string ServiceProfileBuilder::return_profile()
 {
   std::string service_profile;
-  service_profile = Common::start_node(Common::SERVICE_PROFILE);
+  service_profile = start_node(SERVICE_PROFILE);
   for (std::vector<IdentityStruct>::iterator it = _identities.begin();
        it != _identities.end();
        ++it)
   {
-    service_profile += Common::start_node(Common::PUBLIC_ID);
-    service_profile += Common::add_node(Common::ID, it->identity);
+    service_profile += start_node(PUBLIC_ID);
+    service_profile += add_node(ID, it->identity);
     // If a barring indication is present, add this node.
-    if(it->barring_indication != Common::NO_BARRING_FIELD)
+    if(it->barring_indication != NO_BARRING_FIELD)
     {
-      service_profile += Common::add_node(Common::BARRING_INDICATION, it->barring_indication);
+      service_profile += add_node(BARRING_INDICATION, it->barring_indication);
     }
     // If a wildcarded identity is present, both the identity type and
     // wildcarded IMPU should have been set. Check if this is the case, and if
     // so, add the wildcard info to the XML string.
-    if((it->identity_type != Common::NO_ID_TYPE) && (it->wildcard_impu != Common::NO_WILDCARD_IMPU))
+    if((it->identity_type != NO_ID_TYPE) && (it->wildcard_impu != NO_WILDCARD_IMPU))
     {
       // The number of extensions here is correct.
-      service_profile += Common::start_node(Common::EXTENSION);
-      service_profile += Common::add_node(Common::ID_TYPE, it->identity_type);
-      service_profile += Common::start_node(Common::EXTENSION);
-      service_profile += Common::start_node(Common::EXTENSION);
-      service_profile += Common::add_node(Common::WILDCARD_IMPU, it->wildcard_impu);
-      service_profile += Common::end_node(Common::EXTENSION);
-      service_profile += Common::end_node(Common::EXTENSION);
-      service_profile += Common::end_node(Common::EXTENSION);
+      service_profile += start_node(EXTENSION);
+      service_profile += add_node(ID_TYPE, it->identity_type);
+      service_profile += start_node(EXTENSION);
+      service_profile += start_node(EXTENSION);
+      service_profile += add_node(WILDCARD_IMPU, it->wildcard_impu);
+      service_profile += end_node(EXTENSION);
+      service_profile += end_node(EXTENSION);
+      service_profile += end_node(EXTENSION);
     }
-    service_profile += Common::end_node(Common::PUBLIC_ID);
+    service_profile += end_node(PUBLIC_ID);
   }
   if (_ifcs.empty())
   {
-    service_profile += Common::add_node(Common::IFC, "");
+    service_profile += add_node(IFC, "");
   }
   else
   {
@@ -85,7 +86,7 @@ std::string ServiceProfileBuilder::return_profile()
       service_profile += create_ifc(*ifc);
     }
   }
-  service_profile += Common::end_node(Common::SERVICE_PROFILE);
+  service_profile += end_node(SERVICE_PROFILE);
   return service_profile;
 }
 
@@ -98,9 +99,9 @@ ServiceProfileBuilder& ServiceProfileBuilder::addIdentity(std::string identity)
 {
   IdentityStruct new_identity;
   new_identity.identity = identity;
-  new_identity.barring_indication = Common::NO_BARRING_FIELD;
-  new_identity.identity_type = Common::NO_ID_TYPE;
-  new_identity.wildcard_impu = Common::NO_WILDCARD_IMPU;
+  new_identity.barring_indication = NO_BARRING_FIELD;
+  new_identity.identity_type = NO_ID_TYPE;
+  new_identity.wildcard_impu = NO_WILDCARD_IMPU;
   _identities.push_back(new_identity);
 
   return *this;
@@ -161,7 +162,7 @@ ServiceProfileBuilder& ServiceProfileBuilder::addIfcNoDefHandling(int priority,
   new_ifc.triggers = triggers;
   new_ifc.app_server_name = app_serv_name;
   new_ifc.condition_negated = std::to_string(cond_neg);
-  new_ifc.default_handling = Common::NO_DEF_HANDLING_FIELD;
+  new_ifc.default_handling = NO_DEF_HANDLING_FIELD;
 
   _ifcs.push_back(new_ifc);
   return *this;
@@ -208,31 +209,31 @@ ServiceProfileBuilder& ServiceProfileBuilder::addIfc(int priority,
 std::string ServiceProfileBuilder::create_ifc(IfcStruct ifc_info)
 {
   std::string ifc;
-  ifc = Common::start_node(Common::IFC);
-  ifc += Common::add_node(Common::PRIORITY, std::to_string(ifc_info.priority));
-  ifc += Common::start_node(Common::TRIGGER_POINT);
-  ifc += Common::add_node(Common::CONDITION_CNF, "0");
+  ifc = start_node(IFC);
+  ifc += add_node(PRIORITY, std::to_string(ifc_info.priority));
+  ifc += start_node(TRIGGER_POINT);
+  ifc += add_node(CONDITION_CNF, "0");
   std::vector<std::string> trigger_list = ifc_info.triggers;
   for (std::vector<std::string>::iterator trigger = trigger_list.begin();
        trigger != trigger_list.end();
        ++trigger)
   {
-    ifc += Common::start_node(Common::SPT);
-    ifc += Common::add_node(Common::CONDITION_NEGATED, ifc_info.condition_negated);
-    ifc += Common::add_node(Common::GROUP, "0");
+    ifc += start_node(SPT);
+    ifc += add_node(CONDITION_NEGATED, ifc_info.condition_negated);
+    ifc += add_node(GROUP, "0");
     ifc += *trigger;
-    ifc += Common::add_node(Common::EXTENSION, "");
-    ifc += Common::end_node(Common::SPT);
+    ifc += add_node(EXTENSION, "");
+    ifc += end_node(SPT);
   }
-  ifc += Common::end_node(Common::TRIGGER_POINT);
-  ifc += Common::start_node(Common::APP_SERVER);
-  ifc += Common::add_node(Common::SERVER_NAME, ifc_info.app_server_name);
-  if (ifc_info.default_handling != Common::NO_DEF_HANDLING_FIELD)
+  ifc += end_node(TRIGGER_POINT);
+  ifc += start_node(APP_SERVER);
+  ifc += add_node(SERVER_NAME, ifc_info.app_server_name);
+  if (ifc_info.default_handling != NO_DEF_HANDLING_FIELD)
   {
-    ifc += Common::add_node(Common::DEFAULT_HANDLING, ifc_info.default_handling);
+    ifc += add_node(DEFAULT_HANDLING, ifc_info.default_handling);
   }
-  ifc += Common::end_node(Common::APP_SERVER);
-  ifc += Common::end_node(Common::IFC);
+  ifc += end_node(APP_SERVER);
+  ifc += end_node(IFC);
   return ifc;
 }
 
@@ -249,7 +250,7 @@ SubscriptionBuilder::~SubscriptionBuilder()
 std::string SubscriptionBuilder::return_sub()
 {
   std::string sub;
-  sub = Common::start_node(Common::IMS_SUBSCRIPTION);
+  sub = start_node(IMS_SUBSCRIPTION);
   for (std::vector<ServiceProfileBuilder>::iterator service_profile = _service_profiles.begin();
        service_profile != _service_profiles.end();
        ++service_profile)
@@ -257,7 +258,7 @@ std::string SubscriptionBuilder::return_sub()
     std::string service_prof = service_profile->return_profile();
     sub += service_prof;
   }
-  sub += Common::end_node(Common::IMS_SUBSCRIPTION);
+  sub += end_node(IMS_SUBSCRIPTION);
   return sub;
 }
 
@@ -266,6 +267,161 @@ SubscriptionBuilder& SubscriptionBuilder::addServiceProfile(ServiceProfileBuilde
 {
   _service_profiles.push_back(service_profile);
   return *this;
+}
+
+
+Message::Message()
+{
+  _method = "INVITE";
+  _toscheme = "sip";
+  _status = "200 OK";
+  _from = "6505551000";
+  _fromdomain = "homedomain";
+  _to = "6505551234";
+  _todomain = "homedomain";
+  _content_type = "application/sdp";
+  _forwards = 68;
+  _first_hop = false;
+  _via = "10.83.18.38:36530";
+  _branch = "";
+//  doesn't need to be here...
+//  _route = "Route: <sip:sprout.homedomain;service=scscf>";
+  _cseq = 16567;
+  _in_dialog = false;
+
+  static int unique = 1042;
+  _unique = unique;
+  unique += 10; // leave room for manual increments
+}
+
+Message::~Message()
+{
+}
+
+void Message::set_route(pjsip_msg* msg)
+{
+  std::string route = get_headers(msg, "Record-Route");
+  if (route != "")
+  {
+    // Convert to a Route set by replacing all instances of Record-Route: with Route:
+    for (size_t n = 0; (n = route.find("Record-Route:", n)) != std::string::npos;)
+    {
+      route.replace(n, 13, "Route:");
+    }
+  }
+  _route = route;
+}
+
+std::string Message::get_request()
+{
+  char buf[16384];
+
+  // The remote target.
+  std::string target = std::string(_toscheme).append(":").append(_to);
+  if (!_todomain.empty())
+  {
+    target.append("@").append(_todomain);
+  }
+
+  // If there's no route, the target goes in the request
+  // URI. Otherwise it goes in the Route:, and the route goes in the
+  // request URI.
+  //string requri = _route.empty() ? target : _route;
+  //string route = _route.empty() ? "" : string("Route: ").append(target).append("\r\n");
+  std::string requri = target;
+  std::string route = _route;
+  route = route.empty() ? "" : route.append("\r\n");
+
+  // Default branch parameter if it's not supplied.
+  std::string branch = _branch.empty() ? "Pjmo1aimuq33BAI4rjhgQgBr4sY" + std::to_string(_unique) : _branch;
+
+  int n = snprintf(buf, sizeof(buf),
+                   "%1$s %9$s SIP/2.0\r\n"
+                   "Via: SIP/2.0/TCP %13$s;rport;branch=z9hG4bK%16$s\r\n"
+                   "%12$s"
+                   "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
+                   "To: <%10$s>%17$s\r\n"
+                   "Max-Forwards: %8$d\r\n"
+                   "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%11$04dohntC@10.114.61.213\r\n"
+                   "CSeq: %15$d %1$s\r\n"
+                   "User-Agent: Accession 2.0.0.0\r\n"
+                   "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
+                   "%4$s"
+                   "%7$s"
+                   "%14$s"
+                   "Content-Length: %5$d\r\n"
+                   "\r\n"
+                   "%6$s",
+                   /*  1 */ _method.c_str(),
+                   /*  2 */ _from.c_str(),
+                   /*  3 */ _fromdomain.c_str(),
+                   /*  4 */ _content_type.empty() ? "" : std::string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
+                   /*  5 */ (int)_body.length(),
+                   /*  6 */ _body.c_str(),
+                   /*  7 */ _extra.empty() ? "" : std::string(_extra).append("\r\n").c_str(),
+                   /*  8 */ _forwards,
+                   /*  9 */ _requri.empty() ? requri.c_str() : _requri.c_str(),
+                   /* 10 */ target.c_str(),
+                   /* 11 */ _unique,
+                   /* 12 */ _first_hop ? "" : "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n",
+                   /* 13 */ _via.c_str(),
+                   /* 14 */ route.c_str(),
+                   /* 15 */ _cseq,
+                   /* 16 */ branch.c_str(),
+                   /* 17 */ (_in_dialog) ? ";tag=10.114.61.213+1+8c8b232a+5fb751cf" : ""
+                     );
+
+  EXPECT_LT(n, (int)sizeof(buf));
+
+  std::string ret(buf, n);
+  // cout << ret <<endl;
+  return ret;
+}
+
+std::string Message::get_response()
+{
+  char buf[16384];
+
+  // Default branch parameter if it's not supplied.
+  std::string branch = _branch.empty() ? "Pjmo1aimuq33BAI4rjhgQgBr4sY" + std::to_string(_unique) : _branch;
+
+  int n = snprintf(buf, sizeof(buf),
+                   "SIP/2.0 %9$s\r\n"
+                   "Via: SIP/2.0/TCP %14$s;rport;branch=z9hG4bK%15$s\r\n"
+                   "%12$s"
+                   "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
+                   "To: <sip:%7$s%8$s>\r\n"
+                   "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%11$04dohntC@10.114.61.213\r\n"
+                   "CSeq: %13$d %1$s\r\n"
+                   "User-Agent: Accession 2.0.0.0\r\n"
+                   "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
+                   "%4$s"
+                   "%10$s"
+                   "Content-Length: %5$d\r\n"
+                   "\r\n"
+                   "%6$s",
+                   /*  1 */ _method.c_str(),
+                   /*  2 */ _from.c_str(),
+                   /*  3 */ _fromdomain.c_str(),
+                   /*  4 */ _content_type.empty() ? "" : std::string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
+                   /*  5 */ (int)_body.length(),
+                   /*  6 */ _body.c_str(),
+                   /*  7 */ _to.c_str(),
+                   /*  8 */ _todomain.empty() ? "" : std::string("@").append(_todomain).c_str(),
+                   /*  9 */ _status.c_str(),
+                   /* 10 */ _extra.empty() ? "" : std::string(_extra).append("\r\n").c_str(),
+                   /* 11 */ _unique,
+                   /* 12 */ _first_hop ? "" : "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n",
+                   /* 13 */ _cseq,
+                   /* 14 */ _via.c_str(),
+                   /* 15 */ branch.c_str()
+                     );
+
+  EXPECT_LT(n, (int)sizeof(buf));
+
+  std::string ret(buf, n);
+  // cout << ret <<endl;
+  return ret;
 }
 
 

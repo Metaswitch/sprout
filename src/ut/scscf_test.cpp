@@ -46,180 +46,6 @@ using testing::NiceMock;
 using testing::HasSubstr;
 using ::testing::Return;
 
-namespace SP
-{
-  class Message
-  {
-  public:
-    string _method;
-    string _requri; //< overrides toscheme:to@todomain
-    string _toscheme;
-    string _status;
-    string _from;
-    string _fromdomain;
-    string _to;
-    string _todomain;
-    string _content_type;
-    string _body;
-    string _extra;
-    int _forwards;
-    int _unique; //< unique to this dialog; inserted into Call-ID
-    bool _first_hop;
-    string _via;
-    string _branch;
-    string _route;
-    int _cseq;
-    bool _in_dialog;
-
-    Message() :
-      _method("INVITE"),
-      _toscheme("sip"),
-      _status("200 OK"),
-      _from("6505551000"),
-      _fromdomain("homedomain"),
-      _to("6505551234"),
-      _todomain("homedomain"),
-      _content_type("application/sdp"),
-      _forwards(68),
-      _first_hop(false),
-      _via("10.83.18.38:36530"),
-      _branch(""),
-      _route("Route: <sip:sprout.homedomain;service=scscf>"),
-      _cseq(16567),
-      _in_dialog(false)
-    {
-      static int unique = 1042;
-      _unique = unique;
-      unique += 10; // leave room for manual increments
-    }
-
-    void set_route(pjsip_msg* msg)
-    {
-      string route = get_headers(msg, "Record-Route");
-      if (route != "")
-      {
-        // Convert to a Route set by replacing all instances of Record-Route: with Route:
-        for (size_t n = 0; (n = route.find("Record-Route:", n)) != string::npos;)
-        {
-          route.replace(n, 13, "Route:");
-        }
-      }
-      _route = route;
-    }
-
-    string get_request()
-    {
-      char buf[16384];
-
-      // The remote target.
-      string target = string(_toscheme).append(":").append(_to);
-      if (!_todomain.empty())
-      {
-        target.append("@").append(_todomain);
-      }
-
-      // If there's no route, the target goes in the request
-      // URI. Otherwise it goes in the Route:, and the route goes in the
-      // request URI.
-      //string requri = _route.empty() ? target : _route;
-      //string route = _route.empty() ? "" : string("Route: ").append(target).append("\r\n");
-      string requri = target;
-      string route = _route;
-      route = route.empty() ? "" : route.append("\r\n");
-
-      // Default branch parameter if it's not supplied.
-      std::string branch = _branch.empty() ? "Pjmo1aimuq33BAI4rjhgQgBr4sY" + std::to_string(_unique) : _branch;
-
-      int n = snprintf(buf, sizeof(buf),
-                       "%1$s %9$s SIP/2.0\r\n"
-                       "Via: SIP/2.0/TCP %13$s;rport;branch=z9hG4bK%16$s\r\n"
-                       "%12$s"
-                       "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
-                       "To: <%10$s>%17$s\r\n"
-                       "Max-Forwards: %8$d\r\n"
-                       "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%11$04dohntC@10.114.61.213\r\n"
-                       "CSeq: %15$d %1$s\r\n"
-                       "User-Agent: Accession 2.0.0.0\r\n"
-                       "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
-                       "%4$s"
-                       "%7$s"
-                       "%14$s"
-                       "Content-Length: %5$d\r\n"
-                       "\r\n"
-                       "%6$s",
-                       /*  1 */ _method.c_str(),
-                       /*  2 */ _from.c_str(),
-                       /*  3 */ _fromdomain.c_str(),
-                       /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
-                       /*  5 */ (int)_body.length(),
-                       /*  6 */ _body.c_str(),
-                       /*  7 */ _extra.empty() ? "" : string(_extra).append("\r\n").c_str(),
-                       /*  8 */ _forwards,
-                       /*  9 */ _requri.empty() ? requri.c_str() : _requri.c_str(),
-                       /* 10 */ target.c_str(),
-                       /* 11 */ _unique,
-                       /* 12 */ _first_hop ? "" : "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n",
-                       /* 13 */ _via.c_str(),
-                       /* 14 */ route.c_str(),
-                       /* 15 */ _cseq,
-                       /* 16 */ branch.c_str(),
-                       /* 17 */ (_in_dialog) ? ";tag=10.114.61.213+1+8c8b232a+5fb751cf" : ""
-        );
-
-      EXPECT_LT(n, (int)sizeof(buf));
-
-      string ret(buf, n);
-      // cout << ret <<endl;
-      return ret;
-    }
-
-    string get_response()
-    {
-      char buf[16384];
-
-      // Default branch parameter if it's not supplied.
-      std::string branch = _branch.empty() ? "Pjmo1aimuq33BAI4rjhgQgBr4sY" + std::to_string(_unique) : _branch;
-
-      int n = snprintf(buf, sizeof(buf),
-                       "SIP/2.0 %9$s\r\n"
-                       "Via: SIP/2.0/TCP %14$s;rport;branch=z9hG4bK%15$s\r\n"
-                       "%12$s"
-                       "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
-                       "To: <sip:%7$s%8$s>\r\n"
-                       "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%11$04dohntC@10.114.61.213\r\n"
-                       "CSeq: %13$d %1$s\r\n"
-                       "User-Agent: Accession 2.0.0.0\r\n"
-                       "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
-                       "%4$s"
-                       "%10$s"
-                       "Content-Length: %5$d\r\n"
-                       "\r\n"
-                       "%6$s",
-                       /*  1 */ _method.c_str(),
-                       /*  2 */ _from.c_str(),
-                       /*  3 */ _fromdomain.c_str(),
-                       /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
-                       /*  5 */ (int)_body.length(),
-                       /*  6 */ _body.c_str(),
-                       /*  7 */ _to.c_str(),
-                       /*  8 */ _todomain.empty() ? "" : string("@").append(_todomain).c_str(),
-                       /*  9 */ _status.c_str(),
-                       /* 10 */ _extra.empty() ? "" : string(_extra).append("\r\n").c_str(),
-                       /* 11 */ _unique,
-                       /* 12 */ _first_hop ? "" : "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n",
-                       /* 13 */ _cseq,
-                       /* 14 */ _via.c_str(),
-                       /* 15 */ branch.c_str()
-        );
-
-      EXPECT_LT(n, (int)sizeof(buf));
-
-      string ret(buf, n);
-      // cout << ret <<endl;
-      return ret;
-    }
-  };
-}
 
 /// ABC for fixtures for SCSCFTest and friends.
 class SCSCFTest : public SipTest
@@ -459,24 +285,24 @@ protected:
                      bool tpAset,
                      TransportFlow* tpB,
                      bool tpBset,
-                     SP::Message& msg,
+                     TestingCommon::Message& msg,
                      string route,
                      bool expect_100,
                      bool expect_trusted_headers_on_requests,
                      bool expect_trusted_headers_on_responses,
                      bool expect_orig,
                      bool pcpi);
-  void doAsOriginated(SP::Message& msg, bool expect_orig);
+  void doAsOriginated(TestingCommon::Message& msg, bool expect_orig);
   void doAsOriginated(const std::string& msg, bool expect_orig);
   void doFourAppServerFlow(std::string record_route_regex, bool app_servers_record_route=false);
-  void doSuccessfulFlow(SP::Message& msg,
+  void doSuccessfulFlow(TestingCommon::Message& msg,
                         testing::Matcher<string> uri_matcher,
                         list<HeaderMatcher> headers,
                         bool include_ack_and_bye=true,
                         list<HeaderMatcher> rsp_hdrs = list<HeaderMatcher>());
-  void doFastFailureFlow(SP::Message& msg, int st_code);
-  void doSlowFailureFlow(SP::Message& msg, int st_code, std::string body = "", std::string reason = "");
-  void setupForkedFlow(SP::Message& msg);
+  void doFastFailureFlow(TestingCommon::Message& msg, int st_code);
+  void doSlowFailureFlow(TestingCommon::Message& msg, int st_code, std::string body = "", std::string reason = "");
+  void setupForkedFlow(TestingCommon::Message& msg);
   list<string> doProxyCalculateTargets(int max_targets);
 };
 
@@ -495,7 +321,7 @@ FIFCService* SCSCFTest::_fifc_service;
 MockAsCommunicationTracker* SCSCFTest::_sess_term_comm_tracker;
 MockAsCommunicationTracker* SCSCFTest::_sess_cont_comm_tracker;
 
-using SP::Message;
+using namespace TestingCommon;
 
 void SCSCFTest::doFourAppServerFlow(std::string record_route_regex, bool app_servers_record_route)
 {
@@ -747,7 +573,7 @@ void SCSCFTest::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
                               bool tpAset,         //< Expect all requests to Alice on same transport?
                               TransportFlow* tpB,  //< Bob's transport.
                               bool tpBset,         //< Expect all requests to Bob on same transport?
-                              SP::Message& msg,    //< Message to use for testing.
+                              Message& msg,    //< Message to use for testing.
                               string route,        //< Route header to be used on INVITE
                               bool expect_100,     //< Will we get a 100 Trying?
                               bool expect_trusted_headers_on_requests, //< Should P-A-N-I/P-V-N-I be passed on requests?
@@ -2245,7 +2071,7 @@ TEST_F(SCSCFTest, TestWithoutEnum)
 
 
 /// Test a forked flow - setup phase.
-void SCSCFTest::setupForkedFlow(SP::Message& msg)
+void SCSCFTest::setupForkedFlow(Message& msg)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");

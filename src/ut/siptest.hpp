@@ -9,6 +9,9 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
+#ifndef SIPTEST_H__
+#define SIPTEST_H__
+
 #include <string>
 #include <sstream>
 #include "gmock/gmock.h"
@@ -422,3 +425,5 @@ private:
   string _header;
   std::list<string> _regexes;
 };
+
+#endif
