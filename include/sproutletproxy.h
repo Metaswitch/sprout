@@ -119,6 +119,14 @@ protected:
     void* context;
   };
 
+  // A struct to wrap tx_data and allowed_host_state in a convenient bundle
+  // to pass over interfaces when sending a request.
+  typedef struct
+  {
+    pjsip_tx_data* tx_data;
+    int allowed_host_state;
+  } SendRequest;
+
   bool schedule_timer(pj_timer_entry* tentry, int duration);
   bool cancel_timer(pj_timer_entry* tentry);
   bool timer_running(pj_timer_entry* tentry);
@@ -151,7 +159,7 @@ protected:
 
     /// Notification that an client transaction is not responding.
     virtual void on_client_not_responding(UACTsx* uac_tsx,
-                                          pjsip_event_id_e event);
+                                          ForkErrorState fork_error);
 
     virtual void on_tsx_state(pjsip_event* event);
 
@@ -159,7 +167,7 @@ protected:
   private:
     void tx_request(SproutletWrapper* sproutlet,
                     int fork_id,
-                    pjsip_tx_data* req);
+                    SendRequest req);
 
     void schedule_requests();
 
@@ -211,6 +219,7 @@ protected:
     {
       pjsip_tx_data* req;
       std::pair<SproutletWrapper*, int> upstream;
+      int allowed_host_state;
     } PendingRequest;
     std::queue<PendingRequest> _pending_req_q;
 
@@ -283,7 +292,7 @@ public:
   pjsip_msg* create_response(pjsip_msg* req,
                              pjsip_status_code status_code,
                              const std::string& status_text="");
-  int send_request(pjsip_msg*& req);
+  int send_request(pjsip_msg*& req, int allowed_host_state);
   void send_response(pjsip_msg*& rsp);
   void cancel_fork(int fork_id, int reason=0);
   void cancel_pending_forks(int reason=0);
@@ -307,14 +316,14 @@ private:
   void rx_response(pjsip_tx_data* rsp, int fork_id);
   void rx_cancel(pjsip_tx_data* cancel);
   void rx_error(int status_code);
-  void rx_fork_error(pjsip_event_id_e event, int fork_id);
+  void rx_fork_error(ForkErrorState fork_error, int fork_id);
   void on_timer_pop(TimerID id, void* context);
   void register_tdata(pjsip_tx_data* tdata);
   void deregister_tdata(pjsip_tx_data* tdata);
 
   void process_actions(bool complete_after_actions);
   void aggregate_response(pjsip_tx_data* rsp);
-  void tx_request(pjsip_tx_data* req, int fork_id);
+  void tx_request(SproutletProxy::SendRequest req, int fork_id);
   void tx_response(pjsip_tx_data* rsp);
   void tx_cancel(int fork_id);
   int compare_sip_sc(int sc1, int sc2);
@@ -348,7 +357,7 @@ private:
   typedef std::unordered_map<const pjsip_msg*, pjsip_tx_data*> Packets;
   Packets _packets;
 
-  typedef std::map<int, pjsip_tx_data*> Requests;
+  typedef std::map<int, SproutletProxy::SendRequest> Requests;
   Requests _send_requests;
 
   typedef std::list<pjsip_tx_data*> Responses;

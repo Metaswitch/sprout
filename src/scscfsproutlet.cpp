@@ -2465,6 +2465,10 @@ std::string SCSCFSproutletTsx::fork_failure_reason_as_string(int fork_id, int si
     reason = "Transport error";
     break;
 
+  case NO_ADDRESSES:
+    reason = "No valid address";
+    break;
+
   case NONE:
     reason = "SIP " + std::to_string(sip_code) + " response received";
     break;

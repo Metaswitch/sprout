@@ -212,7 +212,7 @@ int SproutletAppServerTsxHelper::send_request(pjsip_msg*& req)
     pjsip_msg_insert_first_hdr(req, (pjsip_hdr*)rr);
   }
 
-  return _helper->send_request(req);
+  return _helper->send_request(req, BaseResolver::ALL_LISTS);
 }
 
 

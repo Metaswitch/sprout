@@ -907,14 +907,16 @@ void PJUtils::resolve(const std::string& name,
                       int port,
                       int transport,
                       int retries,
-                      std::vector<AddrInfo>& servers)
+                      std::vector<AddrInfo>& servers,
+                      int allowed_host_state)
 {
   stack_data.sipresolver->resolve(name,
                                   stack_data.addr_family,
                                   port,
                                   transport,
                                   retries,
-                                  servers);
+                                  servers,
+                                  allowed_host_state);
 }
 
 
@@ -922,6 +924,7 @@ void PJUtils::resolve(const std::string& name,
 void PJUtils::resolve_next_hop(pjsip_tx_data* tdata,
                                int retries,
                                std::vector<AddrInfo>& servers,
+                               int allowed_host_state,
                                SAS::TrailId trail)
 {
   // Get the next hop URI from the message and parse out the destination, port
@@ -951,6 +954,7 @@ void PJUtils::resolve_next_hop(pjsip_tx_data* tdata,
                                   transport,
                                   retries,
                                   servers,
+                                  allowed_host_state,
                                   trail);
 
   TRC_INFO("Resolved destination URI %s to %d servers",
@@ -1211,7 +1215,7 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
   if (tdata->tp_sel.type != PJSIP_TPSELECTOR_TRANSPORT)
   {
     // No transport determined, so resolve the next hop for the message.
-    resolve_next_hop(tdata, retries, sss->servers, get_trail(tdata));
+    resolve_next_hop(tdata, retries, sss->servers, BaseResolver::ALL_LISTS, get_trail(tdata));
 
     if (!sss->servers.empty())
     {
@@ -1372,7 +1376,7 @@ pj_status_t PJUtils::send_request_stateless(pjsip_tx_data* tdata, int retries)
   if (tdata->tp_sel.type != PJSIP_TPSELECTOR_TRANSPORT)
   {
     // No transport pre-selected so resolve the next hop to a set of servers.
-    resolve_next_hop(tdata, retries, sss->servers, get_trail(tdata));
+    resolve_next_hop(tdata, retries, sss->servers, BaseResolver::ALL_LISTS, get_trail(tdata));
 
     if (!sss->servers.empty())
     {
