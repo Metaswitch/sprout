@@ -457,7 +457,7 @@ static void send_register_to_as(SubscriberDataManager* sdm,
                                       &as_uri,                   // Target
                                       &stack_data.scscf_uri_str, // From
                                       &user_uri,                 // To
-                                      &stack_data.scscf_uri_str, // Contact
+                                      &stack_data.scscf_contact, // Contact
                                       NULL,                      // Auto-generate Call-ID
                                       1,                         // CSeq
                                       NULL,                      // No body

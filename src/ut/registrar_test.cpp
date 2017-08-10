@@ -1142,6 +1142,8 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
   pj_str_t mixed = pj_str("mixed");
   EXPECT_EQ(0, pj_strcmp(&multipart, &out->body->content_type.type));
   EXPECT_EQ(0, pj_strcmp(&mixed, &out->body->content_type.subtype));
+  EXPECT_EQ("Contact: <sip:scscf.sprout.homedomain:5058;transport=TCP>",
+            get_headers(out, "Contact"));
 
   tpAS.expect_target(current_txdata(), false);
   inject_msg(respond_to_current_txdata(200));
