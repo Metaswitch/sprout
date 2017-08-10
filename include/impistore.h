@@ -21,8 +21,8 @@
 /// simple KV store API with atomic write and record expiry semantics.  The
 /// underlying store can be any implementation that implements the Store API.
 ///
-/// We just read and write a JSON object representing the full IMPI, including
-/// its authentication challenges, keyed solely off its private ID.
+/// We read and write a JSON object representing the full IMPI, including its
+/// authentication challenges, keyed solely off its private ID.
 class ImpiStore
 {
 public:
