@@ -76,11 +76,13 @@ bool ICSCFSproutlet::init()
   // not continually converting from a string.
   _bgcf_uri = PJUtils::uri_from_string(_bgcf_uri_str, stack_data.pool, false);
 
+  // LCOV_EXCL_START - Don't test pjsip URI failures in the I-CSCF UTs
   if (_bgcf_uri == NULL)
   {
-    TRC_ERROR("Invalid BGCF URI %s", _bgcf_uri_str.c_str()); //LCOV_EXCL_LINE
+    TRC_ERROR("Invalid BGCF URI %s", _bgcf_uri_str.c_str());
     init_success = false;
   }
+  // LCOV_EXCL_STOP
 
   return init_success;
 }
@@ -284,13 +286,15 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
 }
 
 
+// LCOV_EXCL_START - Excluding from UTs as this is a scenario that shouldn't
+// happen
 void ICSCFSproutletRegTsx::on_rx_in_dialog_request(pjsip_msg* req)
 {
   // I-CSCF shouldn't need to handle in-dialog requests, but it happens, so
   // handle as an initial request.
   on_rx_initial_request(req);
 }
-
+// LCOV_EXCL_STOP
 
 void ICSCFSproutletRegTsx::on_tx_request(pjsip_msg* req, int fork_id)
 {
@@ -396,23 +400,6 @@ void ICSCFSproutletRegTsx::on_tx_response(pjsip_msg* rsp)
     // Pass the transmitted response to the ACR to update the accounting
     // information.
     _acr->tx_response(rsp);
-  }
-}
-
-
-void ICSCFSproutletRegTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
-{
-  if ((status_code == PJSIP_SC_REQUEST_TERMINATED) &&
-      (cancel_req != NULL))
-  {
-    // Create and send an ACR for the CANCEL request.
-    ACR* acr = _icscf->get_acr(trail());
-
-    // @TODO - timestamp from request.
-    acr->rx_request(cancel_req);
-    acr->send();
-
-    delete acr;
   }
 }
 
@@ -710,14 +697,15 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   }
 }
 
-
+// LCOV_EXCL_START - Excluding from UTs as this is a scenario that shouldn't
+// happen
 void ICSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
 {
   // I-CSCF shouldn't need to handle in-dialog requests, but it happens, so
   // handle as an initial request.
   on_rx_initial_request(req);
 }
-
+// LCOV_EXCL_STOP
 
 void ICSCFSproutletTsx::on_tx_request(pjsip_msg* req, int fork_id)
 {
@@ -943,6 +931,8 @@ void ICSCFSproutletTsx::add_p_profile_header(const std::string& wildcard,
   }
   else
   {
+    // LCOV_EXCL_START - Don't test pjsip URI failures in the I-CSCF UTs
     TRC_ERROR("Invalid wildcard returned on LIA: %s", wildcard.c_str());
+    // LCOV_EXCL_STOP
   }
 }
