@@ -2506,29 +2506,21 @@ TEST_F(BasicProxyTest, ResponseErrors)
   // Leave some time for the transactions to be destroyed.
   poll();
 
-  //KRISTA
-  printf("\n\nok, going into the bit where we fail\n");
-
   // Resend the 200 OK response, but remove the second Via header, so the
   // proxy cannot stateless forward it.
   pjsip_tx_data* rsp_tdata = create_response(invite_tdata, 200, NULL);
-  printf("create the reponse\n");
   pjsip_via_hdr* via = (pjsip_via_hdr*)pjsip_msg_find_hdr(rsp_tdata->msg,
                                                           PJSIP_H_VIA,
                                                           NULL);
-  printf("create via headers\n");
   via = (pjsip_via_hdr*)pjsip_msg_find_hdr(rsp_tdata->msg,
                                            PJSIP_H_VIA,
                                            via->next);
   pj_list_erase(via);
-  printf("removed one header\n");
   char buf[16384];
   pjsip_msg_print(rsp_tdata->msg, buf, sizeof(buf));
   pjsip_tx_data_dec_ref(rsp_tdata);
   inject_msg(std::string(buf));
   ASSERT_EQ(0, txdata_count());
-
-  printf("\n\nok, passed the bit where we fail\n\n\n");
 
   // Resend the 200 OK response, but remove the received parameter from the
   // second Via header.  The proxy can recover this by using the sent-by

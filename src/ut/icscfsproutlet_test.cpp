@@ -210,9 +210,7 @@ protected:
   }
 };
 
-
 using TestingCommon::Message;
-
 
 TEST_F(ICSCFSproutletTest, RouteRegisterHSSServerName)
 {

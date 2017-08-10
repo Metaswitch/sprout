@@ -179,9 +179,7 @@ static pjsip_module mod_reject =
   NULL,                                 /* on_tsx_state()       */
 };
 
-
 using TestingCommon::Message;
-
 
 TEST_F(CommonProcessingTest, RequestAllowed)
 {

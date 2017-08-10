@@ -150,7 +150,7 @@ ServiceProfileBuilder& ServiceProfileBuilder::addBarringIndication(std::string i
 }
 
 // Add a new iFC, which includes no DefaultHandling field, to the list of iFCs.
-// Note: This is an incorrect form!! We are using the for error handling
+// Note: This is an incorrect form!! We are using this for error handling
 // testing only.
 ServiceProfileBuilder& ServiceProfileBuilder::addIfcNoDefHandling(int priority,
                                                                   std::vector<std::string> triggers,
@@ -170,6 +170,8 @@ ServiceProfileBuilder& ServiceProfileBuilder::addIfcNoDefHandling(int priority,
 
 // Add a new iFC, where the value in the DefaultHandling field is malformed, to
 // the list of iFCs.
+// Note: This is an incorrect iFC!! We are using this for error handling testing
+// only.
 ServiceProfileBuilder& ServiceProfileBuilder::addIfcBadDefField(int priority,
                                                                 std::vector<std::string> triggers,
                                                                 std::string app_serv_name,
@@ -285,9 +287,6 @@ Message::Message()
   _first_hop = false;
   _via = "10.83.18.38:36530";
   _branch = "";
-//  doesn't need to be here for any tests to pass, but breaks some when it is
-//  present. remove it? (was here for scscf_test only).
-//  _route = "Route: <sip:sprout.homedomain;service=scscf>";
   _cseq = 16567;
   _in_dialog = false;
   _contentlength = true;
@@ -328,18 +327,14 @@ std::string Message::get_request()
     target.append("@").append(_todomain);
   }
 
-// Out of date comments... remove??
-  // If there's no route, the target goes in the request
-  // URI. Otherwise it goes in the Route:, and the route goes in the
-  // request URI.
-  //string requri = _route.empty() ? target : _route;
-  //string route = _route.empty() ? "" : string("Route: ").append(target).append("\r\n");
+  // Set the request uri and the route variables.
   std::string requri = target;
   std::string route = _route.empty() ? "" : _route + "\r\n";
 
   // Default branch parameter if it's not supplied.
   std::string branch = _branch.empty() ? "Pjmo1aimuq33BAI4rjhgQgBr4sY" + std::to_string(_unique) : _branch;
 
+  // Set the content length variable.
   char content_length[128];
   snprintf(content_length, sizeof(content_length), "Content-Length: %d\r\n", (int)_body.length());
 
