@@ -11,8 +11,8 @@
 
 #include "mock_subscriber_data_manager.h"
 
-MockSubscriberDataManager::MockSubscriberDataManager() : 
-  SubscriberDataManager(NULL, NULL, true) 
+MockSubscriberDataManager::MockSubscriberDataManager() :
+  SubscriberDataManager(NULL, NULL, NULL, true)
 {}
 
 MockSubscriberDataManager::~MockSubscriberDataManager()

@@ -46,8 +46,8 @@ public:
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
     _remote_data_store = new LocalStore();
-    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
-    _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, false);
+    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, NULL, true);
+    _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, NULL, false);
     _analytics = new MockAnalyticsLogger();
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
@@ -1149,7 +1149,7 @@ TEST_F(SubscriptionTest, NoDuplicateNotifyOnPCSCFSubscribe)
   check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
   check_subscriptions("sip:6505550231@homedomain", 1u);
 
-  // Next the P-CSCF subscribes  
+  // Next the P-CSCF subscribes
   msg._subscribing_user = "pcscf";
   msg._unique++;
 
@@ -1159,7 +1159,7 @@ TEST_F(SubscriptionTest, NoDuplicateNotifyOnPCSCFSubscribe)
                            "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
                            300)).Times(1);
 
-  inject_msg(msg.get());  
+  inject_msg(msg.get());
 
   check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
   check_subscriptions("sip:6505550231@homedomain", 2u);
@@ -1361,7 +1361,7 @@ public:
   {
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new MockStore();
-    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
+    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, NULL, true);
     _analytics = new AnalyticsLogger();
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
