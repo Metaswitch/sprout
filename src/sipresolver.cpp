@@ -88,8 +88,8 @@ void SIPResolver::resolve(const std::string& name,
     bool addr_blacklisted = blacklisted(ai);
     bool addr_rejected = false;
 
-    if ( (!addr_blacklisted && whitelisted_allowed ) ||
-         ( addr_blacklisted && blacklisted_allowed ) )
+    if ((!addr_blacklisted && whitelisted_allowed)||
+        ( addr_blacklisted && blacklisted_allowed))
     {
       targets.push_back(ai);
     }

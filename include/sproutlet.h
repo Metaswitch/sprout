@@ -22,6 +22,7 @@ extern "C" {
 #include <list>
 #include "baseresolver.h"
 #include "snmp_success_fail_count_by_request_type_table.h"
+#include "fork_error_state.h"
 
 #define API_VERSION 1
 
@@ -34,12 +35,6 @@ class SproutletProxy;
 
 /// Typedefs for Sproutlet-specific types
 typedef intptr_t TimerID;
-
-typedef enum {NONE, TIMEOUT, TRANSPORT_ERROR, NO_ADDRESSES} ForkErrorState;
-const char* const FORK_ERROR_STATE_VALUES[] = {
-  "NONE", "TIMER", "TRANSPORT_ERROR", "NO_ADDRESSES"};
-inline const char* fork_error_to_str(const ForkErrorState fork_error)
-  { return FORK_ERROR_STATE_VALUES[fork_error]; };
 
 struct ForkState
 {
@@ -155,7 +150,8 @@ public:
   ///
   /// @param  req          - The request message to use for forwarding.  If NULL
   ///                        the original request message is used.
-  /// @param  allowed_host_state - Permitted state of hosts when resolving
+  /// @param  allowed_host_state
+  ///                        Permitted state of hosts when resolving
   ///                        addresses. Values are defined in BaseResolver.
   ///
   virtual int send_request(pjsip_msg*& req, int allowed_host_state) = 0;
@@ -479,7 +475,8 @@ protected:
   ///
   /// @returns             - The ID of this forwarded request
   /// @param  req          - The request message to use for forwarding.
-  /// @param  allowed_host_state - Permitted state of hosts when resolving
+  /// @param  allowed_host_state
+  ///                        Permitted state of hosts when resolving
   ///                        addresses. Values are defined in BaseResolver.
   ///
   int send_request(pjsip_msg*& req,
