@@ -169,6 +169,7 @@ namespace TestingCommon
   };
 
 
+  // Class which can build request/response messages.
   class Message
   {
   public:

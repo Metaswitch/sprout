@@ -25,7 +25,7 @@ std::string TestingCommon::end_node(std::string node)
 
 // Returns the text for a complete node.
 std::string TestingCommon::add_node(std::string node_name,
-                             std::string node_value)
+                                    std::string node_value)
 {
   return("<" + node_name + ">" + node_value + "</" + node_name + ">");
 }
@@ -132,7 +132,7 @@ ServiceProfileBuilder& ServiceProfileBuilder::addWildcard(std::string identity,
 // Add a BarringIndication to an identity. This can be either "1" or "0", where
 // 1 means the identity is barred, and 0 means the identity is unbarred.
 ServiceProfileBuilder& ServiceProfileBuilder::addBarringIndication(std::string identity,
-                                               std::string barring_indication)
+                                                                   std::string barring_indication)
 {
   // Locate the specified identity in the list of identities, and apply the
   // given barring_indication to it.
@@ -270,6 +270,7 @@ SubscriptionBuilder& SubscriptionBuilder::addServiceProfile(ServiceProfileBuilde
 }
 
 
+// Set default values for a message.
 Message::Message()
 {
   _method = "INVITE";
@@ -284,7 +285,8 @@ Message::Message()
   _first_hop = false;
   _via = "10.83.18.38:36530";
   _branch = "";
-//  doesn't need to be here...
+//  doesn't need to be here for any tests to pass, but breaks some when it is
+//  present. remove it? (was here for scscf_test only).
 //  _route = "Route: <sip:sprout.homedomain;service=scscf>";
   _cseq = 16567;
   _in_dialog = false;
@@ -298,6 +300,7 @@ Message::~Message()
 {
 }
 
+// Set the route field on a message.
 void Message::set_route(pjsip_msg* msg)
 {
   std::string route = get_headers(msg, "Record-Route");
@@ -312,6 +315,7 @@ void Message::set_route(pjsip_msg* msg)
   _route = route;
 }
 
+// Build a request message, which is returned as a string.
 std::string Message::get_request()
 {
   char buf[16384];
@@ -323,14 +327,14 @@ std::string Message::get_request()
     target.append("@").append(_todomain);
   }
 
+// Out of date comments... remove??
   // If there's no route, the target goes in the request
   // URI. Otherwise it goes in the Route:, and the route goes in the
   // request URI.
   //string requri = _route.empty() ? target : _route;
   //string route = _route.empty() ? "" : string("Route: ").append(target).append("\r\n");
   std::string requri = target;
-  std::string route = _route;
-  route = route.empty() ? "" : route.append("\r\n");
+  std::string route = _route.empty() ? "" : _route + "\r\n";
 
   // Default branch parameter if it's not supplied.
   std::string branch = _branch.empty() ? "Pjmo1aimuq33BAI4rjhgQgBr4sY" + std::to_string(_unique) : _branch;
@@ -378,6 +382,7 @@ std::string Message::get_request()
   return ret;
 }
 
+// Build a response message, which is returned as a string.
 std::string Message::get_response()
 {
   char buf[16384];
