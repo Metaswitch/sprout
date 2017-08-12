@@ -206,6 +206,7 @@ void AoRTimeoutTask::run()
   SAS::Marker end_marker(trail(), MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
 
+
   delete this;
 }
 
@@ -278,17 +279,18 @@ void DeregistrationTask::run()
   delete this;
 }
 
-void AoRTimeoutTask::handle_response()
+void AoRTimeoutTask::process_aor_timeout(std::string aor_id)
 {
   bool all_bindings_expired = false;
+  TRC_DEBUG("Handling timer pop for AoR id: %s", aor_id.c_str());
 
   // Determine the set of IMPUs in the Implicit Registration Set
   AssociatedURIs associated_uris = {};
   std::map<std::string, Ifcs> ifc_map;
-  get_reg_data(_cfg->_hss, _aor_id, associated_uris, ifc_map, trail());
+  get_reg_data(_cfg->_hss, aor_id, associated_uris, ifc_map, trail());
 
   SubscriberDataManager::AoRPair* aor_pair = set_aor_data(_cfg->_sdm,
-                                                          _aor_id,
+                                                          aor_id,
                                                           &associated_uris,
                                                           NULL,
                                                           _cfg->_remote_sdms,
@@ -308,7 +310,7 @@ void AoRTimeoutTask::handle_response()
         bool ignored;
         SubscriberDataManager::AoRPair* remote_aor_pair =
                                                         set_aor_data(*sdm,
-                                                                     _aor_id,
+                                                                     aor_id,
                                                                      &associated_uris,
                                                                      aor_pair,
                                                                      {},
@@ -322,18 +324,18 @@ void AoRTimeoutTask::handle_response()
     {
       TRC_DEBUG("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS");
       SAS::Event event(trail(), SASEvent::REGISTRATION_EXPIRED, 0);
-      event.add_var_param(_aor_id);
+      event.add_var_param(aor_id);
       SAS::report_event(event);
 
       // Get the S-CSCF URI off the AoR to put on the SAR.
       SubscriberDataManager::AoR* aor = aor_pair->get_current();
 
-      _cfg->_hss->update_registration_state(_aor_id, "", HSSConnection::DEREG_TIMEOUT, aor->_scscf_uri, trail());
+      _cfg->_hss->update_registration_state(aor_id, "", HSSConnection::DEREG_TIMEOUT, aor->_scscf_uri, trail());
     }
     else
     {
       SAS::Event event(trail(), SASEvent::SOME_BINDINGS_EXPIRED, 0);
-      event.add_var_param(_aor_id);
+      event.add_var_param(aor_id);
       SAS::report_event(event);
     }
   }
@@ -342,11 +344,11 @@ void AoRTimeoutTask::handle_response()
     // We couldn't update the SubscriberDataManager but there is nothing else we can do to
     // recover from this.
     TRC_INFO("Could not update SubscriberDataManager on registration timeout for AoR: %s",
-             _aor_id.c_str());
+             aor_id.c_str());
   }
 
   delete aor_pair;
-  report_sip_all_register_marker(trail(), _aor_id);
+  report_sip_all_register_marker(trail(), aor_id);
 }
 
 SubscriberDataManager::AoRPair* AoRTimeoutTask::set_aor_data(
@@ -387,33 +389,6 @@ SubscriberDataManager::AoRPair* AoRTimeoutTask::set_aor_data(
   return aor_pair;
 }
 
-// Retrieve the aor ID from the opaque data
-HTTPCode AoRTimeoutTask::parse_response(std::string body)
-{
-  rapidjson::Document doc;
-  std::string json_str = body;
-  doc.Parse<0>(json_str.c_str());
-
-  if (doc.HasParseError())
-  {
-    TRC_DEBUG("Failed to parse opaque data as JSON: %s\nError: %s",
-              json_str.c_str(),
-              rapidjson::GetParseError_En(doc.GetParseError()));
-    return HTTP_BAD_REQUEST;
-  }
-
-  try
-  {
-    JSON_GET_STRING_MEMBER(doc, "aor_id", _aor_id);
-  }
-  catch (JsonFormatError err)
-  {
-    TRC_DEBUG("Badly formed opaque data (missing aor_id)");
-    return HTTP_BAD_REQUEST;
-  }
-  TRC_DEBUG("Handling timer pop for AoR id: %s", _aor_id.c_str());
-  return HTTP_OK;
-}
 
 // Retrieve the aors and any private IDs from the request body
 HTTPCode DeregistrationTask::parse_request(std::string body)

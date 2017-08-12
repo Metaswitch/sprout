@@ -24,6 +24,8 @@
 /// Common factory for all handlers that deal with chronos timer pops. This is
 /// a subclass of SpawningHandler that requests HTTP flows to be
 /// logged at detail level.
+///
+/// @@@ Make this a generic TimerHandler rather than a ChronosHandler...
 template<class H, class C>
 class ChronosHandler : public HttpStackUtils::SpawningHandler<H, C>
 {
@@ -39,6 +41,8 @@ public:
   }
 };
 
+/// Base AoRTimeoutTask class for tasks that implement callbacks from specific
+/// timer services.
 class AoRTimeoutTask : public HttpStackUtils::Task
 {
 public:
@@ -65,8 +69,9 @@ public:
   void run();
 
 protected:
-  void handle_response();
-  HTTPCode parse_response(std::string body);
+  virtual HTTPCode parse_response(std::string body) = 0;
+  virtual void handle_response() = 0;
+  void process_aor_timeout(std::string aor_id);
   SubscriberDataManager::AoRPair* set_aor_data(
                         SubscriberDataManager* current_sdm,
                         std::string aor_id,
@@ -77,7 +82,6 @@ protected:
 
 protected:
   const Config* _cfg;
-  std::string _aor_id;
 };
 
 class DeregistrationTask : public HttpStackUtils::Task

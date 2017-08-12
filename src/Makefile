@@ -63,6 +63,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          httpstack.cpp \
                          httpstack_utils.cpp \
                          handlers.cpp \
+                         chronoshandlers.cpp \
                          contact_filtering.cpp \
                          sproutletproxy.cpp \
                          pluginloader.cpp \

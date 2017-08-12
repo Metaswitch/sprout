@@ -14,6 +14,7 @@
 
 #include "mockhttpstack.hpp"
 #include "handlers.h"
+#include "chronoshandlers.h"
 #include "gtest/gtest.h"
 #include "basetest.hpp"
 #include "siptest.hpp"
@@ -149,12 +150,12 @@ public:
   {
     req = new MockHttpStack::Request(stack, "/", "timers", "", body, method);
     config = new AoRTimeoutTask::Config(store, {remote_store1, remote_store2}, mock_hss);
-    handler = new AoRTimeoutTask(*req, config, 0);
+    handler = new ChronosAoRTimeoutTask(*req, config, 0);
   }
 
   MockHttpStack::Request* req;
   AoRTimeoutTask::Config* config;
-  AoRTimeoutTask* handler;
+  ChronosAoRTimeoutTask* handler;
 };
 
 // Test main flow, without a remote store.
@@ -450,7 +451,7 @@ class AoRTimeoutTasksMockStoreTest : public SipTest
   MockHttpStack::Request* req;
   AoRTimeoutTask::Config* chronos_config;
 
-  AoRTimeoutTask* handler;
+  ChronosAoRTimeoutTask* handler;
 
   void SetUp()
   {
@@ -459,7 +460,7 @@ class AoRTimeoutTasksMockStoreTest : public SipTest
     fake_hss = new FakeHSSConnection();
     req = new MockHttpStack::Request(&stack, "/", "timers");
     chronos_config = new AoRTimeoutTask::Config(store, {}, fake_hss);
-    handler = new AoRTimeoutTask(*req, chronos_config, 0);
+    handler = new ChronosAoRTimeoutTask(*req, chronos_config, 0);
   }
 
   void TearDown()
