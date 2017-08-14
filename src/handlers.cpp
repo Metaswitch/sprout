@@ -708,7 +708,7 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
   // response to chronos which will eventually cause it to retry in a different
   // site, which will hopefully have the data.
   bool success = false;
-  ImpiStore::Impi* impi = _cfg->_local_impi_store->get_impi_with_nonce(_impi, _nonce, trail());
+  ImpiStore::Impi* impi = _cfg->_local_impi_store->get_impi(_impi, trail());
   ImpiStore::AuthChallenge* auth_challenge = NULL;
   if (impi != NULL)
   {
