@@ -158,6 +158,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        acr_test.cpp \
                        subscription_test.cpp \
                        handlers_test.cpp \
+                       chronoshandlers_test.cpp \
                        mock_sas.cpp \
                        contact_filtering_test.cpp \
                        appserver_test.cpp \

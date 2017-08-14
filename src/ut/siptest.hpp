@@ -8,6 +8,8 @@
  * Otherwise no rights are granted except for those provided to you by
  * Metaswitch Networks in a separate written agreement.
  */
+#ifndef SIPTEST_H__
+#define SIPTEST_H__
 
 #include <string>
 #include <sstream>
@@ -422,3 +424,5 @@ private:
   string _header;
   std::list<string> _regexes;
 };
+
+#endif
