@@ -132,7 +132,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     std::string mmf_cluster_uri = "sip:mmf." + opt.sprout_hostname;
 
     // As there is not currently a shared_config option for this, form the
-    // MMF node uri manually, specifying the port (currently the BGCF port)
+    // MMF node uri manually, directly specifying the mmf service
     std::string node_host(stack_data.local_host.ptr, stack_data.local_host.slen);
 
     if (Utils::parse_ip_address(node_host) == Utils::IPV6_ADDRESS)
