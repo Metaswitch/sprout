@@ -10378,7 +10378,6 @@ TEST_F(SCSCFTest, MMFPreAs)
   pjsip_hdr* preas_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
   std::string preas_uri = PJUtils::get_header_value(preas_hdr);
   EXPECT_THAT(preas_uri, MatchesRegex(".*sip:11.22.33.44:5053.*"));
-  EXPECT_THAT(preas_uri, MatchesRegex(".*namespace=mmf.*"));
   EXPECT_THAT(preas_uri, MatchesRegex(".*mmfscope=pre-as.*"));
   EXPECT_THAT(preas_uri, MatchesRegex(".*mmftarget=PreASOnly.*"));
   pj_list_erase(preas_hdr);
@@ -10519,7 +10518,6 @@ TEST_F(SCSCFTest, MMFPostAs)
   pjsip_hdr* postas_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
   std::string postas_uri = PJUtils::get_header_value(postas_hdr);
   EXPECT_THAT(postas_uri, MatchesRegex(".*sip:44.33.22.11:5053.*"));
-  EXPECT_THAT(postas_uri, MatchesRegex(".*namespace=mmf.*"));
   EXPECT_THAT(postas_uri, MatchesRegex(".*mmfscope=post-as.*"));
   EXPECT_THAT(postas_uri, MatchesRegex(".*mmftarget=PostASOnly.*"));
   pj_list_erase(postas_hdr);
@@ -10649,7 +10647,6 @@ TEST_F(SCSCFTest, MMFPreAndPostAs)
   std::string preas_uri = PJUtils::get_header_value(preas_hdr);
   //
   EXPECT_THAT(preas_uri, MatchesRegex(".*sip:11.22.33.44:5053.*"));
-  EXPECT_THAT(preas_uri, MatchesRegex(".*namespace=mmf.*"));
   EXPECT_THAT(preas_uri, MatchesRegex(".*mmfscope=pre-as.*"));
   EXPECT_THAT(preas_uri, MatchesRegex(".*mmftarget=BothPreAndPost.*"));
   pj_list_erase(preas_hdr);
@@ -10664,7 +10661,6 @@ TEST_F(SCSCFTest, MMFPreAndPostAs)
   pjsip_hdr* postas_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
   std::string postas_uri = PJUtils::get_header_value(postas_hdr);
   EXPECT_THAT(postas_uri, MatchesRegex(".*sip:44.33.22.11:5053.*"));
-  EXPECT_THAT(postas_uri, MatchesRegex(".*namespace=mmf.*"));
   EXPECT_THAT(postas_uri, MatchesRegex(".*mmfscope=post-as.*"));
   EXPECT_THAT(postas_uri, MatchesRegex(".*mmftarget=BothPreAndPost.*"));
   pj_list_erase(postas_hdr);
