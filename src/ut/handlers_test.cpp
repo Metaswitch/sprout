@@ -26,7 +26,7 @@
 #include "mock_impi_store.h"
 #include "mock_hss_connection.h"
 #include "rapidjson/document.h"
-#include "test_with_mock_sdms.h"
+#include "handlers_test.h"
 
 using namespace std;
 using ::testing::_;

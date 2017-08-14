@@ -1,5 +1,5 @@
 /**
- * @file test_with_mock_sdms.cpp UT for Handlers module.
+ * @file handlers_test.h
  *
  * Copyright (C) Metaswitch Networks 2017
  * If license terms are provided to you in a COPYING file in the root directory
@@ -9,8 +9,8 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-#ifndef TESTWITHMOCKSDMS_H__
-#define TESTWITHMOCKSDMS_H__
+#ifndef HANDLERSTEST_H__
+#define HANDLERSTEST_H__
 
 #include "test_utils.hpp"
 #include <curl/curl.h>
@@ -41,6 +41,7 @@ using ::testing::InSequence;
 using ::testing::ByRef;
 using ::testing::NiceMock;
 
+// Base class used for testing handlers with Mock SDMs.
 class TestWithMockSdms : public SipTest
 {
   MockSubscriberDataManager* store;
