@@ -1,5 +1,5 @@
 /**
- * @file handlers_test.cpp UT for Handlers module.
+ * @file chronoshandlers_test.cpp UT for Chronos Handlers module.
  *
  * Copyright (C) Metaswitch Networks 2017
  * If license terms are provided to you in a COPYING file in the root directory
