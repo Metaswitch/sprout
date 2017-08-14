@@ -23,10 +23,28 @@ public:
     AoRTimeoutTask::AoRTimeoutTask(req, cfg, trail)
   {};
 
+  void run();
+
 protected:
   HTTPCode parse_response(std::string body);
   void handle_response();
   std::string _aor_id;
 };
+
+class ChronosAuthTimeoutTask : public AuthTimeoutTask
+{
+public:
+  ChronosAuthTimeoutTask(HttpStack::Request& req,
+                  const Config* cfg,
+                  SAS::TrailId trail) :
+    AuthTimeoutTask::AuthTimeoutTask(req, cfg, trail)
+  {};
+
+  void run();
+
+protected:
+  HTTPCode handle_response(std::string body);
+};
+
 
 #endif

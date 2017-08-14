@@ -1058,9 +1058,9 @@ class AuthTimeoutTest : public SipTest
 
   MockHttpStack stack;
   MockHttpStack::Request* req;
-  AuthTimeoutTask::Config* chronos_config;
+  ChronosAuthTimeoutTask::Config* chronos_config;
 
-  AuthTimeoutTask* handler;
+  ChronosAuthTimeoutTask* handler;
 
   void SetUp()
   {
@@ -1069,8 +1069,8 @@ class AuthTimeoutTest : public SipTest
     store = new ImpiStore(local_data_store);
     fake_hss = new FakeHSSConnection();
     req = new MockHttpStack::Request(&stack, "/", "authentication-timeout");
-    chronos_config = new AuthTimeoutTask::Config(store, fake_hss);
-    handler = new AuthTimeoutTask(*req, chronos_config, 0);
+    chronos_config = new ChronosAuthTimeoutTask::Config(store, fake_hss);
+    handler = new ChronosAuthTimeoutTask(*req, chronos_config, 0);
   }
 
   void TearDown()

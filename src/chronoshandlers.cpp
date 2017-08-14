@@ -16,6 +16,41 @@
 #include "chronoshandlers.h"
 #include "log.h"
 
+//LCOV_EXCL_START - don't want to actually run the handlers in the UT
+void ChronosAoRTimeoutTask::run()
+{
+  if (_req.method() != htp_method_POST)
+  {
+    send_http_reply(HTTP_BADMETHOD);
+    delete this;
+    return;
+  }
+
+  HTTPCode rc = parse_response(_req.get_rx_body());
+
+  if (rc != HTTP_OK)
+  {
+    TRC_DEBUG("Unable to parse response from Chronos");
+    send_http_reply(rc);
+    delete this;
+    return;
+  }
+
+  send_http_reply(HTTP_OK);
+
+  SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
+  SAS::report_marker(start_marker);
+
+  handle_response();
+
+  SAS::Marker end_marker(trail(), MARKER_ID_END, 1u);
+  SAS::report_marker(end_marker);
+
+
+  delete this;
+}
+//LCOV_EXCL_STOP
+
 HTTPCode ChronosAoRTimeoutTask::parse_response(std::string body)
 {
   rapidjson::Document doc;
@@ -47,4 +82,66 @@ HTTPCode ChronosAoRTimeoutTask::parse_response(std::string body)
 void ChronosAoRTimeoutTask::handle_response()
 {
   process_aor_timeout(_aor_id);
+}
+
+//LCOV_EXCL_START - don't want to actually run the handlers in the UT
+void ChronosAuthTimeoutTask::run()
+{
+  if (_req.method() != htp_method_POST)
+  {
+    send_http_reply(HTTP_BADMETHOD);
+    delete this;
+    return;
+  }
+
+  SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
+  SAS::report_marker(start_marker);
+
+  HTTPCode rc = handle_response(_req.get_rx_body());
+
+  SAS::Marker end_marker(trail(), MARKER_ID_END, 1u);
+  SAS::report_marker(end_marker);
+
+  if (rc != HTTP_OK)
+  {
+    TRC_DEBUG("Unable to handle callback from Chronos");
+    send_http_reply(rc);
+    delete this;
+    return;
+  }
+
+  send_http_reply(HTTP_OK);
+  delete this;
+}
+//LCOV_EXCL_STOP
+
+HTTPCode ChronosAuthTimeoutTask::handle_response(std::string body)
+{
+  rapidjson::Document doc;
+  std::string json_str = body;
+  doc.Parse<0>(json_str.c_str());
+  std::string impi;
+  std::string impu;
+  std::string nonce;
+
+  if (doc.HasParseError())
+  {
+    TRC_INFO("Failed to parse opaque data as JSON: %s\nError: %s",
+             json_str.c_str(),
+             rapidjson::GetParseError_En(doc.GetParseError()));
+    return HTTP_BAD_REQUEST;
+  }
+
+  try
+  {
+    JSON_GET_STRING_MEMBER(doc, "impu", impu);
+    JSON_GET_STRING_MEMBER(doc, "impi", impi);
+    JSON_GET_STRING_MEMBER(doc, "nonce", nonce);
+  }
+  catch (JsonFormatError err)
+  {
+    TRC_INFO("Badly formed opaque data (missing impu, impi or nonce");
+    return HTTP_BAD_REQUEST;
+  }
+  return timeout_auth_challenge(impu, impi, nonce);
 }

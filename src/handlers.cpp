@@ -176,70 +176,6 @@ static void report_sip_all_register_marker(SAS::TrailId trail, std::string uri_s
   pj_pool_release(tmp_pool);
 }
 
-//LCOV_EXCL_START - don't want to actually run the handlers in the UT
-void AoRTimeoutTask::run()
-{
-  if (_req.method() != htp_method_POST)
-  {
-    send_http_reply(HTTP_BADMETHOD);
-    delete this;
-    return;
-  }
-
-  HTTPCode rc = parse_response(_req.get_rx_body());
-
-  if (rc != HTTP_OK)
-  {
-    TRC_DEBUG("Unable to parse response from Chronos");
-    send_http_reply(rc);
-    delete this;
-    return;
-  }
-
-  send_http_reply(HTTP_OK);
-
-  SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
-  SAS::report_marker(start_marker);
-
-  handle_response();
-
-  SAS::Marker end_marker(trail(), MARKER_ID_END, 1u);
-  SAS::report_marker(end_marker);
-
-
-  delete this;
-}
-
-void AuthTimeoutTask::run()
-{
-  if (_req.method() != htp_method_POST)
-  {
-    send_http_reply(HTTP_BADMETHOD);
-    delete this;
-    return;
-  }
-
-  SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
-  SAS::report_marker(start_marker);
-
-  HTTPCode rc = handle_response(_req.get_rx_body());
-
-  SAS::Marker end_marker(trail(), MARKER_ID_END, 1u);
-  SAS::report_marker(end_marker);
-
-  if (rc != HTTP_OK)
-  {
-    TRC_DEBUG("Unable to handle callback from Chronos");
-    send_http_reply(rc);
-    delete this;
-    return;
-  }
-
-  send_http_reply(HTTP_OK);
-  delete this;
-}
-//LCOV_EXCL_STOP
-
 void DeregistrationTask::run()
 {
   // HTTP method must be a DELETE
@@ -645,33 +581,10 @@ SubscriberDataManager::AoRPair* DeregistrationTask::deregister_bindings(
   return aor_pair;
 }
 
-HTTPCode AuthTimeoutTask::handle_response(std::string body)
+HTTPCode AuthTimeoutTask::timeout_auth_challenge(std::string impu,
+                                                 std::string impi,
+                                                 std::string nonce)
 {
-  rapidjson::Document doc;
-  std::string json_str = body;
-  doc.Parse<0>(json_str.c_str());
-
-  if (doc.HasParseError())
-  {
-    TRC_INFO("Failed to parse opaque data as JSON: %s\nError: %s",
-             json_str.c_str(),
-             rapidjson::GetParseError_En(doc.GetParseError()));
-    return HTTP_BAD_REQUEST;
-  }
-
-  try
-  {
-    JSON_GET_STRING_MEMBER(doc, "impu", _impu);
-    JSON_GET_STRING_MEMBER(doc, "impi", _impi);
-    JSON_GET_STRING_MEMBER(doc, "nonce", _nonce);
-    report_sip_all_register_marker(trail(), _impu);
-  }
-  catch (JsonFormatError err)
-  {
-    TRC_INFO("Badly formed opaque data (missing impu, impi or nonce");
-    return HTTP_BAD_REQUEST;
-  }
-
   // Locate the challenge that this timer refers to, to check if the user
   // authenticated against it. If it didn't, we will need to send an
   // AUTHENTICATION_TIMEOUT SAR.
@@ -682,12 +595,15 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
   // quite a weird situation to be in. If we do hit it, we'll return a 500
   // response to chronos which will eventually cause it to retry in a different
   // site, which will hopefully have the data.
+
+  report_sip_all_register_marker(trail(), impu);
+
   bool success = false;
-  ImpiStore::Impi* impi = _cfg->_local_impi_store->get_impi(_impi, trail());
+  ImpiStore::Impi* impi_obj = _cfg->_local_impi_store->get_impi(impi, trail());
   ImpiStore::AuthChallenge* auth_challenge = NULL;
-  if (impi != NULL)
+  if (impi_obj != NULL)
   {
-    auth_challenge = impi->get_auth_challenge(_nonce);
+    auth_challenge = impi_obj->get_auth_challenge(nonce);
   }
   if (auth_challenge != NULL)
   {
@@ -699,7 +615,7 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
     // If not, authentication has timed out.
     if (auth_challenge->nonce_count == ImpiStore::AuthChallenge::INITIAL_NONCE_COUNT)
     {
-      TRC_DEBUG("AV for %s:%s has timed out", _impi.c_str(), _nonce.c_str());
+      TRC_DEBUG("AV for %s:%s has timed out", impi.c_str(), nonce.c_str());
 
       // The AUTHENTICATION_TIMEOUT SAR is idempotent, so there's no
       // problem if Chronos' timer pops twice (e.g. if we have high
@@ -708,7 +624,7 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
       // If either of these operations fail, we return a 500 Internal
       // Server Error - this will trigger Chronos to try a different
       // Sprout, which may have better connectivity to Homestead or Memcached.
-      HTTPCode hss_query = _cfg->_hss->update_registration_state(_impu, _impi, HSSConnection::AUTH_TIMEOUT, auth_challenge->scscf_uri, trail());
+      HTTPCode hss_query = _cfg->_hss->update_registration_state(impu, impi, HSSConnection::AUTH_TIMEOUT, auth_challenge->scscf_uri, trail());
 
       if (hss_query == HTTP_OK)
       {
@@ -726,9 +642,9 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
   }
   else
   {
-    TRC_WARNING("Could not find AV for %s:%s when checking authentication timeout", _impi.c_str(), _nonce.c_str()); // LCOV_EXCL_LINE
+    TRC_WARNING("Could not find AV for %s:%s when checking authentication timeout", impi.c_str(), nonce.c_str()); // LCOV_EXCL_LINE
   }
-  delete impi;
+  delete impi_obj;
 
   return success ? HTTP_OK : HTTP_SERVER_ERROR;
 }
