@@ -35,8 +35,8 @@ class ChronosAuthTimeoutTask : public AuthTimeoutTask
 {
 public:
   ChronosAuthTimeoutTask(HttpStack::Request& req,
-                  const Config* cfg,
-                  SAS::TrailId trail) :
+                         const Config* cfg,
+                         SAS::TrailId trail) :
     AuthTimeoutTask::AuthTimeoutTask(req, cfg, trail)
   {};
 
