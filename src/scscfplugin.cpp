@@ -128,9 +128,8 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
       icscf_uri = opt.external_icscf_uri;
     }
 
-    // Create the MMF cluster uri.  As this is not a separate sproutlet, use
-    // the sprout hostname, and specify the port (currently the BGCF port)
-    std::string mmf_cluster_uri = "sip:" + opt.sprout_hostname + ":" + std::to_string(opt.port_bgcf);
+    // Create the MMF cluster uri
+    std::string mmf_cluster_uri = "sip:mmf." + opt.sprout_hostname;
 
     // As there is not currently a shared_config option for this, form the
     // MMF node uri manually, specifying the port (currently the BGCF port)
@@ -141,7 +140,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
       node_host = "[" + node_host + "]";
     }
 
-    std::string mmf_node_uri = "sip:" + node_host + ":" + std::to_string(opt.port_bgcf);
+    std::string mmf_node_uri = "sip:" + node_host + ";service=mmf";
 
     // Create Application Server communication trackers.
     _sess_term_as_alarm = new Alarm(alarm_manager,
