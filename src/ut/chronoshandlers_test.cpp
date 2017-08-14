@@ -39,7 +39,7 @@ using ::testing::InSequence;
 using ::testing::ByRef;
 using ::testing::NiceMock;
 
-class AoRTimeoutTasksTest : public TestWithMockSdms
+class ChronosAoRTimeoutTasksTest : public TestWithMockSdms
 {
 public:
   void TearDown()
@@ -63,7 +63,7 @@ public:
 };
 
 // Test main flow, without a remote store.
-TEST_F(AoRTimeoutTasksTest, MainlineTest)
+TEST_F(ChronosAoRTimeoutTasksTest, MainlineTest)
 {
   // Build request
   std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
@@ -105,7 +105,7 @@ TEST_F(AoRTimeoutTasksTest, MainlineTest)
 }
 
 // Test that an invalid HTTP method fails with HTTP_BADMETHOD
-TEST_F(AoRTimeoutTasksTest, InvalidHTTPMethodTest)
+TEST_F(ChronosAoRTimeoutTasksTest, InvalidHTTPMethodTest)
 {
   std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
   build_timeout_request(body, htp_method_PUT);
@@ -116,7 +116,7 @@ TEST_F(AoRTimeoutTasksTest, InvalidHTTPMethodTest)
 }
 
 // Test that an invalid JSON body fails in parsing
-TEST_F(AoRTimeoutTasksTest, InvalidJSONTest)
+TEST_F(ChronosAoRTimeoutTasksTest, InvalidJSONTest)
 {
   CapturingTestLogger log(5);
 
@@ -131,7 +131,7 @@ TEST_F(AoRTimeoutTasksTest, InvalidJSONTest)
 }
 
 // Test that a body without an AoR ID fails, logging "Badly formed opaque data"
-TEST_F(AoRTimeoutTasksTest, MissingAorJSONTest)
+TEST_F(ChronosAoRTimeoutTasksTest, MissingAorJSONTest)
 {
   CapturingTestLogger log(5);
 
@@ -146,7 +146,7 @@ TEST_F(AoRTimeoutTasksTest, MissingAorJSONTest)
 }
 
 // Test with a remote AoR with no bindings
-TEST_F(AoRTimeoutTasksTest, RemoteAoRNoBindingsTest)
+TEST_F(ChronosAoRTimeoutTasksTest, RemoteAoRNoBindingsTest)
 {
   std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
   build_timeout_request(body, htp_method_POST);
@@ -192,7 +192,7 @@ TEST_F(AoRTimeoutTasksTest, RemoteAoRNoBindingsTest)
 }
 
 // Test with a remote store, and a local AoR with no bindings
-TEST_F(AoRTimeoutTasksTest, LocalAoRNoBindingsTest)
+TEST_F(ChronosAoRTimeoutTasksTest, LocalAoRNoBindingsTest)
 {
   std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
   build_timeout_request(body, htp_method_POST);
@@ -241,7 +241,7 @@ TEST_F(AoRTimeoutTasksTest, LocalAoRNoBindingsTest)
 }
 
 // Test with a remote store, and both AoRs with no bindings
-TEST_F(AoRTimeoutTasksTest, NoBindingsTest)
+TEST_F(ChronosAoRTimeoutTasksTest, NoBindingsTest)
 {
   std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";
 
@@ -306,7 +306,7 @@ TEST_F(AoRTimeoutTasksTest, NoBindingsTest)
 }
 
 // Test with NULL AoRs
-TEST_F(AoRTimeoutTasksTest, NullAoRTest)
+TEST_F(ChronosAoRTimeoutTasksTest, NullAoRTest)
 {
   CapturingTestLogger log(5);
 
@@ -345,7 +345,7 @@ TEST_F(AoRTimeoutTasksTest, NullAoRTest)
   EXPECT_TRUE(log.contains("Failed to get AoR binding for"));
 }
 
-class AoRTimeoutTasksMockStoreTest : public SipTest
+class ChronosAoRTimeoutTasksMockStoreTest : public SipTest
 {
   FakeChronosConnection* chronos_connection;
   MockSubscriberDataManager* store;
@@ -379,7 +379,7 @@ class AoRTimeoutTasksMockStoreTest : public SipTest
 
 };
 
-TEST_F(AoRTimeoutTasksMockStoreTest, SubscriberDataManagerWritesFail)
+TEST_F(ChronosAoRTimeoutTasksMockStoreTest, SubscriberDataManagerWritesFail)
 {
   // Set up the SubscriberDataManager to fail all sets and respond to all gets with not
   // found.
@@ -404,7 +404,7 @@ TEST_F(AoRTimeoutTasksMockStoreTest, SubscriberDataManagerWritesFail)
   handler->handle_response();
 }
 
-class AuthTimeoutTest : public SipTest
+class ChronosAuthTimeoutTest : public SipTest
 {
   FakeChronosConnection* chronos_connection;
   LocalStore* local_data_store;
@@ -443,7 +443,7 @@ class AuthTimeoutTest : public SipTest
 
 // This tests the case where the AV record is still in memcached, but the Chronos timer has popped.
 // The subscriber's registration state is updated, and the record is deleted from the AV store.
-TEST_F(AuthTimeoutTest, NonceTimedOut)
+TEST_F(ChronosAuthTimeoutTest, NonceTimedOut)
 {
   fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", RegDataXMLUtils::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
   ImpiStore::Impi* impi = new ImpiStore::Impi("6505550231@homedomain");
@@ -462,7 +462,7 @@ TEST_F(AuthTimeoutTest, NonceTimedOut)
   delete impi; impi = NULL;
 }
 
-TEST_F(AuthTimeoutTest, NonceTimedOutWithEmptyCorrelator)
+TEST_F(ChronosAuthTimeoutTest, NonceTimedOutWithEmptyCorrelator)
 {
   fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", RegDataXMLUtils::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
   ImpiStore::Impi* impi = new ImpiStore::Impi("6505550231@homedomain");
@@ -480,7 +480,7 @@ TEST_F(AuthTimeoutTest, NonceTimedOutWithEmptyCorrelator)
   delete impi; impi = NULL;
 }
 
-TEST_F(AuthTimeoutTest, MainlineTest)
+TEST_F(ChronosAuthTimeoutTest, MainlineTest)
 {
   ImpiStore::Impi* impi = new ImpiStore::Impi("test@example.com");
   ImpiStore::DigestAuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge("abcdef", "example.com", "auth", "ha1", time(NULL) + 30);
@@ -498,7 +498,7 @@ TEST_F(AuthTimeoutTest, MainlineTest)
   delete impi; impi = NULL;
 }
 
-TEST_F(AuthTimeoutTest, NoIMPU)
+TEST_F(ChronosAuthTimeoutTest, NoIMPU)
 {
   std::string body = "{\"impi\": \"test@example.com\", \"nonce\": \"abcdef\"}";
   int status = handler->handle_response(body);
@@ -506,7 +506,7 @@ TEST_F(AuthTimeoutTest, NoIMPU)
   ASSERT_EQ(status, 400);
 }
 
-TEST_F(AuthTimeoutTest, CorruptIMPU)
+TEST_F(ChronosAuthTimeoutTest, CorruptIMPU)
 {
   std::string body = "{\"impi\": \"test@example.com\", \"impu\": \"I am not a URI\", \"nonce\": \"abcdef\"}";
   int status = handler->handle_response(body);
@@ -515,7 +515,7 @@ TEST_F(AuthTimeoutTest, CorruptIMPU)
 }
 
 
-TEST_F(AuthTimeoutTest, NoIMPI)
+TEST_F(ChronosAuthTimeoutTest, NoIMPI)
 {
   std::string body = "{\"impu\": \"sip:test@example.com\", \"nonce\": \"abcdef\"}";
   int status = handler->handle_response(body);
@@ -523,7 +523,7 @@ TEST_F(AuthTimeoutTest, NoIMPI)
   ASSERT_EQ(status, 400);
 }
 
-TEST_F(AuthTimeoutTest, NoNonce)
+TEST_F(ChronosAuthTimeoutTest, NoNonce)
 {
   std::string body = "{\"impu\": \"sip:test@example.com\", \"impi\": \"test@example.com\"}";
   int status = handler->handle_response(body);
@@ -531,7 +531,7 @@ TEST_F(AuthTimeoutTest, NoNonce)
   ASSERT_EQ(status, 400);
 }
 
-TEST_F(AuthTimeoutTest, BadJSON)
+TEST_F(ChronosAuthTimeoutTest, BadJSON)
 {
   std::string body = "{\"impu\" \"sip:test@example.com\", \"impi\": \"test@example.com\", \"nonce\": \"abcdef\"}";
   int status = handler->handle_response(body);
