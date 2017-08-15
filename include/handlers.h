@@ -21,7 +21,7 @@
 #include "impistore.h"
 #include "fifcservice.h"
 
-/// Common factory for all handlers that deal with chronos timer pops. This is
+/// Common factory for all handlers that deal with timer pops. This is
 /// a subclass of SpawningHandler that requests HTTP flows to be
 /// logged at detail level.
 template<class H, class C>

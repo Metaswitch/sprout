@@ -258,7 +258,7 @@ void AoRTimeoutTask::process_aor_timeout(std::string aor_id)
 
     if (all_bindings_expired)
     {
-      TRC_DEBUG("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS");
+      TRC_DEBUG("All bindings have expired based on an AoR Timeout - triggering deregistration at the HSS");
       SAS::Event event(trail(), SASEvent::REGISTRATION_EXPIRED, 0);
       event.add_var_param(aor_id);
       SAS::report_event(event);
@@ -591,9 +591,9 @@ HTTPCode AuthTimeoutTask::timeout_auth_challenge(std::string impu,
   //
   // Note that we don't bother checking any of the remote IMPI stores if we
   // don't find a record in the local store. This suggests that the IMPI record
-  // didn't get replicated to this site but the chronos timer did, which is
+  // didn't get replicated to this site but the timer did, which is
   // quite a weird situation to be in. If we do hit it, we'll return a 500
-  // response to chronos which will eventually cause it to retry in a different
+  // response to the timer service which will eventually cause it to retry in a different
   // site, which will hopefully have the data.
 
   report_sip_all_register_marker(trail(), impu);
@@ -618,11 +618,11 @@ HTTPCode AuthTimeoutTask::timeout_auth_challenge(std::string impu,
       TRC_DEBUG("AV for %s:%s has timed out", impi.c_str(), nonce.c_str());
 
       // The AUTHENTICATION_TIMEOUT SAR is idempotent, so there's no
-      // problem if Chronos' timer pops twice (e.g. if we have high
+      // problem if the timer pops twice (e.g. if we have high
       // latency and these operations take more than 2 seconds).
 
       // If either of these operations fail, we return a 500 Internal
-      // Server Error - this will trigger Chronos to try a different
+      // Server Error - this will trigger the timer service to try a different
       // Sprout, which may have better connectivity to Homestead or Memcached.
       HTTPCode hss_query = _cfg->_hss->update_registration_state(impu, impi, HSSConnection::AUTH_TIMEOUT, auth_challenge->scscf_uri, trail());
 
