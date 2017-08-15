@@ -2507,12 +2507,6 @@ void SCSCFSproutletTsx::add_mmf_uri_parameters(pjsip_sip_uri* mmf_uri,
   // Use same transport as AS, in case it can only cope with one.
   mmf_uri->transport_param = as_transport_param;
 
-  TRC_DEBUG("Adding namespace parameter 'mmf'");
-  PJUtils::add_parameter_to_sip_uri(mmf_uri,
-                                    STR_NAMESPACE,
-                                    "mmf",
-                                    pool);
-
   TRC_DEBUG("Adding mmftarget parameter %s", mmftarget_param.c_str());
   PJUtils::add_parameter_to_sip_uri(mmf_uri,
                                     STR_MMFTARGET,
