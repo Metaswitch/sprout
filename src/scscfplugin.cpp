@@ -129,7 +129,7 @@ bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     }
 
     // Create the MMF cluster uri
-    std::string mmf_cluster_uri = "sip:mmf." + opt.sprout_hostname;
+    std::string mmf_cluster_uri = "sip:" + opt.sprout_hostname + ";service=mmf";
 
     // As there is not currently a shared_config option for this, form the
     // MMF node uri manually, directly specifying the mmf service
