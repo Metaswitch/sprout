@@ -16,7 +16,6 @@
 #include "chronoshandlers.h"
 #include "log.h"
 
-//LCOV_EXCL_START - don't want to actually run the handlers in the UT
 void ChronosAoRTimeoutTask::run()
 {
   if (_req.method() != htp_method_POST)
@@ -49,7 +48,6 @@ void ChronosAoRTimeoutTask::run()
 
   delete this;
 }
-//LCOV_EXCL_STOP
 
 HTTPCode ChronosAoRTimeoutTask::parse_response(std::string body)
 {
@@ -84,7 +82,6 @@ void ChronosAoRTimeoutTask::handle_response()
   process_aor_timeout(_aor_id);
 }
 
-//LCOV_EXCL_START - don't want to actually run the handlers in the UT
 void ChronosAuthTimeoutTask::run()
 {
   if (_req.method() != htp_method_POST)
@@ -113,7 +110,6 @@ void ChronosAuthTimeoutTask::run()
   send_http_reply(HTTP_OK);
   delete this;
 }
-//LCOV_EXCL_STOP
 
 HTTPCode ChronosAuthTimeoutTask::handle_response(std::string body)
 {

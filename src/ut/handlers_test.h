@@ -123,4 +123,26 @@ class TestWithMockSdms : public SipTest
   }
 };
 
+class AuthTimeoutTest : public SipTest
+{
+  LocalStore* local_data_store;
+  ImpiStore* store;
+  FakeHSSConnection* fake_hss;
+  MockHttpStack stack;
+
+  void SetUp()
+  {
+    local_data_store = new LocalStore();
+    store = new ImpiStore(local_data_store);
+    fake_hss = new FakeHSSConnection();
+  }
+
+  void TearDown()
+  {
+    delete fake_hss; fake_hss = NULL;
+    delete store; store = NULL;
+    delete local_data_store; local_data_store = NULL;
+  }
+};
+
 #endif

@@ -347,34 +347,31 @@ TEST_F(ChronosAoRTimeoutTasksTest, NullAoRTest)
 
 class ChronosAoRTimeoutTasksMockStoreTest : public SipTest
 {
-  FakeChronosConnection* chronos_connection;
   MockSubscriberDataManager* store;
   FakeHSSConnection* fake_hss;
 
   MockHttpStack stack;
   MockHttpStack::Request* req;
-  AoRTimeoutTask::Config* chronos_config;
+  AoRTimeoutTask::Config* config;
 
   ChronosAoRTimeoutTask* handler;
 
   void SetUp()
   {
-    chronos_connection = new FakeChronosConnection();
     store = new MockSubscriberDataManager();
     fake_hss = new FakeHSSConnection();
     req = new MockHttpStack::Request(&stack, "/", "timers");
-    chronos_config = new AoRTimeoutTask::Config(store, {}, fake_hss);
-    handler = new ChronosAoRTimeoutTask(*req, chronos_config, 0);
+    config = new AoRTimeoutTask::Config(store, {}, fake_hss);
+    handler = new ChronosAoRTimeoutTask(*req, config, 0);
   }
 
   void TearDown()
   {
     delete handler;
-    delete chronos_config;
+    delete config;
     delete req;
     delete fake_hss;
     delete store; store = NULL;
-    delete chronos_connection; chronos_connection = NULL;
   }
 
 };
@@ -404,41 +401,26 @@ TEST_F(ChronosAoRTimeoutTasksMockStoreTest, SubscriberDataManagerWritesFail)
   handler->handle_response();
 }
 
-class ChronosAuthTimeoutTest : public SipTest
+class ChronosAuthTimeoutTest : public AuthTimeoutTest
 {
-  FakeChronosConnection* chronos_connection;
-  LocalStore* local_data_store;
-  ImpiStore* store;
-  FakeHSSConnection* fake_hss;
-
-  MockHttpStack stack;
   MockHttpStack::Request* req;
-  ChronosAuthTimeoutTask::Config* chronos_config;
-
+  AuthTimeoutTask::Config* config;
   ChronosAuthTimeoutTask* handler;
-
-  void SetUp()
-  {
-    chronos_connection = new FakeChronosConnection();
-    local_data_store = new LocalStore();
-    store = new ImpiStore(local_data_store);
-    fake_hss = new FakeHSSConnection();
-    req = new MockHttpStack::Request(&stack, "/", "authentication-timeout");
-    chronos_config = new ChronosAuthTimeoutTask::Config(store, fake_hss);
-    handler = new ChronosAuthTimeoutTask(*req, chronos_config, 0);
-  }
 
   void TearDown()
   {
-    delete handler;
-    delete chronos_config;
-    delete req;
-    delete fake_hss;
-    delete store; store = NULL;
-    delete local_data_store; local_data_store = NULL;
-    delete chronos_connection; chronos_connection = NULL;
+    delete config; config = NULL;
+    if (req != NULL) delete req; req = NULL;
+
+    AuthTimeoutTest::TearDown();
   }
 
+  void build_timeout_request(std::string body, htp_method method)
+  {
+    req = new MockHttpStack::Request(&stack, "/", "authentication-timeout", "", body, method);
+    config = new AuthTimeoutTask::Config(store, fake_hss);
+    handler = new ChronosAuthTimeoutTask(*req, config, 0);
+  }
 };
 
 // This tests the case where the AV record is still in memcached, but the Chronos timer has popped.
@@ -454,9 +436,11 @@ TEST_F(ChronosAuthTimeoutTest, NonceTimedOut)
   store->set_impi(impi, 0);
 
   std::string body = "{\"impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231@homedomain\", \"nonce\": \"abcdef\"}";
-  int status = handler->handle_response(body);
+  build_timeout_request(body, htp_method_POST);
 
-  ASSERT_EQ(status, 200);
+  EXPECT_CALL(stack, send_reply(_, 200, _));
+  handler->run();
+
   ASSERT_TRUE(fake_hss->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=6505550231%40homedomain", "{\"reqtype\": \"dereg-auth-timeout\", \"server_name\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}"));
 
   delete impi; impi = NULL;
@@ -472,9 +456,11 @@ TEST_F(ChronosAuthTimeoutTest, NonceTimedOutWithEmptyCorrelator)
   store->set_impi(impi, 0);
 
   std::string body = "{\"impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231@homedomain\", \"nonce\": \"abcdef\"}";
-  int status = handler->handle_response(body);
+  build_timeout_request(body, htp_method_POST);
 
-  ASSERT_EQ(status, 200);
+  EXPECT_CALL(stack, send_reply(_, 200, _));
+  handler->run();
+
   ASSERT_TRUE(fake_hss->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=6505550231%40homedomain", "{\"reqtype\": \"dereg-auth-timeout\", \"server_name\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}"));
 
   delete impi; impi = NULL;
@@ -490,51 +476,67 @@ TEST_F(ChronosAuthTimeoutTest, MainlineTest)
   store->set_impi(impi, 0);
 
   std::string body = "{\"impu\": \"sip:test@example.com\", \"impi\": \"test@example.com\", \"nonce\": \"abcdef\"}";
-  int status = handler->handle_response(body);
+  build_timeout_request(body, htp_method_POST);
 
-  ASSERT_EQ(status, 200);
+  EXPECT_CALL(stack, send_reply(_, 200, _));
+  handler->run();
+
   ASSERT_FALSE(fake_hss->url_was_requested("/impu/sip%3Atest%40example.com/reg-data?private_id=test%40example.com", "{\"reqtype\": \"dereg-auth-timeout\"}"));
 
   delete impi; impi = NULL;
 }
 
+TEST_F(ChronosAuthTimeoutTest, BadMethod)
+{
+  std::string body = "{\"impi\": \"test@example.com\", \"nonce\": \"abcdef\"}";
+  build_timeout_request(body, htp_method_PUT);
+
+  EXPECT_CALL(stack, send_reply(_, 405, _));
+  handler->run();
+}
+
 TEST_F(ChronosAuthTimeoutTest, NoIMPU)
 {
   std::string body = "{\"impi\": \"test@example.com\", \"nonce\": \"abcdef\"}";
-  int status = handler->handle_response(body);
+  build_timeout_request(body, htp_method_POST);
 
-  ASSERT_EQ(status, 400);
+  EXPECT_CALL(stack, send_reply(_, 400, _));
+  handler->run();
 }
 
 TEST_F(ChronosAuthTimeoutTest, CorruptIMPU)
 {
   std::string body = "{\"impi\": \"test@example.com\", \"impu\": \"I am not a URI\", \"nonce\": \"abcdef\"}";
-  int status = handler->handle_response(body);
+  build_timeout_request(body, htp_method_POST);
 
-  ASSERT_EQ(status, 500);
+  EXPECT_CALL(stack, send_reply(_, 500, _));
+  handler->run();
 }
 
 
 TEST_F(ChronosAuthTimeoutTest, NoIMPI)
 {
   std::string body = "{\"impu\": \"sip:test@example.com\", \"nonce\": \"abcdef\"}";
-  int status = handler->handle_response(body);
+  build_timeout_request(body, htp_method_POST);
 
-  ASSERT_EQ(status, 400);
+  EXPECT_CALL(stack, send_reply(_, 400, _));
+  handler->run();
 }
 
 TEST_F(ChronosAuthTimeoutTest, NoNonce)
 {
   std::string body = "{\"impu\": \"sip:test@example.com\", \"impi\": \"test@example.com\"}";
-  int status = handler->handle_response(body);
+  build_timeout_request(body, htp_method_POST);
 
-  ASSERT_EQ(status, 400);
+  EXPECT_CALL(stack, send_reply(_, 400, _));
+  handler->run();
 }
 
 TEST_F(ChronosAuthTimeoutTest, BadJSON)
 {
   std::string body = "{\"impu\" \"sip:test@example.com\", \"impi\": \"test@example.com\", \"nonce\": \"abcdef\"}";
-  int status = handler->handle_response(body);
+  build_timeout_request(body, htp_method_POST);
 
-  ASSERT_EQ(status, 400);
+  EXPECT_CALL(stack, send_reply(_, 400, _));
+  handler->run();
 }
