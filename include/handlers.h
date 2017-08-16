@@ -21,24 +21,30 @@
 #include "impistore.h"
 #include "fifcservice.h"
 
-/// Common factory for all handlers that deal with chronos timer pops. This is
+/// Common factory for all handlers that deal with timer pops. This is
 /// a subclass of SpawningHandler that requests HTTP flows to be
 /// logged at detail level.
 template<class H, class C>
-class ChronosHandler : public HttpStackUtils::SpawningHandler<H, C>
+class TimerHandler : public HttpStackUtils::SpawningHandler<H, C>
 {
 public:
-  ChronosHandler(C* cfg) : HttpStackUtils::SpawningHandler<H, C>(cfg)
+  TimerHandler(C* cfg) : HttpStackUtils::SpawningHandler<H, C>(cfg)
   {}
 
-  virtual ~ChronosHandler() {}
+  virtual ~TimerHandler() {}
 
   HttpStack::SasLogger* sas_logger(HttpStack::Request& req)
   {
+    // Note that we use a Chronos SAS Logger here even though this TimerHandler
+    // isn't specific to Chronos.  In reality there isn't anything Chronos
+    // specific about the logger, but we should fix up the naming in future
+    // when we actually support multiple timer services.
     return &HttpStackUtils::CHRONOS_SAS_LOGGER;
   }
 };
 
+/// Base AoRTimeoutTask class for tasks that implement AoR timeout callbacks
+/// from specific timer services.
 class AoRTimeoutTask : public HttpStackUtils::Task
 {
 public:
@@ -62,11 +68,10 @@ public:
     HttpStackUtils::Task(req, trail), _cfg(cfg)
   {};
 
-  void run();
+  virtual void run() = 0;
 
 protected:
-  void handle_response();
-  HTTPCode parse_response(std::string body);
+  void process_aor_timeout(std::string aor_id);
   SubscriberDataManager::AoRPair* set_aor_data(
                         SubscriberDataManager* current_sdm,
                         std::string aor_id,
@@ -77,7 +82,35 @@ protected:
 
 protected:
   const Config* _cfg;
-  std::string _aor_id;
+};
+
+/// Base AuthTimeoutTask class for tasks that implement authentication timeout
+/// callbacks from specific timer services.
+class AuthTimeoutTask : public HttpStackUtils::Task
+{
+public:
+  struct Config
+  {
+    Config(ImpiStore* local_impi_store, HSSConnection* hss) :
+      _local_impi_store(local_impi_store),
+      _hss(hss)
+    {}
+    ImpiStore* _local_impi_store;
+    HSSConnection* _hss;
+  };
+  AuthTimeoutTask(HttpStack::Request& req,
+                  const Config* cfg,
+                  SAS::TrailId trail) :
+    HttpStackUtils::Task(req, trail), _cfg(cfg)
+  {};
+
+  virtual void run() = 0;
+
+protected:
+  HTTPCode timeout_auth_challenge(std::string impu,
+                                  std::string impi,
+                                  std::string nonce);
+  const Config* _cfg;
 };
 
 class DeregistrationTask : public HttpStackUtils::Task
@@ -139,33 +172,6 @@ protected:
   const Config* _cfg;
   std::map<std::string, std::string> _bindings;
   std::string _notify;
-};
-
-class AuthTimeoutTask : public HttpStackUtils::Task
-{
-public:
-  struct Config
-  {
-    Config(ImpiStore* local_impi_store, HSSConnection* hss) :
-      _local_impi_store(local_impi_store),
-      _hss(hss)
-    {}
-    ImpiStore* _local_impi_store;
-    HSSConnection* _hss;
-  };
-  AuthTimeoutTask(HttpStack::Request& req,
-                  const Config* cfg,
-                  SAS::TrailId trail) :
-    HttpStackUtils::Task(req, trail), _cfg(cfg)
-  {};
-
-  void run();
-protected:
-  HTTPCode handle_response(std::string body);
-  const Config* _cfg;
-  std::string _impi;
-  std::string _impu;
-  std::string _nonce;
 };
 
 

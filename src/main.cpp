@@ -60,6 +60,7 @@ extern "C" {
 #include "localstore.h"
 #include "scscfselector.h"
 #include "chronosconnection.h"
+#include "chronoshandlers.h"
 #include "handlers.h"
 #include "httpstack.h"
 #include "sproutlet.h"
@@ -2299,10 +2300,8 @@ int main(int argc, char* argv[])
                                                              NULL,
                                                              NULL));
 
-  // The AoRTimeoutTask and AuthTimeoutTask both handle
-  // chronos requests, so use the ChronosHandler.
-  ChronosHandler<AoRTimeoutTask, AoRTimeoutTask::Config> aor_timeout_handler(&aor_timeout_config);
-  ChronosHandler<AuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
+  TimerHandler<ChronosAoRTimeoutTask, AoRTimeoutTask::Config> aor_timeout_handler(&aor_timeout_config);
+  TimerHandler<AuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
   HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
   HttpStackUtils::PingHandler ping_handler;
   HttpStackUtils::SpawningHandler<GetBindingsTask, GetCachedDataTask::Config> get_bindings_handler(&get_cached_data_config);
