@@ -17,29 +17,14 @@
 
 #include "mockhttpstack.hpp"
 #include "handlers.h"
-#include "chronoshandlers.h"
-#include "gtest/gtest.h"
 #include "basetest.hpp"
 #include "siptest.hpp"
 #include "localstore.h"
 #include "fakehssconnection.hpp"
 #include "fakechronosconnection.hpp"
-#include "test_interposer.hpp"
 #include "mock_subscriber_data_manager.h"
 #include "mock_impi_store.h"
 #include "mock_hss_connection.h"
-#include "rapidjson/document.h"
-
-using namespace std;
-using ::testing::_;
-using ::testing::Return;
-using ::testing::SetArgReferee;
-using ::testing::SetArgPointee;
-using ::testing::SaveArg;
-using ::testing::SaveArgPointee;
-using ::testing::InSequence;
-using ::testing::ByRef;
-using ::testing::NiceMock;
 
 // Base class used for testing handlers with Mock SDMs.
 class TestWithMockSdms : public SipTest

@@ -13,20 +13,13 @@
 #include <curl/curl.h>
 
 #include "mockhttpstack.hpp"
-#include "handlers.h"
-#include "chronoshandlers.h"
 #include "gtest/gtest.h"
 #include "basetest.hpp"
 #include "siptest.hpp"
-#include "localstore.h"
-#include "fakehssconnection.hpp"
-#include "fakechronosconnection.hpp"
 #include "test_interposer.hpp"
-#include "mock_subscriber_data_manager.h"
-#include "mock_impi_store.h"
-#include "mock_hss_connection.h"
 #include "rapidjson/document.h"
 #include "handlers_test.h"
+#include "chronoshandlers.h"
 
 using namespace std;
 using ::testing::_;
