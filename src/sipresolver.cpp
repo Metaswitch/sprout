@@ -312,6 +312,7 @@ void SIPResolver::resolve(const std::string& name,
   {
     SAS::Event event(trail, SASEvent::SIPRESOLVE_NO_RECORDS, 0);
     event.add_var_param(name);
+    event.add_static_param(allowed_host_state);
     SAS::report_event(event);
   }
 }
