@@ -2134,8 +2134,9 @@ int main(int argc, char* argv[])
     exit(0);
   }
 
+  AoRStore* astaire_aor_store = new AstaireAoRStore(local_data_store);
   // Create local and optionally remote registration data stores.
-  local_sdm = new SubscriberDataManager(local_data_store,
+  local_sdm = new SubscriberDataManager(astaire_aor_store,
                                         chronos_connection,
                                         analytics_logger,
                                         true);
@@ -2145,7 +2146,8 @@ int main(int argc, char* argv[])
        it != remote_data_stores.end();
        ++it)
   {
-    SubscriberDataManager* remote_sdm = new SubscriberDataManager(*it,
+    AoRStore* remote_astiare_aor_store = new AstaireAoRStore(*it);
+    SubscriberDataManager* remote_sdm = new SubscriberDataManager(remote_astiare_aor_store,
                                                                   chronos_connection,
                                                                   NULL,
                                                                   false);

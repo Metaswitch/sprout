@@ -19,7 +19,8 @@
 #include <stdlib.h>
 
 
-#include "subscriber_data_manager.h"
+#include "store.h"
+#include "aor.h"
 
 // Pure virtual parent class for implementations of the AoRStore, for use
 // in the SubscriberDataManager. Defines the public interface that must
@@ -28,13 +29,13 @@ class AoRStore
 {
 public:
   /// AoRSore constructor.
-  virtual AoRStore() = 0;
+  AoRStore();
 
   /// Destructor.
   virtual ~AoRStore() = 0;
 
   // Called through to from handlers code.
-  virtual bool has_servers() {}=0
+  virtual bool has_servers() = 0;
 
   /// Get the data for a particular address of record (registered SIP URI,
   /// in format "sip:2125551212@example.com"), creating it if necessary.

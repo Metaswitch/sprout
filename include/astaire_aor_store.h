@@ -26,13 +26,15 @@ class AstaireAoRStore: public AoRStore
 {
 public:
   /// Constructor.
-  virtual AstaireAoRStore(Store* store);
+  AstaireAoRStore(Store* store);
 
   /// Destructor.
   virtual ~AstaireAoRStore();
 
   // Called through to from handlers code.
-  virtual bool has_servers();
+  virtual bool has_servers() { return _connector->underlying_store_has_servers(); }
+
+
 
   /// Get the data for a particular address of record (registered SIP URI,
   /// in format "sip:2125551212@example.com"), creating it if necessary.
@@ -54,9 +56,6 @@ public:
                                      AoRPair* aor_pair,
                                      int expiry,
                                      SAS::TrailId trail);
-
-  private:
-    Connector* _connector;
 
 
   /// Class used by the AstaireAoRStore to serialize AoRs from C++
@@ -114,8 +113,8 @@ public:
     JsonSerializerDeserializer* _serializerdeserializer;
   };
 
-
-
+public:
+  Connector* _connector;
 };
 
 #endif
