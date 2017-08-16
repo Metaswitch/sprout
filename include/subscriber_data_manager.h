@@ -13,11 +13,6 @@
 #ifndef SUBSCRIBER_DATA_MANAGER_H__
 #define SUBSCRIBER_DATA_MANAGER_H__
 
-extern "C" {
-#include <pj/pool.h>
-#include <pjsip.h>
-}
-
 #include <string>
 #include <list>
 #include <map>

@@ -198,7 +198,7 @@ private:
   void get_all_bindings(const std::string& aor,
                         SubscriberDataManager*& sdm,
                         SubscriberDataManager*& remote_sdm,
-                        SubscriberDataManager::AoR** aor_data,
+                        AoR** aor_data,
                         SAS::TrailId trail);
 
   void cancel_trying_timer();

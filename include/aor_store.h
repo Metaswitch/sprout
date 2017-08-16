@@ -29,10 +29,10 @@ class AoRStore
 {
 public:
   /// AoRSore constructor.
-  AoRStore();
+  AoRStore(){}
 
   /// Destructor.
-  virtual ~AoRStore() = 0;
+  virtual ~AoRStore(){}
 
   // Called through to from handlers code.
   virtual bool has_servers() = 0;

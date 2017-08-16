@@ -110,23 +110,22 @@ public:
 protected:
   void process_register_request(pjsip_msg* req);
 
-  SubscriberDataManager::AoRPair* write_to_store(
-                     SubscriberDataManager* primary_sdm,         ///<store to write to
-                     std::string aor,                            ///<address of record to write to
-                     AssociatedURIs* associated_uris,            ///<Associated IMPUs in Implicit Registration Set
-                     pjsip_msg* req,                             ///<received request to read headers from
-                     int now,                                    ///<time now
-                     int& expiry,                                ///<[out] longest expiry time
-                     bool& out_is_initial_registration,
-                     SubscriberDataManager::AoRPair* backup_aor, ///<backup data if no entry in store
-                     std::vector<SubscriberDataManager*> backup_sdms,
-                                                                 ///<backup stores to read from if no entry in store and no backup data
-                     std::string private_id,                     ///<private id that the binding was registered with
-                     bool& out_all_bindings_expired);
+  AoRPair* write_to_store(SubscriberDataManager* primary_sdm,         ///<store to write to
+                          std::string aor,                            ///<address of record to write to
+                          AssociatedURIs* associated_uris,            ///<Associated IMPUs in Implicit Registration Set
+                          pjsip_msg* req,                             ///<received request to read headers from
+                          int now,                                    ///<time now
+                          int& expiry,                                ///<[out] longest expiry time
+                          bool& out_is_initial_registration,
+                          AoRPair* backup_aor, ///<backup data if no entry in store
+                          std::vector<SubscriberDataManager*> backup_sdms,
+                                                                      ///<backup stores to read from if no entry in store and no backup data
+                          std::string private_id,                     ///<private id that the binding was registered with
+                          bool& out_all_bindings_expired);
 
   bool get_private_id(pjsip_msg* req, std::string& id);
   std::string get_binding_id(pjsip_contact_hdr *contact);
-  void log_bindings(const std::string& aor_name, SubscriberDataManager::AoR* aor_data);
+  void log_bindings(const std::string& aor_name, AoR* aor_data);
 
   RegistrarSproutlet* _registrar;
 

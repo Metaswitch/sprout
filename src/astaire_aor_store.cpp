@@ -33,11 +33,13 @@
 #include "constants.h"
 #include "json_parse_utils.h"
 #include "rapidjson/error/en.h"
+#include "sproutsasevent.h"
 
 
-AstaireAoRStore::AstaireAoRStore(Store* store){
-  JsonSerializerDeserializer* serializerdeserializer = new JsonSerializerDeserializer();
-  _connector = new Connector(store, serializerdeserializer);
+AstaireAoRStore::AstaireAoRStore(Store* store) : AoRStore()
+{
+  JsonSerializerDeserializer* serializer_deserializer = new JsonSerializerDeserializer();
+  _connector = new Connector(store, serializer_deserializer);
 }
 
 AstaireAoRStore::~AstaireAoRStore()
@@ -45,12 +47,33 @@ AstaireAoRStore::~AstaireAoRStore()
   delete _connector; _connector = NULL;
 }
 
+/// AstaireAoRStore methods
+
+/// Calls through into the connector get and set commands
+AoR* AstaireAoRStore::get_aor_data(const std::string& aor_id,
+                                   SAS::TrailId trail)
+{
+  return _connector->get_aor_data(aor_id, trail);
+}
+
+
+Store::Status AstaireAoRStore::set_aor_data(const std::string& aor_id,
+                                            AoRPair* aor_data,
+                                            int expiry,
+                                            SAS::TrailId trail)
+{
+  return _connector->set_aor_data(aor_id,
+                                  aor_data->get_current(),
+                                  expiry,
+                                  trail);
+}
+
 /// AstaireAoRStore::Connector Methods
 
 AstaireAoRStore::Connector::Connector(Store* data_store,
-                            JsonSerializerDeserializer*& serializerdeserializer):
-  _data_store(data_store);
-  _serializer_deserializer(serializer_deserializer);
+                            JsonSerializerDeserializer*& serializer_deserializer) :
+  _data_store(data_store),
+  _serializer_deserializer(serializer_deserializer)
 {
   // We have taken ownership of the serializer_deserializer.
   serializer_deserializer = NULL;
@@ -65,7 +88,7 @@ AstaireAoRStore::Connector::~Connector()
 /// an empty record if no data exists for the AoR.
 ///
 /// @param aor_id       The SIP Address of Record for the registration
-SubscriberDataManager::AoR* AstaireAoRStore::Connector::get_aor_data(
+AoR* AstaireAoRStore::Connector::get_aor_data(
                                              const std::string& aor_id,
                                              SAS::TrailId trail)
 {
@@ -122,11 +145,11 @@ SubscriberDataManager::AoR* AstaireAoRStore::Connector::get_aor_data(
   return aor_data;
 }
 
-Store::Status SubscriberDataManager::Connector::set_aor_data(
-                                                const std::string& aor_id,
-                                                AoR* aor_data,
-                                                int expiry,
-                                                SAS::TrailId trail)
+Store::Status AstaireAoRStore::Connector::set_aor_data(
+                                            const std::string& aor_id,
+                                            AoR* aor_data,
+                                            int expiry,
+                                            SAS::TrailId trail)
 {
   std::string data = _serializer_deserializer->serialize_aor(aor_data);
 
@@ -164,7 +187,7 @@ Store::Status SubscriberDataManager::Connector::set_aor_data(
 // (De)serializer for the JSON SubscriberDataManager format.
 //
 
-SubscriberDataManager::AoR* AstaireAoRStore::JsonSerializerDeserializer::
+AoR* AstaireAoRStore::JsonSerializerDeserializer::
   deserialize_aor(const std::string& aor_id, const std::string& s)
 {
   TRC_DEBUG("Deserialize JSON document: %s", s.c_str());

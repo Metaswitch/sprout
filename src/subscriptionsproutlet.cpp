@@ -348,19 +348,18 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
 
   // Write to the local store, checking the remote stores if there is no entry locally.
   // If the write to the local store succeeds, then write to the remote stores.
-  SubscriberDataManager::AoRPair* aor_pair =
-                              write_subscriptions_to_store(_subscription->_sdm,
-                                                           aor,
-                                                           &associated_uris,
-                                                           req,
-                                                           now,
-                                                           NULL,
-                                                           _subscription->_remote_sdms,
-                                                           public_id,
-                                                           true,
-                                                           acr,
-                                                           ccfs,
-                                                           ecfs);
+  AoRPair* aor_pair = write_subscriptions_to_store(_subscription->_sdm,
+                                                   aor,
+                                                   &associated_uris,
+                                                   req,
+                                                   now,
+                                                   NULL,
+                                                   _subscription->_remote_sdms,
+                                                   public_id,
+                                                   true,
+                                                   acr,
+                                                   ccfs,
+                                                   ecfs);
 
   if (aor_pair != NULL)
   {
@@ -375,7 +374,7 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
     {
       if ((*it)->has_servers())
       {
-        SubscriberDataManager::AoRPair* remote_aor_pair =
+        AoRPair* remote_aor_pair =
           write_subscriptions_to_store(*it,
                                        aor,
                                        &associated_uris,
@@ -446,14 +445,14 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
 /// primary SDM, we will either use the backup_aor or we will try and look up
 /// the AoR pair in the backup SDMs. Therefore either the backup_aor should be
 /// NULL, or backup_sdms should be empty.
-SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to_store(
+AoRPair* SubscriptionSproutletTsx::write_subscriptions_to_store(
                    SubscriberDataManager* primary_sdm,        ///<store to write to
                    std::string aor,                           ///<address of record to write to
                    AssociatedURIs* associated_uris,
                                                               ///<IMPUs associated with this IRS
                    pjsip_msg* req,                            ///<received request to read headers from
                    int now,                                   ///<time now
-                   SubscriberDataManager::AoRPair* backup_aor,///<backup data if no entry in store
+                   AoRPair* backup_aor,///<backup data if no entry in store
                    std::vector<SubscriberDataManager*> backup_sdms,
                                                               ///<backup stores to read from if no entry in store and no backup data
                    std::string public_id,                     ///
@@ -474,7 +473,7 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
   bool backup_aor_alloced = false;
   int expiry = 0;
   Store::Status set_rc;
-  SubscriberDataManager::AoRPair* aor_pair = NULL;
+  AoRPair* aor_pair = NULL;
   std::string subscription_contact;
   std::string subscription_id;
 
@@ -511,7 +510,7 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
       else
       {
         std::vector<SubscriberDataManager*>::iterator it = backup_sdms.begin();
-        SubscriberDataManager::AoRPair* local_backup_aor = NULL;
+        AoRPair* local_backup_aor = NULL;
 
         while ((it != backup_sdms.end()) && (!found_subscription))
         {
@@ -580,7 +579,7 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
 
       // Find the appropriate subscription in the subscription list for this AoR. If it can't
       // be found a new empty subscription is created.
-      SubscriberDataManager::AoR::Subscription* subscription =
+      AoR::Subscription* subscription =
                     aor_pair->get_current()->get_subscription(subscription_id);
 
       // Update/create the subscription.
@@ -685,15 +684,15 @@ SubscriberDataManager::AoRPair* SubscriptionSproutletTsx::write_subscriptions_to
 }
 
 void SubscriptionSproutletTsx::log_subscriptions(const std::string& aor_name,
-                                                 SubscriberDataManager::AoR* aor_data)
+                                                 AoR* aor_data)
 {
   TRC_DEBUG("Subscriptions for %s", aor_name.c_str());
-  for (SubscriberDataManager::AoR::Subscriptions::const_iterator i =
+  for (AoR::Subscriptions::const_iterator i =
          aor_data->subscriptions().begin();
        i != aor_data->subscriptions().end();
        ++i)
   {
-    SubscriberDataManager::AoR::Subscription* subscription = i->second;
+    AoR::Subscription* subscription = i->second;
 
     TRC_DEBUG("%s URI=%s expires=%d from_uri=%s from_tag=%s to_uri=%s to_tag=%s call_id=%s",
               i->first.c_str(),

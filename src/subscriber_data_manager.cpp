@@ -9,11 +9,7 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-extern "C" {
-#include <pjlib-util.h>
-#include <pjlib.h>
-#include "pjsip-simple/evsub.h"
-}
+
 
 // Common STL includes.
 #include <cassert>
@@ -36,37 +32,9 @@ extern "C" {
 #include "astaire_aor_store.h"
 #include "notify_utils.h"
 #include "stack.h"
-#include "pjutils.h"
 #include "chronosconnection.h"
 #include "sproutsasevent.h"
 #include "constants.h"
-#include "json_parse_utils.h"
-#include "rapidjson/error/en.h"
-
-/// JSON serialization constants.
-/// These live here, as the core logic of serialization lives in
-/// the AoR::Binding and AoR::Subscription to_json methods.
-static const char* const JSON_BINDINGS = "bindings";
-static const char* const JSON_URI = "uri";
-static const char* const JSON_CID = "cid";
-static const char* const JSON_CSEQ = "cseq";
-static const char* const JSON_EXPIRES = "expires";
-static const char* const JSON_PRIORITY = "priority";
-static const char* const JSON_PARAMS = "params";
-static const char* const JSON_PATHS = "paths"; // Depracated as of PC release 119.
-static const char* const JSON_PATH_HEADERS = "path_headers";
-static const char* const JSON_TIMER_ID = "timer_id";
-static const char* const JSON_PRIVATE_ID = "private_id";
-static const char* const JSON_EMERGENCY_REG = "emergency_reg";
-static const char* const JSON_SUBSCRIPTIONS = "subscriptions";
-static const char* const JSON_REQ_URI = "req_uri";
-static const char* const JSON_FROM_URI = "from_uri";
-static const char* const JSON_FROM_TAG = "from_tag";
-static const char* const JSON_TO_URI = "to_uri";
-static const char* const JSON_TO_TAG = "to_tag";
-static const char* const JSON_ROUTES = "routes";
-static const char* const JSON_NOTIFY_CSEQ = "notify_cseq";
-static const char* const JSON_SCSCF_URI = "scscf-uri";
 
 
 /// Helper to delete vectors of bindings safely
@@ -596,7 +564,7 @@ SubscriberDataManager::NotifySender::~NotifySender()
 void SubscriberDataManager::NotifySender::send_notifys(
                                const std::string& aor_id,
                                AssociatedURIs* associated_uris,
-                               SubscriberDataManager::AoRPair* aor_pair,
+                               AoRPair* aor_pair,
                                int now,
                                SAS::TrailId trail)
 {
@@ -606,10 +574,10 @@ void SubscriberDataManager::NotifySender::send_notifys(
 
   // Iterate over the bindings in the original AoR. Find any that aren't in the current
   // AoR and mark those as expired.
-  for (std::pair<std::string, SubscriberDataManager::AoR::Binding*> aor_orig_b :
+  for (std::pair<std::string, AoR::Binding*> aor_orig_b :
          aor_pair->get_orig()->bindings())
   {
-    SubscriberDataManager::AoR::Binding* binding = aor_orig_b.second;
+    AoR::Binding* binding = aor_orig_b.second;
     std::string b_id = aor_orig_b.first;
 
     // Compare the original and current lists to see whether this binding has expired.
@@ -630,16 +598,16 @@ void SubscriberDataManager::NotifySender::send_notifys(
 
   // Iterate over the bindings in the current AoR. Figure out if the bindings
   // have been CREATED, REFRESHED, REGISTERED or SHORTENED.
-  for (std::pair<std::string, SubscriberDataManager::AoR::Binding*> aor_current_b :
+  for (std::pair<std::string, AoR::Binding*> aor_current_b :
          aor_pair->get_current()->bindings())
   {
-    SubscriberDataManager::AoR::Binding* binding = aor_current_b.second;
+    AoR::Binding* binding = aor_current_b.second;
     std::string b_id = aor_current_b.first;
 
     if (!binding->_emergency_registration)
     {
       // If the binding is only in the current AoR, mark it as created
-      SubscriberDataManager::AoR::Bindings::const_iterator aor_orig_b_match =
+      AoR::Bindings::const_iterator aor_orig_b_match =
         aor_pair->get_orig()->bindings().find(b_id);
 
       if (aor_orig_b_match == aor_pair->get_orig()->bindings().end())
@@ -697,17 +665,17 @@ void SubscriberDataManager::NotifySender::send_notifys(
   // Iterate over the subscriptions in the current AoR and send NOTIFYs.
   // If the bindings have changed, then send NOTIFYs to all subscribers; otherwise,
   // only send them when the subscription has been created or updated.
-  for (SubscriberDataManager::AoR::Subscriptions::const_iterator current_sub =
+  for (AoR::Subscriptions::const_iterator current_sub =
         aor_pair->get_current()->subscriptions().begin();
       current_sub != aor_pair->get_current()->subscriptions().end();
       ++current_sub)
   {
-    SubscriberDataManager::AoR::Subscription* subscription = current_sub->second;
+    AoR::Subscription* subscription = current_sub->second;
     std::string s_id = current_sub->first;
 
     // Find the subscription in the original AoR to determine if the current subscription
     // has been created.
-    SubscriberDataManager::AoR::Subscriptions::const_iterator orig_sub =
+    AoR::Subscriptions::const_iterator orig_sub =
       aor_pair->get_orig()->subscriptions().find(s_id);
     bool sub_created = (orig_sub == aor_pair->get_orig()->subscriptions().end());
 
@@ -779,7 +747,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
 void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions(
                                const std::string& aor_id,
                                AssociatedURIs* associated_uris,
-                               SubscriberDataManager::AoRPair* aor_pair,
+                               AoRPair* aor_pair,
                                ClassifiedBindings binding_info_to_notify,
                                std::vector<std::string> expired_binding_uris,
                                int now,
@@ -800,12 +768,12 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
 
   // Iterate over the subscriptions in the original AoR, and send NOTIFYs for
   // any subscriptions that aren't in the current AoR.
-  for (SubscriberDataManager::AoR::Subscriptions::const_iterator aor_orig_s =
+  for (AoR::Subscriptions::const_iterator aor_orig_s =
          aor_pair->get_orig()->subscriptions().begin();
        aor_orig_s != aor_pair->get_orig()->subscriptions().end();
        ++aor_orig_s)
   {
-    SubscriberDataManager::AoR::Subscription* s = aor_orig_s->second;
+    AoR::Subscription* s = aor_orig_s->second;
     std::string s_id = aor_orig_s->first;
 
     if (std::find(expired_binding_uris.begin(), expired_binding_uris.end(), s->_req_uri) !=
@@ -816,7 +784,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
     }
 
     // Is this subscription present in the new AoR?
-    SubscriberDataManager::AoR::Subscriptions::const_iterator aor_current =
+    AoR::Subscriptions::const_iterator aor_current =
       aor_pair->get_current()->subscriptions().find(s_id);
 
     // The subscription has been deleted. We should send a final NOTIFY

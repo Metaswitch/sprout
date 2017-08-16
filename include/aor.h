@@ -13,13 +13,46 @@
 #ifndef AOR_H__
 #define AOR_H__
 
+extern "C" {
+#include <pj/pool.h>
+#include <pjsip.h>
+}
+
 #include <string>
 #include <list>
 #include <map>
 #include <stdio.h>
 #include <stdlib.h>
+#include "constants.h"
+#include "pjutils.h"
 #include "rapidjson/writer.h"
 #include "rapidjson/document.h"
+
+/// JSON serialization constants.
+/// These live here, as the core logic of serialization lives in the AoR
+/// to_json methods, but the SDM also uses some of them.
+static const char* const JSON_BINDINGS = "bindings";
+static const char* const JSON_URI = "uri";
+static const char* const JSON_CID = "cid";
+static const char* const JSON_CSEQ = "cseq";
+static const char* const JSON_EXPIRES = "expires";
+static const char* const JSON_PRIORITY = "priority";
+static const char* const JSON_PARAMS = "params";
+static const char* const JSON_PATHS = "paths"; // Depracated as of PC release 119.
+static const char* const JSON_PATH_HEADERS = "path_headers";
+static const char* const JSON_TIMER_ID = "timer_id";
+static const char* const JSON_PRIVATE_ID = "private_id";
+static const char* const JSON_EMERGENCY_REG = "emergency_reg";
+static const char* const JSON_SUBSCRIPTIONS = "subscriptions";
+static const char* const JSON_REQ_URI = "req_uri";
+static const char* const JSON_FROM_URI = "from_uri";
+static const char* const JSON_FROM_TAG = "from_tag";
+static const char* const JSON_TO_URI = "to_uri";
+static const char* const JSON_TO_TAG = "to_tag";
+static const char* const JSON_ROUTES = "routes";
+static const char* const JSON_NOTIFY_CSEQ = "notify_cseq";
+static const char* const JSON_SCSCF_URI = "scscf-uri";
+
 
 /// @class AoR
 ///
@@ -228,7 +261,7 @@ public:
   /// registration has been created.
   std::string _scscf_uri;
 
-private:
+//private:
   /// Map holding the bindings for a particular AoR indexed by binding ID.
   Bindings _bindings;
 
@@ -245,6 +278,8 @@ private:
 
   /// Store code is allowed to manipulate bindings and subscriptions directly.
   friend class AoRPair;
+  friend class AoRStore;
+  friend class SubscriberDataManager;
 };
 
 /// @class AoRPair

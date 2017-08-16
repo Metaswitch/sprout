@@ -67,11 +67,11 @@ public:
 protected:
   void handle_response();
   HTTPCode parse_response(std::string body);
-  SubscriberDataManager::AoRPair* set_aor_data(
+  AoRPair* set_aor_data(
                         SubscriberDataManager* current_sdm,
                         std::string aor_id,
                         AssociatedURIs* associated_uris,
-                        SubscriberDataManager::AoRPair* previous_aor_data,
+                        AoRPair* previous_aor_data,
                         std::vector<SubscriberDataManager*> remote_sdms,
                         bool& all_bindings_expired);
 
@@ -122,14 +122,14 @@ public:
   void run();
   HTTPCode handle_request();
   HTTPCode parse_request(std::string body);
-  SubscriberDataManager::AoRPair* deregister_bindings(
+  AoRPair* deregister_bindings(
                     SubscriberDataManager* current_sdm,
                     HSSConnection* hss,
                     FIFCService* fifc_service,
                     IFCConfiguration ifc_configuration,
                     std::string aor_id,
                     std::string private_id,
-                    SubscriberDataManager::AoRPair* previous_aor_data,
+                    AoRPair* previous_aor_data,
                     std::vector<SubscriberDataManager*> remote_sdms,
                     std::set<std::string>& impis_to_delete);
 
@@ -197,7 +197,7 @@ public:
   void run();
 
 protected:
-  virtual std::string serialize_data(SubscriberDataManager::AoR* aor) = 0;
+  virtual std::string serialize_data(AoR* aor) = 0;
   const Config* _cfg;
 };
 
@@ -207,7 +207,7 @@ class GetBindingsTask : public GetCachedDataTask
 public:
   using GetCachedDataTask::GetCachedDataTask;
 protected:
-  std::string serialize_data(SubscriberDataManager::AoR* aor);
+  std::string serialize_data(AoR* aor);
 };
 
 /// Concrete subclass for retrieving subscriptions.
@@ -216,7 +216,7 @@ class GetSubscriptionsTask : public GetCachedDataTask
 public:
   using GetCachedDataTask::GetCachedDataTask;
 protected:
-  std::string serialize_data(SubscriberDataManager::AoR* aor);
+  std::string serialize_data(AoR* aor);
 };
 
 /// Task for performing an administrative deregistration at the S-CSCF. This

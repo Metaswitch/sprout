@@ -91,7 +91,7 @@ public:
   class Connector
   {
     Connector(Store* data_store,
-              JsonSerializerDeserializer*& serializerdeserializer);
+              JsonSerializerDeserializer*& serializer_deserializer);
 
     ~Connector();
 
@@ -110,7 +110,7 @@ public:
     friend class AstaireAoRStore;
 
   private:
-    JsonSerializerDeserializer* _serializerdeserializer;
+    JsonSerializerDeserializer* _serializer_deserializer;
   };
 
 public:

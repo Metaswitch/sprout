@@ -272,7 +272,7 @@ IFCConfiguration SCSCFSproutlet::ifc_configuration() const
 /// Gets all bindings for the specified Address of Record from the local or
 /// remote registration stores.
 void SCSCFSproutlet::get_bindings(const std::string& aor,
-                                  SubscriberDataManager::AoRPair** aor_pair,
+                                  AoRPair** aor_pair,
                                   SAS::TrailId trail)
 {
   // Look up the target in the registration data store.
@@ -617,7 +617,7 @@ pjsip_sip_uri* routing_uri = get_routing_uri(req);
       {
         // The bindings are keyed off the default IMPU.
         std::string aor = _default_uri;
-        SubscriberDataManager::AoRPair* aor_pair = NULL;
+        AoRPair* aor_pair = NULL;
         _scscf->get_bindings(aor, &aor_pair, trail());
 
         if ((aor_pair != NULL) &&
@@ -625,12 +625,12 @@ pjsip_sip_uri* routing_uri = get_routing_uri(req);
         {
           if (!aor_pair->get_current()->bindings().empty())
           {
-            const SubscriberDataManager::AoR::Bindings bindings = aor_pair->get_current()->bindings();
+            const AoR::Bindings bindings = aor_pair->get_current()->bindings();
 
             // Loop over the bindings. If any binding has an emergency registration,
             // let the request through. When routing to UEs, we will make sure we
             // only route the request to the bindings that have an emergency registration.
-            for (SubscriberDataManager::AoR::Bindings::const_iterator binding = bindings.begin();
+            for (AoR::Bindings::const_iterator binding = bindings.begin();
                  binding != bindings.end();
                  ++binding)
             {
@@ -1903,7 +1903,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
     }
 
     // Get the bindings from the store and filter/sort them for the request.
-    SubscriberDataManager::AoRPair* aor_pair = NULL;
+    AoRPair* aor_pair = NULL;
     _scscf->get_bindings(aor, &aor_pair, trail());
 
     if ((aor_pair != NULL) &&

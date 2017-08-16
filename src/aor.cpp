@@ -9,7 +9,15 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
+extern "C" {
+#include <pjlib-util.h>
+#include <pjlib.h>
+#include "pjsip-simple/evsub.h"
+}
+
 #include "aor.h"
+#include "json_parse_utils.h"
+#include "rapidjson/error/en.h"
 
 /// Default constructor.
 AoR::AoR(std::string sip_uri) :

@@ -39,7 +39,7 @@ namespace NotifyUtils
   // the binding itself, a unique ID for it and the contact event
   struct BindingNotifyInformation {
     BindingNotifyInformation(std::string id,
-                             SubscriberDataManager::AoR::Binding* b,
+                             AoR::Binding* b,
                              NotifyUtils::ContactEvent event) :
       _id(id),
       _b(b),
@@ -47,22 +47,22 @@ namespace NotifyUtils
     {}
 
     std::string _id;
-    SubscriberDataManager::AoR::Binding* _b;
+    AoR::Binding* _b;
     NotifyUtils::ContactEvent _contact_event;
   };
 
   pj_status_t create_subscription_notify(pjsip_tx_data** tdata_notify,
-                                         SubscriberDataManager::AoR::Subscription* s,
+                                         AoR::Subscription* s,
                                          std::string aor,
                                          AssociatedURIs* associated_uris,
-                                         SubscriberDataManager::AoR* aor_data,
+                                         AoR* aor_data,
                                          std::vector<BindingNotifyInformation*> bnis,
                                          NotifyUtils::RegistrationState reg_state,
                                          int now,
                                          SAS::TrailId trail);
 
   pj_status_t create_notify(pjsip_tx_data** tdata_notify,
-                            SubscriberDataManager::AoR::Subscription* subscription,
+                            AoR::Subscription* subscription,
                             std::string aor,
                             AssociatedURIs* associated_uris,
                             int cseq,
