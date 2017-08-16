@@ -949,3 +949,80 @@ void DeleteImpuTask::run()
   delete this;
   return;
 }
+
+void PushProfileTask::run()
+{
+  // HTTP method must be a POST
+  if (_req.method() != htp_method_POST)
+  {
+    TRC_WARNING("HTTP method isn't post");
+    send_http_reply(HTTP_BADMETHOD);
+    delete this;
+    return;
+  }
+
+  HTTPCode rc = parse_request(_req.get_rx_body());
+
+  if (rc != HTTP_OK)
+  {
+    TRC_WARNING("Request body is invalid, send %d", rc);
+    send_http_reply(rc);
+    delete this;
+    return;
+  }
+
+  rc = handle_request();
+
+  send_http_reply(rc);
+  delete this;
+}
+
+HTTPCode PushProfileTask::parse_request(std::string body)
+{
+  // Get the default ID from the path
+  const std::string prefix = "/registrations/";
+  std::string full_path = _req.full_path();
+  size_t end_of_impu = full_path.find('/', prefix.length());
+  _default_public_id = full_path.substr(prefix.length(), end_of_impu - prefix.length());
+  TRC_DEBUG("Extracted impu %s", _default_public_id.c_str());
+
+  rapidjson::Document doc;
+  doc.Parse<0>(body.c_str());
+
+  if (doc.HasParseError())
+  {
+    TRC_INFO("Failed to parse data as JSON: %s\nError: %s",
+             body.c_str(),
+             rapidjson::GetParseError_En(doc.GetParseError()));
+    return HTTP_BAD_REQUEST;
+  }
+
+  try
+  {
+    JSON_ASSERT_CONTAINS(doc, "associated-identities");
+    JSON_ASSERT_ARRAY(doc["associated-identities"]);
+    const rapidjson::Value& impu_array = doc["associated-identities"] ;
+
+    for (rapidjson::Value::ConstValueIterator impu_it = impu_array.Begin();
+         impu_it != impu_array.End();
+         ++impu_it)
+    {
+      std::string impu = (*impu_it).GetString();
+      _associated_ids.push_back(impu);
+    }
+  }
+  catch (JsonFormatError err)
+  {
+    TRC_WARNING("associated identities are not available in JSON");
+    return HTTP_BAD_REQUEST;
+  }
+
+  TRC_DEBUG("HTTP request successfuly parsed");
+  return HTTP_OK;
+}
+
+HTTPCode PushProfileTask::handle_request()
+{
+ // SubscriberDataManager::AoRPair* aor_pair =
+  return HTTP_OK;
+}
