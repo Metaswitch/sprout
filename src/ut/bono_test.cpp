@@ -237,7 +237,8 @@ public:
 
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
-    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, NULL, true);
+    _local_aor_store = new AstaireAoRStore(_local_data_store);
+    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, NULL, true);
     _analytics = new AnalyticsLogger();
     _hss_connection = new FakeHSSConnection();
     if (ifcs)
@@ -296,6 +297,7 @@ public:
     delete _acr_factory; _acr_factory = NULL;
     delete _sdm; _sdm = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
+    delete _local_aor_store; _local_aor_store = NULL;
     delete _local_data_store; _local_data_store = NULL;
     delete _analytics; _analytics = NULL;
     delete _ifc_handler; _ifc_handler = NULL;
@@ -358,6 +360,7 @@ public:
 protected:
   static LocalStore* _local_data_store;
   static FakeChronosConnection* _chronos_connection;
+  static AstaireAoRStore* _local_aor_store;
   static SubscriberDataManager* _sdm;
   static AnalyticsLogger* _analytics;
   static FakeHSSConnection* _hss_connection;
@@ -388,6 +391,7 @@ protected:
 
 LocalStore* StatefulProxyTestBase::_local_data_store;
 FakeChronosConnection* StatefulProxyTestBase::_chronos_connection;
+AstaireAoRStore* StatefulProxyTestBase::_local_aor_store;
 SubscriberDataManager* StatefulProxyTestBase::_sdm;
 AnalyticsLogger* StatefulProxyTestBase::_analytics;
 FakeHSSConnection* StatefulProxyTestBase::_hss_connection;
