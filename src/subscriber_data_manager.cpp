@@ -66,7 +66,6 @@ SubscriberDataManager::~SubscriberDataManager()
 {
   delete _notify_sender;
   delete _chronos_timer_request_sender;
-  delete _aor_store;
 }
 
 /// Retrieve the registration data for a given SIP Address of Record.

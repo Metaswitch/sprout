@@ -76,7 +76,7 @@ class BasicSubscriberDataManagerTest : public SipTest
     //pjsip_tsx_layer_instance()->start();
 
     delete _store; _store = NULL;
-//    delete _aor_store; _aor_store = NULL;
+    delete _aor_store; _aor_store = NULL;
     delete _datastore; _datastore = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
     delete _analytics_logger; _analytics_logger = NULL;
@@ -527,7 +527,7 @@ class SubscriberDataManagerCorruptDataTest : public ::testing::Test
   {
     delete _store; _store = NULL;
     delete _datastore; _datastore = NULL;
-//    delete _aor_store; _aor_store = NULL;
+    delete _aor_store; _aor_store = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
     delete _analytics_logger; _analytics_logger = NULL;
   }
@@ -613,7 +613,7 @@ class SubscriberDataManagerChronosRequestsTest : public SipTest
   {
     delete _store; _store = NULL;
     delete _datastore; _datastore = NULL;
-//    delete _aor_store; _aor_store = NULL;
+    delete _aor_store; _aor_store = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
     delete _analytics_logger; _analytics_logger = NULL;
   }

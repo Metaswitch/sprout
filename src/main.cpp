@@ -1369,6 +1369,8 @@ Store* local_data_store = NULL;
 std::vector<Store*> remote_data_stores;
 Store* local_impi_data_store = NULL;
 std::vector<Store*> remote_impi_data_stores;
+AoRStore* local_aor_store = NULL;
+std::vector<AoRStore*> remote_aor_stores;
 SubscriberDataManager* local_sdm = NULL;
 std::vector<SubscriberDataManager*> remote_sdms;
 ImpiStore* local_impi_store = NULL;
@@ -2134,20 +2136,26 @@ int main(int argc, char* argv[])
     exit(0);
   }
 
-  AoRStore* astaire_aor_store = new AstaireAoRStore(local_data_store);
+  AoRStore* local_aor_store = new AstaireAoRStore(local_data_store);
   // Create local and optionally remote registration data stores.
-  local_sdm = new SubscriberDataManager(astaire_aor_store,
+  local_sdm = new SubscriberDataManager(local_aor_store,
                                         chronos_connection,
                                         analytics_logger,
                                         true);
-
 
   for (std::vector<Store*>::iterator it = remote_data_stores.begin();
        it != remote_data_stores.end();
        ++it)
   {
-    AoRStore* remote_astiare_aor_store = new AstaireAoRStore(*it);
-    SubscriberDataManager* remote_sdm = new SubscriberDataManager(remote_astiare_aor_store,
+    AoRStore* remote_aor_store = new AstaireAoRStore(*it);
+    remote_aor_stores.push_back(remote_aor_store);
+  }
+
+  for (std::vector<AoRStore*>::iterator it = remote_aor_stores.begin();
+       it != remote_aor_stores.end();
+       ++it)
+  {
+    SubscriberDataManager* remote_sdm = new SubscriberDataManager(*it,
                                                                   chronos_connection,
                                                                   NULL,
                                                                   false);
@@ -2475,6 +2483,8 @@ int main(int argc, char* argv[])
   delete exception_handler;
   delete load_monitor;
   delete local_sdm;
+  delete local_aor_store;
+  delete local_data_store;
 
   for (std::vector<SubscriberDataManager*>::iterator it = remote_sdms.begin();
        it != remote_sdms.end();
@@ -2484,7 +2494,13 @@ int main(int argc, char* argv[])
   }
   remote_sdms.clear();
 
-  delete local_data_store;
+  for (std::vector<AoRStore*>::iterator it = remote_aor_stores.begin();
+       it != remote_aor_stores.end();
+       ++it)
+  {
+    delete *it;
+  }
+  remote_aor_stores.clear();
 
   for (std::vector<Store*>::iterator it = remote_data_stores.begin();
        it != remote_data_stores.end();
