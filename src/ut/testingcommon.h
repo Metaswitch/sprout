@@ -197,10 +197,11 @@ namespace TestingCommon
     Message();
     ~Message();
 
-    void set_route(pjsip_msg* msg);
+    void set_route(pjsip_msg*);
     std::string get_request();
     std::string get_response();
   };
+
 }
 
 #endif
