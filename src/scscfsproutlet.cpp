@@ -1640,11 +1640,6 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
       TRC_DEBUG("Forming post-AS MMF uri");
       pjsip_sip_uri* post_as_uri = (pjsip_sip_uri*)
                         pjsip_uri_clone(get_pool(req), _scscf->mmf_node_uri());
-
-      // MMF doesn't have a port associated with it.  Specify the S-CSCF port
-      // on the post-AS MMF URI so that Sprout will accept the INVITE.
-      post_as_uri->port = _scscf->port();
-
       add_mmf_uri_parameters(post_as_uri,
                              as_uri->transport_param,
                              "post-as",
