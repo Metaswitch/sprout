@@ -421,8 +421,8 @@ public:
                                           "sip:127.0.0.1:5058",
                                           "",
                                           "sip:bgcf@homedomain:5058",
-                                          "sip:11.22.33.44:5053;transport=tcp",
-                                          "sip:44.33.22.11:5053;transport=tcp",
+                                          "sip:11.22.33.44;service=mmf",
+                                          "sip:44.33.22.11;service=mmf",
                                           5058,
                                           "sip:scscf.sprout.homedomain:5058;transport=TCP",
                                           _sdm,
@@ -10343,7 +10343,7 @@ TEST_F(SCSCFTest, MMFPreAs)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
-  TransportFlow tpMMFpreAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "11.22.33.44", 5053);
+  TransportFlow tpMMFpreAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "11.22.33.44", 5060);
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "pre.as.only.mmf.test.server", 56789);
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
@@ -10381,8 +10381,7 @@ TEST_F(SCSCFTest, MMFPreAs)
   // Ensure the pre-as header was added as expected, and remove it
   pjsip_hdr* preas_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
   std::string preas_uri = PJUtils::get_header_value(preas_hdr);
-  EXPECT_THAT(preas_uri, MatchesRegex(".*sip:11.22.33.44:5053.*"));
-  EXPECT_THAT(preas_uri, MatchesRegex(".*namespace=mmf.*"));
+  EXPECT_THAT(preas_uri, MatchesRegex(".*sip:11.22.33.44.*"));
   EXPECT_THAT(preas_uri, MatchesRegex(".*mmfscope=pre-as.*"));
   EXPECT_THAT(preas_uri, MatchesRegex(".*mmftarget=PreASOnly.*"));
   pj_list_erase(preas_hdr);
@@ -10479,7 +10478,7 @@ TEST_F(SCSCFTest, MMFPostAs)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
-  TransportFlow tpMMFpostAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "44.33.22.11", 5053);
+  TransportFlow tpMMFpostAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "44.33.22.11", 5058);
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.5.8.1", 56789);
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
@@ -10522,8 +10521,7 @@ TEST_F(SCSCFTest, MMFPostAs)
   // Ensure the post-as header was added as expected, and remove it
   pjsip_hdr* postas_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
   std::string postas_uri = PJUtils::get_header_value(postas_hdr);
-  EXPECT_THAT(postas_uri, MatchesRegex(".*sip:44.33.22.11:5053.*"));
-  EXPECT_THAT(postas_uri, MatchesRegex(".*namespace=mmf.*"));
+  EXPECT_THAT(postas_uri, MatchesRegex(".*sip:44.33.22.11:5058.*"));
   EXPECT_THAT(postas_uri, MatchesRegex(".*mmfscope=post-as.*"));
   EXPECT_THAT(postas_uri, MatchesRegex(".*mmftarget=PostASOnly.*"));
   pj_list_erase(postas_hdr);
@@ -10614,8 +10612,8 @@ TEST_F(SCSCFTest, MMFPreAndPostAs)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
-  TransportFlow tpMMFpreAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "11.22.33.44", 5053);
-  TransportFlow tpMMFpostAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "44.33.22.11", 5053);
+  TransportFlow tpMMFpreAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "11.22.33.44", 5060);
+  TransportFlow tpMMFpostAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "44.33.22.11", 5058);
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
   // Send the INVITE
@@ -10652,8 +10650,7 @@ TEST_F(SCSCFTest, MMFPreAndPostAs)
   pjsip_hdr* preas_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
   std::string preas_uri = PJUtils::get_header_value(preas_hdr);
   //
-  EXPECT_THAT(preas_uri, MatchesRegex(".*sip:11.22.33.44:5053.*"));
-  EXPECT_THAT(preas_uri, MatchesRegex(".*namespace=mmf.*"));
+  EXPECT_THAT(preas_uri, MatchesRegex(".*sip:11.22.33.44.*"));
   EXPECT_THAT(preas_uri, MatchesRegex(".*mmfscope=pre-as.*"));
   EXPECT_THAT(preas_uri, MatchesRegex(".*mmftarget=BothPreAndPost.*"));
   pj_list_erase(preas_hdr);
@@ -10667,8 +10664,7 @@ TEST_F(SCSCFTest, MMFPreAndPostAs)
   // Ensure the post-as header was added as expected, and remove it
   pjsip_hdr* postas_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
   std::string postas_uri = PJUtils::get_header_value(postas_hdr);
-  EXPECT_THAT(postas_uri, MatchesRegex(".*sip:44.33.22.11:5053.*"));
-  EXPECT_THAT(postas_uri, MatchesRegex(".*namespace=mmf.*"));
+  EXPECT_THAT(postas_uri, MatchesRegex(".*sip:44.33.22.11:5058.*"));
   EXPECT_THAT(postas_uri, MatchesRegex(".*mmfscope=post-as.*"));
   EXPECT_THAT(postas_uri, MatchesRegex(".*mmftarget=BothPreAndPost.*"));
   pj_list_erase(postas_hdr);

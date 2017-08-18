@@ -60,6 +60,7 @@ extern "C" {
 #include "localstore.h"
 #include "scscfselector.h"
 #include "chronosconnection.h"
+#include "chronoshandlers.h"
 #include "handlers.h"
 #include "httpstack.h"
 #include "sproutlet.h"
@@ -1388,42 +1389,6 @@ SIFCService* sifc_service = NULL;
 FIFCService* fifc_service = NULL;
 MMFService* mmf_service = NULL;
 
-bool parse_multi_site_stores_arg(const std::vector<std::string>& stores_arg,
-                                 const std::string& local_site_name,
-                                 const char* store_name,
-                                 std::string& store_location,
-                                 std::vector<std::string>& remote_stores_locations)
-{
-  if (!stores_arg.empty())
-  {
-    if (!Utils::parse_stores_arg(stores_arg,
-                                 local_site_name,
-                                 store_location,
-                                 remote_stores_locations))
-    {
-      TRC_ERROR("Invalid format of %s program argument", store_name);
-      return false;
-    }
-
-    if (store_location == "")
-    {
-      // If we've failed to find a local site registration store then Sprout has
-      // been misconfigured.
-      TRC_ERROR("No local site %s specified", store_name);
-      return false;
-    }
-    else
-    {
-      TRC_INFO("Using memcached %s", store_name);
-      TRC_INFO("  Primary store: %s", store_location.c_str());
-      std::string remote_stores_str = boost::algorithm::join(remote_stores_locations, ", ");
-      TRC_INFO("  Backup store(s): %s", remote_stores_str.c_str());
-    }
-  }
-
-  return true;
-}
-
 /*
  * main()
  */
@@ -1678,11 +1643,11 @@ int main(int argc, char* argv[])
   std::string registration_store_location;
   std::vector<std::string> remote_registration_stores_locations;
 
-  if (!parse_multi_site_stores_arg(opt.registration_stores,
-                                   opt.local_site_name,
-                                   "registration-store",
-                                   registration_store_location,
-                                   remote_registration_stores_locations))
+  if (!Utils::parse_multi_site_stores_arg(opt.registration_stores,
+                                          opt.local_site_name,
+                                          "registration-store",
+                                          registration_store_location,
+                                          remote_registration_stores_locations))
   {
     return 1;
   }
@@ -1702,11 +1667,11 @@ int main(int argc, char* argv[])
   else
   {
     TRC_DEBUG("Parse IMPI store locations argument");
-    if (!parse_multi_site_stores_arg(opt.impi_stores,
-                                     opt.local_site_name,
-                                     "impi-store",
-                                     impi_store_location,
-                                     remote_impi_stores_locations))
+    if (!Utils::parse_multi_site_stores_arg(opt.impi_stores,
+                                            opt.local_site_name,
+                                            "impi-store",
+                                            impi_store_location,
+                                            remote_impi_stores_locations))
     {
       return 1;
     }
@@ -2345,10 +2310,8 @@ int main(int argc, char* argv[])
                                                              NULL,
                                                              NULL));
 
-  // The AoRTimeoutTask and AuthTimeoutTask both handle
-  // chronos requests, so use the ChronosHandler.
-  ChronosHandler<AoRTimeoutTask, AoRTimeoutTask::Config> aor_timeout_handler(&aor_timeout_config);
-  ChronosHandler<AuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
+  TimerHandler<ChronosAoRTimeoutTask, AoRTimeoutTask::Config> aor_timeout_handler(&aor_timeout_config);
+  TimerHandler<ChronosAuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
   HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
   HttpStackUtils::PingHandler ping_handler;
   HttpStackUtils::SpawningHandler<GetBindingsTask, GetCachedDataTask::Config> get_bindings_handler(&get_cached_data_config);

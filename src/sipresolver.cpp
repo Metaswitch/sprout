@@ -310,9 +310,24 @@ void SIPResolver::resolve(const std::string& name,
 
   if ((targets.size() == 0) && (trail != 0))
   {
-    SAS::Event event(trail, SASEvent::SIPRESOLVE_NO_RECORDS, 0);
-    event.add_var_param(name);
-    SAS::report_event(event);
+    if ((allowed_host_state == BaseResolver::WHITELISTED) ||
+        (allowed_host_state == BaseResolver::BLACKLISTED))
+    {
+      // The search was restricted to either just blacklisted or just
+      // whitelisted addresses - there were none with the specified state.
+      bool blacklisted = (allowed_host_state == BaseResolver::BLACKLISTED);
+      SAS::Event event(trail, SASEvent::SIPRESOLVE_NO_ALLOWED_RECORDS, 0);
+      event.add_var_param(name);
+      event.add_static_param(blacklisted);
+      SAS::report_event(event);
+    }
+    else
+    {
+      // No records at all for this address
+      SAS::Event event(trail, SASEvent::SIPRESOLVE_NO_RECORDS, 0);
+      event.add_var_param(name);
+      SAS::report_event(event);
+    }
   }
 }
 
