@@ -67,8 +67,7 @@ public:
 protected:
   void handle_response();
   HTTPCode parse_response(std::string body);
-  AoRPair* set_aor_data(
-                        SubscriberDataManager* current_sdm,
+  AoRPair* set_aor_data(SubscriberDataManager* current_sdm,
                         std::string aor_id,
                         AssociatedURIs* associated_uris,
                         AoRPair* previous_aor_data,
@@ -122,16 +121,15 @@ public:
   void run();
   HTTPCode handle_request();
   HTTPCode parse_request(std::string body);
-  AoRPair* deregister_bindings(
-                    SubscriberDataManager* current_sdm,
-                    HSSConnection* hss,
-                    FIFCService* fifc_service,
-                    IFCConfiguration ifc_configuration,
-                    std::string aor_id,
-                    std::string private_id,
-                    AoRPair* previous_aor_data,
-                    std::vector<SubscriberDataManager*> remote_sdms,
-                    std::set<std::string>& impis_to_delete);
+  AoRPair* deregister_bindings(SubscriberDataManager* current_sdm,
+                               HSSConnection* hss,
+                               FIFCService* fifc_service,
+                               IFCConfiguration ifc_configuration,
+                               std::string aor_id,
+                               std::string private_id,
+                               AoRPair* previous_aor_data,
+                               std::vector<SubscriberDataManager*> remote_sdms,
+                               std::set<std::string>& impis_to_delete);
 
 protected:
   void delete_impi_from_store(ImpiStore* store, const std::string& impi);

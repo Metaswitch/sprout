@@ -444,18 +444,17 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
   // Write to the local store, checking the remote stores if there is no entry locally.
   bool all_bindings_expired;
-  AoRPair* aor_pair =
-                                 write_to_store(_registrar->_sdm,
-                                                aor,
-                                                &associated_uris,
-                                                req,
-                                                now,
-                                                expiry,
-                                                is_initial_registration,
-                                                NULL,
-                                                _registrar->_remote_sdms,
-                                                private_id_for_binding,
-                                                all_bindings_expired);
+  AoRPair* aor_pair = write_to_store(_registrar->_sdm,
+                                     aor,
+                                     &associated_uris,
+                                     req,
+                                     now,
+                                     expiry,
+                                     is_initial_registration,
+                                     NULL,
+                                     _registrar->_remote_sdms,
+                                     private_id_for_binding,
+                                     all_bindings_expired);
 
   if (all_bindings_expired)
   {
@@ -482,18 +481,17 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
       {
         int tmp_expiry = 0;
         bool ignored;
-        AoRPair* remote_aor_pair =
-          write_to_store(*it,
-                         aor,
-                         &associated_uris,
-                         req,
-                         now,
-                         tmp_expiry,
-                         ignored,
-                         aor_pair,
-                         {},
-                         private_id_for_binding,
-                         ignored);
+        AoRPair* remote_aor_pair = write_to_store(*it,
+                                                  aor,
+                                                  &associated_uris,
+                                                  req,
+                                                  now,
+                                                  tmp_expiry,
+                                                  ignored,
+                                                  aor_pair,
+                                                  {},
+                                                  private_id_for_binding,
+                                                  ignored);
         delete remote_aor_pair;
       }
     }
@@ -618,8 +616,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   pjsip_msg_add_hdr(rsp, (pjsip_hdr*)gen_hdr);
 
   // Add contact headers for all active bindings.
-  for (AoR::Bindings::const_iterator i =
-          aor_pair->get_current()->bindings().begin();
+  for (AoR::Bindings::const_iterator i = aor_pair->get_current()->bindings().begin();
        i != aor_pair->get_current()->bindings().end();
        ++i)
   {
@@ -1217,8 +1214,7 @@ void RegistrarSproutletTsx::log_bindings(const std::string& aor_name,
                                          AoR* aor_data)
 {
   TRC_DEBUG("Bindings for %s, timer ID %s", aor_name.c_str(), aor_data->_timer_id.c_str());
-  for (AoR::Bindings::const_iterator i =
-         aor_data->bindings().begin();
+  for (AoR::Bindings::const_iterator i = aor_data->bindings().begin();
        i != aor_data->bindings().end();
        ++i)
   {

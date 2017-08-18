@@ -79,8 +79,7 @@ class TestWithMockSdms : public SipTest
     delete mock_hss;
   }
 
-  AoRPair* build_aor(std::string aor_id,
-                                            bool include_subscription = true)
+  AoRPair* build_aor(std::string aor_id, bool include_subscription = true)
   {
     AoR* aor = new AoR(aor_id);
     int now = time(NULL);
@@ -1201,12 +1200,10 @@ TEST_F(GetBindingsTest, NoBindings)
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  AoRPair* aor =
-    new AoRPair(new AoR(aor_id),
-                                       new AoR(aor_id));
-  AoRPair* remote_aor =
-    new AoRPair(new AoR(aor_id),
-                                       new AoR(aor_id));
+  AoRPair* aor = new AoRPair(new AoR(aor_id),
+                             new AoR(aor_id));
+  AoRPair* remote_aor = new AoRPair(new AoR(aor_id),
+                                    new AoR(aor_id));
 
   {
     InSequence s;
@@ -1363,12 +1360,10 @@ TEST_F(GetSubscriptionsTest, NoSubscriptions)
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  AoRPair* aor =
-    new AoRPair(new AoR(aor_id),
-                                       new AoR(aor_id));
-  AoRPair* remote_aor =
-    new AoRPair(new AoR(aor_id),
-                                       new AoR(aor_id));
+  AoRPair* aor = new AoRPair(new AoR(aor_id),
+                             new AoR(aor_id));
+  AoRPair* remote_aor = new AoRPair(new AoR(aor_id),
+                                    new AoR(aor_id));
 
   {
     InSequence s;

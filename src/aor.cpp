@@ -489,6 +489,3 @@ void AoR::copy_subscriptions_and_bindings(AoR* source_aor)
     *dst = *src;
   }
 }
-
-
-

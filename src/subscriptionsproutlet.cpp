@@ -374,19 +374,18 @@ void SubscriptionSproutletTsx::process_subscription_request(pjsip_msg* req)
     {
       if ((*it)->has_servers())
       {
-        AoRPair* remote_aor_pair =
-          write_subscriptions_to_store(*it,
-                                       aor,
-                                       &associated_uris,
-                                       req,
-                                       now,
-                                       aor_pair,
-                                       {},
-                                       public_id,
-                                       false,
-                                       acr,
-                                       ccfs,
-                                       ecfs);
+        AoRPair* remote_aor_pair = write_subscriptions_to_store(*it,
+                                                                aor,
+                                                                &associated_uris,
+                                                                req,
+                                                                now,
+                                                                aor_pair,
+                                                                {},
+                                                                public_id,
+                                                                false,
+                                                                acr,
+                                                                ccfs,
+                                                                ecfs);
         delete remote_aor_pair;
       }
     }
@@ -452,7 +451,7 @@ AoRPair* SubscriptionSproutletTsx::write_subscriptions_to_store(
                                                               ///<IMPUs associated with this IRS
                    pjsip_msg* req,                            ///<received request to read headers from
                    int now,                                   ///<time now
-                   AoRPair* backup_aor,///<backup data if no entry in store
+                   AoRPair* backup_aor,                       ///<backup data if no entry in store
                    std::vector<SubscriberDataManager*> backup_sdms,
                                                               ///<backup stores to read from if no entry in store and no backup data
                    std::string public_id,                     ///
@@ -687,8 +686,7 @@ void SubscriptionSproutletTsx::log_subscriptions(const std::string& aor_name,
                                                  AoR* aor_data)
 {
   TRC_DEBUG("Subscriptions for %s", aor_name.c_str());
-  for (AoR::Subscriptions::const_iterator i =
-         aor_data->subscriptions().begin();
+  for (AoR::Subscriptions::const_iterator i = aor_data->subscriptions().begin();
        i != aor_data->subscriptions().end();
        ++i)
   {

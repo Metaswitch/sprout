@@ -10,7 +10,6 @@
  */
 
 
-
 // Common STL includes.
 #include <cassert>
 #include <vector>
@@ -71,9 +70,8 @@ SubscriberDataManager::~SubscriberDataManager()
 /// Retrieve the registration data for a given SIP Address of Record.
 ///
 /// @param aor_id       The SIP Address of Record for the registration
-AoRPair* SubscriberDataManager::get_aor_data(
-                                          const std::string& aor_id,
-                                          SAS::TrailId trail)
+AoRPair* SubscriberDataManager::get_aor_data(const std::string& aor_id,
+                                             SAS::TrailId trail)
 {
   AoR* aor_data = _aor_store->get_aor_data(aor_id, trail);
 
@@ -371,8 +369,7 @@ void SubscriberDataManager::expire_subscriptions(AoRPair* aor_pair,
 
       if (aor_orig_s == aor_pair->get_orig()->subscriptions().end())
       {
-        AoR::Subscription* s_copy =
-          aor_pair->get_orig()->get_subscription(i->first);
+        AoR::Subscription* s_copy = aor_pair->get_orig()->get_subscription(i->first);
         *s_copy = *i->second;
       }
 

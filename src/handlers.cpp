@@ -288,11 +288,11 @@ void AoRTimeoutTask::handle_response()
   get_reg_data(_cfg->_hss, _aor_id, associated_uris, ifc_map, trail());
 
   AoRPair* aor_pair = set_aor_data(_cfg->_sdm,
-                                                          _aor_id,
-                                                          &associated_uris,
-                                                          NULL,
-                                                          _cfg->_remote_sdms,
-                                                          all_bindings_expired);
+                                   _aor_id,
+                                   &associated_uris,
+                                   NULL,
+                                   _cfg->_remote_sdms,
+                                   all_bindings_expired);
 
   if (aor_pair != NULL)
   {
@@ -306,13 +306,12 @@ void AoRTimeoutTask::handle_response()
       if ((*sdm)->has_servers())
       {
         bool ignored;
-        AoRPair* remote_aor_pair =
-                                                        set_aor_data(*sdm,
-                                                                     _aor_id,
-                                                                     &associated_uris,
-                                                                     aor_pair,
-                                                                     {},
-                                                                     ignored);
+        AoRPair* remote_aor_pair = set_aor_data(*sdm,
+                                                _aor_id,
+                                                &associated_uris,
+                                                aor_pair,
+                                                {},
+                                                ignored);
         delete remote_aor_pair;
       }
     }
@@ -478,16 +477,15 @@ HTTPCode DeregistrationTask::handle_request()
        it!=_bindings.end();
        ++it)
   {
-    AoRPair* aor_pair =
-      deregister_bindings(_cfg->_sdm,
-                          _cfg->_hss,
-                          _cfg->_fifc_service,
-                          _cfg->_ifc_configuration,
-                          it->first,
-                          it->second,
-                          NULL,
-                          _cfg->_remote_sdms,
-                          impis_to_delete);
+    AoRPair* aor_pair = deregister_bindings(_cfg->_sdm,
+                                            _cfg->_hss,
+                                            _cfg->_fifc_service,
+                                            _cfg->_ifc_configuration,
+                                            it->first,
+                                            it->second,
+                                            NULL,
+                                            _cfg->_remote_sdms,
+                                            impis_to_delete);
 
     // LCOV_EXCL_START
     if ((aor_pair != NULL) &&
@@ -501,16 +499,15 @@ HTTPCode DeregistrationTask::handle_request()
       {
         if ((*sdm)->has_servers())
         {
-          AoRPair* remote_aor_pair =
-            deregister_bindings(*sdm,
-                                _cfg->_hss,
-                                _cfg->_fifc_service,
-                                _cfg->_ifc_configuration,
-                                it->first,
-                                it->second,
-                                aor_pair,
-                                {},
-                                impis_to_delete);
+          AoRPair* remote_aor_pair = deregister_bindings(*sdm,
+                                                         _cfg->_hss,
+                                                         _cfg->_fifc_service,
+                                                         _cfg->_ifc_configuration,
+                                                         it->first,
+                                                         it->second,
+                                                         aor_pair,
+                                                         {},
+                                                         impis_to_delete);
           delete remote_aor_pair;
         }
       }
@@ -622,8 +619,7 @@ AoRPair* DeregistrationTask::deregister_bindings(
          ++i)
     {
       std::string b_id = *i;
-      AoR::Binding* b =
-                                  aor_pair->get_current()->get_binding(b_id);
+      AoR::Binding* b = aor_pair->get_current()->get_binding(b_id);
 
       if (private_id.empty() || private_id == b->_private_id)
       {
@@ -828,8 +824,7 @@ std::string GetBindingsTask::serialize_data(AoR* aor)
     writer.String(JSON_BINDINGS);
     writer.StartObject();
     {
-      for (AoR::Bindings::const_iterator it =
-             aor->bindings().begin();
+      for (AoR::Bindings::const_iterator it = aor->bindings().begin();
            it != aor->bindings().end();
            ++it)
       {
@@ -854,8 +849,7 @@ std::string GetSubscriptionsTask::serialize_data(AoR* aor)
     writer.String(JSON_SUBSCRIPTIONS);
     writer.StartObject();
     {
-      for (AoR::Subscriptions::const_iterator it =
-             aor->subscriptions().begin();
+      for (AoR::Subscriptions::const_iterator it = aor->subscriptions().begin();
            it != aor->subscriptions().end();
            ++it)
       {
