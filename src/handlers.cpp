@@ -28,6 +28,7 @@ extern "C" {
 #include "pjutils.h"
 #include "sproutsasevent.h"
 #include "uri_classifier.h"
+#include "sprout_xml_utils.h"
 
 // If we can't find the AoR pair in the current SDM, we will either use the
 // backup_aor_pair or we will try and look up the AoR pair in the remote SDMs.
@@ -40,7 +41,9 @@ static bool sdm_access_common(SubscriberDataManager::AoRPair** aor_pair,
                               SAS::TrailId trail)
 {
   // Find the current bindings for the AoR.
+  TRC_DEBUG("AAAAAAAAAAAAAAAAAAAAAAAAAAAA");
   delete *aor_pair;
+  TRC_DEBUG("Finding AOR data");
   *aor_pair = current_sdm->get_aor_data(aor_id, trail);
   TRC_DEBUG("Retrieved AoR data %p", *aor_pair);
 
@@ -929,7 +932,7 @@ void DeleteImpuTask::run()
       // Any other 4xx -> 400
       sc = HTTP_BAD_REQUEST;
     }
-    else
+   else
     {
       // Everything else is mapped to 502 Bad Gateway. This covers 5xx responses
       // (which indicate homestead went wrong) or 3xx responses (which homestead
@@ -961,7 +964,8 @@ void PushProfileTask::run()
     return;
   }
 
-  HTTPCode rc = parse_request(_req.get_rx_body());
+  TRC_DEBUG("Received body %s", (_req.get_rx_body()).c_str());
+  HTTPCode rc = parse_request(_req.get_rx_body(), trail());
 
   if (rc != HTTP_OK)
   {
@@ -971,58 +975,113 @@ void PushProfileTask::run()
     return;
   }
 
-  rc = handle_request();
+  rc = get_data(trail());
+  if (rc != HTTP_OK)
+  {
+    TRC_WARNING("Could not get AoR data from SDM, send %d", rc);
+    send_http_reply(rc);
+    delete this;
+    return;
+  }
 
+  rc = set_data(trail());
+  if (rc != HTTP_OK)
+  {
+    TRC_WARNING("Could not set AoR data, send %d", rc);
+  }
+  else
+  {
+    TRC_DEBUG("successful, sending %d", rc);
+  }
   send_http_reply(rc);
   delete this;
 }
 
-HTTPCode PushProfileTask::parse_request(std::string body)
+HTTPCode PushProfileTask::parse_request(std::string body, SAS::TrailId trail)
 {
-  // Get the default ID from the path
+  bool valid_xml;
+  std::map<std::string, Ifcs> unused_ifcs_map;
+  std::vector<std::string> aliases;
   const std::string prefix = "/registrations/";
   std::string full_path = _req.full_path();
-  size_t end_of_impu = full_path.find('/', prefix.length());
+  size_t end_of_impu = full_path.length();
   _default_public_id = full_path.substr(prefix.length(), end_of_impu - prefix.length());
   TRC_DEBUG("Extracted impu %s", _default_public_id.c_str());
 
-  rapidjson::Document doc;
-  doc.Parse<0>(body.c_str());
-
-  if (doc.HasParseError())
-  {
-    TRC_INFO("Failed to parse data as JSON: %s\nError: %s",
-             body.c_str(),
-             rapidjson::GetParseError_En(doc.GetParseError()));
-    return HTTP_BAD_REQUEST;
-  }
-
+  rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
   try
   {
-    JSON_ASSERT_CONTAINS(doc, "associated-identities");
-    JSON_ASSERT_ARRAY(doc["associated-identities"]);
-    const rapidjson::Value& impu_array = doc["associated-identities"] ;
-
-    for (rapidjson::Value::ConstValueIterator impu_it = impu_array.Begin();
-         impu_it != impu_array.End();
-         ++impu_it)
-    {
-      std::string impu = (*impu_it).GetString();
-      _associated_ids.push_back(impu);
-    }
+    root->parse<0>(root->allocate_string(body.c_str()));
   }
-  catch (JsonFormatError err)
+  catch (rapidxml::parse_error& err)
   {
-    TRC_WARNING("associated identities are not available in JSON");
+    // report to the user the failure and their locations in the document.
+    TRC_WARNING("Failed to parse XML:\n %s\n %s", body.c_str(), err.what());
+    delete root;
+    root = NULL;
+  }
+
+  rapidxml::xml_node<>* imss = root->first_node(RegDataXMLUtils::IMS_SUBSCRIPTION);
+
+  valid_xml = SproutXmlUtils::decode_service_profile(_default_public_id,
+				  		     NULL,
+						     imss,
+						     unused_ifcs_map,
+				  	             _associated_uris,
+						     aliases,
+						     NULL,
+						     false,
+					 	     trail);
+  TRC_DEBUG("successfully decoded XML");
+  std::vector<std::string> all_uris = _associated_uris.get_all_uris();
+  std::string first_uri = all_uris.front();
+  std::string last_uri = all_uris.back();
+  TRC_DEBUG("first uri %s, last_uri %s", first_uri.c_str(), last_uri.c_str());
+  if (valid_xml)
+  {
+    return HTTP_OK;
+  }
+  else
+  {
     return HTTP_BAD_REQUEST;
   }
-
-  TRC_DEBUG("HTTP request successfuly parsed");
-  return HTTP_OK;
 }
 
-HTTPCode PushProfileTask::handle_request()
+HTTPCode PushProfileTask::get_data(SAS::TrailId trail)
 {
- // SubscriberDataManager::AoRPair* aor_pair =
+  TRC_DEBUG("Attempting to get AOR data");
+  SubscriberDataManager::AoRPair* aor_pair = NULL;
+
+  if(!sdm_access_common(&aor_pair,
+                         _default_public_id,
+                       	 _cfg->_sdm,
+                         _cfg->_remote_sdms,
+                         NULL,
+			 trail))
+  {
+    return HTTP_SERVER_ERROR;
+  }
+  _aor_pair = aor_pair;
+  TRC_DEBUG("Obtained AOR data");
   return HTTP_OK;
 }
+
+HTTPCode PushProfileTask::set_data(SAS::TrailId trail)
+{
+  bool all_bindings_expired;
+  Store::Status set_rc;
+  TRC_DEBUG("Attempting to set AOR data");
+  set_rc = _cfg->_sdm->set_aor_data(_default_public_id,
+                                    &_associated_uris,
+                                    _aor_pair,
+			            trail,
+			            all_bindings_expired);
+  if (set_rc != Store::OK)
+  {
+    delete _aor_pair; _aor_pair = NULL;
+    return HTTP_SERVER_ERROR;
+  }
+  TRC_DEBUG("Successfully set AOR data");
+  return HTTP_OK;
+}
+

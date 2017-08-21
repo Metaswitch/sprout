@@ -94,7 +94,8 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          fifcservice.cpp \
                          mmfservice.cpp \
                          mmftargets.cpp \
-                         event_statistic_accumulator.cpp
+                         event_statistic_accumulator.cpp \
+			 sprout_xml_utils.cpp
 
 sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_counter_table.cpp \

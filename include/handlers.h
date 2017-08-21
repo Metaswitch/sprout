@@ -286,12 +286,14 @@ public:
   {};
 
   void run();
-  HTTPCode handle_request();
-  HTTPCode parse_request(std::string body);
+  HTTPCode parse_request(std::string body, SAS::TrailId trail);
+  HTTPCode get_data(SAS::TrailId trail);
+  HTTPCode set_data(SAS::TrailId trail);
 
 protected:
   const Config* _cfg;
   std::string _default_public_id;
-  std::vector<std::string> _associated_ids;
+  AssociatedURIs _associated_uris;
+  SubscriberDataManager::AoRPair* _aor_pair;
 };
 #endif

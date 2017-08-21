@@ -107,7 +107,9 @@ SubscriberDataManager::AoRPair* SubscriberDataManager::get_aor_data(
                                           const std::string& aor_id,
                                           SAS::TrailId trail)
 {
+  TRC_DEBUG("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
   AoR* aor_data = _connector->get_aor_data(aor_id, trail);
+  TRC_DEBUG("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB");
 
   if (aor_data != NULL)
   {
@@ -147,6 +149,7 @@ Store::Status SubscriberDataManager::set_aor_data(
                                      AoRPair* aor_pair,
                                      SAS::TrailId trail,
                                      bool& all_bindings_expired)
+
 {
   // The ordering of this function is quite important.
   //
@@ -1305,6 +1308,7 @@ void SubscriberDataManager::ChronosTimerRequestSender::set_timer(
                                     std::map<std::string, uint32_t> tags,
                                     SAS::TrailId trail)
 {
+  TRC_DEBUG("AAAAAAAAAAAAAA");
   std::string temp_timer_id = "";
   HTTPCode status;
   std::string opaque = "{\"aor_id\": \"" + aor_id + "\"}";
@@ -1314,12 +1318,14 @@ void SubscriberDataManager::ChronosTimerRequestSender::set_timer(
   // Otherwise sent a POST.
   if (timer_id == "")
   {
+    TRC_DEBUG("BBBBBBBBBBBBBBBBBB");
     status = _chronos_conn->send_post(temp_timer_id,
                                       expiry,
                                       callback_uri,
                                       opaque,
                                       trail,
                                       tags);
+    TRC_DEBUG("CCCCCCCCCCCCCCCCCCCCCC");
   }
   else
   {
@@ -1338,6 +1344,7 @@ void SubscriberDataManager::ChronosTimerRequestSender::set_timer(
   {
     timer_id = temp_timer_id;
   }
+  TRC_DEBUG("DDDDDDDDDDDDDDDD");
 }
 
 /// NotifySender Methods
@@ -1450,7 +1457,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
                                          expired_binding_uris,
                                          now,
                                          trail);
-
+  TRC_DEBUG("8888888888888888888888888888888");
   // Iterate over the subscriptions in the current AoR and send NOTIFYs.
   // If the bindings have changed, then send NOTIFYs to all subscribers; otherwise,
   // only send them when the subscription has been created or updated.
@@ -1528,8 +1535,46 @@ void SubscriberDataManager::NotifySender::send_notifys(
         }
       }
     }
-  }
+    TRC_DEBUG("LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL");
+   #if 0
+    else if (changed_associated_uris)
+    {
+      TRC_DEBUG("Sending NOTIFY for subscription %s: reason(s) changed associated uris", s_id.c_str());
+      pjsip_tx_data* tdata_notify = NULL;
+      pj_status_t status = NotifyUtils::create_subscription_notify(
+                                            &tdata_notify,
+                                            subscription,
+                                            aor_id,
+                                            associated_uris,
+                                            aor_pair->get_orig(),
+                                            binding_info_to_notify,
+                                            NotifyUtils::RegistrationState::ACTIVE,
+                                            now,
+                                            trail);
 
+      if (status == PJ_SUCCESS)
+      {
+        set_trail(tdata_notify, trail);
+        status = PJUtils::send_request(tdata_notify, 0, NULL, NULL, true);
+
+        if (status == PJ_SUCCESS)
+        {
+          subscription->_refreshed = false;
+        }
+        else
+        {
+          // LCOV_EXCL_START
+          SAS::Event event(trail, SASEvent::NOTIFICATION_FAILED, 0);
+          std::string error_msg = "Failed to send NOTIFY - error: " +
+                                        PJUtils::pj_status_to_string(status);
+          event.add_var_param(error_msg);
+          SAS::report_event(event);
+          // LCOV_EXCL_STOP
+        }
+      }
+    }
+#endif
+  }
   delete_bindings(binding_info_to_notify);
 }
 
