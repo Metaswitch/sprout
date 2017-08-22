@@ -104,21 +104,26 @@ public:
     SipTest::TearDownTestCase();
   }
 
-  SCSCFTest()
+  SCSCFTest(bool use_icscf=true)
   {
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
     _local_data_store->flush_all();  // start from a clean slate on each test
 
     _hss_connection_observer = new MockHSSConnection();
     _hss_connection = new FakeHSSConnection(_hss_connection_observer);
+    _icscf_msg = "";
 
+    if (use_icscf)
+    {
+      _icscf_msg = "sip:icscf.sprout.homedomain:5059;transport=TCP";
+    }
     // Create the S-CSCF Sproutlet.
     IFCConfiguration ifc_configuration(false, false, "sip:DUMMY_AS", NULL, NULL);
     _scscf_sproutlet = new SCSCFSproutlet("scscf",
                                           "scscf",
                                           "sip:scscf.sprout.homedomain:5058;transport=TCP",
                                           "sip:127.0.0.1:5058",
-                                          "sip:icscf.sprout.homedomain:5059;transport=TCP",
+                                          _icscf_msg,
                                           "sip:bgcf@homedomain:5058",
                                           "sip:11.22.33.44;service=mmf",
                                           "sip:44.33.22.11:5053;service=mmf",
@@ -182,7 +187,10 @@ public:
     // Create the SproutletProxy.
     std::list<Sproutlet*> sproutlets;
     sproutlets.push_back(_scscf_sproutlet);
-    sproutlets.push_back(_icscf_sproutlet);
+    if (use_icscf)
+    {
+      sproutlets.push_back(_icscf_sproutlet);
+    }
     sproutlets.push_back(_bgcf_sproutlet);
     sproutlets.push_back(_mmtel_sproutlet);
     std::unordered_set<std::string> additional_home_domains;
@@ -303,6 +311,7 @@ protected:
   SproutletProxy* _proxy;
   static MockAsCommunicationTracker* _sess_term_comm_tracker;
   static MockAsCommunicationTracker* _sess_cont_comm_tracker;
+  std::string _icscf_msg;
 
   void doTestHeaders(TransportFlow* tpA,
                      bool tpAset,
@@ -327,6 +336,11 @@ protected:
   void doSlowFailureFlow(TestingCommon::Message& msg, int st_code, std::string body = "", std::string reason = "");
   void setupForkedFlow(TestingCommon::Message& msg);
   list<string> doProxyCalculateTargets(int max_targets);
+};
+
+class SCSCFTestWithoutICSCF : public SCSCFTest
+{
+  SCSCFTestWithoutICSCF() : SCSCFTest(false) {}  
 };
 
 LocalStore* SCSCFTest::_local_data_store;
@@ -1879,6 +1893,22 @@ TEST_F(SCSCFTest, TestEnumUserPhone)
 }
 
 TEST_F(SCSCFTest, TestEnumNoUserPhone)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+
+  URIClassifier::enforce_user_phone = true;
+  Message msg;
+  msg._to = "+15108580271";
+  // We only do ENUM on originating calls
+  msg._route = "Route: <sip:sprout.homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  doSlowFailureFlow(msg, 404);
+}
+
+TEST_F(SCSCFTestWithoutICSCF, TestEnumNoICSCF)
 {
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
