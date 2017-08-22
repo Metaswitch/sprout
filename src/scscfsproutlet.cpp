@@ -130,24 +130,30 @@ bool SCSCFSproutlet::init()
 
   if (_scscf_cluster_uri == NULL)
   {
+    // LCOV_EXCL_START - Don't test pjsip URI failures in the S-CSCF UTs
     TRC_ERROR("Invalid S-CSCF cluster %s", _scscf_cluster_uri_str.c_str());
     init_success = false;
+    // LCOV_EXCL_STOP
   }
 
   _scscf_node_uri = PJUtils::uri_from_string(_scscf_node_uri_str, stack_data.pool, false);
 
   if (_scscf_node_uri == NULL)
   {
+    // LCOV_EXCL_START - Don't test pjsip URI failures in the S-CSCF UTs
     TRC_ERROR("Invalid S-CSCF node URI %s", _scscf_node_uri_str.c_str());
     init_success = false;
+    // LCOV_EXCL_STOP
   }
 
   _bgcf_uri = PJUtils::uri_from_string(_bgcf_uri_str, stack_data.pool, false);
 
   if (_bgcf_uri == NULL)
   {
+    // LCOV_EXCL_START - Don't test pjsip URI failures in the S-CSCF UTs
     TRC_ERROR("Invalid BGCF URI %s", _bgcf_uri_str.c_str());
     init_success = false;
+    // LCOV_EXCL_STOP
   }
 
   if (_icscf_uri_str != "")
@@ -156,8 +162,10 @@ bool SCSCFSproutlet::init()
 
     if (_icscf_uri == NULL)
     {
+      // LCOV_EXCL_START - Don't test pjsip URI failures in the S-CSCF UTs
       TRC_ERROR("Invalid I-CSCF URI %s", _icscf_uri_str.c_str());
       init_success = false;
+      // LCOV_EXCL_STOP
     }
   }
 
@@ -165,16 +173,20 @@ bool SCSCFSproutlet::init()
 
   if (_mmf_cluster_uri == NULL)
   {
+    // LCOV_EXCL_START - Don't test pjsip URI failures in the S-CSCF UTs
     TRC_ERROR("Invalid MMF cluster URI %s", _mmf_cluster_uri_str.c_str());
     init_success = false;
+    // LCOV_EXCL_STOP
   }
 
   _mmf_node_uri = PJUtils::uri_from_string(_mmf_node_uri_str, stack_data.pool, false);
 
   if (_mmf_node_uri == NULL)
   {
+    // LCOV_EXCL_START - Don't test pjsip URI failures in the S-CSCF UTs
     TRC_ERROR("Invalid MMF node URI %s", _mmf_node_uri_str.c_str());
     init_success = false;
+    // LCOV_EXCL_STOP
   }
 
   // Create an AS Chain table for maintaining the mapping from ODI tokens to
@@ -1367,7 +1379,10 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
 
     if ((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
         ((uri_class == NODE_LOCAL_SIP_URI) ||
-         (uri_class == HOME_DOMAIN_SIP_URI)))
+         (uri_class == HOME_DOMAIN_SIP_URI) ||
+         (uri_class == LOCAL_PHONE_NUMBER) ||
+         (uri_class == GLOBAL_PHONE_NUMBER) 
+         ))
     {
       user = PJUtils::public_id_from_uri(uri);
     }
@@ -1535,8 +1550,7 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
     send_response(rsp);
     free_msg(req);
   }
-
-  if (!server_name.empty())
+  else if (!server_name.empty())
   {
     // We've should have identified an application server to be invoked, so
     // encode the app server hop and the return hop in Route headers.
@@ -1799,21 +1813,6 @@ void SCSCFSproutletTsx::route_to_bgcf(pjsip_msg* req)
                             get_pool(req));
   send_request(req);
 }
-
-
-/// Route the request to the terminating side S-CSCF.
-void SCSCFSproutletTsx::route_to_term_scscf(pjsip_msg* req)
-{
-  TRC_INFO("Routing to terminating S-CSCF %s",
-           PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                  _scscf->scscf_cluster_uri()).c_str());
-  PJUtils::add_route_header(req,
-                            (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req),
-                                                            _scscf->scscf_cluster_uri()),
-                            get_pool(req));
-  send_request(req);
-}
-
 
 /// Route the request to the appropriate onward target.
 void SCSCFSproutletTsx::route_to_target(pjsip_msg* req)
@@ -2216,6 +2215,7 @@ bool SCSCFSproutletTsx::get_billing_role(ACR::NodeRole &role)
     pjsip_sip_uri* uri = (pjsip_sip_uri*)route->name_addr.uri;
     pjsip_param* param = pjsip_param_find(&uri->other_param,
                                           &STR_BILLING_ROLE);
+
     if (param != NULL)
     {
       if (!pj_strcmp(&param->value, &STR_CHARGE_NONE))
