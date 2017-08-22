@@ -400,7 +400,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
     out = current_txdata()->msg;
     RespMatcher(100).matches(out);
     tpA->expect_target(current_txdata(), true);  // Requests always come back on same transport
-    msg.set_route(out);
+    msg.convert_routeset(out);
 
     // Don't bother testing P-Access-Network-Info or P-Visited-Network-Id,
     // because they never get inserted into such messages.
@@ -443,7 +443,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   out = current_txdata()->msg;
   RespMatcher(183).matches(out);
   tpA->expect_target(current_txdata(), true);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
 
   // Check P-Access-Network-Info and P-Visited-Network-Id
@@ -483,7 +483,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpA->expect_target(current_txdata(), true);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
 
   // Check P-Access-Network-Info and P-Visited-Network-Id.
@@ -503,7 +503,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpA->expect_target(current_txdata(), true);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
 
   // Check P-Access-Network-Info and P-Visited-Network-Id.
@@ -545,7 +545,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpA->expect_target(current_txdata(), true);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
 
   // Check P-Access-Network-Info and P-Visited-Network-Id. These will always be stripped,
@@ -648,7 +648,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   out = current_txdata()->msg;
   RespMatcher(404).matches(out);
   tpA->expect_target(current_txdata(), true);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
 
   // Check P-Access-Network-Info and P-Visited-Network-Id.

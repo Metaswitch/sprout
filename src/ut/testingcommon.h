@@ -28,7 +28,7 @@ extern "C" {
 namespace TestingCommon
 {
 
-  // Node names.
+  // XML node names.
   const std::string IMS_SUBSCRIPTION = "IMSSubscription";
   const std::string SERVICE_PROFILE = "ServiceProfile";
   const std::string PUBLIC_ID = "PublicIdentity";
@@ -112,6 +112,18 @@ namespace TestingCommon
   class ServiceProfileBuilder
   {
   public:
+    ServiceProfileBuilder() {};
+    ~ServiceProfileBuilder() {};
+
+    std::string return_profile();
+    ServiceProfileBuilder& addIdentity(std::string);
+    ServiceProfileBuilder& addWildcard(std::string, int, std::string);
+    ServiceProfileBuilder& addBarringIndication(std::string, std::string);
+    ServiceProfileBuilder& addIfc(int, std::vector<std::string>, std::string, int=0, int=0);
+    ServiceProfileBuilder& addIfcNoDefHandling(int, std::vector<std::string>, std::string, int=0);
+    ServiceProfileBuilder& addIfcBadDefField(int, std::vector<std::string>, std::string, int, std::string);
+
+  private:
     // Structure containing the info needed to build a single PublicIdentity node.
     struct IdentityStruct
     {
@@ -134,16 +146,6 @@ namespace TestingCommon
     std::vector<IdentityStruct> _identities;
     std::vector<IfcStruct> _ifcs;
 
-    ServiceProfileBuilder();
-    ~ServiceProfileBuilder();
-
-    std::string return_profile();
-    ServiceProfileBuilder& addIdentity(std::string);
-    ServiceProfileBuilder& addWildcard(std::string, int, std::string);
-    ServiceProfileBuilder& addBarringIndication(std::string, std::string);
-    ServiceProfileBuilder& addIfc(int, std::vector<std::string>, std::string, int=0, int=0);
-    ServiceProfileBuilder& addIfcNoDefHandling(int, std::vector<std::string>, std::string, int=0);
-    ServiceProfileBuilder& addIfcBadDefField(int, std::vector<std::string>, std::string, int, std::string);
     std::string create_ifc(IfcStruct);
   };
 
@@ -159,17 +161,78 @@ namespace TestingCommon
   class SubscriptionBuilder
   {
   public:
-    std::vector<ServiceProfileBuilder> _service_profiles;
-
-    SubscriptionBuilder();
-    ~SubscriptionBuilder();
+    SubscriptionBuilder() {};
+    ~SubscriptionBuilder() {};
 
     std::string return_sub();
     SubscriptionBuilder& addServiceProfile(ServiceProfileBuilder);
+
+  private:
+    std::vector<ServiceProfileBuilder> _service_profiles;
   };
 
 
+  // TODO - Edit this class so that it is more consistent with the
+  // SubscriptionBuilder class. (Instead of tests setting _method, etc.
+  // directly, have functions setMethod(), etc. This means the interface will be
+  // more consistent.)
+  //
   // Class which can build request/response messages.
+  //
+  // The format of the request message is:
+  //    <Method> <RequestURI> SIP/2.0
+  //    Via: SIP/2.0/TCP <Via>;rport;branch=z9hG4bK<Branch>
+  //    <OptionalOtherViaHeaders>
+  //    From: <sip:<From>@<FromDomain>>;tag=10.114.61.213+1+8c8b232a+5fb751cf
+  //    To: <<Target>><OptionalTag>
+  //    Max-Forwards: <MaxForwards>
+  //    Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs<Num>ohntC@10.114.61.213
+  //    CSeq: <CSeq> <Method>
+  //    User-Agent: Accession 2.0.0.0
+  //    Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS
+  //    <OptionalContentType>
+  //    <OptionalExtras>
+  //    <OptionalContentLength>
+  //    <OptionalRoute>
+  //
+  // An example of a request message:
+  //    INVITE sip:123@example SIP/2.0
+  //    Via: SIP/2.0/TCP 1.2.3.4:10000;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY1042
+  //    From: <sip:567@example>;tag=10.114.61.213+1+8c8b232a+5fb751cf
+  //    To: <sip:890@example>
+  //    Max-Forwards: 68
+  //    Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs1042ohntC@10.114.61.213
+  //    CSeq: 16567 INVITE
+  //    User-Agent: Accession 2.0.0.0
+  //    Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS
+  //
+  // The format of the response message is:
+  //   SIP/2.0 <Status>
+  //   Via: SIP/2.0/TCP <Via>;rport;branch=z9hG4bK<Branch>
+  //   <OptionalOtherViaHeaders>
+  //   From: <sip:<From>@<FromDomain>>;tag=10.114.61.213+1+8c8b232a+5fb751cf
+  //   To: <sip:<To><ToDomain>>\r\n
+  //   Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs<Num>ohntC@10.114.61.213
+  //   CSeq: <CSeq> <Method>
+  //   User-Agent: Accession 2.0.0.0
+  //   Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS
+  //   <OptionalContentType>
+  //   <OptionalExtras>
+  //   Content-Length: <ContentLength>
+  //   <OptionalRoute>
+  //
+  // An example of a response message:
+  //   SIP/2.0 200 OK
+  //   Via: SIP/2.0/TCP 1.2.3.4:10000;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY1042
+  //   From: <sip:123@example>;tag=10.114.61.213+1+8c8b232a+5fb751cf
+  //   To: <sip:456@example>
+  //   Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs1042ohntC@10.114.61.213
+  //   CSeq: 16567 INVITE
+  //   User-Agent: Accession 2.0.0.0
+  //   Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS
+  //   Content-Type: application/sdp
+  //   Content-Length: 0
+  //
   class Message
   {
   public:
@@ -194,10 +257,29 @@ namespace TestingCommon
     bool _in_dialog;
     bool _contentlength;
 
-    Message();
-    ~Message();
+    Message() :
+      _method("INVITE"),
+      _toscheme("sip"),
+      _status("200 OK"),
+      _from("6505551000"),
+      _fromdomain("homedomain"),
+      _to("6505551234"),
+      _todomain("homedomain"),
+      _content_type("application/sdp"),
+      _forwards(68),
+      _first_hop(false),
+      _via("10.83.18.38:36530"),
+      _cseq(16567),
+      _in_dialog(false),
+      _contentlength(true)
+    {
+      static int unique = 1042;
+      _unique = unique;
+      unique += 10; // leave room for manual increments
+    };
+    ~Message() {};
 
-    void set_route(pjsip_msg*);
+    void convert_routeset(pjsip_msg*);
     std::string get_request();
     std::string get_response();
   };
@@ -205,4 +287,3 @@ namespace TestingCommon
 }
 
 #endif
-

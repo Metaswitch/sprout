@@ -32,30 +32,26 @@ std::string TestingCommon::add_node(std::string node_name,
 
 using namespace TestingCommon;
 
-ServiceProfileBuilder::ServiceProfileBuilder()
-{
-}
-
-ServiceProfileBuilder::~ServiceProfileBuilder()
-{
-}
 
 // Returns a string, which is the service profile in XML.
 std::string ServiceProfileBuilder::return_profile()
 {
   std::string service_profile;
   service_profile = start_node(SERVICE_PROFILE);
+
   for (std::vector<IdentityStruct>::iterator it = _identities.begin();
        it != _identities.end();
        ++it)
   {
     service_profile += start_node(PUBLIC_ID);
     service_profile += add_node(ID, it->identity);
+
     // If a barring indication is present, add this node.
     if(it->barring_indication != NO_BARRING_FIELD)
     {
       service_profile += add_node(BARRING_INDICATION, it->barring_indication);
     }
+
     // If a wildcarded identity is present, both the identity type and
     // wildcarded IMPU should have been set. Check if this is the case, and if
     // so, add the wildcard info to the XML string.
@@ -73,6 +69,7 @@ std::string ServiceProfileBuilder::return_profile()
     }
     service_profile += end_node(PUBLIC_ID);
   }
+
   if (_ifcs.empty())
   {
     service_profile += add_node(IFC, "");
@@ -86,6 +83,7 @@ std::string ServiceProfileBuilder::return_profile()
       service_profile += create_ifc(*ifc);
     }
   }
+
   service_profile += end_node(SERVICE_PROFILE);
   return service_profile;
 }
@@ -240,14 +238,6 @@ std::string ServiceProfileBuilder::create_ifc(IfcStruct ifc_info)
 }
 
 
-SubscriptionBuilder::SubscriptionBuilder()
-{
-}
-
-SubscriptionBuilder::~SubscriptionBuilder()
-{
-}
-
 // Returns a string, which is the IMS subscription in XML.
 std::string SubscriptionBuilder::return_sub()
 {
@@ -272,36 +262,8 @@ SubscriptionBuilder& SubscriptionBuilder::addServiceProfile(ServiceProfileBuilde
 }
 
 
-// Set default values for a message.
-Message::Message()
-{
-  _method = "INVITE";
-  _toscheme = "sip";
-  _status = "200 OK";
-  _from = "6505551000";
-  _fromdomain = "homedomain";
-  _to = "6505551234";
-  _todomain = "homedomain";
-  _content_type = "application/sdp";
-  _forwards = 68;
-  _first_hop = false;
-  _via = "10.83.18.38:36530";
-  _branch = "";
-  _cseq = 16567;
-  _in_dialog = false;
-  _contentlength = true;
-
-  static int unique = 1042;
-  _unique = unique;
-  unique += 10; // leave room for manual increments
-}
-
-Message::~Message()
-{
-}
-
 // Set the route field on a message.
-void Message::set_route(pjsip_msg* msg)
+void Message::convert_routeset(pjsip_msg* msg)
 {
   std::string route = get_headers(msg, "Record-Route");
   if (route != "")
@@ -377,7 +339,6 @@ std::string Message::get_request()
   EXPECT_LT(n, (int)sizeof(buf));
 
   std::string ret(buf, n);
-  // cout << ret <<endl;
   return ret;
 }
 
@@ -424,8 +385,5 @@ std::string Message::get_response()
   EXPECT_LT(n, (int)sizeof(buf));
 
   std::string ret(buf, n);
-  // cout << ret <<endl;
   return ret;
 }
-
-

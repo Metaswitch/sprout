@@ -395,7 +395,7 @@ void SCSCFTest::doFourAppServerFlow(std::string record_route_regex, bool app_ser
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -433,7 +433,7 @@ void SCSCFTest::doFourAppServerFlow(std::string record_route_regex, bool app_ser
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS2
@@ -468,7 +468,7 @@ void SCSCFTest::doFourAppServerFlow(std::string record_route_regex, bool app_ser
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS2.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS3 - From this point on, we're in terminating mode.
@@ -503,7 +503,7 @@ void SCSCFTest::doFourAppServerFlow(std::string record_route_regex, bool app_ser
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS3.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS4
@@ -538,7 +538,7 @@ void SCSCFTest::doFourAppServerFlow(std::string record_route_regex, bool app_ser
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS4.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -619,7 +619,7 @@ void SCSCFTest::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
     out = current_txdata()->msg;
     RespMatcher(100).matches(out);
     tpA->expect_target(current_txdata(), true);  // Requests always come back on same transport
-    msg.set_route(out);
+    msg.convert_routeset(out);
 
     // Don't bother testing P-Access-Network-Info or P-Visited-Network-Id,
     // because they never get inserted into such messages.
@@ -662,7 +662,7 @@ void SCSCFTest::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
   out = current_txdata()->msg;
   RespMatcher(183).matches(out);
   tpA->expect_target(current_txdata(), true);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
 
   // Check P-Access-Network-Info and P-Visited-Network-Id
@@ -702,7 +702,7 @@ void SCSCFTest::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpA->expect_target(current_txdata(), true);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
 
   // Check P-Access-Network-Info and P-Visited-Network-Id.
@@ -722,7 +722,7 @@ void SCSCFTest::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpA->expect_target(current_txdata(), true);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
 
   // Check P-Access-Network-Info and P-Visited-Network-Id.
@@ -764,7 +764,7 @@ void SCSCFTest::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpA->expect_target(current_txdata(), true);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
 
   // Check P-Access-Network-Info and P-Visited-Network-Id. These will always be stripped,
@@ -871,7 +871,7 @@ void SCSCFTest::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
   out = current_txdata()->msg;
   RespMatcher(404).matches(out);
   tpA->expect_target(current_txdata(), true);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
 
   // Check P-Access-Network-Info and P-Visited-Network-Id.
@@ -938,7 +938,7 @@ void SCSCFTest::doSuccessfulFlow(Message& msg,
     iter->match(out);
   }
 
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
   free_txdata();
 
@@ -1408,7 +1408,7 @@ TEST_F(SCSCFTest, TestTelURIWildcard)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
   ASSERT_EQ(1, txdata_count());
 
@@ -1475,7 +1475,7 @@ TEST_F(SCSCFTest, TestMultipleServiceProfiles)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
   ASSERT_EQ(1, txdata_count());
 
@@ -1542,7 +1542,7 @@ TEST_F(SCSCFTest, TestMultipleAmbiguousServiceProfiles)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
   ASSERT_EQ(1, txdata_count());
 
@@ -2493,7 +2493,7 @@ TEST_F(SCSCFTest, SimpleISCMainline)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -2527,7 +2527,7 @@ TEST_F(SCSCFTest, SimpleISCMainline)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -2592,7 +2592,7 @@ TEST_F(SCSCFTest, ISCMultipleResponses)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -2626,7 +2626,7 @@ TEST_F(SCSCFTest, ISCMultipleResponses)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -2705,7 +2705,7 @@ TEST_F(SCSCFTest, ISCRetargetWithoutCdiv)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -2737,7 +2737,7 @@ TEST_F(SCSCFTest, ISCRetargetWithoutCdiv)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -2829,7 +2829,7 @@ TEST_F(SCSCFTest, SimpleISCTwoRouteHeaders)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -2972,7 +2972,7 @@ TEST_F(SCSCFTest, SimpleNextOrigFlow)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -3004,7 +3004,7 @@ TEST_F(SCSCFTest, SimpleNextOrigFlow)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -3058,7 +3058,7 @@ TEST_F(SCSCFTest, SimpleReject)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -3088,7 +3088,7 @@ TEST_F(SCSCFTest, SimpleReject)
   out = current_txdata()->msg;
   RespMatcher(404).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
   free_txdata();
 
@@ -3134,7 +3134,7 @@ TEST_F(SCSCFTest, SimpleNonLocalReject)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -3164,7 +3164,7 @@ TEST_F(SCSCFTest, SimpleNonLocalReject)
   out = current_txdata()->msg;
   RespMatcher(404).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
   free_txdata();
 
@@ -3208,7 +3208,7 @@ TEST_F(SCSCFTest, SimpleAccept)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -3232,7 +3232,7 @@ TEST_F(SCSCFTest, SimpleAccept)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
   free_txdata();
 
@@ -3282,7 +3282,7 @@ TEST_F(SCSCFTest, SimpleRedirect)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -3313,7 +3313,7 @@ TEST_F(SCSCFTest, SimpleRedirect)
   RespMatcher(302).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
   EXPECT_EQ("Contact: <sip:6505559876@homedomain>", get_headers(out, "Contact"));
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
   free_txdata();
 
@@ -3361,7 +3361,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -3391,7 +3391,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate)
   out = current_txdata()->msg;
   RespMatcher(408).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
   free_txdata();
 
@@ -3442,7 +3442,7 @@ TEST_F(SCSCFTest, DISABLED_DefaultHandlingTerminateTimeout)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS
@@ -3514,7 +3514,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateDisabled)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS
@@ -3646,7 +3646,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistent)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // AS name fails to resolve, so INVITE passed on to final destination
@@ -3700,7 +3700,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonResponsive)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -3775,7 +3775,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueImmediateError)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -3855,7 +3855,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinue100ThenError)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -3940,7 +3940,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinue1xxThenError)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -3986,7 +3986,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinue1xxThenError)
   out = current_txdata()->msg;
   RespMatcher(500).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // ---------- Send ACK from bono
@@ -4035,7 +4035,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueInviteReturnedThenError)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -4072,7 +4072,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueInviteReturnedThenError)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -4102,7 +4102,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueInviteReturnedThenError)
   out = current_txdata()->msg;
   RespMatcher(500).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // ---------- Send ACK from bono
@@ -4156,7 +4156,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeout)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS
@@ -4232,7 +4232,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueDisabled)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS
@@ -4307,7 +4307,7 @@ TEST_F(SCSCFTest, DefaultHandlingMissing)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // AS name fails to resolve, so INVITE passed on to final destination
@@ -4360,7 +4360,7 @@ TEST_F(SCSCFTest, DefaultHandlingMalformed)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // AS name fails to resolve, so INVITE passed on to final destination
@@ -4414,7 +4414,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistentRRTest)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // AS name fails to resolve, so INVITE passed on to final destination
@@ -4478,7 +4478,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeoutRRTest)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS
@@ -4561,7 +4561,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstAsFailsRRTest)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // The first AS fails to resolve so the INVITE is passed on to AS2
@@ -4631,7 +4631,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstTermAsFailsRRTest)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // The first AS fails to resolve so the INVITE is passed on to AS2
@@ -4976,7 +4976,7 @@ TEST_F(SCSCFTest, Cdiv)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as terminating AS for Bob)
@@ -5011,7 +5011,7 @@ TEST_F(SCSCFTest, Cdiv)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS2 (as originating AS for Bob)
@@ -5047,7 +5047,7 @@ TEST_F(SCSCFTest, Cdiv)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS2.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -5104,7 +5104,7 @@ TEST_F(SCSCFTest, CdivToDifferentDomain)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as terminating AS for Bob)
@@ -5139,7 +5139,7 @@ TEST_F(SCSCFTest, CdivToDifferentDomain)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS2 (as originating AS for Bob)
@@ -5167,7 +5167,7 @@ TEST_F(SCSCFTest, CdivToDifferentDomain)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS2.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -5219,7 +5219,7 @@ TEST_F(SCSCFTest, BothEndsWithEnumRewrite)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as terminating AS for Bob)
@@ -5283,7 +5283,7 @@ TEST_F(SCSCFTest, TerminatingWithNoEnumRewrite)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as terminating AS for Bob)
@@ -5369,7 +5369,7 @@ TEST_F(SCSCFTest, MmtelCdiv)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE goes to MMTEL as terminating AS for Bob, and is redirected to 6505555678.
@@ -5381,7 +5381,7 @@ TEST_F(SCSCFTest, MmtelCdiv)
   out = current_txdata()->msg;
   RespMatcher(181).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS2 (as originating AS for Bob)
@@ -5415,7 +5415,7 @@ TEST_F(SCSCFTest, MmtelCdiv)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS2.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -5520,7 +5520,7 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE goes to MMTEL as terminating AS for Bob, and is redirected to 6505555678.
@@ -5532,7 +5532,7 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
   out = current_txdata()->msg;
   RespMatcher(181).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // Now INVITE is redirected to 6505559012
@@ -5541,7 +5541,7 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
   out = current_txdata()->msg;
   RespMatcher(181).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS2 (as originating AS for Bob)
@@ -5575,7 +5575,7 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS2.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -5655,7 +5655,7 @@ TEST_F(SCSCFTest, ExpiredChain)
   out = current_txdata()->msg;
   RespMatcher(404).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
   free_txdata();
 
@@ -5740,7 +5740,7 @@ TEST_F(SCSCFTest, MmtelFlow)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // Call should pass through MMTEL AS, and then proceed. This should
@@ -5772,7 +5772,7 @@ TEST_F(SCSCFTest, MmtelFlow)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -5871,7 +5871,7 @@ TEST_F(SCSCFTest, MmtelThenExternal)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // Call should pass through MMTEL AS, and then proceed. This should
@@ -5905,7 +5905,7 @@ TEST_F(SCSCFTest, MmtelThenExternal)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // Call should pass through MMTEL AS, and then proceed. This should
@@ -5936,7 +5936,7 @@ TEST_F(SCSCFTest, MmtelThenExternal)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS2.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -6034,7 +6034,7 @@ TEST_F(SCSCFTest, MultipleMmtelFlow)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // Call should pass through MMTEL AS four times (!), and then
@@ -6066,7 +6066,7 @@ TEST_F(SCSCFTest, MultipleMmtelFlow)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -6133,7 +6133,7 @@ TEST_F(SCSCFTest, SimpleOptionsAccept)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
   free_txdata();
 }
@@ -6174,7 +6174,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as terminating AS for Bob)
@@ -6223,7 +6223,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed externally
@@ -6244,7 +6244,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
 
   // ---------- AS1 forwards 200 (stripping via)
   hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
@@ -6259,7 +6259,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
@@ -6301,7 +6301,7 @@ TEST_F(SCSCFTest, OriginatingExternal)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as originating AS for Alice)
@@ -6349,7 +6349,7 @@ TEST_F(SCSCFTest, OriginatingExternal)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed externally
@@ -6370,7 +6370,7 @@ TEST_F(SCSCFTest, OriginatingExternal)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
 
   // ---------- AS1 forwards 200 (stripping via)
   hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
@@ -6385,7 +6385,7 @@ TEST_F(SCSCFTest, OriginatingExternal)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
@@ -6438,7 +6438,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingAS)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as originating AS for 6505551000)
@@ -6486,7 +6486,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingAS)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as terminating AS for 6505551234)
@@ -6532,7 +6532,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingAS)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed to terminating UE
@@ -6552,7 +6552,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingAS)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
 
   // ---------- AS1 forwards 200 (stripping via)
   hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
@@ -6567,7 +6567,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingAS)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
 
   // ---------- AS1 forwards 200 (stripping via)
   hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
@@ -6582,7 +6582,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingAS)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
@@ -6630,7 +6630,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingASTimeout)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as originating AS for 6505551000)
@@ -6676,7 +6676,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingASTimeout)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as terminating AS for 6505551234)
@@ -6720,7 +6720,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingASTimeout)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed to terminating UE
@@ -7080,7 +7080,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as terminating AS for Bob)
@@ -7129,7 +7129,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as originating-cdiv AS for Bob)
@@ -7176,7 +7176,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed externally
@@ -7197,7 +7197,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
 
   // ---------- AS1 forwards 200 (stripping via)
   hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
@@ -7212,7 +7212,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
 
   // ---------- AS1 forwards 200 (stripping via)
   hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
@@ -7227,7 +7227,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   //  We should have tracked the session setup time for just the original session.
@@ -7534,7 +7534,7 @@ TEST_F(SCSCFTest, FlowFailedResponse)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed externally
@@ -7620,7 +7620,7 @@ TEST_F(SCSCFTest, PreloadedRouteChangedReqUri)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as terminating AS for Bob)
@@ -7664,7 +7664,7 @@ TEST_F(SCSCFTest, PreloadedRouteChangedReqUri)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -7722,7 +7722,7 @@ TEST_F(SCSCFTest, PreloadedRoutePreserveReqUri)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // ---------- AS1 sends a 100 Trying to indicate it has received the request.
@@ -7763,7 +7763,7 @@ TEST_F(SCSCFTest, PreloadedRoutePreserveReqUri)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -7822,7 +7822,7 @@ TEST_F(SCSCFTest, PreloadedRouteNotLastAs)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as terminating AS for Bob)
@@ -7867,7 +7867,7 @@ TEST_F(SCSCFTest, PreloadedRouteNotLastAs)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -8041,7 +8041,7 @@ TEST_F(SCSCFTest, TestSessionExpiresWhenNoRecordRoute)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS2
@@ -8119,7 +8119,7 @@ TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as terminating AS for Bob)
@@ -8158,7 +8158,7 @@ TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // Followed by a 504 (since the iFC lookup has got a 503)
@@ -8428,7 +8428,7 @@ TEST_F(SCSCFTest, NoMatchingStandardiFCsUseFallbackiFCs)
   // 100 Trying goes back to AS1
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -8454,7 +8454,7 @@ TEST_F(SCSCFTest, NoMatchingStandardiFCsUseFallbackiFCs)
   // 100 Trying goes back to AS1
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -8535,7 +8535,7 @@ TEST_F(SCSCFTest, NoStandardiFCsUseFallbackiFCs)
   // 100 Trying goes back to AS1
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -8561,7 +8561,7 @@ TEST_F(SCSCFTest, NoStandardiFCsUseFallbackiFCs)
   // 100 Trying goes back to AS1
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -8662,7 +8662,7 @@ TEST_F(SCSCFTest, MixedRealAndDummyApplicationServer)
   // 100 Trying goes back to bono
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -8689,7 +8689,7 @@ TEST_F(SCSCFTest, MixedRealAndDummyApplicationServer)
   // 100 Trying goes back to AS1
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -8748,7 +8748,7 @@ TEST_F(SCSCFTest, MMFPreAs)
   // 100 Trying goes back to bono
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to MMF
@@ -8787,7 +8787,7 @@ TEST_F(SCSCFTest, MMFPreAs)
   // 100 Trying goes back to the AS
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -8842,7 +8842,7 @@ TEST_F(SCSCFTest, MMFPostAs)
   // 100 Trying goes back to bono
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS
@@ -8881,7 +8881,7 @@ TEST_F(SCSCFTest, MMFPostAs)
   // 100 Trying goes back to MMF
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -8936,7 +8936,7 @@ TEST_F(SCSCFTest, MMFPreAndPostAs)
   // 100 Trying goes back to bono
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to MMF
@@ -8985,7 +8985,7 @@ TEST_F(SCSCFTest, MMFPreAndPostAs)
   // 100 Trying goes back to MMF
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
