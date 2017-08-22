@@ -107,9 +107,7 @@ SubscriberDataManager::AoRPair* SubscriberDataManager::get_aor_data(
                                           const std::string& aor_id,
                                           SAS::TrailId trail)
 {
-  TRC_DEBUG("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
   AoR* aor_data = _connector->get_aor_data(aor_id, trail);
-  TRC_DEBUG("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB");
 
   if (aor_data != NULL)
   {
@@ -1308,7 +1306,6 @@ void SubscriberDataManager::ChronosTimerRequestSender::set_timer(
                                     std::map<std::string, uint32_t> tags,
                                     SAS::TrailId trail)
 {
-  TRC_DEBUG("AAAAAAAAAAAAAA");
   std::string temp_timer_id = "";
   HTTPCode status;
   std::string opaque = "{\"aor_id\": \"" + aor_id + "\"}";
@@ -1318,14 +1315,12 @@ void SubscriberDataManager::ChronosTimerRequestSender::set_timer(
   // Otherwise sent a POST.
   if (timer_id == "")
   {
-    TRC_DEBUG("BBBBBBBBBBBBBBBBBB");
     status = _chronos_conn->send_post(temp_timer_id,
                                       expiry,
                                       callback_uri,
                                       opaque,
                                       trail,
                                       tags);
-    TRC_DEBUG("CCCCCCCCCCCCCCCCCCCCCC");
   }
   else
   {
@@ -1344,7 +1339,6 @@ void SubscriberDataManager::ChronosTimerRequestSender::set_timer(
   {
     timer_id = temp_timer_id;
   }
-  TRC_DEBUG("DDDDDDDDDDDDDDDD");
 }
 
 /// NotifySender Methods
@@ -1457,7 +1451,6 @@ void SubscriberDataManager::NotifySender::send_notifys(
                                          expired_binding_uris,
                                          now,
                                          trail);
-  TRC_DEBUG("8888888888888888888888888888888");
   // Iterate over the subscriptions in the current AoR and send NOTIFYs.
   // If the bindings have changed, then send NOTIFYs to all subscribers; otherwise,
   // only send them when the subscription has been created or updated.
@@ -1535,8 +1528,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
         }
       }
     }
-    TRC_DEBUG("LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL");
-   #if 0
+#if 0
     else if (changed_associated_uris)
     {
       TRC_DEBUG("Sending NOTIFY for subscription %s: reason(s) changed associated uris", s_id.c_str());

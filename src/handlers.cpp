@@ -41,7 +41,6 @@ static bool sdm_access_common(SubscriberDataManager::AoRPair** aor_pair,
                               SAS::TrailId trail)
 {
   // Find the current bindings for the AoR.
-  TRC_DEBUG("AAAAAAAAAAAAAAAAAAAAAAAAAAAA");
   delete *aor_pair;
   TRC_DEBUG("Finding AOR data");
   *aor_pair = current_sdm->get_aor_data(aor_id, trail);
@@ -987,11 +986,11 @@ void PushProfileTask::run()
   rc = set_data(trail());
   if (rc != HTTP_OK)
   {
-    TRC_WARNING("Could not set AoR data, send %d", rc);
+    TRC_WARNING("Could not set AoR data to SDM, send %d", rc);
   }
   else
   {
-    TRC_DEBUG("successful, sending %d", rc);
+    TRC_DEBUG("Successful, sending %d", rc);
   }
   send_http_reply(rc);
   delete this;
@@ -999,7 +998,6 @@ void PushProfileTask::run()
 
 HTTPCode PushProfileTask::parse_request(std::string body, SAS::TrailId trail)
 {
-  bool valid_xml;
   std::map<std::string, Ifcs> unused_ifcs_map;
   std::vector<std::string> aliases;
   const std::string prefix = "/registrations/";
@@ -1019,25 +1017,20 @@ HTTPCode PushProfileTask::parse_request(std::string body, SAS::TrailId trail)
     TRC_WARNING("Failed to parse XML:\n %s\n %s", body.c_str(), err.what());
     delete root;
     root = NULL;
+    return HTTP_BAD_REQUEST;
   }
 
   rapidxml::xml_node<>* imss = root->first_node(RegDataXMLUtils::IMS_SUBSCRIPTION);
 
-  valid_xml = SproutXmlUtils::decode_service_profile(_default_public_id,
-				  		     NULL,
-						     imss,
-						     unused_ifcs_map,
-				  	             _associated_uris,
-						     aliases,
-						     NULL,
-						     false,
-					 	     trail);
-  TRC_DEBUG("successfully decoded XML");
-  std::vector<std::string> all_uris = _associated_uris.get_all_uris();
-  std::string first_uri = all_uris.front();
-  std::string last_uri = all_uris.back();
-  TRC_DEBUG("first uri %s, last_uri %s", first_uri.c_str(), last_uri.c_str());
-  if (valid_xml)
+  if (SproutXmlUtils::decode_service_profile(_default_public_id,
+                                             NULL,
+                                             imss,
+                                             unused_ifcs_map,
+                                             _associated_uris,
+                                             aliases,
+                                             NULL,
+                                             false,
+                                             trail))
   {
     return HTTP_OK;
   }
@@ -1049,7 +1042,7 @@ HTTPCode PushProfileTask::parse_request(std::string body, SAS::TrailId trail)
 
 HTTPCode PushProfileTask::get_data(SAS::TrailId trail)
 {
-  TRC_DEBUG("Attempting to get AOR data");
+  TRC_DEBUG("Attempting to get AoR data");
   SubscriberDataManager::AoRPair* aor_pair = NULL;
 
   if(!sdm_access_common(&aor_pair,
@@ -1062,7 +1055,7 @@ HTTPCode PushProfileTask::get_data(SAS::TrailId trail)
     return HTTP_SERVER_ERROR;
   }
   _aor_pair = aor_pair;
-  TRC_DEBUG("Obtained AOR data");
+  TRC_DEBUG("Obtained AoR data");
   return HTTP_OK;
 }
 
