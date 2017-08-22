@@ -2177,6 +2177,7 @@ void SCSCFSproutletTsx::add_to_dialog(pjsip_msg* msg,
     pjsip_billing_role = &STR_CHARGE_NONE;
     // LCOV_EXCL_STOP
   }
+
   if (!param)
   {
     // There wasn't a billing role previously.  Set it now.

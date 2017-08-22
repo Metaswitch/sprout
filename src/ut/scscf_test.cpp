@@ -539,8 +539,8 @@ public:
     delete _mmtel; _mmtel = NULL;
     delete _bgcf_sproutlet; _bgcf_sproutlet = NULL;
     delete _scscf_sproutlet; _scscf_sproutlet = NULL;
-    delete _scscf_selector; _scscf_selector = NULL;
     delete _icscf_sproutlet; _icscf_sproutlet = NULL;
+    delete _scscf_selector; _scscf_selector = NULL;
 
   }
 
@@ -10078,7 +10078,7 @@ TEST_F(SCSCFTest, NoMatchingiFCsRejectOrig)
 }
 
 // Check that a request with no matching iFCs is rejected on terminating side.
-TEST_F(SCSCFTest, NoMatchingiFCsRejectTerminating)
+TEST_F(SCSCFTest, NoMatchingiFCsRejectTerm)
 {
   _scscf_sproutlet->_ifc_configuration._reject_if_no_matching_ifcs = true;
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", "UNREGISTERED",
