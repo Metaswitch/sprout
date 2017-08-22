@@ -33,7 +33,7 @@ FakeXDMConnection::~FakeXDMConnection()
 
 void FakeXDMConnection::put(const std::string& uri, const std::string& doc)
 {
-  _fakehttp->put("/org.etsi.ngn.simservs/users/" + Utils::url_escape(uri) + "/simservs.xml", doc, "", 0);
+  _fakehttp->put("/org.etsi.ngn.simservs/users/" + Utils::url_escape(uri) + "/simservs.xml", doc, "", 0, 3);
 }
 
 void FakeXDMConnection::flush_all()
