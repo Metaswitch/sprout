@@ -79,6 +79,17 @@ class SIPResolverTest : public ::testing::Test
     return (DnsRRecord*)new DnsNaptrRecord(name, ttl, order, preference, flags,
                                            service, regex, replacement);
   }
+
+  void add_ip_to_blacklist(const std::string address,
+                           const int port=5060)
+  {
+    AddrInfo ai;
+    ai.port = port;
+    ai.transport = IPPROTO_TCP;
+
+    EXPECT_TRUE(_sipresolver.parse_ip_target(address, ai.address));
+    _sipresolver.blacklist(ai);
+  }
 };
 
 /// A single resolver operation.
@@ -118,7 +129,7 @@ public:
     std::vector<AddrInfo> targets;
     std::string output;
 
-    _resolver.resolve(_name, _af, _port, _transport, 1, targets, 0);
+    _resolver.resolve(_name, _af, _port, _transport, 1, targets, BaseResolver::ALL_LISTS, 0);
     if (!targets.empty())
     {
       // Successful, so render AddrInfo as a string.
@@ -649,4 +660,47 @@ TEST_F(SIPResolverTest, NoMatchingNAPTR)
 
   EXPECT_EQ("4.0.0.1:5060;transport=UDP",
             RT(_sipresolver, "sprout.cw-ngv.com").resolve());
+}
+
+// Test the behaviour of SIPResolver's IP address allowed host state
+// verification
+TEST_F(SIPResolverTest, AllowedHostStateForIPAddr)
+{
+  std::vector<AddrInfo> targets;
+  add_ip_to_blacklist("192.0.2.11", 80);
+  add_ip_to_blacklist("192.0.2.12", 1234);
+  add_ip_to_blacklist("[2001:db8::1]", 9001);
+
+  // Test that ALL_LISTS behaves correctly.
+  _sipresolver.resolve(
+    "192.0.2.1", AF_INET, 80, IPPROTO_TCP, 5, targets, BaseResolver::ALL_LISTS);
+  EXPECT_EQ(1, targets.size());
+  targets.pop_back();
+
+  _sipresolver.resolve(
+    "192.0.2.11", AF_INET, 80, IPPROTO_TCP, 5, targets, BaseResolver::ALL_LISTS);
+  EXPECT_EQ(1, targets.size());
+  targets.pop_back();
+
+  // Allow whitelisted addresses only, and ensure that blacklisted addresses
+  // are not returned.
+  _sipresolver.resolve(
+    "192.0.2.2", AF_INET, 1234, IPPROTO_TCP, 5, targets, BaseResolver::WHITELISTED);
+  EXPECT_EQ(1, targets.size());
+  targets.pop_back();
+
+  _sipresolver.resolve(
+    "192.0.2.12", AF_INET, 1234, IPPROTO_TCP, 5, targets, BaseResolver::WHITELISTED);
+  EXPECT_EQ(0, targets.size()); // Blocked from being added to targets
+
+  // Allow blacklisted addresses only, and ensure that whitelisted addresses
+  // are not returned. Throw in IPv6 for flavour.
+  _sipresolver.resolve(
+    "[2001:db8::]", AF_INET6, 9001, IPPROTO_TCP, 5, targets, BaseResolver::BLACKLISTED);
+  EXPECT_EQ(0, targets.size()); // Blocked from being added to targets
+
+  _sipresolver.resolve(
+    "[2001:db8::1]", AF_INET6, 9001, IPPROTO_TCP, 5, targets, BaseResolver::BLACKLISTED);
+  EXPECT_EQ(1, targets.size());
+  targets.pop_back();
 }

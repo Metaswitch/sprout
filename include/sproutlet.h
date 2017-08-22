@@ -20,8 +20,9 @@ extern "C" {
 }
 
 #include <list>
-#include "sas.h"
+#include "baseresolver.h"
 #include "snmp_success_fail_count_by_request_type_table.h"
+#include "fork_error_state.h"
 
 #define API_VERSION 1
 
@@ -34,8 +35,6 @@ class SproutletProxy;
 
 /// Typedefs for Sproutlet-specific types
 typedef intptr_t TimerID;
-
-typedef enum {NONE, TIMEOUT, TRANSPORT_ERROR} ForkErrorState;
 
 struct ForkState
 {
@@ -151,8 +150,11 @@ public:
   ///
   /// @param  req          - The request message to use for forwarding.  If NULL
   ///                        the original request message is used.
+  /// @param  allowed_host_state
+  ///                        Permitted state of hosts when resolving
+  ///                        addresses. Values are defined in BaseResolver.
   ///
-  virtual int send_request(pjsip_msg*& req) = 0;
+  virtual int send_request(pjsip_msg*& req, int allowed_host_state) = 0;
 
   /// Indicate that the response should be forwarded following standard routing
   /// rules.  Note that, if this service created multiple forks, the responses
@@ -473,9 +475,13 @@ protected:
   ///
   /// @returns             - The ID of this forwarded request
   /// @param  req          - The request message to use for forwarding.
+  /// @param  allowed_host_state
+  ///                        Permitted state of hosts when resolving
+  ///                        addresses. Values are defined in BaseResolver.
   ///
-  int send_request(pjsip_msg*& req)
-    {return _helper->send_request(req);}
+  int send_request(pjsip_msg*& req,
+                   int allowed_host_state=BaseResolver::ALL_LISTS)
+    {return _helper->send_request(req, allowed_host_state);}
 
   /// Indicate that the response should be forwarded following standard routing
   /// rules.  Note that, if this service created multiple forks, the responses

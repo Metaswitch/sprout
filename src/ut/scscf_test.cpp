@@ -365,7 +365,7 @@ public:
 
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
-    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
+    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, NULL, true);
     _analytics = new AnalyticsLogger();
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
     _xdm_connection = new FakeXDMConnection();
@@ -420,8 +420,8 @@ public:
                                           "sip:127.0.0.1:5058",
                                           "sip:icscf.sprout.homedomain:5059;transport=TCP",
                                           "sip:bgcf@homedomain:5058",
-                                          "sip:11.22.33.44:5053;transport=tcp",
-                                          "sip:44.33.22.11:5053;transport=tcp",
+                                          "sip:11.22.33.44;service=mmf",
+                                          "sip:44.33.22.11:5053;service=mmf",
                                           5058,
                                           "sip:scscf.sprout.homedomain:5058;transport=TCP",
                                           _sdm,
@@ -4239,7 +4239,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueRecordRouting)
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("Transport"))).Times(2);
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("No valid address"))).Times(2);
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
   Message msg;
@@ -5414,7 +5414,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstAsFailsRRTest)
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("Transport error")));
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("No valid address")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -5511,7 +5511,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstTermAsFailsRRTest)
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("Transport error")));
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("No valid address")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -10617,7 +10617,7 @@ TEST_F(SCSCFTest, MMFPreAs)
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
-  TransportFlow tpMMFpreAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "11.22.33.44", 5053);
+  TransportFlow tpMMFpreAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "11.22.33.44", 5060);
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "pre.as.only.mmf.test.server", 56789);
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
@@ -10655,8 +10655,7 @@ TEST_F(SCSCFTest, MMFPreAs)
   // Ensure the pre-as header was added as expected, and remove it
   pjsip_hdr* preas_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
   std::string preas_uri = PJUtils::get_header_value(preas_hdr);
-  EXPECT_THAT(preas_uri, MatchesRegex(".*sip:11.22.33.44:5053.*"));
-  EXPECT_THAT(preas_uri, MatchesRegex(".*namespace=mmf.*"));
+  EXPECT_THAT(preas_uri, MatchesRegex(".*sip:11.22.33.44.*"));
   EXPECT_THAT(preas_uri, MatchesRegex(".*mmfscope=pre-as.*"));
   EXPECT_THAT(preas_uri, MatchesRegex(".*mmftarget=PreASOnly.*"));
   pj_list_erase(preas_hdr);
@@ -10800,7 +10799,6 @@ TEST_F(SCSCFTest, MMFPostAs)
   pjsip_hdr* postas_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
   std::string postas_uri = PJUtils::get_header_value(postas_hdr);
   EXPECT_THAT(postas_uri, MatchesRegex(".*sip:44.33.22.11:5053.*"));
-  EXPECT_THAT(postas_uri, MatchesRegex(".*namespace=mmf.*"));
   EXPECT_THAT(postas_uri, MatchesRegex(".*mmfscope=post-as.*"));
   EXPECT_THAT(postas_uri, MatchesRegex(".*mmftarget=PostASOnly.*"));
   pj_list_erase(postas_hdr);
@@ -10894,7 +10892,7 @@ TEST_F(SCSCFTest, MMFPreAndPostAs)
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
-  TransportFlow tpMMFpreAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "11.22.33.44", 5053);
+  TransportFlow tpMMFpreAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "11.22.33.44", 5050);
   TransportFlow tpMMFpostAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "44.33.22.11", 5053);
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
@@ -10932,8 +10930,7 @@ TEST_F(SCSCFTest, MMFPreAndPostAs)
   pjsip_hdr* preas_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
   std::string preas_uri = PJUtils::get_header_value(preas_hdr);
   //
-  EXPECT_THAT(preas_uri, MatchesRegex(".*sip:11.22.33.44:5053.*"));
-  EXPECT_THAT(preas_uri, MatchesRegex(".*namespace=mmf.*"));
+  EXPECT_THAT(preas_uri, MatchesRegex(".*sip:11.22.33.44.*"));
   EXPECT_THAT(preas_uri, MatchesRegex(".*mmfscope=pre-as.*"));
   EXPECT_THAT(preas_uri, MatchesRegex(".*mmftarget=BothPreAndPost.*"));
   pj_list_erase(preas_hdr);
@@ -10948,7 +10945,6 @@ TEST_F(SCSCFTest, MMFPreAndPostAs)
   pjsip_hdr* postas_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
   std::string postas_uri = PJUtils::get_header_value(postas_hdr);
   EXPECT_THAT(postas_uri, MatchesRegex(".*sip:44.33.22.11:5053.*"));
-  EXPECT_THAT(postas_uri, MatchesRegex(".*namespace=mmf.*"));
   EXPECT_THAT(postas_uri, MatchesRegex(".*mmfscope=post-as.*"));
   EXPECT_THAT(postas_uri, MatchesRegex(".*mmftarget=BothPreAndPost.*"));
   pj_list_erase(postas_hdr);

@@ -176,69 +176,6 @@ static void report_sip_all_register_marker(SAS::TrailId trail, std::string uri_s
   pj_pool_release(tmp_pool);
 }
 
-//LCOV_EXCL_START - don't want to actually run the handlers in the UT
-void AoRTimeoutTask::run()
-{
-  if (_req.method() != htp_method_POST)
-  {
-    send_http_reply(HTTP_BADMETHOD);
-    delete this;
-    return;
-  }
-
-  HTTPCode rc = parse_response(_req.get_rx_body());
-
-  if (rc != HTTP_OK)
-  {
-    TRC_DEBUG("Unable to parse response from Chronos");
-    send_http_reply(rc);
-    delete this;
-    return;
-  }
-
-  send_http_reply(HTTP_OK);
-
-  SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
-  SAS::report_marker(start_marker);
-
-  handle_response();
-
-  SAS::Marker end_marker(trail(), MARKER_ID_END, 1u);
-  SAS::report_marker(end_marker);
-
-  delete this;
-}
-
-void AuthTimeoutTask::run()
-{
-  if (_req.method() != htp_method_POST)
-  {
-    send_http_reply(HTTP_BADMETHOD);
-    delete this;
-    return;
-  }
-
-  SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
-  SAS::report_marker(start_marker);
-
-  HTTPCode rc = handle_response(_req.get_rx_body());
-
-  SAS::Marker end_marker(trail(), MARKER_ID_END, 1u);
-  SAS::report_marker(end_marker);
-
-  if (rc != HTTP_OK)
-  {
-    TRC_DEBUG("Unable to handle callback from Chronos");
-    send_http_reply(rc);
-    delete this;
-    return;
-  }
-
-  send_http_reply(HTTP_OK);
-  delete this;
-}
-//LCOV_EXCL_STOP
-
 void DeregistrationTask::run()
 {
   // HTTP method must be a DELETE
@@ -278,17 +215,18 @@ void DeregistrationTask::run()
   delete this;
 }
 
-void AoRTimeoutTask::handle_response()
+void AoRTimeoutTask::process_aor_timeout(std::string aor_id)
 {
   bool all_bindings_expired = false;
+  TRC_DEBUG("Handling timer pop for AoR id: %s", aor_id.c_str());
 
   // Determine the set of IMPUs in the Implicit Registration Set
   AssociatedURIs associated_uris = {};
   std::map<std::string, Ifcs> ifc_map;
-  get_reg_data(_cfg->_hss, _aor_id, associated_uris, ifc_map, trail());
+  get_reg_data(_cfg->_hss, aor_id, associated_uris, ifc_map, trail());
 
   SubscriberDataManager::AoRPair* aor_pair = set_aor_data(_cfg->_sdm,
-                                                          _aor_id,
+                                                          aor_id,
                                                           &associated_uris,
                                                           NULL,
                                                           _cfg->_remote_sdms,
@@ -308,7 +246,7 @@ void AoRTimeoutTask::handle_response()
         bool ignored;
         SubscriberDataManager::AoRPair* remote_aor_pair =
                                                         set_aor_data(*sdm,
-                                                                     _aor_id,
+                                                                     aor_id,
                                                                      &associated_uris,
                                                                      aor_pair,
                                                                      {},
@@ -320,20 +258,20 @@ void AoRTimeoutTask::handle_response()
 
     if (all_bindings_expired)
     {
-      TRC_DEBUG("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS");
+      TRC_DEBUG("All bindings have expired based on an AoR Timeout - triggering deregistration at the HSS");
       SAS::Event event(trail(), SASEvent::REGISTRATION_EXPIRED, 0);
-      event.add_var_param(_aor_id);
+      event.add_var_param(aor_id);
       SAS::report_event(event);
 
       // Get the S-CSCF URI off the AoR to put on the SAR.
       SubscriberDataManager::AoR* aor = aor_pair->get_current();
 
-      _cfg->_hss->update_registration_state(_aor_id, "", HSSConnection::DEREG_TIMEOUT, aor->_scscf_uri, trail());
+      _cfg->_hss->update_registration_state(aor_id, "", HSSConnection::DEREG_TIMEOUT, aor->_scscf_uri, trail());
     }
     else
     {
       SAS::Event event(trail(), SASEvent::SOME_BINDINGS_EXPIRED, 0);
-      event.add_var_param(_aor_id);
+      event.add_var_param(aor_id);
       SAS::report_event(event);
     }
   }
@@ -342,11 +280,11 @@ void AoRTimeoutTask::handle_response()
     // We couldn't update the SubscriberDataManager but there is nothing else we can do to
     // recover from this.
     TRC_INFO("Could not update SubscriberDataManager on registration timeout for AoR: %s",
-             _aor_id.c_str());
+             aor_id.c_str());
   }
 
   delete aor_pair;
-  report_sip_all_register_marker(trail(), _aor_id);
+  report_sip_all_register_marker(trail(), aor_id);
 }
 
 SubscriberDataManager::AoRPair* AoRTimeoutTask::set_aor_data(
@@ -387,33 +325,6 @@ SubscriberDataManager::AoRPair* AoRTimeoutTask::set_aor_data(
   return aor_pair;
 }
 
-// Retrieve the aor ID from the opaque data
-HTTPCode AoRTimeoutTask::parse_response(std::string body)
-{
-  rapidjson::Document doc;
-  std::string json_str = body;
-  doc.Parse<0>(json_str.c_str());
-
-  if (doc.HasParseError())
-  {
-    TRC_DEBUG("Failed to parse opaque data as JSON: %s\nError: %s",
-              json_str.c_str(),
-              rapidjson::GetParseError_En(doc.GetParseError()));
-    return HTTP_BAD_REQUEST;
-  }
-
-  try
-  {
-    JSON_GET_STRING_MEMBER(doc, "aor_id", _aor_id);
-  }
-  catch (JsonFormatError err)
-  {
-    TRC_DEBUG("Badly formed opaque data (missing aor_id)");
-    return HTTP_BAD_REQUEST;
-  }
-  TRC_DEBUG("Handling timer pop for AoR id: %s", _aor_id.c_str());
-  return HTTP_OK;
-}
 
 // Retrieve the aors and any private IDs from the request body
 HTTPCode DeregistrationTask::parse_request(std::string body)
@@ -670,49 +581,29 @@ SubscriberDataManager::AoRPair* DeregistrationTask::deregister_bindings(
   return aor_pair;
 }
 
-HTTPCode AuthTimeoutTask::handle_response(std::string body)
+HTTPCode AuthTimeoutTask::timeout_auth_challenge(std::string impu,
+                                                 std::string impi,
+                                                 std::string nonce)
 {
-  rapidjson::Document doc;
-  std::string json_str = body;
-  doc.Parse<0>(json_str.c_str());
-
-  if (doc.HasParseError())
-  {
-    TRC_INFO("Failed to parse opaque data as JSON: %s\nError: %s",
-             json_str.c_str(),
-             rapidjson::GetParseError_En(doc.GetParseError()));
-    return HTTP_BAD_REQUEST;
-  }
-
-  try
-  {
-    JSON_GET_STRING_MEMBER(doc, "impu", _impu);
-    JSON_GET_STRING_MEMBER(doc, "impi", _impi);
-    JSON_GET_STRING_MEMBER(doc, "nonce", _nonce);
-    report_sip_all_register_marker(trail(), _impu);
-  }
-  catch (JsonFormatError err)
-  {
-    TRC_INFO("Badly formed opaque data (missing impu, impi or nonce");
-    return HTTP_BAD_REQUEST;
-  }
-
   // Locate the challenge that this timer refers to, to check if the user
   // authenticated against it. If it didn't, we will need to send an
   // AUTHENTICATION_TIMEOUT SAR.
   //
   // Note that we don't bother checking any of the remote IMPI stores if we
   // don't find a record in the local store. This suggests that the IMPI record
-  // didn't get replicated to this site but the chronos timer did, which is
+  // didn't get replicated to this site but the timer did, which is
   // quite a weird situation to be in. If we do hit it, we'll return a 500
-  // response to chronos which will eventually cause it to retry in a different
+  // response to the timer service which will eventually cause it to retry in a different
   // site, which will hopefully have the data.
+
+  report_sip_all_register_marker(trail(), impu);
+
   bool success = false;
-  ImpiStore::Impi* impi = _cfg->_local_impi_store->get_impi_with_nonce(_impi, _nonce, trail());
+  ImpiStore::Impi* impi_obj = _cfg->_local_impi_store->get_impi(impi, trail());
   ImpiStore::AuthChallenge* auth_challenge = NULL;
-  if (impi != NULL)
+  if (impi_obj != NULL)
   {
-    auth_challenge = impi->get_auth_challenge(_nonce);
+    auth_challenge = impi_obj->get_auth_challenge(nonce);
   }
   if (auth_challenge != NULL)
   {
@@ -724,16 +615,16 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
     // If not, authentication has timed out.
     if (auth_challenge->nonce_count == ImpiStore::AuthChallenge::INITIAL_NONCE_COUNT)
     {
-      TRC_DEBUG("AV for %s:%s has timed out", _impi.c_str(), _nonce.c_str());
+      TRC_DEBUG("AV for %s:%s has timed out", impi.c_str(), nonce.c_str());
 
       // The AUTHENTICATION_TIMEOUT SAR is idempotent, so there's no
-      // problem if Chronos' timer pops twice (e.g. if we have high
+      // problem if the timer pops twice (e.g. if we have high
       // latency and these operations take more than 2 seconds).
 
       // If either of these operations fail, we return a 500 Internal
-      // Server Error - this will trigger Chronos to try a different
+      // Server Error - this will trigger the timer service to try a different
       // Sprout, which may have better connectivity to Homestead or Memcached.
-      HTTPCode hss_query = _cfg->_hss->update_registration_state(_impu, _impi, HSSConnection::AUTH_TIMEOUT, auth_challenge->scscf_uri, trail());
+      HTTPCode hss_query = _cfg->_hss->update_registration_state(impu, impi, HSSConnection::AUTH_TIMEOUT, auth_challenge->scscf_uri, trail());
 
       if (hss_query == HTTP_OK)
       {
@@ -751,9 +642,9 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
   }
   else
   {
-    TRC_WARNING("Could not find AV for %s:%s when checking authentication timeout", _impi.c_str(), _nonce.c_str()); // LCOV_EXCL_LINE
+    TRC_WARNING("Could not find AV for %s:%s when checking authentication timeout", impi.c_str(), nonce.c_str()); // LCOV_EXCL_LINE
   }
-  delete impi;
+  delete impi_obj;
 
   return success ? HTTP_OK : HTTP_SERVER_ERROR;
 }

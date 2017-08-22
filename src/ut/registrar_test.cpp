@@ -161,8 +161,8 @@ public:
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
     _remote_data_store = new LocalStore();
-    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
-    _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, false);
+    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, NULL, true);
+    _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, NULL, false);
     _remote_sdms = {_remote_sdm};
     _acr_factory = new ACRFactory();
     _hss_connection = new FakeHSSConnection();
@@ -607,7 +607,7 @@ public:
   SDMNoBindings(Store* data_store,
                 ChronosConnection* chronos_connection,
                 bool is_primary) :
-    SubscriberDataManager(data_store, chronos_connection, is_primary)
+    SubscriberDataManager(data_store, chronos_connection, NULL, is_primary)
   {
   }
 
@@ -1142,6 +1142,8 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
   pj_str_t mixed = pj_str("mixed");
   EXPECT_EQ(0, pj_strcmp(&multipart, &out->body->content_type.type));
   EXPECT_EQ(0, pj_strcmp(&mixed, &out->body->content_type.subtype));
+  EXPECT_EQ("Contact: <sip:scscf.sprout.homedomain:5058;transport=TCP>",
+            get_headers(out, "Contact"));
 
   tpAS.expect_target(current_txdata(), false);
   inject_msg(respond_to_current_txdata(200));
@@ -3229,7 +3231,7 @@ public:
   {
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new MockStore();
-    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, true);
+    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, NULL, true);
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
 

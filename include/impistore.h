@@ -21,30 +21,11 @@
 /// simple KV store API with atomic write and record expiry semantics.  The
 /// underlying store can be any implementation that implements the Store API.
 ///
-/// Most of the complexity in this class is around backwards-compatibility, and
-/// this revolves around the ImpiStore::Mode enum.  In
-/// Mode::READ_IMPI_WRITE_IMPI, we just read and write a JSON object
-/// representing the full IMPI, including its authentication challenges, keyed
-/// solely off its private ID.  In Mode::READ_AV_IMPI_WRITE_AV_IMPI, we also
-/// read and write individual JSON objects for each AuthChallenge, keyed off
-/// the private ID and nonce.  This is compatible with the format used by the
-/// "AVStore" in previous versions.
+/// We read and write a JSON object representing the full IMPI, including its
+/// authentication challenges, keyed solely off its private ID.
 class ImpiStore
 {
 public:
-  /// @enum ImpiStore::Mode
-  ///
-  /// Describes the mode to use when accessing the underlying datastore.  Used
-  /// to define "acceptance phases" for clean software upgrade.
-  enum Mode
-  {
-    /// Read nonce-keyed AV data, followed by IMPI data, and then write both
-    /// back.  (This is effectively an acceptance phase.)
-    READ_AV_IMPI_WRITE_AV_IMPI,
-    /// Read IMPI data and write it back.  Ignore nonce-keyed AV data.
-    READ_IMPI_WRITE_IMPI
-  };
-
   /// @class ImpiStore::AuthChallenge
   ///
   /// Represents an authentication challenge
@@ -124,22 +105,7 @@ public:
     /// Deserialization from JSON (IMPI format).
     static ImpiStore::AuthChallenge* from_json(rapidjson::Value* json);
 
-    /// Serialization to JSON (AV format).
-    std::string to_json_av();
-
-    /// Write to JSON writer (AV format).
-    virtual void write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer);
-
-    /// Write inner to JSON writer (AV format).
-    void write_json_av_inner(rapidjson::Writer<rapidjson::StringBuffer>* writer);
-
-    /// Deserialization from JSON (AV format).
-    static ImpiStore::AuthChallenge* from_json_av(const std::string& nonce, const std::string& json);
-
-    /// Deserialization from JSON (AV format).
-    static ImpiStore::AuthChallenge* from_json_av(const std::string& nonce, rapidjson::Value* json);
-
-    /// Memcached CAS value.  Only used for Mode::READ_AV_IMPI_WRITE_AV_IMPI.
+    /// Memcached CAS value.
     uint64_t _cas;
 
     // The IMPI store is a friend so it can call our JSON serialization
@@ -195,12 +161,6 @@ public:
     /// Deserialization from JSON (IMPI format).
     static ImpiStore::DigestAuthChallenge* from_json(rapidjson::Value* json);
 
-    /// Write to JSON writer (AV format).
-    virtual void write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer);
-
-    /// Deserialization from JSON (AV format).
-    static ImpiStore::DigestAuthChallenge* from_json_av(rapidjson::Value* json);
-
     // The IMPI store is a friend so it can call our JSON serialization
     // functions.
     friend class ImpiStore;
@@ -240,12 +200,6 @@ public:
     /// Deserialization from JSON (IMPI format).
     static ImpiStore::AKAAuthChallenge* from_json(rapidjson::Value* json);
 
-    /// Write to JSON writer (AV format).
-    virtual void write_json_av(rapidjson::Writer<rapidjson::StringBuffer>* writer);
-
-    /// Deserialization from JSON (AV format).
-    static ImpiStore::AKAAuthChallenge* from_json_av(rapidjson::Value* json);
-
     // The IMPI store is a friend so it can call our JSON serialization
     // functions.
     friend class ImpiStore;
@@ -259,7 +213,7 @@ public:
   public:
     /// Constructor.
     /// @param _impi         The private ID.
-    Impi(const std::string& _impi) : impi(_impi), auth_challenges(), _cas(0), _nonces() {};
+    Impi(const std::string& _impi) : impi(_impi), auth_challenges(), _cas(0) {};
 
     /// Destructor.
     ~Impi();
@@ -298,18 +252,13 @@ public:
     /// Memcached CAS value.
     uint64_t _cas;
 
-    /// List of nonces that were retrieved from the store.  (Only needed when
-    /// using Mode::READ_AV_IMPI_WRITE_AV_IMPI.)
-    std::vector<std::string> _nonces;
-
     // The IMPI store is a friend so it can read our CAS value.
     friend class ImpiStore;
   };
 
   /// Constructor.
   /// @param data_store    A pointer to the underlying data store.
-  /// @param mode          The mode to use when accessing the data store.
-  ImpiStore(Store* data_store, Mode mode);
+  ImpiStore(Store* data_store);
 
   /// Destructor.
   virtual ~ImpiStore();
@@ -321,8 +270,7 @@ public:
   virtual Store::Status set_impi(Impi* impi,
                                  SAS::TrailId trail);
 
-  /// Retrieves the IMPI for the specified private user identity.  If using
-  /// Mode::READ_AV_IMPI_WRITE_AV_IMPI, this may return incomplete data.
+  /// Retrieves the IMPI for the specified private user identity.
   ///
   /// @returns         A pointer to an Impi object describing the IMPI. The
   ///                  caller owns the returned object. This method only returns
@@ -332,24 +280,8 @@ public:
   virtual Impi* get_impi(const std::string& impi,
                          SAS::TrailId trail);
 
-  /// Retrieves the IMPI for the specified private user identity and nonce.  If
-  /// using Mode::READ_AV_IMPI_WRITE_AV_IMPI, this may return incomplete data,
-  /// but data for the specified nonce will be correct.  If using
-  /// Mode::READ_IMPI_WRITE, the specified nonce is ignored, and this is the
-  /// same as calling get_impi.
+  /// Delete all record of the IMPI.
   ///
-  /// @returns         A pointer to an Impi object describing the IMPI. The
-  ///                  caller owns the returned object. This method only returns
-  ///                  NULL if the underlying store failed - if no IMPI was
-  ///                  found it returns an empty object.
-  /// @param impi      The private user identity.
-  /// @param nonce     The nonce being looked for.
-  virtual Impi* get_impi_with_nonce(const std::string& impi,
-                                    const std::string& nonce,
-                                    SAS::TrailId trail);
-
-  /// Delete all record of the IMPI.  If using Mode::READ_UV_IMPI_WRITE_AV_IMPI,
-  /// this won't necessarily delete all AVs.
   /// @param impi      An Impi object representing the IMPI.  The caller
   ///                  continues to own this object.
   /// @returns Store::Status::OK on success, or an error code on failure.
@@ -360,26 +292,8 @@ private:
   /// Identifier for IMPI table.
   static const std::string TABLE_IMPI;
 
-  /// Identifier for AV table.
-  static const std::string TABLE_AV;
-
   /// The underlying data store.
   Store* _data_store;
-
-  /// The mode to use when accessing the data store.
-  Mode _mode;
-
-  /// Retrieves an authentication challenge from the AV store for the specified
-  /// private user identity and nonce.  Only used when using
-  /// Mode::READ_AV_IMPI_WRITE_AV_IMPI.
-  /// @returns         A pointer to an authentication challenge, or NULL if no
-  ///                  vector found or if the store is corrupt.  The caller is
-  ///                  free to modify this object.
-  /// @param impi      The private user identity.
-  /// @param nonce     The nonce.
-  ImpiStore::AuthChallenge* get_av(const std::string& impi,
-                                   const std::string& nonce,
-                                   SAS::TrailId trail);
 };
 
 // Utility function - retrieves the "corrlator" field from the give challenge

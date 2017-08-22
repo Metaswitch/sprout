@@ -988,12 +988,13 @@ void BasicProxy::UASTsx::set_req_target(pjsip_tx_data* tdata,
 
 /// Allocates and initializes a new UACTsx for the request.
 pj_status_t BasicProxy::UASTsx::allocate_uac(pjsip_tx_data* tdata,
-                                             size_t& index)
+                                             size_t& index,
+                                             int allowed_host_state)
 {
   // Create and initialize the UAC transaction.
   index = _uac_tsx.size();
   UACTsx* uac_tsx = create_uac_tsx(index);
-  pj_status_t status = (uac_tsx != NULL) ? uac_tsx->init(tdata) : PJ_ENOMEM;
+  pj_status_t status = (uac_tsx != NULL) ? uac_tsx->init(tdata, allowed_host_state) : PJ_ENOMEM;
 
   if (status != PJ_SUCCESS)
   {
@@ -1017,7 +1018,7 @@ pj_status_t BasicProxy::UASTsx::allocate_uac(pjsip_tx_data* tdata,
 pj_status_t BasicProxy::UASTsx::forward_request(pjsip_tx_data* tdata,
                                                 size_t& index)
 {
-  pj_status_t status = allocate_uac(tdata, index);
+  pj_status_t status = allocate_uac(tdata, index, BaseResolver::ALL_LISTS);
 
   if (status == PJ_SUCCESS)
   {
@@ -1138,7 +1139,7 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
 
 /// Notification that a client transaction is not responding.
 void BasicProxy::UASTsx::on_client_not_responding(UACTsx* uac_tsx,
-                                                  pjsip_event_id_e event)
+                                                  ForkErrorState fork_error)
 {
   if (_tsx != NULL)
   {
@@ -1590,7 +1591,8 @@ BasicProxy::UACTsx::~UACTsx()
 
 
 /// Initializes a UAC transaction.
-pj_status_t BasicProxy::UACTsx::init(pjsip_tx_data* tdata)
+pj_status_t BasicProxy::UACTsx::init(pjsip_tx_data* tdata,
+                                     int allowed_host_state)
 {
   pj_status_t status;
 
@@ -1638,7 +1640,7 @@ pj_status_t BasicProxy::UACTsx::init(pjsip_tx_data* tdata)
   {
     // Resolve the next hop destination for this request to a set of target
     // servers (IP address/port/transport tuples).
-    PJUtils::resolve_next_hop(tdata, 0, _servers, trail());
+    PJUtils::resolve_next_hop(tdata, 0, _servers, allowed_host_state, trail());
   }
 
   // Work out whether this UAC transaction is to a stateless proxy.
@@ -1736,7 +1738,12 @@ void BasicProxy::UACTsx::send_request()
       // Remove the top Via from the request before reporting the error in
       // case the request is used to build an error response.
       PJUtils::remove_top_via(_tdata);
-      _uas_tsx->on_client_not_responding(this, PJSIP_EVENT_TRANSPORT_ERROR);
+
+      ForkErrorState fork_error = (_servers.size() == 0) ?
+                                    ForkErrorState::NO_ADDRESSES :
+                                    ForkErrorState::TRANSPORT_ERROR;
+
+      _uas_tsx->on_client_not_responding(this, fork_error);
     }
 
     _pending_destroy = true;
@@ -1944,11 +1951,14 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
         // transaction.
         TRC_DEBUG("%s - UAC tsx terminated while still connected to UAS tsx",
                   _tsx->obj_name);
+        ForkErrorState fork_error = ForkErrorState::NONE;
+
         if (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR)
         {
           TRC_DEBUG("Timeout or transport error");
           SAS::Event sas_event(trail(), SASEvent::TRANSPORT_FAILURE, 0);
           SAS::report_event(sas_event);
+          fork_error = ForkErrorState::TRANSPORT_ERROR;
         }
         // LCOV_EXCL_START - no timeouts in UT
         else if (event->body.tsx_state.type == PJSIP_EVENT_TIMER)
@@ -1956,13 +1966,14 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
           TRC_DEBUG("Timeout error");
           SAS::Event sas_event(trail(), SASEvent::TIMEOUT_FAILURE, 0);
           SAS::report_event(sas_event);
+          fork_error = ForkErrorState::TIMEOUT;
         }
         // LCOV_EXCL_STOP - no timeouts in UT
 
         // Report the error to the UASTsx.  Remove the top Via header from the
         // request first in case it is used to generate an error response.
         PJUtils::remove_top_via(_tdata);
-        _uas_tsx->on_client_not_responding(this, event->body.tsx_state.type);
+        _uas_tsx->on_client_not_responding(this, fork_error);
       }
     }
   }
@@ -2217,7 +2228,7 @@ void BasicProxy::UACTsx::timer_c_expired()
                pjsip_tsx_state_str(_tsx->state));
       pjsip_tsx_terminate(_tsx, PJSIP_SC_REQUEST_TIMEOUT);
       PJUtils::remove_top_via(_tdata);
-      _uas_tsx->on_client_not_responding(this, PJSIP_EVENT_TIMER);
+      _uas_tsx->on_client_not_responding(this, ForkErrorState::TIMEOUT);
     }
     //LCOV_EXCL_STOP
   }

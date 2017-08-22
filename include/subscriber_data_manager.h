@@ -93,9 +93,6 @@ public:
       /// value.  E.g., "+sip.ice" -> "".
       std::map<std::string, std::string> _params;
 
-      /// The timer ID provided by Chronos.
-      std::string _timer_id;
-
       /// The private ID this binding was registered with.
       std::string _private_id;
 
@@ -157,9 +154,6 @@ public:
       /// The time (in seconds since the epoch) at which this subscription
       /// should expire.
       int _expires;
-
-      /// The timer ID provided by Chronos.
-      std::string _timer_id;
 
       /// Serialize the subscription as a JSON object.
       ///
@@ -321,22 +315,19 @@ public:
     friend class SubscriberDataManager;
   };
 
-  /// Interface used by the SubscriberDataManager to serialize AoRs from C++ objects to the
-  /// format used in the store, and deserialize them.
-  ///
-  /// This interface allows multiple (de)serializers to be defined and for the
-  /// SubscriberDataManager to use them in a pluggable fashion.
-  class SerializerDeserializer
+  /// Class used by the SubscriberDataManager to serialize AoRs from C++
+  /// objects to the JSON format used in the store, and deserialize them.
+  class JsonSerializerDeserializer
   {
   public:
-    /// Virtual destructor.
-    virtual ~SerializerDeserializer() {};
+    /// Destructor.
+    ~JsonSerializerDeserializer() {}
 
     /// Serialize an AoR object to the format used in the store.
     ///
     /// @param aor_data - The AoR object to serialize.
     /// @return         - The serialized form.
-    virtual std::string serialize_aor(AoR* aor_data) = 0;
+    std::string serialize_aor(AoR* aor_data);
 
     /// Deserialize some data from the store into an AoR object.
     ///
@@ -346,35 +337,8 @@ public:
     ///
     /// @return       - An AoR object, or NULL if the data could not be
     ///                 deserialized (e.g. because it is corrupt).
-    virtual AoR* deserialize_aor(const std::string& aor_id,
-                                 const std::string& s) = 0;
-
-    /// @return the name of this (de)serializer.
-    virtual std::string name() = 0;
-  };
-
-  /// A (de)serializer for the (deprecated) custom binary format.
-  class BinarySerializerDeserializer : public SerializerDeserializer
-  {
-  public:
-    ~BinarySerializerDeserializer() {}
-
-    std::string serialize_aor(AoR* aor_data);
     AoR* deserialize_aor(const std::string& aor_id,
                          const std::string& s);
-    std::string name();
-  };
-
-  /// A (de)serializer for the JSON format.
-  class JsonSerializerDeserializer : public SerializerDeserializer
-  {
-  public:
-    ~JsonSerializerDeserializer() {}
-
-    std::string serialize_aor(AoR* aor_data);
-    AoR* deserialize_aor(const std::string& aor_id,
-                         const std::string& s);
-    std::string name();
   };
 
   /// Provides the interface to the data store. This is responsible for
@@ -384,8 +348,8 @@ public:
   class Connector
   {
     Connector(Store* data_store,
-              SerializerDeserializer*& serializer,
-              std::vector<SerializerDeserializer*>& deserializers);
+              JsonSerializerDeserializer*& serializer,
+              std::vector<JsonSerializerDeserializer*>& deserializers);
 
     ~Connector();
 
@@ -407,8 +371,8 @@ public:
     friend class SubscriberDataManager;
 
   private:
-    SerializerDeserializer* _serializer;
-    std::vector<SerializerDeserializer*> _deserializers;
+    JsonSerializerDeserializer* _serializer;
+    std::vector<JsonSerializerDeserializer*> _deserializers;
   };
 
   /// @class SubscriberDataManager::ChronosTimerRequestSender
@@ -498,7 +462,7 @@ public:
     // @param binding_info_to_notify
     //                     The list of bindings to include on the NOTIFY
     // @param expired_binding_uris
-    //                     A list of URIs of expired bindings    
+    //                     A list of URIs of expired bindings
     // @param now          The current time
     // @param trail        SAS trail
     void send_notifys_for_expired_subscriptions(
@@ -506,7 +470,7 @@ public:
                                    AssociatedURIs* associated_uris,
                                    SubscriberDataManager::AoRPair* aor_pair,
                                    ClassifiedBindings binding_info_to_notify,
-                                   std::vector<std::string> expired_binding_uris,                                  
+                                   std::vector<std::string> expired_binding_uris,
                                    int now,
                                    SAS::TrailId trail);
   };
@@ -516,40 +480,17 @@ public:
   static const std::vector<std::string> TAGS_REG;
   static const std::vector<std::string> TAGS_SUB;
 
-  /// SubscriberDataManager constructor that allows the user to specify which serializer and
-  /// deserializers to use.
+  /// SubscriberDataManager constructor.
   ///
   /// @param data_store         - Pointer to the underlying data store.
-  /// @param serializer         - The serializer to use when writing records.
-  ///                             The SubscriberDataManager takes ownership of it.
-  /// @param deserializer       - A vector of deserializers to when reading
-  ///                             records. The order of this vector is
-  ///                             important - each deserializer is
-  ///                             tried in turn until one successfully parses
-  ///                             the record. The SubscriberDataManager takes ownership of
-  ///                             the entries in the vector.
   /// @param chronos_connection - Chronos connection used to set timers for
   ///                             expiring registrations and subscriptions.
   /// @param analytics_logger   - AnalyticsLogger for reporting registration events.
   /// @param is_primary         - Whether the underlying data store is the local
-  ///                             store or remote.
-  SubscriberDataManager(Store* data_store,
-                        SerializerDeserializer*& serializer,
-                        std::vector<SerializerDeserializer*>& deserializers,
-                        ChronosConnection* chronos_connection,
-                        AnalyticsLogger* analytics_logger,
-                        bool is_primary);
-
-  /// Alternative SubscriberDataManager constructor that creates a SubscriberDataManager using just the
-  /// default (de)serializer.
-  ///
-  /// @param data_store         - Pointer to the underlying data store.
-  /// @param chronos_connection - Chronos connection used to set timers for
-  ///                             expiring registrations and subscriptions.
-  /// @param is_primary         - Whether the underlying data store is the local
   ///                             store or remote
   SubscriberDataManager(Store* data_store,
                         ChronosConnection* chronos_connection,
+                        AnalyticsLogger* analytics_logger,
                         bool is_primary);
 
   /// Destructor.
