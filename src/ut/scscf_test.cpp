@@ -34,6 +34,7 @@
 #include "sproutletproxy.h"
 #include "fakesnmp.hpp"
 #include "mock_as_communication_tracker.h"
+#include "testingcommon.h"
 
 using namespace std;
 using testing::StrEq;
@@ -46,307 +47,6 @@ using testing::NiceMock;
 using testing::HasSubstr;
 using ::testing::Return;
 
-const std::string IMS_SUB_BARRED_MULTIPLE_WILDCARD =
-                               "<IMSSubscription>\n"
-                               "  <ServiceProfile>\n"
-                               "    <PublicIdentity>"
-                               "      <Identity>sip:610@homedomain</Identity>"
-                               "    </PublicIdentity>\n"
-                               "    <PublicIdentity>"
-                               "      <Identity>sip:6!.*!@homedomain</Identity>"
-                               "    </PublicIdentity>\n"
-                               "    <InitialFilterCriteria>\n"
-                               "      <Priority>1</Priority>\n"
-                               "      <ApplicationServer>\n"
-                               "        <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                               "        <DefaultHandling>0</DefaultHandling>\n"
-                               "      </ApplicationServer>\n"
-                               "    </InitialFilterCriteria>\n"
-                               "  </ServiceProfile>\n"
-                               "  <ServiceProfile>\n"
-                               "    <PublicIdentity>"
-                               "      <Identity>sip:611@homedomain</Identity>"
-                               "    </PublicIdentity>\n"
-                               "    <PublicIdentity>"
-                               "      <Identity>sip:65!.*!@homedomain</Identity>"
-                               "    </PublicIdentity>\n"
-                               "    <PublicIdentity>"
-                               "      <Identity>sip:650!.*!@homedomain</Identity>"
-                               "    </PublicIdentity>\n"
-                               "    <PublicIdentity>"
-                               "      <Identity>sip:6505551000@homedomain</Identity>"
-                               "      <BarringIndication>1</BarringIndication>"
-                               "      <Extension>"
-                               "        <IdentityType>3</IdentityType>"
-                               "        <Extension>"
-                               "          <Extension>"
-                               "            <WildcardedIMPU>sip:65!.*!@homedomain</WildcardedIMPU>"
-                               "          </Extension>"
-                               "        </Extension>"
-                               "      </Extension>"
-                               "    </PublicIdentity>\n"
-                               "    <InitialFilterCriteria>\n"
-                               "      <Priority>1</Priority>\n"
-                               "      <ApplicationServer>\n"
-                               "        <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                               "        <DefaultHandling>0</DefaultHandling>\n"
-                               "      </ApplicationServer>\n"
-                               "    </InitialFilterCriteria>\n"
-                               "  </ServiceProfile>\n"
-                               "  <ServiceProfile>\n"
-                               "    <PublicIdentity>"
-                               "      <Identity>sip:612@homedomain</Identity>"
-                               "    </PublicIdentity>\n"
-                               "    <PublicIdentity>"
-                               "      <Identity>sip:!.*!@homedomain</Identity>"
-                               "    </PublicIdentity>\n"
-                               "    <InitialFilterCriteria>\n"
-                               "      <Priority>1</Priority>\n"
-                               "      <ApplicationServer>\n"
-                               "        <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                               "        <DefaultHandling>0</DefaultHandling>\n"
-                               "      </ApplicationServer>\n"
-                               "    </InitialFilterCriteria>\n"
-                               "  </ServiceProfile>\n"
-                               "</IMSSubscription>";
-const std::string IMS_SUB_BARRED_WILDCARD =
-                               "<IMSSubscription><ServiceProfile>\n"
-                               "  <PublicIdentity>"
-                               "    <Identity>sip:610@homedomain</Identity>"
-                               "  </PublicIdentity>\n"
-                               "  <PublicIdentity>"
-                               "    <Identity>sip:65!.*!@homedomain</Identity>"
-                               "    <BarringIndication>1</BarringIndication>"
-                               "  </PublicIdentity>\n"
-                               "  <InitialFilterCriteria>\n"
-                               "    <Priority>1</Priority>\n"
-                               "    <TriggerPoint>\n"
-                               "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                               "    <SPT>\n"
-                               "      <ConditionNegated>1</ConditionNegated>\n"
-                               "      <Group>0</Group>\n"
-                               "      <Method>INVITE</Method>\n"
-                               "      <Extension></Extension>\n"
-                               "    </SPT>\n"
-                               "  </TriggerPoint>\n"
-                               "  <ApplicationServer>\n"
-                               "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                               "    <DefaultHandling>0</DefaultHandling>\n"
-                               "  </ApplicationServer>\n"
-                               "  </InitialFilterCriteria>\n"
-                               "</ServiceProfile></IMSSubscription>";
-const std::string IMS_SUB_BARRED_IMPU_IN_WILDCARD =
-                               "<IMSSubscription><ServiceProfile>\n"
-                               "  <PublicIdentity>"
-                               "    <Identity>sip:610@homedomain</Identity>"
-                               "  </PublicIdentity>\n"
-                               "  <PublicIdentity>"
-                               "    <Identity>sip:65!.*!@homedomain</Identity>"
-                               "  </PublicIdentity>\n"
-                               "  <PublicIdentity>"
-                               "    <Identity>sip:6505551000@homedomain</Identity>"
-                               "    <BarringIndication>1</BarringIndication>"
-                               "    <Extension>"
-                               "      <IdentityType>3</IdentityType>"
-                               "      <Extension>"
-                               "        <Extension>"
-                               "          <WildcardedIMPU>sip:65!.*!@homedomain</WildcardedIMPU>"
-                               "        </Extension>"
-                               "      </Extension>"
-                               "    </Extension>"
-                               "  </PublicIdentity>\n"
-                               "  <InitialFilterCriteria>\n"
-                               "    <Priority>1</Priority>\n"
-                               "    <TriggerPoint>\n"
-                               "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                               "    <SPT>\n"
-                               "      <ConditionNegated>1</ConditionNegated>\n"
-                               "      <Group>0</Group>\n"
-                               "      <Method>INVITE</Method>\n"
-                               "      <Extension></Extension>\n"
-                               "    </SPT>\n"
-                               "  </TriggerPoint>\n"
-                               "  <ApplicationServer>\n"
-                               "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                               "    <DefaultHandling>0</DefaultHandling>\n"
-                               "  </ApplicationServer>\n"
-                               "  </InitialFilterCriteria>\n"
-                               "</ServiceProfile></IMSSubscription>";
-
-namespace SP
-{
-  class Message
-  {
-  public:
-    string _method;
-    string _requri; //< overrides toscheme:to@todomain
-    string _toscheme;
-    string _status;
-    string _from;
-    string _fromdomain;
-    string _to;
-    string _todomain;
-    string _content_type;
-    string _body;
-    string _extra;
-    int _forwards;
-    int _unique; //< unique to this dialog; inserted into Call-ID
-    bool _first_hop;
-    string _via;
-    string _branch;
-    string _route;
-    int _cseq;
-    bool _in_dialog;
-
-    Message() :
-      _method("INVITE"),
-      _toscheme("sip"),
-      _status("200 OK"),
-      _from("6505551000"),
-      _fromdomain("homedomain"),
-      _to("6505551234"),
-      _todomain("homedomain"),
-      _content_type("application/sdp"),
-      _forwards(68),
-      _first_hop(false),
-      _via("10.83.18.38:36530"),
-      _branch(""),
-      _route("Route: <sip:sprout.homedomain;service=scscf>"),
-      _cseq(16567),
-      _in_dialog(false)
-    {
-      static int unique = 1042;
-      _unique = unique;
-      unique += 10; // leave room for manual increments
-    }
-
-    void set_route(pjsip_msg* msg)
-    {
-      string route = get_headers(msg, "Record-Route");
-      if (route != "")
-      {
-        // Convert to a Route set by replacing all instances of Record-Route: with Route:
-        for (size_t n = 0; (n = route.find("Record-Route:", n)) != string::npos;)
-        {
-          route.replace(n, 13, "Route:");
-        }
-      }
-      _route = route;
-    }
-
-    string get_request()
-    {
-      char buf[16384];
-
-      // The remote target.
-      string target = string(_toscheme).append(":").append(_to);
-      if (!_todomain.empty())
-      {
-        target.append("@").append(_todomain);
-      }
-
-      // If there's no route, the target goes in the request
-      // URI. Otherwise it goes in the Route:, and the route goes in the
-      // request URI.
-      //string requri = _route.empty() ? target : _route;
-      //string route = _route.empty() ? "" : string("Route: ").append(target).append("\r\n");
-      string requri = target;
-      string route = _route;
-      route = route.empty() ? "" : route.append("\r\n");
-
-      // Default branch parameter if it's not supplied.
-      std::string branch = _branch.empty() ? "Pjmo1aimuq33BAI4rjhgQgBr4sY" + std::to_string(_unique) : _branch;
-
-      int n = snprintf(buf, sizeof(buf),
-                       "%1$s %9$s SIP/2.0\r\n"
-                       "Via: SIP/2.0/TCP %13$s;rport;branch=z9hG4bK%16$s\r\n"
-                       "%12$s"
-                       "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
-                       "To: <%10$s>%17$s\r\n"
-                       "Max-Forwards: %8$d\r\n"
-                       "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%11$04dohntC@10.114.61.213\r\n"
-                       "CSeq: %15$d %1$s\r\n"
-                       "User-Agent: Accession 2.0.0.0\r\n"
-                       "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
-                       "%4$s"
-                       "%7$s"
-                       "%14$s"
-                       "Content-Length: %5$d\r\n"
-                       "\r\n"
-                       "%6$s",
-                       /*  1 */ _method.c_str(),
-                       /*  2 */ _from.c_str(),
-                       /*  3 */ _fromdomain.c_str(),
-                       /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
-                       /*  5 */ (int)_body.length(),
-                       /*  6 */ _body.c_str(),
-                       /*  7 */ _extra.empty() ? "" : string(_extra).append("\r\n").c_str(),
-                       /*  8 */ _forwards,
-                       /*  9 */ _requri.empty() ? requri.c_str() : _requri.c_str(),
-                       /* 10 */ target.c_str(),
-                       /* 11 */ _unique,
-                       /* 12 */ _first_hop ? "" : "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n",
-                       /* 13 */ _via.c_str(),
-                       /* 14 */ route.c_str(),
-                       /* 15 */ _cseq,
-                       /* 16 */ branch.c_str(),
-                       /* 17 */ (_in_dialog) ? ";tag=10.114.61.213+1+8c8b232a+5fb751cf" : ""
-        );
-
-      EXPECT_LT(n, (int)sizeof(buf));
-
-      string ret(buf, n);
-      // cout << ret <<endl;
-      return ret;
-    }
-
-    string get_response()
-    {
-      char buf[16384];
-
-      // Default branch parameter if it's not supplied.
-      std::string branch = _branch.empty() ? "Pjmo1aimuq33BAI4rjhgQgBr4sY" + std::to_string(_unique) : _branch;
-
-      int n = snprintf(buf, sizeof(buf),
-                       "SIP/2.0 %9$s\r\n"
-                       "Via: SIP/2.0/TCP %14$s;rport;branch=z9hG4bK%15$s\r\n"
-                       "%12$s"
-                       "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
-                       "To: <sip:%7$s%8$s>\r\n"
-                       "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%11$04dohntC@10.114.61.213\r\n"
-                       "CSeq: %13$d %1$s\r\n"
-                       "User-Agent: Accession 2.0.0.0\r\n"
-                       "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
-                       "%4$s"
-                       "%10$s"
-                       "Content-Length: %5$d\r\n"
-                       "\r\n"
-                       "%6$s",
-                       /*  1 */ _method.c_str(),
-                       /*  2 */ _from.c_str(),
-                       /*  3 */ _fromdomain.c_str(),
-                       /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
-                       /*  5 */ (int)_body.length(),
-                       /*  6 */ _body.c_str(),
-                       /*  7 */ _to.c_str(),
-                       /*  8 */ _todomain.empty() ? "" : string("@").append(_todomain).c_str(),
-                       /*  9 */ _status.c_str(),
-                       /* 10 */ _extra.empty() ? "" : string(_extra).append("\r\n").c_str(),
-                       /* 11 */ _unique,
-                       /* 12 */ _first_hop ? "" : "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n",
-                       /* 13 */ _cseq,
-                       /* 14 */ _via.c_str(),
-                       /* 15 */ branch.c_str()
-        );
-
-      EXPECT_LT(n, (int)sizeof(buf));
-
-      string ret(buf, n);
-      // cout << ret <<endl;
-      return ret;
-    }
-  };
-}
 
 /// ABC for fixtures for SCSCFTest and friends.
 class SCSCFTest : public SipTest
@@ -442,7 +142,7 @@ public:
                                           );
     _scscf_sproutlet->init();
 
-    _scscf_selector = new SCSCFSelector("sip:scscf.sprout.homedomain", 
+    _scscf_selector = new SCSCFSelector("sip:scscf.sprout.homedomain",
                                         string(UT_DIR).append("/test_icscf.json"));
     // Create the I-CSCF Sproutlets.
     _icscf_sproutlet = new ICSCFSproutlet("icscf",
@@ -608,24 +308,24 @@ protected:
                      bool tpAset,
                      TransportFlow* tpB,
                      bool tpBset,
-                     SP::Message& msg,
+                     TestingCommon::Message& msg,
                      string route,
                      bool expect_100,
                      bool expect_trusted_headers_on_requests,
                      bool expect_trusted_headers_on_responses,
                      bool expect_orig,
                      bool pcpi);
-  void doAsOriginated(SP::Message& msg, bool expect_orig);
+  void doAsOriginated(TestingCommon::Message& msg, bool expect_orig);
   void doAsOriginated(const std::string& msg, bool expect_orig);
   void doFourAppServerFlow(std::string record_route_regex, bool app_servers_record_route=false);
-  void doSuccessfulFlow(SP::Message& msg,
+  void doSuccessfulFlow(TestingCommon::Message& msg,
                         testing::Matcher<string> uri_matcher,
                         list<HeaderMatcher> headers,
                         bool include_ack_and_bye=true,
                         list<HeaderMatcher> rsp_hdrs = list<HeaderMatcher>());
-  void doFastFailureFlow(SP::Message& msg, int st_code);
-  void doSlowFailureFlow(SP::Message& msg, int st_code, std::string body = "", std::string reason = "");
-  void setupForkedFlow(SP::Message& msg);
+  void doFastFailureFlow(TestingCommon::Message& msg, int st_code);
+  void doSlowFailureFlow(TestingCommon::Message& msg, int st_code, std::string body = "", std::string reason = "");
+  void setupForkedFlow(TestingCommon::Message& msg);
   list<string> doProxyCalculateTargets(int max_targets);
 };
 
@@ -645,105 +345,35 @@ SCSCFSelector* SCSCFTest::_scscf_selector;
 MockAsCommunicationTracker* SCSCFTest::_sess_term_comm_tracker;
 MockAsCommunicationTracker* SCSCFTest::_sess_cont_comm_tracker;
 
-using SP::Message;
+using namespace TestingCommon;
 
 void SCSCFTest::doFourAppServerFlow(std::string record_route_regex, bool app_servers_record_route)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>2</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:4.2.3.4:56788;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                  <InitialFilterCriteria>
-                                    <Priority>1</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>1</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <SessionCase>1</SessionCase>  <!-- terminating-registered -->
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                  <InitialFilterCriteria>
-                                    <Priority>2</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>QWERTY_UIOP</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:sholes.example.com</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                  <InitialFilterCriteria>
-                                    <Priority>3</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:6.2.3.4:56786;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+
+  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:4.2.3.4:56788;transport=UDP")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription_1 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_1);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription_1.return_sub());
+
+  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP")
+    .addIfc(2, {"<Method>QWERTY_UIOP</Method>"}, "sip:sholes.example.com")
+    .addIfc(3, {"<Method>INVITE</Method>"}, "sip:6.2.3.4:56786;transport=UDP");
+  SubscriptionBuilder subscription_2 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_2);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription_2.return_sub());
+
   EXPECT_CALL(*_sess_cont_comm_tracker, on_success(StrEq("sip:4.2.3.4:56788;transport=UDP")));
   EXPECT_CALL(*_sess_cont_comm_tracker, on_success(StrEq("sip:1.2.3.4:56789;transport=UDP")));
   EXPECT_CALL(*_sess_cont_comm_tracker, on_success(StrEq("sip:5.2.3.4:56787;transport=UDP")));
@@ -789,7 +419,7 @@ void SCSCFTest::doFourAppServerFlow(std::string record_route_regex, bool app_ser
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -827,7 +457,7 @@ void SCSCFTest::doFourAppServerFlow(std::string record_route_regex, bool app_ser
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS2
@@ -862,7 +492,7 @@ void SCSCFTest::doFourAppServerFlow(std::string record_route_regex, bool app_ser
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS2.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS3 - From this point on, we're in terminating mode.
@@ -897,7 +527,7 @@ void SCSCFTest::doFourAppServerFlow(std::string record_route_regex, bool app_ser
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS3.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS4
@@ -932,7 +562,7 @@ void SCSCFTest::doFourAppServerFlow(std::string record_route_regex, bool app_ser
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS4.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -967,7 +597,7 @@ void SCSCFTest::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
                               bool tpAset,         //< Expect all requests to Alice on same transport?
                               TransportFlow* tpB,  //< Bob's transport.
                               bool tpBset,         //< Expect all requests to Bob on same transport?
-                              SP::Message& msg,    //< Message to use for testing.
+                              Message& msg,    //< Message to use for testing.
                               string route,        //< Route header to be used on INVITE
                               bool expect_100,     //< Will we get a 100 Trying?
                               bool expect_trusted_headers_on_requests, //< Should P-A-N-I/P-V-N-I be passed on requests?
@@ -1013,7 +643,7 @@ void SCSCFTest::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
     out = current_txdata()->msg;
     RespMatcher(100).matches(out);
     tpA->expect_target(current_txdata(), true);  // Requests always come back on same transport
-    msg.set_route(out);
+    msg.convert_routeset(out);
 
     // Don't bother testing P-Access-Network-Info or P-Visited-Network-Id,
     // because they never get inserted into such messages.
@@ -1056,7 +686,7 @@ void SCSCFTest::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
   out = current_txdata()->msg;
   RespMatcher(183).matches(out);
   tpA->expect_target(current_txdata(), true);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
 
   // Check P-Access-Network-Info and P-Visited-Network-Id
@@ -1096,7 +726,7 @@ void SCSCFTest::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpA->expect_target(current_txdata(), true);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
 
   // Check P-Access-Network-Info and P-Visited-Network-Id.
@@ -1116,7 +746,7 @@ void SCSCFTest::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpA->expect_target(current_txdata(), true);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
 
   // Check P-Access-Network-Info and P-Visited-Network-Id.
@@ -1158,7 +788,7 @@ void SCSCFTest::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpA->expect_target(current_txdata(), true);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
 
   // Check P-Access-Network-Info and P-Visited-Network-Id. These will always be stripped,
@@ -1265,7 +895,7 @@ void SCSCFTest::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
   out = current_txdata()->msg;
   RespMatcher(404).matches(out);
   tpA->expect_target(current_txdata(), true);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
 
   // Check P-Access-Network-Info and P-Visited-Network-Id.
@@ -1332,7 +962,7 @@ void SCSCFTest::doSuccessfulFlow(Message& msg,
     iter->match(out);
   }
 
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
   free_txdata();
 
@@ -1487,29 +1117,16 @@ TEST_F(SCSCFTest, TestBarredCaller)
 {
   // Tests that a call attempt from a barred caller is rejected with a 403.
   SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "REGISTERED",
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "  <PublicIdentity>"
-                                   "    <Identity>sip:6505551000@homedomain</Identity>"
-                                   "    <BarringIndication>1</BarringIndication>"
-                                   "  </PublicIdentity>\n"
-                                   "  <InitialFilterCriteria>\n"
-                                   "    <Priority>1</Priority>\n"
-                                   "    <TriggerPoint>\n"
-                                   "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                   "      <SPT>\n"
-                                   "        <ConditionNegated>1</ConditionNegated>\n"
-                                   "        <Group>0</Group>\n"
-                                   "        <Method>INVITE</Method>\n"
-                                   "        <Extension></Extension>\n"
-                                   "      </SPT>\n"
-                                   "    </TriggerPoint>\n"
-                                   "    <ApplicationServer>\n"
-                                   "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                   "      <DefaultHandling>0</DefaultHandling>\n"
-                                   "    </ApplicationServer>\n"
-                                   "  </InitialFilterCriteria>\n"
-                                   "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addBarringIndication("sip:6505551000@homedomain", "1")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   subscription.return_sub());
   Message msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   doSlowFailureFlow(msg, 403);
@@ -1519,26 +1136,16 @@ TEST_F(SCSCFTest, TestBarredCallee)
 {
   // Tests that a call to a barred callee is rejected with a 404.
   SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", "REGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity><BarringIndication>1</BarringIndication></PublicIdentity>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>1</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addBarringIndication("sip:6505551234@homedomain", "1")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   subscription.return_sub());
   Message msg;
   doSlowFailureFlow(msg, 404);
 }
@@ -1549,10 +1156,19 @@ TEST_F(SCSCFTest, TestBarredCallee)
 TEST_F(SCSCFTest, TestBarredWildcardCaller)
 {
   SCOPED_TRACE("");
+
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:610@homedomain")
+    .addIdentity("sip:65!.*!@homedomain")
+    .addBarringIndication("sip:65!.*!@homedomain", "1")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+
   _hss_connection->set_impu_result("sip:6505551000@homedomain",
                                    "call",
                                    "REGISTERED",
-                                   IMS_SUB_BARRED_WILDCARD);
+                                   subscription.return_sub());
   Message msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   doSlowFailureFlow(msg, 403);
@@ -1564,10 +1180,19 @@ TEST_F(SCSCFTest, TestBarredWildcardCaller)
 TEST_F(SCSCFTest, TestBarredWildcardCallee)
 {
   SCOPED_TRACE("");
+
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:610@homedomain")
+    .addIdentity("sip:65!.*!@homedomain")
+    .addBarringIndication("sip:65!.*!@homedomain", "1")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+
   _hss_connection->set_impu_result("sip:6505551000@homedomain",
                                    "call",
                                    "REGISTERED",
-                                   IMS_SUB_BARRED_WILDCARD);
+                                   subscription.return_sub());
   Message msg;
   doSlowFailureFlow(msg, 404);
 }
@@ -1578,10 +1203,21 @@ TEST_F(SCSCFTest, TestBarredWildcardCallee)
 TEST_F(SCSCFTest, TestWildcardBarredCaller)
 {
   SCOPED_TRACE("");
+
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:610@homedomain")
+    .addIdentity("sip:65!.*!@homedomain")
+    .addIdentity("sip:6505551000@homedomain")
+    .addBarringIndication("sip:6505551000@homedomain", "1")
+    .addWildcard("sip:6505551000@homedomain", 3, "sip:65!.*!@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+
   _hss_connection->set_impu_result("sip:6505551000@homedomain",
                                    "call",
                                    "REGISTERED",
-                                   IMS_SUB_BARRED_IMPU_IN_WILDCARD);
+                                   subscription.return_sub());
   Message msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   doSlowFailureFlow(msg, 403);
@@ -1593,10 +1229,21 @@ TEST_F(SCSCFTest, TestWildcardBarredCaller)
 TEST_F(SCSCFTest, TestWildcardBarredCallee)
 {
   SCOPED_TRACE("");
+
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:610@homedomain")
+    .addIdentity("sip:65!.*!@homedomain")
+    .addIdentity("sip:6505551000@homedomain")
+    .addBarringIndication("sip:6505551000@homedomain", "1")
+    .addWildcard("sip:6505551000@homedomain", 3, "sip:65!.*!@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+
   _hss_connection->set_impu_result("sip:6505551000@homedomain",
                                    "call",
                                    "REGISTERED",
-                                   IMS_SUB_BARRED_IMPU_IN_WILDCARD);
+                                   subscription.return_sub());
   Message msg;
   doSlowFailureFlow(msg, 404);
 }
@@ -1608,10 +1255,32 @@ TEST_F(SCSCFTest, TestWildcardBarredCallee)
 TEST_F(SCSCFTest, TestBarredMultipleWildcardCaller)
 {
   SCOPED_TRACE("");
+
+  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
+    .addIdentity("sip:610@homedomain")
+    .addIdentity("sip:6!.*!@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
+    .addIdentity("sip:611@homedomain")
+    .addIdentity("sip:65!.*!@homedomain")
+    .addIdentity("650!.*!@homedomain")
+    .addIdentity("sip:6505551000@homedomain")
+    .addBarringIndication("sip:6505551000@homedomain", "1")
+    .addWildcard("sip:6505551000@homedomain", 3, "sip:65!.*!@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  ServiceProfileBuilder service_profile_3 = ServiceProfileBuilder()
+    .addIdentity("sip:612@homedomain")
+    .addIdentity("sip:!.*!@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile_1)
+    .addServiceProfile(service_profile_2)
+    .addServiceProfile(service_profile_3);
+
   _hss_connection->set_impu_result("sip:6505551000@homedomain",
                                    "call",
                                    "REGISTERED",
-                                   IMS_SUB_BARRED_MULTIPLE_WILDCARD);
+                                   subscription.return_sub());
   Message msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   doSlowFailureFlow(msg, 403);
@@ -1624,10 +1293,32 @@ TEST_F(SCSCFTest, TestBarredMultipleWildcardCaller)
 TEST_F(SCSCFTest, TestBarredMultipleWildcardCallee)
 {
   SCOPED_TRACE("");
+
+  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
+    .addIdentity("sip:610@homedomain")
+    .addIdentity("sip:6!.*!@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
+    .addIdentity("sip:611@homedomain")
+    .addIdentity("sip:65!.*!@homedomain")
+    .addIdentity("650!.*!@homedomain")
+    .addIdentity("sip:6505551000@homedomain")
+    .addBarringIndication("sip:6505551000@homedomain", "1")
+    .addWildcard("sip:6505551000@homedomain", 3, "sip:65!.*!@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  ServiceProfileBuilder service_profile_3 = ServiceProfileBuilder()
+    .addIdentity("sip:612@homedomain")
+    .addIdentity("sip:!.*!@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile_1)
+    .addServiceProfile(service_profile_2)
+    .addServiceProfile(service_profile_3);
+
   _hss_connection->set_impu_result("sip:6505551000@homedomain",
                                    "call",
                                    "REGISTERED",
-                                   IMS_SUB_BARRED_MULTIPLE_WILDCARD);
+                                   subscription.return_sub());
   Message msg;
   doSlowFailureFlow(msg, 404);
 }
@@ -1679,27 +1370,16 @@ TEST_F(SCSCFTest, TestSimpleTelURIVideo)
 TEST_F(SCSCFTest, TestTerminatingTelURI)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("tel:6505551235", "call", "REGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                "<PublicIdentity><Identity>tel:6505551235</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>1</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIdentity("tel:6505551235")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("tel:6505551235",
+                                   "call",
+                                   "REGISTERED",
+                                   subscription.return_sub());
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
@@ -1718,28 +1398,17 @@ TEST_F(SCSCFTest, TestTerminatingTelURI)
 
 TEST_F(SCSCFTest, TestTelURIWildcard)
 {
-  _hss_connection->set_impu_result("tel:6505551235", "call", "REGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>tel:6505552345</Identity></PublicIdentity>"
-                                "<PublicIdentity><Identity>tel:65055522!.*!</Identity></PublicIdentity>"
-                                "<PublicIdentity><Identity>tel:65055512!.*!</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("tel:6505552345")
+    .addIdentity("tel:65055522!.*!")
+    .addIdentity("tel:65055512!.*!")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("tel:6505551235",
+                                   "call",
+                                   "REGISTERED",
+                                   subscription.return_sub());
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -1763,7 +1432,7 @@ TEST_F(SCSCFTest, TestTelURIWildcard)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
   ASSERT_EQ(1, txdata_count());
 
@@ -1793,45 +1462,20 @@ TEST_F(SCSCFTest, TestTelURIWildcard)
 
 TEST_F(SCSCFTest, TestMultipleServiceProfiles)
 {
-  _hss_connection->set_impu_result("tel:6505551235", "call", "REGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>tel:6505552345</Identity></PublicIdentity>"
-                                "<PublicIdentity><Identity>tel:65055512!.*!</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:5.6.7.8:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>tel:6505551235</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
+    .addIdentity("tel:6505552345")
+    .addIdentity("tel:65055512!.*!")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:5.6.7.8:56789;transport=UDP");
+  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
+    .addIdentity("tel:6505551235")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile_1)
+    .addServiceProfile(service_profile_2);
+  _hss_connection->set_impu_result("tel:6505551235",
+                                   "call",
+                                   "REGISTERED",
+                                   subscription.return_sub());
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -1855,7 +1499,7 @@ TEST_F(SCSCFTest, TestMultipleServiceProfiles)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
   ASSERT_EQ(1, txdata_count());
 
@@ -1885,45 +1529,20 @@ TEST_F(SCSCFTest, TestMultipleServiceProfiles)
 
 TEST_F(SCSCFTest, TestMultipleAmbiguousServiceProfiles)
 {
-  _hss_connection->set_impu_result("tel:6505551235", "call", "REGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>tel:6505552345</Identity></PublicIdentity>"
-                                "<PublicIdentity><Identity>tel:65055512!.*!</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>tel:650555123!.*!</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:5.6.7.8:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
+    .addIdentity("tel:6505552345")
+    .addIdentity("tel:65055512!.*!")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
+    .addIdentity("tel:650555123!.*!")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:5.6.7.8:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile_1)
+    .addServiceProfile(service_profile_2);
+  _hss_connection->set_impu_result("tel:6505551235",
+                                   "call",
+                                   "REGISTERED",
+                                   subscription.return_sub());
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -1947,7 +1566,7 @@ TEST_F(SCSCFTest, TestMultipleAmbiguousServiceProfiles)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
   ASSERT_EQ(1, txdata_count());
 
@@ -2464,15 +2083,17 @@ TEST_F(SCSCFTest, TestWithoutEnum)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "+15108580271", "homedomain", "sip:+15108580271@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                   "</ServiceProfile></IMSSubscription>");
-  _hss_connection->set_impu_result("tel:+15108580271", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "<PublicIdentity><Identity>sip:+15108580271@homedomain</Identity></PublicIdentity>"
-                                   "<PublicIdentity><Identity>tel:+15108580271</Identity></PublicIdentity>"
-                                   "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain");
+  SubscriptionBuilder subscription_1 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_1);
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription_1.return_sub());
+  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
+    .addIdentity("sip:+15108580271@homedomain")
+    .addIdentity("tel:+15108580271");
+  SubscriptionBuilder subscription_2 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_2);
+  _hss_connection->set_impu_result("tel:+15108580271", "call", RegDataXMLUtils::STATE_REGISTERED, subscription_2.return_sub());
   _hss_connection->set_result("/impu/tel%3A%2B15108580271/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -2496,7 +2117,7 @@ TEST_F(SCSCFTest, TestWithoutEnum)
 
 
 /// Test a forked flow - setup phase.
-void SCSCFTest::setupForkedFlow(SP::Message& msg)
+void SCSCFTest::setupForkedFlow(Message& msg)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
@@ -2886,26 +2507,15 @@ TEST_F(SCSCFTest, TestReceiveCallToEmergencyBinding)
 TEST_F(SCSCFTest, SimpleISCMainline)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -2932,7 +2542,7 @@ TEST_F(SCSCFTest, SimpleISCMainline)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -2966,7 +2576,7 @@ TEST_F(SCSCFTest, SimpleISCMainline)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -2996,26 +2606,15 @@ TEST_F(SCSCFTest, SimpleISCMainline)
 TEST_F(SCSCFTest, ISCMultipleResponses)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -3045,7 +2644,7 @@ TEST_F(SCSCFTest, ISCMultipleResponses)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -3079,7 +2678,7 @@ TEST_F(SCSCFTest, ISCMultipleResponses)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -3122,48 +2721,20 @@ TEST_F(SCSCFTest, ISCMultipleResponses)
 TEST_F(SCSCFTest, ISCRetargetWithoutCdiv)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", "REGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                "<PublicIdentity><Identity>tel:6505551234</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
-  _hss_connection->set_impu_result("tel:6505551234", "call", "REGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                "<PublicIdentity><Identity>tel:6505551234</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIdentity("tel:6505551234")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   subscription.return_sub());
+  _hss_connection->set_impu_result("tel:6505551234",
+                                   "call",
+                                   "REGISTERED",
+                                   subscription.return_sub());
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3186,7 +2757,7 @@ TEST_F(SCSCFTest, ISCRetargetWithoutCdiv)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -3218,7 +2789,7 @@ TEST_F(SCSCFTest, ISCRetargetWithoutCdiv)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -3238,26 +2809,15 @@ TEST_F(SCSCFTest, ISCRetargetWithoutCdiv)
 TEST_F(SCSCFTest, URINotIncludedInUserData)
 {
   register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("tel:8886505551234", "call", "UNREGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("tel:8886505551234",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3290,26 +2850,15 @@ TEST_F(SCSCFTest, URINotIncludedInUserData)
 TEST_F(SCSCFTest, SimpleISCTwoRouteHeaders)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3332,7 +2881,7 @@ TEST_F(SCSCFTest, SimpleISCTwoRouteHeaders)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -3357,26 +2906,15 @@ TEST_F(SCSCFTest, SimpleISCTwoRouteHeaders)
 TEST_F(SCSCFTest, ISCASURIMalformed)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip::5060</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip::5060");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
@@ -3411,26 +2949,15 @@ TEST_F(SCSCFTest, ISCASURIMalformed)
 TEST_F(SCSCFTest, ISCASURITel)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>tel:1234</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "tel:1234");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
@@ -3465,42 +2992,16 @@ TEST_F(SCSCFTest, ISCASURITel)
 TEST_F(SCSCFTest, SimpleNextOrigFlow)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>0</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>ETAOIN_SHRDLU</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:linotype.example.org</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(0, {"<Method>ETAOIN_SHRDLU</Method>"}, "sip:linotype.example.org")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -3526,7 +3027,7 @@ TEST_F(SCSCFTest, SimpleNextOrigFlow)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -3558,7 +3059,7 @@ TEST_F(SCSCFTest, SimpleNextOrigFlow)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -3579,26 +3080,16 @@ TEST_F(SCSCFTest, SimpleNextOrigFlow)
 TEST_F(SCSCFTest, SimpleReject)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                   "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
+
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -3625,7 +3116,7 @@ TEST_F(SCSCFTest, SimpleReject)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -3655,7 +3146,7 @@ TEST_F(SCSCFTest, SimpleReject)
   out = current_txdata()->msg;
   RespMatcher(404).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
   free_txdata();
 
@@ -3670,26 +3161,15 @@ TEST_F(SCSCFTest, SimpleReject)
 TEST_F(SCSCFTest, SimpleNonLocalReject)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3712,7 +3192,7 @@ TEST_F(SCSCFTest, SimpleNonLocalReject)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -3742,7 +3222,7 @@ TEST_F(SCSCFTest, SimpleNonLocalReject)
   out = current_txdata()->msg;
   RespMatcher(404).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
   free_txdata();
 
@@ -3757,26 +3237,12 @@ TEST_F(SCSCFTest, SimpleNonLocalReject)
 TEST_F(SCSCFTest, SimpleAccept)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -3803,7 +3269,7 @@ TEST_F(SCSCFTest, SimpleAccept)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -3827,7 +3293,7 @@ TEST_F(SCSCFTest, SimpleAccept)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
   free_txdata();
 
@@ -3848,26 +3314,12 @@ TEST_F(SCSCFTest, SimpleAccept)
 TEST_F(SCSCFTest, SimpleRedirect)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -3894,7 +3346,7 @@ TEST_F(SCSCFTest, SimpleRedirect)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -3925,7 +3377,7 @@ TEST_F(SCSCFTest, SimpleRedirect)
   RespMatcher(302).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
   EXPECT_EQ("Contact: <sip:6505559876@homedomain>", get_headers(out, "Contact"));
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
   free_txdata();
 
@@ -3940,26 +3392,15 @@ TEST_F(SCSCFTest, SimpleRedirect)
 TEST_F(SCSCFTest, DefaultHandlingTerminate)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>1</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 0, 1);
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
   EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("408")));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -3984,7 +3425,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -4014,7 +3455,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate)
   out = current_txdata()->msg;
   RespMatcher(408).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
   free_txdata();
 
@@ -4033,26 +3474,15 @@ TEST_F(SCSCFTest, DISABLED_DefaultHandlingTerminateTimeout)
 
   // Set up an application server for the caller. It's default handling is set
   // to session continue.
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=tcp</ServerName>\n"
-                                "    <DefaultHandling>1</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0, 1);
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
   EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -4076,7 +3506,7 @@ TEST_F(SCSCFTest, DISABLED_DefaultHandlingTerminateTimeout)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS
@@ -4116,26 +3546,16 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateDisabled)
 
   // Set up an application server for the caller. It's default handling is set
   // to session continue.
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=tcp</ServerName>\n"
-                                "    <DefaultHandling>1</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp", 0 , 1);
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -4158,7 +3578,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateDisabled)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS
@@ -4194,48 +3614,28 @@ TEST_F(SCSCFTest, DefaultHandlingContinueRecordRouting)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:who@example.net");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:ne-as:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
 
- _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:ne-as:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
-  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=UDP");
+  SubscriptionBuilder subscription_1 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_1);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription_1.return_sub());
+
+  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=UDP");
+  SubscriptionBuilder subscription_2 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_2);
+ _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                  "call",
+                                  RegDataXMLUtils::STATE_REGISTERED,
+                                  subscription_2.return_sub());
+
+ _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
@@ -4283,26 +3683,15 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistent)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:who@example.net");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:ne-as:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -4328,7 +3717,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistent)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // AS name fails to resolve, so INVITE passed on to final destination
@@ -4350,29 +3739,19 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonResponsive)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:who@example.net");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(StrEq("sip:1.2.3.4:56789;transport=UDP"), _));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -4396,7 +3775,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonResponsive)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -4438,26 +3817,12 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonResponsive)
 TEST_F(SCSCFTest, DefaultHandlingContinueImmediateError)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-    _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -4488,7 +3853,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueImmediateError)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -4535,26 +3900,12 @@ TEST_F(SCSCFTest, DefaultHandlingContinueImmediateError)
 TEST_F(SCSCFTest, DefaultHandlingContinue100ThenError)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-    _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -4585,7 +3936,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinue100ThenError)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -4637,26 +3988,12 @@ TEST_F(SCSCFTest, DefaultHandlingContinue100ThenError)
 TEST_F(SCSCFTest, DefaultHandlingContinue1xxThenError)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-    _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -4687,7 +4024,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinue1xxThenError)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -4733,7 +4070,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinue1xxThenError)
   out = current_txdata()->msg;
   RespMatcher(500).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // ---------- Send ACK from bono
@@ -4749,26 +4086,12 @@ TEST_F(SCSCFTest, DefaultHandlingContinue1xxThenError)
 TEST_F(SCSCFTest, DefaultHandlingContinueInviteReturnedThenError)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-    _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
 
   // This flow is classed as a successful AS flow, as the AS will pass the
@@ -4796,7 +4119,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueInviteReturnedThenError)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -4833,7 +4156,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueInviteReturnedThenError)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -4863,7 +4186,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueInviteReturnedThenError)
   out = current_txdata()->msg;
   RespMatcher(500).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // ---------- Send ACK from bono
@@ -4885,29 +4208,19 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeout)
 
   // Set up an application server for the caller. It's default handling is set
   // to session continue.
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=tcp</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -4931,7 +4244,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeout)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS
@@ -4975,29 +4288,19 @@ TEST_F(SCSCFTest, DefaultHandlingContinueDisabled)
 
   // Set up an application server for the caller. It's default handling is set
   // to session continue.
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=tcp</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, _));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -5021,7 +4324,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueDisabled)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS
@@ -5065,25 +4368,15 @@ TEST_F(SCSCFTest, DefaultHandlingMissing)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:who@example.net");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:ne-as:56789;transport=UDP</ServerName>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfcNoDefHandling(1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -5109,7 +4402,7 @@ TEST_F(SCSCFTest, DefaultHandlingMissing)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // AS name fails to resolve, so INVITE passed on to final destination
@@ -5131,26 +4424,15 @@ TEST_F(SCSCFTest, DefaultHandlingMalformed)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:who@example.net");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:ne-as:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>frog</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfcBadDefField(1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=UDP", 0, "frog");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -5176,7 +4458,7 @@ TEST_F(SCSCFTest, DefaultHandlingMalformed)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // AS name fails to resolve, so INVITE passed on to final destination
@@ -5201,26 +4483,12 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistentRRTest)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:who@example.net");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:ne-as:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -5247,7 +4515,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistentRRTest)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // AS name fails to resolve, so INVITE passed on to final destination
@@ -5279,29 +4547,19 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeoutRRTest)
 
   // Set up an application server for the caller. It's default handling is set
   // to session continue.
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=tcp</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=tcp");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -5325,7 +4583,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeoutRRTest)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS
@@ -5375,42 +4633,16 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstAsFailsRRTest)
 
   // Set up an application server for the caller. It's default handling is set
   // to session continue.
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:ne-as:56789;transport=tcp</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>2</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=tcp")
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -5437,7 +4669,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstAsFailsRRTest)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // The first AS fails to resolve so the INVITE is passed on to AS2
@@ -5470,42 +4702,13 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstTermAsFailsRRTest)
 
   // Set up an application server for the caller. It's default handling is set
   // to session continue.
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:ne-as:56789;transport=tcp</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>2</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:ne-as:56789;transport=tcp")
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -5539,7 +4742,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstTermAsFailsRRTest)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // The first AS fails to resolve so the INVITE is passed on to AS2
@@ -5706,46 +4909,20 @@ void SCSCFTest::doAsOriginated(Message& msg, bool expect_orig)
 void SCSCFTest::doAsOriginated(const std::string& msg, bool expect_orig)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                "<IMSSubscription><ServiceProfile>"
-                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                  "<InitialFilterCriteria>"
-                                    "<Priority>1</Priority>"
-                                    "<TriggerPoint>"
-                                    "<ConditionTypeCNF>0</ConditionTypeCNF>"
-                                    "<SPT>"
-                                      "<ConditionNegated>0</ConditionNegated>"
-                                      "<Group>0</Group>"
-                                      "<Method>INVITE</Method>"
-                                      "<Extension></Extension>"
-                                    "</SPT>"
-                                  "</TriggerPoint>"
-                                  "<ApplicationServer>"
-                                    "<ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>"
-                                    "<DefaultHandling>0</DefaultHandling>"
-                                  "</ApplicationServer>"
-                                  "</InitialFilterCriteria>"
-                                "</ServiceProfile></IMSSubscription>");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                "<IMSSubscription><ServiceProfile>"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                  "<InitialFilterCriteria>"
-                                    "<Priority>0</Priority>"
-                                    "<TriggerPoint>"
-                                    "<ConditionTypeCNF>0</ConditionTypeCNF>"
-                                    "<SPT>"
-                                      "<ConditionNegated>0</ConditionNegated>"
-                                      "<Group>0</Group>"
-                                      "<Method>INVITE</Method>"
-                                      "<Extension></Extension>"
-                                    "</SPT>"
-                                  "</TriggerPoint>"
-                                  "<ApplicationServer>"
-                                    "<ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>"
-                                    "<DefaultHandling>0</DefaultHandling>"
-                                  "</ApplicationServer>"
-                                  "</InitialFilterCriteria>"
-                                "</ServiceProfile></IMSSubscription>");
+
+  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription_1 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_1);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription_1.return_sub());
+
+  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(0, {"<Method>INVITE</Method>"}, "sip:5.2.3.4:56787;transport=UDP");
+  SubscriptionBuilder subscription_2 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_2);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription_2.return_sub());
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS0(TransportFlow::Protocol::UDP, stack_data.scscf_port, "6.2.3.4", 56786);
@@ -5896,59 +5073,21 @@ TEST_F(SCSCFTest, Cdiv)
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:wuntootree@10.14.61.213:5061;transport=tcp;ob");
   register_uri(_sdm, _hss_connection, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>2</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <SessionCase>4</SessionCase>  <!-- originating-cdiv -->
-                                      <Extension></Extension>
-                                    </SPT>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                  <InitialFilterCriteria>
-                                    <Priority>0</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <SessionCase>1</SessionCase>  <!-- terminating-registered -->
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(2, {"<SessionCase>4</SessionCase><!-- originating-cdiv -->", "<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP")
+    .addIfc(0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
 
   _hss_connection->set_result("/impu/sip%3A6505555678%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
-  
+
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
   TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -5972,7 +5111,7 @@ TEST_F(SCSCFTest, Cdiv)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as terminating AS for Bob)
@@ -6007,7 +5146,7 @@ TEST_F(SCSCFTest, Cdiv)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS2 (as originating AS for Bob)
@@ -6043,7 +5182,7 @@ TEST_F(SCSCFTest, Cdiv)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS2.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -6067,54 +5206,16 @@ TEST_F(SCSCFTest, CdivToDifferentDomain)
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:wuntootree@10.14.61.213:5061;transport=tcp;ob");
   register_uri(_sdm, _hss_connection, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>2</Priority>
-                                    <TriggerPoint>
-                                      <ConditionTypeCNF>0</ConditionTypeCNF>
-                                      <SPT>
-                                        <ConditionNegated>0</ConditionNegated>
-                                        <Group>0</Group>
-                                        <SessionCase>4</SessionCase>  <!-- originating-cdiv -->
-                                        <Extension></Extension>
-                                      </SPT>
-                                      <SPT>
-                                        <ConditionNegated>0</ConditionNegated>
-                                        <Group>0</Group>
-                                        <Method>INVITE</Method>
-                                        <Extension></Extension>
-                                      </SPT>
-                                    </TriggerPoint>
-                                    <ApplicationServer>
-                                      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
-                                      <DefaultHandling>0</DefaultHandling>
-                                    </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                  <InitialFilterCriteria>
-                                    <Priority>0</Priority>
-                                    <TriggerPoint>
-                                      <ConditionTypeCNF>0</ConditionTypeCNF>
-                                      <SPT>
-                                        <ConditionNegated>0</ConditionNegated>
-                                        <Group>0</Group>
-                                        <Method>INVITE</Method>
-                                        <Extension></Extension>
-                                      </SPT>
-                                      <SPT>
-                                        <ConditionNegated>0</ConditionNegated>
-                                        <Group>0</Group>
-                                        <SessionCase>1</SessionCase>  <!-- terminating-registered -->
-                                        <Extension></Extension>
-                                      </SPT>
-                                    </TriggerPoint>
-                                    <ApplicationServer>
-                                      <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
-                                      <DefaultHandling>0</DefaultHandling>
-                                    </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(2, {"<SessionCase>4</SessionCase><!-- originating-cdiv -->", "<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP")
+    .addIfc(0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -6138,7 +5239,7 @@ TEST_F(SCSCFTest, CdivToDifferentDomain)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as terminating AS for Bob)
@@ -6173,7 +5274,7 @@ TEST_F(SCSCFTest, CdivToDifferentDomain)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS2 (as originating AS for Bob)
@@ -6201,7 +5302,7 @@ TEST_F(SCSCFTest, CdivToDifferentDomain)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS2.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -6221,32 +5322,12 @@ TEST_F(SCSCFTest, CdivToDifferentDomain)
 TEST_F(SCSCFTest, BothEndsWithEnumRewrite)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-    _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                               R"(<IMSSubscription><ServiceProfile>
-                                  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>0</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <SessionCase>1</SessionCase>  <!-- terminating-registered -->
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -6276,7 +5357,7 @@ TEST_F(SCSCFTest, BothEndsWithEnumRewrite)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as terminating AS for Bob)
@@ -6309,32 +5390,15 @@ TEST_F(SCSCFTest, BothEndsWithEnumRewrite)
 TEST_F(SCSCFTest, TerminatingWithNoEnumRewrite)
 {
   register_uri(_sdm, _hss_connection, "1115551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-    _hss_connection->set_impu_result("sip:1115551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                  <PublicIdentity><Identity>sip:1115551234@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>0</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <SessionCase>1</SessionCase>  <!-- terminating-registered -->
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:1115551234@homedomain")
+    .addIfc(0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:1115551234@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -6357,7 +5421,7 @@ TEST_F(SCSCFTest, TerminatingWithNoEnumRewrite)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as terminating AS for Bob)
@@ -6391,54 +5455,16 @@ TEST_F(SCSCFTest, MmtelCdiv)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   register_uri(_sdm, _hss_connection, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>2</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <SessionCase>4</SessionCase>  <!-- originating-cdiv -->
-                                      <Extension></Extension>
-                                    </SPT>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                  <InitialFilterCriteria>
-                                    <Priority>0</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <SessionCase>1</SessionCase>  <!-- terminating-registered -->
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:mmtel.homedomain</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(2, {"<SessionCase>4</SessionCase><!-- originating-cdiv -->", "<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP")
+    .addIfc(0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:mmtel.homedomain");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
   _xdm_connection->put("sip:6505551234@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -6488,7 +5514,7 @@ TEST_F(SCSCFTest, MmtelCdiv)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE goes to MMTEL as terminating AS for Bob, and is redirected to 6505555678.
@@ -6500,7 +5526,7 @@ TEST_F(SCSCFTest, MmtelCdiv)
   out = current_txdata()->msg;
   RespMatcher(181).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS2 (as originating AS for Bob)
@@ -6534,7 +5560,7 @@ TEST_F(SCSCFTest, MmtelCdiv)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS2.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -6556,32 +5582,16 @@ TEST_F(SCSCFTest, MmtelCdiv)
 TEST_F(SCSCFTest, MmtelDoubleCdiv)
 {
   register_uri(_sdm, _hss_connection, "6505559012", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", "UNREGISTERED",
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>0</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <SessionCase>2</SessionCase>  <!-- terminating-unregistered -->
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:mmtel.homedomain</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+
+  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(0, {"<Method>INVITE</Method>", "<SessionCase>2</SessionCase><!-- terminating-unregistered -->"}, "sip:mmtel.homedomain");
+  SubscriptionBuilder subscription_1 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_1);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription_1.return_sub());
   _xdm_connection->put("sip:6505551234@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -6601,54 +5611,17 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
-  _hss_connection->set_impu_result("sip:6505555678@homedomain", "call", "UNREGISTERED",
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505555678@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>2</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <SessionCase>4</SessionCase>  <!-- originating-cdiv -->
-                                      <Extension></Extension>
-                                    </SPT>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                  <InitialFilterCriteria>
-                                    <Priority>0</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <SessionCase>2</SessionCase>  <!-- terminating-unregistered -->
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:mmtel.homedomain</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+
+  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
+    .addIdentity("sip:6505555678@homedomain")
+    .addIfc(2, {"<SessionCase>4</SessionCase><!-- originating-cdiv -->", "<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP")
+    .addIfc(0, {"<Method>INVITE</Method>", "<SessionCase>2</SessionCase><!-- terminating-unregistered -->"}, "sip:mmtel.homedomain");
+  SubscriptionBuilder subscription_2 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_2);
+  _hss_connection->set_impu_result("sip:6505555678@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription_2.return_sub());
   _xdm_connection->put("sip:6505555678@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -6668,6 +5641,7 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
+
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
 
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
@@ -6701,7 +5675,7 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE goes to MMTEL as terminating AS for Bob, and is redirected to 6505555678.
@@ -6713,7 +5687,7 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
   out = current_txdata()->msg;
   RespMatcher(181).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // Now INVITE is redirected to 6505559012
@@ -6722,7 +5696,7 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
   out = current_txdata()->msg;
   RespMatcher(181).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS2 (as originating AS for Bob)
@@ -6756,7 +5730,7 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS2.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -6776,26 +5750,15 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
 TEST_F(SCSCFTest, ExpiredChain)
 {
   register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                "<IMSSubscription><ServiceProfile>"
-                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -6850,7 +5813,7 @@ TEST_F(SCSCFTest, ExpiredChain)
   out = current_txdata()->msg;
   RespMatcher(404).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
   free_txdata();
 
@@ -6882,26 +5845,16 @@ TEST_F(SCSCFTest, ExpiredChain)
 TEST_F(SCSCFTest, MmtelFlow)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>1</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:mmtel.homedomain</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+
+  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain");
+  SubscriptionBuilder subscription_1 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_1);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription_1.return_sub());
   _xdm_connection->put("sip:6505551000@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -6913,26 +5866,16 @@ TEST_F(SCSCFTest, MmtelFlow)
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>0</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+
+  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(0, {"<Method>INVITE</Method>"}, "sip:5.2.3.4:56787;transport=UDP");
+  SubscriptionBuilder subscription_2 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_2);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription_2.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -6958,7 +5901,7 @@ TEST_F(SCSCFTest, MmtelFlow)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // Call should pass through MMTEL AS, and then proceed. This should
@@ -6990,7 +5933,7 @@ TEST_F(SCSCFTest, MmtelFlow)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -7022,42 +5965,17 @@ TEST_F(SCSCFTest, MmtelFlow)
 TEST_F(SCSCFTest, MmtelThenExternal)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>1</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:mmtel.homedomain</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                  <InitialFilterCriteria>
-                                    <Priority>2</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+
+  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain")
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription_1 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_1);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription_1.return_sub());
   _xdm_connection->put("sip:6505551000@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -7069,42 +5987,17 @@ TEST_F(SCSCFTest, MmtelThenExternal)
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                        </simservs>)");  // "
-    _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>1</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:mmtel.homedomain</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                  <InitialFilterCriteria>
-                                    <Priority>2</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+
+  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain")
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:5.2.3.4:56787;transport=UDP");
+  SubscriptionBuilder subscription_2 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_2);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription_2.return_sub());
   _xdm_connection->put("sip:6505551234@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -7142,7 +6035,7 @@ TEST_F(SCSCFTest, MmtelThenExternal)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // Call should pass through MMTEL AS, and then proceed. This should
@@ -7176,7 +6069,7 @@ TEST_F(SCSCFTest, MmtelThenExternal)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // Call should pass through MMTEL AS, and then proceed. This should
@@ -7207,7 +6100,7 @@ TEST_F(SCSCFTest, MmtelThenExternal)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS2.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -7240,42 +6133,16 @@ TEST_F(SCSCFTest, MmtelThenExternal)
 TEST_F(SCSCFTest, MultipleMmtelFlow)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>1</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:mmtel.homedomain</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                  <InitialFilterCriteria>
-                                    <Priority>2</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:mmtel.homedomain</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain")
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain");
+  SubscriptionBuilder subscription_1 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_1);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription_1.return_sub());
   _xdm_connection->put("sip:6505551000@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -7287,58 +6154,17 @@ TEST_F(SCSCFTest, MultipleMmtelFlow)
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>1</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:mmtel.homedomain</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                  <InitialFilterCriteria>
-                                    <Priority>2</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:mmtel.homedomain</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                  <InitialFilterCriteria>
-                                    <Priority>3</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain")
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:mmtel.homedomain")
+    .addIfc(3, {"<Method>INVITE</Method>"}, "sip:5.2.3.4:56787;transport=UDP");
+  SubscriptionBuilder subscription_2 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_2);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription_2.return_sub());
   _xdm_connection->put("sip:6505551234@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -7375,7 +6201,7 @@ TEST_F(SCSCFTest, MultipleMmtelFlow)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // Call should pass through MMTEL AS four times (!), and then
@@ -7407,7 +6233,7 @@ TEST_F(SCSCFTest, MultipleMmtelFlow)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -7428,26 +6254,12 @@ TEST_F(SCSCFTest, MultipleMmtelFlow)
 TEST_F(SCSCFTest, SimpleOptionsAccept)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>OPTIONS</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(1, {"<Method>OPTIONS</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -7491,7 +6303,7 @@ TEST_F(SCSCFTest, SimpleOptionsAccept)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   msg._cseq++;
   free_txdata();
 }
@@ -7502,32 +6314,12 @@ TEST_F(SCSCFTest, SimpleOptionsAccept)
 TEST_F(SCSCFTest, TerminatingDiversionExternal)
 {
   register_uri(_sdm, _hss_connection, "6505501234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505501234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505501234@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>1</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <SessionCase>1</SessionCase>  <!-- terminating-registered -->
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505501234@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505501234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
   _hss_connection->set_result("/impu/sip%3A6505501234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -7555,7 +6347,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as terminating AS for Bob)
@@ -7604,7 +6396,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed externally
@@ -7625,7 +6417,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
 
   // ---------- AS1 forwards 200 (stripping via)
   hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
@@ -7640,7 +6432,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
@@ -7652,32 +6444,12 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
 TEST_F(SCSCFTest, OriginatingExternal)
 {
   register_uri(_sdm, _hss_connection, "6505501234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>1</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <SessionCase>0</SessionCase>  <!-- originating-registered -->
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>", "<SessionCase>0</SessionCase><!-- originating-registered -->"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505501234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
 
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
@@ -7702,7 +6474,7 @@ TEST_F(SCSCFTest, OriginatingExternal)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as originating AS for Alice)
@@ -7750,7 +6522,7 @@ TEST_F(SCSCFTest, OriginatingExternal)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed externally
@@ -7771,7 +6543,7 @@ TEST_F(SCSCFTest, OriginatingExternal)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
 
   // ---------- AS1 forwards 200 (stripping via)
   hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
@@ -7786,7 +6558,7 @@ TEST_F(SCSCFTest, OriginatingExternal)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
@@ -7798,46 +6570,26 @@ TEST_F(SCSCFTest, OriginatingExternal)
 TEST_F(SCSCFTest, OriginatingTerminatingAS)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>1</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>1</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+
+  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription_1 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_1);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription_1.return_sub());
+
+  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription_2 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_2);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription_2.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -7862,7 +6614,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingAS)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as originating AS for 6505551000)
@@ -7910,7 +6662,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingAS)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as terminating AS for 6505551234)
@@ -7956,7 +6708,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingAS)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed to terminating UE
@@ -7976,7 +6728,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingAS)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
 
   // ---------- AS1 forwards 200 (stripping via)
   hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
@@ -7991,7 +6743,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingAS)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
 
   // ---------- AS1 forwards 200 (stripping via)
   hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
@@ -8006,7 +6758,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingAS)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
@@ -8021,46 +6773,20 @@ TEST_F(SCSCFTest, OriginatingTerminatingASTimeout)
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>1</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:1.2.3.4:56789;transport=TCP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>1</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:1.2.3.4:56789;transport=TCP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+
+  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
+  SubscriptionBuilder subscription_1 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_1);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription_1.return_sub());
+
+  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
+  SubscriptionBuilder subscription_2 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_2);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription_2.return_sub());
 
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -8084,7 +6810,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingASTimeout)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as originating AS for 6505551000)
@@ -8130,7 +6856,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingASTimeout)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as terminating AS for 6505551234)
@@ -8174,7 +6900,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingASTimeout)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed to terminating UE
@@ -8316,46 +7042,20 @@ TEST_F(SCSCFTest, OriginatingTerminatingMessageASTimeout)
   TransportFlow tpAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>1</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>MESSAGE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:1.2.3.4:56789;transport=TCP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>1</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>MESSAGE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:1.2.3.4:56789;transport=TCP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+
+  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(1, {"<Method>MESSAGE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
+  SubscriptionBuilder subscription_1 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_1);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription_1.return_sub());
+
+  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>MESSAGE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
+  SubscriptionBuilder subscription_2 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_2);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription_2.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8536,26 +7236,12 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   TransportFlow tpExternal(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.9.8.7", 5060);
 
   register_uri(_sdm, _hss_connection, "6505501234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505501234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505501234@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>1</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505501234@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+    SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505501234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
   _hss_connection->set_result("/impu/sip%3A6505501234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -8580,7 +7266,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as terminating AS for Bob)
@@ -8629,7 +7315,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as originating-cdiv AS for Bob)
@@ -8676,7 +7362,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed externally
@@ -8697,7 +7383,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
 
   // ---------- AS1 forwards 200 (stripping via)
   hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
@@ -8712,7 +7398,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
 
   // ---------- AS1 forwards 200 (stripping via)
   hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
@@ -8727,7 +7413,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   //  We should have tracked the session setup time for just the original session.
@@ -8745,24 +7431,26 @@ TEST_F(SCSCFTest, TestInvitePProfileKey)
   // This UT is unrealistic as we're using the same P-Profile-Key header for
   // both the originating and the terminating side; this is OK though for what
   // we're testing
+  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
+    .addIdentity("sip:6515551000@homedomain")
+    .addIdentity("tel:6515551000");
+  SubscriptionBuilder subscription_1 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_1);
   _hss_connection->set_impu_result("sip:6515551000@homedomain",
                                    "call",
                                    RegDataXMLUtils::STATE_REGISTERED,
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "<PublicIdentity><Identity>sip:6515551000@homedomain</Identity></PublicIdentity>"
-                                   "<PublicIdentity><Identity>tel:6515551000</Identity></PublicIdentity>"
-                                   "  <InitialFilterCriteria>\n"
-                                   "  </InitialFilterCriteria>\n"
-                                   "</ServiceProfile></IMSSubscription>",
+                                   subscription_1.return_sub(),
                                    "",
                                    wildcard);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
-                                   "  <InitialFilterCriteria>\n"
-                                   "  </InitialFilterCriteria>\n"
-                                   "</ServiceProfile></IMSSubscription>",
+  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIdentity("tel:6505551000");
+  SubscriptionBuilder subscription_2 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_2);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription_2.return_sub(),
                                    "",
                                    wildcard);
   _hss_connection->set_result("/impu/sip%3A6515551000%40homedomain/location",
@@ -8783,13 +7471,15 @@ TEST_F(SCSCFTest, TestAddSecondTelPAIHdr)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
-                                   "  <InitialFilterCriteria>\n"
-                                   "  </InitialFilterCriteria>\n"
-                                   "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIdentity("tel:6505551000");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8807,13 +7497,15 @@ TEST_F(SCSCFTest, TestAddSecondTelPAIHdrWithAlias)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                   "<PublicIdentity><Identity>tel:6505551001</Identity></PublicIdentity>"
-                                   "  <InitialFilterCriteria>\n"
-                                   "  </InitialFilterCriteria>\n"
-                                   "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIdentity("tel:6505551001");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8832,14 +7524,16 @@ TEST_F(SCSCFTest, TestAddSecondTelPAIHdrMultipleAliasesNoMatch)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                   "<PublicIdentity><Identity>tel:6505551003</Identity></PublicIdentity>"
-                                   "<PublicIdentity><Identity>tel:6505551002</Identity></PublicIdentity>"
-                                   "  <InitialFilterCriteria>\n"
-                                   "  </InitialFilterCriteria>\n"
-                                   "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIdentity("tel:6505551003")
+    .addIdentity("tel:6505551002");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8858,14 +7552,16 @@ TEST_F(SCSCFTest, TestAddSecondTelPAIHdrMultipleAliases)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                   "<PublicIdentity><Identity>tel:6505551003</Identity></PublicIdentity>"
-                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
-                                   "  <InitialFilterCriteria>\n"
-                                   "  </InitialFilterCriteria>\n"
-                                   "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIdentity("tel:6505551003")
+    .addIdentity("tel:6505551000");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8880,13 +7576,15 @@ TEST_F(SCSCFTest, TestAddSecondSIPPAIHdr)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("tel:6505551000", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
-                                   "  <InitialFilterCriteria>\n"
-                                   "  </InitialFilterCriteria>\n"
-                                   "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIdentity("tel:6505551000");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("tel:6505551000",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8904,12 +7602,14 @@ TEST_F(SCSCFTest, TestAddSecondSIPPAIHdrNoSIPUri)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("tel:6505551000", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
-                                   "  <InitialFilterCriteria>\n"
-                                   "  </InitialFilterCriteria>\n"
-                                   "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("tel:6505551000");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("tel:6505551000",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8925,13 +7625,15 @@ TEST_F(SCSCFTest, TestTwoPAIHdrsAlready)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
-                                   "  <InitialFilterCriteria>\n"
-                                   "  </InitialFilterCriteria>\n"
-                                   "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIdentity("tel:6505551000");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8947,13 +7649,15 @@ TEST_F(SCSCFTest, TestNoPAIHdrs)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
-                                   "  <InitialFilterCriteria>\n"
-                                   "  </InitialFilterCriteria>\n"
-                                   "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIdentity("tel:6505551000");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8968,13 +7672,15 @@ TEST_F(SCSCFTest, TestPAIHdrODIToken)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
-                                   "  <InitialFilterCriteria>\n"
-                                   "  </InitialFilterCriteria>\n"
-                                   "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIdentity("tel:6505551000");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8990,13 +7696,15 @@ TEST_F(SCSCFTest, TestNoSecondPAIHdrTerm)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
-                                   "  <InitialFilterCriteria>\n"
-                                   "  </InitialFilterCriteria>\n"
-                                   "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIdentity("tel:6505551000");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
   Message msg;
   msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
   list<HeaderMatcher> hdrs;
@@ -9014,27 +7722,14 @@ TEST_F(SCSCFTest, FlowFailedResponse)
   std::string user = "sip:6505550231@homedomain";
   register_uri(_sdm, _hss_connection, "6505550231", "homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213", 30);
 
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505550231@homedomain")
+    .addIfc(1, {"<Method>REGISTER</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 0, 1);
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "dereg-timeout", RegDataXMLUtils::STATE_REGISTERED,
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>REGISTER</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>1</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "dereg-timeout", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -9056,7 +7751,7 @@ TEST_F(SCSCFTest, FlowFailedResponse)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed externally
@@ -9111,32 +7806,15 @@ TEST_F(SCSCFTest, FlowFailedResponse)
 TEST_F(SCSCFTest, PreloadedRouteChangedReqUri)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>0</Priority>
-                                    <TriggerPoint>
-                                      <ConditionTypeCNF>0</ConditionTypeCNF>
-                                      <SPT>
-                                        <ConditionNegated>0</ConditionNegated>
-                                        <Group>0</Group>
-                                        <Method>INVITE</Method>
-                                        <Extension></Extension>
-                                      </SPT>
-                                      <SPT>
-                                        <ConditionNegated>0</ConditionNegated>
-                                        <Group>0</Group>
-                                        <SessionCase>1</SessionCase>  <!-- terminating-registered -->
-                                        <Extension></Extension>
-                                      </SPT>
-                                    </TriggerPoint>
-                                    <ApplicationServer>
-                                      <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
-                                      <DefaultHandling>0</DefaultHandling>
-                                    </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -9159,7 +7837,7 @@ TEST_F(SCSCFTest, PreloadedRouteChangedReqUri)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as terminating AS for Bob)
@@ -9203,7 +7881,7 @@ TEST_F(SCSCFTest, PreloadedRouteChangedReqUri)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -9230,32 +7908,15 @@ TEST_F(SCSCFTest, PreloadedRouteChangedReqUri)
 TEST_F(SCSCFTest, PreloadedRoutePreserveReqUri)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>0</Priority>
-                                    <TriggerPoint>
-                                      <ConditionTypeCNF>0</ConditionTypeCNF>
-                                      <SPT>
-                                        <ConditionNegated>0</ConditionNegated>
-                                        <Group>0</Group>
-                                        <Method>INVITE</Method>
-                                        <Extension></Extension>
-                                      </SPT>
-                                      <SPT>
-                                        <ConditionNegated>0</ConditionNegated>
-                                        <Group>0</Group>
-                                        <SessionCase>1</SessionCase>  <!-- terminating-registered -->
-                                        <Extension></Extension>
-                                      </SPT>
-                                    </TriggerPoint>
-                                    <ApplicationServer>
-                                      <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
-                                      <DefaultHandling>0</DefaultHandling>
-                                    </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -9278,7 +7939,7 @@ TEST_F(SCSCFTest, PreloadedRoutePreserveReqUri)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // ---------- AS1 sends a 100 Trying to indicate it has received the request.
@@ -9319,7 +7980,7 @@ TEST_F(SCSCFTest, PreloadedRoutePreserveReqUri)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -9346,54 +8007,16 @@ TEST_F(SCSCFTest, PreloadedRoutePreserveReqUri)
 TEST_F(SCSCFTest, PreloadedRouteNotLastAs)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>0</Priority>
-                                    <TriggerPoint>
-                                      <ConditionTypeCNF>0</ConditionTypeCNF>
-                                      <SPT>
-                                        <ConditionNegated>0</ConditionNegated>
-                                        <Group>0</Group>
-                                        <Method>INVITE</Method>
-                                        <Extension></Extension>
-                                      </SPT>
-                                      <SPT>
-                                        <ConditionNegated>0</ConditionNegated>
-                                        <Group>0</Group>
-                                        <SessionCase>1</SessionCase>  <!-- terminating-registered -->
-                                        <Extension></Extension>
-                                      </SPT>
-                                    </TriggerPoint>
-                                    <ApplicationServer>
-                                      <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
-                                      <DefaultHandling>0</DefaultHandling>
-                                    </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                  <InitialFilterCriteria>
-                                    <Priority>1</Priority>
-                                    <TriggerPoint>
-                                      <ConditionTypeCNF>0</ConditionTypeCNF>
-                                      <SPT>
-                                        <ConditionNegated>0</ConditionNegated>
-                                        <Group>0</Group>
-                                        <Method>INVITE</Method>
-                                        <Extension></Extension>
-                                      </SPT>
-                                      <SPT>
-                                        <ConditionNegated>0</ConditionNegated>
-                                        <Group>0</Group>
-                                        <SessionCase>1</SessionCase>  <!-- terminating-registered -->
-                                        <Extension></Extension>
-                                      </SPT>
-                                    </TriggerPoint>
-                                    <ApplicationServer>
-                                      <ServerName>sip:1.2.3.4:56787;transport=UDP</ServerName>
-                                      <DefaultHandling>0</DefaultHandling>
-                                    </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP")
+    .addIfc(1, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:1.2.3.4:56787;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -9416,7 +8039,7 @@ TEST_F(SCSCFTest, PreloadedRouteNotLastAs)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as terminating AS for Bob)
@@ -9461,7 +8084,7 @@ TEST_F(SCSCFTest, PreloadedRouteNotLastAs)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -9574,42 +8197,16 @@ TEST_F(SCSCFTest, TestSessionExpiresWhenNoRecordRoute)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>2</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:4.2.3.4:56788;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                  <InitialFilterCriteria>
-                                    <Priority>1</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:4.2.3.4:56788;transport=UDP")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
 
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
   TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.scscf_port, "4.2.3.4", 56788);
@@ -9661,7 +8258,7 @@ TEST_F(SCSCFTest, TestSessionExpiresWhenNoRecordRoute)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS2
@@ -9707,54 +8304,16 @@ TEST_F(SCSCFTest, HSSTimeoutOnPutRegData)
 // Diversion results in sprout sending a 504
 TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
 {
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>2</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <SessionCase>4</SessionCase>  <!-- originating-cdiv -->
-                                      <Extension></Extension>
-                                    </SPT>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                  <InitialFilterCriteria>
-                                    <Priority>0</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <SessionCase>1</SessionCase>  <!-- terminating-registered -->
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(2, {"<SessionCase>4</SessionCase><!-- originating-cdiv -->", "<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP")
+    .addIfc(0, {"<Method>INVITE</Method>", "<SessionCase>1</SessionCase><!-- terminating-registered -->"}, "sip:5.2.3.4:56787;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -9777,7 +8336,7 @@ TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1 (as terminating AS for Bob)
@@ -9816,7 +8375,7 @@ TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
   tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // Followed by a 504 (since the iFC lookup has got a 503)
@@ -9898,27 +8457,17 @@ TEST_F(SCSCFTest, TestCallerNotBarred)
 
   // The primary IMPU is barred, but this shouldn't stop us making a call since
   // we are calling from one of the other IMPUs.
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "REGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551001@homedomain</Identity><BarringIndication>1</BarringIndication></PublicIdentity>\n"
-                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>1</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551001@homedomain")
+    .addBarringIndication("sip:6505551001@homedomain", "1")
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -9937,27 +8486,17 @@ TEST_F(SCSCFTest, TestCalleeNotBarred)
 
   // The primary IMPU is barred, but this shouldn't stop us making a call since
   // we are calling one of the other IMPUs.
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", "REGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551235@homedomain</Identity><BarringIndication>1</BarringIndication></PublicIdentity>\n"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>1</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551235@homedomain")
+    .addBarringIndication("sip:6505551235@homedomain", "1")
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   subscription.return_sub());
   Message msg;
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
@@ -9968,26 +8507,17 @@ TEST_F(SCSCFTest, TestEmergencyCalleeNotBarred)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;sos;ob", 3600, "", true);
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", "REGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity><BarringIndication>1</BarringIndication></PublicIdentity>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>1</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addBarringIndication("sip:6505551234@homedomain", "1")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   subscription.return_sub());
+
   Message msg;
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
@@ -10000,26 +8530,16 @@ TEST_F(SCSCFTest, TestEmergencyMultipleBindings)
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;sos;ob", 3600, "", true);
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:fowertreetoowun@10.114.61.213:5061;transport=tcp;ob", 3600, "", false);
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", "REGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity><BarringIndication>1</BarringIndication></PublicIdentity>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>1</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addBarringIndication("sip:6505551234@homedomain", "1")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   "REGISTERED",
+                                   subscription.return_sub());
   Message msg;
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
@@ -10029,26 +8549,15 @@ TEST_F(SCSCFTest, TestEmergencyMultipleBindings)
 TEST_F(SCSCFTest, NoMatchingiFCsRejectOrig)
 {
   _scscf_sproutlet->_ifc_configuration._reject_if_no_matching_ifcs = true;
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                   "  <InitialFilterCriteria>\n"
-                                   "    <Priority>0</Priority>\n"
-                                   "    <TriggerPoint>\n"
-                                   "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                   "    <SPT>\n"
-                                   "      <ConditionNegated>0</ConditionNegated>\n"
-                                   "      <Group>0</Group>\n"
-                                   "      <Method>PUBLISH</Method>\n"
-                                   "      <Extension></Extension>\n"
-                                   "    </SPT>\n"
-                                   "  </TriggerPoint>\n"
-                                   "  <ApplicationServer>\n"
-                                   "    <ServerName>sip:DUMMY_AS</ServerName>\n"
-                                   "    <DefaultHandling>0</DefaultHandling>\n"
-                                   "  </ApplicationServer>\n"
-                                   "  </InitialFilterCriteria>\n"
-                                   "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(0, {"<Method>PUBLISH</Method>"}, "sip:DUMMY_AS");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
@@ -10081,26 +8590,12 @@ TEST_F(SCSCFTest, NoMatchingiFCsRejectOrig)
 TEST_F(SCSCFTest, NoMatchingiFCsRejectTerm)
 {
   _scscf_sproutlet->_ifc_configuration._reject_if_no_matching_ifcs = true;
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", "UNREGISTERED",
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                   "  <InitialFilterCriteria>\n"
-                                   "    <Priority>0</Priority>\n"
-                                   "    <TriggerPoint>\n"
-                                   "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                   "    <SPT>\n"
-                                   "      <ConditionNegated>0</ConditionNegated>\n"
-                                   "      <Group>0</Group>\n"
-                                   "      <Method>PUBLISH</Method>\n"
-                                   "      <Extension></Extension>\n"
-                                   "    </SPT>\n"
-                                   "  </TriggerPoint>\n"
-                                   "  <ApplicationServer>\n"
-                                   "    <ServerName>sip:DUMMY_AS</ServerName>\n"
-                                   "    <DefaultHandling>0</DefaultHandling>\n"
-                                   "  </ApplicationServer>\n"
-                                   "  </InitialFilterCriteria>\n"
-                                   "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(0, {"<Method>PUBLISH</Method>"}, "sip:DUMMY_AS");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", "UNREGISTERED", subscription.return_sub());
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
@@ -10135,26 +8630,15 @@ TEST_F(SCSCFTest, NoMatchingStandardiFCsUseFallbackiFCs)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _scscf_sproutlet->_ifc_configuration._apply_fallback_ifcs = true;
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                   "  <InitialFilterCriteria>\n"
-                                   "    <Priority>0</Priority>\n"
-                                   "    <TriggerPoint>\n"
-                                   "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                   "    <SPT>\n"
-                                   "      <ConditionNegated>0</ConditionNegated>\n"
-                                   "      <Group>0</Group>\n"
-                                   "      <Method>PUBLISH</Method>\n"
-                                   "      <Extension></Extension>\n"
-                                   "    </SPT>\n"
-                                   "    </TriggerPoint>\n"
-                                   "    <ApplicationServer>\n"
-                                   "      <ServerName>sip:1.2.3.5:56789;transport=UDP</ServerName>\n"
-                                   "      <DefaultHandling>0</DefaultHandling>\n"
-                                   "    </ApplicationServer>\n"
-                                   "  </InitialFilterCriteria>\n"
-                                   "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(0, {"<Method>PUBLISH</Method>"}, "sip:1.2.3.5:56789;transport=UDP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -10204,7 +8688,7 @@ TEST_F(SCSCFTest, NoMatchingStandardiFCsUseFallbackiFCs)
   // 100 Trying goes back to AS1
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -10230,7 +8714,7 @@ TEST_F(SCSCFTest, NoMatchingStandardiFCsUseFallbackiFCs)
   // 100 Trying goes back to AS1
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -10257,10 +8741,14 @@ TEST_F(SCSCFTest, NoStandardiFCsUseFallbackiFCs)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _scscf_sproutlet->_ifc_configuration._apply_fallback_ifcs = true;
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                   "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -10310,7 +8798,7 @@ TEST_F(SCSCFTest, NoStandardiFCsUseFallbackiFCs)
   // 100 Trying goes back to AS1
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -10336,7 +8824,7 @@ TEST_F(SCSCFTest, NoStandardiFCsUseFallbackiFCs)
   // 100 Trying goes back to AS1
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -10360,42 +8848,16 @@ TEST_F(SCSCFTest, NoStandardiFCsUseFallbackiFCs)
 // servers are triggered.
 TEST_F(SCSCFTest, OnlyDummyApplicationServers)
 {
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                   "  <InitialFilterCriteria>\n"
-                                   "    <Priority>0</Priority>\n"
-                                   "    <TriggerPoint>\n"
-                                   "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                   "    <SPT>\n"
-                                   "      <ConditionNegated>0</ConditionNegated>\n"
-                                   "      <Group>0</Group>\n"
-                                   "      <Method>INVITE</Method>\n"
-                                   "      <Extension></Extension>\n"
-                                   "    </SPT>\n"
-                                   "  </TriggerPoint>\n"
-                                   "  <ApplicationServer>\n"
-                                   "    <ServerName>sip:DUMMY_AS</ServerName>\n"
-                                   "    <DefaultHandling>0</DefaultHandling>\n"
-                                   "  </ApplicationServer>\n"
-                                   "  </InitialFilterCriteria>\n"
-                                   "  <InitialFilterCriteria>\n"
-                                   "    <Priority>1</Priority>\n"
-                                   "    <TriggerPoint>\n"
-                                   "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                   "    <SPT>\n"
-                                   "      <ConditionNegated>0</ConditionNegated>\n"
-                                   "      <Group>0</Group>\n"
-                                   "      <Method>INVITE</Method>\n"
-                                   "      <Extension></Extension>\n"
-                                   "    </SPT>\n"
-                                   "  </TriggerPoint>\n"
-                                   "  <ApplicationServer>\n"
-                                   "    <ServerName>sip:DUMMY_AS</ServerName>\n"
-                                   "    <DefaultHandling>0</DefaultHandling>\n"
-                                   "  </ApplicationServer>\n"
-                                   "  </InitialFilterCriteria>\n"
-                                   "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(0, {"<Method>INVITE</Method>"}, "sip:DUMMY_AS")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:DUMMY_AS");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
@@ -10431,58 +8893,17 @@ TEST_F(SCSCFTest, OnlyDummyApplicationServers)
 TEST_F(SCSCFTest, MixedRealAndDummyApplicationServer)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>0</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:DUMMY_AS</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>2</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:DUMMY_AS</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(0, {"<Method>INVITE</Method>"}, "sip:DUMMY_AS")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP")
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:DUMMY_AS");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -10507,7 +8928,7 @@ TEST_F(SCSCFTest, MixedRealAndDummyApplicationServer)
   // 100 Trying goes back to bono
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS1
@@ -10534,7 +8955,7 @@ TEST_F(SCSCFTest, MixedRealAndDummyApplicationServer)
   // 100 Trying goes back to AS1
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -10561,58 +8982,17 @@ TEST_F(SCSCFTest, MMFPreAs)
 {
   TRC_DEBUG("TEst");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>0</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:DUMMY_AS</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:pre.as.only.mmf.test.server:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>2</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:DUMMY_AS</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(0, {"<Method>INVITE</Method>"}, "sip:DUMMY_AS")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:pre.as.only.mmf.test.server:56789;transport=UDP")
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:DUMMY_AS");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -10637,7 +9017,7 @@ TEST_F(SCSCFTest, MMFPreAs)
   // 100 Trying goes back to bono
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to MMF
@@ -10675,7 +9055,7 @@ TEST_F(SCSCFTest, MMFPreAs)
   // 100 Trying goes back to the AS
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -10699,58 +9079,17 @@ TEST_F(SCSCFTest, MMFPreAs)
 TEST_F(SCSCFTest, MMFPostAs)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>0</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:DUMMY_AS</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.5.8.1:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>2</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:DUMMY_AS</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(0, {"<Method>INVITE</Method>"}, "sip:DUMMY_AS")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.5.8.1:56789;transport=UDP")
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:DUMMY_AS");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -10774,7 +9113,7 @@ TEST_F(SCSCFTest, MMFPostAs)
   // 100 Trying goes back to bono
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to AS
@@ -10812,7 +9151,7 @@ TEST_F(SCSCFTest, MMFPostAs)
   // 100 Trying goes back to MMF
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
@@ -10836,58 +9175,17 @@ TEST_F(SCSCFTest, MMFPostAs)
 TEST_F(SCSCFTest, MMFPreAndPostAs)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>0</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:DUMMY_AS</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:preandpost.mmf.test.server:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>2</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:DUMMY_AS</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+    .addIfc(0, {"<Method>INVITE</Method>"}, "sip:DUMMY_AS")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:preandpost.mmf.test.server:56789;transport=UDP")
+    .addIfc(2, {"<Method>INVITE</Method>"}, "sip:DUMMY_AS");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain",
+                                   "call",
+                                   "UNREGISTERED",
+                                   subscription.return_sub());
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -10911,7 +9209,7 @@ TEST_F(SCSCFTest, MMFPreAndPostAs)
   // 100 Trying goes back to bono
   pjsip_msg* out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to MMF
@@ -10958,7 +9256,7 @@ TEST_F(SCSCFTest, MMFPreAndPostAs)
   // 100 Trying goes back to MMF
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
-  msg.set_route(out);
+  msg.convert_routeset(out);
   free_txdata();
 
   // INVITE passed on to final destination
