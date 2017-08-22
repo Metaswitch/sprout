@@ -2083,15 +2083,17 @@ TEST_F(SCSCFTest, TestWithoutEnum)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "+15108580271", "homedomain", "sip:+15108580271@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                   "</ServiceProfile></IMSSubscription>");
-  _hss_connection->set_impu_result("tel:+15108580271", "call", RegDataXMLUtils::STATE_REGISTERED,
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "<PublicIdentity><Identity>sip:+15108580271@homedomain</Identity></PublicIdentity>"
-                                   "<PublicIdentity><Identity>tel:+15108580271</Identity></PublicIdentity>"
-                                   "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile_1 = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain");
+  SubscriptionBuilder subscription_1 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_1);
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription_1.return_sub());
+  ServiceProfileBuilder service_profile_2 = ServiceProfileBuilder()
+    .addIdentity("sip:+15108580271@homedomain")
+    .addIdentity("tel:+15108580271");
+  SubscriptionBuilder subscription_2 = SubscriptionBuilder()
+    .addServiceProfile(service_profile_2);
+  _hss_connection->set_impu_result("tel:+15108580271", "call", RegDataXMLUtils::STATE_REGISTERED, subscription_2.return_sub());
   _hss_connection->set_result("/impu/tel%3A%2B15108580271/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -8469,7 +8471,6 @@ TEST_F(SCSCFTest, TestCallerNotBarred)
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
->>>>>>> 4a19c39747552d3bfb1e8f720a4663fae333c3ea
   Message msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   list<HeaderMatcher> hdrs;
@@ -8589,26 +8590,12 @@ TEST_F(SCSCFTest, NoMatchingiFCsRejectOrig)
 TEST_F(SCSCFTest, NoMatchingiFCsRejectTerm)
 {
   _scscf_sproutlet->_ifc_configuration._reject_if_no_matching_ifcs = true;
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", "UNREGISTERED",
-                                   "<IMSSubscription><ServiceProfile>\n"
-                                   "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
-                                   "  <InitialFilterCriteria>\n"
-                                   "    <Priority>0</Priority>\n"
-                                   "    <TriggerPoint>\n"
-                                   "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                   "    <SPT>\n"
-                                   "      <ConditionNegated>0</ConditionNegated>\n"
-                                   "      <Group>0</Group>\n"
-                                   "      <Method>PUBLISH</Method>\n"
-                                   "      <Extension></Extension>\n"
-                                   "    </SPT>\n"
-                                   "  </TriggerPoint>\n"
-                                   "  <ApplicationServer>\n"
-                                   "    <ServerName>sip:DUMMY_AS</ServerName>\n"
-                                   "    <DefaultHandling>0</DefaultHandling>\n"
-                                   "  </ApplicationServer>\n"
-                                   "  </InitialFilterCriteria>\n"
-                                   "</ServiceProfile></IMSSubscription>");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(0, {"<Method>PUBLISH</Method>"}, "sip:DUMMY_AS");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", "UNREGISTERED", subscription.return_sub());
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
