@@ -284,6 +284,16 @@ namespace TestingCommon
     std::string get_response();
   };
 
+  class SCSCFMessage : public Message
+  {
+  public:
+    SCSCFMessage()
+    {
+      Message::_route = "Route: <sip:sprout.homedomain;service=scscf>";
+    };
+    ~SCSCFMessage() {};
+  };
+
 }
 
 #endif
