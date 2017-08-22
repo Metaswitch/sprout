@@ -86,6 +86,12 @@ public:
     /// be changed once the challenge has been created.
     std::string scscf_uri;
 
+    /// Write to JSON writer (IMPI format).
+    virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
+
+    /// Deserialization from JSON (IMPI format).
+    static ImpiStore::AuthChallenge* from_json(rapidjson::Value* json);
+
   private:
     /// Constructor.
     /// @param _type         Type of authentication challenge.
@@ -97,15 +103,7 @@ public:
       correlator(),
       scscf_uri() {};
 
-    /// Write to JSON writer (IMPI format).
-    virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
-
-    /// Deserialization from JSON (IMPI format).
-    static ImpiStore::AuthChallenge* from_json(rapidjson::Value* json);
-
-    // The IMPI store is a friend so it can call our JSON serialization
-    // functions and read our CAS value.
-    friend class ImpiStore;
+  friend class ImpiStore;
   };
 
   /// @class ImpiStore::DigestAuthChallenge
@@ -142,6 +140,12 @@ public:
     /// Digest HA1
     std::string ha1;
 
+    /// Write to JSON writer (IMPI format).
+    virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
+
+    /// Deserialization from JSON (IMPI format).
+    static ImpiStore::DigestAuthChallenge* from_json(rapidjson::Value* json);
+
   private:
     /// Constructor.
     DigestAuthChallenge() :
@@ -149,12 +153,6 @@ public:
       realm(),
       qop(),
       ha1() {};
-
-    /// Write to JSON writer (IMPI format).
-    virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
-
-    /// Deserialization from JSON (IMPI format).
-    static ImpiStore::DigestAuthChallenge* from_json(rapidjson::Value* json);
 
     // The IMPI store is a friend so it can call our JSON serialization
     // functions.
@@ -183,17 +181,17 @@ public:
     /// AKA expected response
     std::string response;
 
-  private:
-    /// Constructor.
-    AKAAuthChallenge() :
-      AuthChallenge(AuthChallenge::Type::AKA),
-      response() {};
-
     /// Write to JSON writer (IMPI format).
     virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
 
     /// Deserialization from JSON (IMPI format).
     static ImpiStore::AKAAuthChallenge* from_json(rapidjson::Value* json);
+
+  private:
+    /// Constructor.
+    AKAAuthChallenge() :
+      AuthChallenge(AuthChallenge::Type::AKA),
+      response() {};
 
     // The IMPI store is a friend so it can call our JSON serialization
     // functions.
@@ -208,10 +206,10 @@ public:
   public:
     /// Constructor.
     /// @param _impi         The private ID.
-    Impi(const std::string& _impi) : impi(_impi), auth_challenges(), _cas(0) {};
+    Impi(const std::string& _impi) : impi(_impi), auth_challenges() {};
 
     /// Destructor.
-    ~Impi();
+    virtual ~Impi();
 
     /// Helper - get authentication challenge for a given nonce.
     /// @returns the authentication challenge, or NULL if not found
@@ -227,33 +225,20 @@ public:
     /// are removed, they must be destroyed by the user.
     std::vector<ImpiStore::AuthChallenge*> auth_challenges;
 
-  private:
-    /// Serialization to JSON.
-    std::string to_json();
-
-    /// Write to JSON writer.
-    void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
-
-    /// Deserialization from JSON.
-    static ImpiStore::Impi* from_json(const std::string& impi, const std::string& json);
-
-    /// Deserialization from JSON.
-    static ImpiStore::Impi* from_json(const std::string& impi, rapidjson::Value* json);
-
     /// Get the expiry time for the whole IMPI object.
     /// @returns the expiry time.
     int get_expires();
 
-    /// Memcached CAS value.
-    uint64_t _cas;
+  protected:
+    /// Serialization to JSON.
+    virtual std::string to_json();
+
+    /// Write to JSON writer.
+    virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer) = 0;
 
     // The IMPI store is a friend so it can read our CAS value.
     friend class ImpiStore;
   };
-
-  /// Constructor.
-  /// @param data_store    A pointer to the underlying data store.
-  ImpiStore(Store* data_store);
 
   /// Destructor.
   virtual ~ImpiStore();
@@ -263,7 +248,7 @@ public:
   /// @param impi      An Impi object representing the IMPI.  The caller
   ///                  continues to own this object.
   virtual Store::Status set_impi(Impi* impi,
-                                 SAS::TrailId trail);
+                                 SAS::TrailId trail) = 0;
 
   /// Retrieves the IMPI for the specified private user identity.
   ///
@@ -273,7 +258,7 @@ public:
   ///                  found it returns an empty object.
   /// @param impi      The private user identity.
   virtual Impi* get_impi(const std::string& impi,
-                         SAS::TrailId trail);
+                         SAS::TrailId trail) = 0;
 
   /// Delete all record of the IMPI.
   ///
@@ -281,14 +266,14 @@ public:
   ///                  continues to own this object.
   /// @returns Store::Status::OK on success, or an error code on failure.
   virtual Store::Status delete_impi(Impi* impi,
-                                    SAS::TrailId trail);
+                                    SAS::TrailId trail) = 0;
+
+protected:
+  static rapidjson::Document* json_from_string(const std::string& string);
 
 private:
   /// Identifier for IMPI table.
   static const std::string TABLE_IMPI;
-
-  /// The underlying data store.
-  Store* _data_store;
 };
 
 // Utility function - retrieves the "corrlator" field from the give challenge

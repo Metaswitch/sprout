@@ -29,6 +29,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          memcachedstoreview.cpp \
                          memcached_config.cpp \
                          impistore.cpp \
+                         astaire_impistore.cpp \
                          subscriber_data_manager.cpp \
                          xdmconnection.cpp \
                          simservs.cpp \

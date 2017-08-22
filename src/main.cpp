@@ -86,6 +86,7 @@ extern "C" {
 #include "ralf_processor.h"
 #include "sprout_alarmdefinition.h"
 #include "sproutlet_options.h"
+#include "astaire_impistore.h"
 
 enum OptionTypes
 {
@@ -2161,7 +2162,7 @@ int main(int argc, char* argv[])
                                                                       astaire_resolver,
                                                                       false,
                                                                       astaire_comm_monitor);
-    local_impi_store = new ImpiStore(local_impi_data_store);
+    local_impi_store = new AstaireImpiStore(local_impi_data_store);
 
     // Only set up remote IMPI stores if some have been configured, and we need
     // the IMPI store to be GR.
@@ -2180,7 +2181,7 @@ int main(int argc, char* argv[])
                                                                              true,
                                                                              remote_astaire_comm_monitor);
         remote_impi_data_stores.push_back(remote_data_store);
-        remote_impi_stores.push_back(new ImpiStore(remote_data_store));
+        remote_impi_stores.push_back(new AstaireImpiStore(remote_data_store));
       }
     }
   }
@@ -2189,7 +2190,7 @@ int main(int argc, char* argv[])
     // Use local store.
     TRC_STATUS("Using local store");
     local_impi_data_store = (Store*)new LocalStore();
-    local_impi_store = new ImpiStore(local_data_store);
+    local_impi_store = new AstaireImpiStore(local_data_store);
   }
 
   // Load the sproutlet plugins.
