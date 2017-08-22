@@ -1132,3 +1132,166 @@ TEST_F(DeleteImpuTaskTest, BadMethod)
 
   task->run();
 }
+
+class PushProfileTaskTest : public SipTest
+{
+  MockSubscriberDataManager* _subscriber_data_manager;
+  MockHttpStack* _httpstack;
+  FakeHSSConnection* _hss;
+  MockHttpStack::Request* _req;
+  PushProfileTask::Config* _cfg;
+  PushProfileTask* _task;
+
+  static void SetUpTestCase()
+  {
+    SipTest::SetUpTestCase();
+    SipTest::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
+  }
+
+  void SetUp()
+  {
+    _httpstack = new MockHttpStack();
+    _subscriber_data_manager = new MockSubscriberDataManager();
+    _hss = new FakeHSSConnection();
+  }
+
+  void TearDown()
+  {
+    delete _req;
+    delete _cfg;
+    delete _hss;
+    delete _subscriber_data_manager;
+    delete _httpstack;
+  }
+
+  void build_pushprofile_request(std::string body,
+				 std::string default_uri,
+                                 htp_method method = htp_method_POST)
+  {
+    _req = new MockHttpStack::Request(_httpstack,
+         "/registrations/" + default_uri,
+         "",
+         "",
+         body,
+         method);
+     _cfg = new PushProfileTask::Config(_subscriber_data_manager,
+                                        {},
+                                        _hss);
+    _task = new PushProfileTask(*_req, _cfg, 0);
+  }
+};
+
+// Mainline Case
+TEST_F(PushProfileTaskTest, MainlineTest)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string body =          "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                              "  <PublicIdentity><Identity>sip:6505550232@homedomain</Identity><BarringIndicator>1</BarringIndicator></PublicIdentity>\n"
+			      "  <PublicIdentity><Identity>sip:6505550233@homedomain</Identity></PublicIdentity>\n"
+                              "  <InitialFilterCriteria>\n"
+                              "    <Priority>1</Priority>\n"
+                              "    <TriggerPoint>\n"
+                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                              "      <SPT>\n"
+                              "        <ConditionNegated>0</ConditionNegated>\n"
+                              "        <Group>0</Group>\n"
+                              "        <Method>REGISTER</Method>\n"
+                              "        <Extension></Extension>\n"
+                              "      </SPT>\n"
+                              "    </TriggerPoint>\n"
+                              "    <ApplicationServer>\n"
+                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                              "      <DefaultHandling>1</DefaultHandling>\n"
+                              "    </ApplicationServer>\n"
+                              "  </InitialFilterCriteria>\n"
+                              "</ServiceProfile></IMSSubscription>";
+  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(default_uri);
+  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
+  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*_subscriber_data_manager, get_aor_data(default_uri, _)).WillOnce(Return(aor_pair));
+  EXPECT_CALL(*_subscriber_data_manager, set_aor_data(default_uri, _, aor_pair, _, _)).WillOnce(Return(Store::OK));
+
+  EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
+  _task->run();
+}
+
+// The XML is not valid and therefore not able to be parsed. Sends HTTP_BAD_REQUEST.
+TEST_F(PushProfileTaskTest, InvalidMethod)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string body =          "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                              "  <<\n"
+                              "</ServiceProfile></IMSSubscription>";
+  build_pushprofile_request(body, default_uri, htp_method_GET);
+
+  EXPECT_CALL(*_httpstack, send_reply(_, 405, _));
+  _task->run();
+}
+
+// The XML is not valid and therefore not able to be parsed. Sends HTTP_BAD_REQUEST.
+TEST_F(PushProfileTaskTest, InvalidXML)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string body =          "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+  			      "  <<\n"
+                              "</ServiceProfile></IMSSubscription>";
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*_httpstack, send_reply(_, 400, _));
+  _task->run();
+}
+
+// The XML does not contain the relevant Public Identities. Sends HTTP_BAD_REQUEST.
+TEST_F(PushProfileTaskTest, MissingPublicIdentityXML)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string body =          "<IMSSubscription><ServiceProfile>\n"
+                              "</ServiceProfile></IMSSubscription>";
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*_httpstack, send_reply(_, 400, _));
+  _task->run();
+}
+
+// get_aor_data returns a NULL pointer. Sends HTTP_SERVER_ERROR
+TEST_F(PushProfileTaskTest, SubscriberDataManagerFails)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string body =          "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                              "</ServiceProfile></IMSSubscription>";
+  SubscriberDataManager::AoRPair* aor_pair;
+  aor_pair = NULL;
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*_subscriber_data_manager, get_aor_data(default_uri, _)).WillOnce(Return(aor_pair));
+
+  EXPECT_CALL(*_httpstack, send_reply(_, 500, _));
+  _task->run();
+}
+
+// set_aor_data fails. Sends HTTP_SERVER_ERROR
+TEST_F(PushProfileTaskTest, SubscriberDataManagerWriteFails)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string body =          "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                              "</ServiceProfile></IMSSubscription>";
+  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(default_uri);
+  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
+  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*_subscriber_data_manager, get_aor_data(default_uri, _)).WillOnce(Return(aor_pair));
+  EXPECT_CALL(*_subscriber_data_manager, set_aor_data(default_uri, _, aor_pair, _, _)).WillOnce(Return(Store::ERROR));
+
+  EXPECT_CALL(*_httpstack, send_reply(_, 500, _));
+  _task->run();
+}
+
+

@@ -24,6 +24,7 @@
 #include "rapidjson/error/en.h"
 #include "snmp_continuous_accumulator_table.h"
 #include "xml_utils.h"
+#include "sprout_xml_utils.h"
 
 const std::string HSSConnection::REG = "reg";
 const std::string HSSConnection::CALL = "call";
@@ -354,6 +355,30 @@ bool decode_homestead_xml(const std::string public_user_identity,
     return false;
   }
 
+  #if 0
+  std::map<std::string, Ifcs > ifcs_map_copy;
+  AssociatedURIs associated_uris_copy;
+  std::vector<std::string> aliases_copy;
+  SIFCService* sifc_service_copy = NULL;
+
+  if (!SproutXmlUtils::decode_service_profile(public_user_identity,
+			 	   	      root,
+					      imss,
+					      ifcs_map_copy,
+					      associated_uris_copy,
+					      aliases_copy,
+					      sifc_service_copy,
+					      true,
+					      trail))
+  {
+    return false;
+  }
+  ifcs_map = ifcs_map_copy;
+  associated_uris = associated_uris_copy;
+  aliases = aliases_copy;
+  sifc_service = sifc_service_copy;
+  #endif
+
   // The set of aliases consists of the set of public identities in the same
   // Service Profile. It is a subset of the associated URIs.
 
@@ -550,7 +575,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
       event.add_var_param(public_user_identity);
       SAS::report_event(event);
     }
-  }
+}
 
   rapidxml::xml_node<>* charging_addrs_node = cw->first_node("ChargingAddresses");
 

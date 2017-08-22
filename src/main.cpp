@@ -1,4 +1,4 @@
-/**
+/*
  * @file main.cpp
  *
  * Copyright (C) Metaswitch Networks 2017
@@ -2299,6 +2299,9 @@ int main(int argc, char* argv[])
                                                    sip_resolver,
                                                    local_impi_store,
                                                    remote_impi_stores);
+  PushProfileTask::Config push_profile_config(local_sdm,
+					      remote_sdms,
+					      hss_connection);
   GetCachedDataTask::Config get_cached_data_config(local_sdm, remote_sdms);
   DeleteImpuTask::Config delete_impu_config(local_sdm,
                                             remote_sdms,
@@ -2313,6 +2316,7 @@ int main(int argc, char* argv[])
   TimerHandler<ChronosAoRTimeoutTask, AoRTimeoutTask::Config> aor_timeout_handler(&aor_timeout_config);
   TimerHandler<ChronosAuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
   HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
+  HttpStackUtils::SpawningHandler<PushProfileTask, PushProfileTask::Config> push_profile_handler(&push_profile_config);
   HttpStackUtils::PingHandler ping_handler;
   HttpStackUtils::SpawningHandler<GetBindingsTask, GetCachedDataTask::Config> get_bindings_handler(&get_cached_data_config);
   HttpStackUtils::SpawningHandler<GetSubscriptionsTask, GetCachedDataTask::Config> get_subscriptions_handler(&get_cached_data_config);
@@ -2330,8 +2334,12 @@ int main(int argc, char* argv[])
                                        &auth_timeout_handler);
       http_stack_sig->register_handler("^/registrations?*$",
                                        &deregistration_handler);
+      http_stack_sig->register_handler("^/registrations/[^/]+$",
+                                       &push_profile_handler);
+
       http_stack_sig->bind_tcp_socket(opt.http_address, opt.http_port);
       http_stack_sig->start(&reg_httpthread_with_pjsip);
+
     }
     catch (HttpStack::Exception& e)
     {

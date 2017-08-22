@@ -265,4 +265,39 @@ private:
   const Config* _cfg;
 };
 
+class PushProfileTask : public HttpStackUtils::Task
+{
+public:
+  struct Config
+  {
+    Config(SubscriberDataManager* sdm,
+           std::vector<SubscriberDataManager*> remote_sdms,
+	   HSSConnection* hss):
+      _sdm(sdm),
+      _remote_sdms(remote_sdms),
+      _hss(hss)
+    {}
+
+    SubscriberDataManager* _sdm;
+    std::vector<SubscriberDataManager*> _remote_sdms;
+    HSSConnection* _hss;
+  };
+
+  PushProfileTask(HttpStack::Request& req,
+                  const Config* cfg,
+		  SAS::TrailId trail) :
+    HttpStackUtils::Task(req, trail), _cfg(cfg)
+  {};
+
+  void run();
+  HTTPCode parse_request(std::string body, SAS::TrailId trail);
+  HTTPCode get_data(SAS::TrailId trail);
+  HTTPCode set_data(SAS::TrailId trail);
+
+protected:
+  const Config* _cfg;
+  std::string _default_public_id;
+  AssociatedURIs _associated_uris;
+  SubscriberDataManager::AoRPair* _aor_pair;
+};
 #endif

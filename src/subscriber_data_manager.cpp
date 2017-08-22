@@ -113,6 +113,7 @@ Store::Status SubscriberDataManager::set_aor_data(
                                      AoRPair* aor_pair,
                                      SAS::TrailId trail,
                                      bool& all_bindings_expired)
+
 {
   // The ordering of this function is quite important.
   //
@@ -657,7 +658,6 @@ void SubscriberDataManager::NotifySender::send_notifys(
                                          expired_binding_uris,
                                          now,
                                          trail);
-
   // Iterate over the subscriptions in the current AoR and send NOTIFYs.
   // If the bindings have changed, then send NOTIFYs to all subscribers; otherwise,
   // only send them when the subscription has been created or updated.
@@ -735,8 +735,45 @@ void SubscriberDataManager::NotifySender::send_notifys(
         }
       }
     }
-  }
+#if 0
+    else if (changed_associated_uris)
+    {
+      TRC_DEBUG("Sending NOTIFY for subscription %s: reason(s) changed associated uris", s_id.c_str());
+      pjsip_tx_data* tdata_notify = NULL;
+      pj_status_t status = NotifyUtils::create_subscription_notify(
+                                            &tdata_notify,
+                                            subscription,
+                                            aor_id,
+                                            associated_uris,
+                                            aor_pair->get_orig(),
+                                            binding_info_to_notify,
+                                            NotifyUtils::RegistrationState::ACTIVE,
+                                            now,
+                                            trail);
 
+      if (status == PJ_SUCCESS)
+      {
+        set_trail(tdata_notify, trail);
+        status = PJUtils::send_request(tdata_notify, 0, NULL, NULL, true);
+
+        if (status == PJ_SUCCESS)
+        {
+          subscription->_refreshed = false;
+        }
+        else
+        {
+          // LCOV_EXCL_START
+          SAS::Event event(trail, SASEvent::NOTIFICATION_FAILED, 0);
+          std::string error_msg = "Failed to send NOTIFY - error: " +
+                                        PJUtils::pj_status_to_string(status);
+          event.add_var_param(error_msg);
+          SAS::report_event(event);
+          // LCOV_EXCL_STOP
+        }
+      }
+    }
+#endif
+  }
   delete_bindings(binding_info_to_notify);
 }
 
