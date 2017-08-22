@@ -11,9 +11,6 @@
 #ifndef SIPTEST_H__
 #define SIPTEST_H__
 
-#ifndef SIPTEST_H__
-#define SIPTEST_H__
-
 #include <string>
 #include <sstream>
 #include "gmock/gmock.h"

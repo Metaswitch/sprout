@@ -29,6 +29,7 @@
 #include "icscfsproutlet.h"
 #include "bgcfsproutlet.h"
 #include "sproutletappserver.h"
+#include "scscfselector.h"
 #include "mmtel.h"
 #include "sproutletproxy.h"
 #include "fakesnmp.hpp"
@@ -117,7 +118,7 @@ public:
                                           "scscf",
                                           "sip:scscf.sprout.homedomain:5058;transport=TCP",
                                           "sip:127.0.0.1:5058",
-                                          "",
+                                          "sip:icscf.sprout.homedomain:5059;transport=TCP",
                                           "sip:bgcf@homedomain:5058",
                                           "sip:11.22.33.44;service=mmf",
                                           "sip:44.33.22.11:5053;service=mmf",
@@ -140,6 +141,23 @@ public:
                                           _sess_cont_comm_tracker
                                           );
     _scscf_sproutlet->init();
+
+    _scscf_selector = new SCSCFSelector("sip:scscf.sprout.homedomain",
+                                        string(UT_DIR).append("/test_icscf.json"));
+    // Create the I-CSCF Sproutlets.
+    _icscf_sproutlet = new ICSCFSproutlet("icscf",
+                                          "sip:bgcf@homedomain:5058",
+                                          5059,
+                                          "sip:icscf.sprout.homedomain:5059;transport=TCP",
+                                          _hss_connection,
+                                          _acr_factory,
+                                          _scscf_selector,
+                                          _enum_service,
+                                          &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
+                                          &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
+                                          false
+                                          );
+    _icscf_sproutlet->init();
 
     // Create the BGCF Sproutlet.
     _bgcf_sproutlet = new BGCFSproutlet("bgcf",
@@ -164,6 +182,7 @@ public:
     // Create the SproutletProxy.
     std::list<Sproutlet*> sproutlets;
     sproutlets.push_back(_scscf_sproutlet);
+    sproutlets.push_back(_icscf_sproutlet);
     sproutlets.push_back(_bgcf_sproutlet);
     sproutlets.push_back(_mmtel_sproutlet);
     std::unordered_set<std::string> additional_home_domains;
@@ -220,6 +239,8 @@ public:
     delete _mmtel; _mmtel = NULL;
     delete _bgcf_sproutlet; _bgcf_sproutlet = NULL;
     delete _scscf_sproutlet; _scscf_sproutlet = NULL;
+    delete _icscf_sproutlet; _icscf_sproutlet = NULL;
+    delete _scscf_selector; _scscf_selector = NULL;
 
   }
 
@@ -273,7 +294,9 @@ protected:
   static ACRFactory* _acr_factory;
   static MMFService* _mmf_service;
   static FIFCService* _fifc_service;
+  static SCSCFSelector* _scscf_selector;
   SCSCFSproutlet* _scscf_sproutlet;
+  ICSCFSproutlet* _icscf_sproutlet;
   BGCFSproutlet* _bgcf_sproutlet;
   Mmtel* _mmtel;
   SproutletAppServerShim* _mmtel_sproutlet;
@@ -318,6 +341,7 @@ EnumService* SCSCFTest::_enum_service;
 ACRFactory* SCSCFTest::_acr_factory;
 MMFService* SCSCFTest::_mmf_service;
 FIFCService* SCSCFTest::_fifc_service;
+SCSCFSelector* SCSCFTest::_scscf_selector;
 MockAsCommunicationTracker* SCSCFTest::_sess_term_comm_tracker;
 MockAsCommunicationTracker* SCSCFTest::_sess_cont_comm_tracker;
 
@@ -1748,6 +1772,9 @@ TEST_F(SCSCFTest, TestNoEnumWhenGRUU)
 {
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+  _hss_connection->set_result("/impu/sip%3A%2B15108580271%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
   register_uri(_sdm, _hss_connection, "+15108580271", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", 30, "abcd");
 
   Message msg;
@@ -1774,6 +1801,9 @@ TEST_F(SCSCFTest, TestGRUUFailure)
   // a 480 error.
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+  _hss_connection->set_result("/impu/sip%3A%2B15108580271%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
   register_uri(_sdm, _hss_connection, "+15108580271", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", 30, "abcde");
 
   Message msg;
@@ -1795,6 +1825,9 @@ TEST_F(SCSCFTest, TestEnumExternalSuccessFromFromHeader)
   SCOPED_TRACE("");
   Message msg;
   _hss_connection->set_impu_result("sip:+15108581234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   msg._to = "+15108580271";
   msg._from = "+15108581234";
@@ -2049,8 +2082,19 @@ TEST_F(SCSCFTest, TestEnumNPBGCFTel)
 TEST_F(SCSCFTest, TestWithoutEnum)
 {
   SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
-
+  register_uri(_sdm, _hss_connection, "+15108580271", "homedomain", "sip:+15108580271@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
+                                   "</ServiceProfile></IMSSubscription>");
+  _hss_connection->set_impu_result("tel:+15108580271", "call", RegDataXMLUtils::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:+15108580271@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:+15108580271</Identity></PublicIdentity>"
+                                   "</ServiceProfile></IMSSubscription>");
+  _hss_connection->set_result("/impu/tel%3A%2B15108580271/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
   // Disable ENUM.
   _scscf_sproutlet->_enum_service = NULL;
 
@@ -2066,7 +2110,7 @@ TEST_F(SCSCFTest, TestWithoutEnum)
 
   // Skip the ACK and BYE on this request by setting the last
   // parameter to false, as we're only testing Sprout functionality
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@homedomain;user=phone.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@10.114.61.213:5061;transport=tcp;.*"), hdrs, false);
 }
 
 
@@ -2470,6 +2514,9 @@ TEST_F(SCSCFTest, SimpleISCMainline)
                                    "call",
                                    "UNREGISTERED",
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
   EXPECT_CALL(*_sess_cont_comm_tracker, on_success(StrEq("sip:1.2.3.4:56789;transport=UDP")));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -2566,6 +2613,9 @@ TEST_F(SCSCFTest, ISCMultipleResponses)
                                    "call",
                                    "UNREGISTERED",
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   // Only expect one cal into the AS communication tracker despite receiving
   // multiple responses to the same request.
@@ -2950,6 +3000,9 @@ TEST_F(SCSCFTest, SimpleNextOrigFlow)
                                    "call",
                                    RegDataXMLUtils::STATE_REGISTERED,
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3036,6 +3089,9 @@ TEST_F(SCSCFTest, SimpleReject)
                                    subscription.return_sub());
 
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3186,6 +3242,9 @@ TEST_F(SCSCFTest, SimpleAccept)
     .addServiceProfile(service_profile);
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3260,6 +3319,9 @@ TEST_F(SCSCFTest, SimpleRedirect)
     .addServiceProfile(service_profile);
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3571,6 +3633,10 @@ TEST_F(SCSCFTest, DefaultHandlingContinueRecordRouting)
                                   RegDataXMLUtils::STATE_REGISTERED,
                                   subscription_2.return_sub());
 
+ _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("No valid address"))).Times(2);
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
@@ -3624,6 +3690,9 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistent)
                                    "call",
                                    RegDataXMLUtils::STATE_REGISTERED,
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -3677,6 +3746,10 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonResponsive)
                                    "call",
                                    RegDataXMLUtils::STATE_REGISTERED,
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(StrEq("sip:1.2.3.4:56789;transport=UDP"), _));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -3749,6 +3822,9 @@ TEST_F(SCSCFTest, DefaultHandlingContinueImmediateError)
     .addServiceProfile(service_profile);
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   // This flow counts as an unsuccessful AS communication, as a 100 trying does
   // not cause an AS to be treated as responsive.
@@ -3829,6 +3905,9 @@ TEST_F(SCSCFTest, DefaultHandlingContinue100ThenError)
     .addServiceProfile(service_profile);
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   // This flow counts as an unsuccessful AS communication, as a 100 trying does
   // not cause an AS to be treated as responsive.
@@ -3914,6 +3993,9 @@ TEST_F(SCSCFTest, DefaultHandlingContinue1xxThenError)
     .addServiceProfile(service_profile);
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   // This flow counts as a successful AS communication, as it sent back a 1xx
   // response.
@@ -4133,6 +4215,10 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeout)
                                    "call",
                                    "UNREGISTERED",
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -4209,6 +4295,10 @@ TEST_F(SCSCFTest, DefaultHandlingContinueDisabled)
                                    "call",
                                    "UNREGISTERED",
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, _));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -4285,6 +4375,9 @@ TEST_F(SCSCFTest, DefaultHandlingMissing)
                                    "call",
                                    RegDataXMLUtils::STATE_REGISTERED,
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -4338,6 +4431,9 @@ TEST_F(SCSCFTest, DefaultHandlingMalformed)
                                    "call",
                                    RegDataXMLUtils::STATE_REGISTERED,
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -4392,6 +4488,9 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistentRRTest)
     .addServiceProfile(service_profile);
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -4455,6 +4554,10 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeoutRRTest)
                                    "call",
                                    "UNREGISTERED",
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("timeout")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -4538,7 +4641,10 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstAsFailsRRTest)
                                    "call",
                                    "UNREGISTERED",
                                    subscription.return_sub());
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("Transport error")));
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+  EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("No valid address")));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -4602,6 +4708,9 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstTermAsFailsRRTest)
     .addServiceProfile(service_profile);
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("No valid address")));
 
@@ -4668,6 +4777,9 @@ TEST_F(SCSCFTest, RecordRoutingTest)
   // - AS4's Record-Route
   // - on end of terminating handling
 
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
   doFourAppServerFlow("Record-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;billing-role=charge-term>\r\n"
                       "Record-Route: <sip:6.2.3.4>\r\n"
                       "Record-Route: <sip:5.2.3.4>\r\n"
@@ -4693,6 +4805,10 @@ TEST_F(SCSCFTest, RecordRoutingTestStartAndEnd)
   // - AS3's Record-Route
   // - AS4's Record-Route
   // - on end of terminating handling
+
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   doFourAppServerFlow("Record-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;billing-role=charge-term>\r\n"
                       "Record-Route: <sip:6.2.3.4>\r\n"
@@ -4732,6 +4848,9 @@ TEST_F(SCSCFTest, RecordRoutingTestEachHop)
   // AS3, we'd have two - one for conclusion of originating processing
   // and one for initiation of terminating processing) but we don't
   // split originating and terminating handling like that yet.
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
   doFourAppServerFlow("Record-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;billing-role=charge-term>\r\n"
                       "Record-Route: <sip:6.2.3.4>\r\n"
                       "Record-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;billing-role=charge-none>\r\n"
@@ -4754,6 +4873,9 @@ TEST_F(SCSCFTest, RecordRoutingTestEachHop)
 TEST_F(SCSCFTest, RecordRoutingTestCollapse)
 {
   // Expect 1 Record-Route
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
   doFourAppServerFlow("Record-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;billing-role=charge-term>\r\n"
                       "Record-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;billing-role=charge-orig>", false);
 }
@@ -4765,6 +4887,9 @@ TEST_F(SCSCFTest, RecordRoutingTestCollapseEveryHop)
 {
   stack_data.record_route_on_every_hop = true;
   // Expect 1 Record-Route
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
   doFourAppServerFlow("Record-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;billing-role=charge-term>\r\n"
                       "Record-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;billing-role=charge-none>\r\n"
                       "Record-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;billing-role=charge-none>\r\n"
@@ -4900,6 +5025,9 @@ TEST_F(SCSCFTest, AsOriginatedOrig)
   // ---------- Send spontaneous INVITE from AS0, marked as originating-handling-required.
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 //  msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -4954,6 +5082,10 @@ TEST_F(SCSCFTest, Cdiv)
                                    RegDataXMLUtils::STATE_REGISTERED,
                                    subscription.return_sub());
 
+  _hss_connection->set_result("/impu/sip%3A6505555678%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
   TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -4966,6 +5098,7 @@ TEST_F(SCSCFTest, Cdiv)
   msg._todomain = "";
   msg._route = "Route: <sip:sprout.homedomain>";
   msg._requri = "sip:6505551234@homedomain";
+  msg._extra = "P-Charging-Vector: icid-value=3";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -5194,6 +5327,9 @@ TEST_F(SCSCFTest, BothEndsWithEnumRewrite)
     .addServiceProfile(service_profile);
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -5348,6 +5484,13 @@ TEST_F(SCSCFTest, MmtelCdiv)
                           </simservs>)");  // "
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
 
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+  _hss_connection->set_result("/impu/sip%3A6505555678%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -5499,6 +5642,16 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
 
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
 
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+  _hss_connection->set_result("/impu/sip%3A6505555678%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+  _hss_connection->set_result("/impu/sip%3A6505559012%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -5604,6 +5757,9 @@ TEST_F(SCSCFTest, ExpiredChain)
                                    "call",
                                    RegDataXMLUtils::STATE_REGISTERED,
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -5718,6 +5874,9 @@ TEST_F(SCSCFTest, MmtelFlow)
                                    "call",
                                    RegDataXMLUtils::STATE_REGISTERED,
                                    subscription_2.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -5848,6 +6007,9 @@ TEST_F(SCSCFTest, MmtelThenExternal)
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -6012,6 +6174,9 @@ TEST_F(SCSCFTest, MultipleMmtelFlow)
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
@@ -6094,6 +6259,9 @@ TEST_F(SCSCFTest, SimpleOptionsAccept)
     .addServiceProfile(service_profile);
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -6151,6 +6319,9 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
     .addServiceProfile(service_profile);
   _hss_connection->set_impu_result("sip:6505501234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+  _hss_connection->set_result("/impu/sip%3A6505501234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   TransportFlow tpBono(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -6417,6 +6588,9 @@ TEST_F(SCSCFTest, OriginatingTerminatingAS)
                                    "call",
                                    RegDataXMLUtils::STATE_REGISTERED,
                                    subscription_2.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpBono(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
@@ -6611,6 +6785,10 @@ TEST_F(SCSCFTest, OriginatingTerminatingASTimeout)
   SubscriptionBuilder subscription_2 = SubscriptionBuilder()
     .addServiceProfile(service_profile_2);
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription_2.return_sub());
+
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -6876,6 +7054,9 @@ TEST_F(SCSCFTest, OriginatingTerminatingMessageASTimeout)
   SubscriptionBuilder subscription_2 = SubscriptionBuilder()
     .addServiceProfile(service_profile_2);
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription_2.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   // ---------- Send MESSAGE
   // We're within the trust boundary, so no stripping should occur.
@@ -7060,6 +7241,9 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
     .addServiceProfile(service_profile);
   _hss_connection->set_impu_result("sip:6505501234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+  _hss_connection->set_result("/impu/sip%3A6505501234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
 
@@ -7267,6 +7451,9 @@ TEST_F(SCSCFTest, TestInvitePProfileKey)
                                    subscription_2.return_sub(),
                                    "",
                                    wildcard);
+  _hss_connection->set_result("/impu/sip%3A6515551000%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
   register_uri(_sdm, _hss_connection, "6515551000", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
   Message msg;
@@ -7291,7 +7478,9 @@ TEST_F(SCSCFTest, TestAddSecondTelPAIHdr)
                                    "call",
                                    RegDataXMLUtils::STATE_REGISTERED,
                                    subscription.return_sub());
-
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
   Message msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
@@ -7315,7 +7504,9 @@ TEST_F(SCSCFTest, TestAddSecondTelPAIHdrWithAlias)
                                    "call",
                                    RegDataXMLUtils::STATE_REGISTERED,
                                    subscription.return_sub());
-
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
   Message msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
@@ -7341,6 +7532,9 @@ TEST_F(SCSCFTest, TestAddSecondTelPAIHdrMultipleAliasesNoMatch)
                                    "call",
                                    RegDataXMLUtils::STATE_REGISTERED,
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
   Message msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
@@ -7366,6 +7560,9 @@ TEST_F(SCSCFTest, TestAddSecondTelPAIHdrMultipleAliases)
                                    "call",
                                    RegDataXMLUtils::STATE_REGISTERED,
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
   Message msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
@@ -7386,6 +7583,9 @@ TEST_F(SCSCFTest, TestAddSecondSIPPAIHdr)
                                    "call",
                                    RegDataXMLUtils::STATE_REGISTERED,
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
   Message msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._extra = "P-Asserted-Identity: Andy <tel:6505551000>";
@@ -7408,6 +7608,9 @@ TEST_F(SCSCFTest, TestAddSecondSIPPAIHdrNoSIPUri)
                                    "call",
                                    RegDataXMLUtils::STATE_REGISTERED,
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
   Message msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._extra = "P-Asserted-Identity: Andy <tel:6505551000>";
@@ -7429,6 +7632,9 @@ TEST_F(SCSCFTest, TestTwoPAIHdrsAlready)
                                    "call",
                                    RegDataXMLUtils::STATE_REGISTERED,
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
   Message msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>\nP-Asserted-Identity: Andy <tel:6505551111>";
@@ -7450,6 +7656,9 @@ TEST_F(SCSCFTest, TestNoPAIHdrs)
                                    "call",
                                    RegDataXMLUtils::STATE_REGISTERED,
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
   Message msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   list<HeaderMatcher> hdrs;
@@ -7470,6 +7679,9 @@ TEST_F(SCSCFTest, TestPAIHdrODIToken)
                                    "call",
                                    RegDataXMLUtils::STATE_REGISTERED,
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
   Message msg;
   msg._route = "Route: <sip:odi_dgds89gd8gdshds@127.0.0.1;orig>";
   msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
@@ -7516,6 +7728,9 @@ TEST_F(SCSCFTest, FlowFailedResponse)
 
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
   _hss_connection->set_impu_result("sip:6505550231@homedomain", "dereg-timeout", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -8251,7 +8466,10 @@ TEST_F(SCSCFTest, TestCallerNotBarred)
                                    "call",
                                    "REGISTERED",
                                    subscription.return_sub());
-
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+>>>>>>> 4a19c39747552d3bfb1e8f720a4663fae333c3ea
   Message msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   list<HeaderMatcher> hdrs;
@@ -8326,8 +8544,8 @@ TEST_F(SCSCFTest, TestEmergencyMultipleBindings)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
-// Check that a request with no matching iFCs is rejected.
-TEST_F(SCSCFTest, NoMatchingiFCsReject)
+// Check that a request with no matching iFCs is rejected on originating side.
+TEST_F(SCSCFTest, NoMatchingiFCsRejectOrig)
 {
   _scscf_sproutlet->_ifc_configuration._reject_if_no_matching_ifcs = true;
   ServiceProfileBuilder service_profile = ServiceProfileBuilder()
@@ -8367,6 +8585,58 @@ TEST_F(SCSCFTest, NoMatchingiFCsReject)
   free_txdata();
 }
 
+// Check that a request with no matching iFCs is rejected on terminating side.
+TEST_F(SCSCFTest, NoMatchingiFCsRejectTerm)
+{
+  _scscf_sproutlet->_ifc_configuration._reject_if_no_matching_ifcs = true;
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", "UNREGISTERED",
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "    <Priority>0</Priority>\n"
+                                   "    <TriggerPoint>\n"
+                                   "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                   "    <SPT>\n"
+                                   "      <ConditionNegated>0</ConditionNegated>\n"
+                                   "      <Group>0</Group>\n"
+                                   "      <Method>PUBLISH</Method>\n"
+                                   "      <Extension></Extension>\n"
+                                   "    </SPT>\n"
+                                   "  </TriggerPoint>\n"
+                                   "  <ApplicationServer>\n"
+                                   "    <ServerName>sip:DUMMY_AS</ServerName>\n"
+                                   "    <DefaultHandling>0</DefaultHandling>\n"
+                                   "  </ApplicationServer>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:sprout.homedomain>";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  free_txdata();
+
+  // Request is rejected with a 400.
+  out = current_txdata()->msg;
+  RespMatcher(400).matches(out);
+  tpBono.expect_target(current_txdata(), true);
+  free_txdata();
+}
+
 // Test that we use fallback iFCs if there are no matching iFCs, and that the
 // application server flows are as expected.
 TEST_F(SCSCFTest, NoMatchingStandardiFCsUseFallbackiFCs)
@@ -8382,6 +8652,9 @@ TEST_F(SCSCFTest, NoMatchingStandardiFCsUseFallbackiFCs)
                                    "call",
                                    "UNREGISTERED",
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.5", 56789);
@@ -8489,6 +8762,9 @@ TEST_F(SCSCFTest, NoStandardiFCsUseFallbackiFCs)
                                    "call",
                                    "UNREGISTERED",
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.5", 56789);
@@ -8641,6 +8917,9 @@ TEST_F(SCSCFTest, MixedRealAndDummyApplicationServer)
                                    "call",
                                    "UNREGISTERED",
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
   EXPECT_CALL(*_sess_cont_comm_tracker, on_success(StrEq("sip:1.2.3.4:56789;transport=UDP")));
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -8727,6 +9006,9 @@ TEST_F(SCSCFTest, MMFPreAs)
                                    "call",
                                    "UNREGISTERED",
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpMMFpreAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "11.22.33.44", 5060);
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "pre.as.only.mmf.test.server", 56789);
@@ -8821,6 +9103,9 @@ TEST_F(SCSCFTest, MMFPostAs)
                                    "call",
                                    "UNREGISTERED",
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpMMFpostAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "44.33.22.11", 5053);
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.5.8.1", 56789);
@@ -8914,6 +9199,9 @@ TEST_F(SCSCFTest, MMFPreAndPostAs)
                                    "call",
                                    "UNREGISTERED",
                                    subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
 
   TransportFlow tpMMFpreAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "11.22.33.44", 5050);
   TransportFlow tpMMFpostAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "44.33.22.11", 5053);
