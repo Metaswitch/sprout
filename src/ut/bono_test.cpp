@@ -797,8 +797,10 @@ Message StatefulEdgeProxyTest::doInviteEdge(string token)
   msg._method = "INVITE";
   msg._to = "6505551000";
   msg._from = "6505551234";
-  msg._extra = "Route: ";
-  msg._extra.append(token);
+//  msg._extra = "Route: ";
+//  msg._extra.append(token);
+  msg._route = "Route: ";
+  msg._route.append(token);
   msg._requri = "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob";
   inject_msg(msg.get_request());
   return msg;

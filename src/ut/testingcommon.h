@@ -284,6 +284,7 @@ namespace TestingCommon
     std::string get_response();
   };
 
+  // Subclass which sets the correct Route header for the SCSCF tests.
   class SCSCFMessage : public Message
   {
   public:
