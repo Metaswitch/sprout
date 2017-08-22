@@ -277,7 +277,7 @@ public:
   std::string _uri;
 
   /// Store code is allowed to manipulate bindings and subscriptions directly.
-  friend class AoRPair;
+  //friend class AoRPair;
   friend class AoRStore;
   friend class SubscriberDataManager;
 };

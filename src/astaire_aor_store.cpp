@@ -20,11 +20,12 @@
 AstaireAoRStore::AstaireAoRStore(Store* store) : AoRStore()
 {
   JsonSerializerDeserializer* serializer_deserializer = new JsonSerializerDeserializer();
-  _connector = new Connector(store, serializer_deserializer);
+  _connector = new Connector(store, serializer_deserializer); // Takes ownership of serializer_deserializer
 }
 
 AstaireAoRStore::~AstaireAoRStore()
 {
+  // Ownership of serializer_deserializer passed to _connector
   delete _connector; _connector = NULL;
 }
 

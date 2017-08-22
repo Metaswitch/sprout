@@ -32,7 +32,7 @@ public:
   virtual ~AstaireAoRStore();
 
   // Called through to from handlers code.
-  virtual bool has_servers() { return _connector->underlying_store_has_servers(); }
+  virtual bool has_servers() override { return _connector->underlying_store_has_servers(); }
 
 
 
@@ -43,7 +43,7 @@ public:
   ///
   /// @param aor_id    The AoR to retrieve
   /// @param trail     SAS trail
-  virtual AoR* get_aor_data(const std::string& aor_id, SAS::TrailId trail);
+  virtual AoR* get_aor_data(const std::string& aor_id, SAS::TrailId trail) override;
 
   /// Update the data for a particular address of record.
   /// if the update succeeds, this returns true.
@@ -55,7 +55,7 @@ public:
   virtual Store::Status set_aor_data(const std::string& aor_id,
                                      AoRPair* aor_pair,
                                      int expiry,
-                                     SAS::TrailId trail);
+                                     SAS::TrailId trail) override;
 
 
   /// Class used by the AstaireAoRStore to serialize AoRs from C++

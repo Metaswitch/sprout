@@ -55,7 +55,6 @@ const std::string HSS_NOT_REG_STATE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?
                                         "<RegistrationState>NOT_REGISTERED</RegistrationState>"
                                       "</ClearwaterRegData>";
 
-
 class DeregistrationTaskTest : public SipTest
 {
   MockSubscriberDataManager* _subscriber_data_manager;
