@@ -5101,6 +5101,7 @@ TEST_F(SCSCFTest, Cdiv)
   msg._route = "Route: <sip:sprout.homedomain>";
   msg._requri = "sip:6505551234@homedomain";
   msg._extra = "P-Charging-Vector: icid-value=3";
+  stack_data.record_route_on_diversion = true;
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -8181,6 +8182,106 @@ TEST_F(SCSCFTest, TestSessionExpiresInDialog)
   Message msg;
   msg._extra = "Supported: timer";
   msg._in_dialog = true;
+
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Record-Route"));
+  hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires:.*"));
+
+  list<HeaderMatcher> rsp_hdrs;
+  rsp_hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires:.*;refresher=uac"));
+  rsp_hdrs.push_back(HeaderMatcher("Record-Route"));
+
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, false, rsp_hdrs);
+}
+
+TEST_F(SCSCFTest, TestSessionExpiresInDialogBilling1)
+{
+  SCOPED_TRACE("");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+
+  // Send an UPDATE in-dialog request to which we should always add RR and SE.
+  // Then check that if the UAS strips the SE, that Sprout tells the UAC to be
+  // the refresher. This ensures that our response processing is correct.
+  Message msg;
+  msg._extra = "Supported: timer";
+  msg._in_dialog = true;
+  msg._route = "Route: <sip:homedomain;transport=tcp;lr;billing-role=charge-term>";
+
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Record-Route"));
+  hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires:.*"));
+
+  list<HeaderMatcher> rsp_hdrs;
+  rsp_hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires:.*;refresher=uac"));
+  rsp_hdrs.push_back(HeaderMatcher("Record-Route"));
+
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, false, rsp_hdrs);
+}
+
+TEST_F(SCSCFTest, TestSessionExpiresInDialogBilling2)
+{
+  SCOPED_TRACE("");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+
+  // Send an UPDATE in-dialog request to which we should always add RR and SE.
+  // Then check that if the UAS strips the SE, that Sprout tells the UAC to be
+  // the refresher. This ensures that our response processing is correct.
+  Message msg;
+  msg._extra = "Supported: timer";
+  msg._in_dialog = true;
+  msg._route = "Route: <sip:homedomain;transport=tcp;lr;billing-role=charge-orig>";
+
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Record-Route"));
+  hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires:.*"));
+
+  list<HeaderMatcher> rsp_hdrs;
+  rsp_hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires:.*;refresher=uac"));
+  rsp_hdrs.push_back(HeaderMatcher("Record-Route"));
+
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, false, rsp_hdrs);
+}
+
+TEST_F(SCSCFTest, TestSessionExpiresInDialogBilling3)
+{
+  SCOPED_TRACE("");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+
+  // Send an UPDATE in-dialog request to which we should always add RR and SE.
+  // Then check that if the UAS strips the SE, that Sprout tells the UAC to be
+  // the refresher. This ensures that our response processing is correct.
+  Message msg;
+  msg._extra = "Supported: timer";
+  msg._in_dialog = true;
+  msg._route = "Route: <sip:homedomain;transport=tcp;lr;billing-role=charge-none>";
+
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Record-Route"));
+  hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires:.*"));
+
+  list<HeaderMatcher> rsp_hdrs;
+  rsp_hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires:.*;refresher=uac"));
+  rsp_hdrs.push_back(HeaderMatcher("Record-Route"));
+
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, false, rsp_hdrs);
+}
+
+TEST_F(SCSCFTest, TestSessionExpiresInDialogBilling4)
+{
+  SCOPED_TRACE("");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+
+  // Send an UPDATE in-dialog request to which we should always add RR and SE.
+  // Then check that if the UAS strips the SE, that Sprout tells the UAC to be
+  // the refresher. This ensures that our response processing is correct.
+  Message msg;
+  msg._extra = "Supported: timer";
+  msg._in_dialog = true;
+  msg._route = "Route: <sip:homedomain;transport=tcp;lr;billing-role=random-string>";
 
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("Record-Route"));
