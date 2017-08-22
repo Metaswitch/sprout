@@ -60,8 +60,7 @@ public:
       nonce_count(INITIAL_NONCE_COUNT),
       expires(_expires),
       correlator(),
-      scscf_uri(),
-      _cas(0) {};
+      scscf_uri() {};
 
     /// Destructor must be virtual as we're going to extend this class.
     virtual ~AuthChallenge() {};
@@ -96,17 +95,13 @@ public:
       nonce_count(0),
       expires(0),
       correlator(),
-      scscf_uri(),
-      _cas(0) {};
+      scscf_uri() {};
 
     /// Write to JSON writer (IMPI format).
     virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
 
     /// Deserialization from JSON (IMPI format).
     static ImpiStore::AuthChallenge* from_json(rapidjson::Value* json);
-
-    /// Memcached CAS value.
-    uint64_t _cas;
 
     // The IMPI store is a friend so it can call our JSON serialization
     // functions and read our CAS value.
