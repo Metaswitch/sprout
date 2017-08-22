@@ -45,7 +45,7 @@ TEST_F(RalfProcessorTest, RequestComplete)
   rr->message = "message";
   rr->trail = 0;
 
-  EXPECT_CALL(*_ralf_connection, send_post(_,_,_,_,_,_)).WillOnce(Return(200));
+  EXPECT_CALL(*_ralf_connection, send_post(_,_,_,_,_)).WillOnce(Return(200));
   _ralf_processor->send_request_to_ralf(rr);
   sleep(1);
 }
