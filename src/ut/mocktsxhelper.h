@@ -36,7 +36,7 @@ public:
   MOCK_METHOD1(clone_request, pjsip_msg*(pjsip_msg*));
   MOCK_METHOD1(clone_msg, pjsip_msg*(pjsip_msg*));
   MOCK_METHOD3(create_response, pjsip_msg*(pjsip_msg*, pjsip_status_code, const std::string&));
-  MOCK_METHOD1(send_request, int(pjsip_msg*&));
+  MOCK_METHOD2(send_request, int(pjsip_msg*&, int));
   MOCK_METHOD1(send_response, void(pjsip_msg*&));
   MOCK_METHOD2(cancel_fork, void(int, int));
   MOCK_METHOD1(cancel_pending_forks, void(int));

@@ -78,34 +78,18 @@ void delete_bindings(ClassifiedBindings& cbs)
 
 /// SubscriberDataManager Methods
 SubscriberDataManager::SubscriberDataManager(Store* data_store,
-                                             SerializerDeserializer*& serializer,
-                                             std::vector<SerializerDeserializer*>& deserializers,
                                              ChronosConnection* chronos_connection,
                                              AnalyticsLogger* analytics_logger,
                                              bool is_primary) :
   _primary_sdm(is_primary)
 {
+  JsonSerializerDeserializer* serializer = new JsonSerializerDeserializer();
+  std::vector<JsonSerializerDeserializer*> deserializers = { new JsonSerializerDeserializer() };
+
   _connector = new Connector(data_store, serializer, deserializers);
   _chronos_timer_request_sender = new ChronosTimerRequestSender(chronos_connection);
   _notify_sender = new NotifySender();
   _analytics = analytics_logger;
-}
-
-
-SubscriberDataManager::SubscriberDataManager(Store* data_store,
-                                             ChronosConnection* chronos_connection,
-                                             bool is_primary) :
-  _primary_sdm(is_primary)
-{
-  SerializerDeserializer* serializer = new JsonSerializerDeserializer();
-  std::vector<SerializerDeserializer*> deserializers = {
-    new JsonSerializerDeserializer(),
-  };
-
-  _connector = new Connector(data_store, serializer, deserializers);
-  _chronos_timer_request_sender = new ChronosTimerRequestSender(chronos_connection);
-  _notify_sender = new NotifySender();
-  _analytics = NULL;
 }
 
 
@@ -486,8 +470,8 @@ int SubscriberDataManager::expire_bindings(AoR* aor_data,
 /// SubscriberDataManager::Connector Methods
 
 SubscriberDataManager::Connector::Connector(Store* data_store,
-                               SerializerDeserializer*& serializer,
-                               std::vector<SerializerDeserializer*>& deserializers) :
+                               JsonSerializerDeserializer*& serializer,
+                               std::vector<JsonSerializerDeserializer*>& deserializers) :
   _data_store(data_store),
   _serializer(serializer),
   _deserializers(deserializers)
@@ -501,7 +485,7 @@ SubscriberDataManager::Connector::~Connector()
 {
   delete _serializer; _serializer = NULL;
 
-  for (SerializerDeserializer* ds : _deserializers)
+  for (JsonSerializerDeserializer* ds : _deserializers)
   {
     delete ds; ds = NULL;
   }
@@ -618,11 +602,10 @@ SubscriberDataManager::AoR* SubscriberDataManager::Connector::deserialize_aor(
 {
   AoR* aor = NULL;
 
-  for (SerializerDeserializer* deserializer : _deserializers)
+  for (JsonSerializerDeserializer* deserializer : _deserializers)
   {
-    TRC_DEBUG("Try to deserialize record for %s with '%s' deserializer",
-              aor_id.c_str(),
-              deserializer->name().c_str());
+    TRC_DEBUG("Try to deserialize record for %s with JSON deserializer",
+              aor_id.c_str());
     aor = deserializer->deserialize_aor(aor_id, s);
 
     if (aor != NULL)
@@ -943,7 +926,6 @@ void SubscriberDataManager::AoR::Binding::
     }
     writer.EndArray();
 
-    writer.String(JSON_TIMER_ID); writer.String("Deprecated");
     writer.String(JSON_PRIVATE_ID); writer.String(_private_id.c_str());
     writer.String(JSON_EMERGENCY_REG); writer.Bool(_emergency_registration);
   }
@@ -999,11 +981,6 @@ void SubscriberDataManager::AoR::Binding::from_json(const rapidjson::Value& b_ob
     }
   }
 
-  _timer_id =
-    ((b_obj.HasMember(JSON_TIMER_ID)) && ((b_obj[JSON_TIMER_ID]).IsString()) ?
-     (b_obj[JSON_TIMER_ID].GetString()) :
-     "");
-  //      JSON_GET_STRING_MEMBER(b_obj, JSON_TIMER_ID, _timer_id);
   JSON_GET_STRING_MEMBER(b_obj, JSON_PRIVATE_ID, _private_id);
   JSON_GET_BOOL_MEMBER(b_obj, JSON_EMERGENCY_REG, _emergency_registration);
 }
@@ -1033,8 +1010,6 @@ void SubscriberDataManager::AoR::Subscription::
     writer.EndArray();
 
     writer.String(JSON_EXPIRES); writer.Int(_expires);
-    writer.String(JSON_TIMER_ID); writer.String("Deprecated");
-
   }
   writer.EndObject();
 }
@@ -1061,10 +1036,6 @@ void SubscriberDataManager::AoR::Subscription::from_json(const rapidjson::Value&
   }
 
   JSON_GET_INT_MEMBER(s_obj, JSON_EXPIRES, _expires);
-  _timer_id =
-    ((s_obj.HasMember(JSON_TIMER_ID)) && ((s_obj[JSON_TIMER_ID]).IsString()) ?
-     (s_obj[JSON_TIMER_ID].GetString()) :
-     "");
 }
 
 // Utility function to return the expiry time of the binding or subscription due
@@ -1126,217 +1097,6 @@ void SubscriberDataManager::AoR::copy_subscriptions_and_bindings(SubscriberDataM
     *dst = *src;
   }
 }
-
-//
-// (De)serializer for the binary SubscriberDataManager format.
-//
-
-SubscriberDataManager::AoR* SubscriberDataManager::BinarySerializerDeserializer::
-  deserialize_aor(const std::string& aor_id, const std::string& s)
-{
-  std::istringstream iss(s, std::istringstream::in|std::istringstream::binary);
-
-  // First off, try to read the number of bindings.
-  int num_bindings;
-  iss.read((char*)&num_bindings, sizeof(int));
-
-  if (iss.eof())
-  {
-    // Hit an EOF which means the record is corrupt.
-    TRC_INFO("Could not deserialize AOR - EOF reached");
-    return NULL;
-  }
-
-  if (num_bindings > 0xffffff)
-  {
-    // That's a lot of bindings. It is more likely that the data is corrupt, or
-    // that we have been passed a record in a different format.
-    TRC_INFO("Could not deserialize AOR. Got %d bindings suggesting the data"
-             " is corrupt or not in the binary format",
-             num_bindings);
-    return NULL;
-  }
-
-  AoR* aor_data = new AoR(aor_id);
-
-  TRC_DEBUG("Deserialize %d bindings", num_bindings);
-
-  for (int ii = 0; ii < num_bindings; ++ii)
-  {
-    // Extract the binding identifier into a string.
-    std::string binding_id;
-    getline(iss, binding_id, '\0');
-    TRC_DEBUG("  Binding %s", binding_id.c_str());
-
-    AoR::Binding* b = aor_data->get_binding(binding_id);
-
-    // Now extract the various fixed binding parameters.
-    getline(iss, b->_uri, '\0');
-    getline(iss, b->_cid, '\0');
-    iss.read((char *)&b->_cseq, sizeof(int));
-    iss.read((char *)&b->_expires, sizeof(int));
-
-    iss.read((char *)&b->_priority, sizeof(int));
-
-    int num_params;
-    iss.read((char *)&num_params, sizeof(int));
-    for (int ii = 0;
-         ii < num_params;
-         ++ii)
-    {
-      std::string pname;
-      std::string pvalue;
-      getline(iss, pname, '\0');
-      getline(iss, pvalue, '\0');
-      b->_params[pname] = pvalue;
-    }
-
-    int num_paths = 0;
-    iss.read((char *)&num_paths, sizeof(int));
-    b->_path_headers.resize(num_paths);
-    TRC_DEBUG("Deserialize %d path headers", num_paths);
-    for (std::list<std::string>::iterator i = b->_path_headers.begin();
-         i != b->_path_headers.end();
-         ++i)
-    {
-      getline(iss, *i, '\0');
-      TRC_DEBUG("  Deserialized path header %s", i->c_str());
-    }
-    getline(iss, b->_timer_id, '\0');
-    getline(iss, b->_private_id, '\0');
-    iss.read((char *)&b->_emergency_registration, sizeof(int));
-  }
-
-  int num_subscriptions;
-  iss.read((char *)&num_subscriptions, sizeof(int));
-  TRC_DEBUG("Deserialize %d subscriptions", num_subscriptions);
-
-  for (int ii = 0; ii < num_subscriptions; ++ii)
-  {
-    // Extract the to tag index into a string.
-    std::string to_tag;
-    getline(iss, to_tag, '\0');
-    TRC_DEBUG("  Subscription %s", to_tag.c_str());
-
-    AoR::Subscription* s = aor_data->get_subscription(to_tag);
-
-    // Now extract the various fixed subscription parameters.
-    getline(iss, s->_req_uri, '\0');
-    getline(iss, s->_from_uri, '\0');
-    getline(iss, s->_from_tag, '\0');
-    getline(iss, s->_to_uri, '\0');
-    getline(iss, s->_to_tag, '\0');
-    getline(iss, s->_cid, '\0');
-
-    int num_routes = 0;
-    iss.read((char *)&num_routes, sizeof(int));
-    TRC_DEBUG("    number of routes = %d", num_routes);
-    s->_route_uris.resize(num_routes);
-    for (std::list<std::string>::iterator i = s->_route_uris.begin();
-         i != s->_route_uris.end();
-         ++i)
-    {
-      getline(iss, *i, '\0');
-    }
-
-    iss.read((char *)&s->_expires, sizeof(int));
-    getline(iss, s->_timer_id, '\0');
-  }
-
-  iss.read((char*)&aor_data->_notify_cseq, sizeof(int));
-  getline(iss, aor_data->_timer_id, '\0');
-
-  return aor_data;
-}
-
-
-std::string SubscriberDataManager::BinarySerializerDeserializer::serialize_aor(AoR* aor_data)
-{
-  std::ostringstream oss(std::ostringstream::out|std::ostringstream::binary);
-
-  int num_bindings = aor_data->bindings().size();
-  TRC_DEBUG("Serialize %d bindings", num_bindings);
-  oss.write((const char *)&num_bindings, sizeof(int));
-
-  for (AoR::Bindings::const_iterator i = aor_data->bindings().begin();
-       i != aor_data->bindings().end();
-       ++i)
-  {
-    TRC_DEBUG("  Binding %s", i->first.c_str());
-    oss << i->first << '\0';
-
-    AoR::Binding* b = i->second;
-    oss << b->_uri << '\0';
-    oss << b->_cid << '\0';
-    oss.write((const char *)&b->_cseq, sizeof(int));
-    oss.write((const char *)&b->_expires, sizeof(int));
-    oss.write((const char *)&b->_priority, sizeof(int));
-    int num_params = b->_params.size();
-    oss.write((const char *)&num_params, sizeof(int));
-    for (std::map<std::string, std::string>::const_iterator i = b->_params.begin();
-         i != b->_params.end();
-         ++i)
-    {
-      oss << i->first << '\0' << i->second << '\0';
-    }
-    int num_path_hdrs = b->_path_headers.size();
-    oss.write((const char *)&num_path_hdrs, sizeof(int));
-    for (std::list<std::string>::const_iterator i = b->_path_headers.begin();
-         i != b->_path_headers.end();
-         ++i)
-    {
-      oss << *i << '\0';
-    }
-    // This was the binding timer_id. It is now deprecated, but has to be kept
-    // as an entity for upgrade and UT compatibility. 19/01/16
-    oss << "Deprecated"  << '\0';
-    oss << b->_private_id << '\0';
-    oss.write((const char *)&b->_emergency_registration, sizeof(int));
-  }
-
-  int num_subscriptions = aor_data->subscriptions().size();
-  TRC_DEBUG("Serialize %d subscriptions", num_subscriptions);
-  oss.write((const char *)&num_subscriptions, sizeof(int));
-
-  for (AoR::Subscriptions::const_iterator i = aor_data->subscriptions().begin();
-       i != aor_data->subscriptions().end();
-       ++i)
-  {
-    TRC_DEBUG("  Subscription %s", i->first.c_str());
-    oss << i->first << '\0';
-
-    AoR::Subscription* s = i->second;
-    oss << s->_req_uri << '\0';
-    oss << s->_from_uri << '\0';
-    oss << s->_from_tag << '\0';
-    oss << s->_to_uri << '\0';
-    oss << s->_to_tag << '\0';
-    oss << s->_cid << '\0';
-    int num_routes = s->_route_uris.size();
-    TRC_DEBUG("    number of routes = %d", num_routes);
-    oss.write((const char *)&num_routes, sizeof(int));
-    for (std::list<std::string>::const_iterator i = s->_route_uris.begin();
-         i != s->_route_uris.end();
-         ++i)
-    {
-      oss << *i << '\0';
-    }
-    oss.write((const char *)&s->_expires, sizeof(int));
-    // This was the subscription timer_id. It is now deprecated, but has to be
-    // kept as an entity for upgrade and UT compatibility. 19/01/16
-    oss << "Deprecated" << '\0';
-  }
-
-  oss.write((const char *)&aor_data->_notify_cseq, sizeof(int));
-  oss << aor_data->_timer_id << '\0';
-  return oss.str();
-}
-
-std::string SubscriberDataManager::BinarySerializerDeserializer::name()
-{
-  return "binary";
-}
-
 
 //
 // (De)serializer for the JSON SubscriberDataManager format.
@@ -1466,11 +1226,6 @@ std::string SubscriberDataManager::JsonSerializerDeserializer::serialize_aor(AoR
   return sb.GetString();
 }
 
-std::string SubscriberDataManager::JsonSerializerDeserializer::name()
-{
-  return "JSON";
-}
-
 /// ChronosTimerRequestSender Methods
 
 SubscriberDataManager::ChronosTimerRequestSender::
@@ -1552,9 +1307,7 @@ void SubscriberDataManager::ChronosTimerRequestSender::set_timer(
 {
   std::string temp_timer_id = "";
   HTTPCode status;
-  // Previous versions of handlers.cpp asserted timers contain a "binding_id".
-  // We no longer want this information, but it is included to simplify upgrade.
-  std::string opaque = "{\"aor_id\": \"" + aor_id + "\", \"binding_id\": \"notavalidID\"}";
+  std::string opaque = "{\"aor_id\": \"" + aor_id + "\"}";
   std::string callback_uri = "/timers";
 
   // If a timer has been previously set for this binding, send a PUT.
@@ -1604,8 +1357,8 @@ void SubscriberDataManager::NotifySender::send_notifys(
                                int now,
                                SAS::TrailId trail)
 {
-  std::vector<std::string> expired_binding_uris;  
-  ClassifiedBindings binding_info_to_notify;  
+  std::vector<std::string> expired_binding_uris;
+  ClassifiedBindings binding_info_to_notify;
   bool bindings_changed = false;
 
   // Iterate over the bindings in the original AoR. Find any that aren't in the current
@@ -1626,7 +1379,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
       NotifyUtils::BindingNotifyInformation* bni =
                new NotifyUtils::BindingNotifyInformation(b_id,
                                                          binding,
-                                                         NotifyUtils::ContactEvent::EXPIRED);      
+                                                         NotifyUtils::ContactEvent::EXPIRED);
       binding_info_to_notify.push_back(bni);
       bindings_changed = true;
     }
@@ -1652,8 +1405,8 @@ void SubscriberDataManager::NotifySender::send_notifys(
         NotifyUtils::BindingNotifyInformation* bni =
               new NotifyUtils::BindingNotifyInformation(b_id,
                                                         binding,
-                                                        NotifyUtils::ContactEvent::CREATED);        
-        binding_info_to_notify.push_back(bni);       
+                                                        NotifyUtils::ContactEvent::CREATED);
+        binding_info_to_notify.push_back(bni);
         bindings_changed = true;
       }
       else
@@ -1682,22 +1435,22 @@ void SubscriberDataManager::NotifySender::send_notifys(
         NotifyUtils::BindingNotifyInformation* bni =
               new NotifyUtils::BindingNotifyInformation(b_id,
                                                         binding,
-                                                        event);        
+                                                        event);
         binding_info_to_notify.push_back(bni);
       }
-    }    
+    }
   }
 
   // Iterate over the subscriptions in the original AoR, and send NOTIFYs for
-  // any subscriptions that aren't in the current AoR. 
-  send_notifys_for_expired_subscriptions(aor_id, 
+  // any subscriptions that aren't in the current AoR.
+  send_notifys_for_expired_subscriptions(aor_id,
                                          associated_uris,
                                          aor_pair,
                                          binding_info_to_notify,
-                                         expired_binding_uris,                                         
+                                         expired_binding_uris,
                                          now,
                                          trail);
-  
+
   // Iterate over the subscriptions in the current AoR and send NOTIFYs.
   // If the bindings have changed, then send NOTIFYs to all subscribers; otherwise,
   // only send them when the subscription has been created or updated.
@@ -1723,7 +1476,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
     {
       std::string reasons;
 
-      if (bindings_changed) 
+      if (bindings_changed)
       {
         reasons += "bindings_changed ";
       }
@@ -1773,11 +1526,11 @@ void SubscriberDataManager::NotifySender::send_notifys(
           SAS::report_event(event);
           // LCOV_EXCL_STOP
         }
-      }      
+      }
     }
-  }  
-  
-  delete_bindings(binding_info_to_notify);    
+  }
+
+  delete_bindings(binding_info_to_notify);
 }
 
 void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions(
@@ -1785,18 +1538,18 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
                                AssociatedURIs* associated_uris,
                                SubscriberDataManager::AoRPair* aor_pair,
                                ClassifiedBindings binding_info_to_notify,
-                               std::vector<std::string> expired_binding_uris,                               
+                               std::vector<std::string> expired_binding_uris,
                                int now,
                                SAS::TrailId trail)
 {
-  // The registration state to send is ACTIVE if we have at least one active binding, 
+  // The registration state to send is ACTIVE if we have at least one active binding,
   // otherwise TERMINATED.
   NotifyUtils::RegistrationState reg_state = (!aor_pair->get_current()->bindings().empty()) ?
     NotifyUtils::RegistrationState::ACTIVE :
     NotifyUtils::RegistrationState::TERMINATED;
 
   // expired_binding_uris lists bindings which have expired - we no longer have a valid connection to
-  // these endpoints, so shouldn't send a NOTIFY to them (even to say that their subscription is 
+  // these endpoints, so shouldn't send a NOTIFY to them (even to say that their subscription is
   // terminated).
   //
   // Note that we can't just check whether a binding exists before sending a NOTIFY - a SUBSCRIBE
@@ -1812,7 +1565,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
     SubscriberDataManager::AoR::Subscription* s = aor_orig_s->second;
     std::string s_id = aor_orig_s->first;
 
-    if (std::find(expired_binding_uris.begin(), expired_binding_uris.end(), s->_req_uri) != 
+    if (std::find(expired_binding_uris.begin(), expired_binding_uris.end(), s->_req_uri) !=
       expired_binding_uris.end())
     {
       // This NOTIFY would go to a binding which no longer exists - skip it.
@@ -1827,7 +1580,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
     // about the state of the bindings in the original AoR
     if (aor_current == aor_pair->get_current()->subscriptions().end())
     {
-      TRC_DEBUG("The subscription (%s) has been terminated", s_id.c_str());    
+      TRC_DEBUG("The subscription (%s) has been terminated", s_id.c_str());
 
       pjsip_tx_data* tdata_notify = NULL;
 
@@ -1863,7 +1616,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
           SAS::report_event(event);
           // LCOV_EXCL_STOP
         }
-      }      
+      }
     }
   }
 }

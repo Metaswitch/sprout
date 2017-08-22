@@ -368,7 +368,7 @@ TEST_F(MangelwurzelTest, InitialReq)
   // again when mangelwurzel sends it on.
   EXPECT_CALL(*_helper, original_request()).WillOnce(Return(original_req));
   EXPECT_CALL(*_helper, get_pool(req)).WillOnce(Return(stack_data.pool));
-  EXPECT_CALL(*_helper, send_request(req));
+  EXPECT_CALL(*_helper, send_request(req, BaseResolver::ALL_LISTS));
   mangelwurzel_tsx.on_rx_initial_request(req);
 
   // Check mangelwurzel has made the appropriate manipulations.
@@ -475,7 +475,7 @@ TEST_F(MangelwurzelTest, InDialogReq)
   // Trigger in dialog request processing in mangelwurzel and catch the request
   // again when mangelwurzel sends it on.
   EXPECT_CALL(*_helper, get_pool(req)).WillOnce(Return(stack_data.pool));
-  EXPECT_CALL(*_helper, send_request(req));
+  EXPECT_CALL(*_helper, send_request(req, BaseResolver::ALL_LISTS));
   mangelwurzel_tsx.on_rx_in_dialog_request(req);
 
   // Check mangelwurzel has made the appropriate manipulations.

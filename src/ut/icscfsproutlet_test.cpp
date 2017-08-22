@@ -1909,6 +1909,136 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSRetry)
   delete tp;
 }
 
+TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSRetryWithWildcard)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        ICSCF_PORT,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS responses for the originating location query.
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true&auth-type=CAPAB",
+                              "{\"result-code\": 2001,"
+                              " \"wildcard-identity\": \"sip:650![0-9].*!@homedomain\","
+                              " \"mandatory-capabilities\": [654],"
+                              " \"optional-capabilities\": [567]}");
+
+  // Inject a INVITE request with orig in the Route header and a P-Served-User
+  // header.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
+  msg1._route = "Route: <sip:homedomain;orig>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting a 100 Trying and an INVITE. Free the 100 Trying, then kill the
+  // TCP connection to the S-CSCF to force a retry.
+  ASSERT_EQ(2, txdata_count());
+  free_txdata();
+  tdata = current_txdata();
+  terminate_tcp_transport(tdata->tp_info.transport);
+  free_txdata();
+  cwtest_advance_time_ms(6000);
+  poll();
+
+  // The HSS is queried a second time for capabilities. This time S-CSCF
+  // scscf4.homedomain is selected, and the subscriber has a wildcard
+  // identity.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.4", 5058, tdata);
+
+  // Check that a P-Profile-Key has been added that uses the wildcard
+  string ppk = get_headers(tdata->msg, "P-Profile-Key");
+  ASSERT_EQ("P-Profile-Key: <sip:650![0-9].*!@homedomain>", PJUtils::unescape_string_for_uri(ppk, stack_data.pool));
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher r1(200);
+  r1.matches(tdata->msg);
+  free_txdata();
+
+  test_session_establishment_stats(0, 0, 0, 0);
+
+  _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true");
+  _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true&auth-type=CAPAB");
+
+  delete tp;
+}
+
+TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSRetryOnceNoMatchingSCSCF)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        ICSCF_PORT,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS responses for the originating location query.
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true&auth-type=CAPAB",
+                              "{\"result-code\": 2001,"
+                              " \"mandatory-capabilities\": [765, 654],"
+                              " \"optional-capabilities\": [567]}");
+
+  // Inject a INVITE request with orig in the Route header and a P-Served-User
+  // header.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
+  msg1._route = "Route: <sip:homedomain;orig>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting a 100 Trying and an INVITE. Free the 100 Trying, then kill the
+  // TCP connection to the S-CSCF to force a retry.
+  ASSERT_EQ(2, txdata_count());
+  free_txdata();
+  tdata = current_txdata();
+  terminate_tcp_transport(tdata->tp_info.transport);
+  free_txdata();
+  cwtest_advance_time_ms(6000);
+  poll();
+
+  // Looking up the next S-CSCF in the HSS fails though as there are no S-CSCFs
+  // that match all the mandatory capabilites. Check the response - it should
+  // be a 503 (as that's what we got from the first S-CSCF we tried).
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher r2(503);
+  r2.matches(tdata->msg);
+  free_txdata();
+
+  test_session_establishment_stats(0, 0, 0, 0);
+
+  _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true");
+  _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true&auth-type=CAPAB");
+
+  delete tp;
+}
 
 TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSFail)
 {

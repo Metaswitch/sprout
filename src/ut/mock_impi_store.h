@@ -17,7 +17,7 @@
 class MockImpiStore : public ImpiStore
 {
 public:
-  MockImpiStore() : ImpiStore(NULL, ImpiStore::READ_IMPI_WRITE_IMPI) {}
+  MockImpiStore() : ImpiStore(NULL) {}
   virtual ~MockImpiStore() {}
 
   MOCK_METHOD2(set_impi, Store::Status(Impi* impi, SAS::TrailId trail));

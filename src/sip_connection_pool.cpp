@@ -143,7 +143,8 @@ pj_status_t SIPConnectionPool::resolve_host(const pj_str_t* host,
                    port,
                    IPPROTO_TCP,
                    1,
-                   servers);
+                   servers,
+                   BaseResolver::ALL_LISTS);
   memset(addr, 0, sizeof(pj_sockaddr));
 
   if (!servers.empty())

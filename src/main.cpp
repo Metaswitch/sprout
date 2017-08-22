@@ -60,6 +60,7 @@ extern "C" {
 #include "localstore.h"
 #include "scscfselector.h"
 #include "chronosconnection.h"
+#include "chronoshandlers.h"
 #include "handlers.h"
 #include "httpstack.h"
 #include "sproutlet.h"
@@ -97,7 +98,6 @@ enum OptionTypes
   OPT_CALL_LIST_TTL,
   OPT_DNS_SERVER,
   OPT_TARGET_LATENCY_US,
-  OPT_MEMCACHED_WRITE_FORMAT,
   OPT_OVERRIDE_NPDI,
   OPT_MAX_TOKENS,
   OPT_INIT_TOKEN_RATE,
@@ -124,7 +124,6 @@ enum OptionTypes
   OPT_SPROUT_HOSTNAME,
   OPT_LISTEN_PORT,
   SPROUTLET_MACRO(SPROUTLET_OPTION_TYPES)
-  OPT_IMPI_STORE_MODE,
   OPT_NONCE_COUNT_SUPPORTED,
   OPT_LOCAL_SITE_NAME,
   OPT_REGISTRATION_STORES,
@@ -192,7 +191,6 @@ const static struct pj_getopt_option long_opt[] =
   { "daemon",                       no_argument,       0, 'd'},
   { "interactive",                  no_argument,       0, 't'},
   { "help",                         no_argument,       0, 'h'},
-  { "memcached-write-format",       required_argument, 0, OPT_MEMCACHED_WRITE_FORMAT},
   { "override-npdi",                no_argument,       0, OPT_OVERRIDE_NPDI},
   { "max-tokens",                   required_argument, 0, OPT_MAX_TOKENS},
   { "init-token-rate",              required_argument, 0, OPT_INIT_TOKEN_RATE},
@@ -218,7 +216,6 @@ const static struct pj_getopt_option long_opt[] =
   { "sprout-hostname",              required_argument, 0, OPT_SPROUT_HOSTNAME},
   { "listen-port",                  required_argument, 0, OPT_LISTEN_PORT},
   SPROUTLET_MACRO(SPROUTLET_CFG_PJ_STRUCT)
-  { "impi-store-mode",              required_argument, 0, OPT_IMPI_STORE_MODE},
   { "nonce-count-supported",        no_argument,       0, OPT_NONCE_COUNT_SUPPORTED},
   { "scscf-node-uri",               required_argument, 0, OPT_SCSCF_NODE_URI},
   { "sas-use-signaling-interface",  no_argument,       0, OPT_SAS_USE_SIGNALING_IF},
@@ -365,9 +362,6 @@ static void usage(void)
        "     --memento-notify-url <url>\n"
        "                            URL Memento should notify when call lists change.\n"
        "     --alarms-enabled       Whether SNMP alarms are enabled (default: false)\n"
-       "     --memcached-write-format\n"
-       "                            The data format to use when writing registration and subscription data\n"
-       "                            to memcached. Valid values are 'binary' and 'json' (default is 'json')\n"
        "     --override-npdi        Whether the deployment should check for number portability data on \n"
        "                            requests that already have the 'npdi' indicator (default: false)\n"
        "     --exception-max-ttl <secs>\n"
@@ -418,9 +412,6 @@ static void usage(void)
        "     --force-3pr-body       Always include the original REGISTER and 200 OK in the body of\n"
        "                            third-party REGISTER messages to application servers, even if the\n"
        "                            User-Data doesn't specify it\n"
-       "     --impi-store-mode (av-impi|impi)\n"
-       "                            Whether to run the IMPI store in AV and IMPI mode (historical) or\n"
-       "                            IMPI-only (forward-looking) mode\n"
        "     --nonce-count-supported\n"
        "                            Whether sprout accepts authentication responses with a nonce count\n"
        "                            greater than 1\n"
@@ -884,27 +875,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
-    case OPT_MEMCACHED_WRITE_FORMAT:
-      if (strcmp(pj_optarg, "binary") == 0)
-      {
-        TRC_INFO("Memcached write format set to 'binary'");
-        options->memcached_write_format = MemcachedWriteFormat::BINARY;
-      }
-      else if (strcmp(pj_optarg, "json") == 0)
-      {
-        TRC_INFO("Memcached write format set to 'json'");
-        options->memcached_write_format = MemcachedWriteFormat::JSON;
-      }
-      else
-      {
-        TRC_WARNING("Invalid value for memcached-write-format, using '%s'."
-                    "Got '%s', valid vales are 'json' and 'binary'",
-                    ((options->memcached_write_format == MemcachedWriteFormat::JSON) ?
-                     "json" : "binary"),
-                    pj_optarg);
-      }
-      break;
-
     case 'W':
       {
         VALIDATE_INT_PARAM_NON_ZERO(options->worker_threads,
@@ -1186,23 +1156,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       TRC_INFO("Pidfile set to %s", pj_optarg);
       break;
 
-    case OPT_IMPI_STORE_MODE:
-      if (stricmp(pj_optarg, "av-impi") == 0)
-      {
-        options->impi_store_mode = ImpiStore::Mode::READ_AV_IMPI_WRITE_AV_IMPI;
-        TRC_INFO("IMPI store mode set to: av-impi");
-      }
-      else if (stricmp(pj_optarg, "impi") == 0)
-      {
-        options->impi_store_mode = ImpiStore::Mode::READ_IMPI_WRITE_IMPI;
-        TRC_INFO("IMPI store mode set to: impi");
-      }
-      else
-      {
-        TRC_ERROR("Unknown IMPI store mode: %s", pj_optarg);
-      }
-      break;
-
     case OPT_NONCE_COUNT_SUPPORTED:
       options->nonce_count_supported = true;
       TRC_INFO("Nonce counts supported");
@@ -1409,26 +1362,6 @@ void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
   }
 }
 
-
-void create_sdm_plugins(SubscriberDataManager::SerializerDeserializer*& serializer,
-                        std::vector<SubscriberDataManager::SerializerDeserializer*>& deserializers,
-                        MemcachedWriteFormat write_format)
-{
-  deserializers.clear();
-  deserializers.push_back(new SubscriberDataManager::JsonSerializerDeserializer());
-  deserializers.push_back(new SubscriberDataManager::BinarySerializerDeserializer());
-
-  if (write_format == MemcachedWriteFormat::JSON)
-  {
-    serializer = new SubscriberDataManager::JsonSerializerDeserializer();
-  }
-  else
-  {
-    serializer = new SubscriberDataManager::BinarySerializerDeserializer();
-  }
-}
-
-
 // Objects that must be shared with dynamically linked sproutlets must be
 // globally scoped.
 LoadMonitor* load_monitor = NULL;
@@ -1453,42 +1386,6 @@ ChronosConnection* chronos_connection = NULL;
 SIFCService* sifc_service = NULL;
 FIFCService* fifc_service = NULL;
 MMFService* mmf_service = NULL;
-
-bool parse_multi_site_stores_arg(const std::vector<std::string>& stores_arg,
-                                 const std::string& local_site_name,
-                                 const char* store_name,
-                                 std::string& store_location,
-                                 std::vector<std::string>& remote_stores_locations)
-{
-  if (!stores_arg.empty())
-  {
-    if (!Utils::parse_stores_arg(stores_arg,
-                                 local_site_name,
-                                 store_location,
-                                 remote_stores_locations))
-    {
-      TRC_ERROR("Invalid format of %s program argument", store_name);
-      return false;
-    }
-
-    if (store_location == "")
-    {
-      // If we've failed to find a local site registration store then Sprout has
-      // been misconfigured.
-      TRC_ERROR("No local site %s specified", store_name);
-      return false;
-    }
-    else
-    {
-      TRC_INFO("Using memcached %s", store_name);
-      TRC_INFO("  Primary store: %s", store_location.c_str());
-      std::string remote_stores_str = boost::algorithm::join(remote_stores_locations, ", ");
-      TRC_INFO("  Backup store(s): %s", remote_stores_str.c_str());
-    }
-  }
-
-  return true;
-}
 
 /*
  * main()
@@ -1562,7 +1459,6 @@ int main(int argc, char* argv[])
   opt.log_level = 0;
   opt.daemon = PJ_FALSE;
   opt.interactive = PJ_FALSE;
-  opt.memcached_write_format = MemcachedWriteFormat::JSON;
   opt.override_npdi = PJ_FALSE;
   opt.exception_max_ttl = 600;
   opt.sip_blacklist_duration = SIPResolver::DEFAULT_BLACKLIST_DURATION;
@@ -1579,7 +1475,6 @@ int main(int argc, char* argv[])
   opt.force_third_party_register_body = false;
   opt.listen_port = 0;
   SPROUTLET_MACRO(SPROUTLET_CFG_OPTIONS_DEFAULT_VALUES)
-  opt.impi_store_mode = ImpiStore::Mode::READ_IMPI_WRITE_IMPI;
   opt.nonce_count_supported = false;
   opt.scscf_node_uri = "";
   opt.sas_signaling_if = false;
@@ -1746,11 +1641,11 @@ int main(int argc, char* argv[])
   std::string registration_store_location;
   std::vector<std::string> remote_registration_stores_locations;
 
-  if (!parse_multi_site_stores_arg(opt.registration_stores,
-                                   opt.local_site_name,
-                                   "registration-store",
-                                   registration_store_location,
-                                   remote_registration_stores_locations))
+  if (!Utils::parse_multi_site_stores_arg(opt.registration_stores,
+                                          opt.local_site_name,
+                                          "registration-store",
+                                          registration_store_location,
+                                          remote_registration_stores_locations))
   {
     return 1;
   }
@@ -1770,11 +1665,11 @@ int main(int argc, char* argv[])
   else
   {
     TRC_DEBUG("Parse IMPI store locations argument");
-    if (!parse_multi_site_stores_arg(opt.impi_stores,
-                                     opt.local_site_name,
-                                     "impi-store",
-                                     impi_store_location,
-                                     remote_impi_stores_locations))
+    if (!Utils::parse_multi_site_stores_arg(opt.impi_stores,
+                                            opt.local_site_name,
+                                            "impi-store",
+                                            impi_store_location,
+                                            remote_impi_stores_locations))
     {
       return 1;
     }
@@ -2205,19 +2100,7 @@ int main(int argc, char* argv[])
   }
 
   // Create local and optionally remote registration data stores.
-  //
-  // It is fine to reuse these variables for creating both stores, as
-  // ownership of the objects they point to is transferred to the store when
-  // it is constructed.
-  SubscriberDataManager::SerializerDeserializer* serializer;
-  std::vector<SubscriberDataManager::SerializerDeserializer*> deserializers;
-
-  create_sdm_plugins(serializer,
-                     deserializers,
-                     opt.memcached_write_format);
   local_sdm = new SubscriberDataManager(local_data_store,
-                                        serializer,
-                                        deserializers,
                                         chronos_connection,
                                         analytics_logger,
                                         true);
@@ -2227,12 +2110,7 @@ int main(int argc, char* argv[])
        it != remote_data_stores.end();
        ++it)
   {
-    create_sdm_plugins(serializer,
-                       deserializers,
-                       opt.memcached_write_format);
     SubscriberDataManager* remote_sdm = new SubscriberDataManager(*it,
-                                                                  serializer,
-                                                                  deserializers,
                                                                   chronos_connection,
                                                                   NULL,
                                                                   false);
@@ -2283,7 +2161,7 @@ int main(int argc, char* argv[])
                                                                       astaire_resolver,
                                                                       false,
                                                                       astaire_comm_monitor);
-    local_impi_store = new ImpiStore(local_impi_data_store, opt.impi_store_mode);
+    local_impi_store = new ImpiStore(local_impi_data_store);
 
     // Only set up remote IMPI stores if some have been configured, and we need
     // the IMPI store to be GR.
@@ -2302,7 +2180,7 @@ int main(int argc, char* argv[])
                                                                              true,
                                                                              remote_astaire_comm_monitor);
         remote_impi_data_stores.push_back(remote_data_store);
-        remote_impi_stores.push_back(new ImpiStore(remote_data_store, opt.impi_store_mode));
+        remote_impi_stores.push_back(new ImpiStore(remote_data_store));
       }
     }
   }
@@ -2311,7 +2189,7 @@ int main(int argc, char* argv[])
     // Use local store.
     TRC_STATUS("Using local store");
     local_impi_data_store = (Store*)new LocalStore();
-    local_impi_store = new ImpiStore(local_data_store, opt.impi_store_mode);
+    local_impi_store = new ImpiStore(local_data_store);
   }
 
   // Load the sproutlet plugins.
@@ -2422,10 +2300,8 @@ int main(int argc, char* argv[])
                                                              NULL,
                                                              NULL));
 
-  // The AoRTimeoutTask and AuthTimeoutTask both handle
-  // chronos requests, so use the ChronosHandler.
-  ChronosHandler<AoRTimeoutTask, AoRTimeoutTask::Config> aor_timeout_handler(&aor_timeout_config);
-  ChronosHandler<AuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
+  TimerHandler<ChronosAoRTimeoutTask, AoRTimeoutTask::Config> aor_timeout_handler(&aor_timeout_config);
+  TimerHandler<ChronosAuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
   HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
   HttpStackUtils::PingHandler ping_handler;
   HttpStackUtils::SpawningHandler<GetBindingsTask, GetCachedDataTask::Config> get_bindings_handler(&get_cached_data_config);

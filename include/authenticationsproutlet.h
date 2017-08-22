@@ -122,12 +122,10 @@ private:
   /// to GR stores if necessary).
   ///
   /// @param impi  - The IMPI to read.
-  /// @param nonce - The nonce that the caller is in interested in.
   /// @param trail - SAS trail ID.
   ///
   /// @return      - The IMPI object, or NULL if there was a store failure.
   ImpiStore::Impi* read_impi(const std::string& impi,
-                             const std::string& nonce,
                              SAS::TrailId trail);
 
   /// Write a challenge to the IMPI stores. This handles GR replication.

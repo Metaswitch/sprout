@@ -1223,12 +1223,11 @@ void RegistrarSproutletTsx::log_bindings(const std::string& aor_name,
        ++i)
   {
     SubscriberDataManager::AoR::Binding* binding = i->second;
-    TRC_DEBUG("  %s URI=%s expires=%d q=%d from=%s cseq=%d timer=%s private_id=%s emergency_registration=%s",
+    TRC_DEBUG("  %s URI=%s expires=%d q=%d from=%s cseq=%d private_id=%s emergency_registration=%s",
               i->first.c_str(),
               binding->_uri.c_str(),
               binding->_expires, binding->_priority,
               binding->_cid.c_str(), binding->_cseq,
-              binding->_timer_id.c_str(),
               binding->_private_id.c_str(),
               (binding->_emergency_registration ? "true" : "false"));
   }
