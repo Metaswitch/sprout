@@ -47,6 +47,21 @@ using testing::NiceMock;
 using testing::HasSubstr;
 using ::testing::Return;
 
+// TODO - make this class more consistent with the
+// TestingCommon::SubscriptionBuilder class (ie. have function "set_route",
+// instead of setting the route when initialising). This work should be done
+// when the parent class is reworked.
+//
+// Subclass which sets the correct Route header for the SCSCF tests.
+class SCSCFMessage : public TestingCommon::Message
+{
+public:
+  SCSCFMessage()
+  {
+    Message::_route = "Route: <sip:sprout.homedomain;service=scscf>";
+  };
+  ~SCSCFMessage() {};
+};
 
 /// ABC for fixtures for SCSCFTest and friends.
 class SCSCFTest : public SipTest
@@ -308,24 +323,24 @@ protected:
                      bool tpAset,
                      TransportFlow* tpB,
                      bool tpBset,
-                     TestingCommon::SCSCFMessage& msg,
+                     SCSCFMessage& msg,
                      string route,
                      bool expect_100,
                      bool expect_trusted_headers_on_requests,
                      bool expect_trusted_headers_on_responses,
                      bool expect_orig,
                      bool pcpi);
-  void doAsOriginated(TestingCommon::SCSCFMessage& msg, bool expect_orig);
+  void doAsOriginated(SCSCFMessage& msg, bool expect_orig);
   void doAsOriginated(const std::string& msg, bool expect_orig);
   void doFourAppServerFlow(std::string record_route_regex, bool app_servers_record_route=false);
-  void doSuccessfulFlow(TestingCommon::SCSCFMessage& msg,
+  void doSuccessfulFlow(SCSCFMessage& msg,
                         testing::Matcher<string> uri_matcher,
                         list<HeaderMatcher> headers,
                         bool include_ack_and_bye=true,
                         list<HeaderMatcher> rsp_hdrs = list<HeaderMatcher>());
-  void doFastFailureFlow(TestingCommon::SCSCFMessage& msg, int st_code);
-  void doSlowFailureFlow(TestingCommon::SCSCFMessage& msg, int st_code, std::string body = "", std::string reason = "");
-  void setupForkedFlow(TestingCommon::SCSCFMessage& msg);
+  void doFastFailureFlow(SCSCFMessage& msg, int st_code);
+  void doSlowFailureFlow(SCSCFMessage& msg, int st_code, std::string body = "", std::string reason = "");
+  void setupForkedFlow(SCSCFMessage& msg);
   list<string> doProxyCalculateTargets(int max_targets);
 };
 
