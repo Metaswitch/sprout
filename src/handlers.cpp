@@ -925,7 +925,7 @@ HTTPCode PushProfileTask::parse_request(std::string body, SAS::TrailId trail)
 HTTPCode PushProfileTask::get_data(SAS::TrailId trail)
 {
   TRC_DEBUG("Attempting to get AoR data");
-  SubscriberDataManager::AoRPair* aor_pair = NULL;
+  AoRPair* aor_pair = NULL;
 
   if(!sdm_access_common(&aor_pair,
                          _default_public_id,
