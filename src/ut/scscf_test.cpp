@@ -8224,7 +8224,7 @@ TEST_F(SCSCFTest, TestSessionExpiresInDialog)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, false, rsp_hdrs);
 }
 
-TEST_F(SCSCFTest, TestSessionExpiresInDialogBilling1)
+TEST_F(SCSCFTest, TestSessionExpiresInDialogBillingTerm)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
@@ -8249,7 +8249,7 @@ TEST_F(SCSCFTest, TestSessionExpiresInDialogBilling1)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, false, rsp_hdrs);
 }
 
-TEST_F(SCSCFTest, TestSessionExpiresInDialogBilling2)
+TEST_F(SCSCFTest, TestSessionExpiresInDialogBillingOrig)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
@@ -8274,7 +8274,7 @@ TEST_F(SCSCFTest, TestSessionExpiresInDialogBilling2)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, false, rsp_hdrs);
 }
 
-TEST_F(SCSCFTest, TestSessionExpiresInDialogBilling3)
+TEST_F(SCSCFTest, TestSessionExpiresInDialogBillingNone)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
@@ -8299,7 +8299,7 @@ TEST_F(SCSCFTest, TestSessionExpiresInDialogBilling3)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, false, rsp_hdrs);
 }
 
-TEST_F(SCSCFTest, TestSessionExpiresInDialogBilling4)
+TEST_F(SCSCFTest, TestSessionExpiresInDialogBillingNotFound)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
@@ -8311,7 +8311,7 @@ TEST_F(SCSCFTest, TestSessionExpiresInDialogBilling4)
   Message msg;
   msg._extra = "Supported: timer";
   msg._in_dialog = true;
-  msg._route = "Route: <sip:homedomain;transport=tcp;lr;billing-role=random-string>";
+  msg._route = "Route: <sip:homedomain;transport=tcp;lr>";
 
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("Record-Route"));

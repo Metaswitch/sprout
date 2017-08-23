@@ -1406,10 +1406,6 @@ AsChainLink SCSCFSproutletTsx::create_as_chain(Ifcs ifcs,
                                                ACR*& acr,
                                                SAS::TrailId chain_trail)
 {
-  if (served_user.empty())
-  {
-    TRC_WARNING("create_as_chain called with an empty served_user");
-  }
   bool is_registered = is_user_registered(served_user);
 
   AsChainLink ret = AsChainLink::create_as_chain(_scscf->as_chain_table(),
