@@ -421,7 +421,7 @@ class ChronosAuthTimeoutTest : public AuthTimeoutTest
 TEST_F(ChronosAuthTimeoutTest, NonceTimedOut)
 {
   fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", RegDataXMLUtils::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
-  ImpiStore::Impi* impi = new ImpiStore::Impi("6505550231@homedomain");
+  ImpiStore::Impi* impi = new AstaireImpiStore::Impi("6505550231@homedomain");
   ImpiStore::DigestAuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge("abcdef", "example.com", "auth", "ha1", time(NULL) + 30);
   auth_challenge->correlator = "abcde";
   auth_challenge->scscf_uri = "sip:scscf.sprout.homedomain:5058;transport=TCP";
@@ -442,7 +442,7 @@ TEST_F(ChronosAuthTimeoutTest, NonceTimedOut)
 TEST_F(ChronosAuthTimeoutTest, NonceTimedOutWithEmptyCorrelator)
 {
   fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", RegDataXMLUtils::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
-  ImpiStore::Impi* impi = new ImpiStore::Impi("6505550231@homedomain");
+  ImpiStore::Impi* impi = new AstaireImpiStore::Impi("6505550231@homedomain");
   ImpiStore::DigestAuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge("abcdef", "example.com", "auth", "ha1", time(NULL) + 30);
   auth_challenge->scscf_uri = "sip:scscf.sprout.homedomain:5058;transport=TCP";
   impi->auth_challenges.push_back(auth_challenge);
@@ -461,7 +461,7 @@ TEST_F(ChronosAuthTimeoutTest, NonceTimedOutWithEmptyCorrelator)
 
 TEST_F(ChronosAuthTimeoutTest, MainlineTest)
 {
-  ImpiStore::Impi* impi = new ImpiStore::Impi("test@example.com");
+  ImpiStore::Impi* impi = new AstaireImpiStore::Impi("test@example.com");
   ImpiStore::DigestAuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge("abcdef", "example.com", "auth", "ha1", time(NULL) + 30);
   auth_challenge->nonce_count++; // Indicates that one successful authentication has occurred
   auth_challenge->correlator = "abcde";

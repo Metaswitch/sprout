@@ -25,6 +25,7 @@
 #include "mock_subscriber_data_manager.h"
 #include "mock_impi_store.h"
 #include "mock_hss_connection.h"
+#include "astaire_impistore.h"
 
 // Base class used for testing handlers with Mock SDMs.
 class TestWithMockSdms : public SipTest
@@ -118,7 +119,7 @@ class AuthTimeoutTest : public SipTest
   void SetUp()
   {
     local_data_store = new LocalStore();
-    store = new ImpiStore(local_data_store);
+    store = new AstaireImpiStore(local_data_store);
     fake_hss = new FakeHSSConnection();
   }
 

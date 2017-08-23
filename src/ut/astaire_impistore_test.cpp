@@ -17,7 +17,7 @@
 #include "utils.h"
 #include "sas.h"
 #include "localstore.h"
-#include "impistore.h"
+#include "astaire_impistore.h"
 #include "test_utils.hpp"
 #include "test_interposer.hpp"
 
@@ -29,18 +29,18 @@ static const std::string NONCE1 = "nonce1";
 static const std::string NONCE2 = "nonce2";
 
 /// Base fixture for all IMPI store tests.
-class ImpiStoreTest : public ::testing::Test
+class AstaireImpiStoreTest : public ::testing::Test
 {
 public:
   LocalStore* local_store;
   ImpiStore* impi_store;
-  ImpiStoreTest()
+  AstaireImpiStoreTest()
   {
     local_store = new LocalStore();
-    impi_store = new ImpiStore(local_store);;
+    impi_store = new AstaireImpiStore(local_store);;
 
   }
-  virtual ~ImpiStoreTest()
+  virtual ~AstaireImpiStoreTest()
   {
     delete local_store;
     delete impi_store;
@@ -50,7 +50,7 @@ public:
 /// Example IMPI, with a single digest authentication challenge.
 ImpiStore::Impi* example_impi_digest()
 {
-  ImpiStore::Impi* impi = new ImpiStore::Impi(IMPI);
+  ImpiStore::Impi* impi = new AstaireImpiStore::Impi(IMPI);
   ImpiStore::AuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge(NONCE1, "example.com", "auth", "ha1", time(NULL) + 30);
   auth_challenge->correlator = "correlator";
   impi->auth_challenges.push_back(auth_challenge);
@@ -60,7 +60,7 @@ ImpiStore::Impi* example_impi_digest()
 /// Example IMPI, with a single AKA authentication challenge.
 ImpiStore::Impi* example_impi_aka()
 {
-  ImpiStore::Impi* impi = new ImpiStore::Impi(IMPI);
+  ImpiStore::Impi* impi = new AstaireImpiStore::Impi(IMPI);
   ImpiStore::AuthChallenge* auth_challenge = new ImpiStore::AKAAuthChallenge(NONCE1, "response", time(NULL) + 30);
   auth_challenge->correlator = "correlator";
   impi->auth_challenges.push_back(auth_challenge);
@@ -70,7 +70,7 @@ ImpiStore::Impi* example_impi_aka()
 /// Example IMPI, with both a digest and an AKA authentication challenge.
 ImpiStore::Impi* example_impi_digest_aka()
 {
-  ImpiStore::Impi* impi = new ImpiStore::Impi(IMPI);
+  ImpiStore::Impi* impi = new AstaireImpiStore::Impi(IMPI);
   ImpiStore::AuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge(NONCE1, "example.com", "auth", "ha1", time(NULL) + 30);
   auth_challenge->correlator = "correlator";
   impi->auth_challenges.push_back(auth_challenge);
@@ -128,7 +128,7 @@ void expect_impis_equal(ImpiStore::Impi* impi1, ImpiStore::Impi* impi2)
   }
 };
 
-TEST_F(ImpiStoreTest, SetGet)
+TEST_F(AstaireImpiStoreTest, SetGet)
 {
   ImpiStore::Impi* impi1 = example_impi_digest();
   Store::Status status = this->impi_store->set_impi(impi1, 0L);
@@ -139,7 +139,7 @@ TEST_F(ImpiStoreTest, SetGet)
   delete impi1;
 }
 
-TEST_F(ImpiStoreTest, SetGetFailure)
+TEST_F(AstaireImpiStoreTest, SetGetFailure)
 {
   ImpiStore::Impi* impi1 = example_impi_digest();
   Store::Status status = this->impi_store->set_impi(impi1, 0L);
@@ -151,7 +151,7 @@ TEST_F(ImpiStoreTest, SetGetFailure)
   delete impi1;
 }
 
-TEST_F(ImpiStoreTest, SetDelete)
+TEST_F(AstaireImpiStoreTest, SetDelete)
 {
   ImpiStore::Impi* impi1 = example_impi_digest();
   Store::Status status = this->impi_store->set_impi(impi1, 0L);
@@ -161,7 +161,7 @@ TEST_F(ImpiStoreTest, SetDelete)
   delete impi1;
 }
 
-TEST_F(ImpiStoreTest, IMPICorruptJSON)
+TEST_F(AstaireImpiStoreTest, IMPICorruptJSON)
 {
   local_store->set_data("impi", IMPI, "{]", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
@@ -170,7 +170,7 @@ TEST_F(ImpiStoreTest, IMPICorruptJSON)
   delete impi;
 }
 
-TEST_F(ImpiStoreTest, IMPINotObject)
+TEST_F(AstaireImpiStoreTest, IMPINotObject)
 {
   local_store->set_data("impi", IMPI, "\"not an object\"", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
@@ -179,7 +179,7 @@ TEST_F(ImpiStoreTest, IMPINotObject)
   delete impi;
 }
 
-TEST_F(ImpiStoreTest, ChallengeNotObject)
+TEST_F(AstaireImpiStoreTest, ChallengeNotObject)
 {
   local_store->set_data("impi", IMPI, "{\"authChallenges\":[\"not an object\"]}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
@@ -188,7 +188,7 @@ TEST_F(ImpiStoreTest, ChallengeNotObject)
   delete impi;
 }
 
-TEST_F(ImpiStoreTest, ChallengeDigest)
+TEST_F(AstaireImpiStoreTest, ChallengeDigest)
 {
   local_store->set_data("impi", IMPI, "{\"authChallenges\":[{\"type\":\"digest\",\"nonce\":\"nonce\",\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\"}]}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
@@ -198,7 +198,7 @@ TEST_F(ImpiStoreTest, ChallengeDigest)
   delete impi;
 }
 
-TEST_F(ImpiStoreTest, ChallengeUnknownType)
+TEST_F(AstaireImpiStoreTest, ChallengeUnknownType)
 {
   local_store->set_data("impi", IMPI, "{\"authChallenges\":[{\"type\":\"unknown\"}]}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
@@ -207,7 +207,7 @@ TEST_F(ImpiStoreTest, ChallengeUnknownType)
   delete impi;
 }
 
-TEST_F(ImpiStoreTest, ChallengeDigestMissingRealm)
+TEST_F(AstaireImpiStoreTest, ChallengeDigestMissingRealm)
 {
   local_store->set_data("impi", IMPI, "{\"authChallenges\":[{\"type\":\"digest\",\"nonce\":\"nonce\",\"qop\":\"auth\",\"ha1\":\"ha1\"}]}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
@@ -216,7 +216,7 @@ TEST_F(ImpiStoreTest, ChallengeDigestMissingRealm)
   delete impi;
 }
 
-TEST_F(ImpiStoreTest, ChallengeDigestMissingQoP)
+TEST_F(AstaireImpiStoreTest, ChallengeDigestMissingQoP)
 {
   local_store->set_data("impi", IMPI, "{\"authChallenges\":[{\"type\":\"digest\",\"nonce\":\"nonce\",\"realm\":\"example.com\",\"ha1\":\"ha1\"}]}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
@@ -225,7 +225,7 @@ TEST_F(ImpiStoreTest, ChallengeDigestMissingQoP)
   delete impi;
 }
 
-TEST_F(ImpiStoreTest, ChallengeDigestMissingHA1)
+TEST_F(AstaireImpiStoreTest, ChallengeDigestMissingHA1)
 {
   local_store->set_data("impi", IMPI, "{\"authChallenges\":[{\"type\":\"digest\",\"nonce\":\"nonce\",\"realm\":\"example.com\",\"qop\":\"auth\"}]}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
@@ -234,7 +234,7 @@ TEST_F(ImpiStoreTest, ChallengeDigestMissingHA1)
   delete impi;
 }
 
-TEST_F(ImpiStoreTest, ChallengeDigestMissingNonce)
+TEST_F(AstaireImpiStoreTest, ChallengeDigestMissingNonce)
 {
   local_store->set_data("impi", IMPI, "{\"authChallenges\":[{\"type\":\"digest\",\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\"}]}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
@@ -243,7 +243,7 @@ TEST_F(ImpiStoreTest, ChallengeDigestMissingNonce)
   delete impi;
 }
 
-TEST_F(ImpiStoreTest, ChallengeDigestExpiresInPast)
+TEST_F(AstaireImpiStoreTest, ChallengeDigestExpiresInPast)
 {
   local_store->set_data("impi", IMPI, "{\"authChallenges\":[{\"type\":\"digest\",\"nonce\":\"nonce\",\"realm\":\"example.com\",\"qop\":\"auth\",\"ha1\":\"ha1\",\"expires\":1}]}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
@@ -252,7 +252,7 @@ TEST_F(ImpiStoreTest, ChallengeDigestExpiresInPast)
   delete impi;
 }
 
-TEST_F(ImpiStoreTest, ChallengeAKAMissingResponse)
+TEST_F(AstaireImpiStoreTest, ChallengeAKAMissingResponse)
 {
   local_store->set_data("impi", IMPI, "{\"authChallenges\":[{\"type\":\"aka\",\"nonce\":\"nonce\"}]}", 0, 30, 0L);
   ImpiStore::Impi* impi = impi_store->get_impi(IMPI, 0L);
