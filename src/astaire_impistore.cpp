@@ -28,20 +28,7 @@
 const std::string AstaireImpiStore::TABLE_IMPI = "impi";
 
 // JSON field names and values.
-static const char* const JSON_TYPE = "type";
-static const char* const JSON_TYPE_DIGEST = "digest";
-static const char* const JSON_TYPE_AKA = "aka";
-static const char* const JSON_TYPE_ENUM[] = {JSON_TYPE_DIGEST, JSON_TYPE_AKA};
-static const char* const JSON_NONCE = "nonce";
-static const char* const JSON_NONCE_COUNT = "nc";
-static const char* const JSON_EXPIRES = "expires";
-static const char* const JSON_CORRELATOR = "correlator";
-static const char* const JSON_REALM = "realm";
-static const char* const JSON_QOP = "qop";
-static const char* const JSON_HA1 = "ha1";
-static const char* const JSON_RESPONSE = "response";
 static const char* const JSON_AUTH_CHALLENGES = "authChallenges";
-static const char* const JSON_SCSCF_URI = "scscf-uri";
 
 void AstaireImpiStore::Impi::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer)
 {

@@ -13,7 +13,6 @@
 #include <pthread.h>
 
 #include "log.h"
-#include "store.h"
 #include "impistore.h"
 #include "sas.h"
 #include "sproutsasevent.h"
@@ -57,7 +56,6 @@ static const char* const JSON_REALM = "realm";
 static const char* const JSON_QOP = "qop";
 static const char* const JSON_HA1 = "ha1";
 static const char* const JSON_RESPONSE = "response";
-static const char* const JSON_AUTH_CHALLENGES = "authChallenges";
 static const char* const JSON_SCSCF_URI = "scscf-uri";
 
 ImpiStore::AuthChallenge* ImpiStore::Impi::get_auth_challenge(const std::string& nonce)
