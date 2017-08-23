@@ -15,6 +15,15 @@
 #include <string>
 #include <vector>
 #include <map>
+#include "rapidjson/writer.h"
+#include "rapidjson/document.h"
+
+/// JSON Serialization constants
+static const char* const JSON_ASSOC_URI= "assoc-uri";
+static const char* const JSON_ASSOCIATED_URIS_ARRAY = "associated-uris-array";
+static const char* const JSON_BARRING = "barring";
+static const char* const JSON_WILDCARD_MAPPINGS ="wildcard-mappings";
+static const char* const JSON_ASSOCIATED_URIS = "associated-uris";
 
 struct AssociatedURIs
 {
@@ -49,6 +58,22 @@ public:
 
   /// Add a mapping between a distinct IMPU and the wildcard it belongs to
   void add_wildcard_mapping(std::string wildcard, std::string distinct);
+
+  /// Returns the wildcard mappings.
+  std::map<std::string, std::string> get_wildcard_mappings();
+
+  /// Serialize the associated URIs as a JSON object.
+  ///
+  /// @param writer - a rapidjson writer to write to.
+  void to_json(rapidjson::Writer<rapidjson::StringBuffer>& writer);
+
+  // Deserialize associated URIs from a JSON object.
+  //
+  // @param s_obj - The associated URIs a JSON object.
+  //
+  // @return      - Nothing. If this function fails (because the JSON is not
+  //                semantically valid) this method throws JsonFormError.
+  void from_json(const rapidjson::Value& s_obj);
 
 private:
   /// A vector of associated URIs.

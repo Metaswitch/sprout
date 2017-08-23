@@ -96,6 +96,7 @@ TEST_F(BasicSubscriberDataManagerTest, BindingTests)
 {
   AoRPair* aor_data1;
   AoR::Binding* b1;
+  AssociatedURIs associated_uris = {};
   bool rc;
   int now;
 
@@ -104,6 +105,7 @@ TEST_F(BasicSubscriberDataManagerTest, BindingTests)
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
   aor_data1->get_current()->_timer_id = "AoRtimer";
+  aor_data1->get_current()->_associated_uris = associated_uris;
   EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
   b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
@@ -121,7 +123,6 @@ TEST_F(BasicSubscriberDataManagerTest, BindingTests)
 
   // Add the AoR record to the store.
   std::string aor = "5102175698@cw-ngv.com";
-  AssociatedURIs associated_uris = {};
   associated_uris.add_uri(aor, false);
   EXPECT_CALL(*(this->_analytics_logger),
               registration("5102175698@cw-ngv.com",
@@ -228,6 +229,7 @@ TEST_F(BasicSubscriberDataManagerTest, SubscriptionTests)
 {
   AoRPair* aor_data1;
   AoR::Binding* b1;
+  AssociatedURIs associated_uris = {};
   AoR::Subscription* s1;
   bool rc;
   int now;
@@ -237,6 +239,7 @@ TEST_F(BasicSubscriberDataManagerTest, SubscriptionTests)
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
   aor_data1->get_current()->_timer_id = "AoRtimer";
+  aor_data1->get_current()->_associated_uris = associated_uris;
   EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
   b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
@@ -254,7 +257,6 @@ TEST_F(BasicSubscriberDataManagerTest, SubscriptionTests)
 
   // Add the AoR record to the store.
   std::string aor = "5102175698@cw-ngv.com";
-  AssociatedURIs associated_uris = {};
   associated_uris.add_uri(aor, false);
   EXPECT_CALL(*(this->_analytics_logger),
               registration("5102175698@cw-ngv.com",
@@ -323,6 +325,7 @@ TEST_F(BasicSubscriberDataManagerTest, CopyTests)
 {
   AoRPair* aor_data1;
   AoR::Binding* b1;
+  AssociatedURIs associated_uris = {};
   AoR::Subscription* s1;
   int now;
 
@@ -331,6 +334,7 @@ TEST_F(BasicSubscriberDataManagerTest, CopyTests)
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
   aor_data1->get_current()->_timer_id = "AoRtimer";
+  aor_data1->get_current()->_associated_uris = associated_uris;
   EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
   EXPECT_EQ(0u, aor_data1->get_current()->subscriptions().size());
 
@@ -396,6 +400,7 @@ TEST_F(BasicSubscriberDataManagerTest, ExpiryTests)
   AoR::Binding* b2;
   AoR::Subscription* s1;
   AoR::Subscription* s2;
+  AssociatedURIs associated_uris = {};
   bool rc;
   int now;
 
@@ -404,6 +409,7 @@ TEST_F(BasicSubscriberDataManagerTest, ExpiryTests)
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
   aor_data1->get_current()->_timer_id = "AoRtimer";
+  aor_data1->get_current()->_associated_uris = associated_uris;
   EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
   EXPECT_EQ(0u, aor_data1->get_current()->subscriptions().size());
 
@@ -459,7 +465,7 @@ TEST_F(BasicSubscriberDataManagerTest, ExpiryTests)
 
   // Write the record to the store.
   std::string aor = "5102175698@cw-ngv.com";
-  AssociatedURIs associated_uris = {};
+  associated_uris = {};
   associated_uris.add_uri(aor, false);
   EXPECT_CALL(*(this->_analytics_logger),
               registration("5102175698@cw-ngv.com",

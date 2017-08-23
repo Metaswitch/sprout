@@ -1206,9 +1206,9 @@ TEST_F(PushProfileTaskTest, MainlineTest)
                               "    </ApplicationServer>\n"
                               "  </InitialFilterCriteria>\n"
                               "</ServiceProfile></IMSSubscription>";
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(default_uri);
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor = new AoR(default_uri);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
   build_pushprofile_request(body, default_uri);
 
   EXPECT_CALL(*_subscriber_data_manager, get_aor_data(default_uri, _)).WillOnce(Return(aor_pair));
@@ -1265,7 +1265,7 @@ TEST_F(PushProfileTaskTest, SubscriberDataManagerFails)
   std::string body =          "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
                               "</ServiceProfile></IMSSubscription>";
-  SubscriberDataManager::AoRPair* aor_pair;
+  AoRPair* aor_pair;
   aor_pair = NULL;
   build_pushprofile_request(body, default_uri);
 
@@ -1282,9 +1282,9 @@ TEST_F(PushProfileTaskTest, SubscriberDataManagerWriteFails)
   std::string body =          "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
                               "</ServiceProfile></IMSSubscription>";
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(default_uri);
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor = new AoR(default_uri);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
   build_pushprofile_request(body, default_uri);
 
   EXPECT_CALL(*_subscriber_data_manager, get_aor_data(default_uri, _)).WillOnce(Return(aor_pair));
