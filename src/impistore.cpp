@@ -69,7 +69,7 @@ ImpiStore::AuthChallenge* ImpiStore::Impi::get_auth_challenge(const std::string&
        it != auth_challenges.end();
        it++)
   {
-    if ((*it)->nonce == nonce)
+    if ((*it)->_nonce == nonce)
     {
       auth_challenge = *it;
       break;
@@ -81,15 +81,15 @@ ImpiStore::AuthChallenge* ImpiStore::Impi::get_auth_challenge(const std::string&
 void ImpiStore::AuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer)
 {
   // Write all the base AuthChallenge fields to JSON, in the IMPI format.
-  writer->String(JSON_TYPE); writer->String(JSON_TYPE_ENUM[type]);
-  writer->String(JSON_NONCE); writer->String(nonce.c_str());
-  writer->String(JSON_NONCE_COUNT); writer->Uint(nonce_count);
-  writer->String(JSON_EXPIRES); writer->Int(expires);
-  if (correlator != "")
+  writer->String(JSON_TYPE); writer->String(JSON_TYPE_ENUM[_type]);
+  writer->String(JSON_NONCE); writer->String(_nonce.c_str());
+  writer->String(JSON_NONCE_COUNT); writer->Uint(_nonce_count);
+  writer->String(JSON_EXPIRES); writer->Int(_expires);
+  if (_correlator != "")
   {
-    writer->String(JSON_CORRELATOR); writer->String(correlator.c_str());
+    writer->String(JSON_CORRELATOR); writer->String(_correlator.c_str());
   }
-  writer->String(JSON_SCSCF_URI); writer->String(scscf_uri.c_str());
+  writer->String(JSON_SCSCF_URI); writer->String(_scscf_uri.c_str());
   // We don't serialize the CAS - this is passed to the store on the set_data call.
 }
 
@@ -121,22 +121,22 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* 
     // remaining (base) fields.
     if (auth_challenge != NULL)
     {
-      JSON_SAFE_GET_STRING_MEMBER(*json, JSON_NONCE, auth_challenge->nonce);
-      JSON_SAFE_GET_UINT_MEMBER(*json, JSON_NONCE_COUNT, auth_challenge->nonce_count);
-      JSON_SAFE_GET_INT_MEMBER(*json, JSON_EXPIRES, auth_challenge->expires);
-      JSON_SAFE_GET_STRING_MEMBER(*json, JSON_CORRELATOR, auth_challenge->correlator);
-      JSON_SAFE_GET_STRING_MEMBER(*json, JSON_SCSCF_URI, auth_challenge->scscf_uri);
+      JSON_SAFE_GET_STRING_MEMBER(*json, JSON_NONCE, auth_challenge->_nonce);
+      JSON_SAFE_GET_UINT_MEMBER(*json, JSON_NONCE_COUNT, auth_challenge->_nonce_count);
+      JSON_SAFE_GET_INT_MEMBER(*json, JSON_EXPIRES, auth_challenge->_expires);
+      JSON_SAFE_GET_STRING_MEMBER(*json, JSON_CORRELATOR, auth_challenge->_correlator);
+      JSON_SAFE_GET_STRING_MEMBER(*json, JSON_SCSCF_URI, auth_challenge->_scscf_uri);
 
-      if (auth_challenge->nonce_count == 0)
+      if (auth_challenge->_nonce_count == 0)
       {
         // We should always have a nonce_count, but to ease version
         // forward-compatibility, default it if not found.
         TRC_WARNING("No \"%s\" field in JSON authentication challenge - defaulting to %u",
                     JSON_NONCE_COUNT, INITIAL_NONCE_COUNT);
-        auth_challenge->nonce_count = INITIAL_NONCE_COUNT;
+        auth_challenge->_nonce_count = INITIAL_NONCE_COUNT;
       }
 
-      if (auth_challenge->expires == 0)
+      if (auth_challenge->_expires == 0)
       {
         // We should always have an expires, but to ease version forward-
         // compatibility, default it if not found.  We use the DEFAULT_EXPIRES
@@ -144,18 +144,18 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* 
         // if it won't allow re-authentication later.
         TRC_WARNING("No \"%s\" field in JSON authentication challenge - defaulting to %d",
                     JSON_EXPIRES, DEFAULT_EXPIRES);
-        auth_challenge->expires = time(NULL) + DEFAULT_EXPIRES;
+        auth_challenge->_expires = time(NULL) + DEFAULT_EXPIRES;
       }
 
       // Check we have the nonce and the record hasn't expired - otherwise drop
       // the record.
-      if (auth_challenge->nonce == "")
+      if (auth_challenge->_nonce == "")
       {
         TRC_WARNING("No \"%s\" field in JSON authentication challenge - dropping",
                     JSON_NONCE);
         delete auth_challenge; auth_challenge = NULL;
       }
-      else if (auth_challenge->expires < time(NULL))
+      else if (auth_challenge->_expires < time(NULL))
       {
         TRC_DEBUG("Expires in past - dropping");
         delete auth_challenge; auth_challenge = NULL;
@@ -174,33 +174,33 @@ void ImpiStore::DigestAuthChallenge::write_json(rapidjson::Writer<rapidjson::Str
   // Write all the DigestAuthChallenge fields to JSON, in IMPI format.  We
   // call into the superclass to write base AuthChallenges fields.
   ImpiStore::AuthChallenge::write_json(writer);
-  writer->String(JSON_REALM); writer->String(realm.c_str());
-  writer->String(JSON_QOP); writer->String(qop.c_str());
-  writer->String(JSON_HA1); writer->String(ha1.c_str());
+  writer->String(JSON_REALM); writer->String(_realm.c_str());
+  writer->String(JSON_QOP); writer->String(_qop.c_str());
+  writer->String(JSON_HA1); writer->String(_ha1.c_str());
 }
 
 ImpiStore::DigestAuthChallenge* ImpiStore::DigestAuthChallenge::from_json(rapidjson::Value* json)
 {
   // Construct a DigestAuthChallenge and fill it in.
   ImpiStore::DigestAuthChallenge* auth_challenge = new DigestAuthChallenge();
-  JSON_SAFE_GET_STRING_MEMBER(*json, JSON_REALM, auth_challenge->realm);
-  JSON_SAFE_GET_STRING_MEMBER(*json, JSON_QOP, auth_challenge->qop);
-  JSON_SAFE_GET_STRING_MEMBER(*json, JSON_HA1, auth_challenge->ha1);
+  JSON_SAFE_GET_STRING_MEMBER(*json, JSON_REALM, auth_challenge->_realm);
+  JSON_SAFE_GET_STRING_MEMBER(*json, JSON_QOP, auth_challenge->_qop);
+  JSON_SAFE_GET_STRING_MEMBER(*json, JSON_HA1, auth_challenge->_ha1);
 
   // Check we have the realm, qop and ha1 - otherwise drop the record.
-  if (auth_challenge->realm == "")
+  if (auth_challenge->_realm == "")
   {
     TRC_WARNING("No \"%s\" field in JSON authentication challenge - dropping",
                 JSON_REALM);
     delete auth_challenge; auth_challenge = NULL;
   }
-  else if (auth_challenge->qop == "")
+  else if (auth_challenge->_qop == "")
   {
     TRC_WARNING("No \"%s\" field in JSON authentication challenge - dropping",
                 JSON_QOP);
     delete auth_challenge; auth_challenge = NULL;
   }
-  else if (auth_challenge->ha1 == "")
+  else if (auth_challenge->_ha1 == "")
   {
     TRC_WARNING("No \"%s\" field in JSON authentication challenge - dropping",
                 JSON_HA1);
@@ -214,17 +214,17 @@ void ImpiStore::AKAAuthChallenge::write_json(rapidjson::Writer<rapidjson::String
   // Write all the AKAAuthChallenge fields to JSON, in IMPI format.  We call
   // into the superclass to write base AuthChallenges fields.
   ImpiStore::AuthChallenge::write_json(writer);
-  writer->String(JSON_RESPONSE); writer->String(response.c_str());
+  writer->String(JSON_RESPONSE); writer->String(_response.c_str());
 }
 
 ImpiStore::AKAAuthChallenge* ImpiStore::AKAAuthChallenge::from_json(rapidjson::Value* json)
 {
   // Construct an AKAAuthChallenge and fill it in.
   ImpiStore::AKAAuthChallenge* auth_challenge = new AKAAuthChallenge();
-  JSON_SAFE_GET_STRING_MEMBER(*json, JSON_RESPONSE, auth_challenge->response);
+  JSON_SAFE_GET_STRING_MEMBER(*json, JSON_RESPONSE, auth_challenge->_response);
 
   // Check we have the response field - otherwise drop the record.
-  if (auth_challenge->response == "")
+  if (auth_challenge->_response == "")
   {
     TRC_WARNING("No \"response\" field in JSON authentication challenge - dropping");
     delete auth_challenge; auth_challenge = NULL;
@@ -264,7 +264,7 @@ int ImpiStore::Impi::get_expires()
        it != auth_challenges.end();
        it++)
   {
-    expires = std::max(expires, (*it)->expires);
+    expires = std::max(expires, (*it)->_expires);
   }
   return expires;
 }
@@ -277,10 +277,10 @@ void correlate_trail_to_challenge(ImpiStore::AuthChallenge* auth_challenge,
                                   SAS::TrailId trail)
 {
   // Report the correlator as a SAS marker, if it exists.
-  if (auth_challenge->correlator != "")
+  if (auth_challenge->get_correlator() != "")
   {
     SAS::Marker via_marker(trail, MARKER_ID_VIA_BRANCH_PARAM, 1u);
-    via_marker.add_var_param(auth_challenge->correlator);
+    via_marker.add_var_param(auth_challenge->get_correlator());
     SAS::report_marker(via_marker, SAS::Marker::Scope::Trace);
   }
   else

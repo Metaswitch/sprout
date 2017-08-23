@@ -54,7 +54,7 @@ void AstaireImpiStore::Impi::write_json(rapidjson::Writer<rapidjson::StringBuffe
          it != auth_challenges.end();
          it++)
     {
-      if ((*it)->expires > now)
+      if ((*it)->get_expires() > now)
       {
         writer->StartObject();
         {

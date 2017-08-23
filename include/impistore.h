@@ -51,40 +51,22 @@ public:
     static const int DEFAULT_EXPIRES = 40;
 
     /// Constructor.
-    /// @param _type         Type of authentication challenge.
-    /// @param _nonce        Nonce used for this challenge.
-    /// @param _expires      Absolute expiry time in seconds since the epoch.
-    AuthChallenge(const Type _type, const std::string& _nonce, int _expires) :
-      type(_type),
-      nonce(_nonce),
-      nonce_count(INITIAL_NONCE_COUNT),
-      expires(_expires),
-      correlator(),
-      scscf_uri() {};
+    /// @param type         Type of authentication challenge.
+    /// @param nonce        Nonce used for this challenge.
+    /// @param expires      Absolute expiry time in seconds since the epoch.
+    ///
+    /// Marks the AuthChallenge as Updated, so that it appears new to the Store.
+    AuthChallenge(const Type type, const std::string& nonce, int expires) :
+      _type(type),
+      _nonce(nonce),
+      _nonce_count(INITIAL_NONCE_COUNT),
+      _expires(expires),
+      _correlator(),
+      _scscf_uri(),
+      _updated(true) {};
 
     /// Destructor must be virtual as we're going to extend this class.
     virtual ~AuthChallenge() {};
-
-    /// Type of the AV
-    enum Type type;
-
-    /// Nonce used for this challenge.
-    std::string nonce;
-
-    /// Minimum nonce count we will accept - any nonce count lower than this
-    /// might be a replay and must be rejected.
-    uint32_t nonce_count;
-
-    /// Expiry time - absolute in seconds since the Epoch
-    int expires;
-
-    /// Correlator between original challenge and responses.
-    std::string correlator;
-
-    /// URI of the S-CSCF that issued the challenge. This is the server name
-    /// used on the SAR if the authentication times out. This field should not
-    /// be changed once the challenge has been created.
-    std::string scscf_uri;
 
     /// Write to JSON writer (IMPI format).
     virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
@@ -92,16 +74,105 @@ public:
     /// Deserialization from JSON (IMPI format).
     static ImpiStore::AuthChallenge* from_json(rapidjson::Value* json);
 
+    /// Getters and setters
+    Type get_type()
+    {
+      return _type;
+    }
+
+    std::string get_nonce()
+    {
+      return _nonce;
+    }
+
+    void set_nonce(std::string nonce)
+    {
+      _updated = true;
+      _nonce = nonce;
+    }
+
+    uint32_t get_nonce_count()
+    {
+      return _nonce_count;
+    }
+
+    void set_nonce_count(int nonce_count)
+    {
+      _updated = true;
+      _nonce_count = nonce_count;
+    }
+
+    int get_expires()
+    {
+      return _expires;
+    }
+
+    void set_expires(int expires)
+    {
+      _updated = true;
+      _expires = expires;
+    }
+
+    std::string get_correlator()
+    {
+      return _correlator;
+    }
+
+    void set_correlator(std::string correlator)
+    {
+      _updated = true;
+      _correlator = correlator;
+    }
+
+    std::string get_scscf_uri()
+    {
+      return _scscf_uri;
+    }
+
+    void set_scscf_uri(std::string uri)
+    {
+      _updated = true;
+      _scscf_uri = uri;
+    }
+
   private:
     /// Constructor.
     /// @param _type         Type of authentication challenge.
-    AuthChallenge(const Type _type) :
-      type(_type),
-      nonce(),
-      nonce_count(0),
-      expires(0),
-      correlator(),
-      scscf_uri() {};
+    ///
+    /// Marks the AuthChallenge as not Updated, as this is called when
+    /// retrieving one from the store
+    AuthChallenge(const Type type) :
+      _type(type),
+      _nonce(),
+      _nonce_count(0),
+      _expires(0),
+      _correlator(),
+      _scscf_uri(),
+      _updated(false) {};
+
+    /// Type of the AV
+    enum Type _type;
+
+    /// Nonce used for this challenge.
+    std::string _nonce;
+
+    /// Minimum nonce count we will accept - any nonce count lower than this
+    /// might be a replay and must be rejected.
+    uint32_t _nonce_count;
+
+    /// Expiry time - absolute in seconds since the Epoch
+    int _expires;
+
+    /// Correlator between original challenge and responses.
+    std::string _correlator;
+
+    /// URI of the S-CSCF that issued the challenge. This is the server name
+    /// used on the SAR if the authentication times out. This field should not
+    /// be changed once the challenge has been created.
+    std::string _scscf_uri;
+
+    /// Tracks whether this AV has been updated
+    bool _updated;
 
   friend class ImpiStore;
   };
@@ -113,32 +184,23 @@ public:
   {
   public:
     /// Constructor.
-    /// @param _nonce        Nonce used for this challenge.
-    /// @param _realm        Authentication realm.
-    /// @param _qop          Quality of Protection.
-    /// @param _ha1          HA1 digest.
-    /// @param _expires      Absolute expiry time in seconds since the epoch.
-    DigestAuthChallenge(const std::string& _nonce,
-                        const std::string& _realm,
-                        const std::string& _qop,
-                        const std::string& _ha1,
-                        int _expires) :
-      AuthChallenge(AuthChallenge::Type::DIGEST, _nonce, _expires),
-      realm(_realm),
-      qop(_qop),
-      ha1(_ha1) {};
+    /// @param nonce        Nonce used for this challenge.
+    /// @param realm        Authentication realm.
+    /// @param qop          Quality of Protection.
+    /// @param ha1          HA1 digest.
+    /// @param expires      Absolute expiry time in seconds since the epoch.
+    DigestAuthChallenge(const std::string& nonce,
+                        const std::string& realm,
+                        const std::string& qop,
+                        const std::string& ha1,
+                        int expires) :
+      AuthChallenge(AuthChallenge::Type::DIGEST, nonce, expires),
+      _realm(realm),
+      _qop(qop),
+      _ha1(ha1) {};
 
     /// Destructor.
     virtual ~DigestAuthChallenge() {};
-
-    /// Digest realm
-    std::string realm;
-
-    /// Digest Quality of Protection
-    std::string qop;
-
-    /// Digest HA1
-    std::string ha1;
 
     /// Write to JSON writer (IMPI format).
     virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
@@ -146,13 +208,56 @@ public:
     /// Deserialization from JSON (IMPI format).
     static ImpiStore::DigestAuthChallenge* from_json(rapidjson::Value* json);
 
+    /// Getters and Setters
+    std::string get_realm()
+    {
+      return _realm;
+    }
+
+    void set_realm(std::string realm)
+    {
+      _updated = true;
+      _realm = realm;
+    }
+
+    std::string get_qop()
+    {
+      return _qop;
+    }
+
+    void set_qop(std::string qop)
+    {
+      _updated = true;
+      _qop = qop;
+    }
+
+    std::string get_ha1()
+    {
+      return _ha1;
+    }
+
+    void set_ha1(std::string ha1)
+    {
+      _updated = true;
+      _ha1 = ha1;
+    }
+
   private:
     /// Constructor.
     DigestAuthChallenge() :
       AuthChallenge(AuthChallenge::Type::DIGEST),
-      realm(),
-      qop(),
-      ha1() {};
+      _realm(),
+      _qop(),
+      _ha1() {};
+
+    /// Digest realm
+    std::string _realm;
+
+    /// Digest Quality of Protection
+    std::string _qop;
+
+    /// Digest HA1
+    std::string _ha1;
 
     // The IMPI store is a friend so it can call our JSON serialization
     // functions.
@@ -166,20 +271,17 @@ public:
   {
   public:
     /// Constructor.
-    /// @param _nonce        Nonce used for this challenge.
-    /// @param _response     AKA response.
-    /// @param _expires      Absolute expiry time in seconds since the epoch.
-    AKAAuthChallenge(const std::string& _nonce,
-                     const std::string& _response,
-                     int _expires) :
-      AuthChallenge(AuthChallenge::Type::AKA, _nonce, _expires),
-      response(_response) {};
+    /// @param nonce        Nonce used for this challenge.
+    /// @param response     AKA response.
+    /// @param expires      Absolute expiry time in seconds since the epoch.
+    AKAAuthChallenge(const std::string& nonce,
+                     const std::string& response,
+                     int expires) :
+      AuthChallenge(AuthChallenge::Type::AKA, nonce, expires),
+      _response(response) {};
 
     /// Destructor.
     virtual ~AKAAuthChallenge() {};
-
-    /// AKA expected response
-    std::string response;
 
     /// Write to JSON writer (IMPI format).
     virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
@@ -187,11 +289,26 @@ public:
     /// Deserialization from JSON (IMPI format).
     static ImpiStore::AKAAuthChallenge* from_json(rapidjson::Value* json);
 
+    /// Getters and Setters
+    std::string get_response()
+    {
+      return _response;
+    }
+
+    void set_response(std::string response)
+    {
+      _updated = true;
+      _response = response;
+    }
+
   private:
     /// Constructor.
     AKAAuthChallenge() :
       AuthChallenge(AuthChallenge::Type::AKA),
-      response() {};
+      _response() {};
+
+    /// AKA expected response
+    std::string _response;
 
     // The IMPI store is a friend so it can call our JSON serialization
     // functions.
