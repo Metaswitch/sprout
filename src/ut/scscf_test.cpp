@@ -80,7 +80,8 @@ public:
 
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
-    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, NULL, true);
+    _local_aor_store = new AstaireAoRStore(_local_data_store);
+    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, NULL, true);
     _analytics = new AnalyticsLogger();
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
     _xdm_connection = new FakeXDMConnection();
@@ -109,6 +110,7 @@ public:
     delete _fifc_service; _fifc_service = NULL;
     delete _sdm; _sdm = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
+    delete _local_aor_store; _local_aor_store = NULL;
     delete _local_data_store; _local_data_store = NULL;
     delete _analytics; _analytics = NULL;
     delete _enum_service; _enum_service = NULL;
@@ -299,6 +301,7 @@ public:
 protected:
   static LocalStore* _local_data_store;
   static FakeChronosConnection* _chronos_connection;
+  static AstaireAoRStore* _local_aor_store;
   static SubscriberDataManager* _sdm;
   static AnalyticsLogger* _analytics;
   static FakeHSSConnection* _hss_connection;
@@ -346,6 +349,7 @@ protected:
 
 LocalStore* SCSCFTest::_local_data_store;
 FakeChronosConnection* SCSCFTest::_chronos_connection;
+AstaireAoRStore* SCSCFTest::_local_aor_store;
 SubscriberDataManager* SCSCFTest::_sdm;
 AnalyticsLogger* SCSCFTest::_analytics;
 FakeHSSConnection* SCSCFTest::_hss_connection;
@@ -7784,7 +7788,7 @@ TEST_F(SCSCFTest, FlowFailedResponse)
   free_txdata();
 
   // Sprout deletes the binding.
-  SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data(user, 0);
+  AoRPair* aor_data = _sdm->get_aor_data(user, 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(0u, aor_data->get_current()->_bindings.size());
   delete aor_data; aor_data = NULL;
@@ -8411,8 +8415,8 @@ TEST_F(SCSCFTest, TestAddStoredPathHeader)
   string uri("sip:6505551234@homedomain");
   string contact("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result(uri, "call", RegDataXMLUtils::STATE_REGISTERED, "");
-  SubscriberDataManager::AoRPair* aor = _sdm->get_aor_data(uri, 0);
-  SubscriberDataManager::AoR::Binding* binding = aor->get_current()->get_binding(contact);
+  AoRPair* aor = _sdm->get_aor_data(uri, 0);
+  AoR::Binding* binding = aor->get_current()->get_binding(contact);
   binding->_uri = contact;
   binding->_cid = "1";
   binding->_cseq = 1;
@@ -8443,8 +8447,8 @@ TEST_F(SCSCFTest, TestAddStoredPathURI)
   string uri("sip:6505551234@homedomain");
   string contact("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result(uri, "call", RegDataXMLUtils::STATE_REGISTERED, "");
-  SubscriberDataManager::AoRPair* aor = _sdm->get_aor_data(uri, 0);
-  SubscriberDataManager::AoR::Binding* binding = aor->get_current()->get_binding(contact);
+  AoRPair* aor = _sdm->get_aor_data(uri, 0);
+  AoR::Binding* binding = aor->get_current()->get_binding(contact);
   binding->_uri = contact;
   binding->_cid = "1";
   binding->_cseq = 1;

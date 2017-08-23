@@ -32,11 +32,11 @@ extern "C" {
 // If we can't find the AoR pair in the current SDM, we will either use the
 // backup_aor_pair or we will try and look up the AoR pair in the remote SDMs.
 // Therefore either the backup_aor_pair should be NULL, or remote_sdms should be empty.
-static bool sdm_access_common(SubscriberDataManager::AoRPair** aor_pair,
+static bool sdm_access_common(AoRPair** aor_pair,
                               std::string aor_id,
                               SubscriberDataManager* current_sdm,
                               std::vector<SubscriberDataManager*> remote_sdms,
-                              SubscriberDataManager::AoRPair* backup_aor_pair,
+                              AoRPair* backup_aor_pair,
                               SAS::TrailId trail)
 {
   // Find the current bindings for the AoR.
@@ -67,7 +67,7 @@ static bool sdm_access_common(SubscriberDataManager::AoRPair** aor_pair,
     else
     {
       std::vector<SubscriberDataManager*>::iterator it = remote_sdms.begin();
-      SubscriberDataManager::AoRPair* local_backup_aor_pair = NULL;
+      AoRPair* local_backup_aor_pair = NULL;
 
       while ((it != remote_sdms.end()) && (!found_binding))
       {
@@ -225,12 +225,12 @@ void AoRTimeoutTask::process_aor_timeout(std::string aor_id)
   std::map<std::string, Ifcs> ifc_map;
   get_reg_data(_cfg->_hss, aor_id, associated_uris, ifc_map, trail());
 
-  SubscriberDataManager::AoRPair* aor_pair = set_aor_data(_cfg->_sdm,
-                                                          aor_id,
-                                                          &associated_uris,
-                                                          NULL,
-                                                          _cfg->_remote_sdms,
-                                                          all_bindings_expired);
+  AoRPair* aor_pair = set_aor_data(_cfg->_sdm,
+                                   aor_id,
+                                   &associated_uris,
+                                   NULL,
+                                   _cfg->_remote_sdms,
+                                   all_bindings_expired);
 
   if (aor_pair != NULL)
   {
@@ -244,13 +244,12 @@ void AoRTimeoutTask::process_aor_timeout(std::string aor_id)
       if ((*sdm)->has_servers())
       {
         bool ignored;
-        SubscriberDataManager::AoRPair* remote_aor_pair =
-                                                        set_aor_data(*sdm,
-                                                                     aor_id,
-                                                                     &associated_uris,
-                                                                     aor_pair,
-                                                                     {},
-                                                                     ignored);
+        AoRPair* remote_aor_pair = set_aor_data(*sdm,
+                                                aor_id,
+                                                &associated_uris,
+                                                aor_pair,
+                                                {},
+                                                ignored);
         delete remote_aor_pair;
       }
     }
@@ -264,7 +263,7 @@ void AoRTimeoutTask::process_aor_timeout(std::string aor_id)
       SAS::report_event(event);
 
       // Get the S-CSCF URI off the AoR to put on the SAR.
-      SubscriberDataManager::AoR* aor = aor_pair->get_current();
+      AoR* aor = aor_pair->get_current();
 
       _cfg->_hss->update_registration_state(aor_id, "", HSSConnection::DEREG_TIMEOUT, aor->_scscf_uri, trail());
     }
@@ -287,15 +286,15 @@ void AoRTimeoutTask::process_aor_timeout(std::string aor_id)
   report_sip_all_register_marker(trail(), aor_id);
 }
 
-SubscriberDataManager::AoRPair* AoRTimeoutTask::set_aor_data(
+AoRPair* AoRTimeoutTask::set_aor_data(
                           SubscriberDataManager* current_sdm,
                           std::string aor_id,
                           AssociatedURIs* associated_uris,
-                          SubscriberDataManager::AoRPair* previous_aor_pair,
+                          AoRPair* previous_aor_pair,
                           std::vector<SubscriberDataManager*> remote_sdms,
                           bool& all_bindings_expired)
 {
-  SubscriberDataManager::AoRPair* aor_pair = NULL;
+  AoRPair* aor_pair = NULL;
   Store::Status set_rc;
 
   do
@@ -389,16 +388,15 @@ HTTPCode DeregistrationTask::handle_request()
        it!=_bindings.end();
        ++it)
   {
-    SubscriberDataManager::AoRPair* aor_pair =
-      deregister_bindings(_cfg->_sdm,
-                          _cfg->_hss,
-                          _cfg->_fifc_service,
-                          _cfg->_ifc_configuration,
-                          it->first,
-                          it->second,
-                          NULL,
-                          _cfg->_remote_sdms,
-                          impis_to_delete);
+    AoRPair* aor_pair = deregister_bindings(_cfg->_sdm,
+                                            _cfg->_hss,
+                                            _cfg->_fifc_service,
+                                            _cfg->_ifc_configuration,
+                                            it->first,
+                                            it->second,
+                                            NULL,
+                                            _cfg->_remote_sdms,
+                                            impis_to_delete);
 
     // LCOV_EXCL_START
     if ((aor_pair != NULL) &&
@@ -412,16 +410,15 @@ HTTPCode DeregistrationTask::handle_request()
       {
         if ((*sdm)->has_servers())
         {
-          SubscriberDataManager::AoRPair* remote_aor_pair =
-            deregister_bindings(*sdm,
-                                _cfg->_hss,
-                                _cfg->_fifc_service,
-                                _cfg->_ifc_configuration,
-                                it->first,
-                                it->second,
-                                aor_pair,
-                                {},
-                                impis_to_delete);
+          AoRPair* remote_aor_pair = deregister_bindings(*sdm,
+                                                         _cfg->_hss,
+                                                         _cfg->_fifc_service,
+                                                         _cfg->_ifc_configuration,
+                                                         it->first,
+                                                         it->second,
+                                                         aor_pair,
+                                                         {},
+                                                         impis_to_delete);
           delete remote_aor_pair;
         }
       }
@@ -483,18 +480,18 @@ void DeregistrationTask::delete_impi_from_store(ImpiStore* store,
 }
 
 
-SubscriberDataManager::AoRPair* DeregistrationTask::deregister_bindings(
-                                        SubscriberDataManager* current_sdm,
-                                        HSSConnection* hss,
-                                        FIFCService* fifc_service,
-                                        IFCConfiguration ifc_configuration,
-                                        std::string aor_id,
-                                        std::string private_id,
-                                        SubscriberDataManager::AoRPair* previous_aor_pair,
-                                        std::vector<SubscriberDataManager*> remote_sdms,
-                                        std::set<std::string>& impis_to_delete)
+AoRPair* DeregistrationTask::deregister_bindings(
+                             SubscriberDataManager* current_sdm,
+                             HSSConnection* hss,
+                             FIFCService* fifc_service,
+                             IFCConfiguration ifc_configuration,
+                             std::string aor_id,
+                             std::string private_id,
+                             AoRPair* previous_aor_pair,
+                             std::vector<SubscriberDataManager*> remote_sdms,
+                             std::set<std::string>& impis_to_delete)
 {
-  SubscriberDataManager::AoRPair* aor_pair = NULL;
+  AoRPair* aor_pair = NULL;
   bool all_bindings_expired = false;
   bool got_ifcs;
   Store::Status set_rc;
@@ -519,7 +516,7 @@ SubscriberDataManager::AoRPair* DeregistrationTask::deregister_bindings(
 
     std::vector<std::string> binding_ids;
 
-    for (SubscriberDataManager::AoR::Bindings::const_iterator i =
+    for (AoR::Bindings::const_iterator i =
            aor_pair->get_current()->bindings().begin();
          i != aor_pair->get_current()->bindings().end();
          ++i)
@@ -533,8 +530,7 @@ SubscriberDataManager::AoRPair* DeregistrationTask::deregister_bindings(
          ++i)
     {
       std::string b_id = *i;
-      SubscriberDataManager::AoR::Binding* b =
-                                  aor_pair->get_current()->get_binding(b_id);
+      AoR::Binding* b = aor_pair->get_current()->get_binding(b_id);
 
       if (private_id.empty() || private_id == b->_private_id)
       {
@@ -653,9 +649,6 @@ HTTPCode AuthTimeoutTask::timeout_auth_challenge(std::string impu,
 // APIS for retrieving cached data.
 //
 
-const char* JSON_BINDINGS = "bindings";
-const char* JSON_SUBSCRIPTIONS = "subscriptions";
-
 void GetCachedDataTask::run()
 {
   // This interface is read only so reject any non-GETs.
@@ -678,7 +671,7 @@ void GetCachedDataTask::run()
   TRC_DEBUG("Extracted impu %s", impu.c_str());
 
   // Lookup the IMPU in the store.
-  SubscriberDataManager::AoRPair* aor_pair = nullptr;
+  AoRPair* aor_pair = nullptr;
   if (!sdm_access_common(&aor_pair,
                          impu,
                          _cfg->_sdm,
@@ -712,7 +705,7 @@ void GetCachedDataTask::run()
   return;
 }
 
-std::string GetBindingsTask::serialize_data(SubscriberDataManager::AoR* aor)
+std::string GetBindingsTask::serialize_data(AoR* aor)
 {
   rapidjson::StringBuffer sb;
   rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
@@ -722,8 +715,7 @@ std::string GetBindingsTask::serialize_data(SubscriberDataManager::AoR* aor)
     writer.String(JSON_BINDINGS);
     writer.StartObject();
     {
-      for (SubscriberDataManager::AoR::Bindings::const_iterator it =
-             aor->bindings().begin();
+      for (AoR::Bindings::const_iterator it = aor->bindings().begin();
            it != aor->bindings().end();
            ++it)
       {
@@ -738,7 +730,7 @@ std::string GetBindingsTask::serialize_data(SubscriberDataManager::AoR* aor)
   return sb.GetString();
 }
 
-std::string GetSubscriptionsTask::serialize_data(SubscriberDataManager::AoR* aor)
+std::string GetSubscriptionsTask::serialize_data(AoR* aor)
 {
   rapidjson::StringBuffer sb;
   rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
@@ -748,8 +740,7 @@ std::string GetSubscriptionsTask::serialize_data(SubscriberDataManager::AoR* aor
     writer.String(JSON_SUBSCRIPTIONS);
     writer.StartObject();
     {
-      for (SubscriberDataManager::AoR::Subscriptions::const_iterator it =
-             aor->subscriptions().begin();
+      for (AoR::Subscriptions::const_iterator it = aor->subscriptions().begin();
            it != aor->subscriptions().end();
            ++it)
       {

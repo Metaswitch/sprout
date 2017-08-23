@@ -126,7 +126,7 @@ private:
   /// Gets all bindings for the specified Address of Record from the local or
   /// remote registration stores.
   void get_bindings(const std::string& aor,
-                    SubscriberDataManager::AoRPair** aor_pair,
+                    AoRPair** aor_pair,
                     SAS::TrailId trail);
 
   /// Removes the specified binding for the specified Address of Record from
