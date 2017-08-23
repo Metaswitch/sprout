@@ -66,6 +66,8 @@ public:
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
     _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, NULL, true);
+    _remote_data_store = new LocalStore();
+    _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, NULL, true);
     _analytics = new AnalyticsLogger();
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
     _xdm_connection = new FakeXDMConnection();
@@ -93,8 +95,10 @@ public:
     delete _mmf_service; _mmf_service = NULL;
     delete _fifc_service; _fifc_service = NULL;
     delete _sdm; _sdm = NULL;
-    delete _chronos_connection; _chronos_connection = NULL;
     delete _local_data_store; _local_data_store = NULL;
+    delete _remote_sdm; _remote_sdm = NULL;
+    delete _remote_data_store; _remote_data_store = NULL;
+    delete _chronos_connection; _chronos_connection = NULL;
     delete _analytics; _analytics = NULL;
     delete _enum_service; _enum_service = NULL;
     delete _bgcf_service; _bgcf_service = NULL;
@@ -104,7 +108,7 @@ public:
     SipTest::TearDownTestCase();
   }
 
-  SCSCFTest(bool use_icscf=true)
+  SCSCFTest(bool use_icscf=true, bool use_remote_sdm=false)
   {
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
     _local_data_store->flush_all();  // start from a clean slate on each test
@@ -112,11 +116,18 @@ public:
     _hss_connection_observer = new MockHSSConnection();
     _hss_connection = new FakeHSSConnection(_hss_connection_observer);
     _icscf_msg = "";
+    _remote_sdm_msg = {};
 
     if (use_icscf)
     {
       _icscf_msg = "sip:icscf.sprout.homedomain:5059;transport=TCP";
     }
+
+    if (use_remote_sdm)
+    {
+      _remote_sdm_msg = {_remote_sdm};
+    }
+
     // Create the S-CSCF Sproutlet.
     IFCConfiguration ifc_configuration(false, false, "sip:DUMMY_AS", NULL, NULL);
     _scscf_sproutlet = new SCSCFSproutlet("scscf",
@@ -130,7 +141,7 @@ public:
                                           5058,
                                           "sip:scscf.sprout.homedomain:5058;transport=TCP",
                                           _sdm,
-                                          {},
+                                          _remote_sdm_msg,
                                           _hss_connection,
                                           _enum_service,
                                           _acr_factory,
@@ -290,9 +301,11 @@ public:
   }
 
 protected:
-  static LocalStore* _local_data_store;
   static FakeChronosConnection* _chronos_connection;
+  static LocalStore* _local_data_store;
   static SubscriberDataManager* _sdm;
+  static LocalStore* _remote_data_store;
+  static SubscriberDataManager* _remote_sdm;
   static AnalyticsLogger* _analytics;
   static FakeHSSConnection* _hss_connection;
   static MockHSSConnection* _hss_connection_observer;
@@ -312,6 +325,7 @@ protected:
   static MockAsCommunicationTracker* _sess_term_comm_tracker;
   static MockAsCommunicationTracker* _sess_cont_comm_tracker;
   std::string _icscf_msg;
+  std::vector<SubscriberDataManager*> _remote_sdm_msg;
 
   void doTestHeaders(TransportFlow* tpA,
                      bool tpAset,
@@ -340,12 +354,19 @@ protected:
 
 class SCSCFTestWithoutICSCF : public SCSCFTest
 {
-  SCSCFTestWithoutICSCF() : SCSCFTest(false) {}  
+  SCSCFTestWithoutICSCF() : SCSCFTest(false, false) {}  
 };
 
-LocalStore* SCSCFTest::_local_data_store;
+class SCSCFTestWithRemoteSDM : public SCSCFTest
+{
+  SCSCFTestWithRemoteSDM() : SCSCFTest(true, true) {}  
+};
+
 FakeChronosConnection* SCSCFTest::_chronos_connection;
+LocalStore* SCSCFTest::_local_data_store;
 SubscriberDataManager* SCSCFTest::_sdm;
+LocalStore* SCSCFTest::_remote_data_store;
+SubscriberDataManager* SCSCFTest::_remote_sdm;
 AnalyticsLogger* SCSCFTest::_analytics;
 FakeHSSConnection* SCSCFTest::_hss_connection;
 MockHSSConnection* SCSCFTest::_hss_connection_observer;
@@ -1438,6 +1459,36 @@ TEST_F(SCSCFTest, TestEmptyAOR)
   list<HeaderMatcher> hdrs;
   doSlowFailureFlow(msg, 480);
 }
+
+
+TEST_F(SCSCFTestWithRemoteSDM, TestEmptyAOR)
+{
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP", 1);
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("tel:6505551235",
+                                   "call",
+                                   "REGISTERED",
+                                   subscription.return_sub());
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+
+  // Send a terminating INVITE for a subscriber with a tel: URI
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:sprout.homedomain>";
+  msg._todomain = "";
+  msg._requri = "tel:6505551235";
+
+  msg._method = "INVITE";
+  list<HeaderMatcher> hdrs;
+  doSlowFailureFlow(msg, 480);
+}
+
 
 TEST_F(SCSCFTest, TestTelURIWildcard)
 {
