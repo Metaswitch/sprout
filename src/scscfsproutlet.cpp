@@ -1377,16 +1377,13 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
   {
     URIClass uri_class = URIClassifier::classify_uri(uri);
 
-    if ((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
+    if (((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
         ((uri_class == NODE_LOCAL_SIP_URI) ||
          (uri_class == HOME_DOMAIN_SIP_URI) ||
          (uri_class == LOCAL_PHONE_NUMBER) ||
          (uri_class == GLOBAL_PHONE_NUMBER) 
-         ))
-    {
-      user = PJUtils::public_id_from_uri(uri);
-    }
-    else if (PJSIP_URI_SCHEME_IS_TEL(uri))
+         )) 
+        || (PJSIP_URI_SCHEME_IS_TEL(uri)))
     {
       user = PJUtils::public_id_from_uri(uri);
     }
@@ -1748,7 +1745,9 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     {
       if (!schedule_timer(NULL, _liveness_timer, timeout))
       {
+        // LCOV_EXCL_START - Don't test pjsip failures in the S-CSCF UTs
         TRC_WARNING("Failed to start liveness timer");
+        // LCOV_EXCL_STOP
       }
     }
   }

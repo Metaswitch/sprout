@@ -1091,6 +1091,25 @@ TEST_F(SCSCFTest, TestSimpleMainline)
   EXPECT_EQ(0, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_invite_tbl)->_count);
 }
 
+
+TEST_F(SCSCFTest, TestSimpleMainlineMaddr)
+{
+  SCOPED_TRACE("");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  Message msg;
+  msg._requri = "sip:6505551234@homedomain;maddr=1.2.3.4";
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*maddr.*"), hdrs);
+
+  // This is a terminating call so should not result in a session setup time
+  // getting tracked.
+  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
+  EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
+
+  // It also shouldn't result in any forked INVITEs
+  EXPECT_EQ(0, ((SNMP::FakeCounterTable*)_scscf_sproutlet->_forked_invite_tbl)->_count);
+}
+
 TEST_F(SCSCFTest, TestSimpleMainlineRemoteSite)
 {
   SCOPED_TRACE("");
@@ -8379,6 +8398,31 @@ TEST_F(SCSCFTest, TestSessionExpiresInDialogBillingNone)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, false, rsp_hdrs);
 }
 
+
+TEST_F(SCSCFTest, TestSessionExpiresInDialogBillingUnknown)
+{
+  SCOPED_TRACE("");
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+
+  // Send an UPDATE in-dialog request to which we should always add RR and SE.
+  // Then check that if the UAS strips the SE, that Sprout tells the UAC to be
+  // the refresher. This ensures that our response processing is correct.
+  Message msg;
+  msg._extra = "Supported: timer";
+  msg._in_dialog = true;
+  msg._route = "Route: <sip:homedomain;transport=tcp;lr;billing-role=unknown-string>";
+
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Record-Route"));
+  hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires:.*"));
+
+  list<HeaderMatcher> rsp_hdrs;
+  rsp_hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires:.*;refresher=uac"));
+  rsp_hdrs.push_back(HeaderMatcher("Record-Route"));
+
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, false, rsp_hdrs);
+}
 TEST_F(SCSCFTest, TestSessionExpiresInDialogBillingNotFound)
 {
   SCOPED_TRACE("");
