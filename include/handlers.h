@@ -298,6 +298,6 @@ protected:
   const Config* _cfg;
   std::string _default_public_id;
   AssociatedURIs _associated_uris;
-  SubscriberDataManager::AoRPair* _aor_pair;
+  AoRPair* _aor_pair;
 };
 #endif
