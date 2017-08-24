@@ -40,9 +40,6 @@ rapidjson::Document* ImpiStore::json_from_string(const std::string& string)
   return json;
 }
 
-// Constant table names.
-const std::string ImpiStore::TABLE_IMPI = "impi";
-
 // JSON field names and values.
 static const char* const JSON_TYPE = "type";
 static const char* const JSON_TYPE_DIGEST = "digest";

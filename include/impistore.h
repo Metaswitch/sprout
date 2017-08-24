@@ -387,10 +387,6 @@ public:
 
 protected:
   static rapidjson::Document* json_from_string(const std::string& string);
-
-private:
-  /// Identifier for IMPI table.
-  static const std::string TABLE_IMPI;
 };
 
 // Utility function - retrieves the "corrlator" field from the give challenge
