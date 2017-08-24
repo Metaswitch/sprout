@@ -64,9 +64,9 @@ TEST_F(ChronosAoRTimeoutTasksTest, MainlineTest)
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoRPair* aor = build_aor(aor_id);
-  SubscriberDataManager::AoRPair* remote_aor1 = build_aor(aor_id);
-  SubscriberDataManager::AoRPair* remote_aor2 = build_aor(aor_id);
+  AoRPair* aor = build_aor(aor_id);
+  AoRPair* remote_aor1 = build_aor(aor_id);
+  AoRPair* remote_aor2 = build_aor(aor_id);
 
   // Set up IRS IMPU list to be returned by the mocked get_registration_data call.
   // Add a bunch of random IMPUs to this list - they should all be passed to set_aor_data.
@@ -146,15 +146,15 @@ TEST_F(ChronosAoRTimeoutTasksTest, RemoteAoRNoBindingsTest)
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoRPair* aor = build_aor(aor_id);
+  AoRPair* aor = build_aor(aor_id);
 
   // Set up AoRs with no bindings for both remote stores.
-  SubscriberDataManager::AoR* remote1_aor1 = new SubscriberDataManager::AoR(aor_id);
-  SubscriberDataManager::AoR* remote1_aor2 = new SubscriberDataManager::AoR(*remote1_aor1);
-  SubscriberDataManager::AoRPair* remote1_aor_pair = new SubscriberDataManager::AoRPair(remote1_aor1, remote1_aor2);
-  SubscriberDataManager::AoR* remote2_aor1 = new SubscriberDataManager::AoR(aor_id);
-  SubscriberDataManager::AoR* remote2_aor2 = new SubscriberDataManager::AoR(*remote2_aor1);
-  SubscriberDataManager::AoRPair* remote2_aor_pair = new SubscriberDataManager::AoRPair(remote2_aor1, remote2_aor2);
+  AoR* remote1_aor1 = new AoR(aor_id);
+  AoR* remote1_aor2 = new AoR(*remote1_aor1);
+  AoRPair* remote1_aor_pair = new AoRPair(remote1_aor1, remote1_aor2);
+  AoR* remote2_aor1 = new AoR(aor_id);
+  AoR* remote2_aor2 = new AoR(*remote2_aor1);
+  AoRPair* remote2_aor_pair = new AoRPair(remote2_aor1, remote2_aor2);
 
   // Set up IRS IMPU list to be returned by the mocked get_registration_data calls
   // We'll return an empty list from the mocked get_registration_data.  We should still
@@ -193,17 +193,17 @@ TEST_F(ChronosAoRTimeoutTasksTest, LocalAoRNoBindingsTest)
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
   // Set up local AoR with no bindings
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor = new AoR(aor_id);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
 
-  SubscriberDataManager::AoRPair* remote1_aor1 = build_aor(aor_id);
+  AoRPair* remote1_aor1 = build_aor(aor_id);
 
   // Set up the remote AoR again, to avoid problem of test process deleting
   // the data of the first one. This is only a problem in the tests, as real
   // use would correctly set the data to the store before deleting the local copy
-  SubscriberDataManager::AoRPair* remote1_aor2 = build_aor(aor_id);
-  SubscriberDataManager::AoRPair* remote2_aor = build_aor(aor_id);
+  AoRPair* remote1_aor2 = build_aor(aor_id);
+  AoRPair* remote2_aor = build_aor(aor_id);
 
   // Set up IRS IMPU list to be returned by the mocked get_registration_data call
   AssociatedURIs associated_uris = {};
@@ -242,27 +242,27 @@ TEST_F(ChronosAoRTimeoutTasksTest, NoBindingsTest)
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
   // Set up AoRs with no bindings
-  SubscriberDataManager::AoR* aor1 = new SubscriberDataManager::AoR(aor_id);
+  AoR* aor1 = new AoR(aor_id);
   aor1->_scscf_uri = "sip:scscf.sprout.homedomain:5058;transport=TCP";
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor1);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor1, aor2);
+  AoR* aor2 = new AoR(*aor1);
+  AoRPair* aor_pair = new AoRPair(aor1, aor2);
 
-  SubscriberDataManager::AoR* remote1_aor1 = new SubscriberDataManager::AoR(aor_id);
-  SubscriberDataManager::AoR* remote1_aor2 = new SubscriberDataManager::AoR(*remote1_aor1);
-  SubscriberDataManager::AoRPair* remote1_aor_pair1 = new SubscriberDataManager::AoRPair(remote1_aor1, remote1_aor2);
-  SubscriberDataManager::AoR* remote2_aor1 = new SubscriberDataManager::AoR(aor_id);
-  SubscriberDataManager::AoR* remote2_aor2 = new SubscriberDataManager::AoR(*remote2_aor1);
-  SubscriberDataManager::AoRPair* remote2_aor_pair1 = new SubscriberDataManager::AoRPair(remote2_aor1, remote2_aor2);
+  AoR* remote1_aor1 = new AoR(aor_id);
+  AoR* remote1_aor2 = new AoR(*remote1_aor1);
+  AoRPair* remote1_aor_pair1 = new AoRPair(remote1_aor1, remote1_aor2);
+  AoR* remote2_aor1 = new AoR(aor_id);
+  AoR* remote2_aor2 = new AoR(*remote2_aor1);
+  AoRPair* remote2_aor_pair1 = new AoRPair(remote2_aor1, remote2_aor2);
 
   // Set up the remote AoRs again, to avoid problem of test process deleting
   // the data of the first one. This is only a problem in the tests, as real
   // use would correctly set the data to the store before deleting the local copy
-  SubscriberDataManager::AoR* remote1_aor3 = new SubscriberDataManager::AoR(aor_id);
-  SubscriberDataManager::AoR* remote1_aor4 = new SubscriberDataManager::AoR(*remote1_aor3);
-  SubscriberDataManager::AoRPair* remote1_aor_pair2 = new SubscriberDataManager::AoRPair(remote1_aor3, remote1_aor4);
-  SubscriberDataManager::AoR* remote2_aor3 = new SubscriberDataManager::AoR(aor_id);
-  SubscriberDataManager::AoR* remote2_aor4 = new SubscriberDataManager::AoR(*remote2_aor3);
-  SubscriberDataManager::AoRPair* remote2_aor_pair2 = new SubscriberDataManager::AoRPair(remote2_aor3, remote2_aor4);
+  AoR* remote1_aor3 = new AoR(aor_id);
+  AoR* remote1_aor4 = new AoR(*remote1_aor3);
+  AoRPair* remote1_aor_pair2 = new AoRPair(remote1_aor3, remote1_aor4);
+  AoR* remote2_aor3 = new AoR(aor_id);
+  AoR* remote2_aor4 = new AoR(*remote2_aor3);
+  AoRPair* remote2_aor_pair2 = new AoRPair(remote2_aor3, remote2_aor4);
 
   // Set up IRS IMPU list to be returned by the mocked get_registration_data call
   AssociatedURIs associated_uris = {};
@@ -308,10 +308,10 @@ TEST_F(ChronosAoRTimeoutTasksTest, NullAoRTest)
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoR* aor = NULL;
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor);
-  SubscriberDataManager::AoRPair* remote1_aor_pair = new SubscriberDataManager::AoRPair(aor, aor);
-  SubscriberDataManager::AoRPair* remote2_aor_pair = new SubscriberDataManager::AoRPair(aor, aor);
+  AoR* aor = NULL;
+  AoRPair* aor_pair = new AoRPair(aor, aor);
+  AoRPair* remote1_aor_pair = new AoRPair(aor, aor);
+  AoRPair* remote2_aor_pair = new AoRPair(aor, aor);
 
   // Set up IRS IMPU list to be returned by the mocked get_registration_data call
   AssociatedURIs associated_uris = {};
@@ -373,9 +373,9 @@ TEST_F(ChronosAoRTimeoutTasksMockStoreTest, SubscriberDataManagerWritesFail)
 {
   // Set up the SubscriberDataManager to fail all sets and respond to all gets with not
   // found.
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR("sip:6505550231@homedomain");
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor = new AoR("sip:6505550231@homedomain");
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
 
   // Set up IRS IMPU list to be returned by the mocked get_registration_data call
   AssociatedURIs associated_uris = {};

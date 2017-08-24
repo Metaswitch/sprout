@@ -54,10 +54,10 @@ class TestWithMockSdms : public SipTest
     delete mock_hss;
   }
 
-  SubscriberDataManager::AoRPair* build_aor(std::string aor_id,
+  AoRPair* build_aor(std::string aor_id,
                                             bool include_subscription = true)
   {
-    SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
+    AoR* aor = new AoR(aor_id);
     int now = time(NULL);
     build_binding(aor, now);
     if (include_subscription)
@@ -65,18 +65,18 @@ class TestWithMockSdms : public SipTest
       build_subscription(aor, now);
     }
     aor->_scscf_uri = "sip:scscf.sprout.homedomain:5058;transport=TCP";
-    SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-    SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+    AoR* aor2 = new AoR(*aor);
+    AoRPair* aor_pair = new AoRPair(aor, aor2);
 
     return aor_pair;
   }
 
-  SubscriberDataManager::AoR::Binding*
-    build_binding(SubscriberDataManager::AoR* aor,
+  AoR::Binding*
+    build_binding(AoR* aor,
                   int now,
                   const std::string& id = "<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1")
   {
-    SubscriberDataManager::AoR::Binding* b = aor->get_binding(std::string(id));
+    AoR::Binding* b = aor->get_binding(std::string(id));
     b->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
     b->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
     b->_cseq = 17038;
@@ -91,12 +91,12 @@ class TestWithMockSdms : public SipTest
     return b;
   }
 
-  SubscriberDataManager::AoR::Subscription*
-    build_subscription(SubscriberDataManager::AoR* aor,
+  AoR::Subscription*
+    build_subscription(AoR* aor,
                        int now,
                        const std::string& id = "1234")
   {
-    SubscriberDataManager::AoR::Subscription* s = aor->get_subscription(id);
+    AoR::Subscription* s = aor->get_subscription(id);
     s->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
     s->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
     s->_from_tag = std::string("4321");

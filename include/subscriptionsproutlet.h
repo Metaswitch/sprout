@@ -97,14 +97,14 @@ protected:
   void on_rx_request(pjsip_msg* req);
   void process_subscription_request(pjsip_msg* req);
 
-  SubscriberDataManager::AoRPair* write_subscriptions_to_store(
+  AoRPair* write_subscriptions_to_store(
                      SubscriberDataManager* primary_sdm,        ///<store to write to
                      std::string aor,                           ///<address of record to write to
                      AssociatedURIs* associated_uris,
                                                                 ///<IMPUs associated with this IRS
                      pjsip_msg* req,                            ///<received request to read headers from
                      int now,                                   ///<time now
-                     SubscriberDataManager::AoRPair* backup_aor,///<backup data if no entry in store
+                     AoRPair* backup_aor,                       ///<backup data if no entry in store
                      std::vector<SubscriberDataManager*> backup_sdms,
                                                                 ///<backup stores to read from if no entry in store and no backup data
                      std::string public_id,                     ///
@@ -114,7 +114,7 @@ protected:
                      std::deque<std::string> ecfs);             ///
 
   void log_subscriptions(const std::string& aor_name,
-                         SubscriberDataManager::AoR* aor_data);
+                         AoR* aor_data);
 
   SubscriptionSproutlet* _subscription;
 };

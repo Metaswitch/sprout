@@ -21,6 +21,7 @@
 #include "sas.h"
 #include "localstore.h"
 #include "subscriber_data_manager.h"
+#include "astaire_aor_store.h"
 #include "test_utils.hpp"
 #include "test_interposer.hpp"
 #include "fakechronosconnection.hpp"
@@ -51,8 +52,9 @@ class BasicSubscriberDataManagerTest : public SipTest
   {
     _chronos_connection = new FakeChronosConnection();
     _datastore = new LocalStore();
+    _aor_store = new AstaireAoRStore(_datastore);
     _analytics_logger = new MockAnalyticsLogger();
-    _store = new SubscriberDataManager(_datastore,
+    _store = new SubscriberDataManager(_aor_store,
                                        _chronos_connection,
                                        _analytics_logger,
                                        true);
@@ -74,6 +76,7 @@ class BasicSubscriberDataManagerTest : public SipTest
     //pjsip_tsx_layer_instance()->start();
 
     delete _store; _store = NULL;
+    delete _aor_store; _aor_store = NULL;
     delete _datastore; _datastore = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
     delete _analytics_logger; _analytics_logger = NULL;
@@ -84,14 +87,15 @@ class BasicSubscriberDataManagerTest : public SipTest
   // `this->store` rather than `_store`).
   FakeChronosConnection* _chronos_connection;
   LocalStore* _datastore;
+  AstaireAoRStore* _aor_store;
   SubscriberDataManager* _store;
   MockAnalyticsLogger* _analytics_logger;
 };
 
 TEST_F(BasicSubscriberDataManagerTest, BindingTests)
 {
-  SubscriberDataManager::AoRPair* aor_data1;
-  SubscriberDataManager::AoR::Binding* b1;
+  AoRPair* aor_data1;
+  AoR::Binding* b1;
   bool rc;
   int now;
 
@@ -222,9 +226,9 @@ TEST_F(BasicSubscriberDataManagerTest, BindingTests)
 
 TEST_F(BasicSubscriberDataManagerTest, SubscriptionTests)
 {
-  SubscriberDataManager::AoRPair* aor_data1;
-  SubscriberDataManager::AoR::Binding* b1;
-  SubscriberDataManager::AoR::Subscription* s1;
+  AoRPair* aor_data1;
+  AoR::Binding* b1;
+  AoR::Subscription* s1;
   bool rc;
   int now;
 
@@ -317,9 +321,9 @@ TEST_F(BasicSubscriberDataManagerTest, SubscriptionTests)
 
 TEST_F(BasicSubscriberDataManagerTest, CopyTests)
 {
-  SubscriberDataManager::AoRPair* aor_data1;
-  SubscriberDataManager::AoR::Binding* b1;
-  SubscriberDataManager::AoR::Subscription* s1;
+  AoRPair* aor_data1;
+  AoR::Binding* b1;
+  AoR::Subscription* s1;
   int now;
 
   // Get an initial empty AoR record.
@@ -362,7 +366,7 @@ TEST_F(BasicSubscriberDataManagerTest, CopyTests)
   aor_data1->get_current()->_notify_cseq = 1;
 
   // Test AoR copy constructor.
-  SubscriberDataManager::AoR* copy = new SubscriberDataManager::AoR(*aor_data1->get_current());
+  AoR* copy = new AoR(*aor_data1->get_current());
   EXPECT_EQ("AoRtimer", copy->_timer_id);
   EXPECT_EQ(1u, copy->bindings().size());
   EXPECT_EQ(1u, copy->subscriptions().size());
@@ -372,7 +376,7 @@ TEST_F(BasicSubscriberDataManagerTest, CopyTests)
   delete copy; copy = NULL;
 
   // Test AoR assignment.
-  copy = new SubscriberDataManager::AoR("sip:name@example.com");
+  copy = new AoR("sip:name@example.com");
   *copy = *aor_data1->get_current();
   EXPECT_EQ("AoRtimer", copy->_timer_id);
   EXPECT_EQ(1u, copy->bindings().size());
@@ -387,11 +391,11 @@ TEST_F(BasicSubscriberDataManagerTest, CopyTests)
 TEST_F(BasicSubscriberDataManagerTest, ExpiryTests)
 {
   // The expiry tests require pjsip, so initialise for this test
-  SubscriberDataManager::AoRPair* aor_data1;
-  SubscriberDataManager::AoR::Binding* b1;
-  SubscriberDataManager::AoR::Binding* b2;
-  SubscriberDataManager::AoR::Subscription* s1;
-  SubscriberDataManager::AoR::Subscription* s2;
+  AoRPair* aor_data1;
+  AoR::Binding* b1;
+  AoR::Binding* b2;
+  AoR::Subscription* s1;
+  AoR::Subscription* s2;
   bool rc;
   int now;
 
@@ -508,10 +512,11 @@ class SubscriberDataManagerCorruptDataTest : public ::testing::Test
   {
     _chronos_connection = new FakeChronosConnection();
     _datastore = new MockStore();
+    _aor_store = new AstaireAoRStore(_datastore);
     _analytics_logger = new AnalyticsLogger();
 
     {
-      _store = new SubscriberDataManager(_datastore,
+      _store = new SubscriberDataManager(_aor_store,
                                          _chronos_connection,
                                          _analytics_logger,
                                          true);
@@ -522,19 +527,21 @@ class SubscriberDataManagerCorruptDataTest : public ::testing::Test
   {
     delete _store; _store = NULL;
     delete _datastore; _datastore = NULL;
+    delete _aor_store; _aor_store = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
     delete _analytics_logger; _analytics_logger = NULL;
   }
 
   FakeChronosConnection* _chronos_connection;
   MockStore* _datastore;
+  AstaireAoRStore* _aor_store;
   SubscriberDataManager* _store;
   AnalyticsLogger* _analytics_logger;
 };
 
 TEST_F(SubscriberDataManagerCorruptDataTest, BadlyFormedJson)
 {
-  SubscriberDataManager::AoRPair* aor_data1;
+  AoRPair* aor_data1;
 
   EXPECT_CALL(*_datastore, get_data(_, _, _, _, _))
     .WillOnce(DoAll(SetArgReferee<2>(std::string("{\"bindings\": {}")),
@@ -549,7 +556,7 @@ TEST_F(SubscriberDataManagerCorruptDataTest, BadlyFormedJson)
 
 TEST_F(SubscriberDataManagerCorruptDataTest, SemanticallyInvalidJson)
 {
-  SubscriberDataManager::AoRPair* aor_data1;
+  AoRPair* aor_data1;
 
   EXPECT_CALL(*_datastore, get_data(_, _, _, _, _))
     .WillOnce(DoAll(SetArgReferee<2>(
@@ -565,7 +572,7 @@ TEST_F(SubscriberDataManagerCorruptDataTest, SemanticallyInvalidJson)
 
 TEST_F(SubscriberDataManagerCorruptDataTest, EmptyJsonObject)
 {
-  SubscriberDataManager::AoRPair* aor_data1;
+  AoRPair* aor_data1;
 
   EXPECT_CALL(*_datastore, get_data(_, _, _, _, _))
     .WillOnce(DoAll(SetArgReferee<2>(std::string("{}")),
@@ -594,8 +601,9 @@ class SubscriberDataManagerChronosRequestsTest : public SipTest
   {
     _chronos_connection = new MockChronosConnection("chronos");
     _datastore = new LocalStore();
+    _aor_store = new AstaireAoRStore(_datastore);
     _analytics_logger = new AnalyticsLogger();
-    _store = new SubscriberDataManager(_datastore,
+    _store = new SubscriberDataManager(_aor_store,
                                        _chronos_connection,
                                        _analytics_logger,
                                        true);
@@ -605,12 +613,14 @@ class SubscriberDataManagerChronosRequestsTest : public SipTest
   {
     delete _store; _store = NULL;
     delete _datastore; _datastore = NULL;
+    delete _aor_store; _aor_store = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
     delete _analytics_logger; _analytics_logger = NULL;
   }
 
   MockChronosConnection* _chronos_connection;
   LocalStore* _datastore;
+  AstaireAoRStore* _aor_store;
   SubscriberDataManager* _store;
   AnalyticsLogger* _analytics_logger;
 };
@@ -619,9 +629,9 @@ class SubscriberDataManagerChronosRequestsTest : public SipTest
 // voiding the AoR (removing all bindings) sends a DELETE request.
 TEST_F(SubscriberDataManagerChronosRequestsTest, BasicAoRTimerTest)
 {
-  SubscriberDataManager::AoRPair* aor_data1;
-  SubscriberDataManager::AoR::Binding* b1;
-  SubscriberDataManager::AoR::Subscription* s1;
+  AoRPair* aor_data1;
+  AoR::Binding* b1;
+  AoR::Subscription* s1;
   bool rc;
   int now;
 
@@ -689,8 +699,8 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, BasicAoRTimerTest)
 // Test that updating an AoR with extra bindings and subscriptions generates a chronos PUT request.
 TEST_F(SubscriberDataManagerChronosRequestsTest, UpdateAoRTimerTest)
 {
-  SubscriberDataManager::AoRPair* aor_data1;
-  SubscriberDataManager::AoR::Binding* b1;
+  AoRPair* aor_data1;
+  AoR::Binding* b1;
   std::map<std::string, uint32_t> expected_tags;
   expected_tags["REG"] = 1;
   expected_tags["BIND"] = 0;
@@ -736,7 +746,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, UpdateAoRTimerTest)
   EXPECT_EQ("TIMER_ID", aor_data1->get_current()->_timer_id);
 
   // Add a subscription to the record.
-  SubscriberDataManager::AoR::Subscription* s1;
+  AoR::Subscription* s1;
   s1 = aor_data1->get_current()->get_subscription("1234");
   s1->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
   s1->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
@@ -761,7 +771,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, UpdateAoRTimerTest)
   ASSERT_TRUE(aor_data1 != NULL);
 
   // Add another binding to the record.
-  SubscriberDataManager::AoR::Binding* b2;
+  AoR::Binding* b2;
   b2 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:2"));
   b2->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
@@ -790,9 +800,9 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, UpdateAoRTimerTest)
 // does not generate a chronos request.
 TEST_F(SubscriberDataManagerChronosRequestsTest, AoRChangeNoUpdateTimerTest)
 {
-  SubscriberDataManager::AoRPair* aor_data1;
-  SubscriberDataManager::AoR::Binding* b1;
-  SubscriberDataManager::AoR::Subscription* s1;
+  AoRPair* aor_data1;
+  AoR::Binding* b1;
+  AoR::Subscription* s1;
   std::map<std::string, uint32_t> expected_tags;
   expected_tags["REG"] = 1;
   expected_tags["BIND"] = 0;
@@ -851,7 +861,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRChangeNoUpdateTimerTest)
   EXPECT_EQ("TIMER_ID", aor_data1->get_current()->_timer_id);
 
   // Add another binding to the record.
-  SubscriberDataManager::AoR::Binding* b2;
+  AoR::Binding* b2;
   b2 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:2"));
   b2->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
@@ -869,7 +879,7 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRChangeNoUpdateTimerTest)
   expected_tags["BIND"]++;
 
   // Add another subscription to the record.
-  SubscriberDataManager::AoR::Subscription* s2;
+  AoR::Subscription* s2;
   s2 = aor_data1->get_current()->get_subscription("5678");
   s2->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
   s2->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
@@ -906,9 +916,9 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRChangeNoUpdateTimerTest)
 // Test that changing the soonest expiry time of the AoR members generates a chronos PUT request.
 TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
 {
-  SubscriberDataManager::AoRPair* aor_data1;
-  SubscriberDataManager::AoR::Binding* b1;
-  SubscriberDataManager::AoR::Subscription* s1;
+  AoRPair* aor_data1;
+  AoR::Binding* b1;
+  AoR::Subscription* s1;
   std::map<std::string, uint32_t> expected_tags;
   expected_tags["REG"] = 1;
   expected_tags["BIND"] = 0;
@@ -1010,8 +1020,8 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRNextExpiresUpdateTimerTest)
 // Test that a failed timer POST does not change the timer ID in the AoR.
 TEST_F(SubscriberDataManagerChronosRequestsTest, AoRTimerBadRequestNoIDTest)
 {
-  SubscriberDataManager::AoRPair* aor_data1;
-  SubscriberDataManager::AoR::Binding* b1;
+  AoRPair* aor_data1;
+  AoR::Binding* b1;
   bool rc;
   int now;
 

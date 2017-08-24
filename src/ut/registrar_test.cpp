@@ -160,9 +160,11 @@ public:
 
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
+    _local_aor_store = new AstaireAoRStore(_local_data_store);
+    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, NULL, true);
     _remote_data_store = new LocalStore();
-    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, NULL, true);
-    _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, NULL, false);
+    _remote_aor_store = new AstaireAoRStore(_remote_data_store);
+    _remote_sdm = new SubscriberDataManager((AoRStore*)_remote_aor_store, _chronos_connection, NULL, false);
     _remote_sdms = {_remote_sdm};
     _acr_factory = new ACRFactory();
     _hss_connection = new FakeHSSConnection();
@@ -178,8 +180,10 @@ public:
     delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _remote_sdm; _remote_sdm = NULL;
-    delete _sdm; _sdm = NULL;
+    delete _remote_aor_store; _remote_aor_store = NULL;
     delete _remote_data_store; _remote_data_store = NULL;
+    delete _sdm; _sdm = NULL;
+    delete _local_aor_store; _local_aor_store = NULL;
     delete _local_data_store; _local_data_store = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
     SipTest::TearDownTestCase();
@@ -341,6 +345,8 @@ protected:
   static LocalStore* _local_data_store;
   static LocalStore* _remote_data_store;
   static FIFCService* _fifc_service;
+  static AstaireAoRStore* _local_aor_store;
+  static AstaireAoRStore* _remote_aor_store;
   static SubscriberDataManager* _sdm;
   static SubscriberDataManager* _remote_sdm;
   static std::vector<SubscriberDataManager*> _remote_sdms;
@@ -604,20 +610,19 @@ private:
 class SDMNoBindings : public SubscriberDataManager
 {
 public:
-  SDMNoBindings(Store* data_store,
+  SDMNoBindings(AoRStore* aor_store,
                 ChronosConnection* chronos_connection,
                 bool is_primary) :
-    SubscriberDataManager(data_store, chronos_connection, NULL, is_primary)
+    SubscriberDataManager(aor_store, chronos_connection, NULL, is_primary)
   {
   }
 
-  SubscriberDataManager::AoRPair* get_aor_data(
-                                            const std::string& aor_id,
-                                            SAS::TrailId trail)
+  AoRPair* get_aor_data(const std::string& aor_id,
+                        SAS::TrailId trail)
   {
     // Call the real get_data function, but delete any bindings from the AoRPair
     // returned (if any)
-    SubscriberDataManager::AoRPair* aor_pair = SubscriberDataManager::get_aor_data(aor_id, trail);
+    AoRPair* aor_pair = SubscriberDataManager::get_aor_data(aor_id, trail);
 
     if ((aor_pair != NULL) && aor_pair->current_contains_bindings())
     {
@@ -641,7 +646,8 @@ public:
     RegistrarObservedHssTest::SetUpTestCase();
 
     _remote_data_store_no_bindings = new LocalStore();
-    _remote_sdm_no_bindings = new SDMNoBindings((Store*)_remote_data_store_no_bindings, _chronos_connection, false);
+    _remote_aor_store_no_bindings = new AstaireAoRStore(_remote_data_store_no_bindings);
+    _remote_sdm_no_bindings = new SDMNoBindings((AoRStore*)_remote_aor_store_no_bindings, _chronos_connection, false);
     _remote_sdms = {_remote_sdm_no_bindings, _remote_sdm};
 
     if (_sdm)
@@ -650,7 +656,7 @@ public:
       _sdm = NULL;
     }
 
-    _sdm = new SDMNoBindings((Store*)_local_data_store, _chronos_connection, true);
+    _sdm = new SDMNoBindings((AoRStore*)_local_aor_store, _chronos_connection, true);
   }
 
   RegistrarTestRemoteSDM() : RegistrarObservedHssTest()
@@ -664,17 +670,22 @@ public:
     RegistrarObservedHssTest::TearDownTestCase();
 
     delete _remote_sdm_no_bindings; _remote_sdm_no_bindings = NULL;
+    delete _remote_aor_store_no_bindings; _remote_aor_store_no_bindings = NULL;
     delete _remote_data_store_no_bindings; _remote_data_store_no_bindings = NULL;
   }
 
 protected:
   static LocalStore* _remote_data_store_no_bindings;
+  static AstaireAoRStore* _remote_aor_store_no_bindings;
   static SubscriberDataManager* _remote_sdm_no_bindings;
 };
 
 LocalStore* RegistrarTest::_local_data_store;
 LocalStore* RegistrarTest::_remote_data_store;
 LocalStore* RegistrarTestRemoteSDM::_remote_data_store_no_bindings;
+AstaireAoRStore* RegistrarTest::_local_aor_store;
+AstaireAoRStore* RegistrarTest::_remote_aor_store;
+AstaireAoRStore* RegistrarTestRemoteSDM::_remote_aor_store_no_bindings;
 SubscriberDataManager* RegistrarTest::_sdm;
 SubscriberDataManager* RegistrarTest::_remote_sdm;
 SubscriberDataManager* RegistrarTestRemoteSDM::_remote_sdm_no_bindings;
@@ -1523,7 +1534,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
                               "  </InitialFilterCriteria>\n"
                               "</ServiceProfile></IMSSubscription>");
 
-  SubscriberDataManager::AoRPair* aor_data;
+  AoRPair* aor_data;
   aor_data = _sdm->get_aor_data(user, 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
@@ -1675,7 +1686,7 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
   ASSERT_EQ(2, txdata_count());
 
   // Check that we create a binding
-  SubscriberDataManager::AoRPair* aor_data;
+  AoRPair* aor_data;
   aor_data = _sdm->get_aor_data(user, 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
@@ -1770,7 +1781,7 @@ TEST_F(RegistrarTest, AppServersDeRegistrationFailure)
   ASSERT_EQ(2, txdata_count());
 
   // Check that we create a binding
-  SubscriberDataManager::AoRPair* aor_data;
+  AoRPair* aor_data;
   aor_data = _sdm->get_aor_data(user, 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(0u, aor_data->get_current()->_bindings.size());
@@ -2344,7 +2355,7 @@ TEST_F(RegistrarTest, NonPrimaryAssociatedUri)
   free_txdata();
 
   // Check that we registered the correct URI (0233, not 0234).
-  SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data("sip:6505550233@homedomain", 0);
+  AoRPair* aor_data = _sdm->get_aor_data("sip:6505550233@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
   delete aor_data; aor_data = NULL;
@@ -2519,7 +2530,7 @@ TEST_F(RegistrarTest, MainlineEmergencyRegistration)
   free_txdata();
 
   // There should be one binding, and it is an emergency registration. The emergency binding should have 'sos' prepended to its key.
-  SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
+  AoRPair* aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
   EXPECT_TRUE(aor_data->get_current()->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
@@ -2557,7 +2568,7 @@ TEST_F(RegistrarTest, MainlineEmergencyRegistrationWithTelURI)
   free_txdata();
 
   // There should be one binding, and it is an emergency registration. The emergency binding should have 'sos' prepended to its key.
-  SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data("tel:6505550231", 0);
+  AoRPair* aor_data = _sdm->get_aor_data("tel:6505550231", 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
   EXPECT_TRUE(aor_data->get_current()->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
@@ -2596,7 +2607,7 @@ TEST_F(RegistrarTest, MainlineEmergencyRegistrationNoSipInstance)
   free_txdata();
 
   // There should be one binding, and it is an emergency registration
-  SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
+  AoRPair* aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
   EXPECT_TRUE(aor_data->get_current()->get_binding(std::string("sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob"))->_emergency_registration);
@@ -2634,7 +2645,7 @@ TEST_F(RegistrarTest, EmergencyDeregistration)
   free_txdata();
 
   // There should be one binding, and it is an emergency registration. The emergency binding should have 'sos' prepended to its key.
-  SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
+  AoRPair* aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
   EXPECT_TRUE(aor_data->get_current()->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
@@ -2710,7 +2721,7 @@ TEST_F(RegistrarTest, MultipleEmergencyRegistrations)
   free_txdata();
 
   // There should be one binding, and it isn't an emergency registration
-  SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
+  AoRPair* aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
   EXPECT_FALSE(aor_data->get_current()->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
@@ -2863,8 +2874,8 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   free_txdata();
 
   // Now add a subscription to the store
-  SubscriberDataManager::AoRPair* aor_pair = _sdm->get_aor_data(aor, 0);
-  SubscriberDataManager::AoR::Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
+  AoRPair* aor_pair = _sdm->get_aor_data(aor, 0);
+  AoR::Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
   s1->_req_uri = std::string("sip:6505550231@192.91.191.29:59934;transport=tcp");
   s1->_from_uri = aor_brackets;
   s1->_from_tag = std::string("4321");
@@ -2952,8 +2963,8 @@ TEST_F(RegistrarTest, NoNotifyToUnregisteredUser)
   free_txdata();
 
   // Now add a subscription to the store
-  SubscriberDataManager::AoRPair* aor_pair = _sdm->get_aor_data(aor, 0);
-  SubscriberDataManager::AoR::Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
+  AoRPair* aor_pair = _sdm->get_aor_data(aor, 0);
+  AoR::Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
   s1->_req_uri = msg._contact;
   s1->_from_uri = aor_brackets;
   s1->_from_tag = std::string("4321");
@@ -3010,8 +3021,8 @@ TEST_F(RegistrarTest, MultipleRegistrationsWithSubscription)
   free_txdata();
 
   // Now add a subscription to the store
-  SubscriberDataManager::AoRPair* aor_pair = _sdm->get_aor_data(aor, 0);
-  SubscriberDataManager::AoR::Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
+  AoRPair* aor_pair = _sdm->get_aor_data(aor, 0);
+  AoR::Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
   s1->_req_uri = std::string("sip:6505550231@192.91.191.29:59934;transport=tcp");
   s1->_from_uri = aor_brackets;
   s1->_from_tag = std::string("4321");
@@ -3080,11 +3091,11 @@ TEST_F(RegistrarTest, StoreFullPathHeader)
   free_txdata();
 
   // Get the binding.
-  SubscriberDataManager::AoRPair* aor_data;
+  AoRPair* aor_data;
   aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
-  SubscriberDataManager::AoR::Binding* binding = aor_data->get_current()->bindings().begin()->second;
+  AoR::Binding* binding = aor_data->get_current()->bindings().begin()->second;
 
   // Chck that the path header fields are filled in correctly.
   EXPECT_EQ(1u, binding->_path_headers.size());
@@ -3133,7 +3144,7 @@ TEST_F(RegistrarTest, BarredEmergencyRegistration)
 
   // There should be one binding, and it is an emergency registration. The
   // emergency binding should have 'sos' prepended to its key.
-  SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
+  AoRPair* aor_data = _sdm->get_aor_data("sip:6505550231@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
   EXPECT_TRUE(aor_data->get_current()->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
@@ -3182,7 +3193,7 @@ TEST_F(RegistrarTest, BarredEmergencyRegistrationBadURI)
 
   // There should be one binding, and it is an emergency registration. The
   // emergency binding should have 'sos' prepended to its key.
-  SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data("tel:6505550232@badhomedomain", 0);
+  AoRPair* aor_data = _sdm->get_aor_data("tel:6505550232@badhomedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->get_current()->_bindings.size());
   EXPECT_TRUE(aor_data->get_current()->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
@@ -3231,7 +3242,8 @@ public:
   {
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new MockStore();
-    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, NULL, true);
+    _local_aor_store = new AstaireAoRStore(_local_data_store);
+    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, NULL, true);
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
 
@@ -3290,6 +3302,7 @@ public:
     delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _sdm; _sdm = NULL;
+    delete _local_aor_store; _local_aor_store = NULL;
     delete _local_data_store; _local_data_store = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
   }
@@ -3335,6 +3348,7 @@ public:
 
 protected:
   MockStore* _local_data_store;
+  AstaireAoRStore* _local_aor_store;
   SubscriberDataManager* _sdm;
   IfcHandler* _ifc_handler;
   ACRFactory* _acr_factory;

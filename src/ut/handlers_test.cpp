@@ -116,7 +116,7 @@ class DeregistrationTaskTest : public SipTest
   }
 
   void expect_sdm_updates(std::vector<std::string> aor_ids,
-                          std::vector<SubscriberDataManager::AoRPair*> aors)
+                          std::vector<AoRPair*> aors)
   {
     for (uint32_t ii = 0; ii < aor_ids.size(); ++ii)
     {
@@ -163,9 +163,9 @@ TEST_F(DeregistrationTaskTest, MainlineTest)
 
   // Get an initial empty AoR record and add a standard binding
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
+  AoR* aor = new AoR(aor_id);
   int now = time(NULL);
-  SubscriberDataManager::AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -179,10 +179,10 @@ TEST_F(DeregistrationTaskTest, MainlineTest)
   b1->_private_id = "6505550231";
 
   // Set up the subscriber_data_manager expectations
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
   std::vector<std::string> aor_ids = {aor_id};
-  std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair};
+  std::vector<AoRPair*> aors = {aor_pair};
 
   expect_sdm_updates(aor_ids, aors);
 
@@ -214,20 +214,20 @@ TEST_F(DeregistrationTaskTest, AoRPrivateIdPairsTest)
   std::string aor_id_2 = "sip:6505552002@homedomain";
   std::string aor_id_3 = "sip:6505552003@homedomain";
   std::string aor_id_4 = "sip:6505552004@homedomain";
-  SubscriberDataManager::AoR* aor_1 = new SubscriberDataManager::AoR(aor_id_1);
-  SubscriberDataManager::AoR* aor_11 = new SubscriberDataManager::AoR(*aor_1);
-  SubscriberDataManager::AoRPair* aor_pair_1 = new SubscriberDataManager::AoRPair(aor_1, aor_11);
-  SubscriberDataManager::AoR* aor_2 = new SubscriberDataManager::AoR(aor_id_2);
-  SubscriberDataManager::AoR* aor_22 = new SubscriberDataManager::AoR(*aor_2);
-  SubscriberDataManager::AoRPair* aor_pair_2 = new SubscriberDataManager::AoRPair(aor_2, aor_22);
-  SubscriberDataManager::AoR* aor_3 = new SubscriberDataManager::AoR(aor_id_3);
-  SubscriberDataManager::AoR* aor_33 = new SubscriberDataManager::AoR(*aor_3);
-  SubscriberDataManager::AoRPair* aor_pair_3 = new SubscriberDataManager::AoRPair(aor_3, aor_33);
-  SubscriberDataManager::AoR* aor_4 = new SubscriberDataManager::AoR(aor_id_4);
-  SubscriberDataManager::AoR* aor_44 = new SubscriberDataManager::AoR(*aor_4);
-  SubscriberDataManager::AoRPair* aor_pair_4 = new SubscriberDataManager::AoRPair(aor_4, aor_44);
+  AoR* aor_1 = new AoR(aor_id_1);
+  AoR* aor_11 = new AoR(*aor_1);
+  AoRPair* aor_pair_1 = new AoRPair(aor_1, aor_11);
+  AoR* aor_2 = new AoR(aor_id_2);
+  AoR* aor_22 = new AoR(*aor_2);
+  AoRPair* aor_pair_2 = new AoRPair(aor_2, aor_22);
+  AoR* aor_3 = new AoR(aor_id_3);
+  AoR* aor_33 = new AoR(*aor_3);
+  AoRPair* aor_pair_3 = new AoRPair(aor_3, aor_33);
+  AoR* aor_4 = new AoR(aor_id_4);
+  AoR* aor_44 = new AoR(*aor_4);
+  AoRPair* aor_pair_4 = new AoRPair(aor_4, aor_44);
   std::vector<std::string> aor_ids = {aor_id_1, aor_id_2, aor_id_3, aor_id_4};
-  std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair_1, aor_pair_2, aor_pair_3, aor_pair_4};
+  std::vector<AoRPair*> aors = {aor_pair_1, aor_pair_2, aor_pair_3, aor_pair_4};
 
   expect_sdm_updates(aor_ids, aors);
 
@@ -245,9 +245,9 @@ TEST_F(DeregistrationTaskTest, SubscriberDataManagerFailureTest)
 
   // Set up the subscriber_data_manager expectations
   std::string aor_id = "sip:6505552001@homedomain";
-  SubscriberDataManager::AoRPair* aor_pair = NULL;
+  AoRPair* aor_pair = NULL;
   std::vector<std::string> aor_ids = {aor_id};
-  std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair};
+  std::vector<AoRPair*> aors = {aor_pair};
 
   expect_sdm_updates(aor_ids, aors);
 
@@ -268,11 +268,11 @@ TEST_F(DeregistrationTaskTest, InvalidIMPUTest)
 
   // Set up the subscriber_data_manager expectations
   std::string aor_id = "notavalidsipuri";
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor = new AoR(aor_id);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
   std::vector<std::string> aor_ids = {aor_id};
-  std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair};
+  std::vector<AoRPair*> aors = {aor_pair};
 
   expect_sdm_updates(aor_ids, aors);
 
@@ -334,9 +334,9 @@ TEST_F(DeregistrationTaskTest, SubscriberDataManagerWritesFail)
   std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231\"}]}";
   build_dereg_request(body);
 
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR("sip:6505550231@homedomain");
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor = new AoR("sip:6505550231@homedomain");
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
   EXPECT_CALL(*_subscriber_data_manager, get_aor_data(_,  _)).WillOnce(Return(aor_pair));
   EXPECT_CALL(*_subscriber_data_manager, set_aor_data(_, _, _, _, _)).WillOnce(Return(Store::ERROR));
 
@@ -353,17 +353,17 @@ TEST_F(DeregistrationTaskTest, ImpiNotClearedWhenBindingNotDeregistered)
 
   // Create an AoR with a minimal binding.
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
+  AoR* aor = new AoR(aor_id);
   int now = time(NULL);
-  SubscriberDataManager::AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_expires = now + 300;
   b1->_emergency_registration = false;
   b1->_private_id = "impi1";
 
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
   std::vector<std::string> aor_ids = {aor_id};
-  std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair};
+  std::vector<AoRPair*> aors = {aor_pair};
 
   expect_sdm_updates(aor_ids, aors);
 
@@ -383,17 +383,17 @@ TEST_F(DeregistrationTaskTest, ImpiClearedWhenBindingUnconditionallyDeregistered
 
   // Create an AoR with a minimal binding.
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
+  AoR* aor = new AoR(aor_id);
   int now = time(NULL);
-  SubscriberDataManager::AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_expires = now + 300;
   b1->_emergency_registration = false;
   b1->_private_id = "impi1";
 
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
   std::vector<std::string> aor_ids = {aor_id};
-  std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair};
+  std::vector<AoRPair*> aors = {aor_pair};
 
   expect_sdm_updates(aor_ids, aors);
 
@@ -440,35 +440,35 @@ TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
 
   // Create an AoR with two bindings.
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
+  AoR* aor = new AoR(aor_id);
 
-  SubscriberDataManager::AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_expires = now + 300;
   b1->_emergency_registration = false;
   b1->_private_id = "impi1";
 
-  SubscriberDataManager::AoR::Binding* b2 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:2"));
+  AoR::Binding* b2 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:2"));
   b2->_expires = now + 300;
   b2->_emergency_registration = false;
   b2->_private_id = "impi2";
 
-  SubscriberDataManager::AoR* backup_aor = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, backup_aor);
+  AoR* backup_aor = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, backup_aor);
 
   // create another AoR with one binding.
   std::string aor_id2 = "sip:6505550232@homedomain";
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(aor_id2);
+  AoR* aor2 = new AoR(aor_id2);
 
-  SubscriberDataManager::AoR::Binding* b3 = aor2->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:3"));
+  AoR::Binding* b3 = aor2->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:3"));
   b3->_expires = now + 300;
   b3->_emergency_registration = false;
   b3->_private_id = "impi3";
 
-  SubscriberDataManager::AoR* backup_aor2 = new SubscriberDataManager::AoR(*aor2);
-  SubscriberDataManager::AoRPair* aor_pair2 = new SubscriberDataManager::AoRPair(aor2, backup_aor2);
+  AoR* backup_aor2 = new AoR(*aor2);
+  AoRPair* aor_pair2 = new AoRPair(aor2, backup_aor2);
 
   std::vector<std::string> aor_ids = {aor_id, aor_id2};
-  std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair, aor_pair2};
+  std::vector<AoRPair*> aors = {aor_pair, aor_pair2};
   expect_sdm_updates(aor_ids, aors);
 
   // The corresponding IMPIs are also deleted.
@@ -508,17 +508,17 @@ TEST_F(DeregistrationTaskTest, CannotFindImpiToDelete)
 
   // Create an AoR with a minimal binding.
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
+  AoR* aor = new AoR(aor_id);
   int now = time(NULL);
-  SubscriberDataManager::AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_expires = now + 300;
   b1->_emergency_registration = false;
   b1->_private_id = "impi1";
 
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
   std::vector<std::string> aor_ids = {aor_id};
-  std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair};
+  std::vector<AoRPair*> aors = {aor_pair};
   expect_sdm_updates(aor_ids, aors);
 
   // Simulate the IMPI not being found in the store. The handler does not go on
@@ -539,17 +539,17 @@ TEST_F(DeregistrationTaskTest, ImpiStoreFailure)
 
   // Create an AoR with a minimal binding.
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
+  AoR* aor = new AoR(aor_id);
   int now = time(NULL);
-  SubscriberDataManager::AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_expires = now + 300;
   b1->_emergency_registration = false;
   b1->_private_id = "impi1";
 
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
   std::vector<std::string> aor_ids = {aor_id};
-  std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair};
+  std::vector<AoRPair*> aors = {aor_pair};
   expect_sdm_updates(aor_ids, aors);
 
   // Simulate the IMPI store failing when deleting the IMPI. The handler does
@@ -571,17 +571,17 @@ TEST_F(DeregistrationTaskTest, ImpiStoreDataContention)
 
   // Create an AoR with a minimal binding.
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
+  AoR* aor = new AoR(aor_id);
   int now = time(NULL);
-  SubscriberDataManager::AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_expires = now + 300;
   b1->_emergency_registration = false;
   b1->_private_id = "impi1";
 
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
   std::vector<std::string> aor_ids = {aor_id};
-  std::vector<SubscriberDataManager::AoRPair*> aors = {aor_pair};
+  std::vector<AoRPair*> aors = {aor_pair};
   expect_sdm_updates(aor_ids, aors);
 
   // We need to create two IMPIs when we return one on a call to get_impi we
@@ -621,12 +621,10 @@ TEST_F(GetBindingsTest, NoBindings)
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoRPair* aor =
-    new SubscriberDataManager::AoRPair(new SubscriberDataManager::AoR(aor_id),
-                                       new SubscriberDataManager::AoR(aor_id));
-  SubscriberDataManager::AoRPair* remote_aor =
-    new SubscriberDataManager::AoRPair(new SubscriberDataManager::AoR(aor_id),
-                                       new SubscriberDataManager::AoR(aor_id));
+  AoRPair* aor = new AoRPair(new AoR(aor_id),
+                             new AoR(aor_id));
+  AoRPair* remote_aor = new AoRPair(new AoR(aor_id),
+                                    new AoR(aor_id));
 
   {
     InSequence s;
@@ -652,7 +650,7 @@ TEST_F(GetBindingsTest, OneBinding)
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoRPair* aor = build_aor(aor_id);
+  AoRPair* aor = build_aor(aor_id);
   std::string id = aor->get_current()->bindings().begin()->first;
   std::string contact = aor->get_current()->bindings().begin()->second->_uri;
 
@@ -707,11 +705,11 @@ TEST_F(GetBindingsTest, TwoBindings)
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
+  AoR* aor = new AoR(aor_id);
   build_binding(aor, now, "123");
   build_binding(aor, now, "456");
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
 
   {
     InSequence s;
@@ -783,12 +781,10 @@ TEST_F(GetSubscriptionsTest, NoSubscriptions)
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoRPair* aor =
-    new SubscriberDataManager::AoRPair(new SubscriberDataManager::AoR(aor_id),
-                                       new SubscriberDataManager::AoR(aor_id));
-  SubscriberDataManager::AoRPair* remote_aor =
-    new SubscriberDataManager::AoRPair(new SubscriberDataManager::AoR(aor_id),
-                                       new SubscriberDataManager::AoR(aor_id));
+  AoRPair* aor = new AoRPair(new AoR(aor_id),
+                             new AoR(aor_id));
+  AoRPair* remote_aor = new AoRPair(new AoR(aor_id),
+                                    new AoR(aor_id));
 
   {
     InSequence s;
@@ -814,7 +810,7 @@ TEST_F(GetSubscriptionsTest, OneSubscription)
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoRPair* aor = build_aor(aor_id);
+  AoRPair* aor = build_aor(aor_id);
   std::string id = aor->get_current()->subscriptions().begin()->first;
   std::string uri = aor->get_current()->subscriptions().begin()->second->_req_uri;
 
@@ -868,12 +864,12 @@ TEST_F(GetSubscriptionsTest, TwoSubscriptions)
 
   // Set up subscriber_data_manager expectations
   std::string aor_id = "sip:6505550231@homedomain";
-  SubscriberDataManager::AoR* aor = new SubscriberDataManager::AoR(aor_id);
+  AoR* aor = new AoR(aor_id);
   build_binding(aor, now, "123");
   build_subscription(aor, now, "456");
   build_subscription(aor, now, "789");
-  SubscriberDataManager::AoR* aor2 = new SubscriberDataManager::AoR(*aor);
-  SubscriberDataManager::AoRPair* aor_pair = new SubscriberDataManager::AoRPair(aor, aor2);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
 
   {
     InSequence s;
@@ -988,7 +984,7 @@ TEST_F(DeleteImpuTaskTest, Mainline)
   std::string impu = "sip:6505550231@homedomain";
   std::string impu_escaped =  "sip%3A6505550231%40homedomain";
 
-  SubscriberDataManager::AoRPair* aor = build_aor(impu, false);
+  AoRPair* aor = build_aor(impu, false);
   build_task(impu_escaped);
 
   {
@@ -1011,7 +1007,7 @@ TEST_F(DeleteImpuTaskTest, StoreFailure)
   std::string impu = "sip:6505550231@homedomain";
   std::string impu_escaped =  "sip%3A6505550231%40homedomain";
 
-  SubscriberDataManager::AoRPair* aor = build_aor(impu, true);
+  AoRPair* aor = build_aor(impu, true);
   build_task(impu_escaped);
 
   {
@@ -1032,7 +1028,7 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith404)
   std::string impu = "sip:6505550231@homedomain";
   std::string impu_escaped =  "sip%3A6505550231%40homedomain";
 
-  SubscriberDataManager::AoRPair* aor = build_aor(impu, true);
+  AoRPair* aor = build_aor(impu, true);
   build_task(impu_escaped);
 
   {
@@ -1055,7 +1051,7 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith5xx)
   std::string impu = "sip:6505550231@homedomain";
   std::string impu_escaped =  "sip%3A6505550231%40homedomain";
 
-  SubscriberDataManager::AoRPair* aor = build_aor(impu, true);
+  AoRPair* aor = build_aor(impu, true);
   build_task(impu_escaped);
 
   {
@@ -1078,7 +1074,7 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith4xx)
   std::string impu = "sip:6505550231@homedomain";
   std::string impu_escaped =  "sip%3A6505550231%40homedomain";
 
-  SubscriberDataManager::AoRPair* aor = build_aor(impu, true);
+  AoRPair* aor = build_aor(impu, true);
   build_task(impu_escaped);
 
   {
@@ -1101,8 +1097,8 @@ TEST_F(DeleteImpuTaskTest, WritingToRemoteStores)
   std::string impu = "sip:6505550231@homedomain";
   std::string impu_escaped =  "sip%3A6505550231%40homedomain";
 
-  SubscriberDataManager::AoRPair* aor = build_aor(impu);
-  SubscriberDataManager::AoRPair* remote_aor = build_aor(impu);
+  AoRPair* aor = build_aor(impu);
+  AoRPair* remote_aor = build_aor(impu);
   build_task(impu_escaped, htp_method_DELETE, true);
 
   {
