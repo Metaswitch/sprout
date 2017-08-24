@@ -261,7 +261,7 @@ public:
   /// registration has been created.
   std::string _scscf_uri;
 
-//private:
+private:
   /// Map holding the bindings for a particular AoR indexed by binding ID.
   Bindings _bindings;
 
@@ -277,7 +277,6 @@ public:
   std::string _uri;
 
   /// Store code is allowed to manipulate bindings and subscriptions directly.
-  //friend class AoRPair;
   friend class AoRStore;
   friend class SubscriberDataManager;
 };
