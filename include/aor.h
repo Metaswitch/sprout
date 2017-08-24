@@ -261,7 +261,6 @@ public:
   /// registration has been created.
   std::string _scscf_uri;
 
-private:
   /// Map holding the bindings for a particular AoR indexed by binding ID.
   Bindings _bindings;
 
