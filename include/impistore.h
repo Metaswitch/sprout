@@ -353,13 +353,6 @@ public:
     /// @returns the expiry time.
     int get_expires();
 
-  protected:
-    /// Serialization to JSON.
-    virtual std::string to_json();
-
-    /// Write to JSON writer.
-    virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer) = 0;
-
     // The IMPI store is a friend so it can read our CAS value.
     friend class ImpiStore;
   };
@@ -394,10 +387,6 @@ public:
 
 protected:
   static rapidjson::Document* json_from_string(const std::string& string);
-
-private:
-  /// Identifier for IMPI table.
-  static const std::string TABLE_IMPI;
 };
 
 // Utility function - retrieves the "corrlator" field from the give challenge

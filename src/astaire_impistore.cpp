@@ -30,6 +30,19 @@ const std::string AstaireImpiStore::TABLE_IMPI = "impi";
 // JSON field names and values.
 static const char* const JSON_AUTH_CHALLENGES = "authChallenges";
 
+std::string AstaireImpiStore::Impi::to_json()
+{
+  // Build a writer, serialize the IMPI to it and return the result.
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+  writer.StartObject();
+  {
+    write_json(&writer);
+  }
+  writer.EndObject();
+  return buffer.GetString();
+}
+
 void AstaireImpiStore::Impi::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer)
 {
   // Write a JSON array, and then write each of the AuthChallenges into it.

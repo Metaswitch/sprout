@@ -40,9 +40,6 @@ rapidjson::Document* ImpiStore::json_from_string(const std::string& string)
   return json;
 }
 
-// Constant table names.
-const std::string ImpiStore::TABLE_IMPI = "impi";
-
 // JSON field names and values.
 static const char* const JSON_TYPE = "type";
 static const char* const JSON_TYPE_DIGEST = "digest";
@@ -239,19 +236,6 @@ ImpiStore::Impi::~Impi()
   {
     delete *it;
   }
-}
-
-std::string ImpiStore::Impi::to_json()
-{
-  // Build a writer, serialize the IMPI to it and return the result.
-  rapidjson::StringBuffer buffer;
-  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-  writer.StartObject();
-  {
-    write_json(&writer);
-  }
-  writer.EndObject();
-  return buffer.GetString();
 }
 
 int ImpiStore::Impi::get_expires()
