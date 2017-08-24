@@ -241,19 +241,6 @@ ImpiStore::Impi::~Impi()
   }
 }
 
-std::string ImpiStore::Impi::to_json()
-{
-  // Build a writer, serialize the IMPI to it and return the result.
-  rapidjson::StringBuffer buffer;
-  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-  writer.StartObject();
-  {
-    write_json(&writer);
-  }
-  writer.EndObject();
-  return buffer.GetString();
-}
-
 int ImpiStore::Impi::get_expires()
 {
   // Spin through the AuthChallenges, finding the latest expires time.

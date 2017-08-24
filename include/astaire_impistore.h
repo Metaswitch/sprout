@@ -43,7 +43,10 @@ public:
 
   private:
     /// Write to JSON writer.
-    virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer) override;
+    void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
+
+    /// Serialization to JSON.
+    std::string to_json();
 
     /// Memcached CAS value.
     uint64_t _cas;

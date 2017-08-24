@@ -353,13 +353,6 @@ public:
     /// @returns the expiry time.
     int get_expires();
 
-  protected:
-    /// Serialization to JSON.
-    virtual std::string to_json();
-
-    /// Write to JSON writer.
-    virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer) = 0;
-
     // The IMPI store is a friend so it can read our CAS value.
     friend class ImpiStore;
   };
