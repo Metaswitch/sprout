@@ -135,6 +135,13 @@ public:
       _scscf_uri = uri;
     }
 
+    /// Returns whether this AuthChallenge has been updated since reading it
+    /// from the store.
+    bool is_updated()
+    {
+      return _updated;
+    }
+
   private:
     /// Constructor.
     /// @param _type         Type of authentication challenge.
