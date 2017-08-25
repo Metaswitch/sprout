@@ -159,7 +159,7 @@ static void report_sip_all_register_marker(SAS::TrailId trail, std::string uri_s
 
     // Create and report the marker.
     SAS::Marker sip_all_register(trail, MARKER_ID_SIP_ALL_REGISTER, 1u);
-    sip_all_register.add_var_param(PJUtils::strip_uri_scheme(uri_str));
+    sip_all_register.add_var_param(Utils::strip_uri_scheme(uri_str));
     // Add the DN parameter. If the user part is not numeric just log it in
     // its entirety.
     sip_all_register.add_var_param(URIClassifier::is_user_numeric(user) ?
