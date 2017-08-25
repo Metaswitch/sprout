@@ -788,6 +788,9 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
                                    PJUtils::pj_str_to_string(&via_hdr->branch_param) :
                                    "");
 
+    // Add the IMPU to the challenge
+    auth_challenge->set_impu(impu_for_hss);
+
     // Write the new authentication challenge to the IMPI store
     TRC_DEBUG("Write authentication challenge to IMPI store");
     Store::Status status;
