@@ -257,6 +257,7 @@ namespace TestingCommon
     int _cseq;
     bool _in_dialog;
     bool _contentlength;
+    bool _urn_uri;
 
     Message() :
       _method("INVITE"),
@@ -272,7 +273,8 @@ namespace TestingCommon
       _via("10.83.18.38:36530"),
       _cseq(16567),
       _in_dialog(false),
-      _contentlength(true)
+      _contentlength(true),
+      _urn_uri(false)
     {
       static int unique = 1042;
       _unique = unique;

@@ -293,6 +293,21 @@ std::string Message::get_request()
   std::string requri = target;
   std::string route = _route.empty() ? "" : _route + "\r\n";
 
+  // Set the value of the To header.
+  std::string to_header = "To: ";
+  if (!_urn_uri)
+  {
+    to_header.append("<").append(target).append(">");
+    if (_in_dialog)
+    {
+      to_header.append(";tag=10.114.61.213+1+8c8b232a+5fb751cf");
+    }
+  }
+  else
+  {
+    to_header.append("<urn:service:sos>");
+  }
+
   // Default branch parameter if it's not supplied.
   std::string branch = _branch.empty() ? "Pjmo1aimuq33BAI4rjhgQgBr4sY" + std::to_string(_unique) : _branch;
 
@@ -305,7 +320,7 @@ std::string Message::get_request()
                    "Via: SIP/2.0/TCP %13$s;rport;branch=z9hG4bK%16$s\r\n"
                    "%12$s"
                    "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
-                   "To: <%10$s>%17$s\r\n"
+                   "%10$s\r\n"
                    "Max-Forwards: %8$d\r\n"
                    "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%11$04dohntC@10.114.61.213\r\n"
                    "CSeq: %15$d %1$s\r\n"
@@ -326,14 +341,13 @@ std::string Message::get_request()
                    /*  7 */ _extra.empty() ? "" : std::string(_extra).append("\r\n").c_str(),
                    /*  8 */ _forwards,
                    /*  9 */ _requri.empty() ? requri.c_str() : _requri.c_str(),
-                   /* 10 */ target.c_str(),
+                   /* 10 */ to_header.c_str(),
                    /* 11 */ _unique,
                    /* 12 */ _first_hop ? "" : "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n",
                    /* 13 */ _via.c_str(),
                    /* 14 */ route.c_str(),
                    /* 15 */ _cseq,
-                   /* 16 */ branch.c_str(),
-                   /* 17 */ (_in_dialog) ? ";tag=10.114.61.213+1+8c8b232a+5fb751cf" : ""
+                   /* 16 */ branch.c_str()
                      );
 
   EXPECT_LT(n, (int)sizeof(buf));

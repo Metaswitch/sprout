@@ -3614,3 +3614,45 @@ TEST_F(ICSCFSproutletTest, RouteOutOfDialogAck)
   poll();
   delete tp;
 }
+
+
+// Test the case where the Req-URI is "urn:service:sos". This will be received
+// from Perimeta when a subscriber has made an emergency call.
+// This URI should be accepted, and the MESSAGE should be forwarded on.
+TEST_F(ICSCFSproutletTest, HandleUrnUri)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        ICSCF_PORT,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a SIP MESSAGE.
+  Message msg1;
+  msg1._first_hop = true;
+  msg1._method = "MESSAGE";
+  msg1._requri = "urn:service:sos";
+  msg1._urn_uri = true;
+  msg1._route = "Route: <sip:homedomain;orig>";
+  std::string p_asserted_id = "P-Asserted-Identity: <sip:";
+  p_asserted_id.append(msg1._from).append("@").append(msg1._fromdomain).append(">");
+  msg1._extra = p_asserted_id;
+  inject_msg(msg1.get_request(), tp);
+
+  // Check that the message is forwarded as expected.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+
+  // Is the right kind and method.
+  ReqMatcher r1("MESSAGE");
+  r1.matches(tdata->msg);
+
+  // Don't know if this is applicable.
+  // Goes to the configured upstream proxy ("upstreamnode", "10.6.6.8")
+//  expect_target("TCP", "10.6.6.8", stack_data.pcscf_trusted_port, tdata);
+
+  free_txdata();
+
+}
