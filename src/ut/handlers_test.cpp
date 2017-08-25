@@ -187,11 +187,11 @@ TEST_F(DeregistrationTaskTest, MainlineTest)
   expect_sdm_updates(aor_ids, aors);
 
   // The IMPI is also deleted from the local and remote stores.
-  ImpiStore::Impi* impi = new AstaireImpiStore::Impi("6505550231");
+  ImpiStore::Impi* impi = new ImpiStore::Impi("6505550231");
   EXPECT_CALL(*_local_impi_store, get_impi("6505550231", _)).WillOnce(Return(impi));
   EXPECT_CALL(*_local_impi_store, delete_impi(impi, _)).WillOnce(Return(Store::OK));
 
-  impi = new AstaireImpiStore::Impi("6505550231");
+  impi = new ImpiStore::Impi("6505550231");
   EXPECT_CALL(*_remote_impi_store, get_impi("6505550231", _)).WillOnce(Return(impi));
   EXPECT_CALL(*_remote_impi_store, delete_impi(impi, _)).WillOnce(Return(Store::OK));
 
@@ -398,7 +398,7 @@ TEST_F(DeregistrationTaskTest, ImpiClearedWhenBindingUnconditionallyDeregistered
   expect_sdm_updates(aor_ids, aors);
 
   // The corresponding IMPI is also deleted.
-  ImpiStore::Impi* impi = new AstaireImpiStore::Impi("impi1");
+  ImpiStore::Impi* impi = new ImpiStore::Impi("impi1");
   EXPECT_CALL(*_local_impi_store, get_impi("impi1", _)).WillOnce(Return(impi));
   EXPECT_CALL(*_local_impi_store, delete_impi(impi, _)).WillOnce(Return(Store::OK));
 
@@ -472,9 +472,9 @@ TEST_F(DeregistrationTaskTest, ClearMultipleImpis)
   expect_sdm_updates(aor_ids, aors);
 
   // The corresponding IMPIs are also deleted.
-  ImpiStore::Impi* impi1 = new AstaireImpiStore::Impi("impi1");
-  ImpiStore::Impi* impi2 = new AstaireImpiStore::Impi("impi2");
-  ImpiStore::Impi* impi3 = new AstaireImpiStore::Impi("impi3");
+  ImpiStore::Impi* impi1 = new ImpiStore::Impi("impi1");
+  ImpiStore::Impi* impi2 = new ImpiStore::Impi("impi2");
+  ImpiStore::Impi* impi3 = new ImpiStore::Impi("impi3");
   EXPECT_CALL(*_local_impi_store, get_impi("impi1", _)).WillOnce(Return(impi1));
   EXPECT_CALL(*_local_impi_store, delete_impi(impi1, _)).WillOnce(Return(Store::OK));
   EXPECT_CALL(*_local_impi_store, get_impi("impi2", _)).WillOnce(Return(impi2));
@@ -554,7 +554,7 @@ TEST_F(DeregistrationTaskTest, ImpiStoreFailure)
 
   // Simulate the IMPI store failing when deleting the IMPI. The handler does
   // not retry the delete.
-  ImpiStore::Impi* impi1 = new AstaireImpiStore::Impi("impi1");
+  ImpiStore::Impi* impi1 = new ImpiStore::Impi("impi1");
   EXPECT_CALL(*_local_impi_store, get_impi("impi1", _)).WillOnce(Return(impi1));
   EXPECT_CALL(*_local_impi_store, delete_impi(impi1, _)).WillOnce(Return(Store::ERROR));
 
@@ -586,8 +586,8 @@ TEST_F(DeregistrationTaskTest, ImpiStoreDataContention)
 
   // We need to create two IMPIs when we return one on a call to get_impi we
   // lose ownership of it.
-  ImpiStore::Impi* impi1 = new AstaireImpiStore::Impi("impi1");
-  ImpiStore::Impi* impi1a = new AstaireImpiStore::Impi("impi1");
+  ImpiStore::Impi* impi1 = new ImpiStore::Impi("impi1");
+  ImpiStore::Impi* impi1a = new ImpiStore::Impi("impi1");
   {
     // Simulate the IMPI store returning data contention on the first delete.
     // The handler tries again.
