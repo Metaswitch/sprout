@@ -63,7 +63,8 @@ public:
       _expires(expires),
       _correlator(),
       _scscf_uri(),
-      _updated(true) {};
+      _updated(true),
+      _impu() {};
 
     /// Destructor must be virtual as we're going to extend this class.
     virtual ~AuthChallenge() {};
@@ -85,7 +86,7 @@ public:
       return _nonce;
     }
 
-    void set_nonce(std::string nonce)
+    void set_nonce(const std::string& nonce)
     {
       _updated = true;
       _nonce = nonce;
@@ -118,7 +119,7 @@ public:
       return _correlator;
     }
 
-    void set_correlator(std::string correlator)
+    void set_correlator(const std::string& correlator)
     {
       _updated = true;
       _correlator = correlator;
@@ -129,10 +130,22 @@ public:
       return _scscf_uri;
     }
 
-    void set_scscf_uri(std::string uri)
+    void set_scscf_uri(const std::string& uri)
     {
       _updated = true;
       _scscf_uri = uri;
+    }
+
+    std::string get_impu()
+    {
+      return _impu;
+    }
+
+    void set_impu(const std::string& impu)
+    {
+      // Setting the Impu doesn't mark the challenge as updated, as we never
+      // change the impu after initial creation
+      _impu = impu;
     }
 
     /// Returns whether this AuthChallenge has been updated since reading it
@@ -155,7 +168,8 @@ public:
       _expires(0),
       _correlator(),
       _scscf_uri(),
-      _updated(false) {};
+      _updated(false),
+      _impu() {};
 
     /// Type of the AV
     enum Type _type;
@@ -180,6 +194,9 @@ public:
 
     /// Tracks whether this AV has been updated
     bool _updated;
+
+    /// The IMPU for which this challenge was generated
+    std::string _impu;
 
   friend class ImpiStore;
   };
@@ -221,7 +238,7 @@ public:
       return _realm;
     }
 
-    void set_realm(std::string realm)
+    void set_realm(const std::string& realm)
     {
       _updated = true;
       _realm = realm;
@@ -232,7 +249,7 @@ public:
       return _qop;
     }
 
-    void set_qop(std::string qop)
+    void set_qop(const std::string& qop)
     {
       _updated = true;
       _qop = qop;
@@ -243,7 +260,7 @@ public:
       return _ha1;
     }
 
-    void set_ha1(std::string ha1)
+    void set_ha1(const std::string& ha1)
     {
       _updated = true;
       _ha1 = ha1;
@@ -302,7 +319,7 @@ public:
       return _response;
     }
 
-    void set_response(std::string response)
+    void set_response(const std::string& response)
     {
       _updated = true;
       _response = response;
