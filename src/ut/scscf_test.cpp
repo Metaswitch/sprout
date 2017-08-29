@@ -8644,7 +8644,7 @@ TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
 
 // Test that a failure to get iFCs due to a 404 error from homestead during Call
 // Diversion
-TEST_F(SCSCFTest, HSSNotFoundCdiv)
+TEST_F(SCSCFTest, HSSNotFoundOnCdiv)
 {
   ServiceProfileBuilder service_profile = ServiceProfileBuilder()
     .addIdentity("sip:6505551234@homedomain")

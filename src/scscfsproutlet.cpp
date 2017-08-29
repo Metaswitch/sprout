@@ -375,14 +375,14 @@ long SCSCFSproutlet::read_hss_data(const std::string& public_id,
     // Get the default URI. This should always succeed.
     associated_uris.get_default_impu(default_uri, true);
 
-    // We may want to route to bindings that are barred (in case of an emergency),
-    // so get all the URIs.
+    // We may want to route to bindings that are barred (in case of an
+    // emergency), so get all the URIs.
     uris = associated_uris.get_all_uris();
     registered = (regstate == RegDataXMLUtils::STATE_REGISTERED);
     barred = associated_uris.is_impu_barred(public_id);
   }
 
-  return (http_code);
+  return http_code;
 }
 
 
@@ -509,7 +509,7 @@ SCSCFSproutletTsx::~SCSCFSproutletTsx()
 
   if (_liveness_timer != 0)
   {
-    cancel_timer(_liveness_timer);
+    cancel_timer(_liveness_timer); //LCOV_EXCL_LINE - can't be hit in production
   }
 
   // If the ACR was stored locally, destroy it now.
@@ -583,7 +583,7 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   // Construct the S-CSCF URI for this transaction. Use the configured S-CSCF
   // URI as a starting point.
   pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), _scscf->_scscf_cluster_uri);
-pjsip_sip_uri* routing_uri = get_routing_uri(req);
+  pjsip_sip_uri* routing_uri = get_routing_uri(req);
   SCSCFUtils::get_scscf_uri(get_pool(req),
                             get_local_hostname(routing_uri),
                             get_local_hostname(scscf_uri),
@@ -1813,7 +1813,6 @@ void SCSCFSproutletTsx::route_to_bgcf(pjsip_msg* req)
 void SCSCFSproutletTsx::route_to_target(pjsip_msg* req)
 {
   pjsip_uri* req_uri = req->line.req.uri;
-  URIClass uri_class = URIClassifier::classify_uri(req_uri);
 
   if ((PJSIP_URI_SCHEME_IS_SIP(req_uri) &&
       ((pjsip_sip_uri*)req_uri)->maddr_param.slen))
@@ -1825,18 +1824,11 @@ void SCSCFSproutletTsx::route_to_target(pjsip_msg* req)
              ((pjsip_sip_uri*)req_uri)->maddr_param.ptr);
     send_request(req);
   }
-  else if (uri_class == OFFNET_SIP_URI)
-  {
-    // The Request-URI indicates an non-home domain, so forward the request
-    // to the domain in the Request-URI unchanged.
-    TRC_INFO("Route request to Request-URI %s",
-             PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req_uri).c_str());
-    send_request(req);
-  }
   else
   {
-    // The Request-URI is a SIP URI local to us, or a tel: URI that would only have reached this
-    // point if it was owned by us, so look it up in the registration store.
+    // The Request-URI is a SIP URI local to us, or a tel: URI that would only
+    // have reached this point if it was owned by us, so look it up in the
+    // registration store.
     TRC_INFO("Route request to registered UE bindings");
     route_to_ue_bindings(req);
   }
@@ -2026,19 +2018,10 @@ long SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
 
 
 /// Look up the registration state for the given public ID, using the
-/// per-transaction cache if possible (and caching them and the iFC otherwise).
+/// per-transaction cache, which will be present at this point 
 bool SCSCFSproutletTsx::is_user_registered(std::string public_id)
 {
-  long http_code = get_data_from_hss(public_id);
-  if (http_code == HTTP_OK)
-  {
-    return _registered;
-  }
-  else
-  {
-    TRC_ERROR("Connection to Homestead failed, treating user as unregistered");
-    return false;
-  }
+  return _registered;
 }
 
 
@@ -2453,10 +2436,6 @@ std::string SCSCFSproutletTsx::fork_failure_reason_as_string(int fork_id, int si
   {
   case TIMEOUT:
     reason = "SIP timeout";
-    break;
-
-  case TRANSPORT_ERROR:
-    reason = "Transport error";
     break;
 
   case NO_ADDRESSES:
