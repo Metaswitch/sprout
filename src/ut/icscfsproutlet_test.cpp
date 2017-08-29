@@ -3648,8 +3648,10 @@ TEST_F(ICSCFSproutletTest, HandleUrnUri)
   // Is the right kind and method.
   ReqMatcher r1("MESSAGE");
   r1.matches(tdata->msg);
+  // We should probably do more thorough checking here
 
-  // Don't know if this is applicable.
+  // Don't know if this is applicable - pulled this check out a different test
+  // that had a MESSAGE in it.
   // Goes to the configured upstream proxy ("upstreamnode", "10.6.6.8")
 //  expect_target("TCP", "10.6.6.8", stack_data.pcscf_trusted_port, tdata);
 
