@@ -50,9 +50,7 @@ bool AssociatedURIs::contains_uri(std::string uri)
 void AssociatedURIs::add_uri(std::string uri,
                              bool barred)
 {
-  TRC_DEBUG("Adding URI part 2. URI: %s", uri.c_str());
   _associated_uris.push_back(uri);
-  TRC_DEBUG("Added URI");
   add_barring_status(uri, barred);
 }
 
@@ -69,6 +67,7 @@ void AssociatedURIs::clear_uris()
 {
   _associated_uris.clear();
   _barred_map.clear();
+  _distinct_to_wildcard.clear();
 }
 
 // Returns if the specified URI is barred.
@@ -200,7 +199,7 @@ void AssociatedURIs::from_json(const rapidjson::Value& au_obj)
     bool barring;
     JSON_GET_STRING_MEMBER(*associated_uris_it, JSON_ASSOC_URI, uri);
     JSON_GET_BOOL_MEMBER(*associated_uris_it, JSON_BARRING, barring);
-    TRC_DEBUG("Adding URI: %s, barring: %d", uri.c_str(), barring);
+    TRC_DEBUG("From JSON - Adding URI: %s, barring: %d", uri.c_str(), barring);
     add_uri(uri, barring);
   }
 
@@ -218,3 +217,16 @@ void AssociatedURIs::from_json(const rapidjson::Value& au_obj)
   }
 }
 
+bool AssociatedURIs::is_equal_to(AssociatedURIs associated_uris_other)
+{
+  if (_associated_uris != associated_uris_other.get_all_uris() ||
+      get_barred_uris() != associated_uris_other.get_barred_uris() ||
+      _distinct_to_wildcard != associated_uris_other.get_wildcard_mappings())
+  {
+    TRC_DEBUG("Associated URIS is different in the 2 sets compared");
+    return false;
+  }
+
+  TRC_DEBUG("Associated URIs are the same");
+  return true;
+}

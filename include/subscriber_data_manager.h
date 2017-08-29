@@ -104,7 +104,6 @@ public:
     /// @param now          The current time
     /// @param trail        SAS trail
     void send_notifys(const std::string& aor_id,
-                      AssociatedURIs* associated_uris,
                       AoRPair* aor_pair,
                       int now,
                       SAS::TrailId trail);
@@ -127,7 +126,6 @@ public:
     // @param trail        SAS trail
     void send_notifys_for_expired_subscriptions(
                                    const std::string& aor_id,
-                                   AssociatedURIs* associated_uris,
                                    AoRPair* aor_pair,
                                    ClassifiedBindings binding_info_to_notify,
                                    std::vector<std::string> expired_binding_uris,
@@ -180,7 +178,6 @@ public:
   /// @param all_bindings_expired Whether all bindings have expired
   ///                             as a result of the set
   virtual Store::Status set_aor_data(const std::string& aor_id,
-                                     AssociatedURIs* associated_uris,
                                      AoRPair* aor_pair,
                                      SAS::TrailId trail,
                                      bool& all_bindings_expired = unused_bool);

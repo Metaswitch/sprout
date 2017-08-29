@@ -311,8 +311,9 @@ AoRPair* AoRTimeoutTask::set_aor_data(
       break;
     }
 
+    aor_pair->get_current()->_associated_uris = *associated_uris;
+
     set_rc = current_sdm->set_aor_data(aor_id,
-                                       associated_uris,
                                        aor_pair,
                                        trail(),
                                        all_bindings_expired);
@@ -546,8 +547,8 @@ AoRPair* DeregistrationTask::deregister_bindings(
       }
     }
 
+    aor_pair->get_current()->_associated_uris = associated_uris;
     set_rc = current_sdm->set_aor_data(aor_id,
-                                       &associated_uris,
                                        aor_pair,
                                        trail(),
                                        all_bindings_expired);
@@ -836,10 +837,10 @@ void DeleteImpuTask::run()
 
 void PushProfileTask::run()
 {
-  // HTTP method must be a POST
-  if (_req.method() != htp_method_POST)
+  // HTTP method must be a PUT
+  if (_req.method() != htp_method_PUT)
   {
-    TRC_WARNING("HTTP method isn't post");
+    TRC_WARNING("HTTP method isn't put");
     send_http_reply(HTTP_BADMETHOD);
     delete this;
     return;
@@ -914,10 +915,12 @@ HTTPCode PushProfileTask::parse_request(std::string body, SAS::TrailId trail)
                                              false,
                                              trail))
   {
+    delete root; root = NULL;
     return HTTP_OK;
   }
   else
   {
+    delete root; root = NULL;
     return HTTP_BAD_REQUEST;
   }
 }
@@ -945,9 +948,9 @@ HTTPCode PushProfileTask::set_data(SAS::TrailId trail)
 {
   bool all_bindings_expired;
   Store::Status set_rc;
+  _aor_pair->get_current()->_associated_uris = _associated_uris;
   TRC_DEBUG("Attempting to set AOR data");
   set_rc = _cfg->_sdm->set_aor_data(_default_public_id,
-                                    &_associated_uris,
                                     _aor_pair,
 			            trail,
 			            all_bindings_expired);
@@ -956,7 +959,10 @@ HTTPCode PushProfileTask::set_data(SAS::TrailId trail)
     delete _aor_pair; _aor_pair = NULL;
     return HTTP_SERVER_ERROR;
   }
+
   TRC_DEBUG("Successfully set AOR data");
+
+  delete _aor_pair; _aor_pair = NULL;
   return HTTP_OK;
 }
 
