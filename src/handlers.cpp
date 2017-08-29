@@ -611,7 +611,7 @@ HTTPCode AuthTimeoutTask::timeout_auth_challenge(std::string impu,
 
     // If authentication completed, we'll have incremented the nonce count.
     // If not, authentication has timed out.
-    if (auth_challenge->nonce_count == ImpiStore::AuthChallenge::INITIAL_NONCE_COUNT)
+    if (auth_challenge->get_nonce_count() == ImpiStore::AuthChallenge::INITIAL_NONCE_COUNT)
     {
       TRC_DEBUG("AV for %s:%s has timed out", impi.c_str(), nonce.c_str());
 
@@ -622,7 +622,7 @@ HTTPCode AuthTimeoutTask::timeout_auth_challenge(std::string impu,
       // If either of these operations fail, we return a 500 Internal
       // Server Error - this will trigger the timer service to try a different
       // Sprout, which may have better connectivity to Homestead or Memcached.
-      HTTPCode hss_query = _cfg->_hss->update_registration_state(impu, impi, HSSConnection::AUTH_TIMEOUT, auth_challenge->scscf_uri, trail());
+      HTTPCode hss_query = _cfg->_hss->update_registration_state(impu, impi, HSSConnection::AUTH_TIMEOUT, auth_challenge->get_scscf_uri(), trail());
 
       if (hss_query == HTTP_OK)
       {

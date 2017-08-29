@@ -19,7 +19,6 @@
 #include "handlers.h"
 #include "basetest.hpp"
 #include "siptest.hpp"
-#include "localstore.h"
 #include "fakehssconnection.hpp"
 #include "fakechronosconnection.hpp"
 #include "mock_subscriber_data_manager.h"
@@ -110,15 +109,13 @@ class TestWithMockSdms : public SipTest
 
 class AuthTimeoutTest : public SipTest
 {
-  LocalStore* local_data_store;
-  ImpiStore* store;
+  MockImpiStore* store;
   FakeHSSConnection* fake_hss;
   MockHttpStack stack;
 
   void SetUp()
   {
-    local_data_store = new LocalStore();
-    store = new ImpiStore(local_data_store);
+    store = new MockImpiStore();
     fake_hss = new FakeHSSConnection();
   }
 
@@ -126,7 +123,6 @@ class AuthTimeoutTest : public SipTest
   {
     delete fake_hss; fake_hss = NULL;
     delete store; store = NULL;
-    delete local_data_store; local_data_store = NULL;
   }
 };
 

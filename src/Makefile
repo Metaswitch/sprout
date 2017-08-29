@@ -29,6 +29,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          memcachedstoreview.cpp \
                          memcached_config.cpp \
                          impistore.cpp \
+                         astaire_impistore.cpp \
                          subscriber_data_manager.cpp \
                          xdmconnection.cpp \
                          simservs.cpp \
@@ -141,7 +142,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        xdmconnection_test.cpp \
                        enumservice_test.cpp \
                        subscriber_data_manager_test.cpp \
-                       impistore_test.cpp \
+                       astaire_impistore_test.cpp \
                        registrar_test.cpp \
                        bono_test.cpp \
                        bgcfservice_test.cpp \
@@ -199,7 +200,8 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        mock_sifc_parser.cpp \
                        fifcservice_test.cpp \
                        mmfservice_test.cpp \
-                       scscf_utils.cpp
+                       scscf_utils.cpp \
+                       testingcommon.cpp
 
 COVERAGE_ROOT := ..
 sprout_test_COVERAGE_EXCLUSIONS := ^src/ut|^usr|^modules/gmock|^modules/cpp-common|^modules/rapidjson|^include|^src/mangelwurzel/ut|^modules/gemini/src/ut|^modules/gemini/include|^modules/memento-as/modules|^modules/memento-as/src/ut|^modules/memento-as/include

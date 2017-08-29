@@ -17,14 +17,11 @@
 class MockImpiStore : public ImpiStore
 {
 public:
-  MockImpiStore() : ImpiStore(NULL) {}
+  MockImpiStore() : ImpiStore() {}
   virtual ~MockImpiStore() {}
 
   MOCK_METHOD2(set_impi, Store::Status(Impi* impi, SAS::TrailId trail));
   MOCK_METHOD2(get_impi, Impi*(const std::string& impi, SAS::TrailId trail));
-  MOCK_METHOD3(get_impi_with_nonce, Impi*(const std::string& impi,
-                                          const std::string& nonce,
-                                          SAS::TrailId trail));
   MOCK_METHOD2(delete_impi, Store::Status(Impi* impi, SAS::TrailId trail));
 };
 
