@@ -73,7 +73,7 @@ SubscriberDataManager::~SubscriberDataManager()
 AoRPair* SubscriberDataManager::get_aor_data(const std::string& aor_id,
                                              SAS::TrailId trail)
 {
-    AoR* aor_data = _aor_store->get_aor_data(aor_id, trail);
+  AoR* aor_data = _aor_store->get_aor_data(aor_id, trail);
 
   if (aor_data != NULL)
   {
@@ -83,7 +83,6 @@ AoRPair* SubscriberDataManager::get_aor_data(const std::string& aor_id,
     int now = time(NULL);
     AoRPair* aor_pair = new AoRPair(aor_data, aor_copy);
     expire_aor_members(aor_pair, now, trail);
-
     return aor_pair;
   }
   else
@@ -113,7 +112,6 @@ Store::Status SubscriberDataManager::set_aor_data(
                                      AoRPair* aor_pair,
                                      SAS::TrailId trail,
                                      bool& all_bindings_expired)
-
 {
   // The ordering of this function is quite important.
   //
@@ -184,7 +182,6 @@ Store::Status SubscriberDataManager::set_aor_data(
   // as it's safe to increment it unnecessarily, and if we wait to find out
   // how many NOTIFYs we're going to send then we'll have to write back to
   // memcached again
-
   aor_pair->get_current()->_notify_cseq++;
   Store::Status rc = _aor_store->set_aor_data(aor_id,
                                               aor_pair,

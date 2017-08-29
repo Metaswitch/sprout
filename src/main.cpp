@@ -1,4 +1,4 @@
-/*
+/**
  * @file main.cpp
  *
  * Copyright (C) Metaswitch Networks 2017
@@ -2339,7 +2339,6 @@ int main(int argc, char* argv[])
 
       http_stack_sig->bind_tcp_socket(opt.http_address, opt.http_port);
       http_stack_sig->start(&reg_httpthread_with_pjsip);
-
     }
     catch (HttpStack::Exception& e)
     {

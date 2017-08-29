@@ -42,7 +42,6 @@ static bool sdm_access_common(AoRPair** aor_pair,
 {
   // Find the current bindings for the AoR.
   delete *aor_pair;
-  TRC_DEBUG("Finding AOR data");
   *aor_pair = current_sdm->get_aor_data(aor_id, trail);
   TRC_DEBUG("Retrieved AoR data %p", *aor_pair);
 
@@ -814,7 +813,7 @@ void DeleteImpuTask::run()
       // Any other 4xx -> 400
       sc = HTTP_BAD_REQUEST;
     }
-   else
+    else
     {
       // Everything else is mapped to 502 Bad Gateway. This covers 5xx responses
       // (which indicate homestead went wrong) or 3xx responses (which homestead
@@ -835,6 +834,8 @@ void DeleteImpuTask::run()
   return;
 }
 
+// Will deal with requests sent from Homestead in Push Profile Requests.
+// Will send a HTTP return code to Homestead.
 void PushProfileTask::run()
 {
   // HTTP method must be a PUT
@@ -905,6 +906,8 @@ HTTPCode PushProfileTask::parse_request(std::string body, SAS::TrailId trail)
 
   rapidxml::xml_node<>* imss = root->first_node(RegDataXMLUtils::IMS_SUBSCRIPTION);
 
+  // Decode service profile from the XML. Create and populate an instance of th
+  // Associated URIs class
   if (SproutXmlUtils::decode_service_profile(_default_public_id,
                                              NULL,
                                              imss,
@@ -925,9 +928,9 @@ HTTPCode PushProfileTask::parse_request(std::string body, SAS::TrailId trail)
   }
 }
 
+// Get the AoR pair from the store
 HTTPCode PushProfileTask::get_data(SAS::TrailId trail)
 {
-  TRC_DEBUG("Attempting to get AoR data");
   AoRPair* aor_pair = NULL;
 
   if(!sdm_access_common(&aor_pair,
@@ -944,12 +947,12 @@ HTTPCode PushProfileTask::get_data(SAS::TrailId trail)
   return HTTP_OK;
 }
 
+// Set the associated URIs to the current AoR and update the data to the store.
 HTTPCode PushProfileTask::set_data(SAS::TrailId trail)
 {
   bool all_bindings_expired;
   Store::Status set_rc;
   _aor_pair->get_current()->_associated_uris = _associated_uris;
-  TRC_DEBUG("Attempting to set AOR data");
   set_rc = _cfg->_sdm->set_aor_data(_default_public_id,
                                     _aor_pair,
 			            trail,
@@ -961,7 +964,6 @@ HTTPCode PushProfileTask::set_data(SAS::TrailId trail)
   }
 
   TRC_DEBUG("Successfully set AOR data");
-
   delete _aor_pair; _aor_pair = NULL;
   return HTTP_OK;
 }

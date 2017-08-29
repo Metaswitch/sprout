@@ -269,6 +269,7 @@ public:
   /// generated when the subscription dialog was established.
   Subscriptions _subscriptions;
 
+  // Associated URIs class, to hold the associated URIs for this IRS.
   AssociatedURIs _associated_uris;
 
   /// CAS value for this AoR record.  Used when updating an existing record.

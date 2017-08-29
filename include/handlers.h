@@ -265,6 +265,10 @@ private:
   const Config* _cfg;
 };
 
+/// Task for receiving user data from Homestead, after a Push Profile Request
+/// Will parse the request, obtain the previous AoR from the store, change the
+/// Associated URIs, and reset to the store. Will send a HTTP Return Code back
+/// to Homestead.
 class PushProfileTask : public HttpStackUtils::Task
 {
 public:
