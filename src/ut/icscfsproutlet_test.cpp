@@ -3619,6 +3619,8 @@ TEST_F(ICSCFSproutletTest, RouteOutOfDialogAck)
 // Test the case where the Req-URI is "urn:service:sos". This will be received
 // from Perimeta when a subscriber has made an emergency call.
 // This URI should be accepted, and the MESSAGE should be forwarded on.
+// A 200 MESSAGE returned to the I-CSCF should then be forwarded back to
+// Perimeta.
 TEST_F(ICSCFSproutletTest, HandleUrnUri)
 {
   pjsip_tx_data* tdata;
@@ -3628,6 +3630,11 @@ TEST_F(ICSCFSproutletTest, HandleUrnUri)
                                         ICSCF_PORT,
                                         "1.2.3.4",
                                         49152);
+
+  // Set up the HSS responses for the terminating location query.
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
+                              "{\"result-code\": 2001,"
+                              "\"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
 
   // Inject a SIP MESSAGE.
   Message msg1;
@@ -3654,6 +3661,10 @@ TEST_F(ICSCFSproutletTest, HandleUrnUri)
   // that had a MESSAGE in it.
   // Goes to the configured upstream proxy ("upstreamnode", "10.6.6.8")
 //  expect_target("TCP", "10.6.6.8", stack_data.pcscf_trusted_port, tdata);
+
+  // We should also feed back in a 200 MESSAGE, and check that is forwarded back
+  // to the Perimeta that sent the original MESSAGE.
+  // This will then match the behaviour Perimeta expect.
 
   free_txdata();
 
