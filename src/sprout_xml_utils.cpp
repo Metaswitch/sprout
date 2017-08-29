@@ -63,6 +63,7 @@ bool decode_service_profile(const std::string public_user_identity,
   associated_uris.clear_uris();
   rapidxml::xml_node<>* sp = NULL;
   Ifcs ifc;
+  Ifcs* p_ifc;
 
   if (!node->first_node(RegDataXMLUtils::SERVICE_PROFILE))
   {
@@ -76,7 +77,9 @@ bool decode_service_profile(const std::string public_user_identity,
   {
     if (contain_ifc)
     {
-      Ifcs ifc(root, sp, sifc_service, trail);
+      p_ifc = new Ifcs(root, sp, sifc_service, trail);
+      ifc = *p_ifc;
+      delete p_ifc, p_ifc = NULL;
     }
     rapidxml::xml_node<>* public_id = NULL;
 
@@ -219,7 +222,6 @@ bool decode_service_profile(const std::string public_user_identity,
       SAS::report_event(event);
     }
   }
-  TRC_DEBUG("Finished processing");
   return true;
 }
 }

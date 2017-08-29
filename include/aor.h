@@ -217,10 +217,6 @@ public:
   // Remove the bindings from an AOR object
   void clear_bindings();
 
-  void set_associated_uris(AssociatedURIs associated_uris);
-
-  AssociatedURIs get_associated_uris();
-
   /// Binding ID -> Binding.  First is sometimes the contact URI, but not always.
   /// Second is a pointer to an object owned by this object.
   typedef std::map<std::string, Binding*> Bindings;

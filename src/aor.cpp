@@ -76,7 +76,7 @@ void AoR::common_constructor(const AoR& other)
     _subscriptions.insert(std::make_pair(i->first, ss));
   }
 
-  _associated_uris = other._associated_uris;
+  _associated_uris = AssociatedURIs(other._associated_uris);
   _notify_cseq = other._notify_cseq;
   _timer_id = other._timer_id;
   _cas = other._cas;
@@ -115,7 +115,6 @@ void AoR::clear(bool clear_emergency_bindings)
   }
 
   _subscriptions.clear();
-
   _associated_uris.clear_uris();
 }
 
@@ -492,16 +491,4 @@ void AoR::copy_subscriptions_and_bindings(AoR* source_aor)
     Subscription* dst = get_subscription(i->first);
     *dst = *src;
   }
-}
-
-// Sets the associated URIs
-void AoR::set_associated_uris(AssociatedURIs associated_uris)
-{
-  _associated_uris = associated_uris;
-}
-
-// Obtains the associated URIs
-AssociatedURIs AoR::get_associated_uris()
-{
-  return _associated_uris;
 }

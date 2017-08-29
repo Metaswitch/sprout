@@ -62,6 +62,8 @@ public:
   /// Returns the wildcard mappings.
   std::map<std::string, std::string> get_wildcard_mappings();
 
+  std::map<std::string, bool> get_barring_map();
+
   /// Serialize the associated URIs as a JSON object.
   ///
   /// @param writer - a rapidjson writer to write to.
@@ -74,6 +76,8 @@ public:
   // @return      - Nothing. If this function fails (because the JSON is not
   //                semantically valid) this method throws JsonFormError.
   void from_json(const rapidjson::Value& s_obj);
+
+  bool is_equal_to(AssociatedURIs associated_uris_other);
 
 private:
   /// A vector of associated URIs.
