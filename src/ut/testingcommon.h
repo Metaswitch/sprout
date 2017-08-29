@@ -175,7 +175,8 @@ namespace TestingCommon
   // TODO - Edit this class so that it is more consistent with the
   // SubscriptionBuilder class. (Instead of tests setting _method, etc.
   // directly, have functions setMethod(), etc. This means the interface will be
-  // more consistent.)
+  // more consistent.) When this work is done, the subclass SCSCFMessage (in
+  // scscf_test.cpp) should also be reworked.
   //
   // Class which can build request/response messages.
   //

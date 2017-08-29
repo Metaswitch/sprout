@@ -48,6 +48,21 @@ using testing::HasSubstr;
 using ::testing::Return;
 using ::testing::AtLeast;
 
+// TODO - make this class more consistent with the
+// TestingCommon::SubscriptionBuilder class (ie. have function "set_route",
+// instead of setting the route when initialising). This work should be done
+// when the parent class is reworked.
+//
+// Subclass which sets the correct Route header for the SCSCF tests.
+class SCSCFMessage : public TestingCommon::Message
+{
+public:
+  SCSCFMessage()
+  {
+    Message::_route = "Route: <sip:sprout.homedomain;service=scscf>";
+  };
+  ~SCSCFMessage() {};
+};
 
 /// ABC for fixtures for SCSCFTest and friends.
 class SCSCFTest : public SipTest
@@ -96,6 +111,8 @@ public:
     delete _mmf_service; _mmf_service = NULL;
     delete _fifc_service; _fifc_service = NULL;
     delete _sdm; _sdm = NULL;
+    delete _chronos_connection; _chronos_connection = NULL;
+    delete _local_aor_store; _local_aor_store = NULL;
     delete _local_data_store; _local_data_store = NULL;
     delete _remote_sdm; _remote_sdm = NULL;
     delete _remote_data_store; _remote_data_store = NULL;
@@ -304,6 +321,7 @@ public:
 protected:
   static FakeChronosConnection* _chronos_connection;
   static LocalStore* _local_data_store;
+  static AstaireAoRStore* _local_aor_store;
   static SubscriberDataManager* _sdm;
   static LocalStore* _remote_data_store;
   static SubscriberDataManager* _remote_sdm;
@@ -332,24 +350,24 @@ protected:
                      bool tpAset,
                      TransportFlow* tpB,
                      bool tpBset,
-                     TestingCommon::Message& msg,
+                     SCSCFMessage& msg,
                      string route,
                      bool expect_100,
                      bool expect_trusted_headers_on_requests,
                      bool expect_trusted_headers_on_responses,
                      bool expect_orig,
                      bool pcpi);
-  void doAsOriginated(TestingCommon::Message& msg, bool expect_orig);
+  void doAsOriginated(SCSCFMessage& msg, bool expect_orig);
   void doAsOriginated(const std::string& msg, bool expect_orig);
   void doFourAppServerFlow(std::string record_route_regex, bool app_servers_record_route=false);
-  void doSuccessfulFlow(TestingCommon::Message& msg,
+  void doSuccessfulFlow(SCSCFMessage& msg,
                         testing::Matcher<string> uri_matcher,
                         list<HeaderMatcher> headers,
                         bool include_ack_and_bye=true,
                         list<HeaderMatcher> rsp_hdrs = list<HeaderMatcher>());
-  void doFastFailureFlow(TestingCommon::Message& msg, int st_code);
-  void doSlowFailureFlow(TestingCommon::Message& msg, int st_code, std::string body = "", std::string reason = "");
-  void setupForkedFlow(TestingCommon::Message& msg);
+  void doFastFailureFlow(SCSCFMessage& msg, int st_code);
+  void doSlowFailureFlow(SCSCFMessage& msg, int st_code, std::string body = "", std::string reason = "");
+  void setupForkedFlow(SCSCFMessage& msg);
   list<string> doProxyCalculateTargets(int max_targets);
 };
 
@@ -365,6 +383,7 @@ class SCSCFTestWithRemoteSDM : public SCSCFTest
 
 FakeChronosConnection* SCSCFTest::_chronos_connection;
 LocalStore* SCSCFTest::_local_data_store;
+AstaireAoRStore* SCSCFTest::_local_aor_store;
 SubscriberDataManager* SCSCFTest::_sdm;
 LocalStore* SCSCFTest::_remote_data_store;
 SubscriberDataManager* SCSCFTest::_remote_sdm;
@@ -439,7 +458,7 @@ void SCSCFTest::doFourAppServerFlow(std::string record_route_regex, bool app_ser
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -633,7 +652,7 @@ void SCSCFTest::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
                               bool tpAset,         //< Expect all requests to Alice on same transport?
                               TransportFlow* tpB,  //< Bob's transport.
                               bool tpBset,         //< Expect all requests to Bob on same transport?
-                              Message& msg,    //< Message to use for testing.
+                              SCSCFMessage& msg,    //< Message to use for testing.
                               string route,        //< Route header to be used on INVITE
                               bool expect_100,     //< Will we get a 100 Trying?
                               bool expect_trusted_headers_on_requests, //< Should P-A-N-I/P-V-N-I be passed on requests?
@@ -954,7 +973,7 @@ void SCSCFTest::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
 
 /// Test a message results in a successful flow. The outgoing INVITE's
 /// URI is verified.
-void SCSCFTest::doSuccessfulFlow(Message& msg,
+void SCSCFTest::doSuccessfulFlow(SCSCFMessage& msg,
                                  testing::Matcher<string> uri_matcher,
                                  list<HeaderMatcher> headers,
                                  bool include_ack_and_bye,
@@ -1037,7 +1056,7 @@ void SCSCFTest::doSuccessfulFlow(Message& msg,
 }
 
 /// Test a message results in an immediate failure.
-void SCSCFTest::doFastFailureFlow(Message& msg, int st_code)
+void SCSCFTest::doFastFailureFlow(SCSCFMessage& msg, int st_code)
 {
   SCOPED_TRACE("");
 
@@ -1053,7 +1072,7 @@ void SCSCFTest::doFastFailureFlow(Message& msg, int st_code)
 }
 
 /// Test a message results in a 100 then a failure.
-void SCSCFTest::doSlowFailureFlow(Message& msg,
+void SCSCFTest::doSlowFailureFlow(SCSCFMessage& msg,
                                   int st_code,
                                   std::string body,
                                   std::string reason)
@@ -1079,7 +1098,7 @@ TEST_F(SCSCFTest, TestSimpleMainline)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  Message msg;
+  SCSCFMessage msg;
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 
@@ -1115,7 +1134,7 @@ TEST_F(SCSCFTest, TestSimpleMainlineRemoteSite)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  Message msg;
+  SCSCFMessage msg;
   msg._route = "Route: <sip:scscf.sprout-site2.homedomain;transport=tcp;lr>";
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("Record-Route", "Record-Route: <sip:scscf.sprout.homedomain:5058;transport=TCP;lr;billing-role=charge-term>"));
@@ -1132,7 +1151,7 @@ TEST_F(SCSCFTest, ReqURIMatchesSproutletPort)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  Message msg;
+  SCSCFMessage msg;
   msg._requri = "sip:254.253.252.251:5058";
   msg._route = "Route: <sip:sprout.homedomain;transport=tcp;lr;billing-role=charge-term>";
   list<HeaderMatcher> hdrs;
@@ -1147,7 +1166,7 @@ TEST_F(SCSCFTest, TestMainlineHeadersSprout)
 
   // INVITE from anywhere to anywhere.
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345";
   doTestHeaders(_tp_default, false, _tp_default, false, msg, "", true, true, true, false, true);
 }
@@ -1155,7 +1174,7 @@ TEST_F(SCSCFTest, TestMainlineHeadersSprout)
 TEST_F(SCSCFTest, TestNotRegisteredTo)
 {
   SCOPED_TRACE("");
-  Message msg;
+  SCSCFMessage msg;
   doSlowFailureFlow(msg, 404);
 }
 
@@ -1163,7 +1182,7 @@ TEST_F(SCSCFTest, TestBadScheme)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  Message msg;
+  SCSCFMessage msg;
   msg._toscheme = "sips";
   doFastFailureFlow(msg, 416);  // bad scheme
 }
@@ -1182,7 +1201,7 @@ TEST_F(SCSCFTest, TestBarredCaller)
                                    "call",
                                    "REGISTERED",
                                    subscription.return_sub());
-  Message msg;
+  SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   doSlowFailureFlow(msg, 403);
 }
@@ -1201,7 +1220,7 @@ TEST_F(SCSCFTest, TestBarredCallee)
                                    "call",
                                    "REGISTERED",
                                    subscription.return_sub());
-  Message msg;
+  SCSCFMessage msg;
   doSlowFailureFlow(msg, 404);
 }
 
@@ -1224,7 +1243,7 @@ TEST_F(SCSCFTest, TestBarredWildcardCaller)
                                    "call",
                                    "REGISTERED",
                                    subscription.return_sub());
-  Message msg;
+  SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   doSlowFailureFlow(msg, 403);
 }
@@ -1248,7 +1267,7 @@ TEST_F(SCSCFTest, TestBarredWildcardCallee)
                                    "call",
                                    "REGISTERED",
                                    subscription.return_sub());
-  Message msg;
+  SCSCFMessage msg;
   doSlowFailureFlow(msg, 404);
 }
 
@@ -1273,7 +1292,7 @@ TEST_F(SCSCFTest, TestWildcardBarredCaller)
                                    "call",
                                    "REGISTERED",
                                    subscription.return_sub());
-  Message msg;
+  SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   doSlowFailureFlow(msg, 403);
 }
@@ -1299,7 +1318,7 @@ TEST_F(SCSCFTest, TestWildcardBarredCallee)
                                    "call",
                                    "REGISTERED",
                                    subscription.return_sub());
-  Message msg;
+  SCSCFMessage msg;
   doSlowFailureFlow(msg, 404);
 }
 
@@ -1336,7 +1355,7 @@ TEST_F(SCSCFTest, TestBarredMultipleWildcardCaller)
                                    "call",
                                    "REGISTERED",
                                    subscription.return_sub());
-  Message msg;
+  SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   doSlowFailureFlow(msg, 403);
 }
@@ -1374,7 +1393,7 @@ TEST_F(SCSCFTest, TestBarredMultipleWildcardCallee)
                                    "call",
                                    "REGISTERED",
                                    subscription.return_sub());
-  Message msg;
+  SCSCFMessage msg;
   doSlowFailureFlow(msg, 404);
 }
 
@@ -1384,7 +1403,7 @@ TEST_F(SCSCFTest, TestSimpleTelURI)
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
-  Message msg;
+  SCSCFMessage msg;
   msg._toscheme = "tel";
   msg._to = "16505551234";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
@@ -1406,7 +1425,7 @@ TEST_F(SCSCFTest, TestSimpleTelURIVideo)
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
-  Message msg;
+  SCSCFMessage msg;
   msg._toscheme = "tel";
   msg._to = "16505551234";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
@@ -1439,7 +1458,7 @@ TEST_F(SCSCFTest, TestTerminatingTelURI)
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
   // Send a terminating INVITE for a subscriber with a tel: URI
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain>";
@@ -1528,7 +1547,7 @@ TEST_F(SCSCFTest, TestTelURIWildcard)
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   // Send a terminating INVITE for a subscriber with a tel: URI
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain>";
@@ -1595,7 +1614,7 @@ TEST_F(SCSCFTest, TestMultipleServiceProfiles)
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   // Send a terminating INVITE for a subscriber with a tel: URI
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain>";
@@ -1662,7 +1681,7 @@ TEST_F(SCSCFTest, TestMultipleAmbiguousServiceProfiles)
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   // Send a terminating INVITE for a subscriber with a tel: URI
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain>";
@@ -1712,7 +1731,7 @@ TEST_F(SCSCFTest, TestNoMoreForwards)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  Message msg;
+  SCSCFMessage msg;
   msg._forwards = 1;
   doFastFailureFlow(msg, 483); // too many hops
 }
@@ -1721,7 +1740,7 @@ TEST_F(SCSCFTest, TestNoMoreForwards2)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  Message msg;
+  SCSCFMessage msg;
   msg._forwards = 0;
   doFastFailureFlow(msg, 483); // too many hops
 }
@@ -1743,7 +1762,7 @@ TEST_F(SCSCFTest, TestTransportShutdown)
   // the TransportFlow is destroyed.
   pjsip_transport_shutdown(tp->transport());
 
-  Message msg;
+  SCSCFMessage msg;
   msg._method = "INVITE";
   msg._requri = "sip:bob@awaydomain";
   msg._from = "alice";
@@ -1771,7 +1790,7 @@ TEST_F(SCSCFTest, TestStrictRouteThrough)
 {
   SCOPED_TRACE("");
   // This message is passing through this proxy; it's not local
-  Message msg;
+  SCSCFMessage msg;
   add_host_mapping("intermediate.com", "10.10.10.1");
   add_host_mapping("destination.com", "10.10.10.2");
   msg._route = "";
@@ -1789,7 +1808,7 @@ TEST_F(SCSCFTest, TestNonLocal)
   SCOPED_TRACE("");
   // This message is passing through this proxy; it's not local
   add_host_mapping("destination.com", "10.10.10.2");
-  Message msg;
+  SCSCFMessage msg;
   msg._route = "";
   msg._to = "lasthop";
   msg._todomain = "destination.com";
@@ -1800,7 +1819,7 @@ TEST_F(SCSCFTest, TestNonLocal)
   // Add another test where the nonlocal domain doesn't contain a period. This
   // is for code coverage.
   add_host_mapping("destination", "10.10.10.3");
-  Message msg2;
+  SCSCFMessage msg2;
   msg2._route = "";
   msg2._to = "lasthop";
   msg2._todomain = "destination";
@@ -1816,7 +1835,7 @@ TEST_F(SCSCFTest, TestTerminatingPCV)
 
   // Test that a segfault previously seen when not doing originating
   // handling on a call with a P-Charging-Vector does not reoccur.
-  Message msg;
+  SCSCFMessage msg;
   msg._extra = "P-Charging-Vector: icid-value=3";
   msg._to = "lasthop";
   msg._todomain = "destination.com";
@@ -1829,7 +1848,7 @@ TEST_F(SCSCFTest, TestTerminatingPCV)
 TEST_F(SCSCFTest, DISABLED_TestLooseRoute)  // @@@KSW not quite - how does this work again?
 {
   SCOPED_TRACE("");
-  Message msg;
+  SCSCFMessage msg;
   msg._extra = "Route: <sip:nexthop@anotherdomain;lr>\r\nRoute: <sip:lasthop@destination.com;lr>";
   msg._to = "lasthop";
   msg._todomain = "destination.com";
@@ -1842,7 +1861,7 @@ TEST_F(SCSCFTest, DISABLED_TestLooseRoute)  // @@@KSW not quite - how does this 
 TEST_F(SCSCFTest, TestExternal)
 {
   SCOPED_TRACE("");
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "+15108580271";
   msg._todomain = "ut.cw-ngv.com";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
@@ -1856,7 +1875,7 @@ TEST_F(SCSCFTest, TestExternal)
 TEST_F(SCSCFTest, DISABLED_TestExternalRecordRoute)
 {
   SCOPED_TRACE("");
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "+15108580271";
   msg._todomain = "ut.cw-ngv.com";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
@@ -1870,7 +1889,7 @@ TEST_F(SCSCFTest, TestEnumExternalSuccess)
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
 
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "+15108580271";
   // We only do ENUM on originating calls
   msg._route = "Route: <sip:sprout.homedomain;orig>";
@@ -1891,7 +1910,7 @@ TEST_F(SCSCFTest, TestNoEnumWhenGRUU)
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
   register_uri(_sdm, _hss_connection, "+15108580271", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", 30, "abcd");
 
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "+15108580271";
   msg._todomain += ";gr=abcd";
   // We only do ENUM on originating calls
@@ -1920,7 +1939,7 @@ TEST_F(SCSCFTest, TestGRUUFailure)
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
   register_uri(_sdm, _hss_connection, "+15108580271", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", 30, "abcde");
 
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "+15108580271";
   msg._todomain += ";gr=abcd";
   // We only do ENUM on originating calls
@@ -1937,7 +1956,7 @@ TEST_F(SCSCFTest, TestGRUUFailure)
 TEST_F(SCSCFTest, TestEnumExternalSuccessFromFromHeader)
 {
   SCOPED_TRACE("");
-  Message msg;
+  SCSCFMessage msg;
   _hss_connection->set_impu_result("sip:+15108581234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
@@ -1959,7 +1978,7 @@ TEST_F(SCSCFTest, TestEnumExternalSuccessFromFromHeader)
 TEST_F(SCSCFTest, TestEnumExternalOffNetDialingAllowed)
 {
   SCOPED_TRACE("");
-  Message msg;
+  SCSCFMessage msg;
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
 
   msg._to = "+15108580271";
@@ -1979,7 +1998,7 @@ TEST_F(SCSCFTest, TestEnumUserPhone)
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
 
   URIClassifier::enforce_user_phone = true;
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "+15108580271";
   msg._requri = "sip:+15108580271@homedomain;user=phone";
   // We only do ENUM on originating calls
@@ -1998,7 +2017,7 @@ TEST_F(SCSCFTest, TestEnumNoUserPhone)
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
 
   URIClassifier::enforce_user_phone = true;
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "+15108580271";
   // We only do ENUM on originating calls
   msg._route = "Route: <sip:sprout.homedomain;orig>";
@@ -2030,7 +2049,7 @@ TEST_F(SCSCFTest, TestEnumLocalNumber)
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
 
   URIClassifier::enforce_global = true;
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "15108580271";
   // We only do ENUM on originating calls
   msg._route = "Route: <sip:sprout.homedomain;orig>";
@@ -2046,7 +2065,7 @@ TEST_F(SCSCFTest, TestEnumLocalTelURI)
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
 
   URIClassifier::enforce_global = true;
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "16505551234;npdi";
   msg._toscheme = "tel";
   msg._todomain = "";
@@ -2066,7 +2085,7 @@ TEST_F(SCSCFTest, TestEnumLocalSIPURINumber)
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
 
   URIClassifier::enforce_global = true;
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "15108580271;npdi";
   msg._requri = "sip:15108580271;npdi@homedomain;user=phone";
   // We only do ENUM on originating calls
@@ -2086,7 +2105,7 @@ TEST_F(SCSCFTest, TestEnumNPData)
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
 
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "+15108580401";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
@@ -2102,7 +2121,7 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPData)
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
 
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "+15108580401;npdi;rn=+16";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
@@ -2120,7 +2139,7 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPDataOverride)
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
 
   _scscf_sproutlet->set_override_npdi(true);
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "+15108580401;npdi;rn=+16";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
@@ -2138,7 +2157,7 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPDataToSIP)
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
 
   URIClassifier::enforce_user_phone = true;
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "+15108580272;rn=+16";
   msg._requri = "sip:+15108580272;rn=+16@homedomain;user=phone";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
@@ -2157,7 +2176,7 @@ TEST_F(SCSCFTest, DISABLED_TestEnumToCIC)
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
 
   URIClassifier::enforce_user_phone = true;
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "+15108580501";
   msg._requri = "sip:+15108580501@homedomain;user=phone";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
@@ -2176,7 +2195,7 @@ TEST_F(SCSCFTest, TestEnumNPBGCFSIP)
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
   _scscf_sproutlet->set_override_npdi(true);
 
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "+15108580401";
   msg._requri = "sip:+15108580401@homedomain;user=phone";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
@@ -2194,7 +2213,7 @@ TEST_F(SCSCFTest, TestEnumNPBGCFTel)
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
   _scscf_sproutlet->set_override_npdi(true);
 
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "+15108580401";
   msg._toscheme = "tel";
   msg._todomain = "";
@@ -2230,7 +2249,7 @@ TEST_F(SCSCFTest, TestWithoutEnum)
   // Disable ENUM.
   _scscf_sproutlet->_enum_service = NULL;
 
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "+15108580271";
   msg._requri = "sip:+15108580271@homedomain;user=phone";
 
@@ -2247,7 +2266,7 @@ TEST_F(SCSCFTest, TestWithoutEnum)
 
 
 /// Test a forked flow - setup phase.
-void SCSCFTest::setupForkedFlow(Message& msg)
+void SCSCFTest::setupForkedFlow(SCSCFMessage& msg)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
@@ -2283,7 +2302,7 @@ TEST_F(SCSCFTest, TestForkedFlow)
 {
   SCOPED_TRACE("");
   pjsip_msg* out;
-  Message msg;
+  SCSCFMessage msg;
   setupForkedFlow(msg);
   ASSERT_EQ(3u, _tdata.size());
 
@@ -2358,7 +2377,7 @@ TEST_F(SCSCFTest, TestForkedFlow2)
 {
   SCOPED_TRACE("");
   pjsip_msg* out;
-  Message msg;
+  SCSCFMessage msg;
   setupForkedFlow(msg);
   ASSERT_EQ(3u, _tdata.size());
 
@@ -2423,7 +2442,7 @@ TEST_F(SCSCFTest, TestForkedFlow3)
 {
   SCOPED_TRACE("");
   pjsip_msg* out;
-  Message msg;
+  SCSCFMessage msg;
   setupForkedFlow(msg);
   ASSERT_EQ(3u, _tdata.size());
 
@@ -2475,7 +2494,7 @@ TEST_F(SCSCFTest, TestForkedFlow3)
 TEST_F(SCSCFTest, TestForkedFlow4)
 {
   SCOPED_TRACE("");
-  Message msg;
+  SCSCFMessage msg;
   setupForkedFlow(msg);
   ASSERT_EQ(3u, _tdata.size());
 
@@ -2549,7 +2568,7 @@ TEST_F(SCSCFTest, TestSIPMessageSupport)
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345";
   pjsip_msg* out;
   pjsip_tx_data* message = NULL;
@@ -2586,7 +2605,7 @@ TEST_F(SCSCFTest, TestSimpleMultipart)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  Message msg;
+  SCSCFMessage msg;
   msg._content_type = "multipart/mixed;boundary=\"boundary1\"";
   msg._body = "\r\n--boundary1\r\nContent-Type: application/sdp\r\nContent-Length: 343\r\n\r\nv=0\r\no=- 3600506724 3600506724 IN IP4 888.888.888.888\r\n" \
               "s=-\r\nc=IN IP4 888.888.888.888\r\nt=0 0\r\nm=message 9 TCP/MSRP *\r\na=path:msrp://888.888.888.888:7777/1391517924073;tcp\r\n" \
@@ -2606,7 +2625,7 @@ TEST_F(SCSCFTest, TestReceiveCallToEmergencyBinding)
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;sos;ob");
-  Message msg;
+  SCSCFMessage msg;
 
   pjsip_msg* out;
 
@@ -2656,7 +2675,7 @@ TEST_F(SCSCFTest, SimpleISCMainline)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
@@ -2758,7 +2777,7 @@ TEST_F(SCSCFTest, ISCMultipleResponses)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
@@ -2871,7 +2890,7 @@ TEST_F(SCSCFTest, ISCRetargetWithoutCdiv)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain>";
@@ -2953,7 +2972,7 @@ TEST_F(SCSCFTest, URINotIncludedInUserData)
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   // Send a terminating INVITE for a subscriber with invalid HSS data
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain>";
@@ -2995,7 +3014,7 @@ TEST_F(SCSCFTest, SimpleISCTwoRouteHeaders)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain;orig>\r\nRoute: <sip:abcde.com>";
@@ -3050,7 +3069,7 @@ TEST_F(SCSCFTest, ISCASURIMalformed)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
@@ -3093,7 +3112,7 @@ TEST_F(SCSCFTest, ISCASURITel)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
@@ -3141,7 +3160,7 @@ TEST_F(SCSCFTest, SimpleNextOrigFlow)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -3230,7 +3249,7 @@ TEST_F(SCSCFTest, SimpleReject)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -3306,7 +3325,7 @@ TEST_F(SCSCFTest, SimpleNonLocalReject)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -3383,7 +3402,7 @@ TEST_F(SCSCFTest, SimpleAccept)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -3460,7 +3479,7 @@ TEST_F(SCSCFTest, SimpleRedirect)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -3538,7 +3557,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -3623,7 +3642,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateTimeout)
   TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
 
   // Caller sends INVITE
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
@@ -3690,7 +3709,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateDisabled)
   TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
 
   // Caller sends INVITE
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
@@ -3770,7 +3789,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueRecordRouting)
   EXPECT_CALL(*_sess_cont_comm_tracker, on_failure(_, HasSubstr("No valid address"))).Times(2);
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -3829,7 +3848,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistent)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -3887,7 +3906,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonResponsive)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -3965,7 +3984,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueImmediateError)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -4048,7 +4067,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinue100ThenError)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -4136,7 +4155,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinue1xxThenError)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -4231,7 +4250,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueInviteReturnedThenError)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -4356,7 +4375,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeout)
   TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
 
   // Caller sends INVITE
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
@@ -4436,7 +4455,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueDisabled)
   TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
 
   // Caller sends INVITE
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
@@ -4514,7 +4533,7 @@ TEST_F(SCSCFTest, DefaultHandlingMissing)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -4570,7 +4589,7 @@ TEST_F(SCSCFTest, DefaultHandlingMalformed)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -4627,7 +4646,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistentRRTest)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -4695,7 +4714,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTimeoutRRTest)
   TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
 
   // Caller sends INVITE
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
@@ -4781,7 +4800,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstAsFailsRRTest)
   TransportFlow tpCallee(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.114.61.213", 5061);
 
   // Caller sends INVITE
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
@@ -4854,7 +4873,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueFirstTermAsFailsRRTest)
   stack_data.record_route_on_completion_of_originating = true;
 
   // Caller sends INVITE
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
@@ -5029,7 +5048,7 @@ TEST_F(SCSCFTest, RecordRoutingTestCollapseEveryHop)
 }
 
 // Test AS-originated flow.
-void SCSCFTest::doAsOriginated(Message& msg, bool expect_orig)
+void SCSCFTest::doAsOriginated(SCSCFMessage& msg, bool expect_orig)
 {
   doAsOriginated(msg.get_request(), expect_orig);
 }
@@ -5154,7 +5173,7 @@ TEST_F(SCSCFTest, AsOriginatedOrig)
 {
   // ---------- Send spontaneous INVITE from AS0, marked as originating-handling-required.
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
@@ -5181,7 +5200,7 @@ TEST_F(SCSCFTest, AsOriginatedTerm)
 {
   // ---------- Send spontaneous INVITE from AS0, marked as terminating-handling-only.
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
 //  msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -5222,7 +5241,7 @@ TEST_F(SCSCFTest, Cdiv)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -5352,7 +5371,7 @@ TEST_F(SCSCFTest, CdivToDifferentDomain)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -5470,7 +5489,7 @@ TEST_F(SCSCFTest, BothEndsWithEnumRewrite)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "1115551234@homedomain";
   msg._todomain = "";
@@ -5534,7 +5553,7 @@ TEST_F(SCSCFTest, TerminatingWithNoEnumRewrite)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "1115551234@homedomain";
   msg._todomain = "";
@@ -5627,7 +5646,7 @@ TEST_F(SCSCFTest, MmtelCdiv)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -5788,7 +5807,7 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -5897,7 +5916,7 @@ TEST_F(SCSCFTest, ExpiredChain)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -6014,7 +6033,7 @@ TEST_F(SCSCFTest, MmtelFlow)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -6148,7 +6167,7 @@ TEST_F(SCSCFTest, MmtelThenExternal)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -6314,7 +6333,7 @@ TEST_F(SCSCFTest, MultipleMmtelFlow)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -6399,7 +6418,7 @@ TEST_F(SCSCFTest, SimpleOptionsAccept)
 
   // ---------- Send OPTIONS
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -6461,7 +6480,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345";
   msg._to = "6505501234@homedomain";
   msg._todomain = "";
@@ -6588,7 +6607,7 @@ TEST_F(SCSCFTest, OriginatingExternal)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345";
   msg._to = "6505501234@ut.cw-ngv.com";
   msg._todomain = "";
@@ -6728,7 +6747,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingAS)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -6923,7 +6942,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingASTimeout)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345";
   msg._branch = "1111111111";
   msg._to = "6505551234@homedomain";
@@ -7191,7 +7210,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingMessageASTimeout)
 
   // ---------- Send MESSAGE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._method = "MESSAGE";
   msg._via = "10.99.88.11:12345";
   msg._branch = "1111111111";
@@ -7380,7 +7399,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345";
   msg._to = "6505501234@homedomain";
   msg._todomain = "";
@@ -7587,7 +7606,7 @@ TEST_F(SCSCFTest, TestInvitePProfileKey)
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
   register_uri(_sdm, _hss_connection, "6515551000", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
-  Message msg;
+  SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._extra = "P-Profile-Key: <" + PJUtils::escape_string_for_uri(wildcard) + ">";
   msg._to = "6515551000";
@@ -7612,7 +7631,7 @@ TEST_F(SCSCFTest, TestAddSecondTelPAIHdr)
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
-  Message msg;
+  SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
   list<HeaderMatcher> hdrs;
@@ -7638,7 +7657,7 @@ TEST_F(SCSCFTest, TestAddSecondTelPAIHdrWithAlias)
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
-  Message msg;
+  SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
   list<HeaderMatcher> hdrs;
@@ -7666,7 +7685,7 @@ TEST_F(SCSCFTest, TestAddSecondTelPAIHdrMultipleAliasesNoMatch)
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
-  Message msg;
+  SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
   list<HeaderMatcher> hdrs;
@@ -7694,7 +7713,7 @@ TEST_F(SCSCFTest, TestAddSecondTelPAIHdrMultipleAliases)
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
-  Message msg;
+  SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
   list<HeaderMatcher> hdrs;
@@ -7717,7 +7736,7 @@ TEST_F(SCSCFTest, TestAddSecondSIPPAIHdr)
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
-  Message msg;
+  SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._extra = "P-Asserted-Identity: Andy <tel:6505551000>";
   list<HeaderMatcher> hdrs;
@@ -7742,7 +7761,7 @@ TEST_F(SCSCFTest, TestAddSecondSIPPAIHdrNoSIPUri)
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
-  Message msg;
+  SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._extra = "P-Asserted-Identity: Andy <tel:6505551000>";
   list<HeaderMatcher> hdrs;
@@ -7766,7 +7785,7 @@ TEST_F(SCSCFTest, TestTwoPAIHdrsAlready)
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
-  Message msg;
+  SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>\nP-Asserted-Identity: Andy <tel:6505551111>";
   list<HeaderMatcher> hdrs;
@@ -7790,7 +7809,7 @@ TEST_F(SCSCFTest, TestNoPAIHdrs)
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
-  Message msg;
+  SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("P-Asserted-Identity"));
@@ -7813,7 +7832,7 @@ TEST_F(SCSCFTest, TestPAIHdrODIToken)
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
-  Message msg;
+  SCSCFMessage msg;
   msg._route = "Route: <sip:odi_dgds89gd8gdshds@127.0.0.1;orig>";
   msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
   list<HeaderMatcher> hdrs;
@@ -7834,7 +7853,7 @@ TEST_F(SCSCFTest, TestNoSecondPAIHdrTerm)
                                    "call",
                                    RegDataXMLUtils::STATE_REGISTERED,
                                    subscription.return_sub());
-  Message msg;
+  SCSCFMessage msg;
   msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain>"));
@@ -7865,7 +7884,7 @@ TEST_F(SCSCFTest, FlowFailedResponse)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345";
   msg._to = "65055502314@homedomain";
   msg._todomain = "";
@@ -7898,7 +7917,7 @@ TEST_F(SCSCFTest, FlowFailedResponse)
   free_txdata();
 
   // Sprout deletes the binding.
-  SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data(user, 0);
+  AoRPair* aor_data = _sdm->get_aor_data(user, 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(0u, aor_data->get_current()->_bindings.size());
   delete aor_data; aor_data = NULL;
@@ -7950,7 +7969,7 @@ TEST_F(SCSCFTest, PreloadedRouteChangedReqUri)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -8052,7 +8071,7 @@ TEST_F(SCSCFTest, PreloadedRoutePreserveReqUri)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -8152,7 +8171,7 @@ TEST_F(SCSCFTest, PreloadedRouteNotLastAs)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -8240,7 +8259,7 @@ TEST_F(SCSCFTest, AutomaticRegistration)
 
   // Create an originating request that has a proxy-authorization header and
   // requires automatic registration.
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "newuser";
   msg._todomain = "domainvalid";
   msg._route = "Route: <sip:sprout.homedomain;orig;auto-reg>";
@@ -8261,7 +8280,7 @@ TEST_F(SCSCFTest, AutomaticRegistrationDerivedIMPI)
   SCOPED_TRACE("");
 
   // Create an originating request that requires automatic registration.
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "newuser";
   msg._todomain = "domainvalid";
   msg._route = "Route: <sip:sprout.homedomain;orig;auto-reg>";
@@ -8289,7 +8308,7 @@ TEST_F(SCSCFTest, TestSessionExpires)
   // Most of the session timer logic is tested in
   // `session_expires_helper_test.cpp`. This is just to check that the S-CSCF
   // invokes the logic correctly.
-  Message msg;
+  SCSCFMessage msg;
   msg._extra = "Session-Expires: 600\r\nSupported: timer";
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("Session-Expires", "Session-Expires:.*"));
@@ -8307,7 +8326,7 @@ TEST_F(SCSCFTest, TestSessionExpiresInDialog)
   // Send an UPDATE in-dialog request to which we should always add RR and SE.
   // Then check that if the UAS strips the SE, that Sprout tells the UAC to be
   // the refresher. This ensures that our response processing is correct.
-  Message msg;
+  SCSCFMessage msg;
   msg._extra = "Supported: timer";
   msg._in_dialog = true;
 
@@ -8467,7 +8486,7 @@ TEST_F(SCSCFTest, TestSessionExpiresWhenNoRecordRoute)
 
 
   // Send an INVITE
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -8532,7 +8551,7 @@ TEST_F(SCSCFTest, TestSessionExpiresWhenNoRecordRoute)
 TEST_F(SCSCFTest, HSSTimeoutOnPutRegData)
 {
   // Send originating INVITE
-  Message msg;
+  SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
 
   // HSS will return a 503
@@ -8574,7 +8593,7 @@ TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -8738,8 +8757,8 @@ TEST_F(SCSCFTest, TestAddStoredPathHeader)
   string uri("sip:6505551234@homedomain");
   string contact("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result(uri, "call", RegDataXMLUtils::STATE_REGISTERED, "");
-  SubscriberDataManager::AoRPair* aor = _sdm->get_aor_data(uri, 0);
-  SubscriberDataManager::AoR::Binding* binding = aor->get_current()->get_binding(contact);
+  AoRPair* aor = _sdm->get_aor_data(uri, 0);
+  AoR::Binding* binding = aor->get_current()->get_binding(contact);
   binding->_uri = contact;
   binding->_cid = "1";
   binding->_cseq = 1;
@@ -8755,7 +8774,7 @@ TEST_F(SCSCFTest, TestAddStoredPathHeader)
   EXPECT_TRUE(ret);
 
   // Check that the Route header contains the full path header form the binding.
-  Message msg;
+  SCSCFMessage msg;
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("Route", "Route: \"Bob\" <sip:abcdefgh@ut.cw-ngv.com;lr>;tag=6ht7"));
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
@@ -8770,8 +8789,8 @@ TEST_F(SCSCFTest, TestAddStoredPathURI)
   string uri("sip:6505551234@homedomain");
   string contact("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result(uri, "call", RegDataXMLUtils::STATE_REGISTERED, "");
-  SubscriberDataManager::AoRPair* aor = _sdm->get_aor_data(uri, 0);
-  SubscriberDataManager::AoR::Binding* binding = aor->get_current()->get_binding(contact);
+  AoRPair* aor = _sdm->get_aor_data(uri, 0);
+  AoR::Binding* binding = aor->get_current()->get_binding(contact);
   binding->_uri = contact;
   binding->_cid = "1";
   binding->_cseq = 1;
@@ -8786,7 +8805,7 @@ TEST_F(SCSCFTest, TestAddStoredPathURI)
   EXPECT_TRUE(ret);
 
   // Check that the Route header contains the URI part of the path header.
-  Message msg;
+  SCSCFMessage msg;
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("Route", "Route: <sip:abcdefgh@ut.cw-ngv.com;lr>"));
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
@@ -8813,7 +8832,7 @@ TEST_F(SCSCFTest, TestCallerNotBarred)
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
-  Message msg;
+  SCSCFMessage msg;
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
@@ -8839,7 +8858,7 @@ TEST_F(SCSCFTest, TestCalleeNotBarred)
                                    "call",
                                    "REGISTERED",
                                    subscription.return_sub());
-  Message msg;
+  SCSCFMessage msg;
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
@@ -8860,7 +8879,7 @@ TEST_F(SCSCFTest, TestEmergencyCalleeNotBarred)
                                    "REGISTERED",
                                    subscription.return_sub());
 
-  Message msg;
+  SCSCFMessage msg;
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
@@ -8882,7 +8901,7 @@ TEST_F(SCSCFTest, TestEmergencyMultipleBindings)
                                    "call",
                                    "REGISTERED",
                                    subscription.return_sub());
-  Message msg;
+  SCSCFMessage msg;
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
@@ -8905,7 +8924,7 @@ TEST_F(SCSCFTest, NoMatchingiFCsRejectOrig)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._todomain = "";
@@ -8943,7 +8962,7 @@ TEST_F(SCSCFTest, NoMatchingiFCsRejectTerm)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain>";
   msg._todomain = "";
@@ -8990,7 +9009,7 @@ TEST_F(SCSCFTest, NoMatchingStandardiFCsUseFallbackiFCs)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._todomain = "";
@@ -9100,7 +9119,7 @@ TEST_F(SCSCFTest, NoStandardiFCsUseFallbackiFCs)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:homedomain;orig>";
   msg._todomain = "";
@@ -9205,7 +9224,7 @@ TEST_F(SCSCFTest, OnlyDummyApplicationServers)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._todomain = "";
@@ -9256,7 +9275,7 @@ TEST_F(SCSCFTest, MixedRealAndDummyApplicationServer)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._todomain = "";
@@ -9344,7 +9363,7 @@ TEST_F(SCSCFTest, MMFPreAs)
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
   // Send the INVITE
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._todomain = "";
@@ -9441,7 +9460,7 @@ TEST_F(SCSCFTest, MMFPostAs)
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
   // Send the INVITE
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._todomain = "";
@@ -9537,7 +9556,7 @@ TEST_F(SCSCFTest, MMFPreAndPostAs)
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
   // Send the INVITE
-  Message msg;
+  SCSCFMessage msg;
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._todomain = "";

@@ -31,6 +31,7 @@ class IfcHandlerTest : public SipTest
 public:
   static FakeChronosConnection* _chronos_connection;
   static FakeHSSConnection* _hss_connection;
+  static AstaireAoRStore* _local_aor_store;
   static LocalStore* _local_data_store;
   static SubscriberDataManager* _sdm;
   static IfcHandler* _ifc_handler;
@@ -43,20 +44,19 @@ public:
     _chronos_connection = new FakeChronosConnection();
     _hss_connection = new FakeHSSConnection();
     _local_data_store = new LocalStore();
-    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, NULL, true);
+    _local_aor_store = new AstaireAoRStore(_local_data_store);
+    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, NULL, true);
     _ifc_handler = new IfcHandler();
   }
 
   static void TearDownTestCase()
   {
-    delete _sdm;
-    delete _local_data_store;
-    delete _ifc_handler;
-    _ifc_handler = NULL;
-    delete _hss_connection;
-    _hss_connection = NULL;
-    delete _chronos_connection;
-    _chronos_connection = NULL;
+    delete _sdm; _sdm = NULL;
+    delete _local_aor_store; _local_aor_store = NULL;
+    delete _local_data_store; _local_data_store = NULL;
+    delete _ifc_handler; _ifc_handler = NULL;
+    delete _hss_connection; _hss_connection = NULL;
+    delete _chronos_connection; _chronos_connection = NULL;
 
     SipTest::TearDownTestCase();
   }
@@ -131,6 +131,7 @@ public:
 FakeChronosConnection* IfcHandlerTest::_chronos_connection;
 FakeHSSConnection* IfcHandlerTest::_hss_connection;
 LocalStore* IfcHandlerTest::_local_data_store;
+AstaireAoRStore* IfcHandlerTest::_local_aor_store;
 SubscriberDataManager* IfcHandlerTest::_sdm;
 IfcHandler* IfcHandlerTest::_ifc_handler;
 

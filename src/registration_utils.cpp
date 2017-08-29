@@ -603,7 +603,7 @@ static bool expire_bindings(SubscriberDataManager *sdm,
 
   do
   {
-    SubscriberDataManager::AoRPair* aor_pair = sdm->get_aor_data(aor, trail);
+    AoRPair* aor_pair = sdm->get_aor_data(aor, trail);
 
     if ((aor_pair == NULL) || (aor_pair->get_current() == NULL))
     {
@@ -611,7 +611,7 @@ static bool expire_bindings(SubscriberDataManager *sdm,
     }
 
     // Get the S-CSCF URI off the AoR to put on the SAR to the HSS.
-    SubscriberDataManager::AoR* aor_data = aor_pair->get_current();
+    AoR* aor_data = aor_pair->get_current();
     scscf_uri = aor_data->_scscf_uri;
 
     if (binding_id == "*")
