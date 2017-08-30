@@ -3666,6 +3666,9 @@ TEST_F(ICSCFSproutletTest, HandleUrnUri)
   // to the Perimeta that sent the original MESSAGE.
   // This will then match the behaviour Perimeta expect.
 
+  //Clean up.
   free_txdata();
+  _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true");
+  delete tp;
 
 }
