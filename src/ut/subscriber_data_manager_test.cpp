@@ -1062,3 +1062,90 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRTimerBadRequestNoIDTest)
 
   delete aor_data1; aor_data1 = NULL;
 }
+
+TEST_F(BasicSubscriberDataManagerTest, AoRComparisonTests)
+{
+  AoRPair* aor_data1;
+  AoR::Binding* b1;
+  AoR::Subscription* s1;
+  bool rc;
+  int now;
+
+  // Get an initial empty AoR record and add a binding.
+  now = time(NULL);
+  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+  aor_data1->get_current()->_timer_id = "AoRtimer";
+  EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
+  b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_priority = 0;
+  b1->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
+  b1->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
+  b1->_private_id = "5102175698@cw-ngv.com";
+  b1->_emergency_registration = false;
+
+  // Add a subscription to the record.
+  s1 = aor_data1->get_current()->get_subscription("1234");
+  s1->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
+  s1->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s1->_from_tag = std::string("4321");
+  s1->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s1->_to_tag = std::string("1234");
+  s1->_cid = std::string("xyzabc@192.91.191.29");
+  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s1->_expires = now + 300;
+
+  // Check the 'get_updated_<bindings/subscriptions>' functions
+  EXPECT_EQ(aor_data1->_current_aor->_bindings, aor_data1->get_updated_bindings());
+  EXPECT_EQ(aor_data1->_current_aor->_subscriptions, aor_data1->get_updated_subscriptions());
+
+  // Add the AoR record to the store.
+  std::string aor = "5102175698@cw-ngv.com";
+  AssociatedURIs associated_uris = {};
+  associated_uris.add_uri(aor, false);
+  rc = this->_store->set_aor_data(aor, &associated_uris, aor_data1, 0);
+  EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
+
+  // Get the AoR record from the store.
+  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+
+  // Update the binding and subscription, and check that this is picked up.
+  b1 = aor_data1->get_current()->bindings().begin()->second;
+  b1->_expires += 300;
+  s1 = aor_data1->get_current()->get_subscription("1234");
+  s1->_expires += 300;
+
+  EXPECT_EQ(aor_data1->_current_aor->_bindings, aor_data1->get_updated_bindings());
+  EXPECT_EQ(aor_data1->_current_aor->_subscriptions, aor_data1->get_updated_subscriptions());
+
+  // Write the record back to the store.
+  rc = this->_store->set_aor_data(aor, &associated_uris, aor_data1, 0);
+  EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
+
+  // Get the AoR record from the store.
+  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+
+  // Check that with no change, there are no updates reported
+  EXPECT_EQ(true, (aor_data1->get_updated_bindings()).empty());
+  EXPECT_EQ(true, (aor_data1->get_updated_subscriptions()).empty());
+
+  // Remove binding and subscription, and verify this is reported correctly.
+  aor_data1->get_current()->remove_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  aor_data1->get_current()->remove_subscription(std::string("1234"));
+
+  EXPECT_EQ(aor_data1->_orig_aor->_bindings, aor_data1->get_removed_bindings());
+  EXPECT_EQ(aor_data1->_orig_aor->_subscriptions, aor_data1->get_removed_subscriptions());
+
+  delete aor_data1; aor_data1 = NULL;
+}
