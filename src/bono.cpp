@@ -2953,7 +2953,7 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
         // Either failed to connect to the selected server, or failed or get
         // a response, so blacklist it.
         TRC_DEBUG("Failed to connected to server, so add to blacklist");
-        PJUtils::blacklist_server(_servers[_current_server]);
+        PJUtils::blacklist(_servers[_current_server]);
 
         // Attempt a retry.
         retrying = retry_request();

@@ -386,7 +386,7 @@ void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity
   pj_list_insert_before(&auth_hdr->credential.common.other_param, new_param);
 }
 
-// Add an empty Proxy-Authorization header to signal to Sprout that this needs to be challenged
+// Add an empty Proxy-Authorization header to signal to Sprout that this needs to be challenged.
 void PJUtils::add_proxy_auth_for_pbx(pjsip_tx_data* tdata)
 {
   pjsip_proxy_authorization_hdr* auth_hdr = (pjsip_proxy_authorization_hdr*)
@@ -405,7 +405,7 @@ void PJUtils::add_proxy_auth_for_pbx(pjsip_tx_data* tdata)
 std::string PJUtils::extract_username(pjsip_authorization_hdr* auth_hdr, pjsip_uri* impu_uri)
 {
   std::string impi;
-  // Check to see if the request has an explicit IMPI in the Proxy-Authorization header
+  // Check to see if the request has an explicit IMPI in the Proxy-Authorization header.
   if ((auth_hdr != NULL) &&
       (auth_hdr->credential.digest.username.slen != 0))
   {
@@ -732,7 +732,7 @@ pj_status_t PJUtils::create_response(pjsip_endpoint* endpt,
     set_trail(*p_tdata, get_trail(rdata));
 
     // Some headers should always be copied onto responses, like
-    // charging headers
+    // charging headers.
     PJUtils::clone_header(&STR_P_C_V, rdata->msg_info.msg, (*p_tdata)->msg, (*p_tdata)->pool);
     PJUtils::clone_header(&STR_P_C_F_A, rdata->msg_info.msg, (*p_tdata)->msg, (*p_tdata)->pool);
 
@@ -832,7 +832,7 @@ pj_status_t PJUtils::create_response(pjsip_endpoint *endpt,
   // Copy CSeq header. */
   pjsip_msg_add_hdr(msg, (pjsip_hdr*)pjsip_hdr_clone(tdata->pool, PJSIP_MSG_CSEQ_HDR(req_msg)));
 
-  // Some headers should always be copied onto responses, like charging headers
+  // Some headers should always be copied onto responses, like charging headers.
   PJUtils::clone_header(&STR_P_C_V, req_msg, msg, tdata->pool);
   PJUtils::clone_header(&STR_P_C_F_A, req_msg, msg, tdata->pool);
 
@@ -902,6 +902,22 @@ pjsip_tx_data* PJUtils::create_cancel(pjsip_endpoint* endpt,
   return cancel;
 }
 
+/// Resolves a destination and returns an iterator.
+BaseAddrIterator* PJUtils::resolve_iter(const std::string& name,
+                           int port,
+                           int transport,
+                           int retries,
+                           int allowed_host_state)
+{
+  return stack_data.sipresolver->resolve_iter(name,
+                                       stack_data.addr_family,
+                                       port,
+                                       transport,
+                                       retries,
+                                       allowed_host_state);
+}
+
+
 /// Resolves a destination.
 void PJUtils::resolve(const std::string& name,
                       int port,
@@ -920,7 +936,50 @@ void PJUtils::resolve(const std::string& name,
 }
 
 
-/// Resolves the next hop target of the SIP message
+/// Resolves the next hop target of the SIP message.
+BaseAddrIterator* PJUtils::resolve_next_hop_iter(pjsip_tx_data* tdata,
+                               int retries,
+                               int allowed_host_state,
+                               SAS::TrailId trail)
+{
+  // Get the next hop URI from the message and parse out the destination, port
+  // and transport.
+  pjsip_sip_uri* next_hop = (pjsip_sip_uri*)PJUtils::next_hop(tdata->msg);
+  std::string name = std::string(next_hop->host.ptr, next_hop->host.slen);
+  int port = next_hop->port;
+  int transport = -1;
+  if (pj_stricmp2(&next_hop->transport_param, "TCP") == 0)
+  {
+    transport = IPPROTO_TCP;
+  }
+  else if (pj_stricmp2(&next_hop->transport_param, "UDP") == 0)
+  {
+    transport = IPPROTO_UDP;
+  }
+
+  if (retries == 0)
+  {
+    // Used default number of retries.
+    retries = DEFAULT_RETRIES;
+  }
+
+  BaseAddrIterator* targets_iter = stack_data.sipresolver->resolve_iter(name,
+                                                                        stack_data.addr_family,
+                                                                        port,
+                                                                        transport,
+                                                                        retries,
+                                                                        allowed_host_state,
+                                                                        trail);
+
+  TRC_INFO("Resolved destination URI %s",
+           PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                  (pjsip_uri*)next_hop).c_str());
+
+  return targets_iter;
+}
+
+
+/// Resolves the next hop target of the SIP message.
 void PJUtils::resolve_next_hop(pjsip_tx_data* tdata,
                                int retries,
                                std::vector<AddrInfo>& servers,
@@ -964,9 +1023,17 @@ void PJUtils::resolve_next_hop(pjsip_tx_data* tdata,
 }
 
 
+/// Reports that a request to a server was successful. If that server was on the
+/// graylist it is now moved to the whitelist.
+void PJUtils::success(AddrInfo& server)
+{
+  stack_data.sipresolver->success(server);
+}
+
+
 /// Blacklists the specified server so it will not be preferred in subsequent
 /// resolve calls.
-void PJUtils::blacklist_server(AddrInfo& server)
+void PJUtils::blacklist(AddrInfo& server)
 {
   stack_data.sipresolver->blacklist(server);
 }
@@ -1093,7 +1160,7 @@ static void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event)
           // Either the connection failed, or the server didn't respond within
           // the timeout, so blacklist it.  We don't blacklist servers that
           // return 5xx errors as this may indicate a transient overload.
-          PJUtils::blacklist_server(sss->servers[sss->current_server]);
+          PJUtils::blacklist(sss->servers[sss->current_server]);
         }
 
         // Can we do a retry?
@@ -1303,7 +1370,7 @@ struct StatelessSendState
 };
 
 
-/// Callback used for PJUtils::send_request_stateless
+/// Callback used for PJUtils::send_request_stateless.
 static void stateless_send_cb(pjsip_send_state *st,
                               pj_ssize_t sent,
                               pj_bool_t *cont)
@@ -1319,7 +1386,7 @@ static void stateless_send_cb(pjsip_send_state *st,
     // Request to a resolved server failed.  When sending statelessly
     // this means we couldn't get a transport, so couldn't connect to the
     // selected target, so we always blacklist.
-    PJUtils::blacklist_server(sss->servers[sss->current_server]);
+    PJUtils::blacklist(sss->servers[sss->current_server]);
 
     // Can we do a retry?
     pj_status_t status = PJ_ENOTFOUND;
@@ -1366,7 +1433,7 @@ static void stateless_send_cb(pjsip_send_state *st,
 
 
 /// Sends a request statelessly, possibly retrying the specified number of
-/// times if the
+/// times if the.
 pj_status_t PJUtils::send_request_stateless(pjsip_tx_data* tdata, int retries)
 {
   pj_status_t status = PJ_SUCCESS;
@@ -1433,14 +1500,14 @@ pj_status_t PJUtils::respond_stateless(pjsip_endpoint* endpt,
   pjsip_response_addr res_addr;
   pjsip_tx_data* tdata;
 
-  // Create response message
+  // Create response message.
   status = create_response(endpt, rdata, st_code, st_text, &tdata);
   if (status != PJ_SUCCESS)
   {
     return status;
   }
 
-  // Add the message headers, if any
+  // Add the message headers, if any.
   if (hdr_list)
   {
     const pjsip_hdr* hdr = hdr_list->next;
@@ -1509,7 +1576,7 @@ pj_status_t PJUtils::respond_stateful(pjsip_endpoint* endpt,
     return status;
   }
 
-  // Add the message headers, if any
+  // Add the message headers, if any.
   if (hdr_list)
   {
     const pjsip_hdr* hdr = hdr_list->next;
@@ -1578,7 +1645,7 @@ pjsip_tx_data* PJUtils::clone_tdata(pjsip_tx_data* tdata)
     pjsip_tx_data_set_transport(cloned_tdata, &tdata->tp_sel);
   }
 
-  // If the message has any addr in dest_info, copy that
+  // If the message has any addr in dest_info, copy that.
   if (tdata->dest_info.addr.count != 0)
   {
     pj_memcpy(&cloned_tdata->dest_info, &tdata->dest_info, sizeof(cloned_tdata->dest_info));
@@ -1659,7 +1726,7 @@ std::string PJUtils::get_header_value(pjsip_hdr* header)
 
   int len = pjsip_hdr_print_on(header, buf2, MAX_HDR_SIZE);
 
-  // Eat up to the first colon
+  // Eat up to the first colon.
   while (*buf2 != ':') { buf2++; len--; }
 
   // Now eat the colon.
@@ -1721,7 +1788,7 @@ void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* 
 
 bool PJUtils::is_emergency_registration(pjsip_contact_hdr* contact_hdr)
 {
-  // Contact header must be a SIP URI
+  // Contact header must be a SIP URI.
   pjsip_sip_uri* uri = (contact_hdr->uri != NULL) ?
                      (pjsip_sip_uri*)pjsip_uri_get_uri(contact_hdr->uri) : NULL;
   return ((uri != NULL) && (PJSIP_URI_SCHEME_IS_SIP(uri)) &&
@@ -1729,17 +1796,17 @@ bool PJUtils::is_emergency_registration(pjsip_contact_hdr* contact_hdr)
 }
 
 // Return true if there are no route headers, or there is exactly one,
-// which is local
+// which is local.
 bool PJUtils::check_route_headers(pjsip_rx_data* rdata)
 {
   return check_route_headers(rdata->msg_info.msg);
 }
 
 // Return true if there are no route headers, or there is exactly one,
-// which is local
+// which is local.
 bool PJUtils::check_route_headers(pjsip_msg* msg)
 {
-  // Get all the route headers
+  // Get all the route headers.
   int count = 0;
   bool local = true;
   pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, NULL);
@@ -2148,7 +2215,7 @@ pjsip_uri* PJUtils::translate_sip_uri_to_tel_uri(const pjsip_sip_uri* sip_uri,
     tel_uri->ext_param.ptr = ext->value.ptr;
   }
 
-  // Copy across any SIP user parameters to the new Tel URI
+  // Copy across any SIP user parameters to the new Tel URI.
   for (pjsip_param* p = sip_uri->userinfo_param.next;
        (p != NULL) && (p != &sip_uri->userinfo_param);
        p = p->next)
@@ -2183,13 +2250,13 @@ void PJUtils::add_parameter_to_sip_uri(pjsip_sip_uri* sip_uri,
 
 static const boost::regex CHARS_TO_STRIP = boost::regex("[.)(-]");
 
-// Strip any visual separators from the number
+// Strip any visual separators from the number.
 std::string PJUtils::remove_visual_separators(const std::string& number)
 {
   return boost::regex_replace(number, CHARS_TO_STRIP, std::string(""));
 };
 
-// Strip any visual separators from the number
+// Strip any visual separators from the number.
 std::string PJUtils::remove_visual_separators(const pj_str_t& number)
 {
   std::string s = pj_str_to_string(&number);
@@ -2202,12 +2269,12 @@ bool PJUtils::get_npdi(pjsip_uri* uri)
 
   if (PJSIP_URI_SCHEME_IS_TEL(uri))
   {
-    // If the URI is a tel URI, pull out the information from the other_params
+    // If the URI is a tel URI, pull out the information from the other_params.
     npdi = (pjsip_param_find(&((pjsip_tel_uri*)uri)->other_param, &STR_NPDI) != NULL);
   }
   else if (PJSIP_URI_SCHEME_IS_SIP(uri))
   {
-    // If the URI is a tel URI, pull out the information from the userinfo_params
+    // If the URI is a tel URI, pull out the information from the userinfo_params.
     npdi = (pjsip_param_find(&((pjsip_sip_uri*)uri)->userinfo_param, &STR_NPDI) != NULL);
   }
 
@@ -2221,12 +2288,12 @@ bool PJUtils::get_rn(pjsip_uri* uri, std::string& routing_value)
 
   if (PJSIP_URI_SCHEME_IS_TEL(uri))
   {
-    // If the URI is a tel URI, pull out the information from the other_params
+    // If the URI is a tel URI, pull out the information from the other_params.
     rn = pjsip_param_find(&((pjsip_tel_uri*)uri)->other_param, &STR_RN);
   }
   else if (PJSIP_URI_SCHEME_IS_SIP(uri))
   {
-    // If the URI is a SIP URI, pull out the information from the userinfo_params
+    // If the URI is a SIP URI, pull out the information from the userinfo_params.
     rn = pjsip_param_find(&((pjsip_sip_uri*)uri)->userinfo_param, &STR_RN);
   }
 
@@ -2245,12 +2312,12 @@ pjsip_param* PJUtils::get_userpart_param(pjsip_uri* uri, pj_str_t param)
 
   if (PJSIP_URI_SCHEME_IS_TEL(uri))
   {
-    // If the URI is a tel URI, pull out the information from the other_params
+    // If the URI is a tel URI, pull out the information from the other_params.
     param_value = pjsip_param_find(&((pjsip_tel_uri*)uri)->other_param, &param);
   }
   else if (PJSIP_URI_SCHEME_IS_SIP(uri))
   {
-    // If the URI is a SIP URI, pull out the information from the userinfo_params
+    // If the URI is a SIP URI, pull out the information from the userinfo_params.
     param_value = pjsip_param_find(&((pjsip_sip_uri*)uri)->userinfo_param, &param);
   }
 
@@ -2507,7 +2574,7 @@ pjsip_uri* PJUtils::get_next_routing_uri(const pjsip_msg* msg, pjsip_uri_context
 // Gets the media types specified in the SDP on the message.  Currently only
 // looks for Audio and Video media types.
 //
-// @returns A set of type pjmedia_type
+// @returns A set of type pjmedia_type.
 std::set<pjmedia_type> PJUtils::get_media_types(const pjsip_msg *msg)
 {
   std::set<pjmedia_type> media_types;

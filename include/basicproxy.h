@@ -315,9 +315,18 @@ protected:
     /// after it has been passed to PJSIP for sending.
     pjsip_tx_data* _tdata;
 
-    /// The resolved server addresses for this transaction.
-    std::vector<AddrInfo> _servers;
-    int _current_server;
+    /// Iterator to the list of available servers.
+    BaseAddrIterator* _servers_iter;
+
+    /// Current server target.
+    AddrInfo _current_server;
+
+    /// Boolean to track whether _servers_iter has run out of targets, and thus
+    /// whether _current_server is a valid target.
+    bool _current_server_valid;
+
+    /// Boolean to track whether _servers_iter was initially an empty iterator.
+    bool _no_servers;
 
     /// Pointer to the associated PJSIP UAC transaction used to send a
     /// CANCEL request.  NULL if no CANCEL has been sent.

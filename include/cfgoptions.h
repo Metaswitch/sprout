@@ -111,6 +111,7 @@ struct options
   int                                  cass_target_latency_us;
   int                                  exception_max_ttl;
   int                                  sip_blacklist_duration;
+  int                                  sip_graylist_duration;
   int                                  http_blacklist_duration;
   int                                  astaire_blacklist_duration;
   int                                  sip_tcp_connect_timeout;

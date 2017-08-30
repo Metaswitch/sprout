@@ -106,6 +106,7 @@ enum OptionTypes
   OPT_EXCEPTION_MAX_TTL,
   OPT_MAX_SESSION_EXPIRES,
   OPT_SIP_BLACKLIST_DURATION,
+  OPT_SIP_GRAYLIST_DURATION,
   OPT_HTTP_BLACKLIST_DURATION,
   OPT_ASTAIRE_BLACKLIST_DURATION,
   OPT_SIP_TCP_CONNECT_TIMEOUT,
@@ -198,6 +199,7 @@ const static struct pj_getopt_option long_opt[] =
   { "cass-target-latency-us",       required_argument, 0, OPT_CASS_TARGET_LATENCY_US},
   { "exception-max-ttl",            required_argument, 0, OPT_EXCEPTION_MAX_TTL},
   { "sip-blacklist-duration",       required_argument, 0, OPT_SIP_BLACKLIST_DURATION},
+  { "sip-graylist-duration",        required_argument, 0, OPT_SIP_GRAYLIST_DURATION},
   { "http-blacklist-duration",      required_argument, 0, OPT_HTTP_BLACKLIST_DURATION},
   { "astaire-blacklist-duration",   required_argument, 0, OPT_ASTAIRE_BLACKLIST_DURATION},
   { "sip-tcp-connect-timeout",      required_argument, 0, OPT_SIP_TCP_CONNECT_TIMEOUT},
@@ -369,6 +371,8 @@ static void usage(void)
        "                            The actual time is randomised.\n"
        "     --sip-blacklist-duration <secs>\n"
        "                            The amount of time to blacklist a SIP peer when it is unresponsive.\n"
+       "     --sip-graylist-duration <secs>\n"
+       "                            The amount of time to graylist a SIP peer when it has not been probed.\n"
        "     --http-blacklist-duration <secs>\n"
        "                            The amount of time to blacklist an HTTP peer when it is unresponsive.\n"
        "     --astaire-blacklist-duration <secs>\n"
@@ -1027,6 +1031,14 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
+    case OPT_SIP_GRAYLIST_DURATION:
+      {
+        VALIDATE_INT_PARAM(options->sip_graylist_duration,
+                           sip_graylist_duration,
+                           SIP graylist duration);
+      }
+      break;
+
     case OPT_HTTP_BLACKLIST_DURATION:
       {
         VALIDATE_INT_PARAM(options->http_blacklist_duration,
@@ -1462,6 +1474,7 @@ int main(int argc, char* argv[])
   opt.override_npdi = PJ_FALSE;
   opt.exception_max_ttl = 600;
   opt.sip_blacklist_duration = SIPResolver::DEFAULT_BLACKLIST_DURATION;
+  opt.sip_graylist_duration = SIPResolver::DEFAULT_GRAYLIST_DURATION;
   opt.http_blacklist_duration = HttpResolver::DEFAULT_BLACKLIST_DURATION;
   opt.astaire_blacklist_duration = AstaireResolver::DEFAULT_BLACKLIST_DURATION;
   opt.sip_tcp_connect_timeout = 2000;
@@ -1828,7 +1841,7 @@ int main(int argc, char* argv[])
 
   // Create a DNS resolver and a SIP specific resolver.
   dns_resolver = new DnsCachedResolver(opt.dns_servers, opt.dns_timeout);
-  sip_resolver = new SIPResolver(dns_resolver, opt.sip_blacklist_duration);
+  sip_resolver = new SIPResolver(dns_resolver, opt.sip_blacklist_duration, opt.sip_graylist_duration);
 
   // Create a new quiescing manager instance and register our completion handler
   // with it.
