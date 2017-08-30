@@ -141,7 +141,6 @@ BaseAddrIterator* SIPResolver::resolve_iter(const std::string& name,
 
     // Creates an iterator to the vector of targets.
     targets_iter = new SimpleAddrIterator(targets);
-    return targets_iter;
   }
   else
   {
@@ -336,33 +335,8 @@ BaseAddrIterator* SIPResolver::resolve_iter(const std::string& name,
 
       targets_iter = a_resolve_iter(a_name, af, port, transport, dummy_ttl, trail, allowed_host_state);
     }
-    return targets_iter;
   }
-
-  /*
-  // Alex said to remove
-  if ((targets.empty()) && (trail != 0))
-  {
-    if ((allowed_host_state == BaseResolver::WHITELISTED) ||
-        (allowed_host_state == BaseResolver::BLACKLISTED))
-    {
-      // The search was restricted to either just blacklisted or just
-      // whitelisted addresses - there were none with the specified state.
-      bool blacklisted = (allowed_host_state == BaseResolver::BLACKLISTED);
-      SAS::Event event(trail, SASEvent::SIPRESOLVE_NO_ALLOWED_RECORDS, 0);
-      event.add_var_param(name);
-      event.add_static_param(blacklisted);
-      SAS::report_event(event);
-    }
-    else
-    {
-      // No records at all for this address.
-      SAS::Event event(trail, SASEvent::SIPRESOLVE_NO_RECORDS, 0);
-      event.add_var_param(name);
-      SAS::report_event(event);
-    }
-  }
-  */
+  return targets_iter;
 }
 
 std::string SIPResolver::get_transport_str(int transport)
