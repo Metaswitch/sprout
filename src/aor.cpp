@@ -556,7 +556,7 @@ AoR::Subscriptions AoRPair::get_updated_subscriptions()
       // The subscription is in both AoRs. Check if the expiry time has changed at all
       if (orig_aor_subscription_match->second->_expires != subscription->_expires)
       {
-        TRC_DEBUG("Subscription %s expiry has been changed refreshed", s_id.c_str());
+        TRC_DEBUG("Subscription %s expiry has been changed", s_id.c_str());
         updated_subscriptions.insert(std::make_pair(s_id, subscription));
       }
       else
@@ -565,6 +565,7 @@ AoR::Subscriptions AoRPair::get_updated_subscriptions()
       }
     }
   }
+
   return updated_subscriptions;
 }
 
@@ -580,11 +581,12 @@ AoR::Bindings AoRPair::get_removed_bindings()
         _current_aor->bindings().end())
     {
       // Binding is gone (which may mean deregistration or expiry)
-      TRC_DEBUG("The binding (%s) has been removed", orig_aor_binding.first.c_str());
+      TRC_DEBUG("Binding %s has been removed", orig_aor_binding.first.c_str());
       removed_bindings.insert(std::make_pair(orig_aor_binding.first,
                                              orig_aor_binding.second));
     }
   }
+
   return removed_bindings;
 }
 
@@ -601,7 +603,7 @@ AoR::Subscriptions AoRPair::get_removed_subscriptions()
         _current_aor->subscriptions().end())
     {
       // Subscription is gone
-      TRC_DEBUG("The subscription (%s) is no longer present",
+      TRC_DEBUG("Subscription %s is no longer present",
                     orig_aor_subscription.first.c_str());
       removed_subscriptions.insert(std::make_pair(orig_aor_subscription.first,
                                                   orig_aor_subscription.second));

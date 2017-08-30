@@ -1063,21 +1063,16 @@ TEST_F(SubscriberDataManagerChronosRequestsTest, AoRTimerBadRequestNoIDTest)
   delete aor_data1; aor_data1 = NULL;
 }
 
-TEST_F(BasicSubscriberDataManagerTest, AoRComparisonTests)
+TEST_F(BasicSubscriberDataManagerTest, AoRComparisonCreatedBinding)
 {
-  AoRPair* aor_data1;
-  AoR::Binding* b1;
-  AoR::Subscription* s1;
-  bool rc;
-  int now;
+  std::string aor_id = "5102175698@cw-ngv.com";
+  int now = time(NULL);
+  AoR* orig_aor = new AoR(aor_id);
+  AoR* current_aor = new AoR(aor_id);
 
-  // Get an initial empty AoR record and add a binding.
-  now = time(NULL);
-  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
-  ASSERT_TRUE(aor_data1 != NULL);
-  aor_data1->get_current()->_timer_id = "AoRtimer";
-  EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
-  b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  // Add a binding to the current AoR
+  std::string b_id = "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1";
+  AoR::Binding* b1 = current_aor->get_binding(b_id);
   b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -1091,8 +1086,174 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonTests)
   b1->_private_id = "5102175698@cw-ngv.com";
   b1->_emergency_registration = false;
 
-  // Add a subscription to the record.
-  s1 = aor_data1->get_current()->get_subscription("1234");
+  // Create the AoRPair
+  AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
+
+  // Check the 'get_updated_<bindings/subscriptions>' function returns the binding
+  AoR::Bindings updated_bindings = aor_pair->get_updated_bindings();
+  ASSERT_TRUE(updated_bindings.find( b_id ) != updated_bindings.end());
+
+  delete aor_pair; aor_pair = NULL;
+}
+
+TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUpdatedBinding)
+{
+  std::string aor_id = "5102175698@cw-ngv.com";
+  int now = time(NULL);
+  AoR* orig_aor = new AoR(aor_id);
+  AoR* current_aor = new AoR(aor_id);
+
+  // Add a binding to the original AoR
+  std::string b_id = "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1";
+  AoR::Binding* b1 = orig_aor->get_binding(b_id);
+  b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_priority = 0;
+  b1->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
+  b1->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
+  b1->_private_id = "5102175698@cw-ngv.com";
+  b1->_emergency_registration = false;
+
+  // Add the same binding, but with an updated expiry, to the current AoR
+  AoR::Binding* b2 = current_aor->get_binding(b_id);
+  b2->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
+  b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b2->_cseq = 17038;
+  b2->_expires = now + 600;
+  b2->_priority = 0;
+  b2->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
+  b2->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
+  b2->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b2->_params["reg-id"] = "1";
+  b2->_params["+sip.ice"] = "";
+  b2->_private_id = "5102175698@cw-ngv.com";
+  b2->_emergency_registration = false;
+
+
+  // Create the AoRPair
+  AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
+
+  // Check that `get_updated_bindings` returns the updated binding
+  AoR::Bindings updated_bindings = aor_pair->get_updated_bindings();
+  ASSERT_TRUE(updated_bindings.find( b_id ) != updated_bindings.end());
+  EXPECT_EQ((now + 600), updated_bindings[b_id]->_expires);
+
+  delete aor_pair; aor_pair = NULL;
+}
+
+TEST_F(BasicSubscriberDataManagerTest, AoRComparisonDeletedBinding)
+{
+  std::string aor_id = "5102175698@cw-ngv.com";
+  int now = time(NULL);
+  AoR* orig_aor = new AoR(aor_id);
+  AoR* current_aor = new AoR(aor_id);
+
+  // Add a binding to the original AoR only
+  std::string b_id = "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1";
+  AoR::Binding* b1 = orig_aor->get_binding(b_id);
+  b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_priority = 0;
+  b1->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
+  b1->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
+  b1->_private_id = "5102175698@cw-ngv.com";
+  b1->_emergency_registration = false;
+
+  // Create the AoRPair
+  AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
+
+  // Check that `get_removed_bindings` returns the 'deleted' binding
+  AoR::Bindings removed_bindings = aor_pair->get_removed_bindings();
+  ASSERT_TRUE(removed_bindings.find( b_id ) != removed_bindings.end());
+
+  delete aor_pair; aor_pair = NULL;
+}
+
+TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUnchangedBinding)
+{
+  std::string aor_id = "5102175698@cw-ngv.com";
+  int now = time(NULL);
+  AoR* orig_aor = new AoR(aor_id);
+  AoR* current_aor = new AoR(aor_id);
+
+  // Add a binding to the original AoR
+  std::string b_id = "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1";
+  AoR::Binding* b1 = orig_aor->get_binding(b_id);
+  b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_priority = 0;
+  b1->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
+  b1->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
+  b1->_private_id = "5102175698@cw-ngv.com";
+  b1->_emergency_registration = false;
+
+  // Add the same binding to the current AoR
+  AoR::Binding* b2 = current_aor->get_binding(b_id);
+  b2->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
+  b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b2->_cseq = 17038;
+  b2->_expires = now + 300;
+  b2->_priority = 0;
+  b2->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
+  b2->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
+  b2->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b2->_params["reg-id"] = "1";
+  b2->_params["+sip.ice"] = "";
+  b2->_private_id = "5102175698@cw-ngv.com";
+  b2->_emergency_registration = false;
+
+  // Create the AoRPair
+  AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
+
+  // Check that `get_updated_bindings` and `get_removed_bindings` return nothing
+  AoR::Bindings updated_bindings = aor_pair->get_updated_bindings();
+  ASSERT_TRUE(updated_bindings.find( b_id ) == updated_bindings.end());
+  AoR::Bindings removed_bindings = aor_pair->get_removed_bindings();
+  ASSERT_TRUE(removed_bindings.find( b_id ) == removed_bindings.end());
+
+  delete aor_pair; aor_pair = NULL;
+}
+
+TEST_F(BasicSubscriberDataManagerTest, AoRComparisonCreatedSubscription)
+{
+  std::string aor_id = "5102175698@cw-ngv.com";
+  int now = time(NULL);
+  AoR* orig_aor = new AoR(aor_id);
+  AoR* current_aor = new AoR(aor_id);
+
+  // Add a binding and subscription to the current AoR
+  std::string b_id = "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1";
+  AoR::Binding* b1 = current_aor->get_binding(b_id);
+  b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_priority = 0;
+  b1->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
+  b1->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
+  b1->_private_id = "5102175698@cw-ngv.com";
+  b1->_emergency_registration = false;
+
+  std::string s_id = "1234";
+  AoR::Subscription* s1 = current_aor->get_subscription(s_id);
   s1->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
   s1->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
   s1->_from_tag = std::string("4321");
@@ -1102,50 +1263,213 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonTests)
   s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
   s1->_expires = now + 300;
 
-  // Check the 'get_updated_<bindings/subscriptions>' functions
-  EXPECT_EQ(aor_data1->_current_aor->_bindings, aor_data1->get_updated_bindings());
-  EXPECT_EQ(aor_data1->_current_aor->_subscriptions, aor_data1->get_updated_subscriptions());
+  // Create the AoRPair
+  AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
 
-  // Add the AoR record to the store.
-  std::string aor = "5102175698@cw-ngv.com";
-  AssociatedURIs associated_uris = {};
-  associated_uris.add_uri(aor, false);
-  rc = this->_store->set_aor_data(aor, &associated_uris, aor_data1, 0);
-  EXPECT_TRUE(rc);
-  delete aor_data1; aor_data1 = NULL;
+  // Check that `get_updated_subscriptions` returns the new subscription 
+  AoR::Subscriptions updated_subscriptions = aor_pair->get_updated_subscriptions();
+  ASSERT_TRUE(updated_subscriptions.find( s_id ) != updated_subscriptions.end());
 
-  // Get the AoR record from the store.
-  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
-  ASSERT_TRUE(aor_data1 != NULL);
+  delete aor_pair; aor_pair = NULL;
+}
 
-  // Update the binding and subscription, and check that this is picked up.
-  b1 = aor_data1->get_current()->bindings().begin()->second;
-  b1->_expires += 300;
-  s1 = aor_data1->get_current()->get_subscription("1234");
-  s1->_expires += 300;
+TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUpdatedSubscription)
+{
+  std::string aor_id = "5102175698@cw-ngv.com";
+  int now = time(NULL);
+  AoR* orig_aor = new AoR(aor_id);
+  AoR* current_aor = new AoR(aor_id);
 
-  EXPECT_EQ(aor_data1->_current_aor->_bindings, aor_data1->get_updated_bindings());
-  EXPECT_EQ(aor_data1->_current_aor->_subscriptions, aor_data1->get_updated_subscriptions());
+  // Add a binding and subscription to the original AoR
+  std::string b_id = "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1";
+  AoR::Binding* b1 = orig_aor->get_binding(b_id);
+  b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_priority = 0;
+  b1->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
+  b1->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
+  b1->_private_id = "5102175698@cw-ngv.com";
+  b1->_emergency_registration = false;
 
-  // Write the record back to the store.
-  rc = this->_store->set_aor_data(aor, &associated_uris, aor_data1, 0);
-  EXPECT_TRUE(rc);
-  delete aor_data1; aor_data1 = NULL;
+  std::string s_id = "1234";
+  AoR::Subscription* s1 = orig_aor->get_subscription(s_id);
+  s1->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
+  s1->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s1->_from_tag = std::string("4321");
+  s1->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s1->_to_tag = std::string("1234");
+  s1->_cid = std::string("xyzabc@192.91.191.29");
+  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s1->_expires = now + 300;
 
-  // Get the AoR record from the store.
-  aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
-  ASSERT_TRUE(aor_data1 != NULL);
+  // Add the same binding and subscription to the current AoR, but with updated
+  // expiry time on the subscription.
+  AoR::Binding* b2 = current_aor->get_binding(b_id);
+  b2->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
+  b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b2->_cseq = 17038;
+  b2->_expires = now + 300;
+  b2->_priority = 0;
+  b2->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
+  b2->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
+  b2->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b2->_params["reg-id"] = "1";
+  b2->_params["+sip.ice"] = "";
+  b2->_private_id = "5102175698@cw-ngv.com";
+  b2->_emergency_registration = false;
 
-  // Check that with no change, there are no updates reported
-  EXPECT_EQ(true, (aor_data1->get_updated_bindings()).empty());
-  EXPECT_EQ(true, (aor_data1->get_updated_subscriptions()).empty());
+  AoR::Subscription* s2 = current_aor->get_subscription(s_id);
+  s2->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
+  s2->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s2->_from_tag = std::string("4321");
+  s2->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s2->_to_tag = std::string("1234");
+  s2->_cid = std::string("xyzabc@192.91.191.29");
+  s2->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s2->_expires = now + 600;
 
-  // Remove binding and subscription, and verify this is reported correctly.
-  aor_data1->get_current()->remove_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
-  aor_data1->get_current()->remove_subscription(std::string("1234"));
+  // Create the AoRPair
+  AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
 
-  EXPECT_EQ(aor_data1->_orig_aor->_bindings, aor_data1->get_removed_bindings());
-  EXPECT_EQ(aor_data1->_orig_aor->_subscriptions, aor_data1->get_removed_subscriptions());
+  // Check that `get_updated_subscriptions` returns the updated subscription
+  AoR::Subscriptions updated_subscriptions = aor_pair->get_updated_subscriptions();
+  ASSERT_TRUE(updated_subscriptions.find( s_id ) != updated_subscriptions.end());
+  EXPECT_EQ((now + 600), updated_subscriptions[s_id]->_expires);
 
-  delete aor_data1; aor_data1 = NULL;
+  delete aor_pair; aor_pair = NULL;
+}
+
+TEST_F(BasicSubscriberDataManagerTest, AoRComparisonDeletedSubscription)
+{
+  std::string aor_id = "5102175698@cw-ngv.com";
+  int now = time(NULL);
+  AoR* orig_aor = new AoR(aor_id);
+  AoR* current_aor = new AoR(aor_id);
+
+  // Add a binding and subscription to the original AoR
+  std::string b_id = "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1";
+  AoR::Binding* b1 = orig_aor->get_binding(b_id);
+  b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_priority = 0;
+  b1->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
+  b1->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
+  b1->_private_id = "5102175698@cw-ngv.com";
+  b1->_emergency_registration = false;
+
+  std::string s_id = "1234";
+  AoR::Subscription* s1 = orig_aor->get_subscription(s_id);
+  s1->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
+  s1->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s1->_from_tag = std::string("4321");
+  s1->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s1->_to_tag = std::string("1234");
+  s1->_cid = std::string("xyzabc@192.91.191.29");
+  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s1->_expires = now + 300;
+
+  // Add the same binding to the current AoR, but not the subscription
+  AoR::Binding* b2 = current_aor->get_binding(b_id);
+  b2->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
+  b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b2->_cseq = 17038;
+  b2->_expires = now + 300;
+  b2->_priority = 0;
+  b2->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
+  b2->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
+  b2->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b2->_params["reg-id"] = "1";
+  b2->_params["+sip.ice"] = "";
+  b2->_private_id = "5102175698@cw-ngv.com";
+  b2->_emergency_registration = false;
+
+  // Create the AoRPair
+  AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
+
+  // Check that `get_removed_subscriptions` returns the 'deleted' subscription
+  AoR::Subscriptions removed_subscriptions = aor_pair->get_removed_subscriptions();
+  ASSERT_TRUE(removed_subscriptions.find( s_id ) != removed_subscriptions.end());
+
+  delete aor_pair; aor_pair = NULL;
+}
+
+TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUnchangedSubscription)
+{
+  std::string aor_id = "5102175698@cw-ngv.com";
+  int now = time(NULL);
+  AoR* orig_aor = new AoR(aor_id);
+  AoR* current_aor = new AoR(aor_id);
+
+  // Add a binding and subscription to the original AoR
+  std::string b_id = "urn:uuid:00000000-0000-0000-0000-b4dd32817622:1";
+  AoR::Binding* b1 = orig_aor->get_binding(b_id);
+  b1->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_priority = 0;
+  b1->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
+  b1->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
+  b1->_private_id = "5102175698@cw-ngv.com";
+  b1->_emergency_registration = false;
+
+  std::string s_id = "1234";
+  AoR::Subscription* s1 = orig_aor->get_subscription(s_id);
+  s1->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
+  s1->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s1->_from_tag = std::string("4321");
+  s1->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s1->_to_tag = std::string("1234");
+  s1->_cid = std::string("xyzabc@192.91.191.29");
+  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s1->_expires = now + 300;
+
+  // Add the same binding and subscription to the current AoR
+  AoR::Binding* b2 = current_aor->get_binding(b_id);
+  b2->_uri = std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>");
+  b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b2->_cseq = 17038;
+  b2->_expires = now + 300;
+  b2->_priority = 0;
+  b2->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
+  b2->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
+  b2->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b2->_params["reg-id"] = "1";
+  b2->_params["+sip.ice"] = "";
+  b2->_private_id = "5102175698@cw-ngv.com";
+  b2->_emergency_registration = false;
+
+  AoR::Subscription* s2 = current_aor->get_subscription(s_id);
+  s2->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
+  s2->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s2->_from_tag = std::string("4321");
+  s2->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s2->_to_tag = std::string("1234");
+  s2->_cid = std::string("xyzabc@192.91.191.29");
+  s2->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s2->_expires = now + 300;
+
+  // Create the AoRPair
+  AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
+
+  // Check that `get_updated_subscriptions` and `get_removed_subscriptions` returns nothing
+  AoR::Subscriptions updated_subscriptions = aor_pair->get_updated_subscriptions();
+  ASSERT_TRUE(updated_subscriptions.find( s_id ) == updated_subscriptions.end());
+  AoR::Subscriptions removed_subscriptions = aor_pair->get_removed_subscriptions();
+  ASSERT_TRUE(removed_subscriptions.find( s_id ) == removed_subscriptions.end());
+  
+  delete aor_pair; aor_pair = NULL;
 }
