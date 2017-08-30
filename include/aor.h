@@ -316,6 +316,13 @@ public:
             (!_current_aor->subscriptions().empty()));
   }
 
+  /// Utility functions to compare Bindings and Subscriptions in the original AoR
+  /// and current AoR, and return the set of those created/updated or removed.
+  AoR::Bindings get_updated_bindings();
+  AoR::Subscriptions get_updated_subscriptions();
+  AoR::Bindings get_removed_bindings();
+  AoR::Subscriptions get_removed_subscriptions();
+
 private:
   AoR* _orig_aor;
   AoR* _current_aor;
