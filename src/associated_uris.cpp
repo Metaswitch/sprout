@@ -148,6 +148,9 @@ std::map<std::string, std::string> AssociatedURIs::get_wildcard_mappings()
   return _distinct_to_wildcard;
 }
 
+// Expected format of json:
+// {"associated-uris-array": [{"associated-uri": "sip:uri", "barring": false},.......],
+//  "wildcard-mappings": {"sip:distincturi": "sip:wildcarduri", .....}}
 void AssociatedURIs::to_json(rapidjson::Writer<rapidjson::StringBuffer>& writer)
 {
   writer.StartObject();
@@ -217,16 +220,18 @@ void AssociatedURIs::from_json(const rapidjson::Value& au_obj)
   }
 }
 
-bool AssociatedURIs::is_equal_to(AssociatedURIs associated_uris_other)
+bool AssociatedURIs::operator==(AssociatedURIs associated_uris_other)
 {
+  // Only comparing associated URIs and barring, not wildcard mappings
   if (_associated_uris != associated_uris_other.get_all_uris() ||
-      get_barred_uris() != associated_uris_other.get_barred_uris() ||
-      _distinct_to_wildcard != associated_uris_other.get_wildcard_mappings())
+      get_barred_uris() != associated_uris_other.get_barred_uris())
   {
-    TRC_DEBUG("Associated URIS is different in the 2 sets compared");
     return false;
   }
-
-  TRC_DEBUG("Associated URIs are the same");
   return true;
+}
+
+bool AssociatedURIs::operator!=(AssociatedURIs associated_uris_other)
+{
+  return !(operator==(associated_uris_other));
 }

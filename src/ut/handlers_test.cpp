@@ -1185,27 +1185,11 @@ class PushProfileTaskTest : public SipTest
 TEST_F(PushProfileTaskTest, MainlineTest)
 {
   std::string default_uri = "sip:6505550231@homedomain";
-  std::string body =          "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
-                              "  <PublicIdentity><Identity>sip:6505550232@homedomain</Identity><BarringIndicator>1</BarringIndicator></PublicIdentity>\n"
-			      "  <PublicIdentity><Identity>sip:6505550233@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>REGISTER</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>1</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
+  std::string user_data =     "<IMSSubscription><ServiceProfile>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
                               "</ServiceProfile></IMSSubscription>";
+  std::string body =          "{\"user-data-xml\":\"" + user_data + "\"}";
+
   AoR* aor = new AoR(default_uri);
   AoR* aor2 = new AoR(*aor);
   AoRPair* aor_pair = new AoRPair(aor, aor2);
@@ -1213,19 +1197,19 @@ TEST_F(PushProfileTaskTest, MainlineTest)
 
   EXPECT_CALL(*_subscriber_data_manager, get_aor_data(default_uri, _)).WillOnce(Return(aor_pair));
   EXPECT_CALL(*_subscriber_data_manager, set_aor_data(default_uri, aor_pair, _, _)).WillOnce(Return(Store::OK));
-
   EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
   _task->run();
 }
 
-// The XML is not valid and therefore not able to be parsed. Sends HTTP_BAD_REQUEST.
+// The method is not a put, and therefore is invalid. Sends HTTP_BAD_REQUEST.
 TEST_F(PushProfileTaskTest, InvalidMethod)
 {
   std::string default_uri = "sip:6505550231@homedomain";
-  std::string body =          "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
-                              "  <<\n"
+  std::string user_data =     "<IMSSubscription><ServiceProfile>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
                               "</ServiceProfile></IMSSubscription>";
+  std::string body =          "{\"user-data-xml\":\"" + user_data + "\"}";
+
   build_pushprofile_request(body, default_uri, htp_method_GET);
 
   EXPECT_CALL(*_httpstack, send_reply(_, 405, _));
@@ -1236,10 +1220,12 @@ TEST_F(PushProfileTaskTest, InvalidMethod)
 TEST_F(PushProfileTaskTest, InvalidXML)
 {
   std::string default_uri = "sip:6505550231@homedomain";
-  std::string body =          "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
-  			      "  <<\n"
+  std::string user_data =     "<IMSSubscription><ServiceProfile>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                              "<<"
                               "</ServiceProfile></IMSSubscription>";
+  std::string body =          "{\"user-data-xml\":\"" + user_data + "\"}";
+
   build_pushprofile_request(body, default_uri);
 
   EXPECT_CALL(*_httpstack, send_reply(_, 400, _));
@@ -1250,8 +1236,10 @@ TEST_F(PushProfileTaskTest, InvalidXML)
 TEST_F(PushProfileTaskTest, MissingPublicIdentityXML)
 {
   std::string default_uri = "sip:6505550231@homedomain";
-  std::string body =          "<IMSSubscription><ServiceProfile>\n"
-                              "</ServiceProfile></IMSSubscription>";
+  std::string user_data =  "<IMSSubscription><ServiceProfile>"
+                           "</ServiceProfile></IMSSubscription>";
+  std::string body =       "{\"user-data-xml\":\"" + user_data + "\"}";
+
   build_pushprofile_request(body, default_uri);
 
   EXPECT_CALL(*_httpstack, send_reply(_, 400, _));
@@ -1262,15 +1250,16 @@ TEST_F(PushProfileTaskTest, MissingPublicIdentityXML)
 TEST_F(PushProfileTaskTest, SubscriberDataManagerFails)
 {
   std::string default_uri = "sip:6505550231@homedomain";
-  std::string body =          "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+  std::string user_data =     "<IMSSubscription><ServiceProfile>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
                               "</ServiceProfile></IMSSubscription>";
+  std::string body =          "{\"user-data-xml\":\"" + user_data + "\"}";
+
   AoRPair* aor_pair;
   aor_pair = NULL;
   build_pushprofile_request(body, default_uri);
 
   EXPECT_CALL(*_subscriber_data_manager, get_aor_data(default_uri, _)).WillOnce(Return(aor_pair));
-
   EXPECT_CALL(*_httpstack, send_reply(_, 500, _));
   _task->run();
 }
@@ -1279,9 +1268,11 @@ TEST_F(PushProfileTaskTest, SubscriberDataManagerFails)
 TEST_F(PushProfileTaskTest, SubscriberDataManagerWriteFails)
 {
   std::string default_uri = "sip:6505550231@homedomain";
-  std::string body =          "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+  std::string user_data =     "<IMSSubscription><ServiceProfile>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
                               "</ServiceProfile></IMSSubscription>";
+  std::string body =          "{\"user-data-xml\":\"" + user_data + "\"}";
+
   AoR* aor = new AoR(default_uri);
   AoR* aor2 = new AoR(*aor);
   AoRPair* aor_pair = new AoRPair(aor, aor2);
@@ -1289,7 +1280,6 @@ TEST_F(PushProfileTaskTest, SubscriberDataManagerWriteFails)
 
   EXPECT_CALL(*_subscriber_data_manager, get_aor_data(default_uri, _)).WillOnce(Return(aor_pair));
   EXPECT_CALL(*_subscriber_data_manager, set_aor_data(default_uri, aor_pair, _, _)).WillOnce(Return(Store::ERROR));
-
   EXPECT_CALL(*_httpstack, send_reply(_, 500, _));
   _task->run();
 }
