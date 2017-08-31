@@ -1393,6 +1393,7 @@ void SubscriptionTest::check_NOTIFY_body(std::string& body,
 
     EXPECT_EQ("full", std::string(reg_info->first_attribute("state")->value()));
     EXPECT_EQ(reg_state, std::string(registration->first_attribute("state")->value()));
+    ASSERT_NE(nullptr, contact);
     EXPECT_EQ(contact_values.first, std::string(contact->first_attribute("state")->value()));
     EXPECT_EQ(contact_values.second, std::string(contact->first_attribute("event")->value()));
   }
