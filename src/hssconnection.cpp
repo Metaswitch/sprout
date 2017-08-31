@@ -362,7 +362,6 @@ bool decode_homestead_xml(const std::string public_user_identity,
                                               associated_uris,
                                               aliases,
                                               sifc_service,
-                                              true,
                                               trail))
   {
     return false;

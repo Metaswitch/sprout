@@ -372,9 +372,7 @@ TEST_F(BasicSubscriberDataManagerTest, AssociatedURIsTests)
 
   // Add URI
   std::string aor1 = "5102175691@cw-ngv.com";
-
   associated_uris.add_uri(aor1, false);
-
   aor_data1->get_current()->_associated_uris = associated_uris;
 
   // Write AoR record back to store
@@ -402,18 +400,12 @@ TEST_F(BasicSubscriberDataManagerTest, AssociatedURIsTests)
   EXPECT_EQ(now + 300, b1->_expires);
   EXPECT_EQ(0, b1->_priority);
 
-
   // Add some Associated URIs and write back to the store
   std::string aor2 = "5102175692@cw-ngv.com";
-  std::string wildcard1 = "5102175693@cw-ngv.com";
   std::string barred1 =  "5102175694@cw-ngv.com";
 
   associated_uris.add_uri(aor2, false);
-  associated_uris.add_uri(wildcard1, false);
   associated_uris.add_uri(barred1, true);
-
-  associated_uris.add_wildcard_mapping(wildcard1, aor1);
-
   aor_data1->get_current()->_associated_uris = associated_uris;
 
   // Write AoR record back to store
@@ -428,27 +420,21 @@ TEST_F(BasicSubscriberDataManagerTest, AssociatedURIsTests)
   AssociatedURIs au = aor_data1->get_current()->_associated_uris;
   std::vector<std::string> list_associated_uris = au.get_all_uris();
   std::vector<std::string> barred_uris = au.get_barred_uris();
-  std::map<std::string, std::string> wildcard_map = au.get_wildcard_mappings();
 
-  EXPECT_EQ(4u, list_associated_uris.size());
+  EXPECT_EQ(3u, list_associated_uris.size());
   EXPECT_EQ(std::string("5102175691@cw-ngv.com"), list_associated_uris[0]);
   EXPECT_EQ(std::string("5102175692@cw-ngv.com"), list_associated_uris[1]);
-  EXPECT_EQ(std::string("5102175693@cw-ngv.com"), list_associated_uris[2]);
-  EXPECT_EQ(std::string("5102175694@cw-ngv.com"), list_associated_uris[3]);
+  EXPECT_EQ(std::string("5102175694@cw-ngv.com"), list_associated_uris[2]);
 
   EXPECT_EQ(1u, barred_uris.size());
   EXPECT_EQ(std::string("5102175694@cw-ngv.com"), barred_uris[0]);
 
-  EXPECT_EQ(1u, wildcard_map.size());
-  EXPECT_EQ(std::string("5102175693@cw-ngv.com"), wildcard_map["5102175691@cw-ngv.com"]);
-
   EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 1234: reason(s) changed_associated_uris"));
+
   // Clear Associated URIs
   au.clear_uris();
-
   EXPECT_EQ(0u, au.get_all_uris().size());
   EXPECT_EQ(0u, au.get_barred_uris().size());
-  EXPECT_EQ(0u, au.get_wildcard_mappings().size());
 
   delete aor_data1; aor_data1 = NULL;
 }
@@ -617,7 +603,6 @@ TEST_F(BasicSubscriberDataManagerTest, ExpiryTests)
   delete aor_data1; aor_data1 = NULL;
 
   EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 1234: reason(s) bindings_changed subscription_created changed_associated_uris"));
-
 
   // Advance the time by 101 seconds and read the record back from the store.
   // The first binding should have expired.

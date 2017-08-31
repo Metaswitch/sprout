@@ -265,10 +265,9 @@ private:
   const Config* _cfg;
 };
 
-/// Task for receiving user data from Homestead, after a Push Profile Request
-/// Will parse the request, obtain the previous AoR from the store, change the
-/// Associated URIs, and reset to the store. Will send a HTTP Return Code back
-/// to Homestead.
+/// Task for receiving user data sent by Homestead when it receives a PPR.
+/// It will send NOTIFYs if the associated URIs have changed (by calling
+/// into the SDM)  Will send a HTTP Return Code back to Homestead.
 class PushProfileTask : public HttpStackUtils::Task
 {
 public:
@@ -295,13 +294,14 @@ public:
 
   void run();
   HTTPCode parse_request(std::string body, SAS::TrailId trail);
-  HTTPCode get_data(SAS::TrailId trail);
-  HTTPCode set_data(SAS::TrailId trail);
+  HTTPCode update_store_to_send_any_notifys(SAS::TrailId trail);
+  //HTTPCode get_data(SAS::TrailId trail);
+  //HTTPCode set_data(SAS::TrailId trail);
 
 protected:
   const Config* _cfg;
   std::string _default_public_id;
   AssociatedURIs _associated_uris;
-  AoRPair* _aor_pair;
+//  AoRPair* _aor_pair;
 };
 #endif

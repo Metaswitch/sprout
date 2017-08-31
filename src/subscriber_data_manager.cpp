@@ -565,7 +565,8 @@ void SubscriberDataManager::NotifySender::send_notifys(
   std::vector<std::string> expired_binding_uris;
   ClassifiedBindings binding_info_to_notify;
   bool bindings_changed = false;
-  bool associated_uris_changed;
+  AssociatedURIs associated_uris;
+  bool associated_uris_changed = false;
 
   // Iterate over the bindings in the original AoR. Find any that aren't in the current
   // AoR and mark those as expired.
@@ -647,11 +648,10 @@ void SubscriberDataManager::NotifySender::send_notifys(
     }
   }
 
-  AssociatedURIs associated_uris = aor_pair->get_current()->_associated_uris;
-  AssociatedURIs orig_associated_uris = aor_pair->get_orig()->_associated_uris;
+  associated_uris = aor_pair->get_current()->_associated_uris;
 
   // Check if the associated URIs have changed. If so, will need to send a NOTIFY.
-  associated_uris_changed = !associated_uris.is_equal_to(orig_associated_uris);
+  associated_uris_changed = (associated_uris != aor_pair->get_orig()->_associated_uris);
 
   // Iterate over the subscriptions in the original AoR, and send NOTIFYs for
   // any subscriptions that aren't in the current AoR.
@@ -661,9 +661,11 @@ void SubscriberDataManager::NotifySender::send_notifys(
                                          expired_binding_uris,
                                          now,
                                          trail);
+
   // Iterate over the subscriptions in the current AoR and send NOTIFYs.
-  // If the bindings have changed, then send NOTIFYs to all subscribers; otherwise,
-  // only send them when the subscription has been created or updated.
+  // If the bindings have changed, or the Associated URIs has changed,
+  // then send NOTIFYs to all subscribers; otherwise, only send them
+  // when the subscription has been created or updated.
   for (AoR::Subscriptions::const_iterator current_sub =
         aor_pair->get_current()->subscriptions().begin();
       current_sub != aor_pair->get_current()->subscriptions().end();

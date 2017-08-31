@@ -56,11 +56,11 @@ public:
   /// Returns all URIs.
   std::vector<std::string> get_all_uris();
 
-  /// Add a mapping between a distinct IMPU and the wildcard it belongs to
-  void add_wildcard_mapping(std::string wildcard, std::string distinct);
-
   /// Returns the wildcard mappings.
   std::map<std::string, std::string> get_wildcard_mappings();
+
+  /// Add a mapping between a distinct IMPU and the wildcard it belongs to
+  void add_wildcard_mapping(std::string wildcard, std::string distinct);
 
   /// Serialize the associated URIs as a JSON object.
   ///
@@ -77,7 +77,8 @@ public:
 
   // Compares the contents of this class instance to another, to see
   // if they are the same.
-  bool is_equal_to(AssociatedURIs associated_uris_other);
+  bool operator==(AssociatedURIs associated_uris_other);
+  bool operator!=(AssociatedURIs associated_uris_other);
 
 private:
   /// A vector of associated URIs.

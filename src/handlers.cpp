@@ -841,7 +841,7 @@ void PushProfileTask::run()
   // HTTP method must be a PUT
   if (_req.method() != htp_method_PUT)
   {
-    TRC_WARNING("HTTP method isn't put");
+    TRC_DEBUG("Rejecting request, since HTTP Method isn't PUT");
     send_http_reply(HTTP_BADMETHOD);
     delete this;
     return;
@@ -858,19 +858,14 @@ void PushProfileTask::run()
     return;
   }
 
-  rc = get_data(trail());
+  rc = update_store_to_send_any_notifys(trail());
+
   if (rc != HTTP_OK)
   {
-    TRC_WARNING("Could not get AoR data from SDM, send %d", rc);
+    TRC_DEBUG("Failure to handle request, send %d", rc);
     send_http_reply(rc);
     delete this;
     return;
-  }
-
-  rc = set_data(trail());
-  if (rc != HTTP_OK)
-  {
-    TRC_WARNING("Could not set AoR data to SDM, send %d", rc);
   }
   else
   {
@@ -882,8 +877,28 @@ void PushProfileTask::run()
 
 HTTPCode PushProfileTask::parse_request(std::string body, SAS::TrailId trail)
 {
-  std::map<std::string, Ifcs> unused_ifcs_map;
-  std::vector<std::string> aliases;
+  std::string user_data_xml;
+  rapidjson::Document doc;
+  doc.Parse<0>(body.c_str());
+
+  if (doc.HasParseError())
+  {
+    TRC_INFO("Failed to parse data as JSON: %s\nError: %s",
+             body.c_str(),
+             rapidjson::GetParseError_En(doc.GetParseError()));
+    return HTTP_BAD_REQUEST;
+  }
+
+  try
+  {
+    JSON_GET_STRING_MEMBER(doc, "user-data-xml", user_data_xml);
+  }
+  catch (JsonFormatError err)
+  {
+    TRC_WARNING("User data not available in the JSON");
+    return HTTP_BAD_REQUEST;
+  }
+
   const std::string prefix = "/registrations/";
   std::string full_path = _req.full_path();
   size_t end_of_impu = full_path.length();
@@ -891,9 +906,10 @@ HTTPCode PushProfileTask::parse_request(std::string body, SAS::TrailId trail)
   TRC_DEBUG("Extracted impu %s", _default_public_id.c_str());
 
   rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
+
   try
   {
-    root->parse<0>(root->allocate_string(body.c_str()));
+    root->parse<0>(root->allocate_string(user_data_xml.c_str()));
   }
   catch (rapidxml::parse_error& err)
   {
@@ -906,17 +922,11 @@ HTTPCode PushProfileTask::parse_request(std::string body, SAS::TrailId trail)
 
   rapidxml::xml_node<>* imss = root->first_node(RegDataXMLUtils::IMS_SUBSCRIPTION);
 
-  // Decode service profile from the XML. Create and populate an instance of th
+  // Decode service profile from the XML. Create and populate an instance of the
   // Associated URIs class
-  if (SproutXmlUtils::decode_service_profile(_default_public_id,
-                                             NULL,
-                                             imss,
-                                             unused_ifcs_map,
-                                             _associated_uris,
-                                             aliases,
-                                             NULL,
-                                             false,
-                                             trail))
+  if (SproutXmlUtils::get_uris_from_service_profile(imss,
+                                                     _associated_uris,
+                                                     trail))
   {
     delete root; root = NULL;
     return HTTP_OK;
@@ -928,43 +938,69 @@ HTTPCode PushProfileTask::parse_request(std::string body, SAS::TrailId trail)
   }
 }
 
-// Get the AoR pair from the store
-HTTPCode PushProfileTask::get_data(SAS::TrailId trail)
+HTTPCode PushProfileTask::update_store_to_send_any_notifys(SAS::TrailId trail)
 {
   AoRPair* aor_pair = NULL;
 
   if(!sdm_access_common(&aor_pair,
                          _default_public_id,
-                       	 _cfg->_sdm,
+                         _cfg->_sdm,
                          _cfg->_remote_sdms,
                          NULL,
-			 trail))
+                         trail))
   {
+    TRC_DEBUG("Could not get AoR data from SDM");
     return HTTP_SERVER_ERROR;
   }
-  _aor_pair = aor_pair;
-  TRC_DEBUG("Obtained AoR data");
-  return HTTP_OK;
-}
 
-// Set the associated URIs to the current AoR and update the data to the store.
-HTTPCode PushProfileTask::set_data(SAS::TrailId trail)
-{
-  bool all_bindings_expired;
+  TRC_DEBUG("Obtained AoR data");
+
+  bool all_bindings_expired = false;
   Store::Status set_rc;
-  _aor_pair->get_current()->_associated_uris = _associated_uris;
+  aor_pair->get_current()->_associated_uris = _associated_uris;
   set_rc = _cfg->_sdm->set_aor_data(_default_public_id,
-                                    _aor_pair,
-			            trail,
-			            all_bindings_expired);
+                                    aor_pair,
+                                    trail,
+                                    all_bindings_expired);
   if (set_rc != Store::OK)
   {
-    delete _aor_pair; _aor_pair = NULL;
+    TRC_DEBUG("Could not set AoR data to SDM");
     return HTTP_SERVER_ERROR;
   }
 
-  TRC_DEBUG("Successfully set AOR data");
-  delete _aor_pair; _aor_pair = NULL;
+  // If we have any remote stores, try to store this in them too.  We don't worry
+  // about failures in this case.
+  // LCOV_EXCL_START
+  if (aor_pair != NULL)
+  {
+    for (std::vector<SubscriberDataManager*>::const_iterator sdm = _cfg->_remote_sdms.begin();
+         sdm != _cfg->_remote_sdms.end();
+	 ++sdm)
+    {
+      if ((*sdm)->has_servers())
+      {
+        (*sdm)->set_aor_data(_default_public_id,
+                              aor_pair,
+                              trail,
+                              all_bindings_expired);
+      }
+    }
+  }
+  // LCOV_EXCL_STOP
+
+  if (all_bindings_expired)
+  {
+    TRC_DEBUG("All bindings have expired - triggering deregistration at the HSS");
+    SAS::Event event(trail, SASEvent::REGISTRATION_EXPIRED, 0);
+    event.add_var_param(_default_public_id);
+    SAS::report_event(event);
+
+    // Get the S-CSCF URI off the AoR to put on the SAR.
+    AoR* aor = aor_pair->get_current();
+
+    _cfg->_hss->update_registration_state(_default_public_id, "", HSSConnection::DEREG_TIMEOUT, aor->_scscf_uri, trail);
+  }
+
+  delete aor_pair; aor_pair = NULL;
   return HTTP_OK;
 }
-
