@@ -200,6 +200,8 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        fifcservice_test.cpp \
                        mmfservice_test.cpp \
                        scscf_utils.cpp \
+                       test_interposer.cpp \
+                       curl_interposer.cpp \
                        testingcommon.cpp
 
 COVERAGE_ROOT := ..
@@ -311,24 +313,13 @@ sprout_test_VALGRIND_ARGS := --suppressions=ut/sprout_test.supp
 include ../build-infra/cpp.mk
 
 # Special extra objects for sprout_test
-${BUILD_DIR}/bin/sprout_test : ${sprout_test_OBJECT_DIR}/md5.o \
-                               ${sprout_test_OBJECT_DIR}/test_interposer.so \
-                               ${sprout_test_OBJECT_DIR}/curl_interposer.so
+${BUILD_DIR}/bin/sprout_test : ${sprout_test_OBJECT_DIR}/md5.o
 
 # Build rules for SIPp cryptographic modules
 SIPP_DIR := ../modules/sipp
 $(sprout_test_OBJECT_DIR)/md5.o : $(SIPP_DIR)/md5.c
 	$(CC) $(CPPFLAGS) $(sprout_test_CPPFLAGS) -I$(SIPP_DIR) -c $(SIPP_DIR)/md5.c -o $@
 CLEANS += ${sprout_test_OBJECT_DIR}/md5.o
-
-# Build rule for our interposer.
-${sprout_test_OBJECT_DIR}/test_interposer.so : ../modules/cpp-common/test_utils/test_interposer.cpp ../modules/cpp-common/test_utils/test_interposer.hpp
-	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(sprout_test_CPPFLAGS) -shared -fPIC -ldl $< -o $@
-CLEANS += ${sprout_test_OBJECT_DIR}/test_interposer.so
-
-${sprout_test_OBJECT_DIR}/curl_interposer.so : ../modules/cpp-common/test_utils/curl_interposer.cpp ../modules/cpp-common/test_utils/curl_interposer.hpp ../modules/cpp-common/test_utils/fakecurl.cpp ../modules/cpp-common/test_utils/fakecurl.hpp
-	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(sprout_test_CPPFLAGS) -shared -fPIC -ldl $< -o $@
-CLEANS += ${sprout_test_OBJECT_DIR}/curl_interposer.so
 
 # Alarm definition generation rules
 ROOT := $(abspath $(shell pwd)/../)
