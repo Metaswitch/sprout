@@ -99,7 +99,9 @@ bool SubscriptionSproutlet::handle_request(pjsip_msg* req,
   URIClass uri_class = URIClassifier::classify_uri(req->line.req.uri);
   TRC_INFO("URI class is %d", uri_class);
   if (((uri_class != NODE_LOCAL_SIP_URI) &&
-       (uri_class != HOME_DOMAIN_SIP_URI)) ||
+       (uri_class != HOME_DOMAIN_SIP_URI) &&
+       (uri_class != GLOBAL_PHONE_NUMBER) &&
+       (uri_class != LOCAL_PHONE_NUMBER)) ||
       !PJUtils::check_route_headers(req))
   {
     TRC_DEBUG("Not processing subscription request not targeted at this domain or node");
