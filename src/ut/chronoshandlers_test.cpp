@@ -414,10 +414,11 @@ TEST_F(ChronosAuthTimeoutTest, NonceTimedOut)
   fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", RegDataXMLUtils::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
   ImpiStore::Impi* impi = new ImpiStore::Impi("6505550231@homedomain");
   ImpiStore::DigestAuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge("abcdef", "example.com", "auth", "ha1", time(NULL) + 30);
-  auth_challenge->correlator = "abcde";
-  auth_challenge->scscf_uri = "sip:scscf.sprout.homedomain:5058;transport=TCP";
+  auth_challenge->_correlator = "abcde";
+  auth_challenge->_scscf_uri = "sip:scscf.sprout.homedomain:5058;transport=TCP";
   impi->auth_challenges.push_back(auth_challenge);
-  store->set_impi(impi, 0);
+
+  EXPECT_CALL(*store, get_impi("6505550231@homedomain", _)).WillOnce(Return(impi));
 
   std::string body = "{\"impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231@homedomain\", \"nonce\": \"abcdef\"}";
   build_timeout_request(body, htp_method_POST);
@@ -426,8 +427,6 @@ TEST_F(ChronosAuthTimeoutTest, NonceTimedOut)
   handler->run();
 
   ASSERT_TRUE(fake_hss->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=6505550231%40homedomain", "{\"reqtype\": \"dereg-auth-timeout\", \"server_name\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}"));
-
-  delete impi; impi = NULL;
 }
 
 TEST_F(ChronosAuthTimeoutTest, NonceTimedOutWithEmptyCorrelator)
@@ -435,9 +434,10 @@ TEST_F(ChronosAuthTimeoutTest, NonceTimedOutWithEmptyCorrelator)
   fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", RegDataXMLUtils::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
   ImpiStore::Impi* impi = new ImpiStore::Impi("6505550231@homedomain");
   ImpiStore::DigestAuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge("abcdef", "example.com", "auth", "ha1", time(NULL) + 30);
-  auth_challenge->scscf_uri = "sip:scscf.sprout.homedomain:5058;transport=TCP";
+  auth_challenge->_scscf_uri = "sip:scscf.sprout.homedomain:5058;transport=TCP";
   impi->auth_challenges.push_back(auth_challenge);
-  store->set_impi(impi, 0);
+
+  EXPECT_CALL(*store, get_impi("6505550231@homedomain", _)).WillOnce(Return(impi));
 
   std::string body = "{\"impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231@homedomain\", \"nonce\": \"abcdef\"}";
   build_timeout_request(body, htp_method_POST);
@@ -446,18 +446,17 @@ TEST_F(ChronosAuthTimeoutTest, NonceTimedOutWithEmptyCorrelator)
   handler->run();
 
   ASSERT_TRUE(fake_hss->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=6505550231%40homedomain", "{\"reqtype\": \"dereg-auth-timeout\", \"server_name\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}"));
-
-  delete impi; impi = NULL;
 }
 
 TEST_F(ChronosAuthTimeoutTest, MainlineTest)
 {
   ImpiStore::Impi* impi = new ImpiStore::Impi("test@example.com");
   ImpiStore::DigestAuthChallenge* auth_challenge = new ImpiStore::DigestAuthChallenge("abcdef", "example.com", "auth", "ha1", time(NULL) + 30);
-  auth_challenge->nonce_count++; // Indicates that one successful authentication has occurred
-  auth_challenge->correlator = "abcde";
+  auth_challenge->_nonce_count++; // Indicates that one successful authentication has occurred
+  auth_challenge->_correlator = "abcde";
   impi->auth_challenges.push_back(auth_challenge);
-  store->set_impi(impi, 0);
+
+  EXPECT_CALL(*store, get_impi("test@example.com", _)).WillOnce(Return(impi));
 
   std::string body = "{\"impu\": \"sip:test@example.com\", \"impi\": \"test@example.com\", \"nonce\": \"abcdef\"}";
   build_timeout_request(body, htp_method_POST);
@@ -466,8 +465,6 @@ TEST_F(ChronosAuthTimeoutTest, MainlineTest)
   handler->run();
 
   ASSERT_FALSE(fake_hss->url_was_requested("/impu/sip%3Atest%40example.com/reg-data?private_id=test%40example.com", "{\"reqtype\": \"dereg-auth-timeout\"}"));
-
-  delete impi; impi = NULL;
 }
 
 TEST_F(ChronosAuthTimeoutTest, BadMethod)

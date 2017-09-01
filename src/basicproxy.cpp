@@ -2056,7 +2056,7 @@ bool BasicProxy::UACTsx::retry_request()
     pjsip_transaction* retry_tsx;
 
     // In congestion cases, the old tdata might still be held by PjSIP's
-    // trasport layer waiting to be sent.  Therefore it's not safe to re-send
+    // transport layer waiting to be sent.  Therefore it's not safe to re-send
     // the same tdata, so we should clone it first.
     // LCOV_EXCL_START - No congestion in UTs
     if (_tdata->is_pending)
