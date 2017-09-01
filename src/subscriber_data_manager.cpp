@@ -101,8 +101,6 @@ AoRPair* SubscriberDataManager::get_aor_data(const std::string& aor_id,
 ///                     should not retry.
 ///
 /// @param aor_id     The SIP Address of Record for the registration
-/// @param associated_uris
-///                   The associated IMPUs in the Implicit Registration Set for the AoR
 /// @param aor_pair   The registration data record.
 /// @param trail      The SAS trail
 bool SubscriberDataManager::unused_bool = false;
@@ -565,7 +563,6 @@ void SubscriberDataManager::NotifySender::send_notifys(
   std::vector<std::string> expired_binding_uris;
   ClassifiedBindings binding_info_to_notify;
   bool bindings_changed = false;
-  AssociatedURIs associated_uris;
   bool associated_uris_changed = false;
 
   // Iterate over the bindings in the original AoR. Find any that aren't in the current
@@ -648,10 +645,8 @@ void SubscriberDataManager::NotifySender::send_notifys(
     }
   }
 
-  associated_uris = aor_pair->get_current()->_associated_uris;
-
   // Check if the associated URIs have changed. If so, will need to send a NOTIFY.
-  associated_uris_changed = (associated_uris != aor_pair->get_orig()->_associated_uris);
+  associated_uris_changed = (aor_pair->get_current()->_associated_uris != aor_pair->get_orig()->_associated_uris);
 
   // Iterate over the subscriptions in the original AoR, and send NOTIFYs for
   // any subscriptions that aren't in the current AoR.
@@ -717,7 +712,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
                                             &tdata_notify,
                                             subscription,
                                             aor_id,
-                                            &associated_uris,
+                                            &aor_pair->get_current()->_associated_uris,
                                             aor_pair->get_orig(),
                                             binding_info_to_notify,
                                             NotifyUtils::RegistrationState::ACTIVE,
@@ -764,8 +759,6 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
     NotifyUtils::RegistrationState::ACTIVE :
     NotifyUtils::RegistrationState::TERMINATED;
 
-  AssociatedURIs associated_uris = aor_pair->get_current()->_associated_uris;
-
   // expired_binding_uris lists bindings which have expired - we no longer have a valid connection to
   // these endpoints, so shouldn't send a NOTIFY to them (even to say that their subscription is
   // terminated).
@@ -808,7 +801,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
                                           &tdata_notify,
                                           s,
                                           aor_id,
-                                          &associated_uris,
+                                          &aor_pair->get_current()->_associated_uris,
                                           aor_pair->get_orig(),
                                           binding_info_to_notify,
                                           reg_state,

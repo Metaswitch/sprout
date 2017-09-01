@@ -63,10 +63,12 @@ bool get_uris_from_service_profile(rapidxml::xml_node<>* node,
         rapidxml::xml_node<>* extension =
                               public_id->first_node(RegDataXMLUtils::EXTENSION);
 
+        // LCOV_EXCL_START
         if (extension)
         {
           RegDataXMLUtils::parse_extension_identity(associated_uri, extension);
         }
+        // LCOV_EXCL_STOP
 
         rapidxml::xml_node<>* barring_indication =
                      public_id->first_node(RegDataXMLUtils::BARRING_INDICATION);
@@ -83,6 +85,7 @@ bool get_uris_from_service_profile(rapidxml::xml_node<>* node,
           }
         }
 
+        // LCOV_EXCL_START
         if (associated_uri != identity_uri)
         {
           // We're in the case where we're processing a non-distinct IMPU. We
@@ -92,6 +95,7 @@ bool get_uris_from_service_profile(rapidxml::xml_node<>* node,
           // needs to override the barring status of the wildcard IMPU.
           associated_uris.add_barring_status(identity_uri, barred);
         }
+        // LCOV_EXCL_STOP
         else if (!associated_uris.contains_uri(associated_uri))
         {
           associated_uris.add_uri(associated_uri, barred);

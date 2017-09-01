@@ -150,13 +150,13 @@ void AssociatedURIs::add_wildcard_mapping(std::string wildcard,
 }
 
 // Expected format of json:
-// {"associated-uris-array": [{"associated-uri": "sip:uri", "barring": false},.......],
-//  "wildcard-mappings": {"sip:distincturi": "sip:wildcarduri", .....}}
+// {"uris": [{"uri": "sip:uri", "barring": false},.......],
+//  "wildcard-mapping": {"distinct": ".....", "wildcard": "......"}}
 void AssociatedURIs::to_json(rapidjson::Writer<rapidjson::StringBuffer>& writer)
 {
   writer.StartObject();
   {
-    writer.String(JSON_ASSOCIATED_URIS_ARRAY);
+    writer.String(JSON_URIS);
     writer.StartArray();
     for (std::vector<std::string>::iterator uris_it = _associated_uris.begin();
          uris_it != _associated_uris.end();
@@ -165,21 +165,22 @@ void AssociatedURIs::to_json(rapidjson::Writer<rapidjson::StringBuffer>& writer)
       bool uri_barred = is_impu_barred(*uris_it);
       writer.StartObject();
       {
-        writer.String(JSON_ASSOC_URI); writer.String((*uris_it).c_str());
+        writer.String(JSON_URI); writer.String((*uris_it).c_str());
         writer.String(JSON_BARRING); writer.Bool(uri_barred);
       }
       writer.EndObject();
     }
     writer.EndArray();
 
-    writer.String(JSON_WILDCARD_MAPPINGS);
+    writer.String(JSON_WILDCARD_MAPPING);
     writer.StartObject();
     {
-      for (std::map<std::string, std::string>::const_iterator wildcard_it = _distinct_to_wildcard.begin();
-           wildcard_it != _distinct_to_wildcard.end();
-           ++wildcard_it)
+      if (get_wildcard_mapping().size() != 0)
       {
-        writer.String(wildcard_it->first.c_str()); writer.String(wildcard_it->second.c_str());
+        writer.String(JSON_DISTINCT);
+        writer.String(get_wildcard_mapping().begin()->first.c_str());
+        writer.String(JSON_WILDCARD);
+        writer.String(get_wildcard_mapping().begin()->second.c_str());
       }
     }
     writer.EndObject();
@@ -189,9 +190,9 @@ void AssociatedURIs::to_json(rapidjson::Writer<rapidjson::StringBuffer>& writer)
 
 void AssociatedURIs::from_json(const rapidjson::Value& au_obj)
 {
-  JSON_ASSERT_CONTAINS(au_obj, JSON_ASSOCIATED_URIS_ARRAY);
-  JSON_ASSERT_ARRAY(au_obj[JSON_ASSOCIATED_URIS_ARRAY]);
-  const rapidjson::Value& associated_uris_arr = au_obj[JSON_ASSOCIATED_URIS_ARRAY];
+  JSON_ASSERT_CONTAINS(au_obj, JSON_URIS);
+  JSON_ASSERT_ARRAY(au_obj[JSON_URIS]);
+  const rapidjson::Value& associated_uris_arr = au_obj[JSON_URIS];
 
   clear_uris();
 
@@ -201,23 +202,24 @@ void AssociatedURIs::from_json(const rapidjson::Value& au_obj)
   {
     std::string uri;
     bool barring;
-    JSON_GET_STRING_MEMBER(*associated_uris_it, JSON_ASSOC_URI, uri);
+    JSON_GET_STRING_MEMBER(*associated_uris_it, JSON_URI, uri);
     JSON_GET_BOOL_MEMBER(*associated_uris_it, JSON_BARRING, barring);
     TRC_DEBUG("From JSON - Adding URI: %s, barring: %d", uri.c_str(), barring);
     add_uri(uri, barring);
   }
 
-  JSON_ASSERT_CONTAINS(au_obj, JSON_WILDCARD_MAPPINGS);
-  JSON_ASSERT_OBJECT(au_obj[JSON_WILDCARD_MAPPINGS]);
-  const rapidjson::Value& wildcard_obj = au_obj[JSON_WILDCARD_MAPPINGS];
+  JSON_ASSERT_CONTAINS(au_obj, JSON_WILDCARD_MAPPING);
+  JSON_ASSERT_OBJECT(au_obj[JSON_WILDCARD_MAPPING]);
+  const rapidjson::Value& wildcard_obj = au_obj[JSON_WILDCARD_MAPPING];
 
-  for (rapidjson::Value::ConstMemberIterator wildcard_it = wildcard_obj.MemberBegin();
-       wildcard_it != wildcard_obj.MemberEnd();
-       ++wildcard_it)
+  if (wildcard_obj.HasMember(JSON_DISTINCT))
   {
-    JSON_ASSERT_STRING(wildcard_it->value);
-    add_wildcard_mapping(wildcard_it->value.GetString(),
-                         wildcard_it->name.GetString());
+    std::string distinct;
+    std::string wildcard;
+    JSON_GET_STRING_MEMBER(wildcard_obj, JSON_DISTINCT, distinct)
+    JSON_GET_STRING_MEMBER(wildcard_obj, JSON_WILDCARD, wildcard)
+
+    add_wildcard_mapping(distinct, wildcard);
   }
 }
 

@@ -1183,13 +1183,29 @@ class PushProfileTaskTest : public TestWithMockSdms
   }
 };
 
-// Mainline Case
+// Mainline Case. Complicated XML to make sure all components can be handled correctly
 TEST_F(PushProfileTaskTest, MainlineTest)
 {
   std::string default_uri = "sip:6505550231@homedomain";
   std::string user_data =     "<IMSSubscription><ServiceProfile>"
                               "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
                               "<PublicIdentity><Identity>sip:6505550232@homedomain</Identity><BarringIndication>1</BarringIndication></PublicIdentity>"
+                              "<InitialFilterCriteria>"
+                              "<Priority>1</Priority>"
+                              "<TriggerPoint>"
+                              "<ConditionTypeCNF>0</ConditionTypeCNF>"
+                              "<SPT>"
+                              "<ConditionNegated>0</ConditionNegated>"
+                              "<Group>0</Group>"
+                              "<Method>REGISTER</Method>"
+                              "<Extension></Extension>"
+                              "</SPT>"
+                              "</TriggerPoint>"
+                              "<ApplicationServer>"
+                              "<ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>"
+                              "<DefaultHandling>1</DefaultHandling>"
+                              "</ApplicationServer>"
+                              "</InitialFilterCriteria>"
                               "</ServiceProfile></IMSSubscription>";
   std::string body =          "{\"user-data-xml\":\"" + user_data + "\"}";
 
@@ -1235,7 +1251,7 @@ TEST_F(PushProfileTaskTest, InvalidJSON)
 }
 
 // The JSON is valid JSON, but does not contain the xml component as expected Sends HTTP_BAD_REQUEST
-TEST_F(PushProfileTaskTest, MisingXMLfromJSON)
+TEST_F(PushProfileTaskTest, MissingXMLfromJSON)
 {
   std::string default_uri = "sip:6505550231@homedomain";
   std::string user_data =     "<IMSSubscription><ServiceProfile>"
@@ -1273,7 +1289,7 @@ TEST_F(PushProfileTaskTest, MissingServiceProfileXML)
   std::string user_data =     "<IMSSubscription>"
                               "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
                               "</IMSSubscription>";
-  std::string body = "{\"user-data-xml\":\""+ default_uri + "\"}";
+  std::string body = "{\"user-data-xml\":\"" + user_data + "\"}";
 
   build_pushprofile_request(body, default_uri);
 

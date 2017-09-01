@@ -941,31 +941,39 @@ HTTPCode PushProfileTask::parse_request(std::string body, SAS::TrailId trail)
 HTTPCode PushProfileTask::update_associated_uris(SAS::TrailId trail)
 {
   AoRPair* aor_pair = NULL;
-
-  if(!sdm_access_common(&aor_pair,
-                        _default_public_id,
-                        _cfg->_sdm,
-                        _cfg->_remote_sdms,
-                        NULL,
-                        trail))
-  {
-    delete aor_pair; aor_pair = NULL;
-    TRC_DEBUG("Could not get AoR data from SDM");
-    return HTTP_SERVER_ERROR;
-  }
-
-  TRC_DEBUG("Obtained AoR data");
-
   bool all_bindings_expired = false;
   Store::Status set_rc;
-  aor_pair->get_current()->_associated_uris = _associated_uris;
-  set_rc = _cfg->_sdm->set_aor_data(_default_public_id,
-                                    aor_pair,
-                                    trail,
-                                    all_bindings_expired);
+
+  do
+  {
+    if(!sdm_access_common(&aor_pair,
+                          _default_public_id,
+                          _cfg->_sdm,
+                          _cfg->_remote_sdms,
+                          NULL,
+                          trail))
+    {
+      delete aor_pair; aor_pair = NULL;
+      TRC_DEBUG("Could not get AoR data from SDM");
+      return HTTP_SERVER_ERROR;
+    }
+
+    TRC_DEBUG("Obtained AoR data");
+
+    aor_pair->get_current()->_associated_uris = _associated_uris;
+    set_rc = _cfg->_sdm->set_aor_data(_default_public_id,
+                                      aor_pair,
+                                      trail,
+                                      all_bindings_expired);
+    if (set_rc != Store::OK)
+    {
+      delete aor_pair; aor_pair = NULL;
+    }
+  }
+  while (set_rc == Store::DATA_CONTENTION);
+
   if (set_rc != Store::OK)
   {
-    delete aor_pair; aor_pair = NULL;
     TRC_DEBUG("Could not set AoR data to SDM");
     return HTTP_SERVER_ERROR;
   }
