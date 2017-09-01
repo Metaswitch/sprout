@@ -79,7 +79,7 @@ pj_xml_node* notify_create_reg_state_xml(
                          pj_pool_t *pool,
                          std::string& aor,
                          AssociatedURIs* associated_uris,
-                         SubscriberDataManager::AoR::Subscription* subscription,
+                         AoR::Subscription* subscription,
                          std::vector<NotifyUtils::BindingNotifyInformation*> bnis,
                          NotifyUtils::RegistrationState reg_state,
                          SAS::TrailId trail)
@@ -318,7 +318,7 @@ pj_status_t notify_create_body(pjsip_msg_body* body,
                                pj_pool_t *pool,
                                std::string& aor,
                                AssociatedURIs* associated_uris,
-                               SubscriberDataManager::AoR::Subscription* subscription,
+                               AoR::Subscription* subscription,
                                std::vector<NotifyUtils::BindingNotifyInformation*> bnis,
                                NotifyUtils::RegistrationState reg_state,
                                SAS::TrailId trail)
@@ -355,7 +355,7 @@ pj_status_t notify_create_body(pjsip_msg_body* body,
 
 pj_status_t create_request_from_subscription(
                                      pjsip_tx_data** p_tdata,
-                                     SubscriberDataManager::AoR::Subscription* subscription,
+                                     AoR::Subscription* subscription,
                                      int cseq,
                                      pj_str_t* body)
 {
@@ -386,10 +386,10 @@ pj_status_t create_request_from_subscription(
 // Pass the correct subscription parameters in to create_notify
 pj_status_t NotifyUtils::create_subscription_notify(
                                     pjsip_tx_data** tdata_notify,
-                                    SubscriberDataManager::AoR::Subscription* s,
+                                    AoR::Subscription* s,
                                     std::string aor,
                                     AssociatedURIs* associated_uris,
-                                    SubscriberDataManager::AoR* aor_data,
+                                    AoR* aor_data,
                                     std::vector<NotifyUtils::BindingNotifyInformation*> bnis,
                                     NotifyUtils::RegistrationState reg_state,
                                     int now,
@@ -420,7 +420,7 @@ pj_status_t NotifyUtils::create_subscription_notify(
 // Create the request with to and from headers and a null body string, then add the body.
 pj_status_t NotifyUtils::create_notify(
                                     pjsip_tx_data** tdata_notify,
-                                    SubscriberDataManager::AoR::Subscription* subscription,
+                                    AoR::Subscription* subscription,
                                     std::string aor,
                                     AssociatedURIs* associated_uris,
                                     int cseq,

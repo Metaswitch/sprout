@@ -45,9 +45,11 @@ public:
 
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
+    _local_aor_store = new AstaireAoRStore(_local_data_store);
+    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, NULL, true);
     _remote_data_store = new LocalStore();
-    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, NULL, true);
-    _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, NULL, false);
+    _remote_aor_store = new AstaireAoRStore(_remote_data_store);
+    _remote_sdm = new SubscriberDataManager((AoRStore*)_remote_aor_store, _chronos_connection, NULL, false);
     _analytics = new MockAnalyticsLogger();
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
@@ -65,8 +67,10 @@ public:
     delete _hss_connection; _hss_connection = NULL;
     delete _analytics; _analytics = NULL;
     delete _remote_sdm; _remote_sdm = NULL;
-    delete _sdm; _sdm = NULL;
+    delete _remote_aor_store; _remote_aor_store = NULL;
     delete _remote_data_store; _remote_data_store = NULL;
+    delete _sdm; _sdm = NULL;
+    delete _local_aor_store; _local_aor_store = NULL;
     delete _local_data_store; _local_data_store = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
     SipTest::TearDownTestCase();
@@ -101,8 +105,8 @@ public:
 
     // Get an initial empty AoR record and add a binding.
     int now = time(NULL);
-    SubscriberDataManager::AoRPair* aor_pair = _sdm->get_aor_data(std::string("sip:6505550231@homedomain"), 0);
-    SubscriberDataManager::AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+    AoRPair* aor_pair = _sdm->get_aor_data(std::string("sip:6505550231@homedomain"), 0);
+    AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
     b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
     b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
     b1->_cseq = 17038;
@@ -171,6 +175,8 @@ public:
 protected:
   static LocalStore* _local_data_store;
   static LocalStore* _remote_data_store;
+  static AstaireAoRStore* _local_aor_store;
+  static AstaireAoRStore* _remote_aor_store;
   static SubscriberDataManager* _sdm;
   static SubscriberDataManager* _remote_sdm;
   static MockAnalyticsLogger* _analytics;
@@ -201,6 +207,8 @@ protected:
 
 LocalStore* SubscriptionTest::_local_data_store;
 LocalStore* SubscriptionTest::_remote_data_store;
+AstaireAoRStore* SubscriptionTest::_local_aor_store;
+AstaireAoRStore* SubscriptionTest::_remote_aor_store;
 SubscriberDataManager* SubscriptionTest::_sdm;
 SubscriberDataManager* SubscriptionTest::_remote_sdm;
 MockAnalyticsLogger* SubscriptionTest::_analytics;
@@ -455,8 +463,8 @@ TEST_F(SubscriptionTest, SimpleMainlineWithTelURI)
 {
   // Get an initial empty AoR record and add a binding (with the Tel URI)
   int now = time(NULL);
-  SubscriberDataManager::AoRPair* aor_pair = _sdm->get_aor_data(std::string("tel:6505550231"), 0);
-  SubscriberDataManager::AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  AoRPair* aor_pair = _sdm->get_aor_data(std::string("tel:6505550231"), 0);
+  AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -762,8 +770,8 @@ TEST_F(SubscriptionTest, NonPrimaryAssociatedUri)
 {
   // Get an initial empty AoR record and add a binding.
   int now = time(NULL);
-  SubscriberDataManager::AoRPair* aor_pair = _sdm->get_aor_data(std::string("sip:6505550233@homedomain"), 0);
-  SubscriberDataManager::AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  AoRPair* aor_pair = _sdm->get_aor_data(std::string("sip:6505550233@homedomain"), 0);
+  AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -816,8 +824,8 @@ TEST_F(SubscriptionTest, NoNotificationsForEmergencyRegistrations)
   // Get an initial empty AoR record and add a standard and an emergency binding.
   int now = time(NULL);
 
-  SubscriberDataManager::AoRPair* aor_data1 = _sdm->get_aor_data(std::string("sip:6505550231@homedomain"), 0);
-  SubscriberDataManager::AoR::Binding* b1 = aor_data1->get_current()->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  AoRPair* aor_data1 = _sdm->get_aor_data(std::string("sip:6505550231@homedomain"), 0);
+  AoR::Binding* b1 = aor_data1->get_current()->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;sos;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -829,7 +837,7 @@ TEST_F(SubscriptionTest, NoNotificationsForEmergencyRegistrations)
   b1->_params["+sip.ice"] = "";
   b1->_emergency_registration = true;
 
-  SubscriberDataManager::AoR::Binding* b2 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  AoR::Binding* b2 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   b2->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
   b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b2->_cseq = 17038;
@@ -941,8 +949,8 @@ TEST_F(SubscriptionTest, SubscriptionWithWildcard)
 {
   // Get an initial empty AoR record and add a binding.
   int now = time(NULL);
-  SubscriberDataManager::AoRPair* aor_pair = _sdm->get_aor_data(std::string("sip:6505551231@homedomain"), 0);
-  SubscriberDataManager::AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  AoRPair* aor_pair = _sdm->get_aor_data(std::string("sip:6505551231@homedomain"), 0);
+  AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   b1->_uri = std::string("<sip:6505551231@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -1000,8 +1008,8 @@ TEST_F(SubscriptionTest, SubscriptionWithBarredIdentity)
 {
   // Get an initial empty AoR record and add a binding.
   int now = time(NULL);
-  SubscriberDataManager::AoRPair* aor_pair = _sdm->get_aor_data(std::string("sip:6505551231@homedomain"), 0);
-  SubscriberDataManager::AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  AoRPair* aor_pair = _sdm->get_aor_data(std::string("sip:6505551231@homedomain"), 0);
+  AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   b1->_uri = std::string("<sip:6505551231@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -1204,7 +1212,7 @@ TEST_F(SubscriptionTest, Resubscribe)
 void SubscriptionTest::check_subscriptions(std::string aor, uint32_t expected)
 {
   // Check that we registered the correct URI (0233, not 0234).
-  SubscriberDataManager::AoRPair* aor_data = _sdm->get_aor_data(aor, 0);
+  AoRPair* aor_data = _sdm->get_aor_data(aor, 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(expected, aor_data->get_current()->_subscriptions.size());
   delete aor_data; aor_data = NULL;
@@ -1361,7 +1369,8 @@ public:
   {
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new MockStore();
-    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, NULL, true);
+    _local_aor_store = new AstaireAoRStore(_local_data_store);
+    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, NULL, true);
     _analytics = new AnalyticsLogger();
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
@@ -1408,6 +1417,7 @@ public:
     delete _analytics; _analytics = NULL;
     delete _sdm; _sdm = NULL;
     delete _local_data_store; _local_data_store = NULL;
+    delete _local_aor_store; _local_aor_store = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
   }
 
@@ -1442,6 +1452,7 @@ public:
 
 protected:
   MockStore* _local_data_store;
+  AstaireAoRStore* _local_aor_store;
   SubscriberDataManager* _sdm;
   AnalyticsLogger* _analytics;
   ACRFactory* _acr_factory;

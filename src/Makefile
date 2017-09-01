@@ -29,6 +29,7 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          memcachedstoreview.cpp \
                          memcached_config.cpp \
                          impistore.cpp \
+                         astaire_impistore.cpp \
                          subscriber_data_manager.cpp \
                          xdmconnection.cpp \
                          simservs.cpp \
@@ -95,7 +96,9 @@ SPROUT_COMMON_SOURCES := logger.cpp \
                          fifcservice.cpp \
                          mmfservice.cpp \
                          mmftargets.cpp \
-                         event_statistic_accumulator.cpp
+                         event_statistic_accumulator.cpp \
+                         aor.cpp \
+                         astaire_aor_store.cpp
 
 sprout_SOURCES := ${SPROUT_COMMON_SOURCES} \
                   snmp_counter_table.cpp \
@@ -138,7 +141,7 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        xdmconnection_test.cpp \
                        enumservice_test.cpp \
                        subscriber_data_manager_test.cpp \
-                       impistore_test.cpp \
+                       astaire_impistore_test.cpp \
                        registrar_test.cpp \
                        bono_test.cpp \
                        bgcfservice_test.cpp \
