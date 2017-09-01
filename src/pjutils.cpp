@@ -910,11 +910,11 @@ BaseAddrIterator* PJUtils::resolve_iter(const std::string& name,
                            int allowed_host_state)
 {
   return stack_data.sipresolver->resolve_iter(name,
-                                       stack_data.addr_family,
-                                       port,
-                                       transport,
-                                       retries,
-                                       allowed_host_state);
+                                              stack_data.addr_family,
+                                              port,
+                                              transport,
+                                              retries,
+                                              allowed_host_state);
 }
 
 
@@ -926,13 +926,12 @@ void PJUtils::resolve(const std::string& name,
                       std::vector<AddrInfo>& servers,
                       int allowed_host_state)
 {
-  stack_data.sipresolver->resolve(name,
-                                  stack_data.addr_family,
-                                  port,
-                                  transport,
-                                  retries,
-                                  servers,
-                                  allowed_host_state);
+  BaseAddrIterator* servers_iter = resolve_iter(name,
+                                                port,
+                                                transport,
+                                                retries,
+                                                allowed_host_state);
+  servers = servers_iter->take(retries);
 }
 
 
@@ -986,40 +985,11 @@ void PJUtils::resolve_next_hop(pjsip_tx_data* tdata,
                                int allowed_host_state,
                                SAS::TrailId trail)
 {
-  // Get the next hop URI from the message and parse out the destination, port
-  // and transport.
-  pjsip_sip_uri* next_hop = (pjsip_sip_uri*)PJUtils::next_hop(tdata->msg);
-  std::string name = std::string(next_hop->host.ptr, next_hop->host.slen);
-  int port = next_hop->port;
-  int transport = -1;
-  if (pj_stricmp2(&next_hop->transport_param, "TCP") == 0)
-  {
-    transport = IPPROTO_TCP;
-  }
-  else if (pj_stricmp2(&next_hop->transport_param, "UDP") == 0)
-  {
-    transport = IPPROTO_UDP;
-  }
-
-  if (retries == 0)
-  {
-    // Used default number of retries.
-    retries = DEFAULT_RETRIES;
-  }
-
-  stack_data.sipresolver->resolve(name,
-                                  stack_data.addr_family,
-                                  port,
-                                  transport,
-                                  retries,
-                                  servers,
-                                  allowed_host_state,
-                                  trail);
-
-  TRC_INFO("Resolved destination URI %s to %d servers",
-           PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                  (pjsip_uri*)next_hop).c_str(),
-           servers.size());
+  BaseAddrIterator* servers_iter = resolve_next_hop_iter(tdata,
+                                                         retries,
+                                                         allowed_host_state,
+                                                         trail);
+  servers = servers_iter->take(retries);
 }
 
 
