@@ -189,6 +189,7 @@ AoR* AstaireAoRStore::JsonSerializerDeserializer::
 
   try
   {
+    JSON_ASSERT_OBJECT(doc);
     JSON_ASSERT_CONTAINS(doc, JSON_BINDINGS);
     JSON_ASSERT_OBJECT(doc[JSON_BINDINGS]);
     const rapidjson::Value& bindings_obj = doc[JSON_BINDINGS];
