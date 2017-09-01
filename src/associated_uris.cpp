@@ -136,16 +136,17 @@ std::vector<std::string> AssociatedURIs::get_all_uris()
   return _associated_uris;
 }
 
+// Returns the wildcard mapping
+std::map<std::string, std::string> AssociatedURIs::get_wildcard_mapping()
+{
+  return _distinct_to_wildcard;
+}
+
 // Sets up the link between a distinct IMPU and its wildcard.
 void AssociatedURIs::add_wildcard_mapping(std::string wildcard,
                                           std::string distinct)
 {
   _distinct_to_wildcard.insert(std::make_pair(distinct, wildcard));
-}
-
-std::map<std::string, std::string> AssociatedURIs::get_wildcard_mappings()
-{
-  return _distinct_to_wildcard;
 }
 
 // Expected format of json:

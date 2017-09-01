@@ -403,9 +403,12 @@ TEST_F(BasicSubscriberDataManagerTest, AssociatedURIsTests)
   // Add some Associated URIs and write back to the store
   std::string aor2 = "5102175692@cw-ngv.com";
   std::string barred1 =  "5102175694@cw-ngv.com";
+  std::string wildcard1 = "510*@cw-ngv.com";
 
   associated_uris.add_uri(aor2, false);
   associated_uris.add_uri(barred1, true);
+  associated_uris.add_wildcard_mapping(aor2, wildcard1);
+
   aor_data1->get_current()->_associated_uris = associated_uris;
 
   // Write AoR record back to store
@@ -420,6 +423,7 @@ TEST_F(BasicSubscriberDataManagerTest, AssociatedURIsTests)
   AssociatedURIs au = aor_data1->get_current()->_associated_uris;
   std::vector<std::string> list_associated_uris = au.get_all_uris();
   std::vector<std::string> barred_uris = au.get_barred_uris();
+  std::map<std::string, std::string> wildcard_map = au.get_wildcard_mapping();
 
   EXPECT_EQ(3u, list_associated_uris.size());
   EXPECT_EQ(std::string("5102175691@cw-ngv.com"), list_associated_uris[0]);
@@ -428,6 +432,8 @@ TEST_F(BasicSubscriberDataManagerTest, AssociatedURIsTests)
 
   EXPECT_EQ(1u, barred_uris.size());
   EXPECT_EQ(std::string("5102175694@cw-ngv.com"), barred_uris[0]);
+
+  EXPECT_EQ(1u, wildcard_map.size());
 
   EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 1234: reason(s) changed_associated_uris"));
 
@@ -1405,7 +1411,7 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonCreatedSubscription)
   // Create the AoRPair
   AoRPair* aor_pair = new AoRPair(orig_aor, current_aor);
 
-  // Check that `get_updated_subscriptions` returns the new subscription 
+  // Check that `get_updated_subscriptions` returns the new subscription
   AoR::Subscriptions updated_subscriptions = aor_pair->get_updated_subscriptions();
   ASSERT_TRUE(updated_subscriptions.find( s_id ) != updated_subscriptions.end());
 
@@ -1609,6 +1615,6 @@ TEST_F(BasicSubscriberDataManagerTest, AoRComparisonUnchangedSubscription)
   ASSERT_TRUE(updated_subscriptions.find( s_id ) == updated_subscriptions.end());
   AoR::Subscriptions removed_subscriptions = aor_pair->get_removed_subscriptions();
   ASSERT_TRUE(removed_subscriptions.find( s_id ) == removed_subscriptions.end());
-  
+
   delete aor_pair; aor_pair = NULL;
 }

@@ -858,7 +858,7 @@ void PushProfileTask::run()
     return;
   }
 
-  rc = update_store_to_send_any_notifys(trail());
+  rc = update_associated_uris(trail());
 
   if (rc != HTTP_OK)
   {
@@ -925,8 +925,8 @@ HTTPCode PushProfileTask::parse_request(std::string body, SAS::TrailId trail)
   // Decode service profile from the XML. Create and populate an instance of the
   // Associated URIs class
   if (SproutXmlUtils::get_uris_from_service_profile(imss,
-                                                     _associated_uris,
-                                                     trail))
+                                                    _associated_uris,
+                                                    trail))
   {
     delete root; root = NULL;
     return HTTP_OK;
@@ -938,17 +938,18 @@ HTTPCode PushProfileTask::parse_request(std::string body, SAS::TrailId trail)
   }
 }
 
-HTTPCode PushProfileTask::update_store_to_send_any_notifys(SAS::TrailId trail)
+HTTPCode PushProfileTask::update_associated_uris(SAS::TrailId trail)
 {
   AoRPair* aor_pair = NULL;
 
   if(!sdm_access_common(&aor_pair,
-                         _default_public_id,
-                         _cfg->_sdm,
-                         _cfg->_remote_sdms,
-                         NULL,
-                         trail))
+                        _default_public_id,
+                        _cfg->_sdm,
+                        _cfg->_remote_sdms,
+                        NULL,
+                        trail))
   {
+    delete aor_pair; aor_pair = NULL;
     TRC_DEBUG("Could not get AoR data from SDM");
     return HTTP_SERVER_ERROR;
   }
@@ -964,6 +965,7 @@ HTTPCode PushProfileTask::update_store_to_send_any_notifys(SAS::TrailId trail)
                                     all_bindings_expired);
   if (set_rc != Store::OK)
   {
+    delete aor_pair; aor_pair = NULL;
     TRC_DEBUG("Could not set AoR data to SDM");
     return HTTP_SERVER_ERROR;
   }
@@ -975,14 +977,14 @@ HTTPCode PushProfileTask::update_store_to_send_any_notifys(SAS::TrailId trail)
   {
     for (std::vector<SubscriberDataManager*>::const_iterator sdm = _cfg->_remote_sdms.begin();
          sdm != _cfg->_remote_sdms.end();
-	 ++sdm)
+         ++sdm)
     {
       if ((*sdm)->has_servers())
       {
         (*sdm)->set_aor_data(_default_public_id,
-                              aor_pair,
-                              trail,
-                              all_bindings_expired);
+                             aor_pair,
+                             trail,
+                             all_bindings_expired);
       }
     }
   }

@@ -57,7 +57,7 @@ public:
   std::vector<std::string> get_all_uris();
 
   /// Returns the wildcard mappings.
-  std::map<std::string, std::string> get_wildcard_mappings();
+  std::map<std::string, std::string> get_wildcard_mapping();
 
   /// Add a mapping between a distinct IMPU and the wildcard it belongs to
   void add_wildcard_mapping(std::string wildcard, std::string distinct);

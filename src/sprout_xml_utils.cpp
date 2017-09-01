@@ -103,13 +103,13 @@ bool get_uris_from_service_profile(rapidxml::xml_node<>* node,
 }
 
 bool decode_service_profile(const std::string public_user_identity,
-                             std::shared_ptr<rapidxml::xml_document<> > root,
-    			     rapidxml::xml_node<>* node,
-			     std::map<std::string, Ifcs >& ifcs_map,
-                             AssociatedURIs& associated_uris,
-			     std::vector<std::string>& aliases,
-			     SIFCService* sifc_service,
-			     SAS::TrailId trail)
+                            std::shared_ptr<rapidxml::xml_document<> > root,
+                            rapidxml::xml_node<>* node,
+                            std::map<std::string, Ifcs >& ifcs_map,
+                            AssociatedURIs& associated_uris,
+                            std::vector<std::string>& aliases,
+                            SIFCService* sifc_service,
+                            SAS::TrailId trail)
 {
   // The set of aliases consists of the set of public identities in the same
   // Service Profile. It is a subset of the associated URIs.
