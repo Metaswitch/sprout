@@ -87,7 +87,7 @@ class SIPResolverTest : public ::testing::Test
     ai.port = port;
     ai.transport = IPPROTO_TCP;
 
-    EXPECT_TRUE(_sipresolver.parse_ip_target(address, ai.address));
+    EXPECT_TRUE(Utils::parse_ip_target(address, ai.address));
     _sipresolver.blacklist(ai);
   }
 };
@@ -133,42 +133,12 @@ public:
     if (!targets.empty())
     {
       // Successful, so render AddrInfo as a string.
-      output = addrinfo_to_string(targets[0]);
+      output = targets[0].to_string();
     }
     return output;
   }
 
 private:
-  std::string addrinfo_to_string(const AddrInfo& ai) const
-  {
-    ostringstream oss;
-    char buf[100];
-    if (ai.address.af == AF_INET6)
-    {
-      oss << "[";
-    }
-    oss << inet_ntop(ai.address.af, &ai.address.addr, buf, sizeof(buf));
-    if (ai.address.af == AF_INET6)
-    {
-      oss << "]";
-    }
-    oss << ":" << ai.port;
-    oss << ";transport=";
-    if (ai.transport == IPPROTO_UDP)
-    {
-      oss << "UDP";
-    }
-    else if (ai.transport == IPPROTO_TCP)
-    {
-      oss << "TCP";
-    }
-    else
-    {
-      oss << "Unknown (" << ai.transport << ")";
-    }
-    return oss.str();
-  }
-
   /// Reference to the SIPResolver.
   SIPResolver& _resolver;
 
