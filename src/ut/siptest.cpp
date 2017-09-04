@@ -877,6 +877,17 @@ void MsgMatcher::matches(pjsip_msg* msg)
   }
 }
 
+void MsgMatcher::body_regex_matches(pjsip_msg* msg)
+{
+  if (_body_regex != "")
+  {    
+    char buf[16384];
+    int n = msg->body->print_body(msg->body, buf, sizeof(buf));
+    string body(buf, n);
+    EXPECT_THAT(body, testing::MatchesRegex(_body_regex));
+  }
+}
+
 void ReqMatcher::matches(pjsip_msg* msg)
 {
   ASSERT_EQ(PJSIP_REQUEST_MSG, msg->type) << PjMsg(msg);

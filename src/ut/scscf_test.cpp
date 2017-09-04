@@ -340,7 +340,8 @@ protected:
                         testing::Matcher<string> uri_matcher,
                         list<HeaderMatcher> headers,
                         bool include_ack_and_bye=true,
-                        list<HeaderMatcher> rsp_hdrs = list<HeaderMatcher>());
+                        list<HeaderMatcher> rsp_hdrs = list<HeaderMatcher>(),
+                        string body_regex = "");
   void doFastFailureFlow(SCSCFMessage& msg, int st_code);
   void doSlowFailureFlow(SCSCFMessage& msg, int st_code, std::string body = "", std::string reason = "");
   void setupForkedFlow(SCSCFMessage& msg);
@@ -941,7 +942,8 @@ void SCSCFTest::doSuccessfulFlow(SCSCFMessage& msg,
                                  testing::Matcher<string> uri_matcher,
                                  list<HeaderMatcher> headers,
                                  bool include_ack_and_bye,
-                                 list<HeaderMatcher> rsp_headers)
+                                 list<HeaderMatcher> rsp_headers,
+                                 string body_regex)
 {
   SCOPED_TRACE("");
   pjsip_msg* out;
@@ -957,7 +959,7 @@ void SCSCFTest::doSuccessfulFlow(SCSCFMessage& msg,
 
   // INVITE passed on
   out = current_txdata()->msg;
-  ReqMatcher req("INVITE");
+  ReqMatcher req("INVITE", "", body_regex);
   ASSERT_NO_FATAL_FAILURE(req.matches(out));
 
   // Do checks on what gets passed through:
@@ -965,6 +967,11 @@ void SCSCFTest::doSuccessfulFlow(SCSCFMessage& msg,
   for (list<HeaderMatcher>::iterator iter = headers.begin(); iter != headers.end(); ++iter)
   {
     iter->match(out);
+  }
+
+  if (body_regex.length() != 0)
+  {
+    req.body_regex_matches(out);
   }
 
   // Send 200 OK back
@@ -2486,7 +2493,14 @@ TEST_F(SCSCFTest, TestSimpleMultipart)
               "text/plain; charset=utf-8\r\n\r\nsubject\r\n\r\n--boundary1--";
 
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
+  // Check that the Content-Type manipulation in PJSIP has not inserted multiple
+  // Content-Types in the bodyparts
+  doSuccessfulFlow(msg, 
+                   testing::MatchesRegex(".*wuntootreefower.*"), 
+                   hdrs, 
+                   true, 
+                   list<HeaderMatcher>(), 
+                   ".*--\\S+\r\nContent-Length: 343\r\nContent-Type: application/sdp\r\n\r\n.*");
 }
 
 // Test emergency registrations receive calls.

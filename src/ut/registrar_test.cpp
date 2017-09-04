@@ -1220,8 +1220,10 @@ TEST_F(RegistrarTest, AppServersWithMultipartBodyWithTelURI)
   // INVITE passed on to AS
   SCOPED_TRACE("REGISTER (S)");
   pjsip_msg* out = current_txdata()->msg;
-  ReqMatcher r1("REGISTER");
+  // Verify that Content-Type headers are inserted into multipart message parts
+  ReqMatcher r1("REGISTER", "", ".*--\\S+\r\nContent-Type: message/sip\r\n\r\n.*");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  r1.body_regex_matches(out);
   pj_str_t multipart = pj_str("multipart");
   pj_str_t mixed = pj_str("mixed");
   EXPECT_EQ(0, pj_strcmp(&multipart, &out->body->content_type.type));
