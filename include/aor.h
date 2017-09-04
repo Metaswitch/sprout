@@ -33,7 +33,6 @@ extern "C" {
 /// These live here, as the core logic of serialization lives in the AoR
 /// to_json methods, but the SDM also uses some of them.
 static const char* const JSON_BINDINGS = "bindings";
-static const char* const JSON_URI = "uri";
 static const char* const JSON_CID = "cid";
 static const char* const JSON_CSEQ = "cseq";
 static const char* const JSON_EXPIRES = "expires";

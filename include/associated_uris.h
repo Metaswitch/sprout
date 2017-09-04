@@ -19,11 +19,13 @@
 #include "rapidjson/document.h"
 
 /// JSON Serialization constants
-static const char* const JSON_ASSOC_URI= "assoc-uri";
-static const char* const JSON_ASSOCIATED_URIS_ARRAY = "associated-uris-array";
+static const char* const JSON_URI = "uri";
+static const char* const JSON_URIS = "uris";
 static const char* const JSON_BARRING = "barring";
-static const char* const JSON_WILDCARD_MAPPINGS ="wildcard-mappings";
+static const char* const JSON_WILDCARD_MAPPING ="wildcard-mapping";
 static const char* const JSON_ASSOCIATED_URIS = "associated-uris";
+static const char* const JSON_DISTINCT = "distinct";
+static const char* const JSON_WILDCARD = "wildcard";
 
 struct AssociatedURIs
 {
