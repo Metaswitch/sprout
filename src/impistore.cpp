@@ -83,7 +83,7 @@ void ImpiStore::AuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuf
 
   // The expiry is in seconds, so if we're supposed to write it in ms multiply
   // by 1000
-  int expires = _expires;
+  int64_t expires = _expires;
 
   // LCOV_EXCL_START
   if (expiry_in_ms)
@@ -92,7 +92,7 @@ void ImpiStore::AuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuf
   }
   // LCOV_EXCL_STOP
 
-  writer->String(JSON_EXPIRES); writer->Int(expires);
+  writer->String(JSON_EXPIRES); writer->Int64(expires);
 
   if (_correlator != "")
   {
@@ -136,8 +136,8 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* 
       JSON_SAFE_GET_STRING_MEMBER(*json, JSON_CORRELATOR, auth_challenge->_correlator);
       JSON_SAFE_GET_STRING_MEMBER(*json, JSON_SCSCF_URI, auth_challenge->_scscf_uri);
 
-      int expires = 0;
-      JSON_SAFE_GET_INT_MEMBER(*json, JSON_EXPIRES, expires);
+      int64_t expires = 0;
+      JSON_SAFE_GET_INT_64_MEMBER(*json, JSON_EXPIRES, expires);
 
       // LCOV_EXCL_START
       if (expiry_in_ms)
