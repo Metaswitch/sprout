@@ -81,7 +81,8 @@ public:
 
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
-    _sdm = new SubscriberDataManager((Store*)_local_data_store, _chronos_connection, NULL, true);
+    _local_aor_store = new AstaireAoRStore(_local_data_store);
+    _sdm = new SubscriberDataManager((AoRStore*)_local_aor_store, _chronos_connection, NULL, true);
     _analytics = new AnalyticsLogger();
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
     _xdm_connection = new FakeXDMConnection();
@@ -112,7 +113,6 @@ public:
     delete _chronos_connection; _chronos_connection = NULL;
     delete _local_aor_store; _local_aor_store = NULL;
     delete _local_data_store; _local_data_store = NULL;
-    delete _chronos_connection; _chronos_connection = NULL;
     delete _analytics; _analytics = NULL;
     delete _enum_service; _enum_service = NULL;
     delete _bgcf_service; _bgcf_service = NULL;
@@ -129,36 +129,6 @@ public:
 
     _hss_connection_observer = new MockHSSConnection();
     _hss_connection = new FakeHSSConnection(_hss_connection_observer);
-
-    // Create the S-CSCF Sproutlet.
-    IFCConfiguration ifc_configuration(false, false, "sip:DUMMY_AS", NULL, NULL);
-    _scscf_sproutlet = new SCSCFSproutlet("scscf",
-                                          "scscf",
-                                          "sip:scscf.sprout.homedomain:5058;transport=TCP",
-                                          "sip:127.0.0.1:5058",
-                                          "sip:icscf.sprout.homedomain:5059;transport=TCP";
-                                          "sip:bgcf@homedomain:5058",
-                                          "sip:11.22.33.44;service=mmf",
-                                          "sip:44.33.22.11:5053;service=mmf",
-                                          5058,
-                                          "sip:scscf.sprout.homedomain:5058;transport=TCP",
-                                          _sdm,
-                                          {},
-                                          _hss_connection,
-                                          _enum_service,
-                                          _acr_factory,
-                                          &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
-                                          &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
-                                          false,
-                                          _mmf_service,
-                                          _fifc_service,
-                                          ifc_configuration,
-                                          3000, // Session continue timeout - different from default
-                                          6000, // Session terminated timeout - different from default
-                                          _sess_term_comm_tracker,
-                                          _sess_cont_comm_tracker
-                                          );
-    _scscf_sproutlet->init();
 
     // Create the BGCF Sproutlet.
     _bgcf_sproutlet = new BGCFSproutlet("bgcf",
@@ -179,17 +149,6 @@ public:
                                                   &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
                                                   &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
                                                   "mmtel.homedomain");
-
-    // Add common sproutlet to the list
-    std::list<Sproutlet*> sproutlets;
-    sproutlets.push_back(_scscf_sproutlet);
-    sproutlets.push_back(_bgcf_sproutlet);
-    sproutlets.push_back(_mmtel_sproutlet);
-
-    std::unordered_set<std::string> additional_home_domains;
-    additional_home_domains.insert("sprout.homedomain");
-    additional_home_domains.insert("sprout-site2.homedomain");
-    additional_home_domains.insert("127.0.0.1");
   }
 
   ~SCSCFTestBase()
@@ -234,6 +193,8 @@ public:
     delete _mmtel; _mmtel = NULL;
     delete _bgcf_sproutlet; _bgcf_sproutlet = NULL;
     delete _scscf_sproutlet; _scscf_sproutlet = NULL;
+    delete _icscf_sproutlet; _icscf_sproutlet = NULL;
+    delete _scscf_selector; _scscf_selector = NULL;
 
   }
 
@@ -275,8 +236,8 @@ public:
   }
 
 protected:
-  static FakeChronosConnection* _chronos_connection;
   static LocalStore* _local_data_store;
+  static FakeChronosConnection* _chronos_connection;
   static AstaireAoRStore* _local_aor_store;
   static SubscriberDataManager* _sdm;
   static AnalyticsLogger* _analytics;
@@ -288,10 +249,12 @@ protected:
   static ACRFactory* _acr_factory;
   static MMFService* _mmf_service;
   static FIFCService* _fifc_service;
-  SCSCFSproutlet* _scscf_sproutlet;
   BGCFSproutlet* _bgcf_sproutlet;
+  SCSCFSproutlet* _scscf_sproutlet;
   Mmtel* _mmtel;
   SproutletAppServerShim* _mmtel_sproutlet;
+  static SCSCFSelector* _scscf_selector;
+  ICSCFSproutlet* _icscf_sproutlet;
   SproutletProxy* _proxy;
   static MockAsCommunicationTracker* _sess_term_comm_tracker;
   static MockAsCommunicationTracker* _sess_cont_comm_tracker;
@@ -321,12 +284,30 @@ protected:
   list<string> doProxyCalculateTargets(int max_targets);
 };
 
+LocalStore* SCSCFTestBase::_local_data_store;
+FakeChronosConnection* SCSCFTestBase::_chronos_connection;
+AstaireAoRStore* SCSCFTestBase::_local_aor_store;
+SubscriberDataManager* SCSCFTestBase::_sdm;
+AnalyticsLogger* SCSCFTestBase::_analytics;
+FakeHSSConnection* SCSCFTestBase::_hss_connection;
+MockHSSConnection* SCSCFTestBase::_hss_connection_observer;
+FakeXDMConnection* SCSCFTestBase::_xdm_connection;
+BgcfService* SCSCFTestBase::_bgcf_service;
+EnumService* SCSCFTestBase::_enum_service;
+ACRFactory* SCSCFTestBase::_acr_factory;
+MMFService* SCSCFTestBase::_mmf_service;
+FIFCService* SCSCFTestBase::_fifc_service;
+SCSCFSelector* SCSCFTestBase::_scscf_selector;
+MockAsCommunicationTracker* SCSCFTestBase::_sess_term_comm_tracker;
+MockAsCommunicationTracker* SCSCFTestBase::_sess_cont_comm_tracker;
+
 // Default test setup, with ICSCF and without remote SDM
 class SCSCFTest : public SCSCFTestBase
 {
+public:
   static void SetUpTestCase()
   {
-    SCSCFTestBase::SetupTestCase();
+    SCSCFTestBase::SetUpTestCase();
   }
   static void TearDownTestCase()
   {
@@ -335,62 +316,13 @@ class SCSCFTest : public SCSCFTestBase
 
   SCSCFTest() : SCSCFTestBase()
   {
-    _scscf_selector = new SCSCFSelector("sip:scscf.sprout.homedomain",
-                                        string(UT_DIR).append("/test_icscf.json"));
-    // Create the I-CSCF Sproutlets.
-    _icscf_sproutlet = new ICSCFSproutlet("icscf",
-                                          "sip:bgcf@homedomain:5058",
-                                          5059,
-                                          "sip:icscf.sprout.homedomain:5059;transport=TCP",
-                                          _hss_connection,
-                                          _acr_factory,
-                                          _scscf_selector,
-                                          _enum_service,
-                                          &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
-                                          &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
-                                          false
-                                          );
-    _icscf_sproutlet->init();
-    sproutlets.push_back(_icscf_sproutlet);
-
-    _proxy = new SproutletProxy(stack_data.endpt,
-                                PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
-                                "homedomain",
-                                additional_home_domains,
-                                sproutlets,
-                                std::set<std::string>());
-  }
-
-  ~SCSCFTest() : ~SCSCFTestBase()
-  {
-    delete _icscf_sproutlet; _icscf_sproutlet = NULL;
-    delete _scscf_selector; _scscf_selector = NULL;
-  }
-
-protected:
-  static SCSCFSelector* _scscf_selector;
-  ICSCFSproutlet* _icscf_sproutlet;
-}
-
-class SCSCFTestWithoutICSCF : public SCSCFTestBase
-{
-  static void SetUpTestCase()
-  {
-    SCSCFTestBase::SetupTestCase();
-  }
-  static void TearDownTestCase()
-  {
-    SCSCFTestBase::TearDownTestCase();
-  }
-
-  SCSCFTestWithoutICSCF() : SCSCFTestBase()
-  {
     // Create the S-CSCF Sproutlet.
+    IFCConfiguration ifc_configuration(false, false, "sip:DUMMY_AS", NULL, NULL);
     _scscf_sproutlet = new SCSCFSproutlet("scscf",
                                           "scscf",
                                           "sip:scscf.sprout.homedomain:5058;transport=TCP",
                                           "sip:127.0.0.1:5058",
-                                          "",
+                                          "sip:icscf.sprout.homedomain:5059;transport=TCP",
                                           "sip:bgcf@homedomain:5058",
                                           "sip:11.22.33.44;service=mmf",
                                           "sip:44.33.22.11:5053;service=mmf",
@@ -414,61 +346,37 @@ class SCSCFTestWithoutICSCF : public SCSCFTestBase
                                           );
     _scscf_sproutlet->init();
 
-    _proxy = new SproutletProxy(stack_data.endpt,
-                                PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
-                                "homedomain",
-                                additional_home_domains,
-                                sproutlets,
-                                std::set<std::string>());
-  }  
-}
-
-class SCSCFTestWithRemoteSDM : public SCSCFTestBase
-{
-  static void SetUpTestCase()
-  {
-    SCSCFTestBase::SetupTestCase();
-    _remote_data_store = new LocalStore();
-    _remote_sdm = new SubscriberDataManager((Store*)_remote_data_store, _chronos_connection, NULL, true);
-  }
-  static void TearDownTestCase()
-  {
-    SCSCFTestBase::TearDownTestCase();
-    delete _remote_sdm; _remote_sdm = NULL;
-    delete _remote_data_store; _remote_data_store = NULL;
-  }
-
-  SCSCFTestWithRemoteSDM() : SCSCFTestBase()
-  {
-    // Create the S-CSCF Sproutlet.
-    _scscf_sproutlet = new SCSCFSproutlet("scscf",
-                                          "scscf",
-                                          "sip:scscf.sprout.homedomain:5058;transport=TCP",
-                                          "sip:127.0.0.1:5058",
-                                          "",
+    // Create the I-CSCF Sproutlets.
+    _scscf_selector = new SCSCFSelector("sip:scscf.sprout.homedomain",
+                                        string(UT_DIR).append("/test_icscf.json"));
+    _icscf_sproutlet = new ICSCFSproutlet("icscf",
                                           "sip:bgcf@homedomain:5058",
-                                          "sip:11.22.33.44;service=mmf",
-                                          "sip:44.33.22.11:5053;service=mmf",
-                                          5058,
-                                          "sip:scscf.sprout.homedomain:5058;transport=TCP",
-                                          _sdm,
-                                          {_remote_sdm},
+                                          5059,
+                                          "sip:icscf.sprout.homedomain:5059;transport=TCP",
                                           _hss_connection,
-                                          _enum_service,
                                           _acr_factory,
+                                          _scscf_selector,
+                                          _enum_service,
                                           &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
                                           &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
-                                          false,
-                                          _mmf_service,
-                                          _fifc_service,
-                                          ifc_configuration,
-                                          3000, // Session continue timeout - different from default
-                                          6000, // Session terminated timeout - different from default
-                                          _sess_term_comm_tracker,
-                                          _sess_cont_comm_tracker
+                                          false
                                           );
-    _scscf_sproutlet->init();
+    _icscf_sproutlet->init();
 
+    // Add common sproutlet to the list for Proxy use
+    std::list<Sproutlet*> sproutlets;
+    sproutlets.push_back(_scscf_sproutlet);
+    sproutlets.push_back(_icscf_sproutlet);
+    sproutlets.push_back(_bgcf_sproutlet);
+    sproutlets.push_back(_mmtel_sproutlet);
+
+    // Add additional home domain for Proxy use
+    std::unordered_set<std::string> additional_home_domains;
+    additional_home_domains.insert("sprout.homedomain");
+    additional_home_domains.insert("sprout-site2.homedomain");
+    additional_home_domains.insert("127.0.0.1");
+
+    // Create the SproutletProxy.
     _proxy = new SproutletProxy(stack_data.endpt,
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "homedomain",
@@ -477,33 +385,14 @@ class SCSCFTestWithRemoteSDM : public SCSCFTestBase
                                 std::set<std::string>());
   }
 
-protected:
-  static LocalStore* _remote_data_store;
-  static SubscriberDataManager* _remote_sdm;
+  ~SCSCFTest()
+  {
+  }
 };
-
-FakeChronosConnection* SCSCFTest::_chronos_connection;
-LocalStore* SCSCFTest::_local_data_store;
-AstaireAoRStore* SCSCFTest::_local_aor_store;
-SubscriberDataManager* SCSCFTest::_sdm;
-LocalStore* SCSCFTest::_remote_data_store;
-SubscriberDataManager* SCSCFTest::_remote_sdm;
-AnalyticsLogger* SCSCFTest::_analytics;
-FakeHSSConnection* SCSCFTest::_hss_connection;
-MockHSSConnection* SCSCFTest::_hss_connection_observer;
-FakeXDMConnection* SCSCFTest::_xdm_connection;
-BgcfService* SCSCFTest::_bgcf_service;
-EnumService* SCSCFTest::_enum_service;
-ACRFactory* SCSCFTest::_acr_factory;
-MMFService* SCSCFTest::_mmf_service;
-FIFCService* SCSCFTest::_fifc_service;
-SCSCFSelector* SCSCFTest::_scscf_selector;
-MockAsCommunicationTracker* SCSCFTest::_sess_term_comm_tracker;
-MockAsCommunicationTracker* SCSCFTest::_sess_cont_comm_tracker;
 
 using namespace TestingCommon;
 
-void SCSCFTest::doFourAppServerFlow(std::string record_route_regex, bool app_servers_record_route)
+void SCSCFTestBase::doFourAppServerFlow(std::string record_route_regex, bool app_servers_record_route)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
@@ -749,7 +638,7 @@ void SCSCFTest::doFourAppServerFlow(std::string record_route_regex, bool app_ser
 // Test flows into Sprout (S-CSCF), in particular for header stripping.
 // Check the transport each message is on, and the headers.
 // Test a call from Alice to Bob.
-void SCSCFTest::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
+void SCSCFTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
                               bool tpAset,         //< Expect all requests to Alice on same transport?
                               TransportFlow* tpB,  //< Bob's transport.
                               bool tpBset,         //< Expect all requests to Bob on same transport?
@@ -1074,7 +963,7 @@ void SCSCFTest::doTestHeaders(TransportFlow* tpA,  //< Alice's transport.
 
 /// Test a message results in a successful flow. The outgoing INVITE's
 /// URI is verified.
-void SCSCFTest::doSuccessfulFlow(SCSCFMessage& msg,
+void SCSCFTestBase::doSuccessfulFlow(SCSCFMessage& msg,
                                  testing::Matcher<string> uri_matcher,
                                  list<HeaderMatcher> headers,
                                  bool include_ack_and_bye,
@@ -1157,7 +1046,7 @@ void SCSCFTest::doSuccessfulFlow(SCSCFMessage& msg,
 }
 
 /// Test a message results in an immediate failure.
-void SCSCFTest::doFastFailureFlow(SCSCFMessage& msg, int st_code)
+void SCSCFTestBase::doFastFailureFlow(SCSCFMessage& msg, int st_code)
 {
   SCOPED_TRACE("");
 
@@ -1173,7 +1062,7 @@ void SCSCFTest::doFastFailureFlow(SCSCFMessage& msg, int st_code)
 }
 
 /// Test a message results in a 100 then a failure.
-void SCSCFTest::doSlowFailureFlow(SCSCFMessage& msg,
+void SCSCFTestBase::doSlowFailureFlow(SCSCFMessage& msg,
                                   int st_code,
                                   std::string body,
                                   std::string reason)
@@ -1217,7 +1106,7 @@ TEST_F(SCSCFTest, TestSimpleMainlineMaddr)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  Message msg;
+  SCSCFMessage msg;
   msg._requri = "sip:6505551234@homedomain;maddr=1.2.3.4";
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*maddr.*"), hdrs);
@@ -1578,7 +1467,7 @@ TEST_F(SCSCFTest, TestEmptyBinding)
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
-  Message msg;
+  SCSCFMessage msg;
   msg._requri = "tel:6505551235";
   list<HeaderMatcher> hdrs;
 
@@ -2082,23 +1971,6 @@ TEST_F(SCSCFTest, TestEnumNoUserPhone)
   list<HeaderMatcher> hdrs;
   doSlowFailureFlow(msg, 404);
 }
-
-TEST_F(SCSCFTestWithoutICSCF, TestEnumNoICSCF)
-{
-  SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
-
-  URIClassifier::enforce_user_phone = true;
-  Message msg;
-  msg._to = "+15108580271";
-  // We only do ENUM on originating calls
-  msg._route = "Route: <sip:sprout.homedomain;orig>";
-  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
-  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
-  list<HeaderMatcher> hdrs;
-  doSlowFailureFlow(msg, 404);
-}
-
 TEST_F(SCSCFTest, TestEnumLocalNumber)
 {
   SCOPED_TRACE("");
@@ -2322,7 +2194,7 @@ TEST_F(SCSCFTest, TestWithoutEnum)
 
 
 /// Test a forked flow - setup phase.
-void SCSCFTest::setupForkedFlow(SCSCFMessage& msg)
+void SCSCFTestBase::setupForkedFlow(SCSCFMessage& msg)
 {
   SCOPED_TRACE("");
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
@@ -3671,8 +3543,10 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate)
 }
 
 
-// Code bug raised in clearwater-issues. Currently the test is made to pass 
-// superficially to achieve full coverage
+// Bug for both session terminated and session continue (see clearwater-issue)
+// When liveness timer pops before SIP response is received from AS, Sprout 
+// doesn't send immediate failure upstream but keeps retrying.
+// Currently the test is made to pass superficially to achieve full coverage
 TEST_F(SCSCFTest, DefaultHandlingTerminateTimeout)
 {
   // Register an endpoint to act as the callee.
@@ -3689,8 +3563,10 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateTimeout)
                                    "call",
                                    "UNREGISTERED",
                                    subscription.return_sub());
-  // The tracker should once by called once, but is currently called more than
-  // once due to code bug
+
+  // The tracker should be called only once. Currently there is a code bug that 
+  // Sprout keeps retrying if liveness timer pops before AS response is
+  // received. So the tracker are being  called several times.
   EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout"))).Times(AtLeast(1));
 
   TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -3810,7 +3686,6 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateDisabled)
   poll();
   ASSERT_EQ(0, txdata_count());
 }
-
 
 // Test DefaultHandling=CONTINUE for non-existent AS (where name does not resolve).
 TEST_F(SCSCFTest, DefaultHandlingContinueRecordRouting)
@@ -5104,12 +4979,12 @@ TEST_F(SCSCFTest, RecordRoutingTestCollapseEveryHop)
 }
 
 // Test AS-originated flow.
-void SCSCFTest::doAsOriginated(SCSCFMessage& msg, bool expect_orig)
+void SCSCFTestBase::doAsOriginated(SCSCFMessage& msg, bool expect_orig)
 {
   doAsOriginated(msg.get_request(), expect_orig);
 }
 
-void SCSCFTest::doAsOriginated(const std::string& msg, bool expect_orig)
+void SCSCFTestBase::doAsOriginated(const std::string& msg, bool expect_orig)
 {
   register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
@@ -8402,7 +8277,7 @@ TEST_F(SCSCFTest, TestSessionExpiresInDialog)
 // the real effect of billing role in ACR as the ACR response is faked.
 TEST_F(SCSCFTest, TestSessionExpiresInDialogBillingTerm)
 {
-  Message msg;
+  SCSCFMessage msg;
   msg._in_dialog = true;
   msg._route = "Route: <sip:homedomain;transport=tcp;lr;billing-role=charge-term>";
   list<HeaderMatcher> hdrs;
@@ -8414,7 +8289,7 @@ TEST_F(SCSCFTest, TestSessionExpiresInDialogBillingTerm)
 
 TEST_F(SCSCFTest, TestSessionExpiresInDialogBillingOrig)
 {
-  Message msg;
+  SCSCFMessage msg;
   msg._in_dialog = true;
   msg._route = "Route: <sip:homedomain;transport=tcp;lr;billing-role=charge-orig>";
   list<HeaderMatcher> hdrs;
@@ -8426,7 +8301,7 @@ TEST_F(SCSCFTest, TestSessionExpiresInDialogBillingOrig)
 
 TEST_F(SCSCFTest, TestSessionExpiresInDialogBillingNone)
 {
-  Message msg;
+  SCSCFMessage msg;
   msg._in_dialog = true;
   msg._route = "Route: <sip:homedomain;transport=tcp;lr;billing-role=charge-none>";
   list<HeaderMatcher> hdrs;
@@ -8439,7 +8314,7 @@ TEST_F(SCSCFTest, TestSessionExpiresInDialogBillingNone)
 
 TEST_F(SCSCFTest, TestSessionExpiresInDialogBillingUnknown)
 {
-  Message msg;
+  SCSCFMessage msg;
   msg._in_dialog = true;
   msg._route = "Route: <sip:homedomain;transport=tcp;lr;billing-role=unknown-string>";
   list<HeaderMatcher> hdrs;
@@ -8451,7 +8326,7 @@ TEST_F(SCSCFTest, TestSessionExpiresInDialogBillingUnknown)
 
 TEST_F(SCSCFTest, TestSessionExpiresInDialogBillingNotFound)
 {
-  Message msg;
+  SCSCFMessage msg;
   msg._in_dialog = true;
   msg._route = "Route: <sip:homedomain;transport=tcp;lr>";
   list<HeaderMatcher> hdrs;
@@ -8459,6 +8334,18 @@ TEST_F(SCSCFTest, TestSessionExpiresInDialogBillingNotFound)
 
   doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, false);
   EXPECT_TRUE(log.contains("No charging role in Route header, assume originating"));
+}
+
+TEST_F(SCSCFTest, TestSessionExpiresInDialogRouteHeaderEmpty)
+{
+  SCSCFMessage msg;
+  msg._in_dialog = true;
+  msg._route = "";
+  list<HeaderMatcher> hdrs;
+  CapturingTestLogger log;
+
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, false);
+  EXPECT_TRUE(log.contains("Cannot determine charging role as no Route header, assume originating"));
 }
 
 TEST_F(SCSCFTest, TestSessionExpiresWhenNoRecordRoute)
@@ -8657,7 +8544,7 @@ TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
 
 
 // Test that a failure to get iFCs due to a 404 error from homestead during Call
-// Diversion
+// Diversion result in AS sending a 404 error 
 TEST_F(SCSCFTest, HSSNotFoundOnCdiv)
 {
   ServiceProfileBuilder service_profile = ServiceProfileBuilder()
@@ -8676,7 +8563,7 @@ TEST_F(SCSCFTest, HSSNotFoundOnCdiv)
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
@@ -9632,6 +9519,209 @@ TEST_F(SCSCFTest, MMFPreAndPostAs)
   pjsip_tx_data_dec_ref(txdata); txdata = NULL;
 }
 
+
+class SCSCFTestWithoutICSCF : public SCSCFTestBase
+{
+  static void SetUpTestCase()
+  {
+    SCSCFTestBase::SetUpTestCase();
+  }
+  static void TearDownTestCase()
+  {
+    SCSCFTestBase::TearDownTestCase();
+  }
+
+  SCSCFTestWithoutICSCF() : SCSCFTestBase()
+  {
+    // Create the S-CSCF Sproutlet.
+    IFCConfiguration ifc_configuration(false, false, "sip:DUMMY_AS", NULL, NULL);
+    _scscf_sproutlet = new SCSCFSproutlet("scscf",
+                                          "scscf",
+                                          "sip:scscf.sprout.homedomain:5058;transport=TCP",
+                                          "sip:127.0.0.1:5058",
+                                          "",
+                                          "sip:bgcf@homedomain:5058",
+                                          "sip:11.22.33.44;service=mmf",
+                                          "sip:44.33.22.11:5053;service=mmf",
+                                          5058,
+                                          "sip:scscf.sprout.homedomain:5058;transport=TCP",
+                                          _sdm,
+                                          {},
+                                          _hss_connection,
+                                          _enum_service,
+                                          _acr_factory,
+                                          &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
+                                          &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
+                                          false,
+                                          _mmf_service,
+                                          _fifc_service,
+                                          ifc_configuration,
+                                          3000, // Session continue timeout - different from default
+                                          6000, // Session terminated timeout - different from default
+                                          _sess_term_comm_tracker,
+                                          _sess_cont_comm_tracker
+                                          );
+    _scscf_sproutlet->init();
+
+    // Create the I-CSCF Sproutlets.
+    _scscf_selector = new SCSCFSelector("sip:scscf.sprout.homedomain",
+                                        string(UT_DIR).append("/test_icscf.json"));
+    _icscf_sproutlet = new ICSCFSproutlet("icscf",
+                                          "sip:bgcf@homedomain:5058",
+                                          5059,
+                                          "sip:icscf.sprout.homedomain:5059;transport=TCP",
+                                          _hss_connection,
+                                          _acr_factory,
+                                          _scscf_selector,
+                                          _enum_service,
+                                          &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
+                                          &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
+                                          false
+                                          );
+    _icscf_sproutlet->init();
+
+    // Add common sproutlet to the list for Proxy use
+    std::list<Sproutlet*> sproutlets;
+    sproutlets.push_back(_scscf_sproutlet);
+    sproutlets.push_back(_bgcf_sproutlet);
+    sproutlets.push_back(_mmtel_sproutlet);
+
+    // Add additional home domain for Proxy use
+    std::unordered_set<std::string> additional_home_domains;
+    additional_home_domains.insert("sprout.homedomain");
+    additional_home_domains.insert("sprout-site2.homedomain");
+    additional_home_domains.insert("127.0.0.1");
+
+    _proxy = new SproutletProxy(stack_data.endpt,
+                                PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
+                                "homedomain",
+                                additional_home_domains,
+                                sproutlets,
+                                std::set<std::string>());
+  }  
+
+  ~SCSCFTestWithoutICSCF()
+  {
+  }
+};
+
+// Test routing directly to local SCSCF when ICSCF is disabled 
+TEST_F(SCSCFTestWithoutICSCF, TestEnumWithoutICSCF)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
+
+  URIClassifier::enforce_user_phone = true;
+  SCSCFMessage msg;
+  msg._to = "+15108580271";
+  // We only do ENUM on originating calls
+  msg._route = "Route: <sip:sprout.homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  doSlowFailureFlow(msg, 404);
+}
+
+class SCSCFTestWithRemoteSDM : public SCSCFTestBase
+{
+  static void SetUpTestCase()
+  {
+    SCSCFTestBase::SetUpTestCase();
+    _remote_data_store = new LocalStore();
+    _remote_aor_store = new AstaireAoRStore(_remote_data_store);
+    _remote_sdm = new SubscriberDataManager((AoRStore*)_remote_aor_store, _chronos_connection, NULL, true);
+  }
+  static void TearDownTestCase()
+  {
+    SCSCFTestBase::TearDownTestCase();
+    delete _remote_sdm; _remote_sdm = NULL;
+    delete _remote_aor_store; _remote_aor_store = NULL;
+    delete _remote_data_store; _remote_data_store = NULL;
+  }
+
+  SCSCFTestWithRemoteSDM() : SCSCFTestBase()
+  {
+    // Create the S-CSCF Sproutlet.
+    IFCConfiguration ifc_configuration(false, false, "sip:DUMMY_AS", NULL, NULL);
+    _scscf_sproutlet = new SCSCFSproutlet("scscf",
+                                          "scscf",
+                                          "sip:scscf.sprout.homedomain:5058;transport=TCP",
+                                          "sip:127.0.0.1:5058",
+                                          "sip:icscf.sprout.homedomain:5059;transport=TCP",
+                                          "sip:bgcf@homedomain:5058",
+                                          "sip:11.22.33.44;service=mmf",
+                                          "sip:44.33.22.11:5053;service=mmf",
+                                          5058,
+                                          "sip:scscf.sprout.homedomain:5058;transport=TCP",
+                                          _sdm,
+                                          {_remote_sdm},
+                                          _hss_connection,
+                                          _enum_service,
+                                          _acr_factory,
+                                          &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
+                                          &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
+                                          false,
+                                          _mmf_service,
+                                          _fifc_service,
+                                          ifc_configuration,
+                                          3000, // Session continue timeout - different from default
+                                          6000, // Session terminated timeout - different from default
+                                          _sess_term_comm_tracker,
+                                          _sess_cont_comm_tracker
+                                          );
+    _scscf_sproutlet->init();
+
+    // Create the I-CSCF Sproutlets.
+    _scscf_selector = new SCSCFSelector("sip:scscf.sprout.homedomain",
+                                        string(UT_DIR).append("/test_icscf.json"));
+    _icscf_sproutlet = new ICSCFSproutlet("icscf",
+                                          "sip:bgcf@homedomain:5058",
+                                          5059,
+                                          "sip:icscf.sprout.homedomain:5059;transport=TCP",
+                                          _hss_connection,
+                                          _acr_factory,
+                                          _scscf_selector,
+                                          _enum_service,
+                                          &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
+                                          &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
+                                          false
+                                          );
+    _icscf_sproutlet->init();
+
+    // Add common sproutlet to the list for Proxy use
+    std::list<Sproutlet*> sproutlets;
+    sproutlets.push_back(_scscf_sproutlet);
+    sproutlets.push_back(_icscf_sproutlet);
+    sproutlets.push_back(_bgcf_sproutlet);
+    sproutlets.push_back(_mmtel_sproutlet);
+
+    // Add additional home domain for Proxy use
+    std::unordered_set<std::string> additional_home_domains;
+    additional_home_domains.insert("sprout.homedomain");
+    additional_home_domains.insert("sprout-site2.homedomain");
+    additional_home_domains.insert("127.0.0.1");
+
+    _proxy = new SproutletProxy(stack_data.endpt,
+                                PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
+                                "homedomain",
+                                additional_home_domains,
+                                sproutlets,
+                                std::set<std::string>());
+  }
+
+  ~SCSCFTestWithRemoteSDM()
+  {
+  }
+
+protected:
+  static LocalStore* _remote_data_store;
+  static AstaireAoRStore* _remote_aor_store;
+  static SubscriberDataManager* _remote_sdm;
+};
+LocalStore* SCSCFTestWithRemoteSDM::_remote_data_store;
+AstaireAoRStore* SCSCFTestWithRemoteSDM::_remote_aor_store;
+SubscriberDataManager* SCSCFTestWithRemoteSDM::_remote_sdm;
+
 //Get bindings from remote store if the AOR is not registered with local store 
 TEST_F(SCSCFTestWithRemoteSDM, TestGetBindingFromRemoteStore)
 {
@@ -9650,7 +9740,7 @@ TEST_F(SCSCFTestWithRemoteSDM, TestGetBindingFromRemoteStore)
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
 
   // Send a terminating INVITE for a subscriber with a tel: URI
-  Message msg;
+  SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._route = "Route: <sip:sprout.homedomain>";
@@ -9661,3 +9751,4 @@ TEST_F(SCSCFTestWithRemoteSDM, TestGetBindingFromRemoteStore)
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob"), hdrs, false);
 }
+
