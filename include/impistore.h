@@ -70,10 +70,12 @@ public:
     virtual ~AuthChallenge() {};
 
     /// Write to JSON writer (IMPI format).
-    virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
+    virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer,
+                            bool expiry_in_ms = false);
 
     /// Deserialization from JSON (IMPI format).
-    static ImpiStore::AuthChallenge* from_json(rapidjson::Value* json);
+    static ImpiStore::AuthChallenge* from_json(rapidjson::Value* json,
+                                               bool expiry_in_ms = false);
 
     /// Getters and setters
     Type get_type()
@@ -227,7 +229,8 @@ public:
     virtual ~DigestAuthChallenge() {};
 
     /// Write to JSON writer (IMPI format).
-    virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
+    virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer,
+                            bool expiry_in_ms = false) override;
 
     /// Deserialization from JSON (IMPI format).
     static ImpiStore::DigestAuthChallenge* from_json(rapidjson::Value* json);
@@ -308,7 +311,8 @@ public:
     virtual ~AKAAuthChallenge() {};
 
     /// Write to JSON writer (IMPI format).
-    virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
+    virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer,
+                            bool expiry_in_ms = false) override;
 
     /// Deserialization from JSON (IMPI format).
     static ImpiStore::AKAAuthChallenge* from_json(rapidjson::Value* json);
