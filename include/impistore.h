@@ -312,7 +312,7 @@ public:
 
     /// Write to JSON writer (IMPI format).
     virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer,
-                            bool expiry_im_ms = false) override;
+                            bool expiry_in_ms = false) override;
 
     /// Deserialization from JSON (IMPI format).
     static ImpiStore::AKAAuthChallenge* from_json(rapidjson::Value* json);
