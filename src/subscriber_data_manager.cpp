@@ -174,7 +174,10 @@ Store::Status SubscriberDataManager::set_aor_data(
     }
 
     // 3. Send any Chronos timer requests
-    _chronos_timer_request_sender->send_timers(aor_id, aor_pair, now, trail);
+    if (_chronos_timer_request_sender->_chronos_conn)
+    {
+      _chronos_timer_request_sender->send_timers(aor_id, aor_pair, now, trail);
+    }
   }
 
   // 4. Write the data to memcached. If this fails, bail out here
