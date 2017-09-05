@@ -103,7 +103,8 @@ void ImpiStore::AuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuf
 }
 
 ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* json,
-                                                              bool expiry_in_ms)
+                                                              bool expiry_in_ms,
+                                                              bool include_expired)
 {
   ImpiStore::AuthChallenge* auth_challenge = NULL;
   if (json->IsObject())
@@ -178,7 +179,7 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* 
                     JSON_NONCE);
         delete auth_challenge; auth_challenge = NULL;
       }
-      else if (auth_challenge->_expires < time(NULL))
+      else if ((auth_challenge->_expires < time(NULL)) && (!include_expired))
       {
         TRC_DEBUG("Expires in past - dropping");
         delete auth_challenge; auth_challenge = NULL;
