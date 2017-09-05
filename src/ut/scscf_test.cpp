@@ -9332,7 +9332,6 @@ TEST_F(SCSCFTest, SCSCFHandlesUrnUri)
 
   // Send the MESSAGE into the S-CSCF.
   SCOPED_TRACE("MESSAGE");
-  printf("KKK\n%s\nend\n", msg.get_request().c_str());
   inject_msg(msg.get_request(), _tp_default);
   poll();
 
