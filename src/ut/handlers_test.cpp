@@ -126,7 +126,7 @@ class DeregistrationTaskTest : public SipTest
       if (aors[ii] != NULL)
       {
         // Write the information to the local store
-        EXPECT_CALL(*_subscriber_data_manager, set_aor_data(aor_ids[ii], _, _, _, _)).WillOnce(Return(Store::OK));
+        EXPECT_CALL(*_subscriber_data_manager, set_aor_data(aor_ids[ii], _, _, _)).WillOnce(Return(Store::OK));
       }
     }
   }
@@ -338,7 +338,7 @@ TEST_F(DeregistrationTaskTest, SubscriberDataManagerWritesFail)
   AoR* aor2 = new AoR(*aor);
   AoRPair* aor_pair = new AoRPair(aor, aor2);
   EXPECT_CALL(*_subscriber_data_manager, get_aor_data(_,  _)).WillOnce(Return(aor_pair));
-  EXPECT_CALL(*_subscriber_data_manager, set_aor_data(_, _, _, _, _)).WillOnce(Return(Store::ERROR));
+  EXPECT_CALL(*_subscriber_data_manager, set_aor_data(_, _, _, _)).WillOnce(Return(Store::ERROR));
 
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 500, _));
@@ -991,8 +991,8 @@ TEST_F(DeleteImpuTaskTest, Mainline)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, EmptyAoR(), _, _))
-        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings are expired.
+      EXPECT_CALL(*store, set_aor_data(impu, EmptyAoR(), _, _))
+        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings are expired.
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(impu, _, "dereg-admin", "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _))
         .WillOnce(Return(200));
@@ -1014,8 +1014,8 @@ TEST_F(DeleteImpuTaskTest, StoreFailure)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _))
-        .WillOnce(DoAll(SetArgReferee<4>(false), // Fail to expire bindings.
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<3>(false), // Fail to expire bindings.
                         Return(Store::ERROR)));
       EXPECT_CALL(*stack, send_reply(_, 500, _));
   }
@@ -1035,8 +1035,8 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith404)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _))
-        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(impu, _, _, "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _))
         .WillOnce(Return(404));
@@ -1058,8 +1058,8 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith5xx)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _))
-        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(impu, _, _, "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _))
         .WillOnce(Return(500));
@@ -1081,8 +1081,8 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith4xx)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _))
-        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _))
+        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(impu, _, _, "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _))
         .WillOnce(Return(400));
@@ -1105,15 +1105,15 @@ TEST_F(DeleteImpuTaskTest, WritingToRemoteStores)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, EmptyAoR(), _, _))
-        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
+      EXPECT_CALL(*store, set_aor_data(impu, EmptyAoR(), _, _))
+        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(impu, _, _, "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _))
         .WillOnce(Return(200));
 
       EXPECT_CALL(*remote_store1, get_aor_data(impu, _)).WillOnce(Return(remote_aor));
-      EXPECT_CALL(*remote_store1, set_aor_data(impu, _, EmptyAoR(), _, _))
-        .WillOnce(DoAll(SetArgReferee<4>(true), // All bindings expired
+      EXPECT_CALL(*remote_store1, set_aor_data(impu, EmptyAoR(), _, _))
+        .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
                         Return(Store::OK)));
 
       EXPECT_CALL(*stack, send_reply(_, 200, _));
@@ -1130,5 +1130,247 @@ TEST_F(DeleteImpuTaskTest, BadMethod)
   build_task(impu_escaped, htp_method_PUT);
   EXPECT_CALL(*stack, send_reply(_, 405, _));
 
+  task->run();
+}
+
+
+
+
+class PushProfileTaskTest : public TestWithMockSdms
+{
+  MockHttpStack::Request* req;
+  PushProfileTask::Config* cfg;
+  PushProfileTask* task;
+
+  static void SetUpTestCase()
+  {
+    TestWithMockSdms::SetUpTestCase();
+    TestWithMockSdms::SetScscfUri("sip:all.the.sprout.nodes:5058;transport=TCP");
+  }
+
+  void SetUp()
+  {
+    TestWithMockSdms::SetUp();
+  }
+
+  void TearDown()
+  {
+    delete req;
+    delete cfg;
+    TestWithMockSdms::TearDown();
+  }
+
+  // Build the push profile request
+  void build_pushprofile_request(std::string body,
+                                 std::string default_uri,
+                                 htp_method method = htp_method_PUT,
+                                 bool configure_remote_store = false)
+  {
+    req = new MockHttpStack::Request(stack,
+                                     "/registrations/" + default_uri,
+                                     "",
+                                     "",
+                                     body,
+                                     method);
+    std::vector<SubscriberDataManager*> remote_stores;
+    if (configure_remote_store)
+    {
+      remote_stores.push_back(remote_store1);
+    }
+
+    cfg = new PushProfileTask::Config(store, remote_stores, mock_hss);
+    task = new PushProfileTask(*req, cfg, 0);
+  }
+};
+
+// Mainline Case. Complicated XML to make sure all components can be handled correctly
+TEST_F(PushProfileTaskTest, MainlineTest)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string user_data =     "<IMSSubscription><ServiceProfile>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                              "<PublicIdentity><Identity>sip:6505550232@homedomain</Identity><BarringIndication>1</BarringIndication></PublicIdentity>"
+                              "<InitialFilterCriteria>"
+                              "<Priority>1</Priority>"
+                              "<TriggerPoint>"
+                              "<ConditionTypeCNF>0</ConditionTypeCNF>"
+                              "<SPT>"
+                              "<ConditionNegated>0</ConditionNegated>"
+                              "<Group>0</Group>"
+                              "<Method>REGISTER</Method>"
+                              "<Extension></Extension>"
+                              "</SPT>"
+                              "</TriggerPoint>"
+                              "<ApplicationServer>"
+                              "<ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>"
+                              "<DefaultHandling>1</DefaultHandling>"
+                              "</ApplicationServer>"
+                              "</InitialFilterCriteria>"
+                              "</ServiceProfile></IMSSubscription>";
+  std::string body =          "{\"user-data-xml\":\"" + user_data + "\"}";
+
+  AoR* aor = new AoR(default_uri);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*store, get_aor_data(default_uri, _)).WillOnce(Return(aor_pair));
+  EXPECT_CALL(*store, set_aor_data(default_uri, aor_pair, _, _)).WillOnce(Return(Store::OK));
+  EXPECT_CALL(*stack, send_reply(_, 200, _));
+  task->run();
+}
+
+// The method is not a put, and therefore is invalid. Sends HTTP_BAD_REQUEST.
+TEST_F(PushProfileTaskTest, InvalidMethod)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string user_data =     "<IMSSubscription><ServiceProfile>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                              "</ServiceProfile></IMSSubscription>";
+  std::string body =          "{\"user-data-xml\":\"" + user_data + "\"}";
+
+  build_pushprofile_request(body, default_uri, htp_method_GET);
+
+  EXPECT_CALL(*stack, send_reply(_, 405, _));
+  task->run();
+}
+
+// The JSON is not valid, and therefore not able to be parsed. Sends HTTP_BAD_REQUEST.
+TEST_F(PushProfileTaskTest, InvalidJSON)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string user_data =     "<IMSSubscription><ServiceProfile>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                              "</ServiceProfile></IMSSubscription>";
+  std::string body = " {{\"user-data-xml\":\"" + user_data + "\"}";
+
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*stack, send_reply(_, 400, _));
+  task->run();
+}
+
+// The JSON is valid JSON, but does not contain the xml component as expected Sends HTTP_BAD_REQUEST
+TEST_F(PushProfileTaskTest, MissingXMLfromJSON)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string user_data =     "<IMSSubscription><ServiceProfile>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                              "</ServiceProfile></IMSSubscription>";
+  std::string body = "{\"public-identity\":\""+ default_uri + "\"}";
+
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*stack, send_reply(_, 400, _));
+  task->run();
+}
+
+
+// The XML is not valid and therefore not able to be parsed. Sends HTTP_BAD_REQUEST.
+TEST_F(PushProfileTaskTest, InvalidXML)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string user_data =     "<IMSSubscription><ServiceProfile>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                              "<<"
+                              "</ServiceProfile></IMSSubscription>";
+  std::string body =          "{\"user-data-xml\":\"" + user_data + "\"}";
+
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*stack, send_reply(_, 400, _));
+  task->run();
+}
+
+// The XML does not contain any service profiles. Sends HTTP_BAD_REQUEST
+TEST_F(PushProfileTaskTest, MissingServiceProfileXML)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string user_data =     "<IMSSubscription>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                              "</IMSSubscription>";
+  std::string body = "{\"user-data-xml\":\"" + user_data + "\"}";
+
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*stack, send_reply(_, 400, _));
+  task->run();
+}
+
+
+
+// The XML does not contain the relevant Public Identities. Sends HTTP_BAD_REQUEST.
+TEST_F(PushProfileTaskTest, MissingPublicIdentityXML)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string user_data =  "<IMSSubscription><ServiceProfile>"
+                           "</ServiceProfile></IMSSubscription>";
+  std::string body =       "{\"user-data-xml\":\"" + user_data + "\"}";
+
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*stack, send_reply(_, 400, _));
+  task->run();
+}
+
+// get_aor_data returns a NULL pointer. Sends HTTP_SERVER_ERROR
+TEST_F(PushProfileTaskTest, SubscriberDataManagerFails)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string user_data =     "<IMSSubscription><ServiceProfile>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                              "</ServiceProfile></IMSSubscription>";
+  std::string body =          "{\"user-data-xml\":\"" + user_data + "\"}";
+
+  AoRPair* aor_pair;
+  aor_pair = NULL;
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*store, get_aor_data(default_uri, _)).WillOnce(Return(aor_pair));
+  EXPECT_CALL(*stack, send_reply(_, 500, _));
+  task->run();
+}
+
+// set_aor_data fails. Sends HTTP_SERVER_ERROR
+TEST_F(PushProfileTaskTest, SubscriberDataManagerWriteFails)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string user_data =     "<IMSSubscription><ServiceProfile>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                              "</ServiceProfile></IMSSubscription>";
+  std::string body =          "{\"user-data-xml\":\"" + user_data + "\"}";
+
+  AoR* aor = new AoR(default_uri);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*store, get_aor_data(default_uri, _)).WillOnce(Return(aor_pair));
+  EXPECT_CALL(*store, set_aor_data(default_uri, aor_pair, _, _)).WillOnce(Return(Store::ERROR));
+  EXPECT_CALL(*stack, send_reply(_, 500, _));
+  task->run();
+}
+
+// all bindings are expired - triggers a deregistration
+TEST_F(PushProfileTaskTest, AllBindingExpired)
+{
+  std::string default_uri = "sip:6505550231@homedomain";
+  std::string user_data =     "<IMSSubscription><ServiceProfile>"
+                              "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                              "</ServiceProfile></IMSSubscription>";
+  std::string body =          "{\"user-data-xml\":\"" + user_data + "\"}";
+
+  AoR* aor = new AoR(default_uri);
+  AoR* aor2 = new AoR(*aor);
+  AoRPair* aor_pair = new AoRPair(aor, aor2);
+  build_pushprofile_request(body, default_uri);
+
+  EXPECT_CALL(*store, get_aor_data(default_uri, _)).WillOnce(Return(aor_pair));
+  EXPECT_CALL(*store, set_aor_data(default_uri, aor_pair, _, _))
+    .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings are expired.
+                    Return(Store::OK)));
+  EXPECT_CALL(*mock_hss, update_registration_state(default_uri, _, "dereg-timeout", "", 0))
+    .WillOnce(Return(200));
+  EXPECT_CALL(*stack, send_reply(_, 200, _));
   task->run();
 }

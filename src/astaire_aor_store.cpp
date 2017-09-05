@@ -224,6 +224,13 @@ AoR* AstaireAoRStore::JsonSerializerDeserializer::
       s->from_json(s_obj);
     }
 
+    if (doc.HasMember(JSON_ASSOCIATED_URIS))
+    {
+      JSON_ASSERT_OBJECT(doc[JSON_ASSOCIATED_URIS]);
+      const rapidjson::Value& au_obj = doc[JSON_ASSOCIATED_URIS];
+      aor->_associated_uris.from_json(au_obj);
+    }
+
     JSON_GET_INT_MEMBER(doc, JSON_NOTIFY_CSEQ, aor->_notify_cseq);
     aor->_timer_id =
          ((doc.HasMember(JSON_TIMER_ID)) && ((doc[JSON_TIMER_ID]).IsString()) ?
@@ -283,6 +290,10 @@ std::string AstaireAoRStore::JsonSerializerDeserializer::serialize_aor(AoR* aor_
       }
     }
     writer.EndObject();
+
+    // Associated URIs
+    writer.String(JSON_ASSOCIATED_URIS);
+    aor_data->_associated_uris.to_json(writer);
 
     // Notify Cseq flag
     writer.String(JSON_NOTIFY_CSEQ); writer.Int(aor_data->_notify_cseq);

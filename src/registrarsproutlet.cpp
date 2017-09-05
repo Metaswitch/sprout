@@ -1099,8 +1099,8 @@ AoRPair* RegistrarSproutletTsx::write_to_store(
 
     if (changed_bindings > 0)
     {
+      aor_pair->get_current()->_associated_uris = *associated_uris;
       set_rc = primary_sdm->set_aor_data(aor,
-                                         associated_uris,
                                          aor_pair,
                                          trail(),
                                          all_bindings_expired);
