@@ -203,6 +203,14 @@ URIClass URIClassifier::classify_uri(const pjsip_uri* uri, bool prefer_sip, bool
     }
   }
 
+  // Finally, check if this is a urn URI.
+  // We support the URI "urn:service:sos", which is sent from Perimeta when a
+  // user makes an emergency call.
+  if (PJSIP_URI_SCHEME_IS_URN(uri))
+  {
+    ret = URN_URI;
+  }
+
   TRC_DEBUG("Classified URI as %d", (int)ret);
   return ret;
 }

@@ -7254,7 +7254,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   ServiceProfileBuilder service_profile = ServiceProfileBuilder()
     .addIdentity("sip:6505501234@homedomain")
     .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-    SubscriptionBuilder subscription = SubscriptionBuilder()
+  SubscriptionBuilder subscription = SubscriptionBuilder()
     .addServiceProfile(service_profile);
   _hss_connection->set_impu_result("sip:6505501234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
@@ -9290,3 +9290,79 @@ TEST_F(SCSCFTest, MMFPreAndPostAs)
   send_response_back_through_dialog(respond_to_txdata(txdata, 200), 200, 2);
   pjsip_tx_data_dec_ref(txdata); txdata = NULL;
 }
+
+// Test that "urn:service:service" in Request URI can be handled.
+// This is passed (through the I-CSCF) from Perimeta when a user makes an
+// emergency call. This message should be passed on to the terminating TAS for
+// that user (through configured iFCs) to alert the TAS not to apply any call
+// blocking, etc. on calls to that subscriber for a period of time (in case the
+// emergency call is dropped and the emergency services need to call back).
+// This URI should be accepted, and the MESSAGE should be forwarded onto the
+// server specified in the iFC. This server should terminate the MESSAGE, and
+// return a 200 OK, which should then be forwarded back to the source.
+// (NOTE: Since the TAS should terminate the MESSAGE, if there are multiple
+// terminating TASs for a user, only one will be notified.)
+TEST_F(SCSCFTest, SCSCFHandlesUrnUri)
+{
+  SCOPED_TRACE("");
+
+  pjsip_msg* out;
+
+  TransportFlow tpAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
+
+  // Set up the subscription for the caller, to contain an iFC that will be
+  // triggered on originating calls, if the RequestURI contains "sos".
+  register_uri(_sdm, _hss_connection, "650550100", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  ServiceProfileBuilder service_profile =  ServiceProfileBuilder()
+    .addIdentity("sip:6505551000@homedomain")
+//    .addIfc(1, {"<SessionCase>0</SessionCase><!-- originating-registered -->"}, "sip:1.2.3.4:56789;transport=TCP");
+// GET THIS TO WORK!!!
+    .addIfc(1, {"RequestURI>service:sos</RequestURI>", "<SessionCase>0</SessionCase><!-- originating-registered -->"}, "sip:1.2.3.4:56789;transport=TCP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
+
+  // Create a MESSAGE containing the URI "urn:service:sos".
+  Message msg;
+  msg._method = "MESSAGE";
+  msg._requri = "urn:service:sos";
+  msg._urn_uri = true;
+  msg._route = "Route: <sip:sprout.homedomain;orig>";
+  std::string p_asserted_id = "P-Asserted-Identity: <sip:";
+  p_asserted_id.append(msg._from).append("@").append(msg._fromdomain).append(">");
+  msg._extra = p_asserted_id;
+
+  // Send the MESSAGE into the S-CSCF.
+  SCOPED_TRACE("MESSAGE");
+  printf("KKK\n%s\nend\n", msg.get_request().c_str());
+  inject_msg(msg.get_request(), _tp_default);
+  poll();
+
+  // Check the MESSAGE is passed on to the AS (originating AS for 6505551000).
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  ReqMatcher r1("MESSAGE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  tpAS.expect_target(current_txdata(), false);
+  EXPECT_EQ("urn:service:sos", r1.uri());
+  EXPECT_THAT(get_headers(current_txdata()->msg, "To"),
+              testing::MatchesRegex("To: <urn:service:sos>"));
+  EXPECT_THAT(get_headers(current_txdata()->msg, "Route"),
+              testing::ContainsRegex(";orig"));
+  EXPECT_THAT(get_headers(current_txdata()->msg, "P-Asserted-Identity"),
+              testing::MatchesRegex("P-Asserted-Identity: <sip:6505551000@homedomain>"));
+
+  // In this specific case, the AS should terminate the MESSAGE, and send back a
+  // 200 OK.
+  SCOPED_TRACE("200 OK (MESSAGE)");
+  inject_msg(respond_to_txdata(current_txdata(), 200), &tpAS);
+  free_txdata();
+
+  // Check the 200 OK is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(200).matches(out);
+  _tp_default->expect_target(current_txdata(), true);
+  free_txdata();
+}
+

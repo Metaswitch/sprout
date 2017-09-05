@@ -3615,13 +3615,16 @@ TEST_F(ICSCFSproutletTest, RouteOutOfDialogAck)
   delete tp;
 }
 
-
-// Test the case where the Req-URI is "urn:service:sos". This will be received
-// from Perimeta when a subscriber has made an emergency call.
-// This URI should be accepted, and the MESSAGE should be forwarded on.
-// A 200 MESSAGE returned to the I-CSCF should then be forwarded back to
-// Perimeta.
-TEST_F(ICSCFSproutletTest, HandleUrnUri)
+// Test the case where the Request URI is "urn:service:sos".
+// This will be received from Perimeta when a subscriber has made an emergency
+// call. This message should be passed on to the terminating TAS (through
+// configured iFCs) to alert the TAS not to apply any call blocking, etc. on
+// calls to that subscriber for a period of time (in case the emergency call is
+// dropped and the emergency services need to call back).
+// This URI should be accepted, and the MESSAGE should be forwarded on to the
+// S-CSCF. A 200 OK returned to the I-CSCF should then be forwarded back to the
+// source.
+TEST_F(ICSCFSproutletTest, ICSCFHandlesUrnUri)
 {
   pjsip_tx_data* tdata;
 
@@ -3648,27 +3651,34 @@ TEST_F(ICSCFSproutletTest, HandleUrnUri)
   msg1._extra = p_asserted_id;
   inject_msg(msg1.get_request(), tp);
 
-  // Check that the message is forwarded as expected.
+  // Check that the MESSAGE is forwarded as expected.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
 
-  // Is the right kind and method.
+  // Check the method and content of the MESSAGE is correct.
   ReqMatcher r1("MESSAGE");
   r1.matches(tdata->msg);
-  // We should probably do more thorough checking here
+  expect_target("TCP", "10.10.10.1", 5058, tdata);
+  EXPECT_EQ("urn:service:sos", r1.uri());
+  EXPECT_THAT(get_headers(current_txdata()->msg, "To"),
+              testing::MatchesRegex("To: <urn:service:sos>"));
+  EXPECT_THAT(get_headers(current_txdata()->msg, "Route"),
+              testing::ContainsRegex(";orig"));
+  EXPECT_THAT(get_headers(current_txdata()->msg, "P-Asserted-Identity"),
+              testing::MatchesRegex("P-Asserted-Identity: <sip:6505551000@homedomain>"));
 
-  // Don't know if this is applicable - pulled this check out a different test
-  // that had a MESSAGE in it.
-  // Goes to the configured upstream proxy ("upstreamnode", "10.6.6.8")
-//  expect_target("TCP", "10.6.6.8", stack_data.pcscf_trusted_port, tdata);
+  // Inject a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
 
-  // We should also feed back in a 200 MESSAGE, and check that is forwarded back
-  // to the Perimeta that sent the original MESSAGE.
-  // This will then match the behaviour Perimeta expect.
+  // Check the correct response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher r2(200);
+  r2.matches(tdata->msg);
+  expect_target("TCP", "1.2.3.4", 49152, tdata);
 
   //Clean up.
   free_txdata();
   _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true");
   delete tp;
-
 }
