@@ -2365,7 +2365,6 @@ int main(int argc, char* argv[])
                                        &deregistration_handler);
       http_stack_sig->register_handler("^/registrations/[^/]+$",
                                        &push_profile_handler);
-
       http_stack_sig->bind_tcp_socket(opt.http_address, opt.http_port);
       http_stack_sig->start(&reg_httpthread_with_pjsip);
     }

@@ -646,7 +646,8 @@ void SubscriberDataManager::NotifySender::send_notifys(
   }
 
   // Check if the associated URIs have changed. If so, will need to send a NOTIFY.
-  associated_uris_changed = (aor_pair->get_current()->_associated_uris != aor_pair->get_orig()->_associated_uris);
+  associated_uris_changed = (aor_pair->get_current()->_associated_uris !=
+                             aor_pair->get_orig()->_associated_uris);
 
   // Iterate over the subscriptions in the original AoR, and send NOTIFYs for
   // any subscriptions that aren't in the current AoR.

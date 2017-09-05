@@ -72,12 +72,6 @@ public:
 
 protected:
   void process_aor_timeout(std::string aor_id);
-  AoRPair* set_aor_data(SubscriberDataManager* current_sdm,
-                        std::string aor_id,
-                        AssociatedURIs* associated_uris,
-                        AoRPair* previous_aor_data,
-                        std::vector<SubscriberDataManager*> remote_sdms,
-                        bool& all_bindings_expired);
 
 protected:
   const Config* _cfg;
@@ -267,7 +261,7 @@ private:
 
 /// Task for receiving user data sent by Homestead when it receives a PPR.
 /// It will send NOTIFYs if the associated URIs have changed (by calling
-/// into the SDM)  Will send a HTTP Return Code back to Homestead.
+/// into the SDM).
 class PushProfileTask : public HttpStackUtils::Task
 {
 public:
@@ -293,7 +287,7 @@ public:
   {};
 
   void run();
-  HTTPCode parse_request(std::string body, SAS::TrailId trail);
+  HTTPCode get_associated_uris(std::string body, SAS::TrailId trail);
   HTTPCode update_associated_uris(SAS::TrailId trail);
 
 protected:

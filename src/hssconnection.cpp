@@ -355,7 +355,7 @@ bool decode_homestead_xml(const std::string public_user_identity,
     return false;
   }
 
-  if (!SproutXmlUtils::decode_service_profile(public_user_identity,
+  if (!SproutXmlUtils::parse_ims_subscription(public_user_identity,
                                               root,
                                               imss,
                                               ifcs_map,
