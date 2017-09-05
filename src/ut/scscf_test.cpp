@@ -9315,9 +9315,7 @@ TEST_F(SCSCFTest, SCSCFHandlesUrnUri)
   register_uri(_sdm, _hss_connection, "650550100", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   ServiceProfileBuilder service_profile =  ServiceProfileBuilder()
     .addIdentity("sip:6505551000@homedomain")
-//    .addIfc(1, {"<SessionCase>0</SessionCase><!-- originating-registered -->"}, "sip:1.2.3.4:56789;transport=TCP");
-// GET THIS TO WORK!!!
-    .addIfc(1, {"RequestURI>service:sos</RequestURI>", "<SessionCase>0</SessionCase><!-- originating-registered -->"}, "sip:1.2.3.4:56789;transport=TCP");
+    .addIfc(1, {"<RequestURI>sos</RequestURI>", "<SessionCase>0</SessionCase><!-- originating-registered -->"}, "sip:1.2.3.4:56789;transport=TCP");
   SubscriptionBuilder subscription = SubscriptionBuilder()
     .addServiceProfile(service_profile);
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
