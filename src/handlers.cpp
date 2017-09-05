@@ -595,7 +595,10 @@ HTTPCode AuthTimeoutTask::timeout_auth_challenge(std::string impu,
   report_sip_all_register_marker(trail(), impu);
 
   bool success = false;
-  ImpiStore::Impi* impi_obj = _cfg->_local_impi_store->get_impi(impi, trail());
+
+  // We ask the ImpiStore to return expired challenges here, so that we'll still
+  // get the challenge if the timer has popped after the challenge has expired
+  ImpiStore::Impi* impi_obj = _cfg->_local_impi_store->get_impi(impi, trail(), true);
   ImpiStore::AuthChallenge* auth_challenge = NULL;
   if (impi_obj != NULL)
   {

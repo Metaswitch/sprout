@@ -427,7 +427,7 @@ TEST_F(ChronosAuthTimeoutTest, NonceTimedOut)
   auth_challenge->_scscf_uri = "sip:scscf.sprout.homedomain:5058;transport=TCP";
   impi->auth_challenges.push_back(auth_challenge);
 
-  EXPECT_CALL(*store, get_impi("6505550231@homedomain", _)).WillOnce(Return(impi));
+  EXPECT_CALL(*store, get_impi("6505550231@homedomain", _, true)).WillOnce(Return(impi));
 
   std::string body = "{\"impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231@homedomain\", \"nonce\": \"abcdef\"}";
   build_timeout_request(body, htp_method_POST);
@@ -446,7 +446,7 @@ TEST_F(ChronosAuthTimeoutTest, NonceTimedOutWithEmptyCorrelator)
   auth_challenge->_scscf_uri = "sip:scscf.sprout.homedomain:5058;transport=TCP";
   impi->auth_challenges.push_back(auth_challenge);
 
-  EXPECT_CALL(*store, get_impi("6505550231@homedomain", _)).WillOnce(Return(impi));
+  EXPECT_CALL(*store, get_impi("6505550231@homedomain", _, true)).WillOnce(Return(impi));
 
   std::string body = "{\"impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231@homedomain\", \"nonce\": \"abcdef\"}";
   build_timeout_request(body, htp_method_POST);
@@ -465,7 +465,7 @@ TEST_F(ChronosAuthTimeoutTest, MainlineTest)
   auth_challenge->_correlator = "abcde";
   impi->auth_challenges.push_back(auth_challenge);
 
-  EXPECT_CALL(*store, get_impi("test@example.com", _)).WillOnce(Return(impi));
+  EXPECT_CALL(*store, get_impi("test@example.com", _, true)).WillOnce(Return(impi));
 
   std::string body = "{\"impu\": \"sip:test@example.com\", \"impi\": \"test@example.com\", \"nonce\": \"abcdef\"}";
   build_timeout_request(body, htp_method_POST);
