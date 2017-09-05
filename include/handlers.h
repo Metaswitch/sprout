@@ -265,4 +265,43 @@ private:
   const Config* _cfg;
 };
 
+/// Task for receiving user data sent by Homestead when it receives a PPR.
+/// It will send NOTIFYs if the associated URIs have changed (by calling
+/// into the SDM)  Will send a HTTP Return Code back to Homestead.
+class PushProfileTask : public HttpStackUtils::Task
+{
+public:
+  struct Config
+  {
+    Config(SubscriberDataManager* sdm,
+           std::vector<SubscriberDataManager*> remote_sdms,
+	   HSSConnection* hss):
+      _sdm(sdm),
+      _remote_sdms(remote_sdms),
+      _hss(hss)
+    {}
+
+    SubscriberDataManager* _sdm;
+    std::vector<SubscriberDataManager*> _remote_sdms;
+    HSSConnection* _hss;
+  };
+
+  PushProfileTask(HttpStack::Request& req,
+                  const Config* cfg,
+		  SAS::TrailId trail) :
+    HttpStackUtils::Task(req, trail), _cfg(cfg)
+  {};
+
+  void run();
+  HTTPCode parse_request(std::string body, SAS::TrailId trail);
+  HTTPCode update_store_to_send_any_notifys(SAS::TrailId trail);
+  //HTTPCode get_data(SAS::TrailId trail);
+  //HTTPCode set_data(SAS::TrailId trail);
+
+protected:
+  const Config* _cfg;
+  std::string _default_public_id;
+  AssociatedURIs _associated_uris;
+//  AoRPair* _aor_pair;
+};
 #endif

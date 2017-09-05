@@ -8427,7 +8427,7 @@ TEST_F(SCSCFTest, TestAddStoredPathHeader)
   binding->_emergency_registration = false;
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(uri, false);
-  bool ret = _sdm->set_aor_data(uri, &associated_uris, aor, 0);
+  bool ret = _sdm->set_aor_data(uri, aor, 0);
   delete aor;
   EXPECT_TRUE(ret);
 
@@ -8458,7 +8458,7 @@ TEST_F(SCSCFTest, TestAddStoredPathURI)
   binding->_emergency_registration = false;
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(uri, false);
-  bool ret = _sdm->set_aor_data(uri, &associated_uris, aor, 0);
+  bool ret = _sdm->set_aor_data(uri, aor, 0);
   delete aor;
   EXPECT_TRUE(ret);
 

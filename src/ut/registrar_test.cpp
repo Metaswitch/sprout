@@ -2875,6 +2875,8 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
 
   // Now add a subscription to the store
   AoRPair* aor_pair = _sdm->get_aor_data(aor, 0);
+  AssociatedURIs associated_uris = {};
+  aor_pair->get_current()->_associated_uris = associated_uris;
   AoR::Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
   s1->_req_uri = std::string("sip:6505550231@192.91.191.29:59934;transport=tcp");
   s1->_from_uri = aor_brackets;
@@ -2886,9 +2888,8 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   int now = time(NULL);
   s1->_expires = now + 300;
 
-  AssociatedURIs associated_uris = {};
-  associated_uris.add_uri(aor, false);
-  pj_status_t rc = _sdm->set_aor_data(aor, &associated_uris, aor_pair, 0);
+  aor_pair->get_current()->_associated_uris.add_uri(aor, false);
+  pj_status_t rc = _sdm->set_aor_data(aor, aor_pair, 0);
   EXPECT_TRUE(rc);
   delete aor_pair; aor_pair = NULL;
 
@@ -2964,6 +2965,8 @@ TEST_F(RegistrarTest, NoNotifyToUnregisteredUser)
 
   // Now add a subscription to the store
   AoRPair* aor_pair = _sdm->get_aor_data(aor, 0);
+  AssociatedURIs associated_uris = {};
+  aor_pair->get_current()->_associated_uris = associated_uris;
   AoR::Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
   s1->_req_uri = msg._contact;
   s1->_from_uri = aor_brackets;
@@ -2975,9 +2978,8 @@ TEST_F(RegistrarTest, NoNotifyToUnregisteredUser)
   int now = time(NULL);
   s1->_expires = now + 300;
 
-  AssociatedURIs associated_uris = {};
-  associated_uris.add_uri(aor, false);
-  pj_status_t rc = _sdm->set_aor_data(aor, &associated_uris, aor_pair, 0);
+  aor_pair->get_current()->_associated_uris.add_uri(aor, false);
+  pj_status_t rc = _sdm->set_aor_data(aor, aor_pair, 0);
   EXPECT_TRUE(rc);
   delete aor_pair; aor_pair = NULL;
 
@@ -3022,6 +3024,8 @@ TEST_F(RegistrarTest, MultipleRegistrationsWithSubscription)
 
   // Now add a subscription to the store
   AoRPair* aor_pair = _sdm->get_aor_data(aor, 0);
+  AssociatedURIs associated_uris = {};
+  aor_pair->get_current()->_associated_uris = associated_uris;
   AoR::Subscription* s1 = aor_pair->get_current()->get_subscription("1234");
   s1->_req_uri = std::string("sip:6505550231@192.91.191.29:59934;transport=tcp");
   s1->_from_uri = aor_brackets;
@@ -3033,9 +3037,8 @@ TEST_F(RegistrarTest, MultipleRegistrationsWithSubscription)
   int now = time(NULL);
   s1->_expires = now + 300;
 
-  AssociatedURIs associated_uris = {};
-  associated_uris.add_uri(aor, false);
-  pj_status_t rc = _sdm->set_aor_data(aor, &associated_uris, aor_pair, 0);
+  aor_pair->get_current()->_associated_uris.add_uri(aor, false);
+  pj_status_t rc = _sdm->set_aor_data(aor, aor_pair, 0);
   EXPECT_TRUE(rc);
   delete aor_pair; aor_pair = NULL;
   ASSERT_EQ(1, txdata_count());

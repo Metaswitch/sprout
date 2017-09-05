@@ -82,16 +82,15 @@ TEST_F(ChronosAoRTimeoutTasksTest, MainlineTest)
            .WillOnce(DoAll(SetArgReferee<3>(AssociatedURIs(associated_uris)), //IMPUs in IRS
                            Return(HTTP_OK)));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(aor_id, _, aor, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                                                             Return(Store::OK)));
+      EXPECT_CALL(*store, set_aor_data(aor_id, aor, _, _)).WillOnce(Return(Store::OK));
+
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote_aor1));
-      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, _, remote_aor1, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                                                                             Return(Store::OK)));
+      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, remote_aor1, _, _)).WillOnce(Return(Store::OK));
+
       EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote_aor2));
-      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, _, remote_aor2, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                                                                             Return(Store::OK)));
+      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, remote_aor2, _, _)).WillOnce(Return(Store::OK));
   }
 
   handler->run();
@@ -167,18 +166,15 @@ TEST_F(ChronosAoRTimeoutTasksTest, RemoteAoRNoBindingsTest)
       EXPECT_CALL(*stack, send_reply(_, 200, _));
       EXPECT_CALL(*mock_hss, get_registration_data(_, _, _, _, _)).WillOnce(Return(HTTP_OK));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(aor_id, _, aor, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                                                             Return(Store::OK)));
+      EXPECT_CALL(*store, set_aor_data(aor_id, aor, _, _)).WillOnce(Return(Store::OK));
+
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair));
-      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, _, remote1_aor_pair, _, _))
-                   .WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                   Return(Store::OK)));
+      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, remote1_aor_pair, _, _)).WillOnce(Return(Store::OK));
+
       EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair));
-      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, _, remote2_aor_pair, _, _))
-                   .WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                   Return(Store::OK)));
+      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, remote2_aor_pair, _, _)).WillOnce(Return(Store::OK));
   }
 
   handler->run();
@@ -218,16 +214,15 @@ TEST_F(ChronosAoRTimeoutTasksTest, LocalAoRNoBindingsTest)
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor1));
-      EXPECT_CALL(*store, set_aor_data(aor_id, _, aor_pair, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                                                                  Return(Store::OK)));
+      EXPECT_CALL(*store, set_aor_data(aor_id, aor_pair, _, _)).WillOnce(Return(Store::OK));
+
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor2));
-      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, _, remote1_aor2, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                                                                              Return(Store::OK)));
+      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, remote1_aor2, _, _)).WillOnce(Return(Store::OK));
+
       EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor));
-      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, _, remote2_aor, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                                                                             Return(Store::OK)));
+      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, remote2_aor, _, _)).WillOnce(Return(Store::OK));
   }
 
   handler->run();
@@ -279,19 +274,16 @@ TEST_F(ChronosAoRTimeoutTasksTest, NoBindingsTest)
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair1));
       EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair1));
-      EXPECT_CALL(*store, set_aor_data(aor_id, _, aor_pair, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                                                                  SetArgReferee<4>(true),
-                                                                                  Return(Store::OK)));
+      EXPECT_CALL(*store, set_aor_data(aor_id, aor_pair, _, _)).WillOnce(DoAll(SetArgReferee<3>(true),
+                                                                               Return(Store::OK)));
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair2));
-      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, _, remote1_aor_pair2, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                                                                                   SetArgReferee<4>(true),
-                                                                                                   Return(Store::OK)));
+      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, remote1_aor_pair2, _, _)).WillOnce(DoAll(SetArgReferee<3>(true),
+		                                                                                Return(Store::OK)));
       EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair2));
-      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, _, remote2_aor_pair2, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                                                                                   SetArgReferee<4>(true),
-                                                                                                   Return(Store::OK)));
+      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, remote2_aor_pair2, _, _)).WillOnce(DoAll(SetArgReferee<3>(true),
+		                                                                                Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(aor_id, "", HSSConnection::DEREG_TIMEOUT, "sip:scscf.sprout.homedomain:5058;transport=TCP", 0));
   }
 
@@ -324,13 +316,13 @@ TEST_F(ChronosAoRTimeoutTasksTest, NullAoRTest)
            .WillOnce(DoAll(SetArgReferee<3>(AssociatedURIs(associated_uris)), //IMPUs in IRS
                            Return(HTTP_OK)));
       EXPECT_CALL(*store, get_aor_data(aor_id, _)).WillOnce(Return(aor_pair));
-      EXPECT_CALL(*store, set_aor_data(aor_id, _, _, _, _)).Times(0);
+      EXPECT_CALL(*store, set_aor_data(aor_id, _, _, _)).Times(0);
       EXPECT_CALL(*remote_store1, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store1, get_aor_data(aor_id, _)).WillOnce(Return(remote1_aor_pair));
-      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, _, _, _, _)).Times(0);
+      EXPECT_CALL(*remote_store1, set_aor_data(aor_id, _, _, _)).Times(0);
       EXPECT_CALL(*remote_store2, has_servers()).WillOnce(Return(true));
       EXPECT_CALL(*remote_store2, get_aor_data(aor_id, _)).WillOnce(Return(remote2_aor_pair));
-      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, _, _, _, _)).Times(0);
+      EXPECT_CALL(*remote_store2, set_aor_data(aor_id, _, _, _)).Times(0);
   }
 
   handler->run();
@@ -382,8 +374,7 @@ TEST_F(ChronosAoRTimeoutTasksMockStoreTest, SubscriberDataManagerWritesFail)
   associated_uris.add_uri("sip:6505550231@homedomain", false);
 
   EXPECT_CALL(*store, get_aor_data(_, _)).WillOnce(Return(aor_pair));
-  EXPECT_CALL(*store, set_aor_data(_, _, _, _, _)).WillOnce(DoAll(SetArgPointee<1>(AssociatedURIs(associated_uris)),
-                                                                  Return(Store::ERROR)));
+  EXPECT_CALL(*store, set_aor_data(_, _, _, _)).WillOnce(Return(Store::ERROR));
 
   // Parse and handle the request
   std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\"}";

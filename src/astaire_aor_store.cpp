@@ -184,7 +184,6 @@ AoR* AstaireAoRStore::JsonSerializerDeserializer::
               rapidjson::GetParseError_En(doc.GetParseError()));
     return NULL;
   }
-
   AoR* aor = new AoR(aor_id);
 
   try
@@ -193,7 +192,6 @@ AoR* AstaireAoRStore::JsonSerializerDeserializer::
     JSON_ASSERT_CONTAINS(doc, JSON_BINDINGS);
     JSON_ASSERT_OBJECT(doc[JSON_BINDINGS]);
     const rapidjson::Value& bindings_obj = doc[JSON_BINDINGS];
-
     for (rapidjson::Value::ConstMemberIterator bindings_it = bindings_obj.MemberBegin();
          bindings_it != bindings_obj.MemberEnd();
          ++bindings_it)
@@ -210,7 +208,6 @@ AoR* AstaireAoRStore::JsonSerializerDeserializer::
     JSON_ASSERT_CONTAINS(doc, JSON_SUBSCRIPTIONS);
     JSON_ASSERT_OBJECT(doc[JSON_SUBSCRIPTIONS]);
     const rapidjson::Value& subscriptions_obj = doc[JSON_SUBSCRIPTIONS];
-
     for (rapidjson::Value::ConstMemberIterator subscriptions_it = subscriptions_obj.MemberBegin();
          subscriptions_it != subscriptions_obj.MemberEnd();
          ++subscriptions_it)
@@ -222,6 +219,13 @@ AoR* AstaireAoRStore::JsonSerializerDeserializer::
       const rapidjson::Value& s_obj = subscriptions_it->value;
 
       s->from_json(s_obj);
+    }
+
+    if (doc.HasMember(JSON_ASSOCIATED_URIS))
+    {
+      JSON_ASSERT_OBJECT(doc[JSON_ASSOCIATED_URIS]);
+      const rapidjson::Value& au_obj = doc[JSON_ASSOCIATED_URIS];
+      aor->_associated_uris.from_json(au_obj);
     }
 
     JSON_GET_INT_MEMBER(doc, JSON_NOTIFY_CSEQ, aor->_notify_cseq);
@@ -283,6 +287,10 @@ std::string AstaireAoRStore::JsonSerializerDeserializer::serialize_aor(AoR* aor_
       }
     }
     writer.EndObject();
+
+    // Associated URIs
+    writer.String(JSON_ASSOCIATED_URIS);
+    aor_data->_associated_uris.to_json(writer);
 
     // Notify Cseq flag
     writer.String(JSON_NOTIFY_CSEQ); writer.Int(aor_data->_notify_cseq);
