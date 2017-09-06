@@ -115,7 +115,7 @@ class DNSEnumService : public EnumService
 public:
   DNSEnumService(const std::vector<std::string>& dns_server,
                  const std::string& dns_suffix = ".e164.arpa",
-                 const DNSResolverFactory* resolver_factory = 
+                 const DNSResolverFactory* resolver_factory =
                                                        new DNSResolverFactory(),
                  CommunicationMonitor* comm_monitor = NULL);
   ~DNSEnumService();
