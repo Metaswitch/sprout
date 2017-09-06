@@ -72,7 +72,7 @@ void SIPResolver::resolve(const std::string& name,
     SAS::report_event(event);
   }
 
-  if (parse_ip_target(name, ai.address))
+  if (Utils::parse_ip_target(name, ai.address))
   {
     // The name is already an IP address, so no DNS resolution is possible.
     // Use specified transport and port or defaults if not specified.
