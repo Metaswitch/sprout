@@ -34,8 +34,7 @@ enum URIClass
   HOME_DOMAIN_SIP_URI,
   OFFNET_SIP_URI,
   NP_DATA,
-  FINAL_NP_DATA,
-  URN_URI
+  FINAL_NP_DATA
 };
 
 namespace URIClassifier

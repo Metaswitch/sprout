@@ -294,18 +294,14 @@ std::string Message::get_request()
   std::string route = _route.empty() ? "" : _route + "\r\n";
 
   // Set the value of the To header.
-  std::string to_header = "To: ";
-  if (!_urn_uri)
+  std::string to_header = _full_to_header;
+  if (to_header.empty())
   {
-    to_header.append("<").append(target).append(">");
+    to_header.append("To: <").append(target).append(">");
     if (_in_dialog)
     {
       to_header.append(";tag=10.114.61.213+1+8c8b232a+5fb751cf");
     }
-  }
-  else
-  {
-    to_header.append("<urn:service:sos>");
   }
 
   // Default branch parameter if it's not supplied.

@@ -3637,7 +3637,7 @@ TEST_F(ICSCFSproutletTest, ICSCFHandlesUrnUri)
   msg1._first_hop = true;
   msg1._method = "MESSAGE";
   msg1._requri = "urn:service:sos";
-  msg1._urn_uri = true;
+  msg1._full_to_header = "To: <urn:service:sos>";
   msg1._route = "Route: <sip:homedomain;orig>";
   std::string p_asserted_id = "P-Asserted-Identity: <sip:";
   p_asserted_id.append(msg1._from).append("@").append(msg1._fromdomain).append(">");

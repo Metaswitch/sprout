@@ -9319,7 +9319,7 @@ TEST_F(SCSCFTest, SCSCFHandlesUrnUri)
   Message msg;
   msg._method = "MESSAGE";
   msg._requri = "urn:service:sos";
-  msg._urn_uri = true;
+  msg._full_to_header = "To: <urn:service:sos>";
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   std::string p_asserted_id = "P-Asserted-Identity: <sip:";
   p_asserted_id.append(msg._from).append("@").append(msg._fromdomain).append(">");
@@ -9339,8 +9339,6 @@ TEST_F(SCSCFTest, SCSCFHandlesUrnUri)
   EXPECT_EQ("urn:service:sos", r1.uri());
   EXPECT_THAT(get_headers(current_txdata()->msg, "To"),
               testing::MatchesRegex("To: <urn:service:sos>"));
-  EXPECT_THAT(get_headers(current_txdata()->msg, "Route"),
-              testing::ContainsRegex(";orig"));
   EXPECT_THAT(get_headers(current_txdata()->msg, "P-Asserted-Identity"),
               testing::MatchesRegex("P-Asserted-Identity: <sip:6505551000@homedomain>"));
 
