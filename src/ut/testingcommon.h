@@ -245,6 +245,7 @@ namespace TestingCommon
     std::string _fromdomain;
     std::string _to;
     std::string _todomain;
+    std::string _full_to_header;
     std::string _content_type;
     std::string _body;
     std::string _extra;

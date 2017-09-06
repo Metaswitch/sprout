@@ -3614,3 +3614,60 @@ TEST_F(ICSCFSproutletTest, RouteOutOfDialogAck)
   poll();
   delete tp;
 }
+
+// Test the I-CSCF can handle a MESSAGE where the Request URI is
+// "urn:service:sos".
+TEST_F(ICSCFSproutletTest, ICSCFHandlesUrnUri)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        ICSCF_PORT,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS responses for the terminating location query.
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
+                              "{\"result-code\": 2001,"
+                              "\"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+
+  // Inject a SIP MESSAGE.
+  Message msg1;
+  msg1._first_hop = true;
+  msg1._method = "MESSAGE";
+  msg1._requri = "urn:service:sos";
+  msg1._full_to_header = "To: <urn:service:sos>";
+  msg1._route = "Route: <sip:homedomain;orig>";
+  std::string p_asserted_id = "P-Asserted-Identity: <sip:";
+  p_asserted_id.append(msg1._from).append("@").append(msg1._fromdomain).append(">");
+  msg1._extra = p_asserted_id;
+  inject_msg(msg1.get_request(), tp);
+
+  // Check that the MESSAGE is forwarded as expected.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+
+  // Check the method and content of the MESSAGE is correct.
+  ReqMatcher r1("MESSAGE");
+  r1.matches(tdata->msg);
+  expect_target("TCP", "10.10.10.1", 5058, tdata);
+  EXPECT_EQ("urn:service:sos", r1.uri());
+  EXPECT_THAT(get_headers(current_txdata()->msg, "To"),
+              testing::MatchesRegex("To: <urn:service:sos>"));
+
+  // Inject a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the correct response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher r2(200);
+  r2.matches(tdata->msg);
+  expect_target("TCP", "1.2.3.4", 49152, tdata);
+
+  //Clean up.
+  free_txdata();
+  _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true");
+  delete tp;
+}

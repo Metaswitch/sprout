@@ -1381,7 +1381,7 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
         ((uri_class == NODE_LOCAL_SIP_URI) ||
          (uri_class == HOME_DOMAIN_SIP_URI) ||
          (uri_class == LOCAL_PHONE_NUMBER) ||
-         (uri_class == GLOBAL_PHONE_NUMBER) 
+         (uri_class == GLOBAL_PHONE_NUMBER)
          ))
     {
       user = PJUtils::public_id_from_uri(uri);

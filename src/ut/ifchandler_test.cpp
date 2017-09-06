@@ -1398,6 +1398,52 @@ TEST_F(IfcHandlerTest, ReqURIMatch)
          true);
 }
 
+TEST_F(IfcHandlerTest, ReqURIMatchUrnURI)
+{
+  string str0("MESSAGE urn:service:sos SIP/2.0\n"
+              "Via: SIP/2.0/TCP 10.64.90.97:50693;rport;branch=z9hG4bKPjPtKqxhkZnvVKI2LUEWoZVFjFaqo.cOzf;alias\n"
+              "Max-Forwards: 69\n"
+              "From: <sip:5755550033@homedomain>;tag=13919SIPpTag0011234\n"
+              "To: <urn:service:sos>\n"
+              "Call-ID: 1-13919@10.151.20.48\n"
+              "CSeq: 4 MESSAGE\n"
+              "Route: <sip:127.0.0.1;transport=TCP;lr;orig>\n"
+              "Content-Type: application/sdp\n"
+              "Content-Length: 0\n\n");
+
+  string str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", ""), "$2", "");
+  pjsip_rx_data* rdata = build_rxdata(str);
+  parse_rxdata(rdata);
+  pjsip_msg* msg = rdata->msg_info.msg;
+
+  doBaseTest("",
+             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+             "<ServiceProfile>\n"
+             "  <InitialFilterCriteria>\n"
+             "    <Priority>1</Priority>\n"
+             "  <TriggerPoint>\n"
+             "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+             "    <SPT>\n"
+             "      <ConditionNegated>0</ConditionNegated>\n"
+             "      <Group>0</Group>\n"
+             "      <RequestURI>service:sos</RequestURI>\n"
+             "      <Extension></Extension>\n"
+             "    </SPT>\n"
+             "  </TriggerPoint>\n"
+             "  <ApplicationServer>\n"
+             "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+             "    <DefaultHandling>0</DefaultHandling>\n"
+             "  </ApplicationServer>\n"
+             "  </InitialFilterCriteria>\n"
+             "</ServiceProfile>",
+             msg,
+             "sip:5755550033@homedomain",
+             true,
+             SessionCase::Originating,
+             true,
+             false);
+}
+
 TEST_F(IfcHandlerTest, ReqURIMatchTelURI)
 {
   string str0("INVITE tel:5755550033 SIP/2.0\n"
