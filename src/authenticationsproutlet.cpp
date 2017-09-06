@@ -444,7 +444,7 @@ pj_status_t AuthenticationSproutletTsx::user_lookup(pj_pool_t *pool,
   {
     pj_cstr(&cred_info->scheme, "digest");
     pj_strdup(pool, &cred_info->username, acc_name);
-    if (auth_challenge->type == ImpiStore::AuthChallenge::Type::AKA)
+    if (auth_challenge->get_type() == ImpiStore::AuthChallenge::Type::AKA)
     {
       ImpiStore::AKAAuthChallenge* aka_challenge = (ImpiStore::AKAAuthChallenge*)auth_challenge;
       pjsip_param* auts_param = pjsip_param_find(&credentials->other_param,
@@ -458,7 +458,7 @@ pj_status_t AuthenticationSproutletTsx::user_lookup(pj_pool_t *pool,
       std::string xres = "";
       if (auts_param == NULL)
       {
-        xres = unhex(aka_challenge->response);
+        xres = unhex(aka_challenge->get_response());
       }
 
       cred_info->data_type = PJSIP_CRED_DATA_PLAIN_PASSWD;
@@ -469,15 +469,15 @@ pj_status_t AuthenticationSproutletTsx::user_lookup(pj_pool_t *pool,
       pj_strdup(pool, &cred_info->realm, realm);
       status = PJ_SUCCESS;
     }
-    else if (auth_challenge->type == ImpiStore::AuthChallenge::Type::DIGEST)
+    else if (auth_challenge->get_type() == ImpiStore::AuthChallenge::Type::DIGEST)
     {
       ImpiStore::DigestAuthChallenge* digest_challenge = (ImpiStore::DigestAuthChallenge*)auth_challenge;
 
-      if (pj_strcmp2(realm, digest_challenge->realm.c_str()) == 0)
+      if (pj_strcmp2(realm, digest_challenge->get_realm().c_str()) == 0)
       {
         // Digest authentication, so ha1 field is hashed password.
         cred_info->data_type = PJSIP_CRED_DATA_DIGEST;
-        pj_strdup2(pool, &cred_info->data, digest_challenge->ha1.c_str());
+        pj_strdup2(pool, &cred_info->data, digest_challenge->get_ha1().c_str());
         cred_info->realm = *realm;
         TRC_DEBUG("Found Digest HA1 = %.*s", cred_info->data.slen, cred_info->data.ptr);
         status = PJ_SUCCESS;
@@ -518,15 +518,15 @@ AuthenticationVector* AuthenticationSproutletTsx::get_av_from_store(const std::s
     ImpiStore::AuthChallenge* auth_challenge = impi_obj->get_auth_challenge(nonce);
 
     if ((auth_challenge != nullptr) &&
-        (auth_challenge->type == ImpiStore::AuthChallenge::Type::DIGEST))
+        (auth_challenge->get_type() == ImpiStore::AuthChallenge::Type::DIGEST))
     {
       ImpiStore::DigestAuthChallenge* digest_challenge =
         dynamic_cast<ImpiStore::DigestAuthChallenge*>(auth_challenge);
 
       DigestAv* digest_av = new DigestAv();
-      digest_av->qop = digest_challenge->qop;
-      digest_av->realm = digest_challenge->realm;
-      digest_av->ha1 = digest_challenge->ha1;
+      digest_av->qop = digest_challenge->get_qop();
+      digest_av->realm = digest_challenge->get_realm();
+      digest_av->ha1 = digest_challenge->get_ha1();
 
       av = digest_av;
     }
@@ -784,8 +784,12 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
 
     // Store the branch parameter in memcached for correlation purposes
     pjsip_via_hdr* via_hdr = (pjsip_via_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_VIA, NULL);
-    auth_challenge->correlator =
-      (via_hdr != NULL) ? PJUtils::pj_str_to_string(&via_hdr->branch_param) : "";
+    auth_challenge->set_correlator((via_hdr != NULL) ?
+                                   PJUtils::pj_str_to_string(&via_hdr->branch_param) :
+                                   "");
+
+    // Add the IMPU to the challenge
+    auth_challenge->set_impu(impu_for_hss);
 
     // Write the new authentication challenge to the IMPI store
     TRC_DEBUG("Write authentication challenge to IMPI store");
@@ -793,12 +797,12 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
 
     // Save off the nonce. We will need it to reclaim the auth challenge from
     // the IMPI at the end of the loop.
-    std::string nonce = auth_challenge->nonce;
+    std::string nonce = auth_challenge->get_nonce();
 
     // Set the site-specific server name for the S-CSCF that issued this
     // challenge. This is so that if the authentication timer pops in a remote
     // site, we can use the same server name on the SAR.
-    auth_challenge->scscf_uri = _scscf_uri;
+    auth_challenge->set_scscf_uri(_scscf_uri);
 
     // Write the challenge back to the store.
     status = _authentication->write_challenge(impi, auth_challenge, impi_obj, trail());
@@ -809,7 +813,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
 
     if (status == Store::OK)
     {
-      if (!impu_for_hss.empty())
+      if ((!impu_for_hss.empty()) && (_authentication->_chronos))
       {
         TRC_DEBUG("Set chronos timer for AUTHENTICATION_TIMEOUT SAR");
 
@@ -922,7 +926,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       {
         // Authorization header did not specify an algorithm, so check the challenge for
         // this information instead.
-        if ((auth_challenge != NULL) && (auth_challenge->type == ImpiStore::AuthChallenge::Type::AKA))
+        if ((auth_challenge != NULL) && (auth_challenge->get_type() == ImpiStore::AuthChallenge::Type::AKA))
         {
           auth_stats_table = _authentication->_auth_stats_tables->ims_aka_auth_tbl;
         }
@@ -944,7 +948,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     unsigned long nonce_count = pj_strtoul2(&credentials->nc, NULL, 16);
     nonce_count = (nonce_count == 0) ? 1 : nonce_count;
 
-    if ((auth_challenge != NULL) && (auth_challenge->nonce_count > 1))
+    if ((auth_challenge != NULL) && (auth_challenge->get_nonce_count() > 1))
     {
       // A nonce count > 1 is supplied. Check that it is acceptable. If it is
       // not, pretend that we didn't find the challenge to check against as
@@ -960,14 +964,14 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
         status = PJSIP_EAUTHACCNOTFOUND;
         auth_challenge = NULL;
       }
-      else if (nonce_count < auth_challenge->nonce_count)
+      else if (nonce_count < auth_challenge->get_nonce_count())
       {
         // The nonce count is too low - this might be a replay attack.
         TRC_INFO("Nonce count supplied (%d) is lower than expected (%d) - ignore it",
-                 nonce_count, auth_challenge->nonce_count);
+                 nonce_count, auth_challenge->get_nonce_count());
         SAS::Event event(trail(), SASEvent::AUTHENTICATION_NC_TOO_LOW, 0);
         event.add_static_param(nonce_count);
-        event.add_static_param(auth_challenge->nonce_count);
+        event.add_static_param(auth_challenge->get_nonce_count());
         SAS::report_event(event);
 
         status = PJSIP_EAUTHACCNOTFOUND;
@@ -1012,7 +1016,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
         // Increment the nonce count and set it back to the AV store, handling
         // contention.  We don't check for overflow - it will take ~2^32
         // authentications before it happens.
-        auth_challenge->nonce_count = nonce_count + 1;
+        auth_challenge->set_nonce_count(nonce_count + 1);
 
         // Work out when the challenge should expire. We keep it around if we
         // might need it later which is the case if either:
@@ -1027,14 +1031,14 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
           if (_authentication->_nonce_count_supported)
           {
             TRC_DEBUG("Storing challenge because nonce counts are supported");
-            auth_challenge->expires = calculate_challenge_expiration_time(req);
+            auth_challenge->set_expires(calculate_challenge_expiration_time(req));
           }
-          else if ((auth_challenge->type == ImpiStore::AuthChallenge::DIGEST) &&
+          else if ((auth_challenge->get_type() == ImpiStore::AuthChallenge::DIGEST) &&
                    (_authentication->_non_register_auth_mode &
                        NonRegisterAuthentication::INITIAL_REQ_FROM_REG_DIGEST_ENDPOINT))
           {
             TRC_DEBUG("Storing challenge in order to challenge non-REGISTER requests");
-            auth_challenge->expires = calculate_challenge_expiration_time(req);
+            auth_challenge->set_expires(calculate_challenge_expiration_time(req));
           }
         }
 
@@ -1296,7 +1300,7 @@ Store::Status AuthenticationSproutlet::
                            SAS::TrailId trail)
 {
   Store::Status status;
-  const std::string nonce = auth_challenge->nonce;
+  const std::string nonce = auth_challenge->get_nonce();
   ImpiStore::Impi* current_impi_obj = impi_obj;
 
   do
@@ -1329,10 +1333,10 @@ Store::Status AuthenticationSproutlet::
       //
       // Regardless, we want to be defensive and update the existing challenge
       // (making sure the nonce count and expiry don't move backwards).
-      challenge->nonce_count = std::max(auth_challenge->nonce_count,
-                                        challenge->nonce_count);
-      challenge->expires = std::max(auth_challenge->expires,
-                                    challenge->expires);
+      challenge->set_nonce_count(std::max(auth_challenge->get_nonce_count(),
+                                          challenge->get_nonce_count()));
+      challenge->set_expires(std::max(auth_challenge->get_expires(),
+                                      challenge->get_expires()));
     }
     else
     {

@@ -72,13 +72,6 @@ public:
 
 protected:
   void process_aor_timeout(std::string aor_id);
-  SubscriberDataManager::AoRPair* set_aor_data(
-                        SubscriberDataManager* current_sdm,
-                        std::string aor_id,
-                        AssociatedURIs* associated_uris,
-                        SubscriberDataManager::AoRPair* previous_aor_data,
-                        std::vector<SubscriberDataManager*> remote_sdms,
-                        bool& all_bindings_expired);
 
 protected:
   const Config* _cfg;
@@ -155,16 +148,15 @@ public:
   void run();
   HTTPCode handle_request();
   HTTPCode parse_request(std::string body);
-  SubscriberDataManager::AoRPair* deregister_bindings(
-                    SubscriberDataManager* current_sdm,
-                    HSSConnection* hss,
-                    FIFCService* fifc_service,
-                    IFCConfiguration ifc_configuration,
-                    std::string aor_id,
-                    std::string private_id,
-                    SubscriberDataManager::AoRPair* previous_aor_data,
-                    std::vector<SubscriberDataManager*> remote_sdms,
-                    std::set<std::string>& impis_to_delete);
+  AoRPair* deregister_bindings(SubscriberDataManager* current_sdm,
+                               HSSConnection* hss,
+                               FIFCService* fifc_service,
+                               IFCConfiguration ifc_configuration,
+                               std::string aor_id,
+                               std::string private_id,
+                               AoRPair* previous_aor_data,
+                               std::vector<SubscriberDataManager*> remote_sdms,
+                               std::set<std::string>& impis_to_delete);
 
 protected:
   void delete_impi_from_store(ImpiStore* store, const std::string& impi);
@@ -203,7 +195,7 @@ public:
   void run();
 
 protected:
-  virtual std::string serialize_data(SubscriberDataManager::AoR* aor) = 0;
+  virtual std::string serialize_data(AoR* aor) = 0;
   const Config* _cfg;
 };
 
@@ -213,7 +205,7 @@ class GetBindingsTask : public GetCachedDataTask
 public:
   using GetCachedDataTask::GetCachedDataTask;
 protected:
-  std::string serialize_data(SubscriberDataManager::AoR* aor);
+  std::string serialize_data(AoR* aor);
 };
 
 /// Concrete subclass for retrieving subscriptions.
@@ -222,7 +214,7 @@ class GetSubscriptionsTask : public GetCachedDataTask
 public:
   using GetCachedDataTask::GetCachedDataTask;
 protected:
-  std::string serialize_data(SubscriberDataManager::AoR* aor);
+  std::string serialize_data(AoR* aor);
 };
 
 /// Task for performing an administrative deregistration at the S-CSCF. This
@@ -267,4 +259,40 @@ private:
   const Config* _cfg;
 };
 
+/// Task for receiving user data sent by Homestead when it receives a PPR.
+/// It will send NOTIFYs if the associated URIs have changed (by calling
+/// into the SDM).
+class PushProfileTask : public HttpStackUtils::Task
+{
+public:
+  struct Config
+  {
+    Config(SubscriberDataManager* sdm,
+           std::vector<SubscriberDataManager*> remote_sdms,
+	   HSSConnection* hss):
+      _sdm(sdm),
+      _remote_sdms(remote_sdms),
+      _hss(hss)
+    {}
+
+    SubscriberDataManager* _sdm;
+    std::vector<SubscriberDataManager*> _remote_sdms;
+    HSSConnection* _hss;
+  };
+
+  PushProfileTask(HttpStack::Request& req,
+                  const Config* cfg,
+		  SAS::TrailId trail) :
+    HttpStackUtils::Task(req, trail), _cfg(cfg)
+  {};
+
+  void run();
+  HTTPCode get_associated_uris(std::string body, SAS::TrailId trail);
+  HTTPCode update_associated_uris(SAS::TrailId trail);
+
+protected:
+  const Config* _cfg;
+  std::string _default_public_id;
+  AssociatedURIs _associated_uris;
+};
 #endif
