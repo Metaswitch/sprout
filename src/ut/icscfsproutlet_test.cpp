@@ -3615,7 +3615,7 @@ TEST_F(ICSCFSproutletTest, RouteOutOfDialogAck)
   delete tp;
 }
 
-// Test the I-CSCF can handle a MESSAGE  where the Request URI is
+// Test the I-CSCF can handle a MESSAGE where the Request URI is
 // "urn:service:sos".
 TEST_F(ICSCFSproutletTest, ICSCFHandlesUrnUri)
 {
