@@ -932,14 +932,15 @@ void PJUtils::resolve(const std::string& name,
                                                 retries,
                                                 allowed_host_state);
   servers = servers_iter->take(retries);
+  delete servers_iter; servers_iter = nullptr;
 }
 
 
 /// Resolves the next hop target of the SIP message.
 BaseAddrIterator* PJUtils::resolve_next_hop_iter(pjsip_tx_data* tdata,
-                               int retries,
-                               int allowed_host_state,
-                               SAS::TrailId trail)
+                                                 int retries,
+                                                 int allowed_host_state,
+                                                 SAS::TrailId trail)
 {
   // Get the next hop URI from the message and parse out the destination, port
   // and transport.
@@ -985,11 +986,19 @@ void PJUtils::resolve_next_hop(pjsip_tx_data* tdata,
                                int allowed_host_state,
                                SAS::TrailId trail)
 {
+  if (retries == 0)
+  {
+    // Used default number of retries.
+    retries = DEFAULT_RETRIES;
+  }
+
   BaseAddrIterator* servers_iter = resolve_next_hop_iter(tdata,
                                                          retries,
                                                          allowed_host_state,
                                                          trail);
+
   servers = servers_iter->take(retries);
+  delete servers_iter; servers_iter = nullptr;
 }
 
 

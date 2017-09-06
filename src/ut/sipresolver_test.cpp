@@ -153,6 +153,8 @@ public:
       // Successful, so render AddrInfo as a string.
       output = addrinfo_to_string(record);
     }
+
+    delete targets_iter; targets_iter = nullptr;
     return output;
   }
 

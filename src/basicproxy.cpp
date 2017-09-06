@@ -1588,6 +1588,8 @@ BasicProxy::UACTsx::~UACTsx()
     pj_grp_lock_release(_lock);
     pj_grp_lock_dec_ref(_lock);
   }
+
+  delete _servers_iter; _servers_iter = nullptr;
 }
 
 
@@ -1642,12 +1644,6 @@ pj_status_t BasicProxy::UACTsx::init(pjsip_tx_data* tdata,
     // Resolve the next hop destination for this request to a set of target
     // servers (IP address/port/transport tuples).
     _servers_iter = PJUtils::resolve_next_hop_iter(tdata, 0, allowed_host_state, trail());
-
-    // Stores the first element in servers_iter as _current_server and moves it
-    // along by 1. Next returns true if _servers_iter was non-empty, ie. a valid
-    // target was stored in _current_server.
-    _current_server_valid = _servers_iter->next(_current_server);
-    _no_servers = !(_current_server_valid);
   }
 
   // Work out whether this UAC transaction is to a stateless proxy.
@@ -1674,6 +1670,7 @@ void BasicProxy::UACTsx::send_request()
   TRC_DEBUG("Sending request for %s",
             PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, _tdata->msg->line.req.uri).c_str());
 
+
   if (_tdata->tp_sel.type == PJSIP_TPSELECTOR_TRANSPORT)
   {
     // The transport has already been selected for this request, so
@@ -1683,16 +1680,25 @@ void BasicProxy::UACTsx::send_request()
               _tdata->tp_sel.u.transport->info);
     pjsip_tsx_set_transport(_tsx, &_tdata->tp_sel);
   }
-  else if (_current_server_valid)
-  {
-    // We have resolved servers to try, so set up the destination information
-    // in the request.
-    PJUtils::set_dest_info(_tdata, _current_server);
-  }
   else
   {
-    // We failed to get any valid destination servers, so fail the transaction.
-    status = PJ_ENOTFOUND;
+    // Stores the first element in servers_iter as _current_server and moves it
+    // along by 1. Next returns true if _servers_iter was non-empty, ie. a valid
+    // target was stored in _current_server.
+    _current_server_valid = _servers_iter->next(_current_server);
+    _no_servers = !(_current_server_valid);
+
+    if (_current_server_valid)
+    {
+      // We have resolved servers to try, so set up the destination information
+      // in the request.
+      PJUtils::set_dest_info(_tdata, _current_server);
+    }
+    else
+    {
+      // We failed to get any valid destination servers, so fail the transaction.
+      status = PJ_ENOTFOUND;
+    }
   }
 
   if (status == PJ_SUCCESS)
@@ -1927,6 +1933,11 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
         TRC_DEBUG("Server return 503 error");
         retrying = retry_request();
       }
+
+      if (!blacklisted_server)
+      {
+        PJUtils::success(_current_server);
+      }
     }
 
     if (!retrying)
@@ -2042,11 +2053,6 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
     _proxy->unbind_transaction(_tsx);
     _tsx = NULL;
     _pending_destroy = true;
-  }
-
-  if (!blacklisted_server)
-  {
-    PJUtils::success(_current_server);
   }
 
   exit_context();
