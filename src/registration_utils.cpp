@@ -628,7 +628,8 @@ static bool expire_bindings(SubscriberDataManager *sdm,
                                                            // single binding (flow failed).
     }
 
-    set_rc = sdm->set_aor_data(aor, associated_uris, aor_pair, trail, all_bindings_expired);
+    aor_pair->get_current()->_associated_uris = *associated_uris;
+    set_rc = sdm->set_aor_data(aor, aor_pair, trail, all_bindings_expired);
     delete aor_pair; aor_pair = NULL;
 
     // We can only say for sure that the bindings were expired if we were able

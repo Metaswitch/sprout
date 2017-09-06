@@ -73,13 +73,27 @@ ImpiStore::AuthChallenge* ImpiStore::Impi::get_auth_challenge(const std::string&
   return auth_challenge;
 }
 
-void ImpiStore::AuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer)
+void ImpiStore::AuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer,
+                                          bool expiry_in_ms)
 {
   // Write all the base AuthChallenge fields to JSON, in the IMPI format.
   writer->String(JSON_TYPE); writer->String(JSON_TYPE_ENUM[_type]);
   writer->String(JSON_NONCE); writer->String(_nonce.c_str());
   writer->String(JSON_NONCE_COUNT); writer->Uint(_nonce_count);
-  writer->String(JSON_EXPIRES); writer->Int(_expires);
+
+  // The expiry is in seconds, so if we're supposed to write it in ms multiply
+  // by 1000
+  int64_t expires = _expires;
+
+  // LCOV_EXCL_START
+  if (expiry_in_ms)
+  {
+    expires *= 1000;
+  }
+  // LCOV_EXCL_STOP
+
+  writer->String(JSON_EXPIRES); writer->Int64(expires);
+
   if (_correlator != "")
   {
     writer->String(JSON_CORRELATOR); writer->String(_correlator.c_str());
@@ -88,7 +102,9 @@ void ImpiStore::AuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuf
   // We don't serialize the CAS - this is passed to the store on the set_data call.
 }
 
-ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* json)
+ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* json,
+                                                              bool expiry_in_ms,
+                                                              bool include_expired)
 {
   ImpiStore::AuthChallenge* auth_challenge = NULL;
   if (json->IsObject())
@@ -118,9 +134,22 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* 
     {
       JSON_SAFE_GET_STRING_MEMBER(*json, JSON_NONCE, auth_challenge->_nonce);
       JSON_SAFE_GET_UINT_MEMBER(*json, JSON_NONCE_COUNT, auth_challenge->_nonce_count);
-      JSON_SAFE_GET_INT_MEMBER(*json, JSON_EXPIRES, auth_challenge->_expires);
       JSON_SAFE_GET_STRING_MEMBER(*json, JSON_CORRELATOR, auth_challenge->_correlator);
       JSON_SAFE_GET_STRING_MEMBER(*json, JSON_SCSCF_URI, auth_challenge->_scscf_uri);
+
+      int64_t expires = 0;
+      JSON_SAFE_GET_INT_64_MEMBER(*json, JSON_EXPIRES, expires);
+
+      // LCOV_EXCL_START
+      if (expiry_in_ms)
+      {
+        // The AuthChallenge requires the expiry in seconds, so if we've stored
+        // it in ms divide by 1000
+        expires /= 1000;
+      }
+      // LCOV_EXCL_STOP
+
+      auth_challenge->_expires = expires;
 
       if (auth_challenge->_nonce_count == 0)
       {
@@ -150,7 +179,7 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* 
                     JSON_NONCE);
         delete auth_challenge; auth_challenge = NULL;
       }
-      else if (auth_challenge->_expires < time(NULL))
+      else if ((auth_challenge->_expires < time(NULL)) && (!include_expired))
       {
         TRC_DEBUG("Expires in past - dropping");
         delete auth_challenge; auth_challenge = NULL;
@@ -164,11 +193,12 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* 
   return auth_challenge;
 }
 
-void ImpiStore::DigestAuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer)
+void ImpiStore::DigestAuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer,
+                                                bool expiry_in_ms)
 {
   // Write all the DigestAuthChallenge fields to JSON, in IMPI format.  We
   // call into the superclass to write base AuthChallenges fields.
-  ImpiStore::AuthChallenge::write_json(writer);
+  ImpiStore::AuthChallenge::write_json(writer, expiry_in_ms);
   writer->String(JSON_REALM); writer->String(_realm.c_str());
   writer->String(JSON_QOP); writer->String(_qop.c_str());
   writer->String(JSON_HA1); writer->String(_ha1.c_str());
@@ -204,11 +234,12 @@ ImpiStore::DigestAuthChallenge* ImpiStore::DigestAuthChallenge::from_json(rapidj
   return auth_challenge;
 }
 
-void ImpiStore::AKAAuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer)
+void ImpiStore::AKAAuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer,
+                                             bool expiry_in_ms)
 {
   // Write all the AKAAuthChallenge fields to JSON, in IMPI format.  We call
   // into the superclass to write base AuthChallenges fields.
-  ImpiStore::AuthChallenge::write_json(writer);
+  ImpiStore::AuthChallenge::write_json(writer, expiry_in_ms);
   writer->String(JSON_RESPONSE); writer->String(_response.c_str());
 }
 

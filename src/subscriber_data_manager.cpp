@@ -101,15 +101,12 @@ AoRPair* SubscriberDataManager::get_aor_data(const std::string& aor_id,
 ///                     should not retry.
 ///
 /// @param aor_id     The SIP Address of Record for the registration
-/// @param associated_uris
-///                   The associated IMPUs in the Implicit Registration Set for the AoR
 /// @param aor_pair   The registration data record.
 /// @param trail      The SAS trail
 bool SubscriberDataManager::unused_bool = false;
 
 Store::Status SubscriberDataManager::set_aor_data(
                                      const std::string& aor_id,
-                                     AssociatedURIs* associated_uris,
                                      AoRPair* aor_pair,
                                      SAS::TrailId trail,
                                      bool& all_bindings_expired)
@@ -174,7 +171,10 @@ Store::Status SubscriberDataManager::set_aor_data(
     }
 
     // 3. Send any Chronos timer requests
-    _chronos_timer_request_sender->send_timers(aor_id, aor_pair, now, trail);
+    if (_chronos_timer_request_sender->_chronos_conn)
+    {
+      _chronos_timer_request_sender->send_timers(aor_id, aor_pair, now, trail);
+    }
   }
 
   // 4. Write the data to memcached. If this fails, bail out here
@@ -206,7 +206,7 @@ Store::Status SubscriberDataManager::set_aor_data(
     }
 
     // 6. Send any NOTIFYs
-    _notify_sender->send_notifys(aor_id, associated_uris, aor_pair, now, trail);
+    _notify_sender->send_notifys(aor_id, aor_pair, now, trail);
   }
 
   delete_bindings(classified_bindings);
@@ -559,7 +559,6 @@ SubscriberDataManager::NotifySender::~NotifySender()
 
 void SubscriberDataManager::NotifySender::send_notifys(
                                const std::string& aor_id,
-                               AssociatedURIs* associated_uris,
                                AoRPair* aor_pair,
                                int now,
                                SAS::TrailId trail)
@@ -567,6 +566,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
   std::vector<std::string> expired_binding_uris;
   ClassifiedBindings binding_info_to_notify;
   bool bindings_changed = false;
+  bool associated_uris_changed = false;
 
   // Iterate over the bindings in the original AoR. Find any that aren't in the current
   // AoR and mark those as expired.
@@ -648,10 +648,13 @@ void SubscriberDataManager::NotifySender::send_notifys(
     }
   }
 
+  // Check if the associated URIs have changed. If so, will need to send a NOTIFY.
+  associated_uris_changed = (aor_pair->get_current()->_associated_uris !=
+                             aor_pair->get_orig()->_associated_uris);
+
   // Iterate over the subscriptions in the original AoR, and send NOTIFYs for
   // any subscriptions that aren't in the current AoR.
   send_notifys_for_expired_subscriptions(aor_id,
-                                         associated_uris,
                                          aor_pair,
                                          binding_info_to_notify,
                                          expired_binding_uris,
@@ -659,8 +662,9 @@ void SubscriberDataManager::NotifySender::send_notifys(
                                          trail);
 
   // Iterate over the subscriptions in the current AoR and send NOTIFYs.
-  // If the bindings have changed, then send NOTIFYs to all subscribers; otherwise,
-  // only send them when the subscription has been created or updated.
+  // If the bindings have changed, or the Associated URIs has changed,
+  // then send NOTIFYs to all subscribers; otherwise, only send them
+  // when the subscription has been created or updated.
   for (AoR::Subscriptions::const_iterator current_sub =
         aor_pair->get_current()->subscriptions().begin();
       current_sub != aor_pair->get_current()->subscriptions().end();
@@ -679,7 +683,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
     // so don't try to check whether it's been refreshed.
     bool sub_refreshed = (!sub_created) && subscription->_refreshed;
 
-    if (bindings_changed || sub_created || sub_refreshed)
+    if (bindings_changed || associated_uris_changed || sub_created || sub_refreshed)
     {
       std::string reasons;
 
@@ -698,6 +702,11 @@ void SubscriberDataManager::NotifySender::send_notifys(
         reasons += "subscription_refreshed ";
       }
 
+      if (associated_uris_changed)
+      {
+        reasons += "changed_associated_uris ";
+      }
+
       TRC_DEBUG("Sending NOTIFY for subscription %s: reason(s) %s",
                 s_id.c_str(),
                 reasons.c_str());
@@ -707,7 +716,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
                                             &tdata_notify,
                                             subscription,
                                             aor_id,
-                                            associated_uris,
+                                            &aor_pair->get_current()->_associated_uris,
                                             aor_pair->get_orig(),
                                             binding_info_to_notify,
                                             NotifyUtils::RegistrationState::ACTIVE,
@@ -742,7 +751,6 @@ void SubscriberDataManager::NotifySender::send_notifys(
 
 void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions(
                                const std::string& aor_id,
-                               AssociatedURIs* associated_uris,
                                AoRPair* aor_pair,
                                ClassifiedBindings binding_info_to_notify,
                                std::vector<std::string> expired_binding_uris,
@@ -797,7 +805,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
                                           &tdata_notify,
                                           s,
                                           aor_id,
-                                          associated_uris,
+                                          &aor_pair->get_current()->_associated_uris,
                                           aor_pair->get_orig(),
                                           binding_info_to_notify,
                                           reg_state,
