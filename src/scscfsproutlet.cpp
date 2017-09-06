@@ -2438,6 +2438,10 @@ std::string SCSCFSproutletTsx::fork_failure_reason_as_string(int fork_id, int si
     reason = "SIP timeout";
     break;
 
+  case TRANSPORT_ERROR:
+    reason = "Transport error";
+    break;
+
   case NO_ADDRESSES:
     reason = "No valid address";
     break;

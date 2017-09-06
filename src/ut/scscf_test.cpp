@@ -3491,7 +3491,6 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate)
   msg._todomain = "";
   msg._fromdomain = "remote-base.mars.int";
   msg._requri = "sip:6505551234@homedomain";
-  msg._route = "Route: <sip:sprout.homedomain>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3644,7 +3643,6 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateDisabled)
   SCSCFMessage msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
-  msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._todomain = "";
   msg._requri = "sip:6505551234@homedomain";
 
@@ -3756,6 +3754,63 @@ TEST_F(SCSCFTest, DefaultHandlingContinueRecordRouting)
   stack_data.record_route_on_every_hop = false;
 }
 
+// Test DefaultHandling=CONTINUE for TCP transport error when contacting AS
+TEST_F(SCSCFTest, DefaultHandlingContinueTransportTerminate)
+{
+  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
+    .addIdentity("sip:6505551234@homedomain")
+    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=TCP");
+  SubscriptionBuilder subscription = SubscriptionBuilder()
+    .addServiceProfile(service_profile);
+  _hss_connection->set_impu_result("sip:6505551234@homedomain",
+                                   "call",
+                                   RegDataXMLUtils::STATE_REGISTERED,
+                                   subscription.return_sub());
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
+
+  TransportFlow tpCaller(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  SCSCFMessage msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpCaller);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to caller
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpCaller.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.convert_routeset(out);
+  free_txdata();
+
+  // Contacting right AS, but TCP transport is terminated
+  SCOPED_TRACE("INVITE (2)");
+  out = current_txdata()->msg;
+  terminate_tcp_transport(current_txdata()->tp_info.transport);
+  poll();
+  ReqMatcher r2("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r2.matches(out));
+
+  // Without getting a response from AS, INVITE continues to be pass on to final destination
+  SCOPED_TRACE("INVITE (3)");
+  out = current_txdata()->msg;
+  ReqMatcher r3("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r3.matches(out));
+
+  tpCaller.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@homedomain", r3.uri());
+}
+
 // Test DefaultHandling=CONTINUE for non-existent AS (where name does not resolve).
 TEST_F(SCSCFTest, DefaultHandlingContinueNonExistent)
 {
@@ -3784,7 +3839,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistent)
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
   msg._requri = "sip:6505551234@homedomain";
-  msg._route = "Route: <sip:sprout.homedomain;orig>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3842,7 +3896,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonResponsive)
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
   msg._requri = "sip:6505551234@homedomain";
-  msg._route = "Route: <sip:sprout.homedomain;orig>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3920,7 +3973,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueImmediateError)
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
   msg._requri = "sip:6505551234@homedomain";
-  msg._route = "Route: <sip:sprout.homedomain;orig>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
