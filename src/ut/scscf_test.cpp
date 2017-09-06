@@ -9339,8 +9339,6 @@ TEST_F(SCSCFTest, SCSCFHandlesUrnUri)
   EXPECT_EQ("urn:service:sos", r1.uri());
   EXPECT_THAT(get_headers(current_txdata()->msg, "To"),
               testing::MatchesRegex("To: <urn:service:sos>"));
-  EXPECT_THAT(get_headers(current_txdata()->msg, "P-Asserted-Identity"),
-              testing::MatchesRegex("P-Asserted-Identity: <sip:6505551000@homedomain>"));
 
   // In this specific case, the AS should terminate the MESSAGE, and send back a
   // 200 OK.

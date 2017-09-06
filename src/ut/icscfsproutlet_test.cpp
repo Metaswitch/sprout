@@ -3655,10 +3655,6 @@ TEST_F(ICSCFSproutletTest, ICSCFHandlesUrnUri)
   EXPECT_EQ("urn:service:sos", r1.uri());
   EXPECT_THAT(get_headers(current_txdata()->msg, "To"),
               testing::MatchesRegex("To: <urn:service:sos>"));
-  EXPECT_THAT(get_headers(current_txdata()->msg, "Route"),
-              testing::ContainsRegex(";orig"));
-  EXPECT_THAT(get_headers(current_txdata()->msg, "P-Asserted-Identity"),
-              testing::MatchesRegex("P-Asserted-Identity: <sip:6505551000@homedomain>"));
 
   // Inject a 200 OK response.
   inject_msg(respond_to_current_txdata(200));
