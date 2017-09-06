@@ -9291,17 +9291,8 @@ TEST_F(SCSCFTest, MMFPreAndPostAs)
   pjsip_tx_data_dec_ref(txdata); txdata = NULL;
 }
 
-// Test that "urn:service:service" in Request URI can be handled.
-// This is passed (through the I-CSCF) from Perimeta when a user makes an
-// emergency call. This message should be passed on to the terminating TAS for
-// that user (through configured iFCs) to alert the TAS not to apply any call
-// blocking, etc. on calls to that subscriber for a period of time (in case the
-// emergency call is dropped and the emergency services need to call back).
-// This URI should be accepted, and the MESSAGE should be forwarded onto the
-// server specified in the iFC. This server should terminate the MESSAGE, and
-// return a 200 OK, which should then be forwarded back to the source.
-// (NOTE: Since the TAS should terminate the MESSAGE, if there are multiple
-// terminating TASs for a user, only one will be notified.)
+// Test that a MESSAGE containing "urn:service:service" in the Request URI is
+// handled.
 TEST_F(SCSCFTest, SCSCFHandlesUrnUri)
 {
   SCOPED_TRACE("");

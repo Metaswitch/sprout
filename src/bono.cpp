@@ -675,7 +675,7 @@ static int proxy_verify_request(pjsip_rx_data *rdata)
   // This would have been checked by transport layer.
 
   // 2. URI scheme.
-  // We support "sip:", "tel:" amd "urn:" URI schemes in this simple proxy.
+  // We support "sip:", "tel:" and "urn:" URI schemes in this simple proxy.
   if (!(PJSIP_URI_SCHEME_IS_SIP(rdata->msg_info.msg->line.req.uri) ||
         PJSIP_URI_SCHEME_IS_TEL(rdata->msg_info.msg->line.req.uri) ||
         PJSIP_URI_SCHEME_IS_URN(rdata->msg_info.msg->line.req.uri)))

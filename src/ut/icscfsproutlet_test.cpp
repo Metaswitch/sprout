@@ -3615,15 +3615,8 @@ TEST_F(ICSCFSproutletTest, RouteOutOfDialogAck)
   delete tp;
 }
 
-// Test the case where the Request URI is "urn:service:sos".
-// This will be received from Perimeta when a subscriber has made an emergency
-// call. This message should be passed on to the terminating TAS (through
-// configured iFCs) to alert the TAS not to apply any call blocking, etc. on
-// calls to that subscriber for a period of time (in case the emergency call is
-// dropped and the emergency services need to call back).
-// This URI should be accepted, and the MESSAGE should be forwarded on to the
-// S-CSCF. A 200 OK returned to the I-CSCF should then be forwarded back to the
-// source.
+// Test the I-CSCF can handle a MESSAGE  where the Request URI is
+// "urn:service:sos".
 TEST_F(ICSCFSproutletTest, ICSCFHandlesUrnUri)
 {
   pjsip_tx_data* tdata;
