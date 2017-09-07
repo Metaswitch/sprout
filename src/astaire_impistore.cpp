@@ -161,8 +161,11 @@ Store::Status AstaireImpiStore::set_impi(ImpiStore::Impi* impi,
   return status;
 }
 
+// The AstaireImpiStore never includes expired challenges, so include_expired is
+// unused
 ImpiStore::Impi* AstaireImpiStore::get_impi(const std::string& impi,
-                                     SAS::TrailId trail)
+                                            SAS::TrailId trail,
+                                            bool include_expired)
 {
   // Get the IMPI data from the store and deserialize it.
   AstaireImpiStore::Impi* impi_obj = NULL;

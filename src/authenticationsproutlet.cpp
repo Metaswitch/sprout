@@ -813,7 +813,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
 
     if (status == Store::OK)
     {
-      if (!impu_for_hss.empty())
+      if ((!impu_for_hss.empty()) && (_authentication->_chronos))
       {
         TRC_DEBUG("Set chronos timer for AUTHENTICATION_TIMEOUT SAR");
 

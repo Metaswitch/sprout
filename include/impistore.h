@@ -70,10 +70,13 @@ public:
     virtual ~AuthChallenge() {};
 
     /// Write to JSON writer (IMPI format).
-    virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
+    virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer,
+                            bool expiry_in_ms = false);
 
     /// Deserialization from JSON (IMPI format).
-    static ImpiStore::AuthChallenge* from_json(rapidjson::Value* json);
+    static ImpiStore::AuthChallenge* from_json(rapidjson::Value* json,
+                                               bool expiry_in_ms = false,
+                                               bool include_expired = false);
 
     /// Getters and setters
     Type get_type()
@@ -227,7 +230,8 @@ public:
     virtual ~DigestAuthChallenge() {};
 
     /// Write to JSON writer (IMPI format).
-    virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
+    virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer,
+                            bool expiry_in_ms = false) override;
 
     /// Deserialization from JSON (IMPI format).
     static ImpiStore::DigestAuthChallenge* from_json(rapidjson::Value* json);
@@ -308,7 +312,8 @@ public:
     virtual ~AKAAuthChallenge() {};
 
     /// Write to JSON writer (IMPI format).
-    virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer);
+    virtual void write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer,
+                            bool expiry_in_ms = false) override;
 
     /// Deserialization from JSON (IMPI format).
     static ImpiStore::AKAAuthChallenge* from_json(rapidjson::Value* json);
@@ -390,9 +395,11 @@ public:
   ///                  caller owns the returned object. This method only returns
   ///                  NULL if the underlying store failed - if no IMPI was
   ///                  found it returns an empty object.
-  /// @param impi      The private user identity.
+  /// @param impi                 The private user identity.
+  /// @param include_expired      Whether to include expired challenges.
   virtual Impi* get_impi(const std::string& impi,
-                         SAS::TrailId trail) = 0;
+                         SAS::TrailId trail,
+                         bool include_expired = false) = 0;
 
   /// Delete all record of the IMPI.
   ///

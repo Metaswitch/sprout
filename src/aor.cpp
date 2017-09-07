@@ -26,6 +26,7 @@ AoR::AoR(std::string sip_uri) :
   _scscf_uri(""),
   _bindings(),
   _subscriptions(),
+  _associated_uris(),
   _cas(0),
   _uri(sip_uri)
 {
@@ -75,6 +76,7 @@ void AoR::common_constructor(const AoR& other)
     _subscriptions.insert(std::make_pair(i->first, ss));
   }
 
+  _associated_uris = AssociatedURIs(other._associated_uris);
   _notify_cseq = other._notify_cseq;
   _timer_id = other._timer_id;
   _cas = other._cas;
@@ -113,6 +115,7 @@ void AoR::clear(bool clear_emergency_bindings)
   }
 
   _subscriptions.clear();
+  _associated_uris.clear_uris();
 }
 
 
