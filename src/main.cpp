@@ -1836,6 +1836,7 @@ int main(int argc, char* argv[])
   {
     sip_resolver = new SIPResolver(dns_resolver, opt.sip_blacklist_duration);
   }
+
   // Create a new quiescing manager instance and register our completion handler
   // with it.
   quiescing_mgr = new QuiescingManager();

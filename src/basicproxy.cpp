@@ -1527,7 +1527,6 @@ BasicProxy::UACTsx::UACTsx(BasicProxy* proxy,
   _tsx(NULL),
   _tdata(NULL),
   _servers_iter(NULL),
-  _current_server_valid(false),
   _no_servers(true),
   _cancel_tsx(NULL),
   _timer_c(),
@@ -1670,7 +1669,6 @@ void BasicProxy::UACTsx::send_request()
   TRC_DEBUG("Sending request for %s",
             PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, _tdata->msg->line.req.uri).c_str());
 
-
   if (_tdata->tp_sel.type == PJSIP_TPSELECTOR_TRANSPORT)
   {
     // The transport has already been selected for this request, so
@@ -1682,13 +1680,12 @@ void BasicProxy::UACTsx::send_request()
   }
   else
   {
-    // Stores the first element in servers_iter as _current_server and moves it
-    // along by 1. Next returns true if _servers_iter was non-empty, ie. a valid
-    // target was stored in _current_server.
-    _current_server_valid = _servers_iter->next(_current_server);
-    _no_servers = !(_current_server_valid);
+    // Stores the first element of servers_iter as _current_server and moves the
+    // iterator along by 1. Next returns true if _servers_iter was non-empty,
+    // ie. a valid target was stored in _current_server.
+    _no_servers = !(_servers_iter->next(_current_server));
 
-    if (_current_server_valid)
+    if (!_no_servers)
     {
       // We have resolved servers to try, so set up the destination information
       // in the request.
@@ -2066,8 +2063,7 @@ bool BasicProxy::UACTsx::retry_request()
 
   // See if we have any more target servers that we can try, and if so store the
   // next one in _current_server.
-  _current_server_valid = _servers_iter->next(_current_server);
-  if (_current_server_valid)
+  if (_servers_iter->next(_current_server))
   {
     // More servers to try.  As per RFC3263, retries to an alternate server
     // have to be a completely new transaction, presumably to avoid any

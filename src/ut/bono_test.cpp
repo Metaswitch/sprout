@@ -234,6 +234,7 @@ public:
                             bool emerg_reg_enabled = false)
   {
     SipTest::SetUpTestCase();
+
     // Bono does not currently support SIP Graylisting, so this creates a SIP
     // Resolver without graylisting
     SipTest::SIPResolverNoGraylist();

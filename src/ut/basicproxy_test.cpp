@@ -3954,6 +3954,7 @@ TEST_F(BasicProxyTest, StatelessProxyNoBlacklistOnTimeout)
   tdata = current_txdata();
   ReqMatcher("INVITE").matches(tdata->msg);
 
+  // Check that it was sent to the first server.
   EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
   EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
   string server1 = str_pj(tdata->tp_info.transport->remote_name.host);

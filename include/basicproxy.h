@@ -321,10 +321,6 @@ protected:
     /// Current server target.
     AddrInfo _current_server;
 
-    /// Boolean to track whether _servers_iter has run out of targets, and thus
-    /// whether _current_server is a valid target.
-    bool _current_server_valid;
-
     /// Boolean to track whether _servers_iter was initially an empty iterator.
     bool _no_servers;
 

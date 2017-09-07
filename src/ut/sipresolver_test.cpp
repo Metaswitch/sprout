@@ -20,6 +20,7 @@
 #include "test_interposer.hpp"
 
 using namespace std;
+using ::testing::MatchesRegex;
 
 /// Fixture for SIPResolverTest.
 class SIPResolverTest : public ::testing::Test
@@ -728,6 +729,44 @@ TEST_F(SIPResolverTest, AllowedHostStateForIPAddr)
 }
 
 // Simple test to verify that the resolve wrapper around resolve_iter for the
+// SIPResolver is working, and correctly returns a vector of the results.
+TEST_F(SIPResolverTest, TestResolveMethod)
+{
+  // Creates 2 SRVs and adds an A Record to each.
+  std::vector<DnsRRecord*> records;
+  records.push_back(naptr("sprout.cw-ngv.com", 3600, 0, 0, "S", "SIP+D2T", "", "_sip._tcp.sprout.cw-ngv.com"));
+  _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_naptr, records);
+
+  records.push_back(srv("_sip._tcp.sprout.cw-ngv.com", 3600, 0, 100, 5054, "sprout-1.cw-ngv.com"));
+  records.push_back(srv("_sip._tcp.sprout.cw-ngv.com", 3600, 0, 200, 5054, "sprout-2.cw-ngv.com"));
+  _dnsresolver.add_to_cache("_sip._tcp.sprout.cw-ngv.com", ns_t_srv, records);
+
+  records.push_back(a("sprout-1.cw-ngv.com", 3600, "3.0.0.1"));
+  _dnsresolver.add_to_cache("sprout-1.cw-ngv.com", ns_t_a, records);
+  records.push_back(a("sprout-2.cw-ngv.com", 3600, "3.0.0.2"));
+  _dnsresolver.add_to_cache("sprout-2.cw-ngv.com", ns_t_a, records);
+
+  TRC_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
+
+  std::vector<AddrInfo> targets;
+  _sipresolver.resolve("sprout.cw-ngv.com", AF_INET, 0, IPPROTO_TCP, 2, targets, BaseResolver::ALL_LISTS, 0);
+
+  // The two whitelisted targets will be returned in some order as they are at
+  // the same priority level.
+  std::string whitelist_regex = "3.0.0.[1-2]:5054";
+  std::string result_str_1 = targets[0].address_and_port_to_string();
+  std::string result_str_2 = targets[1].address_and_port_to_string();
+
+  EXPECT_EQ(2, targets.size());
+  EXPECT_THAT(result_str_1, MatchesRegex(whitelist_regex));
+  EXPECT_THAT(result_str_2, MatchesRegex(whitelist_regex));
+
+  // Verifies that the same target wasn't returned twice.
+  EXPECT_NE(result_str_1, result_str_2);
+}
+
+/*
+// Simple test to verify that the resolve wrapper around resolve_iter for the
 // SIPResolver is working, and correctly returns a vector of the results in the
 // right order
 TEST_F(SIPResolverTest, TestResolveMethod)
@@ -764,3 +803,4 @@ TEST_F(SIPResolverTest, TestResolveMethod)
   EXPECT_EQ("3.0.0.1:5054", targets[0].address_and_port_to_string());
   EXPECT_EQ("3.0.0.2:5054", targets[1].address_and_port_to_string());
 }
+*/
