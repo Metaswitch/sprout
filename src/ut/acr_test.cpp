@@ -244,7 +244,7 @@ protected:
     reg._to = "\"6505550000\" <sip:6505550000@homedomain>";   // Strip tag.
     reg._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
     reg._extra_hdrs += "Expires: 300\r\n";
-    reg._extra_hdrs += "P-Charging-Vector: icid-value=1234bc9876e;icid-generated-at=10.83.18.28;orig-ioi=homedomain\r\n";
+    reg._extra_hdrs += "P-Charging-Vector: icid-value=1234bc9876e;icid-generated-at=10.83.18.28;orig-ioi=homedomain;transit-ioi=transitdomain\r\n";
     reg._extra_hdrs += "P-Charging-Function-Addresses: ccf=192.1.1.1;ccf=192.1.1.2;ecf=192.1.1.3;ecf=192.1.1.4\r\n";
     return reg;
   }

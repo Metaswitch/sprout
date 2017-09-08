@@ -17,6 +17,7 @@
             "Originating-IOI": "homedomain"
           }
         ],
+        "Transit-IOI-List":["transitdomain"],
         "Node-Functionality": 2,
         "Role-Of-Node": 0,
         "Route-Header-Received": "<sip:sprout.homedomain:5054;transport=TCP;lr;orig>",
