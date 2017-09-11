@@ -179,7 +179,7 @@ BaseAddrIterator* SIPResolver::resolve_iter(const std::string& name,
         SAS::report_event(event);
       }
 
-      NAPTRReplacement* naptr = _naptr_cache->get(name, dummy_ttl, trail);
+      std::shared_ptr<NAPTRReplacement> naptr = _naptr_cache->get(name, dummy_ttl, trail);
 
       if (naptr != NULL)
       {
@@ -262,8 +262,6 @@ BaseAddrIterator* SIPResolver::resolve_iter(const std::string& name,
           transport = IPPROTO_UDP;
         }
       }
-
-      _naptr_cache->dec_ref(name);
     }
     else if (transport == IPPROTO_UDP)
     {
