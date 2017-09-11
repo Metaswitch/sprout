@@ -563,6 +563,33 @@ static void send_register_to_as(SubscriberDataManager* sdm,
   // Set the SAS trail on the request.
   set_trail(tdata, trail);
 
+  if (Log::enabled(Log::VERBOSE_LEVEL))
+  {
+    char buf[PJSIP_MAX_PKT_LEN];
+    pj_ssize_t size;
+
+    // Serialise the message in a separate buffer using the function
+    // exposed by PJSIP.  In principle we could use tdata's own
+    // serialisation buffer structure for this, but then we'd need to
+    // explicitly invalidate it afterwards to avoid accidentally sending
+    // the wrong data over SIP at some future point.  Safer to use a local
+    // buffer.
+    size = pjsip_msg_print(tdata->msg, buf, sizeof(buf));
+
+    // Defensively set size to zero if pjsip_msg_print failed
+    size = std::max(0L, size);
+
+    TRC_VERBOSE("Routing %s (%d bytes) to 3rd party AS %s:\n"
+                "--start msg--\n\n"
+                "%.*s\n"
+                "--end msg--",
+                pjsip_tx_data_get_info(tdata),
+                size,
+                as.server_name.c_str(),
+                (int)size,
+                buf);
+  }
+
   // Allocate a temporary structure to record the default handling for this
   // REGISTER, and send it statefully.
   ThirdPartyRegData* tsxdata = new ThirdPartyRegData;
