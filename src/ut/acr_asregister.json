@@ -5,6 +5,7 @@
   },
   "event": {
     "Accounting-Record-Type":1,
+    "User-Name":"Alice",
     "Event-Timestamp":1,
     "Service-Information": {
       "IMS-Information": {

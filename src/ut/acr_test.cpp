@@ -246,6 +246,7 @@ protected:
     reg._extra_hdrs += "Expires: 300\r\n";
     reg._extra_hdrs += "P-Charging-Vector: icid-value=1234bc9876e;icid-generated-at=10.83.18.28;orig-ioi=homedomain;transit-ioi=transitdomain\r\n";
     reg._extra_hdrs += "P-Charging-Function-Addresses: ccf=192.1.1.1;ccf=192.1.1.2;ecf=192.1.1.3;ecf=192.1.1.4\r\n";
+    reg._extra_hdrs += "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"\r\n";
     return reg;
   }
 
@@ -500,15 +501,16 @@ TEST_F(ACRTest, SCSCFOrigCall)
   pj_time_val ts;
   ACR* acr;
   std::string acr_message;
-  SIPRequest invite = invite_msg();
 
   // Create a Ralf ACR factory for S-CSCF ACRs.
   RalfACRFactory f(NULL, ACR::SCSCF);
 
   // Create an ACR instance for the ACR[START] triggered by the INVITE.
   acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_ORIGINATING);
+  acr->set_default_ccf("192.1.1.1");
 
-  // Pass the request to the ACR as a received request.
+  // Build an Invite request and pass it to the ACR as a received request.
+  SIPRequest invite = invite_msg();
   ts.sec = 1;
   ts.msec = 0;
   acr->rx_request(parse_msg(invite.get()), ts);
@@ -562,10 +564,9 @@ TEST_F(ACRTest, SCSCFOrigCall)
   ts.msec = 35;
   acr->rx_response(parse_msg(r100trying.get()), ts);
 
+  // Build the 200 OK response and pass to ACR as if it was making its way back 
+  // through the AS chain.
   SIPResponse invite200ok = invite200ok_msg();
-
-  // Pass the response to ACR as if it was making its way back through the
-  // AS chain.
   ts.msec = 40;
   acr->rx_response(parse_msg(invite200ok.get()), ts);
   ts.msec = 50;
@@ -579,6 +580,17 @@ TEST_F(ACRTest, SCSCFOrigCall)
   ts.msec = 70;
   acr->tx_response(parse_msg(invite200ok.get()), ts);
 
+  // Build an ACK request and pass it to the ACR as a received request.
+  /*SIPRequest ack("ACK");
+  ack._requri = "sip:6505559999@10.83.18.50:12345;transport=TCP";
+  ack._routes = "Route: <sip:sprout.homedomain:5054;transport=TCP;orig;lr>\r\n";
+  ack._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  ack._body =
+  "v=0\r\n"
+  "t=0 0\r\n";
+  ts.msec = 80;
+  acr->rx_request(parse_msg(ack.get()), ts);
+*/
   // Build and checked the resulting Rf ACR message.
   acr_message = acr->get_message(ts);
   EXPECT_TRUE(compare_acr(acr_message, "acr_scscforigcall_start.json"));
@@ -596,6 +608,8 @@ TEST_F(ACRTest, SCSCFOrigCall)
   reinvite._extra_hdrs += "P-Asserted-Identity: <tel:6505550000>\r\n";
   reinvite._extra_hdrs += "P-Charging-Vector: icid-value=1234bc9876e;icid-generated-at=10.83.18.28;orig-ioi=homedomain\r\n";
   reinvite._extra_hdrs += "P-Charging-Function-Addresses: ccf=192.1.1.1;ccf=192.1.1.2;ecf=192.1.1.3;ecf=192.1.1.4\r\n";
+  reinvite._extra_hdrs += "P-Access-Network-Info: access-tech=A\r\n";
+  reinvite._extra_hdrs += "P-Visited-Network-ID: other.net,\"Visited network number 1\"\r\n";
 
   // Pass the reINVITE request to the ACR on its way through the S-CSCF.  We're
   // assuming the AS didn't Record-Route itself.
@@ -635,6 +649,7 @@ TEST_F(ACRTest, SCSCFOrigCall)
   bye._extra_hdrs += "P-Asserted-Identity: <tel:6505550000>\r\n";
   bye._extra_hdrs += "P-Charging-Vector: icid-value=1234bc9876e;icid-generated-at=10.83.18.28;orig-ioi=homedomain\r\n";
   bye._extra_hdrs += "P-Charging-Function-Addresses: ccf=192.1.1.1;ccf=192.1.1.2;ecf=192.1.1.3;ecf=192.1.1.4\r\n";
+  bye._extra_hdrs += "Reason: SIP;cause=200;text=\"Call completed elsewhere\"\r\n";
 
   // Pass the BYE request to the ACR on its way through the S-CSCF.  We're
   // assuming the AS didn't Record-Route itself.
@@ -1301,7 +1316,6 @@ TEST_F(ACRTest, IBCFOrigCallStart)
   pj_time_val ts;
   ACR* acr;
   std::string acr_message;
-  SIPRequest invite = invite_msg();
 
   // Create a Ralf ACR factory for S-CSCF ACRs.
   RalfACRFactory f(NULL, ACR::IBCF);
@@ -1309,7 +1323,10 @@ TEST_F(ACRTest, IBCFOrigCallStart)
   // Create an ACR instance for the ACR[START] triggered by the INVITE.
   acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_ORIGINATING);
 
-  // Pass the request to the ACR as a received request.
+  acr->lock();
+
+  // Build an Invite request and pass to the ACR as a received request.
+  SIPRequest invite = invite_msg();
   ts.sec = 1;
   ts.msec = 0;
   acr->rx_request(parse_msg(invite.get()), ts);
@@ -1319,6 +1336,8 @@ TEST_F(ACRTest, IBCFOrigCallStart)
   SIPResponse r100trying(100, "INVITE");
   ts.msec = 5;
   acr->tx_response(parse_msg(r100trying.get()), ts);
+
+  acr->unlock();
 
   // Update the message as if we're transmitting it to an AS, by replacing
   // the existing Route header with the usual two Route headers.
@@ -1376,7 +1395,7 @@ TEST_F(ACRTest, IBCFOrigCallStart)
   acr->as_info("sip:as1.homedomain:5060;transport=TCP",
                "sip:6505559999@homedomain",
                200,
-               false);
+               true);
   ts.msec = 70;
   acr->tx_response(parse_msg(invite200ok.get()), ts);
 

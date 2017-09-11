@@ -103,8 +103,10 @@ std::string ACR::node_name(Node node_functionality)
     case IBCF:
       return "IBCF";
 
+    //LCOV_EXCL_START - functionality is ENUM and should be covered in cases
     default:
       return "Unknown";
+    //LCOV_EXCL_STOP
   }
 }
 
@@ -118,8 +120,10 @@ std::string ACR::node_role_str(NodeRole role)
     case NODE_ROLE_TERMINATING:
       return "Terminating";
 
+    //LCOV_EXCL_START - node role is ENUM and should be covered in cases
     default:
       return "Unknown";
+    //LCOV_EXCL_STOP
   }
 }
 
