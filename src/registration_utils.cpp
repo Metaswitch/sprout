@@ -563,7 +563,7 @@ static void send_register_to_as(SubscriberDataManager* sdm,
   // Set the SAS trail on the request.
   set_trail(tdata, trail);
 
-  // Verbose trace
+  if (Log::enabled(Log::VERBOSE_LEVEL))
   {
     char buf[PJSIP_MAX_PKT_LEN];
     pj_ssize_t size;
