@@ -3491,6 +3491,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate)
   msg._todomain = "";
   msg._fromdomain = "remote-base.mars.int";
   msg._requri = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:sprout.homedomain>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3645,6 +3646,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateDisabled)
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
   msg._requri = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:sprout.homedomain;orig>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpCaller);
@@ -3797,7 +3799,6 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTransportTerminate)
   SCOPED_TRACE("INVITE (2)");
   out = current_txdata()->msg;
   terminate_tcp_transport(current_txdata()->tp_info.transport);
-  poll();
   ReqMatcher r2("INVITE");
   ASSERT_NO_FATAL_FAILURE(r2.matches(out));
 
@@ -3839,6 +3840,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonExistent)
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
   msg._requri = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:sprout.homedomain;orig>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3896,6 +3898,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueNonResponsive)
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
   msg._requri = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:sprout.homedomain;orig>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3973,6 +3976,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueImmediateError)
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
   msg._requri = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:sprout.homedomain;orig>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -9685,10 +9689,10 @@ class SCSCFTestWithRemoteSDM : public SCSCFTestBase
   }
   static void TearDownTestCase()
   {
-    SCSCFTestBase::TearDownTestCase();
     delete _remote_sdm; _remote_sdm = NULL;
     delete _remote_aor_store; _remote_aor_store = NULL;
     delete _remote_data_store; _remote_data_store = NULL;
+    SCSCFTestBase::TearDownTestCase();
   }
 
   SCSCFTestWithRemoteSDM() : SCSCFTestBase()
