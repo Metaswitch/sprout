@@ -163,6 +163,31 @@ public:
     ::testing::Mock::VerifyAndClearExpectations(_analytics);
   }
 
+  void add_tel_uri_binding_to_store()
+  {
+    // Get an initial empty AoR record and add a binding (with the Tel URI)
+    int now = time(NULL);
+    AoRPair* aor_pair = _sdm->get_aor_data(std::string("tel:6505550231"), 0);
+    AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+    b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
+    b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+    b1->_cseq = 17038;
+    b1->_expires = now + 300;
+    b1->_priority = 0;
+    b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+    b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+    b1->_params["reg-id"] = "1";
+    b1->_params["+sip.ice"] = "";
+    b1->_emergency_registration = false;
+
+    // Add the AoR record to the store.
+    std::string aor = "tel:6505550231";
+    AssociatedURIs associated_uris = {};
+    associated_uris.add_uri(aor, false);
+    _sdm->set_aor_data(aor, aor_pair, 0);
+    delete aor_pair; aor_pair = NULL;
+  }
+
   void subscription_sproutlet_handle_200()
   {
     ASSERT_EQ(1, txdata_count());
@@ -235,6 +260,7 @@ public:
   string _branch;
   string _scheme;
   string _to_tag;
+  string _req_uri_scheme;
   int _unique; //< unique to this dialog; inserted into Call-ID
 
   SubscribeMessage() :
@@ -251,7 +277,8 @@ public:
     _record_route("Record-Route: <sip:sprout.example.com;transport=tcp;lr>"),
     _branch(""),
     _scheme("sip"),
-    _to_tag("")
+    _to_tag(""),
+    _req_uri_scheme("sip")
   {
     static int unique = 1042;
     _unique = unique;
@@ -269,33 +296,60 @@ string SubscribeMessage::get()
   char from_uri[256];
   char to_uri[256];
 
-  if (_scheme == "tel")
+  char req_uri[256];
+
+  if (_req_uri_scheme == "tel")
   {
+    snprintf(req_uri, sizeof(req_uri),
+             "%s:%s",
+             _req_uri_scheme.c_str(),
+             _subscribing_user.c_str());
+
     snprintf(from_uri, sizeof(from_uri),
              "%s:%s",
              _scheme.c_str(),
-             _subscribing_user.c_str());
+             _domain.c_str());
+
     snprintf(to_uri, sizeof(to_uri),
              "%s:%s",
-             _scheme.c_str(),
-             _user.c_str());
+             _req_uri_scheme.c_str(),
+             _subscribing_user.c_str());
   }
   else
   {
-    snprintf(from_uri, sizeof(from_uri),
-             "%s:%s@%s",
-             _scheme.c_str(),
-             _subscribing_user.c_str(),
+    snprintf(req_uri, sizeof(req_uri),
+             "%s:%s",
+             _req_uri_scheme.c_str(),
              _domain.c_str());
-    snprintf(to_uri, sizeof(to_uri),
-             "%s:%s@%s",
-             _scheme.c_str(),
-             _user.c_str(),
-             _domain.c_str());
+
+    if (_scheme == "tel")
+    {
+      snprintf(from_uri, sizeof(from_uri),
+               "%s:%s",
+               _scheme.c_str(),
+               _subscribing_user.c_str());
+      snprintf(to_uri, sizeof(to_uri),
+               "%s:%s",
+               _scheme.c_str(),
+               _user.c_str());
+    }
+    else
+    {
+      snprintf(from_uri, sizeof(from_uri),
+               "%s:%s@%s",
+               _scheme.c_str(),
+               _subscribing_user.c_str(),
+               _domain.c_str());
+      snprintf(to_uri, sizeof(to_uri),
+               "%s:%s@%s",
+               _scheme.c_str(),
+               _user.c_str(),
+               _domain.c_str());
+    }
   }
 
   int n = snprintf(buf, sizeof(buf),
-                   "%1$s sip:%3$s SIP/2.0\r\n"
+                   "%1$s %3$s SIP/2.0\r\n"
                    "Via: SIP/2.0/TCP 10.83.18.38:36530;rport;branch=z9hG4bK%15$s\r\n"
                    "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n"
                    "From: <%17$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
@@ -323,7 +377,7 @@ string SubscribeMessage::get()
 
                    /*  1 */ _method.c_str(),
                    /*  2 */ to_uri,
-                   /*  3 */ _domain.c_str(),
+                   /*  3 */ req_uri,
                    /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
                    /*  5 */ (int)_body.length(),
                    /*  6 */ _body.c_str(),
@@ -458,30 +512,36 @@ TEST_F(SubscriptionTest, SimpleMainline)
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
+TEST_F(SubscriptionTest, SimpleMainlineWithReqUriTelUri)
+{
+  // Setup the store for the Tel URI.
+  add_tel_uri_binding_to_store();
+
+  EXPECT_CALL(*(this->_analytics),
+              subscription("tel:6505550231",
+                           _,
+                           "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob",
+                           300)).Times(1);
+
+  SubscribeMessage msg;
+  msg._domain = "example.domain.org";
+  msg._req_uri_scheme = "tel";
+  msg._subscribing_user = "6505550231;sescase=term;regstate=reg";
+  add_host_mapping("example.domain.org", "5.6.7.8");
+  inject_msg(msg.get());
+
+  std::vector<std::pair<std::string, bool>> irs_impus;
+  irs_impus.push_back(std::make_pair("tel:6505550231", false));
+
+  std::string to_tag = check_OK_and_NOTIFY("active", std::make_pair("active", "registered"), irs_impus);
+  check_subscriptions("tel:6505550231", 1u);
+}
+
 /// Simple correct example with Tel URIs
 TEST_F(SubscriptionTest, SimpleMainlineWithTelURI)
 {
-  // Get an initial empty AoR record and add a binding (with the Tel URI)
-  int now = time(NULL);
-  AoRPair* aor_pair = _sdm->get_aor_data(std::string("tel:6505550231"), 0);
-  AoR::Binding* b1 = aor_pair->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
-  b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
-  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
-  b1->_cseq = 17038;
-  b1->_expires = now + 300;
-  b1->_priority = 0;
-  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
-  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
-  b1->_params["reg-id"] = "1";
-  b1->_params["+sip.ice"] = "";
-  b1->_emergency_registration = false;
-
-  // Add the AoR record to the store.
-  std::string aor = "tel:6505550231";
-  AssociatedURIs associated_uris = {};
-  associated_uris.add_uri(aor, false);
-  _sdm->set_aor_data(aor, aor_pair, 0);
-  delete aor_pair; aor_pair = NULL;
+  // Setup the store for the Tel URI.
+  add_tel_uri_binding_to_store();
 
   check_subscriptions("tel:6505550231", 0u);
 
@@ -1333,6 +1393,7 @@ void SubscriptionTest::check_NOTIFY_body(std::string& body,
 
     EXPECT_EQ("full", std::string(reg_info->first_attribute("state")->value()));
     EXPECT_EQ(reg_state, std::string(registration->first_attribute("state")->value()));
+    ASSERT_NE(nullptr, contact);
     EXPECT_EQ(contact_values.first, std::string(contact->first_attribute("state")->value()));
     EXPECT_EQ(contact_values.second, std::string(contact->first_attribute("event")->value()));
   }
