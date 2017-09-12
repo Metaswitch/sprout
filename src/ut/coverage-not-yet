@@ -24,5 +24,4 @@ src/sipresolver.cpp
 src/acr.cpp
 src/sproutletappserver.cpp
 src/mmtel.cpp
-src/scscfsproutlet.cpp
 src/pluginloader.cpp
