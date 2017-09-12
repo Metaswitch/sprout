@@ -3543,7 +3543,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate)
 }
 
 
-// Bug for both session terminated and session continue (see clearwater-issue)
+// Bug for both session terminated and session continue (see clearwater-issues)
 // When liveness timer pops before SIP response is received from AS, Sprout 
 // doesn't send immediate failure upstream but keeps retrying.
 // Currently the test is made to pass superficially to achieve full coverage
@@ -3799,6 +3799,7 @@ TEST_F(SCSCFTest, DefaultHandlingContinueTransportTerminate)
   SCOPED_TRACE("INVITE (2)");
   out = current_txdata()->msg;
   terminate_tcp_transport(current_txdata()->tp_info.transport);
+  poll();
   ReqMatcher r2("INVITE");
   ASSERT_NO_FATAL_FAILURE(r2.matches(out));
 
@@ -9721,7 +9722,7 @@ class SCSCFTestWithoutICSCF : public SCSCFTestBase
 };
 
 // Test routing directly to local SCSCF when ICSCF is disabled 
-TEST_F(SCSCFTestWithoutICSCF, TestEnumWithoutICSCF)
+TEST_F(SCSCFTestWithoutICSCF, TestRouteWithoutICSCF)
 {
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
@@ -9729,11 +9730,11 @@ TEST_F(SCSCFTestWithoutICSCF, TestEnumWithoutICSCF)
   URIClassifier::enforce_user_phone = true;
   SCSCFMessage msg;
   msg._to = "+15108580271";
-  // We only do ENUM on originating calls
   msg._route = "Route: <sip:sprout.homedomain;orig>";
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
-  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+
   list<HeaderMatcher> hdrs;
+  // TODO:Route hdr should contain SCSCF URI rather than ICSCF URI, not checked here
   doSlowFailureFlow(msg, 404);
 }
 
