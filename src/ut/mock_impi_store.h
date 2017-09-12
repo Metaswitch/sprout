@@ -21,7 +21,7 @@ public:
   virtual ~MockImpiStore() {}
 
   MOCK_METHOD2(set_impi, Store::Status(Impi* impi, SAS::TrailId trail));
-  MOCK_METHOD2(get_impi, Impi*(const std::string& impi, SAS::TrailId trail));
+  MOCK_METHOD3(get_impi, Impi*(const std::string& impi, SAS::TrailId trail, bool include_expired));
   MOCK_METHOD2(delete_impi, Store::Status(Impi* impi, SAS::TrailId trail));
 };
 

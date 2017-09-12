@@ -187,10 +187,6 @@ long FakeHSSConnection::get_xml_object(const std::string& path,
     catch (rapidxml::parse_error& err)
     {
       // report to the user the failure and their locations in the document.
-      printf("Failed to parse Homestead response:\n %s\n %s\n %s\n",
-             path.c_str(),
-             i->second.c_str(),
-             err.what());
       TRC_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s",
                 path.c_str(),
                 i->second.c_str(),

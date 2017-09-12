@@ -27,12 +27,12 @@ extern "C" {
 #include "pjutils.h"
 #include "rapidjson/writer.h"
 #include "rapidjson/document.h"
+#include "associated_uris.h"
 
 /// JSON serialization constants.
 /// These live here, as the core logic of serialization lives in the AoR
 /// to_json methods, but the SDM also uses some of them.
 static const char* const JSON_BINDINGS = "bindings";
-static const char* const JSON_URI = "uri";
 static const char* const JSON_CID = "cid";
 static const char* const JSON_CSEQ = "cseq";
 static const char* const JSON_EXPIRES = "expires";
@@ -52,7 +52,6 @@ static const char* const JSON_TO_TAG = "to_tag";
 static const char* const JSON_ROUTES = "routes";
 static const char* const JSON_NOTIFY_CSEQ = "notify_cseq";
 static const char* const JSON_SCSCF_URI = "scscf-uri";
-
 
 /// @class AoR
 ///
@@ -268,6 +267,9 @@ public:
   /// generated when the subscription dialog was established.
   Subscriptions _subscriptions;
 
+  // Associated URIs class, to hold the associated URIs for this IRS.
+  AssociatedURIs _associated_uris;
+
   /// CAS value for this AoR record.  Used when updating an existing record.
   /// Zero for a new record that has not yet been written to a store.
   uint64_t _cas;
@@ -315,6 +317,13 @@ public:
     return ((_current_aor != NULL) &&
             (!_current_aor->subscriptions().empty()));
   }
+
+  /// Utility functions to compare Bindings and Subscriptions in the original AoR
+  /// and current AoR, and return the set of those created/updated or removed.
+  AoR::Bindings get_updated_bindings();
+  AoR::Subscriptions get_updated_subscriptions();
+  AoR::Bindings get_removed_bindings();
+  AoR::Subscriptions get_removed_subscriptions();
 
 private:
   AoR* _orig_aor;

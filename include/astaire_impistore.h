@@ -77,7 +77,8 @@ public:
   ///                  found it returns an empty object.
   /// @param impi      The private user identity.
   virtual ImpiStore::Impi* get_impi(const std::string& impi,
-                                    SAS::TrailId trail) override;
+                                    SAS::TrailId trail,
+                                    bool include_expired = false) override;
 
   /// Delete all record of the IMPI.
   ///
