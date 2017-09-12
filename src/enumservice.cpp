@@ -168,7 +168,7 @@ void JSONEnumService::update_enum()
         // Entry is well-formed, so strip off visual separators and add it.
         TRC_DEBUG("Found valid number prefix block %s", prefix.c_str());
         NumberPrefix pfix;
-        prefix = PJUtils::remove_visual_separators(prefix);
+        prefix = Utils::remove_visual_separators(prefix);
         pfix.prefix = prefix;
 
         if (parse_regex_replace(regex, pfix.match, pfix.replace))
@@ -276,9 +276,9 @@ std::string JSONEnumService::lookup_uri_from_user(const std::string &user, SAS::
 // the object.
 const JSONEnumService::NumberPrefix* JSONEnumService::prefix_match(const std::string& number) const
 {
-  // Iterate through map in reverse order (already sorted by key length during 
+  // Iterate through map in reverse order (already sorted by key length during
   // construction) to find the most specific matching prefix
-  for (std::map<std::string, NumberPrefix>::const_reverse_iterator it = 
+  for (std::map<std::string, NumberPrefix>::const_reverse_iterator it =
                                                      _prefix_regex_map.rbegin();
        it != _prefix_regex_map.rend();
        it++)
@@ -288,10 +288,10 @@ const JSONEnumService::NumberPrefix* JSONEnumService::prefix_match(const std::st
     TRC_DEBUG("Comparing first %d numbers of %s against prefix %s",
               len, number.c_str(), (*it).first.c_str());
 
-    if (PJUtils::remove_visual_separators(number).
+    if (Utils::remove_visual_separators(number).
                                       compare(0, len, (*it).first, 0, len) == 0)
     {
-      // Found a match, so return it. 
+      // Found a match, so return it.
       TRC_DEBUG("Match found");
       return &((*it).second);
     }

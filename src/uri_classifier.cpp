@@ -27,28 +27,7 @@ bool URIClassifier::enforce_user_phone;
 
 bool URIClassifier::is_user_numeric(pj_str_t user)
 {
-  const char* uri = user.ptr;
-
-  for (int i = 0; i < user.slen; i++)
-  {
-    if ((uri[i] == '+') ||
-        (uri[i] == '-') ||
-        (uri[i] == '.') ||
-        (uri[i] == '(') ||
-        (uri[i] == ')') ||
-        (uri[i] == '[') ||
-        (uri[i] == ']') ||
-        ((uri[i] >= '0') &&
-         (uri[i] <= '9')))
-    {
-      continue;
-    }
-    else
-    {
-      return false;
-    }
-  }
-  return true;
+  return Utils::is_user_numeric(user.ptr, user.slen);
 }
 
 static bool is_home_domain(pj_str_t host)
