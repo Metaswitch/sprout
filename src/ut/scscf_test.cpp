@@ -109,6 +109,7 @@ public:
     pjsip_tsx_layer_destroy();
     delete _mmf_service; _mmf_service = NULL;
     delete _fifc_service; _fifc_service = NULL;
+    delete _acr_factory; _acr_factory = NULL;
     delete _sdm; _sdm = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
     delete _local_aor_store; _local_aor_store = NULL;
