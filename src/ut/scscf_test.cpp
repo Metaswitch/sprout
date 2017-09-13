@@ -34,6 +34,7 @@
 #include "sproutletproxy.h"
 #include "fakesnmp.hpp"
 #include "mock_as_communication_tracker.h"
+#include "mock_ralf_processor.h"
 #include "testingcommon.h"
 
 using namespace std;
