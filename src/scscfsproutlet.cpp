@@ -1905,7 +1905,6 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
                                  targets,
                                  _barred,
                                  trail());
-      delete aor_pair; aor_pair = NULL;
     }
     else
     {
@@ -1918,6 +1917,8 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       event.add_var_param(public_id);
       SAS::report_event(event);
     }
+    
+    delete aor_pair; aor_pair = NULL;
   }
   else
   {
