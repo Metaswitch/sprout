@@ -3,18 +3,19 @@
 
 #include "gmock/gmock.h"
 #include "ralf_processor.h"
+#include "mockhttpconnection.h"
 
 class MockRalfProcessor : public RalfProcessor 
 {
 public:
-    MockRalfProcessor() : RalfProcessor(HttpConnection* ralf_connection,
-                                        ExceptionHandler* exception_handler,
-                                        const int ralf_threads){};
+    MockRalfProcessor() : RalfProcessor(new MockHttpConnection(),
+                                        NULL,
+                                        2){};
 
     virtual ~MockRalfProcessor(){};
 
-    MOCK_METHOD1(send_request_to_ralf, void(RalfRequest* rr));
-    MOCK_METHOD2(exception_callback, void(RalfProcessor::RalfRequest* work));
+    MOCK_METHOD1(send_request_to_ralf, void(RalfProcessor::RalfRequest* rr));
+    //MOCK_METHOD2(exception_callback, void(RalfProcessor::RalfRequest* work));
 };
 
 #endif

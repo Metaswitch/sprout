@@ -35,6 +35,7 @@
 #include "fakesnmp.hpp"
 #include "mock_as_communication_tracker.h"
 #include "mock_ralf_processor.h"
+#include "acr.h"
 #include "testingcommon.h"
 
 using namespace std;
@@ -9883,3 +9884,113 @@ TEST_F(SCSCFTestWithRemoteSDM, TestGetBindingFromRemoteStore)
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob"), hdrs, false);
 }
+
+class SCSCFTestWithRalf : public SCSCFTestBase
+{
+  static void SetUpTestCase()
+  {
+    SCSCFTestBase::SetUpTestCase();
+    _ralf_processor = new NiceMock<MockRalfProcessor>();
+    _ralf_acr_factory = new RalfACRFactory(_ralf_processor, ACR::SCSCF);
+  }
+  static void TearDownTestCase()
+  {
+    SCSCFTestBase::TearDownTestCase();
+    delete _ralf_acr_factory; _ralf_acr_factory = NULL;
+    delete _ralf_processor; _ralf_processor = NULL;
+  }
+
+  SCSCFTestWithRalf() : SCSCFTestBase()
+  {
+    // Create the S-CSCF Sproutlet.
+    IFCConfiguration ifc_configuration(false, false, "sip:DUMMY_AS", NULL, NULL);
+    _scscf_sproutlet = new SCSCFSproutlet("scscf",
+                                          "scscf",
+                                          "sip:scscf.sprout.homedomain:5058;transport=TCP",
+                                          "sip:127.0.0.1:5058",
+                                          "sip:icscf.sprout.homedomain:5059;transport=TCP",
+                                          "sip:bgcf@homedomain:5058",
+                                          "sip:11.22.33.44;service=mmf",
+                                          "sip:44.33.22.11:5053;service=mmf",
+                                          5058,
+                                          "sip:scscf.sprout.homedomain:5058;transport=TCP",
+                                          _sdm,
+                                          {},
+                                          _hss_connection,
+                                          _enum_service,
+                                          _ralf_acr_factory,
+                                          &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
+                                          &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
+                                          false,
+                                          _mmf_service,
+                                          _fifc_service,
+                                          ifc_configuration,
+                                          3000, // Session continue timeout - different from default
+                                          6000, // Session terminated timeout - different from default
+                                          _sess_term_comm_tracker,
+                                          _sess_cont_comm_tracker
+                                          );
+    _scscf_sproutlet->init();
+
+    // Create the I-CSCF Sproutlets.
+    _scscf_selector = new SCSCFSelector("sip:scscf.sprout.homedomain",
+                                        string(UT_DIR).append("/test_icscf.json"));
+    _icscf_sproutlet = new ICSCFSproutlet("icscf",
+                                          "sip:bgcf@homedomain:5058",
+                                          5059,
+                                          "sip:icscf.sprout.homedomain:5059;transport=TCP",
+                                          _hss_connection,
+                                          _ralf_acr_factory,
+                                          _scscf_selector,
+                                          _enum_service,
+                                          &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
+                                          &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
+                                          false
+                                          );
+    _icscf_sproutlet->init();
+
+    // Add common sproutlet to the list for Proxy use
+    std::list<Sproutlet*> sproutlets;
+    sproutlets.push_back(_scscf_sproutlet);
+    sproutlets.push_back(_icscf_sproutlet);
+    sproutlets.push_back(_bgcf_sproutlet);
+    sproutlets.push_back(_mmtel_sproutlet);
+
+    // Add additional home domain for Proxy use
+    std::unordered_set<std::string> additional_home_domains;
+    additional_home_domains.insert("sprout.homedomain");
+    additional_home_domains.insert("sprout-site2.homedomain");
+    additional_home_domains.insert("127.0.0.1");
+
+    _proxy = new SproutletProxy(stack_data.endpt,
+                                PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
+                                "homedomain",
+                                additional_home_domains,
+                                sproutlets,
+                                std::set<std::string>());
+  }  
+
+  ~SCSCFTestWithRalf()
+  {
+  }
+protected:
+  static RalfProcessor* _ralf_processor;
+  static RalfACRFactory* _ralf_acr_factory;
+
+};
+RalfProcessor* SCSCFTestWithRalf::_ralf_processor;
+RalfACRFactory* SCSCFTestWithRalf::_ralf_acr_factory;
+
+TEST_F(SCSCFTestWithRalf, TestBilling)
+{
+  SCSCFMessage msg;
+  msg._in_dialog = true;
+  msg._route = "Route: <sip:homedomain;transport=tcp;lr;billing-role=charge-term>";
+  list<HeaderMatcher> hdrs;
+  CapturingTestLogger log;
+
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, false);
+  //EXPECT_CALL(_ralf_processor, send_request_to_ralf);
+}
+
+
