@@ -139,6 +139,7 @@ enum OptionTypes
   OPT_REJECT_IF_NO_MATCHING_IFCS,
   OPT_DUMMY_APP_SERVER,
   OPT_HTTP_ACR_LOGGING,
+  OPT_HOMESTEAD_TIMEOUT,
 };
 
 
@@ -227,6 +228,7 @@ const static struct pj_getopt_option long_opt[] =
   { "reject-if-no-matching-ifcs",   no_argument,       0, OPT_REJECT_IF_NO_MATCHING_IFCS},
   { "dummy-app-server",             required_argument, 0, OPT_DUMMY_APP_SERVER},
   { "http-acr-logging",             no_argument,       0, OPT_HTTP_ACR_LOGGING},
+  { "homestead-timeout",            required_argument, 0, OPT_HOMESTEAD_TIMEOUT},
   { NULL,                           0,                 0, 0}
 };
 
@@ -442,6 +444,7 @@ static void usage(void)
        "                            then the iFC is skipped over.\n"
        "     --http-acr-logging     Whether to include the bodies of ACR HTTP requests when they are logged \n"
        "                            to SAS\n"
+       "     --homestead-timeout    The timeout to use on HTTP requests to Homestead\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
        " -F, --log-file <directory>\n"
@@ -1245,6 +1248,14 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       TRC_INFO("Bodies of ACR HTTP messages will be logged to SAS");
       break;
 
+    case OPT_HOMESTEAD_TIMEOUT:
+      {
+        VALIDATE_INT_PARAM(options->homestead_timeout,
+                          homestead_timeout,
+                          Homestead HTTP timeout);
+      }
+      break;
+
     case OPT_LISTEN_PORT:
       {
         int listen_port;
@@ -1690,6 +1701,7 @@ int main(int argc, char* argv[])
   opt.reject_if_no_matching_ifcs = false;
   opt.dummy_app_server = "";
   opt.http_acr_logging = false;
+  opt.homestead_timeout = 750;
 
   status = init_logging_options(argc, argv, &opt);
 
@@ -2060,7 +2072,8 @@ int main(int argc, char* argv[])
   if (opt.hss_server != "")
   {
     // Create a connection to the HSS.
-    TRC_STATUS("Creating connection to HSS %s", opt.hss_server.c_str());
+    TRC_STATUS("Creating connection to HSS %s with HTTP timeout %d",
+               opt.hss_server.c_str(), opt.homestead_timeout);
     sifc_service = new SIFCService(new Alarm(alarm_manager,
                                              "sprout",
                                              AlarmDef::SPROUT_SIFC_STATUS,
@@ -2076,7 +2089,8 @@ int main(int argc, char* argv[])
                                        homestead_uar_latency_table,
                                        homestead_lir_latency_table,
                                        hss_comm_monitor,
-                                       sifc_service);
+                                       sifc_service,
+                                       opt.homestead_timeout);
   }
 
   // Create FIFC service

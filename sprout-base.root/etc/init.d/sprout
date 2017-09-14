@@ -102,6 +102,21 @@ get_settings()
         authentication=Y
         . /etc/clearwater/config
 
+        # Calculate the correct homestead latency:
+        #  - if we have sprout_homestead_timeout_ms set, use that
+        #  - else:
+        #    - if we have diameter_timeout_ms set, use 550 + that
+        #    - else use 750
+        if [ -z "$sprout_homestead_timeout_ms" ];
+        then
+          if [ -z "$diameter_timeout_ms" ];
+          then
+            sprout_homestead_timeout_ms=750
+          else
+            sprout_homestead_timeout_ms=$((diameter_timeout_ms + 550))
+          fi
+        fi
+
         # Work out which features are enabled.
         MMTEL_SERVICES_ENABLED=Y
         if [ -d /etc/clearwater/features.d ]
@@ -205,7 +220,8 @@ get_daemon_args()
                      --analytics=$log_directory
                      --log-file=$log_directory
                      --log-level=$log_level
-                     --alias=$public_ip,$public_hostname,$alias_list"
+                     --alias=$public_ip,$public_hostname,$alias_list
+                     --homestead-timeout=$sprout_homestead_timeout_ms"
 
         if [ -n "$reg_max_expires" ]
         then

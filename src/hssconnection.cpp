@@ -26,8 +26,6 @@
 #include "xml_utils.h"
 #include "sprout_xml_utils.h"
 
-const long HOMESTEAD_TIMEOUT_MS = 750;
-
 const std::string HSSConnection::REG = "reg";
 const std::string HSSConnection::CALL = "call";
 const std::string HSSConnection::DEREG_USER = "dereg-user";
@@ -46,7 +44,8 @@ HSSConnection::HSSConnection(const std::string& server,
                              SNMP::EventAccumulatorTable* homestead_uar_latency_tbl,
                              SNMP::EventAccumulatorTable* homestead_lir_latency_tbl,
                              CommunicationMonitor* comm_monitor,
-                             SIFCService* sifc_service) :
+                             SIFCService* sifc_service,
+                             long homestead_timeout_ms) :
   _http(new HttpConnection(server,
                            false,
                            resolver,
@@ -57,7 +56,7 @@ HSSConnection::HSSConnection(const std::string& server,
                            "http",
                            false,
                            false,
-                           HOMESTEAD_TIMEOUT_MS)),
+                           homestead_timeout_ms)),
   _latency_tbl(homestead_overall_latency_tbl),
   _mar_latency_tbl(homestead_mar_latency_tbl),
   _sar_latency_tbl(homestead_sar_latency_tbl),
