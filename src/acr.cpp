@@ -103,10 +103,10 @@ std::string ACR::node_name(Node node_functionality)
     case IBCF:
       return "IBCF";
 
-    //LCOV_EXCL_START - functionality is ENUM and should be covered in cases
+    // LCOV_EXCL_START - functionality is ENUM and should be covered in cases
     default:
       return "Unknown";
-    //LCOV_EXCL_STOP
+    // LCOV_EXCL_STOP
   }
 }
 
@@ -120,10 +120,10 @@ std::string ACR::node_role_str(NodeRole role)
     case NODE_ROLE_TERMINATING:
       return "Terminating";
 
-    //LCOV_EXCL_START - node role is ENUM and should be covered in cases
+    // LCOV_EXCL_START - node role is ENUM and should be covered in cases
     default:
       return "Unknown";
-    //LCOV_EXCL_STOP
+    // LCOV_EXCL_STOP
   }
 }
 
@@ -382,6 +382,7 @@ void RalfACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
 
     // In the originating case we always take SDP and other message bodies
     // from the original request.
+
     if (_node_role == NODE_ROLE_ORIGINATING)
     {
       // Store media description if present.
@@ -606,21 +607,25 @@ void RalfACR::as_info(const std::string& uri,
   as_info.redirect_uri = redirect_uri;
   if (timeout)
   {
+    printf("\n000000000\n");
     as_info.status_code = STATUS_CODE_TIMEOUT;
   }
   else if ((status_code >= 400) &&
            (status_code <= 499))
   {
+    printf("\n11111111\n");
     as_info.status_code = STATUS_CODE_4XX;
   }
   else if (status_code >= 500)
   {
     // TS 32.299 doesn't specify what to do with 6xx errors, so we choose to
     // report as 5xx.
+    printf("\n222222222\n");
     as_info.status_code = STATUS_CODE_5XX;
   }
   else
   {
+    printf("\n33333333\n");
     as_info.status_code = STATUS_CODE_NONE;
   }
   _as_information.push_back(as_info);
@@ -1078,6 +1083,9 @@ std::string RalfACR::get_message(pj_time_val timestamp)
         (_record_type == EVENT_RECORD))
     {
       TRC_DEBUG("Adding %d Early-Media-Description AVPs", _early_media.size());
+
+      // LCOV_EXCL_START - missing code to populate _early_media, raised in
+      // clearwater-issues
       if (_early_media.size() > 0)
       {
         writer.String("Early-Media-Description");
@@ -1094,6 +1102,7 @@ std::string RalfACR::get_message(pj_time_val timestamp)
 
         writer.EndArray();
       }
+      // LCOV_EXCL_STOP
     }
 
     if ((_record_type == START_RECORD) ||
@@ -1615,13 +1624,16 @@ void RalfACR::store_media_description(pjsip_msg* msg, MediaDescription& descript
 {
   // If the message has an SDP body store it in the offer or answer slot.
   pjsip_msg_body* body = msg->body;
+  printf("\nstore media description\n");
 
   if ((body != NULL) &&
       (pj_stricmp(&body->content_type.type, &STR_APPLICATION) == 0) &&
       (pj_stricmp(&body->content_type.subtype, &STR_SDP) == 0))
   {
+    printf("\none loop\n");
     if (_method == "ACK")
     {
+       printf("\ntwo loop\n");
       // ACKs can only every carry answers.
       store_media_components(msg, description.answer);
     }
@@ -1630,11 +1642,13 @@ void RalfACR::store_media_description(pjsip_msg* msg, MediaDescription& descript
     {
       // Either a request (so by definition an offer), or no offer on the
       // request, so store as the offer.
+       printf("\n11111\n");
       store_media_components(msg, description.offer);
     }
     else
     {
       // Store the SDP as the answer.
+       printf("\n222222\n");
       store_media_components(msg, description.answer);
     }
   }
@@ -1698,6 +1712,7 @@ void RalfACR::store_message_bodies(pjsip_msg* msg)
     body.length = msg_body->len;
     pjsip_generic_string_hdr* cdisp_hdr = (pjsip_generic_string_hdr*)
                pjsip_msg_find_hdr_by_name(msg, &STR_CONTENT_DISPOSITION, NULL);
+
     if (cdisp_hdr != NULL)
     {
       // Get disposition from header.
