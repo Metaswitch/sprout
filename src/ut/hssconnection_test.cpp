@@ -52,7 +52,8 @@ class HssConnectionTest : public BaseTest
          &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
          &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
          &_cm,
-         NULL)
+         NULL,
+         500)
     {
     fakecurl_responses.clear();
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid42/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
@@ -726,7 +727,8 @@ class HssWithSifcTest : public BaseTest
               &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
               &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
               NULL,
-              &_sifc_service)
+              &_sifc_service,
+              500)
   {
     fakecurl_responses.clear();
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/onesifc/reg-data", "{\"reqtype\": \"reg\", \"server_name\": \"server_name\"}")] =
