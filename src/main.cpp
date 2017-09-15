@@ -444,7 +444,7 @@ static void usage(void)
        "                            then the iFC is skipped over.\n"
        "     --http-acr-logging     Whether to include the bodies of ACR HTTP requests when they are logged \n"
        "                            to SAS\n"
-       "     --homestead-timeout    The timeout to use on HTTP requests to Homestead\n"
+       "     --homestead-timeout    The timeout in ms to use on HTTP requests to Homestead\n"
        " -N, --plugin-option <plugin>,<name>,<value>\n"
        "                            Provide an option value to a plugin.\n"
        " -F, --log-file <directory>\n"

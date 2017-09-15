@@ -105,7 +105,7 @@ get_settings()
         # Calculate the correct homestead latency:
         #  - if we have sprout_homestead_timeout_ms set, use that
         #  - else:
-        #    - if we have diameter_timeout_ms set, use 550 + that
+        #    - if we have diameter_timeout_ms set, use 550 + double that
         #    - else use 750
         if [ -z "$sprout_homestead_timeout_ms" ];
         then
@@ -113,7 +113,7 @@ get_settings()
           then
             sprout_homestead_timeout_ms=750
           else
-            sprout_homestead_timeout_ms=$((diameter_timeout_ms + 550))
+            sprout_homestead_timeout_ms=$((diameter_timeout_ms * 2 + 550))
           fi
         fi
 
