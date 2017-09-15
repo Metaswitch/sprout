@@ -6914,6 +6914,15 @@ TEST_F(SCSCFTest, OriginatingTerminatingAS)
 
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
+
+  // Make sure that we haven't sent a request to homestead with 127.0.0.1 as the domain of the S-CSCF URI
+  bool found_wrong_uri = false;
+  for (FakeHSSConnection::UrlBody body : _hss_connection->_calls)
+  {
+    found_wrong_uri |= (!(body.second.find("127.0.0.1") == std::string::npos));
+  }
+
+  EXPECT_FALSE(found_wrong_uri);
 }
 
 
