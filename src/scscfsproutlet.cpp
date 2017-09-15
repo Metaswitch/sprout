@@ -586,7 +586,6 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   // It will also set the S-CSCF URI
   status_code = determine_served_user(req);
 
-
   // Pass the received request to the ACR.
   // @TODO - request timestamp???
   ACR* acr = get_acr();
