@@ -20,10 +20,10 @@ class MockSproutlet : public Sproutlet
 {
 public:
   MockSproutlet(
-      const std::string& service_name="mock-sproutlet",
-      int port=0,
-      const std::string& service_host="") :
-    Sproutlet(service_name, port, service_host) {}
+      const std::string& service_name,
+      int port,
+      const std::string& service_host);
+  ~MockSproutlet();
 
   MOCK_METHOD6(
       get_tsx,
@@ -35,10 +35,8 @@ public:
 class MockSproutletTsx : public SproutletTsx
 {
 public:
-  MockSproutletTsx() :
-    SproutletTsx(NULL)
-  {
-  }
+  MockSproutletTsx();
+  ~MockSproutletTsx();
 
   void set_helper(SproutletTsxHelper* helper)
   {

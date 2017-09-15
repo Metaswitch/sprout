@@ -18,8 +18,8 @@
 class MockAnalyticsLogger : public AnalyticsLogger
 {
 public:
-  MockAnalyticsLogger() {}
-  virtual ~MockAnalyticsLogger() {}
+  MockAnalyticsLogger();
+  virtual ~MockAnalyticsLogger();
 
   MOCK_METHOD4(registration, void(const std::string& aor,
                                   const std::string& binding_id,
