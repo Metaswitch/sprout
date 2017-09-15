@@ -177,6 +177,11 @@ sprout_test_SOURCES := ${SPROUT_COMMON_SOURCES} \
                        uriclassifier_test.cpp \
                        ralf_processor_test.cpp \
                        mockhttpconnection.cpp \
+                       mockhttpstack.cpp \
+                       mocktsxhelper.cpp \
+                       mock_hss_connection.cpp \
+                       mock_analytics_logger.cpp \
+                       mock_sproutlet.cpp \
                        session_expires_helper_test.cpp \
                        mock_subscriber_data_manager.cpp \
                        mock_chronos_connection.cpp \
