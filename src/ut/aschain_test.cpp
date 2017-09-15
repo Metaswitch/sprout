@@ -136,15 +136,15 @@ TEST_F(AsChainTest, Basics)
 {
   IFCConfiguration ifc_configuration(false, false, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs1 = matching_ifcs(0);
-  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs1, NULL, NULL, ifc_configuration);
+  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs1, NULL, NULL, ifc_configuration, "sip:scscf.homedomain");
   AsChainLink as_chain_link(&as_chain, 0u);
 
   Ifcs ifcs2 = matching_ifcs(1, "sip:pancommunicon.cw-ngv.com");
-  AsChain as_chain2(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs2, NULL, NULL, ifc_configuration);
+  AsChain as_chain2(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs2, NULL, NULL, ifc_configuration, "sip:scscf.homedomain");
   AsChainLink as_chain_link2(&as_chain2, 0u);
 
   Ifcs ifcs3 = matching_ifcs(2, "sip:pancommunicon.cw-ngv.com", "sip:mmtel.homedomain");
-  AsChain as_chain3(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs3, NULL, NULL, ifc_configuration);
+  AsChain as_chain3(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs3, NULL, NULL, ifc_configuration, "sip:scscf.homedomain");
   AsChainLink as_chain_link3(&as_chain3, 0u);
 
   EXPECT_THAT(as_chain_link.to_string(), testing::MatchesRegex("AsChain-orig\\[0x[0-9a-f]+\\]:1/0"));
@@ -168,7 +168,7 @@ TEST_F(AsChainTest, MatchingStandardiFCs)
 {
   IFCConfiguration ifc_configuration(false, false, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = matching_ifcs(2, "sip:as1", "sip:as2");
-  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
+  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration, "sip:scscf.homedomain");
   AsChainLink as_chain_link(&as_chain, 0u);
 
   pjsip_tx_data* tdata = NULL;
@@ -199,7 +199,7 @@ TEST_F(AsChainTest, NoMatchingStandardiFCs)
 {
   IFCConfiguration ifc_configuration(false, false, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = non_matching_ifcs(2, "sip:as1", "sip:as2");
-  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
+  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration, "sip:scscf.homedomain");
   AsChainLink as_chain_link(&as_chain, 0u);
 
   pjsip_tx_data* tdata = NULL;
@@ -218,7 +218,7 @@ TEST_F(AsChainTest, MatchingStandardiFCsRejectIfNone)
 {
   IFCConfiguration ifc_configuration(false, true, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = matching_ifcs(1, "sip:as1");
-  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
+  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration, "sip:scscf.homedomain");
   AsChainLink as_chain_link(&as_chain, 0u);
 
   pjsip_tx_data* tdata = NULL;
@@ -237,7 +237,7 @@ TEST_F(AsChainTest, NoMatchingStandardiFCsRejectIfNone)
 {
   IFCConfiguration ifc_configuration(false, true, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = non_matching_ifcs(2, "sip:as1", "sip:as2");
-  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
+  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration, "sip:scscf.homedomain");
   AsChainLink as_chain_link(&as_chain, 0u);
 
   pjsip_tx_data* tdata = NULL;
@@ -256,7 +256,7 @@ TEST_F(AsChainTest, MatchingStandardiFCsWithMatchingFallbackiFCs)
   IFCConfiguration ifc_configuration(true, true, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = matching_ifcs(2, "sip:as1", "sip:as2");
   Ifcs fallback_ifcs = matching_ifcs(2, "sip:fallback_as2", "sip:fallback_as2");
-  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
+  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration, "sip:scscf.homedomain");
   as_chain._fallback_ifcs = fallback_ifcs.ifcs_list();
   AsChainLink as_chain_link(&as_chain, 0u);
 
@@ -286,7 +286,7 @@ TEST_F(AsChainTest, NoMatchingStandardiFCsWithFallbackiFCs)
   IFCConfiguration ifc_configuration(true, true, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = non_matching_ifcs(2, "sip:as1", "sip:as2");
   Ifcs fallback_ifcs = matching_ifcs(2, "sip:fallback_as1", "sip:fallback_as2");
-  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
+  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration, "sip:scscf.homedomain");
   as_chain._fallback_ifcs = fallback_ifcs.ifcs_list();
   AsChainLink as_chain_link(&as_chain, 0u);
 
@@ -316,7 +316,7 @@ TEST_F(AsChainTest, NoStandardIFCsWithFallbackIFCs)
   IFCConfiguration ifc_configuration(true, true, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = non_matching_ifcs(0);
   Ifcs fallback_ifcs = matching_ifcs(2, "sip:fallback_as1", "sip:fallback_as2");
-  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
+  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration, "sip:scscf.homedomain");
   as_chain._fallback_ifcs = fallback_ifcs.ifcs_list();
   AsChainLink as_chain_link(&as_chain, 0u);
 
@@ -346,7 +346,7 @@ TEST_F(AsChainTest, NoMatchingStandardOrFallbackiFCs)
   IFCConfiguration ifc_configuration(true, false, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = non_matching_ifcs(2, "sip:as1", "sip:as2");
   Ifcs fallback_ifcs = non_matching_ifcs(2, "sip:fallback_as2", "sip:fallback_as2");
-  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
+  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration, "sip:scscf.homedomain");
   as_chain._fallback_ifcs = fallback_ifcs.ifcs_list();
   AsChainLink as_chain_link(&as_chain, 0u);
 
@@ -366,7 +366,7 @@ TEST_F(AsChainTest, NoMatchingStandardOrFallbackiFCsWithReject)
   IFCConfiguration ifc_configuration(true, true, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = non_matching_ifcs(2, "sip:as1", "sip:as2");
   Ifcs fallback_ifcs = non_matching_ifcs(2, "sip:fallback_as2", "sip:fallback_as2");
-  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
+  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration, "sip:scscf.homedomain");
   as_chain._fallback_ifcs = fallback_ifcs.ifcs_list();
   AsChainLink as_chain_link(&as_chain, 0u);
 
@@ -387,7 +387,7 @@ TEST_F(AsChainTest, NoMatchingStandardMatchingDefaultiFCsWithReject)
   IFCConfiguration ifc_configuration(true, true, "", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = non_matching_ifcs(2, "sip:as1", "sip:as2");
   Ifcs fallback_ifcs = matching_ifcs(1, "sip:fallback_as");
-  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
+  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration, "sip:scscf.homedomain");
   as_chain._fallback_ifcs = fallback_ifcs.ifcs_list();
   AsChainLink as_chain_link(&as_chain, 0u);
 
@@ -410,7 +410,7 @@ TEST_F(AsChainTest, MatchingStandardiFCDummyAppServer)
   // the AS Chain with AS2 set up as a dummy application server.
   IFCConfiguration ifc_configuration(false, false, "sip:AS2", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = matching_ifcs(3, "sip:AS1", "sip:AS2", "sip:AS3");
-  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
+  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration, "sip:scscf.homedomain");
   AsChainLink as_chain_link(&as_chain, 0u);
 
   pjsip_tx_data* tdata = NULL;
@@ -444,7 +444,7 @@ TEST_F(AsChainTest, MatchingStandardiFCOnlyDummyAppServer)
   // the AS Chain with AS2 set up as a dummy application server.
   IFCConfiguration ifc_configuration(false, false, "sip:dummy_as", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = matching_ifcs(1, "sip:dummy_as");
-  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
+  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration, "sip:scscf.homedomain");
   AsChainLink as_chain_link(&as_chain, 0u);
 
   pjsip_tx_data* tdata = NULL;
@@ -465,7 +465,7 @@ TEST_F(AsChainTest, MatchingStandardiFCOnlyDummyAppServerWithReject)
   // the AS Chain with AS2 set up as a dummy application server.
   IFCConfiguration ifc_configuration(false, true, "sip:dummy_as", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = matching_ifcs(1, "sip:dummy_as");
-  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
+  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration, "sip:scscf.homedomain");
   AsChainLink as_chain_link(&as_chain, 0u);
 
   pjsip_tx_data* tdata = NULL;
@@ -487,7 +487,7 @@ TEST_F(AsChainTest, MatchingStandardiFCOnlyDummyAppServerWithFallbackiFCs)
   IFCConfiguration ifc_configuration(true, true, "sip:dummy_as", &SNMP::FAKE_COUNTER_TABLE, &SNMP::FAKE_COUNTER_TABLE);
   Ifcs ifcs = matching_ifcs(1, "sip:dummy_as");
   Ifcs fallback_ifcs = matching_ifcs(1, "sip:fallback_as1");
-  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration);
+  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs, NULL, NULL, ifc_configuration, "sip:scscf.homedomain");
   as_chain._fallback_ifcs = fallback_ifcs.ifcs_list();
   AsChainLink as_chain_link(&as_chain, 0u);
 

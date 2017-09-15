@@ -92,7 +92,8 @@ private:
           Ifcs& ifcs,
           ACR* acr,
           FIFCService* fifc_service,
-          IFCConfiguration ifc_configuration);
+          IFCConfiguration ifc_configuration,
+          std::string scscf_uri);
   ~AsChain();
 
   bool inc_ref()
@@ -166,6 +167,9 @@ private:
   IFCConfiguration _ifc_configuration;
   bool _using_standard_ifcs;
   rapidxml::xml_document<>* _root;
+
+  // The S-CSCF URI for which this AsChain was created
+  const std::string _scscf_uri;
 };
 
 
@@ -288,6 +292,11 @@ public:
     return _default_handling;
   }
 
+  std::string scscf_uri()
+  {
+    return (_as_chain != NULL) ? _as_chain->_scscf_uri : "";
+  }
+
   /// Called on receipt of each response from the AS.
   void on_response(int status_code);
 
@@ -320,7 +329,8 @@ public:
                                      Ifcs& ifcs,
                                      ACR* acr,
                                      FIFCService* fifc_service,
-                                     IFCConfiguration ifc_configuration);
+                                     IFCConfiguration ifc_configuration,
+                                     std::string scscf_uri);
 
   pjsip_status_code on_initial_request(pjsip_msg* msg,
                                        std::string& server_name,
