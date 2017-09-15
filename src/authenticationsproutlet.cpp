@@ -1003,7 +1003,6 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
         status = PJSIP_EAUTHACCNOTFOUND;
         auth_challenge = NULL;
-      // AJL Not really sure what we should do about the timer at this point
       }
     }
 
@@ -1211,7 +1210,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     // challenge.
     TRC_DEBUG("No authentication information in request or stale nonce, so reject with challenge (status %d)", status);
     pj_bool_t stale = (status == PJSIP_EAUTHACCNOTFOUND);
-// AJL somehow should delete chronos timer here maybe? for failed auth case
+
     if (stale)
     {
       SAS::Event event(trail(), SASEvent::AUTHENTICATION_FAILED_STALE_NONCE, 0);
