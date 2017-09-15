@@ -795,45 +795,32 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     // the IMPI at the end of the loop.
     std::string nonce = auth_challenge->get_nonce();
 
-    // Pull out the expiry time, so that we can check if we want to set a timer
-    int expiry = auth_challenge->get_expires();
-    int now = time(NULL);
-
     // Create a timer to track the authentication challenge expiry.
     if ((!impu_for_hss.empty()) && (_authentication->_chronos))
     {
-      // If the challenge expiry is already in the past, don't set a timer,
-      // as the store will not save the challenge off.
-      if (expiry > now)
-      {
-        TRC_DEBUG("Set chronos timer for AUTHENTICATION_TIMEOUT SAR");
+      TRC_DEBUG("Set chronos timer for AUTHENTICATION_TIMEOUT SAR");
 
-        // We need to set a Chronos timer so that an AUTHENTICATION_TIMEOUT SAR
-        // is sent to the HSS when the challenge expires. We do this here so
-        // that the timer_id can be stored alongside the auth_challenge.
-        HTTPCode status;
-        std::string timer_id;
-        std::string chronos_body = "{\"impi\": \"" + impi +
-                                "\", \"impu\": \"" + impu_for_hss +
-                                "\", \"nonce\": \"" + nonce +
-                                "\"}";
-        TRC_DEBUG("Sending %s to Chronos to set AV timer", chronos_body.c_str());
-        status = _authentication->_chronos->send_post(timer_id,
-                                                      30,
-                                                      "/authentication-timeout",
-                                                      chronos_body,
-                                                      trail());
-        if (status == HTTP_OK)
-        {
-          TRC_DEBUG("Timer %s successfully stored in Chronos for auth challenge %s",
-                      timer_id.c_str(),
-                      nonce.c_str());
-          auth_challenge->set_timer_id(timer_id);
-        }
-      }
-      else
+      // We need to set a Chronos timer so that an AUTHENTICATION_TIMEOUT SAR
+      // is sent to the HSS when the challenge expires. We do this here so
+      // that the timer_id can be stored alongside the auth_challenge.
+      HTTPCode status;
+      std::string timer_id;
+      std::string chronos_body = "{\"impi\": \"" + impi +
+                              "\", \"impu\": \"" + impu_for_hss +
+                              "\", \"nonce\": \"" + nonce +
+                              "\"}";
+      TRC_DEBUG("Sending %s to Chronos to set AV timer", chronos_body.c_str());
+      status = _authentication->_chronos->send_post(timer_id,
+                                                    30,
+                                                    "/authentication-timeout",
+                                                    chronos_body,
+                                                    trail());
+      if (status == HTTP_OK)
       {
-        TRC_DEBUG("Auth challenge expiry has already passes, so no timer set");
+        TRC_DEBUG("Timer %s successfully stored in Chronos for auth challenge %s",
+                    timer_id.c_str(),
+                    nonce.c_str());
+        auth_challenge->set_timer_id(timer_id);
       }
     }
 
