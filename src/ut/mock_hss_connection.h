@@ -20,18 +20,8 @@
 class MockHSSConnection : public HSSConnection
 {
 public:
-  MockHSSConnection() : HSSConnection("localhost",
-                                      NULL,
-                                      NULL,
-                                      &SNMP::FAKE_IP_COUNT_TABLE,
-                                      &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
-                                      &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
-                                      &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
-                                      &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
-                                      &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
-                                      NULL,
-                                      NULL) {};
-  virtual ~MockHSSConnection() {};
+  MockHSSConnection();
+  virtual ~MockHSSConnection();
 
   MOCK_METHOD5(update_registration_state,
                HTTPCode(const std::string& public_user_identity,
