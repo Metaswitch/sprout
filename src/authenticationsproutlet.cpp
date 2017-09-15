@@ -791,13 +791,55 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     // Add the IMPU to the challenge
     auth_challenge->set_impu(impu_for_hss);
 
-    // Write the new authentication challenge to the IMPI store
-    TRC_DEBUG("Write authentication challenge to IMPI store");
-    Store::Status status;
-
     // Save off the nonce. We will need it to reclaim the auth challenge from
     // the IMPI at the end of the loop.
     std::string nonce = auth_challenge->get_nonce();
+
+    // Pull out the expiry time, so that we can check if we want to set a timer
+    int expiry = auth_challenge->get_expires();
+    int now = time(NULL);
+
+    // Create a timer to track the authentication challenge expiry.
+    if ((!impu_for_hss.empty()) && (_authentication->_chronos))
+    {
+      // If the challenge expiry is already in the past, don't set a timer,
+      // as the store will not save the challenge off.
+      if (expiry > now)
+      {
+        TRC_DEBUG("Set chronos timer for AUTHENTICATION_TIMEOUT SAR");
+
+        // We need to set a Chronos timer so that an AUTHENTICATION_TIMEOUT SAR
+        // is sent to the HSS when the challenge expires. We do this here so
+        // that the timer_id can be stored alongside the auth_challenge.
+        HTTPCode status;
+        std::string timer_id;
+        std::string chronos_body = "{\"impi\": \"" + impi +
+                                "\", \"impu\": \"" + impu_for_hss +
+                                "\", \"nonce\": \"" + nonce +
+                                "\"}";
+        TRC_DEBUG("Sending %s to Chronos to set AV timer", chronos_body.c_str());
+        status = _authentication->_chronos->send_post(timer_id,
+                                                      30,
+                                                      "/authentication-timeout",
+                                                      chronos_body,
+                                                      trail());
+        if (status == HTTP_OK)
+        {
+          TRC_DEBUG("Timer %s successfully stored in Chronos for auth challenge %s",
+                      timer_id.c_str(),
+                      nonce.c_str());
+          auth_challenge->set_timer_id(timer_id);
+        }
+      }
+      else
+      {
+        TRC_DEBUG("Auth challenge expiry has already passes, so no timer set");
+      }
+    }
+
+    // Write the new authentication challenge to the IMPI store
+    TRC_DEBUG("Write authentication challenge to IMPI store");
+    Store::Status status;
 
     // Set the site-specific server name for the S-CSCF that issued this
     // challenge. This is so that if the authentication timer pops in a remote
@@ -807,31 +849,9 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
     // Write the challenge back to the store.
     status = _authentication->write_challenge(impi, auth_challenge, impi_obj, trail());
 
-    // We're done with the auth challenge and IMPI object now.
-    delete auth_challenge; auth_challenge = NULL;
-    delete impi_obj; impi_obj = NULL;
-
     if (status == Store::OK)
     {
-      if ((!impu_for_hss.empty()) && (_authentication->_chronos))
-      {
-        TRC_DEBUG("Set chronos timer for AUTHENTICATION_TIMEOUT SAR");
-
-        // We've written the challenge into the store, so need to set a Chronos
-        // timer so that an AUTHENTICATION_TIMEOUT SAR is sent to the
-        // HSS when it expires.
-        std::string timer_id;
-        std::string chronos_body = "{\"impi\": \"" + impi +
-                                "\", \"impu\": \"" + impu_for_hss +
-                                "\", \"nonce\": \"" + nonce +
-                                "\"}";
-        TRC_DEBUG("Sending %s to Chronos to set AV timer", chronos_body.c_str());
-        _authentication->_chronos->send_post(timer_id,
-                                             30,
-                                             "/authentication-timeout",
-                                             chronos_body,
-                                             trail());
-      }
+      TRC_DEBUG("Successfully stored nonce %s in memcached", nonce.c_str());
     }
     else
     {
@@ -841,8 +861,28 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
       TRC_DEBUG("Failed to store nonce in memcached");
       rsp->line.status.code = PJSIP_SC_INTERNAL_SERVER_ERROR;
       rsp->line.status.reason = *pjsip_get_status_text(PJSIP_SC_INTERNAL_SERVER_ERROR);
+
+      // Also attempt to delete the chronos timer we stored for this challenge.
+      // This stops the a timer pop not finding an AV, and triggering a cycle of
+      // timer pops in every site attempting to find an AV that never existed.
+      // If we failed to create the timer, so have a blank ID, the
+      // chronos_connection will catch this, and not send a delete out.
+      if (_authentication->_chronos)
+      {
+        HTTPCode status;
+        status = _authentication->_chronos->send_delete(auth_challenge->get_timer_id(),
+                                                        trail());
+        if (status == HTTP_OK)
+        {
+          TRC_DEBUG("Timer deleted for auth_challenge %s", nonce.c_str());
+          auth_challenge->set_timer_id("");
+
+        }
+      }
     }
 
+    delete auth_challenge; auth_challenge = NULL;
+    delete impi_obj; impi_obj = NULL;
     delete av;
   }
   else
@@ -976,6 +1016,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
         status = PJSIP_EAUTHACCNOTFOUND;
         auth_challenge = NULL;
+      // AJL Not really sure what we should do about the timer at this point
       }
     }
 
@@ -1017,6 +1058,20 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
         // contention.  We don't check for overflow - it will take ~2^32
         // authentications before it happens.
         auth_challenge->set_nonce_count(nonce_count + 1);
+
+        // The challenge has been authenticated against successfully, so we can
+        // remove the Chronos timer set at creation to trigger expiry
+        if (_authentication->_chronos)
+        {
+          HTTPCode status;
+          status = _authentication->_chronos->send_delete(auth_challenge->get_timer_id(),
+                                                          trail());
+          if (status == HTTP_OK)
+          {
+            TRC_DEBUG("Timer deleted for auth_challenge %s", auth_challenge->get_nonce().c_str());
+            auth_challenge->set_timer_id("");
+          }
+        }
 
         // Work out when the challenge should expire. We keep it around if we
         // might need it later which is the case if either:
@@ -1169,7 +1224,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     // challenge.
     TRC_DEBUG("No authentication information in request or stale nonce, so reject with challenge (status %d)", status);
     pj_bool_t stale = (status == PJSIP_EAUTHACCNOTFOUND);
-
+// AJL somehow should delete chronos timer here maybe? for failed auth case
     if (stale)
     {
       SAS::Event event(trail(), SASEvent::AUTHENTICATION_FAILED_STALE_NONCE, 0);

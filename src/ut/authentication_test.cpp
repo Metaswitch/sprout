@@ -111,6 +111,11 @@ public:
                             stack_data.scscf_port,
                             "0.0.0.0",
                             5060);
+
+    // Set up fake chronos results. Allows actions to succeed for blank timer ids
+    // (i.e. new/non-existent timers), and for the result of a POST (i.e. a created timer).
+    _chronos_connection->set_result("", HTTP_OK);
+    _chronos_connection->set_result("post_identity", HTTP_OK);
   }
 
   void TearDown()
@@ -148,6 +153,10 @@ public:
     ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->reset_count();
     ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->reset_count();
     ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->reset_count();
+
+    // Make sure the fake connections have their results cleaned out.
+    _hss_connection->flush_all();
+    _chronos_connection->flush_all();
 
     // All the AKA tests use the same challenge so flush the data store after
     // each test to avoid tests interacting.
