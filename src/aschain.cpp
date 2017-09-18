@@ -33,7 +33,8 @@ AsChain::AsChain(AsChainTable* as_chain_table,
                  Ifcs& ifcs,
                  ACR* acr,
                  FIFCService* fifc_service,
-                 IFCConfiguration ifc_configuration) :
+                 IFCConfiguration ifc_configuration,
+                 std::string scscf_uri) :
   _as_chain_table(as_chain_table),
   _refs(1),  // for the initial chain link being returned
   _as_info(ifcs.size() + 1),
@@ -48,7 +49,8 @@ AsChain::AsChain(AsChainTable* as_chain_table,
   _fallback_ifcs({}),
   _ifc_configuration(ifc_configuration),
   _using_standard_ifcs(true),
-  _root(NULL)
+  _root(NULL),
+  _scscf_uri(scscf_uri)
 {
   TRC_DEBUG("Creating AsChain %p with %d iFCs and adding to map", this, ifcs.size());
   _as_chain_table->register_(this, _odi_tokens);
@@ -151,7 +153,8 @@ AsChainLink AsChainLink::create_as_chain(AsChainTable* as_chain_table,
                                          Ifcs& ifcs,
                                          ACR* acr,
                                          FIFCService* fifc_service,
-                                         IFCConfiguration ifc_configuration)
+                                         IFCConfiguration ifc_configuration,
+                                         std::string scscf_uri)
 {
   AsChain* as_chain = new AsChain(as_chain_table,
                                   session_case,
@@ -161,7 +164,8 @@ AsChainLink AsChainLink::create_as_chain(AsChainTable* as_chain_table,
                                   ifcs,
                                   acr,
                                   fifc_service,
-                                  ifc_configuration);
+                                  ifc_configuration,
+                                  scscf_uri);
   return AsChainLink(as_chain, 0u);
 }
 

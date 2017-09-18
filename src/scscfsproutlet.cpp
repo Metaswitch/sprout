@@ -580,19 +580,10 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     }
   }
 
-  // Construct the S-CSCF URI for this transaction. Use the configured S-CSCF
-  // URI as a starting point.
-  pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), _scscf->_scscf_cluster_uri);
-  pjsip_sip_uri* routing_uri = get_routing_uri(req);
-  SCSCFUtils::get_scscf_uri(get_pool(req),
-                            get_local_hostname(routing_uri),
-                            get_local_hostname(scscf_uri),
-                            scscf_uri);
-  _scscf_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)scscf_uri);
-
   // Determine the session case and the served user.  This will link to
   // an AsChain object (creating it if necessary), if we need to provide
   // services.
+  // It will also set the S-CSCF URI
   status_code = determine_served_user(req);
 
   // Pass the received request to the ACR.
@@ -1115,6 +1106,9 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
 
   if (_as_chain_link.is_set())
   {
+    // Set the S-CSCF URI to the one we stored in the AsChain
+    _scscf_uri = _as_chain_link.scscf_uri();
+
     bool retargeted = false;
     std::string served_user = served_user_from_msg(req);
 
@@ -1283,6 +1277,16 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         }
       }
 
+      // Before looking up the iFCs, calculate the S-CSCF URI to use for this
+      // transaction, using the configured S-CSCF URI as a starting point.
+      pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), _scscf->_scscf_cluster_uri);
+      pjsip_sip_uri* routing_uri = get_routing_uri(req);
+      SCSCFUtils::get_scscf_uri(get_pool(req),
+                                get_local_hostname(routing_uri),
+                                get_local_hostname(scscf_uri),
+                                scscf_uri);
+      _scscf_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)scscf_uri);
+
       TRC_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
 
       Ifcs ifcs;
@@ -1381,8 +1385,8 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
         ((uri_class == NODE_LOCAL_SIP_URI) ||
          (uri_class == HOME_DOMAIN_SIP_URI) ||
          (uri_class == LOCAL_PHONE_NUMBER) ||
-         (uri_class == GLOBAL_PHONE_NUMBER) 
-         )) 
+         (uri_class == GLOBAL_PHONE_NUMBER)
+         ))
         || (PJSIP_URI_SCHEME_IS_TEL(uri)))
     {
       user = PJUtils::public_id_from_uri(uri);
@@ -1413,7 +1417,8 @@ AsChainLink SCSCFSproutletTsx::create_as_chain(Ifcs ifcs,
                                                  ifcs,
                                                  acr,
                                                  _scscf->fifcservice(),
-                                                 _scscf->ifc_configuration());
+                                                 _scscf->ifc_configuration(),
+                                                 _scscf_uri);
   acr = NULL;
   TRC_DEBUG("S-CSCF sproutlet transaction %p linked to AsChain %s",
             this, ret.to_string().c_str());
@@ -1917,7 +1922,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       event.add_var_param(public_id);
       SAS::report_event(event);
     }
-    
+
     delete aor_pair; aor_pair = NULL;
   }
   else
@@ -2019,7 +2024,7 @@ long SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
 
 
 /// Look up the registration state for the given public ID, using the
-/// per-transaction cache, which will be present at this point 
+/// per-transaction cache, which will be present at this point
 bool SCSCFSproutletTsx::is_user_registered(std::string public_id)
 {
   return _registered;
