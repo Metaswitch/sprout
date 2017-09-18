@@ -2554,11 +2554,11 @@ TEST_F(SCSCFTest, TestSimpleMultipart)
   list<HeaderMatcher> hdrs;
   // Check that the Content-Type manipulation in PJSIP has not inserted multiple
   // Content-Types in the bodyparts
-  doSuccessfulFlow(msg, 
-                   testing::MatchesRegex(".*wuntootreefower.*"), 
-                   hdrs, 
-                   true, 
-                   list<HeaderMatcher>(), 
+  doSuccessfulFlow(msg,
+                   testing::MatchesRegex(".*wuntootreefower.*"),
+                   hdrs,
+                   true,
+                   list<HeaderMatcher>(),
                    ".*--\\S+\r\nContent-Length: 343\r\nContent-Type: application/sdp\r\n\r\n.*");
 }
 
@@ -3559,7 +3559,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminate)
 
 
 // Bug for both session terminated and session continue (see clearwater-issues)
-// When liveness timer pops before SIP response is received from AS, Sprout 
+// When liveness timer pops before SIP response is received from AS, Sprout
 // doesn't send immediate failure upstream but keeps retrying.
 // Currently the test is made to pass superficially to achieve full coverage
 TEST_F(SCSCFTest, DefaultHandlingTerminateTimeout)
@@ -3579,7 +3579,7 @@ TEST_F(SCSCFTest, DefaultHandlingTerminateTimeout)
                                    "UNREGISTERED",
                                    subscription.return_sub());
 
-  // The tracker should be called only once. Currently there is a code bug that 
+  // The tracker should be called only once. Currently there is a code bug that
   // Sprout keeps retrying if liveness timer pops before AS response is
   // received. So the tracker are being  called several times.
   EXPECT_CALL(*_sess_term_comm_tracker, on_failure(_, HasSubstr("timeout"))).Times(AtLeast(1));
@@ -6915,7 +6915,11 @@ TEST_F(SCSCFTest, OriginatingTerminatingAS)
   EXPECT_EQ(1, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_audio_session_setup_time_tbl)->_count);
   EXPECT_EQ(0, ((SNMP::FakeEventAccumulatorTable*)_scscf_sproutlet->_video_session_setup_time_tbl)->_count);
 
-  // Make sure that we haven't sent a request to homestead with 127.0.0.1 as the domain of the S-CSCF URI
+  // Make sure that we haven't sent a request to homestead with 127.0.0.1 as the
+  // domain of the S-CSCF URI.
+  // This used to happen when a request was routed to an App Server and back,
+  // and resulted in Homestead making a request to the HSS with the wrong S-CSCF
+  // URI
   bool found_wrong_uri = false;
   for (FakeHSSConnection::UrlBody body : _hss_connection->_calls)
   {
@@ -8625,7 +8629,7 @@ TEST_F(SCSCFTest, HSSTimeoutOnCdiv)
 
 
 // Test that a failure to get iFCs due to a 404 error from homestead during Call
-// Diversion result in AS sending a 404 error 
+// Diversion result in AS sending a 404 error
 TEST_F(SCSCFTest, HSSNotFoundOnCdiv)
 {
   ServiceProfileBuilder service_profile = ServiceProfileBuilder()
@@ -9738,14 +9742,14 @@ class SCSCFTestWithoutICSCF : public SCSCFTestBase
                                 additional_home_domains,
                                 sproutlets,
                                 std::set<std::string>());
-  }  
+  }
 
   ~SCSCFTestWithoutICSCF()
   {
   }
 };
 
-// Test routing directly to local SCSCF when ICSCF is disabled 
+// Test routing directly to local SCSCF when ICSCF is disabled
 TEST_F(SCSCFTestWithoutICSCF, TestRouteWithoutICSCF)
 {
   SCOPED_TRACE("");
@@ -9862,7 +9866,7 @@ LocalStore* SCSCFTestWithRemoteSDM::_remote_data_store;
 AstaireAoRStore* SCSCFTestWithRemoteSDM::_remote_aor_store;
 SubscriberDataManager* SCSCFTestWithRemoteSDM::_remote_sdm;
 
-//Get bindings from remote store if the AOR is not registered with local store 
+//Get bindings from remote store if the AOR is not registered with local store
 TEST_F(SCSCFTestWithRemoteSDM, TestGetBindingFromRemoteStore)
 {
   register_uri(_remote_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
