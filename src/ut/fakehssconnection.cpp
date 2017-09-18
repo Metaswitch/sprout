@@ -33,7 +33,8 @@ FakeHSSConnection::FakeHSSConnection(MockHSSConnection* hss_connection_observer)
                 &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
                 &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
                 NULL,
-                NULL)
+                NULL,
+                0)
 {
   _hss_connection_observer = hss_connection_observer;
 }

@@ -11,6 +11,7 @@ MockHSSConnection::MockHSSConnection():
                 &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
                 &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
                 NULL,
-                NULL) {};
+                NULL,
+                0) {};
 MockHSSConnection::~MockHSSConnection() {};
 
