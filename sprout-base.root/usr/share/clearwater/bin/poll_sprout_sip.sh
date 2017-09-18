@@ -15,6 +15,7 @@
 # Read the config, defaulting appropriately.
 scscf=5054
 icscf=0
+bgcf=5053
 . /etc/clearwater/config
 [ -z $signaling_namespace ] || namespace_prefix="ip netns exec $signaling_namespace"
 
@@ -28,6 +29,12 @@ fi
 # If that succeeded and we have I-CSCF configured, check it.
 if [ $rc = 0 ] && [ "$icscf" != "0" ] ; then
   $namespace_prefix /usr/share/clearwater/bin/poll-sip $icscf
+  rc=$?
+fi
+
+# If that succeeded and we have BGCF configured, check it.
+if [ $rc = 0 ] && [ "$bgcf" != "0" ]; then
+  $namespace_prefix /usr/share/clearwater/bin/poll-sip $bgcf
   rc=$?
 fi
 
