@@ -758,12 +758,19 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       {
         std::vector<std::string> sas_options;
         Utils::split_string(std::string(pj_optarg), ',', sas_options, 0, false);
-        if (sas_options.size() == 2)
+
+        if ((sas_options.size() == 2) &&
+            !sas_options[0].empty() &&
+            !sas_options[1].empty())
         {
           options->sas_server = sas_options[0];
           options->sas_system_name = sas_options[1];
           TRC_INFO("SAS set to %s", options->sas_server.c_str());
           TRC_INFO("System name is set to %s", options->sas_system_name.c_str());
+        }
+        else
+        {
+          TRC_WARNING("Invalid SAS option: %s", pj_optarg);
         }
       }
       break;
