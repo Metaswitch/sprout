@@ -315,7 +315,7 @@ BaseAddrIterator* SIPResolver::resolve_iter(const std::string& name,
         SAS::report_event(event);
       }
 
-      targets_iter = srv_resolve_iter(srv_name, af, transport, retries, dummy_ttl, trail, allowed_host_state);
+      targets_iter = srv_resolve_iter(srv_name, af, transport, trail, allowed_host_state);
     }
     else
     {
