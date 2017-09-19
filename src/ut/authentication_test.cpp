@@ -2890,6 +2890,8 @@ TEST_F(AuthenticationTimerTest, AuthSuccessTimerDelete)
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
 
+  // Verify the chronos_connection expectations here, as otherwise they wait until the test class is deleted
+  testing::Mock::VerifyAndClear(MockChronosConnectionHelper::get_chronos_connection());
   // clean up
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
@@ -2947,6 +2949,8 @@ TEST_F(AuthenticationTimerTest, AuthSuccessTimerCreationFail)
   // The authentication module lets the request through.
   auth_sproutlet_allows_request();
 
+  // Verify the chronos_connection expectations here, as otherwise they wait until the test class is deleted
+  testing::Mock::VerifyAndClear(MockChronosConnectionHelper::get_chronos_connection());
   // clean up
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
@@ -2985,6 +2989,8 @@ TEST_F(AuthenticationTimerTest, AuthStoreFailTimerDeleted)
   tdata = current_txdata();
   RespMatcher(500).matches(tdata->msg);
 
+  // Verify the chronos_connection expectations here, as otherwise they wait until the test class is deleted
+  testing::Mock::VerifyAndClear(MockChronosConnectionHelper::get_chronos_connection());
   // clean up
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
 }
