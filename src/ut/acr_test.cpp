@@ -469,7 +469,8 @@ TEST_F(ACRTest, SCSCFSubscribeNotify)
   sub._from = "\"6505550000\" <sip:6505550000@homedomain>";   // Strip tag.
   sub._to = "\"6505550000\" <sip:6505550000@homedomain>";   // Strip tag.
   sub._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
-  sub._extra_hdrs = "Event: telephone-event;duration=300";
+  sub._extra_hdrs += "Expires: 300\r\n";
+  sub._extra_hdrs += "Event: telephone-event;duration=300";
   ts.sec = 1;
   ts.msec = 0;
   acr->rx_request(parse_msg(sub.get()), ts);
@@ -486,17 +487,21 @@ TEST_F(ACRTest, SCSCFSubscribeNotify)
   notify._routes = "Route: <sip:sprout.homedomain:5054;transport=TCP;orig;lr>\r\n";
   notify._from = "\"6505550000\" <sip:6505550000@homedomain>";   // Strip tag.
   notify._to = "\"6505550000\" <sip:6505550000@homedomain>";   // Strip tag.
-  notify._extra_hdrs = "Event: telephone-event;duration=300";
+  notify._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  notify._extra_hdrs += "Event: telephone-event;duration=300";
   ts.msec = 10;
   acr->rx_request(parse_msg(sub.get()), ts);
 
-  // Send 206 Partial Content response to the Notify, for testing SIP Response
-  // in 2xx or 3xx range
-  SIPResponse partialContent(206, "NOTIFY");
+  // Receive Subscrible with Expires=0 for end of dialog.
+  SIPRequest end("SUBSCRIBE");
+  end._requri = "sip:homedomain";
+  end._routes = "Route: <sip:sprout.homedomain:5054;transport=TCP;orig;lr>\r\n";
+  end._from = "\"6505550000\" <sip:6505550000@homedomain>";   // Strip tag.
+  end._to = "\"6505550000\" <sip:6505550000@homedomain>";   // Strip tag.
+  end._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  end._extra_hdrs += "Expires: 0\r\n";
   ts.msec = 15;
-  acr->tx_response(parse_msg(partialContent.get()), ts);
-
-  printf("\nooooooooooo\n");
+  acr->rx_request(parse_msg(end.get()), ts);
 
   // Build and checked the resulting Rf ACR message.
   acr_message = acr->get_message(ts);
@@ -538,7 +543,7 @@ TEST_F(ACRTest, SCSCFCancelCall)
 
   // Send 200 OK response to the CANCEL request.
   SIPResponse cancel200ok(200, "CANCEL");
-  cancel200ok._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;expires=300;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  cancel200ok._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
   ts.msec = 15;
   acr->tx_response(parse_msg(cancel200ok.get()), ts);
   //acr->cancel();
@@ -546,7 +551,7 @@ TEST_F(ACRTest, SCSCFCancelCall)
   // Send 487 Response (ie.request terminated) for the Invite sequence.
   SIPResponse invite487terminated(487, "INVITE");
   ts.msec = 20;
-  invite487terminated._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;expires=300;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  invite487terminated._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
   acr->tx_response(parse_msg(invite487terminated.get()), ts);
 
   // Receive ACK request and pass it to the ACR.
@@ -1145,10 +1150,8 @@ TEST_F(ACRTest, SCSCFPublish)
   ts.msec = 0;
   acr->rx_request(parse_msg(pub.get()), ts);
 
-  // Now build a 200 OK response.
+  // Transmit 200 OK response.
   SIPResponse pub200ok(200, "PUBLISH");
-
-  // Pass the response to ACR as a transmitted response.
   ts.msec = 25;
   acr->tx_response(parse_msg(pub200ok.get()), ts);
 
@@ -1158,8 +1161,8 @@ TEST_F(ACRTest, SCSCFPublish)
   delete acr;
 }
 
-// To cover code for PUBLISH with non-default Content-Disposition, minimal and
-// output not checked.
+// To cover code for PUBLISH with non-default Content-Disposition; and code for
+// SIP Response in 2xx or 3xx range. Minimal and output not checked.
 TEST_F(ACRTest, SCSCFPublishTrivial)
 {
   pj_time_val ts;
@@ -1178,6 +1181,11 @@ TEST_F(ACRTest, SCSCFPublishTrivial)
   ts.sec = 1;
   ts.msec = 0;
   acr->rx_request(parse_msg(pub.get()), ts);
+
+  // Send 206 Partial Content response
+  SIPResponse partialContent(206, "NOTIFY");
+  ts.msec = 15;
+  acr->tx_response(parse_msg(partialContent.get()), ts);
 
   acr_message = acr->get_message(ts);
   delete acr;
@@ -1432,7 +1440,7 @@ TEST_F(ACRTest, IBCFTermCall)
   std::string acr_message;
 
   RalfACRFactory f(NULL, ACR::IBCF);
-  acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_TERMINATING);
+  acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_ORIGINATING);
 
   // Receive the original INVITE request.
   SIPRequest invite("INVITE");
@@ -1459,7 +1467,7 @@ TEST_F(ACRTest, IBCFTermCall)
 
   ts.sec = 1;
   ts.msec = 0;
-  //acr->rx_request(parse_msg(invite.get()), ts);
+  acr->rx_request(parse_msg(invite.get()), ts);
 
   // Transmit 100 Trying response.
   SIPResponse r100trying(100, "INVITE");
@@ -1501,7 +1509,7 @@ TEST_F(ACRTest, IBCFTermCall)
 "a=candidate:2337948804 1 udp 2113937151 10.233.25.133 63500 typ host generation 0\r\n";
 
   ts.msec = 50;
-  acr->tx_request(parse_msg(ack.get()), ts);
+  acr->rx_request(parse_msg(ack.get()), ts);
 
   //Build and checked the resulting Rf ACR message.
   string rf_acr = acr->get_message(ts);

@@ -58,10 +58,12 @@ void ACR::send_message(pj_time_val timestamp)
   TRC_DEBUG("Sending Null ACR (%p)", this);
 }
 
+// LCOV_EXCL_START - never used, exists to provide same interface as RalfACR
 std::string ACR::get_message(pj_time_val timestamp)
 {
   return std::string();
 }
+// LCOV_EXCL_STOP
 
 void ACR::set_default_ccf(const std::string& default_ccf)
 {
@@ -261,24 +263,13 @@ void RalfACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
       }
     }
 
-    // Store the content of the expires header if present.
-    pjsip_expires_hdr* expires_hdr = (pjsip_expires_hdr*)
-                                pjsip_msg_find_hdr(req, PJSIP_H_EXPIRES, NULL);
-    if (expires_hdr != NULL)
+    if (
+        (req->line.req.method.id == PJSIP_REGISTER_METHOD) || 
+        ( (req->line.req.method.id == PJSIP_OTHER_METHOD) &&
+          (pj_strcmp2(&(req->line.req.method.name), "SUBSCRIBE") == 0) )   
+       )
     {
-      _expires = expires_hdr->ivalue;
-    }
-    else if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
-    {
-      // Check for expires values in Contact headers.  Set the default to
-      // -1, so if there are no contact headers, or no expires values in the
-      // contact headers we won't include an Expires AVP.
-      if (!PJUtils::get_max_expires(req, -1, _expires))
-      {
-        // Max expires isn't meaningful for this request (it has no Contact
-        // headers), so use the default of -1.
-        _expires = -1;
-      }
+      PJUtils::get_max_expires(req, -1, _expires);
     }
     else
     {
@@ -1160,7 +1151,6 @@ std::string RalfACR::get_message(pj_time_val timestamp)
     int cause_code = 0;
     if (_status_code == PJSIP_SC_OK)
     {
-      printf("\n%d\n", _expires);
       if ((_method == "REGISTER")  &&
           (_num_contacts == 0))
       {
@@ -1626,10 +1616,8 @@ void RalfACR::store_media_description(pjsip_msg* msg, MediaDescription& descript
       (pj_stricmp(&body->content_type.type, &STR_APPLICATION) == 0) &&
       (pj_stricmp(&body->content_type.subtype, &STR_SDP) == 0))
   {
-    printf("\none loop\n");
     if (_method == "ACK")
     {
-       printf("\ntwo loop\n");
       // ACKs can only every carry answers.
       store_media_components(msg, description.answer);
     }
@@ -1638,13 +1626,11 @@ void RalfACR::store_media_description(pjsip_msg* msg, MediaDescription& descript
     {
       // Either a request (so by definition an offer), or no offer on the
       // request, so store as the offer.
-       printf("\n11111\n");
       store_media_components(msg, description.offer);
     }
     else
     {
       // Store the SDP as the answer.
-       printf("\n222222\n");
       store_media_components(msg, description.answer);
     }
   }
