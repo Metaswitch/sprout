@@ -474,7 +474,7 @@ TEST_F(ACRTest, SCSCFSubscribeNotify)
   ts.msec = 0;
   acr->rx_request(parse_msg(sub.get()), ts);
 
-  // Send 200 OK response to the Subscribe and pass to ACR
+  // Send 200 OK response to the Subscribe.
   SIPResponse sub200ok(200, "SUBSCRIBE");
   sub200ok._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
   ts.msec = 5;
@@ -487,14 +487,16 @@ TEST_F(ACRTest, SCSCFSubscribeNotify)
   notify._from = "\"6505550000\" <sip:6505550000@homedomain>";   // Strip tag.
   notify._to = "\"6505550000\" <sip:6505550000@homedomain>";   // Strip tag.
   notify._extra_hdrs = "Event: telephone-event;duration=300";
-  ts.sec = 1;
   ts.msec = 10;
   acr->rx_request(parse_msg(sub.get()), ts);
 
-  // Send 200 OK response to the Notify.
-  SIPResponse notify200ok(200, "NOTIFY");
+  // Send 206 Partial Content response to the Notify, for testing SIP Response
+  // in 2xx or 3xx range
+  SIPResponse partialContent(206, "NOTIFY");
   ts.msec = 15;
-  acr->tx_response(parse_msg(notify200ok.get()), ts);
+  acr->tx_response(parse_msg(partialContent.get()), ts);
+
+  printf("\nooooooooooo\n");
 
   // Build and checked the resulting Rf ACR message.
   acr_message = acr->get_message(ts);
@@ -1457,7 +1459,7 @@ TEST_F(ACRTest, IBCFTermCall)
 
   ts.sec = 1;
   ts.msec = 0;
-  acr->rx_request(parse_msg(invite.get()), ts);
+  //acr->rx_request(parse_msg(invite.get()), ts);
 
   // Transmit 100 Trying response.
   SIPResponse r100trying(100, "INVITE");
@@ -1473,6 +1475,10 @@ TEST_F(ACRTest, IBCFTermCall)
   r200ok._extra_hdrs += "P-Charging-Function-Addresses: ccf=192.1.1.1;ccf=192.1.1.2;ecf=192.1.1.3;ecf=192.1.1.4\r\n";
   r200ok._extra_hdrs += "Content-Type: application/sdp\r\n";
   ts.msec = 30;
+  acr->as_info("sip:as1.homedomain:5060;transport=TCP",
+               "sip:6505559999@homedomain",
+               512,
+               false);
   acr->tx_response(parse_msg(r200ok.get()), ts);
 
   // Receive ACK request with SDP body.
@@ -1497,8 +1503,8 @@ TEST_F(ACRTest, IBCFTermCall)
   ts.msec = 50;
   acr->tx_request(parse_msg(ack.get()), ts);
 
-  // Build and checked the resulting Rf ACR message.
-  //string rf_acr = acr->get_message(ts);
+  //Build and checked the resulting Rf ACR message.
+  string rf_acr = acr->get_message(ts);
   //EXPECT_TRUE(compare_acr(rf_acr, "acr_scscftermcall_start.json"));
   delete acr;
 }

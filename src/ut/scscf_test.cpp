@@ -5898,102 +5898,6 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
   free_txdata();
 }
 
-
-// Test attempted AS chain link after chain has expired.
-TEST_F(SCSCFTest, ExpiredChain)
-{
-  register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551000@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551000@homedomain",
-                                   "call",
-                                   RegDataXMLUtils::STATE_REGISTERED,
-                                   subscription.return_sub());
-  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
-                              "{\"result-code\": 2001,"
-                              " \"scscf\": \"sip:scscf.sprout.homedomain:5058;transport=TCP\"}");
-
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
-
-  // ---------- Send INVITE
-  // We're within the trust boundary, so no stripping should occur.
-  SCSCFMessage msg;
-  msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain";
-  msg._todomain = "";
-  msg._route = "Route: <sip:sprout.homedomain;orig>";
-  msg._requri = "sip:6505551234@homedomain";
-
-  msg._method = "INVITE";
-  inject_msg(msg.get_request(), &tpBono);
-  poll();
-  ASSERT_EQ(2, txdata_count());
-
-  // 100 Trying goes back to bono
-  pjsip_msg* out = current_txdata()->msg;
-  RespMatcher(100).matches(out);
-  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  free_txdata();
-
-  // INVITE passed on to AS1
-  SCOPED_TRACE("INVITE (S)");
-  out = current_txdata()->msg;
-  ReqMatcher r1("INVITE");
-  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
-
-  tpAS1.expect_target(current_txdata(), false);
-  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
-  EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;orig;service=scscf>"));
-
-  // ---------- AS1 gives final response, ending the transaction.
-  string fresp = respond_to_txdata(current_txdata(), 404);
-  pjsip_msg* saved = pop_txdata()->msg;
-  inject_msg(fresp, &tpAS1);
-
-  // ACK goes back to AS1
-  SCOPED_TRACE("ACK");
-  out = current_txdata()->msg;
-  ASSERT_NO_FATAL_FAILURE(ReqMatcher("ACK").matches(out));
-  free_txdata();
-
-  // 404 response goes back to bono
-  SCOPED_TRACE("404");
-  out = current_txdata()->msg;
-  RespMatcher(404).matches(out);
-  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.convert_routeset(out);
-  msg._cseq++;
-  free_txdata();
-
-  // ---------- Send ACK from bono
-  SCOPED_TRACE("ACK");
-  msg._method = "ACK";
-  inject_msg(msg.get_request(), &tpBono);
-
-  // Allow time to pass, so the initial Sprout UAS transaction moves
-  // from Completed to Terminated to Destroyed.  32s is the default
-  // timeout. This causes the ODI token to expire.
-  cwtest_advance_time_ms(33000L);
-  poll();
-
-  // ---------- AS1 attempts to turn the message around (acting as proxy)
-  const pj_str_t STR_ROUTE = pj_str("Route");
-  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(saved, &STR_ROUTE, NULL);
-  if (hdr)
-  {
-    pj_list_erase(hdr);
-  }
-
-  char buf[65535];
-  pj_ssize_t len = pjsip_msg_print(saved, buf, sizeof(buf));
-  doAsOriginated(string(buf, len), true);
-}
-
 // Test a simple MMTEL flow.
 TEST_F(SCSCFTest, MmtelFlow)
 {
@@ -9974,26 +9878,61 @@ class SCSCFTestWithRalf : public SCSCFTestBase
   {
   }
 protected:
-  static RalfProcessor* _ralf_processor;
+  static MockRalfProcessor* _ralf_processor;
   static RalfACRFactory* _ralf_acr_factory;
 
 };
-RalfProcessor* SCSCFTestWithRalf::_ralf_processor;
+MockRalfProcessor* SCSCFTestWithRalf::_ralf_processor;
 RalfACRFactory* SCSCFTestWithRalf::_ralf_acr_factory;
 
-TEST_F(SCSCFTestWithRalf, TestBilling)
+using ::testing::SaveArg;
+using ::testing::Sequence;
+// Test complete mainline call flow and check ralf processor for sending right
+// ACR in sequence.
+TEST_F(SCSCFTestWithRalf, MainlineBilling)
 {
   SCSCFMessage msg;
   msg._in_dialog = true;
-  msg._route = "Route: <sip:homedomain;transport=tcp;lr;billing-role=charge-term>";
+  msg._route = "Route: <sip:homedomain;transport=tcp;lr;billing-role=charge-orig>";
   list<HeaderMatcher> hdrs;
   CapturingTestLogger log;
 
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, false);
-  //EXPECT_CALL(_ralf_processor, send_request_to_ralf);
+  // Save the ralf request being sent out by ralf processor in sequence. 
+  RalfProcessor::RalfRequest* ralf_request_1;
+  RalfProcessor::RalfRequest* ralf_request_2;
+  RalfProcessor::RalfRequest* ralf_request_3;
+  EXPECT_CALL(*_ralf_processor, send_request_to_ralf(_))
+    .WillOnce(SaveArg<0>(&ralf_request_1))
+    .WillOnce(SaveArg<0>(&ralf_request_2))
+    .WillOnce(SaveArg<0>(&ralf_request_3))
+    .RetiresOnSaturation();
+
+  // Complete call flow with ACK and BYE.
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, true);
+
+  // Check Node Function is S-CSCF.
+  EXPECT_THAT(ralf_request_1->path,MatchesRegex("/call-id/.*%4010.114.61.213"));
+  EXPECT_THAT(ralf_request_1->message,MatchesRegex(".*\"Node-Functionality\":0.*"));
+
+  // First ACR is sent for INVITE and is INTERIM_RECORD as it's in dialog
+  EXPECT_THAT(ralf_request_1->message,MatchesRegex(".*\"SIP-Method\":\"INVITE\".*"));
+  EXPECT_THAT(ralf_request_1->message,MatchesRegex(".*\"Accounting-Record-Type\":3.*"));
+
+  // Second ACR is sent for ACK and is INTERIM_RECORD
+  EXPECT_THAT(ralf_request_2->message,MatchesRegex(".*\"SIP-Method\":\"ACK\".*"));
+  EXPECT_THAT(ralf_request_2->message,MatchesRegex(".*\"Accounting-Record-Type\":3.*"));
+
+  // Third request is sent for BYE and has STOP_RECORD
+  EXPECT_THAT(ralf_request_3->message,MatchesRegex(".*\"SIP-Method\":\"BYE\".*"));
+  EXPECT_THAT(ralf_request_3->message,MatchesRegex(".*\"Accounting-Record-Type\":4.*"));
+
+  delete ralf_request_1; ralf_request_1 = NULL;
+  delete ralf_request_2; ralf_request_2 = NULL;
+  delete ralf_request_3; ralf_request_3 = NULL;
 }
 
-// Test attempted AS chain link after chain has expired.
+// Test attempted AS chain link after chain has expired, with additional check 
+// that ralf processor is sending ACR request with right cause code.
 TEST_F(SCSCFTestWithRalf, ExpiredChain)
 {
   register_uri(_sdm, _hss_connection, "6505551000", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
@@ -10012,6 +9951,13 @@ TEST_F(SCSCFTestWithRalf, ExpiredChain)
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+
+  // Save first and last ralf request being sent out.
+  RalfProcessor::RalfRequest* ralf_request;
+  RalfProcessor::RalfRequest* ralf_request_1;
+  EXPECT_CALL(*_ralf_processor, send_request_to_ralf(_))
+    .WillOnce(SaveArg<0>(&ralf_request))
+    .WillRepeatedly(SaveArg<0>(&ralf_request_1));
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -10064,6 +10010,15 @@ TEST_F(SCSCFTestWithRalf, ExpiredChain)
   msg._cseq++;
   free_txdata();
 
+  // Check first ralf request and delete it.
+  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"Accounting-Record-Type\":1.*")); // EVENT_RECORD
+  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"Role-Of-Node\":0.*"));  // NODE_ROLE_ORIGINATING
+  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"SIP-Method\":\"INVITE\".*"));
+  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"Application-Server\":\"sip:1.2.3.4:56789;transport=UDP\".*"));
+  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"Status-Code\":0.*"));
+  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"Cause-Code\":404.*"));
+  delete ralf_request; ralf_request = NULL;
+
   // ---------- Send ACK from bono
   SCOPED_TRACE("ACK");
   msg._method = "ACK";
@@ -10086,124 +10041,9 @@ TEST_F(SCSCFTestWithRalf, ExpiredChain)
   char buf[65535];
   pj_ssize_t len = pjsip_msg_print(saved, buf, sizeof(buf));
   doAsOriginated(string(buf, len), true);
+
+  // Check last ralf request and delete it.
+  EXPECT_THAT(ralf_request_1->message,MatchesRegex(".*\"Accounting-Record-Type\":2.*")); // START_RECORD
+  EXPECT_THAT(ralf_request_1->message,MatchesRegex(".*\"SIP-Method\":\"INVITE\".*"));
+  delete ralf_request_1; ralf_request_1 = NULL;
 }
-
-// Test DefaultHandling=CONTINUE for a responsive AS that passes the INVITE
-// back tot he S-CSCF but then returns an error.
-TEST_F(SCSCFTestWithRalf, DefaultHandlingContinueInviteReturnedThenError)
-{
-  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  ServiceProfileBuilder service_profile = ServiceProfileBuilder()
-    .addIdentity("sip:6505551234@homedomain")
-    .addIfc(1, {"<Method>INVITE</Method>"}, "sip:1.2.3.4:56789;transport=UDP");
-  SubscriptionBuilder subscription = SubscriptionBuilder()
-    .addServiceProfile(service_profile);
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, subscription.return_sub());
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", RegDataXMLUtils::STATE_REGISTERED, "");
-
-  // This flow is classed as a successful AS flow, as the AS will pass the
-  // INVITE back to the S-CSCF which indicates it is responsive.
-  EXPECT_CALL(*_sess_cont_comm_tracker, on_success(_));
-
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
-
-  // ---------- Send INVITE
-  // We're within the trust boundary, so no stripping should occur.
-  SCSCFMessage msg;
-  msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain";
-  msg._todomain = "";
-  msg._requri = "sip:6505551234@homedomain";
-  msg._route = "Route: <sip:sprout.homedomain>";
-
-  msg._method = "INVITE";
-  inject_msg(msg.get_request(), &tpBono);
-  poll();
-  ASSERT_EQ(2, txdata_count());
-
-  // 100 Trying goes back to bono
-  pjsip_msg* out = current_txdata()->msg;
-  RespMatcher(100).matches(out);
-  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.convert_routeset(out);
-  free_txdata();
-
-  // INVITE passed on to AS1
-  SCOPED_TRACE("INVITE (S)");
-  out = current_txdata()->msg;
-  ReqMatcher r1("INVITE");
-  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
-
-  tpAS1.expect_target(current_txdata(), false);
-  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
-  EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;service=scscf>"));
-
-  // ---------- AS1 sends a 100 Trying to indicate it has received the request.
-  string resp_100 = respond_to_txdata(current_txdata(), 100);
-  inject_msg(resp_100, &tpAS1);
-
-  // We are going to send a 500 response to this request later on in the test
-  // case. Build this now, as it means we can mutate the INVITE for sending
-  // back to sprout.
-  string resp_500 = respond_to_txdata(current_txdata(), 500);
-
-  // ---------- AS1 turns it around (acting as proxy)
-  const pj_str_t STR_ROUTE = pj_str("Route");
-  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
-  if (hdr)
-  {
-    pj_list_erase(hdr);
-  }
-  inject_msg(out, &tpAS1);
-  free_txdata();
-
-  // 100 Trying goes back to AS1
-  out = current_txdata()->msg;
-  RespMatcher(100).matches(out);
-  tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.convert_routeset(out);
-  free_txdata();
-
-  // INVITE passed on to final destination
-  SCOPED_TRACE("INVITE (2)");
-  out = current_txdata()->msg;
-  ReqMatcher r2("INVITE");
-  ASSERT_NO_FATAL_FAILURE(r2.matches(out));
-
-  tpBono.expect_target(current_txdata(), false);
-  EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
-  EXPECT_EQ("", get_headers(out, "Route"));
-
-  free_txdata();
-
-  // ---------- AS1 now rejects the request with a 500 response.  The AS is not
-  // bypassed as the INVITE it sent back to sprout indicates that it is live.
-  inject_msg(resp_500, &tpAS1);
-
-  // ACK goes back to AS1
-  SCOPED_TRACE("ACK");
-  out = current_txdata()->msg;
-  ASSERT_NO_FATAL_FAILURE(ReqMatcher("ACK").matches(out));
-  free_txdata();
-
-  // 500 response goes back to bono
-  SCOPED_TRACE("500");
-  out = current_txdata()->msg;
-  RespMatcher(500).matches(out);
-  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.convert_routeset(out);
-  free_txdata();
-
-  // ---------- Send ACK from bono
-  SCOPED_TRACE("ACK");
-  msg._cseq++;
-  msg._method = "ACK";
-  inject_msg(msg.get_request(), &tpBono);
-
-  // Check there are no outstanding messages - this confirms sprout did not
-  // create a fork to bypass the AS.
-  ASSERT_EQ(0, txdata_count());
-}
-

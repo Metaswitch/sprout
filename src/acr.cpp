@@ -607,25 +607,21 @@ void RalfACR::as_info(const std::string& uri,
   as_info.redirect_uri = redirect_uri;
   if (timeout)
   {
-    printf("\n000000000\n");
     as_info.status_code = STATUS_CODE_TIMEOUT;
   }
   else if ((status_code >= 400) &&
            (status_code <= 499))
   {
-    printf("\n11111111\n");
     as_info.status_code = STATUS_CODE_4XX;
   }
   else if (status_code >= 500)
   {
     // TS 32.299 doesn't specify what to do with 6xx errors, so we choose to
     // report as 5xx.
-    printf("\n222222222\n");
     as_info.status_code = STATUS_CODE_5XX;
   }
   else
   {
-    printf("\n33333333\n");
     as_info.status_code = STATUS_CODE_NONE;
   }
   _as_information.push_back(as_info);
@@ -1164,6 +1160,7 @@ std::string RalfACR::get_message(pj_time_val timestamp)
     int cause_code = 0;
     if (_status_code == PJSIP_SC_OK)
     {
+      printf("\n%d\n", _expires);
       if ((_method == "REGISTER")  &&
           (_num_contacts == 0))
       {
@@ -1624,7 +1621,6 @@ void RalfACR::store_media_description(pjsip_msg* msg, MediaDescription& descript
 {
   // If the message has an SDP body store it in the offer or answer slot.
   pjsip_msg_body* body = msg->body;
-  printf("\nstore media description\n");
 
   if ((body != NULL) &&
       (pj_stricmp(&body->content_type.type, &STR_APPLICATION) == 0) &&
