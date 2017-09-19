@@ -292,6 +292,11 @@ protected:
     /// Called when timer C expires.
     void timer_c_expired();
 
+    /// Called to get the next server to try, which is stored in
+    /// _current_server. Returns false if there are no servers or left, or if
+    /// the maximum number of attempts has been attempted.
+    bool get_next_server();
+
     /// Owning proxy object.
     BasicProxy* _proxy;
 
@@ -340,6 +345,9 @@ protected:
 
     // Whether this UAC transaction is to a stateless proxy.
     bool _stateless_proxy;
+
+    // Tracks how many attempts the UACTsx has left to try the request.
+    int _num_attempts_left;
 
     friend class UASTsx;
 

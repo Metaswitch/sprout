@@ -167,7 +167,7 @@ void resolve(const std::string& name,
              int allowed_host_state);
 
 BaseAddrIterator* resolve_next_hop_iter(pjsip_tx_data* tdata,
-                                        int retries,
+                                        int& retries,
                                         int allowed_host_state,
                                         SAS::TrailId trail);
 

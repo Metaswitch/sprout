@@ -938,7 +938,7 @@ void PJUtils::resolve(const std::string& name,
 
 /// Resolves the next hop target of the SIP message.
 BaseAddrIterator* PJUtils::resolve_next_hop_iter(pjsip_tx_data* tdata,
-                                                 int retries,
+                                                 int& retries,
                                                  int allowed_host_state,
                                                  SAS::TrailId trail)
 {
@@ -959,7 +959,8 @@ BaseAddrIterator* PJUtils::resolve_next_hop_iter(pjsip_tx_data* tdata,
 
   if (retries == 0)
   {
-    // Used default number of retries.
+    // Used default number of retries. retries was passed by reference, so this
+    // tells the calling code what the default number of retries is.
     retries = DEFAULT_RETRIES;
   }
 

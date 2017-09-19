@@ -1533,7 +1533,8 @@ BasicProxy::UACTsx::UACTsx(BasicProxy* proxy,
   _trail(0),
   _pending_destroy(false),
   _context_count(0),
-  _stateless_proxy(false)
+  _stateless_proxy(false),
+  _num_attempts_left(0)
 {
   // Don't put any initialization that can fail here, implement in init()
   // instead.
@@ -1641,8 +1642,10 @@ pj_status_t BasicProxy::UACTsx::init(pjsip_tx_data* tdata,
   if (tdata->tp_sel.type != PJSIP_TPSELECTOR_TRANSPORT)
   {
     // Resolve the next hop destination for this request to a set of target
-    // servers (IP address/port/transport tuples).
-    _servers_iter = PJUtils::resolve_next_hop_iter(tdata, 0, allowed_host_state, trail());
+    // servers (IP address/port/transport tuples). The maximum number of times
+    // to attempt the call is stored in _num_attempts. As _num_attempts_left is
+    // initialised to 0, the number of attempts is the default value.
+    _servers_iter = PJUtils::resolve_next_hop_iter(tdata, _num_attempts_left, allowed_host_state, trail());
   }
 
   // Work out whether this UAC transaction is to a stateless proxy.
@@ -1681,9 +1684,9 @@ void BasicProxy::UACTsx::send_request()
   else
   {
     // Stores the first element of servers_iter as _current_server and moves the
-    // iterator along by 1. Next returns true if _servers_iter was non-empty,
-    // ie. a valid target was stored in _current_server.
-    _no_servers = !(_servers_iter->next(_current_server));
+    // iterator along by 1. get_next_server returns true if there is at least
+    // one valid server.
+    _no_servers = !(get_next_server());
 
     if (!_no_servers)
     {
@@ -2061,9 +2064,9 @@ bool BasicProxy::UACTsx::retry_request()
 {
   bool retrying = false;
 
-  // See if we have any more target servers that we can try, and if so store the
-  // next one in _current_server.
-  if (_servers_iter->next(_current_server))
+  // Stores the next server in _current_server. Returns false if no servers are
+  // left, or if the maximum number of retry attempts have been made.
+  if (get_next_server())
   {
     // More servers to try.  As per RFC3263, retries to an alternate server
     // have to be a completely new transaction, presumably to avoid any
@@ -2265,3 +2268,17 @@ void BasicProxy::UACTsx::timer_expired(pj_timer_heap_t *timer_heap,
   }
 }
 
+/// Helper function to store the next server in _current_server. Returns false
+/// if there are no servers left, or the maximum number of attempts have been
+/// made.
+bool BasicProxy::UACTsx::get_next_server()
+{
+  // Decrement the number of attempts left.
+  --_num_attempts_left;
+
+  // Stores the next server in _current_server and incrementes _servers_iter.
+  // next returns true if there was another server to return, so this function
+  // will return true only if there was another server and the maximum number of
+  // attempts have not yet been made.
+  return _servers_iter->next(_current_server) && (_num_attempts_left >= 0);
+}
