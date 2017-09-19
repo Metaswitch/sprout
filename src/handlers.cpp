@@ -184,7 +184,7 @@ static void set_remote_aor_data(std::string aor_id,
 }
 
 static void update_hss_on_aor_expiry(std::string aor_id,
-                                     AoRPair* aor_pair,
+                                     AoRPair& aor_pair,
                                      HSSConnection* hss,
                                      SAS::TrailId trail)
 {
@@ -196,7 +196,7 @@ static void update_hss_on_aor_expiry(std::string aor_id,
   SAS::report_event(event);
 
   // Get the S-CSCF URI off the AoR to put on the SAR.
-  AoR* aor = aor_pair->get_current();
+  AoR* aor = aor_pair.get_current();
 
   hss->update_registration_state(aor_id,
                                  "",
@@ -331,6 +331,14 @@ void AoRTimeoutTask::process_aor_timeout(std::string aor_id)
                         _cfg->_remote_sdms,
                         _cfg->_hss,
                         trail());
+
+    if (all_bindings_expired)
+    {
+      update_hss_on_aor_expiry(aor_id,
+                               *aor_pair,
+                               _cfg->_hss,
+                               trail());
+    }
   }
   else
   {
@@ -338,14 +346,6 @@ void AoRTimeoutTask::process_aor_timeout(std::string aor_id)
     // recover from this.
     TRC_INFO("Could not update SubscriberDataManager on registration timeout for AoR: %s",
              aor_id.c_str());
-  }
-
-  if (all_bindings_expired)
-  {
-    update_hss_on_aor_expiry(aor_id,
-                             aor_pair,
-                             _cfg->_hss,
-                             trail());
   }
 
   delete aor_pair;
@@ -966,19 +966,19 @@ HTTPCode PushProfileTask::update_associated_uris(SAS::TrailId trail)
                         _cfg->_remote_sdms,
                         _cfg->_hss,
                         trail);
+
+    if (all_bindings_expired)
+    {
+      update_hss_on_aor_expiry(_default_public_id,
+                               *aor_pair,
+                               _cfg->_hss,
+                               trail);
+    }
   }
   else
   {
     TRC_DEBUG("Unable to update the associated URIs");
     rc = HTTP_SERVER_ERROR;
-  }
-
-  if (all_bindings_expired)
-  {
-    update_hss_on_aor_expiry(_default_public_id,
-                             aor_pair,
-                             _cfg->_hss,
-                             trail);
   }
 
   delete aor_pair; aor_pair = NULL;
