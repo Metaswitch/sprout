@@ -801,8 +801,9 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
       TRC_DEBUG("Set chronos timer for AUTHENTICATION_TIMEOUT SAR");
 
       // We need to set a Chronos timer so that an AUTHENTICATION_TIMEOUT SAR
-      // is sent to the HSS when the challenge expires. We do this here so
-      // that the timer_id can be stored alongside the auth_challenge.
+      // is sent to the HSS when the challenge expires. We do not have a timer ID
+      // until the timer has been set, so do this here and store the timer_id
+      // alongside the auth_challenge.
       HTTPCode status;
       std::string timer_id;
       std::string chronos_body = "{\"impi\": \"" + impi +
@@ -852,9 +853,7 @@ void AuthenticationSproutletTsx::create_challenge(pjsip_digest_credential* crede
       // Also attempt to delete the chronos timer we stored for this challenge.
       // This stops the a timer pop not finding an AV, and triggering a cycle of
       // timer pops in every site attempting to find an AV that never existed.
-      // If we failed to create the timer, so have a blank ID, the
-      // chronos_connection will catch this, and not send a delete out.
-      if (_authentication->_chronos)
+      if ((_authentication->_chronos) && (auth_challenge->get_timer_id() != ""))
       {
         HTTPCode status;
         status = _authentication->_chronos->send_delete(auth_challenge->get_timer_id(),
@@ -1046,8 +1045,8 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
         auth_challenge->set_nonce_count(nonce_count + 1);
 
         // The challenge has been authenticated against successfully, so we can
-        // remove the Chronos timer set at creation to trigger expiry
-        if (_authentication->_chronos)
+        // remove the Chronos timer set at creation to trigger expiry, if present.
+        if ((_authentication->_chronos) && (auth_challenge->get_timer_id() != ""))
         {
           HTTPCode status;
           status = _authentication->_chronos->send_delete(auth_challenge->get_timer_id(),
