@@ -770,7 +770,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
         }
         else
         {
-          TRC_WARNING("Invalid SAS option: %s", pj_optarg);
+          TRC_WARNING("Invalid --sas option: %s", pj_optarg);
         }
       }
       break;
