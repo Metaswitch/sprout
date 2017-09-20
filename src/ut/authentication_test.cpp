@@ -2907,8 +2907,7 @@ TEST_F(AuthenticationTimerTest, AuthSuccessTimerCreationFail)
 
   // Set up the timer creation to return an error, simulating timer creation failure.
   EXPECT_CALL(*MockChronosConnectionHelper::get_chronos_connection(), send_post(_,_,"/authentication-timeout",_,_,_))
-              .WillOnce(DoAll(SetArgReferee<0>(""),
-                              Return(HTTP_BAD_REQUEST)));
+              .WillOnce(Return(HTTP_BAD_REQUEST));
 
   // Send in a REGISTER request with no authentication header.  This triggers
   // Digest authentication.
