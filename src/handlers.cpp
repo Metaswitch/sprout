@@ -103,7 +103,7 @@ static bool sdm_access_common(AoRPair** aor_pair,
 
     if (found_binding)
     {
-      (*aor_pair)->get_current()->copy_subscriptions_and_bindings(backup_aor_pair->get_current());
+      (*aor_pair)->get_current()->copy_aor(backup_aor_pair->get_current());
     }
 
     if (backup_aor_pair_alloced)

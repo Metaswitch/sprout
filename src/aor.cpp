@@ -471,8 +471,7 @@ int AoR::get_next_expires()
   return _next_expires;
 }
 
-// Copy all bindings and subscriptions to this AoR
-void AoR::copy_subscriptions_and_bindings(AoR* source_aor)
+void AoR::copy_aor(AoR* source_aor)
 {
   for (Bindings::const_iterator i = source_aor->bindings().begin();
        i != source_aor->bindings().end();
@@ -491,6 +490,12 @@ void AoR::copy_subscriptions_and_bindings(AoR* source_aor)
     Subscription* dst = get_subscription(i->first);
     *dst = *src;
   }
+
+  _associated_uris = AssociatedURIs(source_aor->_associated_uris);
+  _notify_cseq = source_aor->_notify_cseq;
+  _timer_id = source_aor->_timer_id;
+  _uri = source_aor->_uri;
+  _scscf_uri = source_aor->_scscf_uri;
 }
 
 AoR::Bindings AoRPair::get_updated_bindings()
