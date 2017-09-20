@@ -238,10 +238,13 @@ public:
   // Return the expiry time of the binding or subscription due to expire next.
   int get_next_expires();
 
-  /// Copy all bindings and subscriptions to this AoR
+  /// Copy all site agnostic values from one AoR to this AoR. This copies basically
+  /// everything, but importantly not the CAS. It doesn't remove any bindings
+  /// or subscriptions that may have been in the existing AoR but not in the copied
+  /// AoR.
   ///
   /// @param source_aor           Source AoR for the copy
-  void copy_subscriptions_and_bindings(AoR* source_aor);
+  void copy_aor(AoR* source_aor);
 
   /// CSeq value for event notifications for this AoR.  This is initialised
   /// to one when the AoR record is first set up and incremented every time

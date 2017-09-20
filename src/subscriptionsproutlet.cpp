@@ -548,7 +548,7 @@ AoRPair* SubscriptionSproutletTsx::write_subscriptions_to_store(
 
       if (found_subscription)
       {
-        aor_pair->get_current()->copy_subscriptions_and_bindings(backup_aor->get_current());
+        aor_pair->get_current()->copy_aor(backup_aor->get_current());
       }
     }
 
