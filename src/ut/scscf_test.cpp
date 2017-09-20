@@ -9892,8 +9892,7 @@ using ::testing::Sequence;
 TEST_F(SCSCFTestWithRalf, MainlineBilling)
 {
   SCSCFMessage msg;
-  msg._in_dialog = true;
-  msg._route = "Route: <sip:homedomain;transport=tcp;lr;billing-role=charge-orig>";
+  register_uri(_sdm, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   list<HeaderMatcher> hdrs;
   CapturingTestLogger log;
 
@@ -9908,19 +9907,19 @@ TEST_F(SCSCFTestWithRalf, MainlineBilling)
     .RetiresOnSaturation();
 
   // Complete call flow with ACK and BYE.
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*homedomain.*"), hdrs, true);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 
   // Check Node Function is S-CSCF.
   EXPECT_THAT(ralf_request_1->path,MatchesRegex("/call-id/.*%4010.114.61.213"));
   EXPECT_THAT(ralf_request_1->message,MatchesRegex(".*\"Node-Functionality\":0.*"));
 
-  // First ACR is sent for INVITE and is INTERIM_RECORD as it's in dialog
+  // First ACR is sent for INVITE and is START_RECORD
   EXPECT_THAT(ralf_request_1->message,MatchesRegex(".*\"SIP-Method\":\"INVITE\".*"));
-  EXPECT_THAT(ralf_request_1->message,MatchesRegex(".*\"Accounting-Record-Type\":3.*"));
+  EXPECT_THAT(ralf_request_1->message,MatchesRegex(".*\"Accounting-Record-Type\":2.*"));
 
-  // Second ACR is sent for ACK and is INTERIM_RECORD
+  // Second ACR is sent for ACK and is EVENT_RECORD
   EXPECT_THAT(ralf_request_2->message,MatchesRegex(".*\"SIP-Method\":\"ACK\".*"));
-  EXPECT_THAT(ralf_request_2->message,MatchesRegex(".*\"Accounting-Record-Type\":3.*"));
+  EXPECT_THAT(ralf_request_2->message,MatchesRegex(".*\"Accounting-Record-Type\":1.*"));
 
   // Third request is sent for BYE and has STOP_RECORD
   EXPECT_THAT(ralf_request_3->message,MatchesRegex(".*\"SIP-Method\":\"BYE\".*"));

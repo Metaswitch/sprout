@@ -1491,7 +1491,6 @@ TEST_F(ACRTest, IBCFTermCall)
 
   // Receive ACK request with SDP body.
   SIPRequest ack("ACK");
-  printf("This is the ACK\n");
   ack._requri = "sip:6505559999@10.83.18.50:12345;transport=TCP";
   ack._routes = "Route: <sip:sprout.homedomain:5054;transport=TCP;orig;lr>\r\n";
   ack._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
