@@ -22,6 +22,7 @@
 #include "httpconnection.h"
 #include "hssconnection.h"
 #include "rapidjson/error/en.h"
+#include "rapidxml/rapidxml_print.hpp"
 #include "snmp_continuous_accumulator_table.h"
 #include "xml_utils.h"
 #include "sprout_xml_utils.h"
@@ -324,7 +325,8 @@ bool decode_homestead_xml(const std::string public_user_identity,
   if (!root.get())
   {
     // If get_xml_object has not returned a document, there must have been a parsing error.
-    TRC_WARNING("Malformed HSS XML - document couldn't be parsed");
+    TRC_WARNING("Malformed HSS XML for %s - document couldn't be parsed",
+                public_user_identity.c_str());
     return false;
   }
 
@@ -332,7 +334,11 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
   if (!cw)
   {
-    TRC_WARNING("Malformed Homestead XML - no ClearwaterRegData element");
+    std::string sp_str;
+    rapidxml::print(std::back_inserter(sp_str), *root, 0);
+    TRC_WARNING("Malformed Homestead XML for %s - no ClearwaterRegData element:\n%s",
+                public_user_identity.c_str(),
+                sp_str.c_str());
     return false;
   }
 
@@ -340,7 +346,11 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
   if (!reg)
   {
-    TRC_WARNING("Malformed Homestead XML - no RegistrationState element");
+    std::string sp_str;
+    rapidxml::print(std::back_inserter(sp_str), *root, 0);
+    TRC_WARNING("Malformed Homestead XML for %s - no RegistrationState element:\n%s",
+                public_user_identity.c_str(),
+                sp_str.c_str());
     return false;
   }
 
@@ -356,7 +366,11 @@ bool decode_homestead_xml(const std::string public_user_identity,
 
   if (!imss)
   {
-    TRC_WARNING("Malformed HSS XML - no IMSSubscription element");
+    std::string sp_str;
+    rapidxml::print(std::back_inserter(sp_str), *root, 0);
+    TRC_WARNING("Malformed HSS XML for %s - no IMSSubscription element:\n%s",
+                public_user_identity.c_str(),
+                sp_str.c_str());
     return false;
   }
 
@@ -369,6 +383,11 @@ bool decode_homestead_xml(const std::string public_user_identity,
                                               sifc_service,
                                               trail))
   {
+    std::string sp_str;
+    rapidxml::print(std::back_inserter(sp_str), *root, 0);
+    TRC_WARNING("Malformed HSS XML for %s:\n%s",
+                public_user_identity.c_str(),
+                sp_str.c_str());
     return false;
   }
 
