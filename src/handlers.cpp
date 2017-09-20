@@ -662,14 +662,15 @@ HTTPCode AuthTimeoutTask::timeout_auth_challenge(std::string impu,
     {
       SAS::Event event(trail(), SASEvent::AUTHENTICATION_TIMER_POP_IGNORED, 0);
       SAS::report_event(event);
-
       TRC_DEBUG("Tombstone record indicates Authentication Vector has been used successfully - ignoring timer pop");
       success = true;
     }
   }
   else
   {
-    TRC_WARNING("Could not find AV for %s:%s when checking authentication timeout", impi.c_str(), nonce.c_str()); // LCOV_EXCL_LINE
+    SAS::Event event(trail(), SASEvent::AUTHENTICATION_TIMER_POP_AV_NOT_FOUND, 0);
+    SAS::report_event(event);
+    TRC_WARNING("Could not find AV for %s:%s when checking authentication timeout", impi.c_str(), nonce.c_str());
   }
   delete impi_obj;
 

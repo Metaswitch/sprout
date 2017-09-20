@@ -63,6 +63,7 @@ public:
       _expires(expires),
       _correlator(),
       _scscf_uri(),
+      _timer_id(""),
       _updated(true),
       _impu() {};
 
@@ -151,6 +152,17 @@ public:
       _impu = impu;
     }
 
+    std::string get_timer_id()
+    {
+      return _timer_id;
+    }
+
+    void set_timer_id(std::string timer_id)
+    {
+      _updated = true;
+      _timer_id = timer_id;
+    }
+
     /// Returns whether this AuthChallenge has been updated since reading it
     /// from the store.
     bool is_updated()
@@ -171,6 +183,7 @@ public:
       _expires(0),
       _correlator(),
       _scscf_uri(),
+      _timer_id(""),
       _updated(false),
       _impu() {};
 
@@ -194,6 +207,9 @@ public:
     /// used on the SAR if the authentication times out. This field should not
     /// be changed once the challenge has been created.
     std::string _scscf_uri;
+
+    /// Timer ID of the Chronos timer used to track when the challenge expires
+    std::string _timer_id;
 
     /// Tracks whether this AV has been updated
     bool _updated;
