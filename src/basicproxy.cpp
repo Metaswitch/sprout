@@ -1534,7 +1534,7 @@ BasicProxy::UACTsx::UACTsx(BasicProxy* proxy,
   _pending_destroy(false),
   _context_count(0),
   _stateless_proxy(false),
-  _num_attempts_left(0)
+  _num_attempts_left(PJUtils::DEFAULT_RETRIES)
 {
   // Don't put any initialization that can fail here, implement in init()
   // instead.
@@ -1643,9 +1643,8 @@ pj_status_t BasicProxy::UACTsx::init(pjsip_tx_data* tdata,
   {
     // Resolve the next hop destination for this request to a set of target
     // servers (IP address/port/transport tuples). The maximum number of times
-    // to attempt the call is stored in _num_attempts. As _num_attempts_left is
-    // initialised to 0, the number of attempts is the default value.
-    _servers_iter = PJUtils::resolve_next_hop_iter(tdata, _num_attempts_left, allowed_host_state, trail());
+    // to attempt the call is stored in _num_attempts.
+    _servers_iter = PJUtils::resolve_next_hop_iter(tdata, allowed_host_state, trail());
   }
 
   // Work out whether this UAC transaction is to a stateless proxy.

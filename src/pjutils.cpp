@@ -33,8 +33,6 @@ extern "C" {
 #include "thread_dispatcher.h"
 
 
-static const int DEFAULT_RETRIES = 5;
-
 static void on_tsx_state(pjsip_transaction*, pjsip_event*);
 
 /// Dummy transaction user module used for send_request method.
@@ -906,14 +904,12 @@ pjsip_tx_data* PJUtils::create_cancel(pjsip_endpoint* endpt,
 BaseAddrIterator* PJUtils::resolve_iter(const std::string& name,
                            int port,
                            int transport,
-                           int retries,
                            int allowed_host_state)
 {
   return stack_data.sipresolver->resolve_iter(name,
                                               stack_data.addr_family,
                                               port,
                                               transport,
-                                              retries,
                                               allowed_host_state);
 }
 
@@ -929,7 +925,6 @@ void PJUtils::resolve(const std::string& name,
   BaseAddrIterator* servers_iter = resolve_iter(name,
                                                 port,
                                                 transport,
-                                                retries,
                                                 allowed_host_state);
   servers = servers_iter->take(retries);
   delete servers_iter; servers_iter = nullptr;
@@ -938,7 +933,6 @@ void PJUtils::resolve(const std::string& name,
 
 /// Resolves the next hop target of the SIP message.
 BaseAddrIterator* PJUtils::resolve_next_hop_iter(pjsip_tx_data* tdata,
-                                                 int& retries,
                                                  int allowed_host_state,
                                                  SAS::TrailId trail)
 {
@@ -957,18 +951,10 @@ BaseAddrIterator* PJUtils::resolve_next_hop_iter(pjsip_tx_data* tdata,
     transport = IPPROTO_UDP;
   }
 
-  if (retries == 0)
-  {
-    // Used default number of retries. retries was passed by reference, so this
-    // tells the calling code what the default number of retries is.
-    retries = DEFAULT_RETRIES;
-  }
-
   BaseAddrIterator* targets_iter = stack_data.sipresolver->resolve_iter(name,
                                                                         stack_data.addr_family,
                                                                         port,
                                                                         transport,
-                                                                        retries,
                                                                         allowed_host_state,
                                                                         trail);
 
@@ -994,7 +980,6 @@ void PJUtils::resolve_next_hop(pjsip_tx_data* tdata,
   }
 
   BaseAddrIterator* servers_iter = resolve_next_hop_iter(tdata,
-                                                         retries,
                                                          allowed_host_state,
                                                          trail);
 

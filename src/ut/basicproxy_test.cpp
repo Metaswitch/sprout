@@ -2943,6 +2943,116 @@ TEST_F(BasicProxyTest, RetryOnTransportError)
   delete tp;
 }
 
+TEST_F(BasicProxyTest, StopsRetryingAfterManyFailures)
+{
+  // Tests that if all servers fail the request stops retrying after 5 retries.
+  // (5 is currently the default set in PJ Utils)
+
+  pjsip_tx_data* tdata;
+
+  // Add a host mapping for proxy-x.awaydomain to six IP addresses.
+  add_host_mapping("proxy-x.awaydomain", "10.10.10.100,10.10.10.101,10.10.10.102,10.10.10.103,10.10.10.104,10.10.10.105,10.10.10.106,10.10.10.107,10.10.10.108,10.10.10.109,10.10.10.110");
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.5",
+                                        49152);
+
+  // Inject a request with a Route header not referencing this node or the
+  // home domain.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@awaydomain";
+  msg1._from = "alice";
+  msg1._to = "bob";
+  msg1._todomain = "awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:proxy-x.awaydomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE.
+
+  // Check the 100 Trying.
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
+  free_txdata();
+
+  // Request is forwarded to the node in the top Route header.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Try to send the request 5 times, and have the request fail after each
+  // attempt due to a transport error. Verify that after 5 failed attempts the
+  // request stops being retried, despite there being addresses left to try.
+  for (int ii = 0; ii < 5; ++ii)
+  {
+    // Check that it was sent to one of the server addresses.
+    EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
+    EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
+    string server1 = str_pj(tdata->tp_info.transport->remote_name.host);
+    if ((server1 != "10.10.10.100") &&
+        (server1 != "10.10.10.101") &&
+        (server1 != "10.10.10.102") &&
+        (server1 != "10.10.10.103") &&
+        (server1 != "10.10.10.104") &&
+        (server1 != "10.10.10.105") &&
+        (server1 != "10.10.10.106") &&
+        (server1 != "10.10.10.107") &&
+        (server1 != "10.10.10.108") &&
+        (server1 != "10.10.10.109") &&
+        (server1 != "10.10.10.110"))
+    {
+      ADD_FAILURE_AT(__FILE__, __LINE__) << "Unexpected server address " << server1;
+    }
+
+    // Check the RequestURI, Route and Record-Route headers.
+    EXPECT_EQ("sip:bob@awaydomain", str_uri(tdata->msg->line.req.uri));
+    EXPECT_EQ("Route: <sip:proxy-x.awaydomain;transport=TCP;lr>",
+              get_headers(tdata->msg, "Route"));
+    EXPECT_EQ("", get_headers(tdata->msg, "Record-Route"));
+
+    // Check no Record-Route headers have been added.
+    string rr = get_headers(tdata->msg, "Record-Route");
+    EXPECT_EQ("", rr);
+
+    // Kill the transport the request was sent on.
+    fake_tcp_init_shutdown((fake_tcp_transport*)tdata->tp_info.transport, PJ_EEOF);
+    free_txdata();
+    poll();
+
+    if (ii<4)
+    {
+      // There are attempts left, so check that the request has been redirected
+      // to another server.
+      ASSERT_EQ(1, txdata_count());
+      tdata = current_txdata();
+      ReqMatcher("INVITE").matches(tdata->msg);
+    }
+  }
+
+  // The 5th retry just failed, so check that the request is not retried,
+  // and instead it fails and this failure of the request is reported.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(408).matches(tdata->msg); // Response is a 408 Timeout.
+  EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
+  EXPECT_EQ(49152, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
+  string server1 = str_pj(tdata->tp_info.transport->remote_name.host);
+  if (server1 != "1.2.3.5")
+  {
+    ADD_FAILURE_AT(__FILE__, __LINE__) << "Unexpected server address " << server1;
+  }
+
+  free_txdata();
+
+  delete tp;
+}
+
 
 TEST_F(BasicProxyTest, RetryOn5xx)
 {

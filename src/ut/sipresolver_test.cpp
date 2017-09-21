@@ -145,7 +145,7 @@ public:
     SCOPED_TRACE(_name);
     std::string output;
 
-    BaseAddrIterator* targets_iter = _resolver.resolve_iter(_name, _af, _port, _transport, 1, BaseResolver::ALL_LISTS, 0);
+    BaseAddrIterator* targets_iter = _resolver.resolve_iter(_name, _af, _port, _transport, BaseResolver::ALL_LISTS, 0);
 
     AddrInfo record;
 

@@ -31,6 +31,8 @@ extern "C" {
 
 namespace PJUtils {
 
+static const int DEFAULT_RETRIES = 5;
+
 pj_status_t init();
 void term();
 
@@ -156,7 +158,6 @@ pjsip_tx_data* create_cancel(pjsip_endpoint* endpt,
 BaseAddrIterator* resolve_iter(const std::string& name,
                                int port,
                                int transport,
-                               int retries,
                                int allowed_host_state);
 
 void resolve(const std::string& name,
@@ -167,7 +168,6 @@ void resolve(const std::string& name,
              int allowed_host_state);
 
 BaseAddrIterator* resolve_next_hop_iter(pjsip_tx_data* tdata,
-                                        int& retries,
                                         int allowed_host_state,
                                         SAS::TrailId trail);
 

@@ -36,7 +36,6 @@ public:
                                  int af,
                                  int port,
                                  int transport,
-                                 int retries,
                                  int allowed_host_state,
                                  SAS::TrailId trail = 0);
 
