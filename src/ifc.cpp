@@ -563,6 +563,7 @@ bool Ifc::filter_matches(const SessionCase& session_case,
     std::string err_str = "iFC evaluation error: " + std::string(err.what());
     TRC_ERROR(err_str.c_str());
     SAS::Event event(trail, SASEvent::INVALID_IFC_IGNORED, 0);
+    event.add_var_param(std::string(err.what()));
     SAS::report_event(event);
     return false;
   }
