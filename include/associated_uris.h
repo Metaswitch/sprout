@@ -15,6 +15,17 @@
 #include <string>
 #include <vector>
 #include <map>
+#include "rapidjson/writer.h"
+#include "rapidjson/document.h"
+
+/// JSON Serialization constants
+static const char* const JSON_URI = "uri";
+static const char* const JSON_URIS = "uris";
+static const char* const JSON_BARRING = "barring";
+static const char* const JSON_WILDCARD_MAPPING ="wildcard-mapping";
+static const char* const JSON_ASSOCIATED_URIS = "associated-uris";
+static const char* const JSON_DISTINCT = "distinct";
+static const char* const JSON_WILDCARD = "wildcard";
 
 struct AssociatedURIs
 {
@@ -47,8 +58,29 @@ public:
   /// Returns all URIs.
   std::vector<std::string> get_all_uris();
 
+  /// Returns the wildcard mappings.
+  std::map<std::string, std::string> get_wildcard_mapping();
+
   /// Add a mapping between a distinct IMPU and the wildcard it belongs to
   void add_wildcard_mapping(std::string wildcard, std::string distinct);
+
+  /// Serialize the associated URIs as a JSON object.
+  ///
+  /// @param writer - a rapidjson writer to write to.
+  void to_json(rapidjson::Writer<rapidjson::StringBuffer>& writer);
+
+  // Deserialize associated URIs from a JSON object.
+  //
+  // @param s_obj - The associated URIs a JSON object.
+  //
+  // @return      - Nothing. If this function fails (because the JSON is not
+  //                semantically valid) this method throws JsonFormError.
+  void from_json(const rapidjson::Value& s_obj);
+
+  // Compares the contents of this class instance to another, to see
+  // if they are the same.
+  bool operator==(AssociatedURIs associated_uris_other);
+  bool operator!=(AssociatedURIs associated_uris_other);
 
 private:
   /// A vector of associated URIs.

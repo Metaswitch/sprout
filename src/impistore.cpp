@@ -13,7 +13,6 @@
 #include <pthread.h>
 
 #include "log.h"
-#include "store.h"
 #include "impistore.h"
 #include "sas.h"
 #include "sproutsasevent.h"
@@ -26,7 +25,7 @@
 /// Parses a string to a JSON document.
 /// @returns a JSON document or NULL.
 /// @param string    the string to parse.
-static rapidjson::Document* json_from_string(const std::string& string)
+rapidjson::Document* ImpiStore::json_from_string(const std::string& string)
 {
   rapidjson::Document* json = new rapidjson::Document;
   json->Parse<0>(string.c_str());
@@ -41,9 +40,6 @@ static rapidjson::Document* json_from_string(const std::string& string)
   return json;
 }
 
-// Constant table names.
-const std::string ImpiStore::TABLE_IMPI = "impi";
-
 // JSON field names and values.
 static const char* const JSON_TYPE = "type";
 static const char* const JSON_TYPE_DIGEST = "digest";
@@ -57,8 +53,8 @@ static const char* const JSON_REALM = "realm";
 static const char* const JSON_QOP = "qop";
 static const char* const JSON_HA1 = "ha1";
 static const char* const JSON_RESPONSE = "response";
-static const char* const JSON_AUTH_CHALLENGES = "authChallenges";
 static const char* const JSON_SCSCF_URI = "scscf-uri";
+static const char* const JSON_TIMER_ID = "timer_id";
 
 ImpiStore::AuthChallenge* ImpiStore::Impi::get_auth_challenge(const std::string& nonce)
 {
@@ -69,7 +65,7 @@ ImpiStore::AuthChallenge* ImpiStore::Impi::get_auth_challenge(const std::string&
        it != auth_challenges.end();
        it++)
   {
-    if ((*it)->nonce == nonce)
+    if ((*it)->_nonce == nonce)
     {
       auth_challenge = *it;
       break;
@@ -78,22 +74,40 @@ ImpiStore::AuthChallenge* ImpiStore::Impi::get_auth_challenge(const std::string&
   return auth_challenge;
 }
 
-void ImpiStore::AuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer)
+void ImpiStore::AuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer,
+                                          bool expiry_in_ms)
 {
   // Write all the base AuthChallenge fields to JSON, in the IMPI format.
-  writer->String(JSON_TYPE); writer->String(JSON_TYPE_ENUM[type]);
-  writer->String(JSON_NONCE); writer->String(nonce.c_str());
-  writer->String(JSON_NONCE_COUNT); writer->Uint(nonce_count);
-  writer->String(JSON_EXPIRES); writer->Int(expires);
-  if (correlator != "")
+  writer->String(JSON_TYPE); writer->String(JSON_TYPE_ENUM[_type]);
+  writer->String(JSON_NONCE); writer->String(_nonce.c_str());
+  writer->String(JSON_NONCE_COUNT); writer->Uint(_nonce_count);
+
+  // The expiry is in seconds, so if we're supposed to write it in ms multiply
+  // by 1000
+  int64_t expires = _expires;
+
+  // LCOV_EXCL_START
+  if (expiry_in_ms)
   {
-    writer->String(JSON_CORRELATOR); writer->String(correlator.c_str());
+    expires *= 1000;
   }
-  writer->String(JSON_SCSCF_URI); writer->String(scscf_uri.c_str());
+  // LCOV_EXCL_STOP
+
+  writer->String(JSON_EXPIRES); writer->Int64(expires);
+
+  if (_correlator != "")
+  {
+    writer->String(JSON_CORRELATOR); writer->String(_correlator.c_str());
+  }
+  writer->String(JSON_SCSCF_URI); writer->String(_scscf_uri.c_str());
+
+  writer->String(JSON_TIMER_ID); writer->String(_timer_id.c_str());
   // We don't serialize the CAS - this is passed to the store on the set_data call.
 }
 
-ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* json)
+ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* json,
+                                                              bool expiry_in_ms,
+                                                              bool include_expired)
 {
   ImpiStore::AuthChallenge* auth_challenge = NULL;
   if (json->IsObject())
@@ -121,22 +135,36 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* 
     // remaining (base) fields.
     if (auth_challenge != NULL)
     {
-      JSON_SAFE_GET_STRING_MEMBER(*json, JSON_NONCE, auth_challenge->nonce);
-      JSON_SAFE_GET_UINT_MEMBER(*json, JSON_NONCE_COUNT, auth_challenge->nonce_count);
-      JSON_SAFE_GET_INT_MEMBER(*json, JSON_EXPIRES, auth_challenge->expires);
-      JSON_SAFE_GET_STRING_MEMBER(*json, JSON_CORRELATOR, auth_challenge->correlator);
-      JSON_SAFE_GET_STRING_MEMBER(*json, JSON_SCSCF_URI, auth_challenge->scscf_uri);
+      JSON_SAFE_GET_STRING_MEMBER(*json, JSON_NONCE, auth_challenge->_nonce);
+      JSON_SAFE_GET_UINT_MEMBER(*json, JSON_NONCE_COUNT, auth_challenge->_nonce_count);
+      JSON_SAFE_GET_STRING_MEMBER(*json, JSON_CORRELATOR, auth_challenge->_correlator);
+      JSON_SAFE_GET_STRING_MEMBER(*json, JSON_SCSCF_URI, auth_challenge->_scscf_uri);
+      JSON_SAFE_GET_STRING_MEMBER(*json, JSON_TIMER_ID, auth_challenge->_timer_id);
 
-      if (auth_challenge->nonce_count == 0)
+      int64_t expires = 0;
+      JSON_SAFE_GET_INT_64_MEMBER(*json, JSON_EXPIRES, expires);
+
+      // LCOV_EXCL_START
+      if (expiry_in_ms)
+      {
+        // The AuthChallenge requires the expiry in seconds, so if we've stored
+        // it in ms divide by 1000
+        expires /= 1000;
+      }
+      // LCOV_EXCL_STOP
+
+      auth_challenge->_expires = expires;
+
+      if (auth_challenge->_nonce_count == 0)
       {
         // We should always have a nonce_count, but to ease version
         // forward-compatibility, default it if not found.
         TRC_WARNING("No \"%s\" field in JSON authentication challenge - defaulting to %u",
                     JSON_NONCE_COUNT, INITIAL_NONCE_COUNT);
-        auth_challenge->nonce_count = INITIAL_NONCE_COUNT;
+        auth_challenge->_nonce_count = INITIAL_NONCE_COUNT;
       }
 
-      if (auth_challenge->expires == 0)
+      if (auth_challenge->_expires == 0)
       {
         // We should always have an expires, but to ease version forward-
         // compatibility, default it if not found.  We use the DEFAULT_EXPIRES
@@ -144,18 +172,18 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* 
         // if it won't allow re-authentication later.
         TRC_WARNING("No \"%s\" field in JSON authentication challenge - defaulting to %d",
                     JSON_EXPIRES, DEFAULT_EXPIRES);
-        auth_challenge->expires = time(NULL) + DEFAULT_EXPIRES;
+        auth_challenge->_expires = time(NULL) + DEFAULT_EXPIRES;
       }
 
       // Check we have the nonce and the record hasn't expired - otherwise drop
       // the record.
-      if (auth_challenge->nonce == "")
+      if (auth_challenge->_nonce == "")
       {
         TRC_WARNING("No \"%s\" field in JSON authentication challenge - dropping",
                     JSON_NONCE);
         delete auth_challenge; auth_challenge = NULL;
       }
-      else if (auth_challenge->expires < time(NULL))
+      else if ((auth_challenge->_expires < time(NULL)) && (!include_expired))
       {
         TRC_DEBUG("Expires in past - dropping");
         delete auth_challenge; auth_challenge = NULL;
@@ -169,38 +197,39 @@ ImpiStore::AuthChallenge* ImpiStore::AuthChallenge::from_json(rapidjson::Value* 
   return auth_challenge;
 }
 
-void ImpiStore::DigestAuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer)
+void ImpiStore::DigestAuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer,
+                                                bool expiry_in_ms)
 {
   // Write all the DigestAuthChallenge fields to JSON, in IMPI format.  We
   // call into the superclass to write base AuthChallenges fields.
-  ImpiStore::AuthChallenge::write_json(writer);
-  writer->String(JSON_REALM); writer->String(realm.c_str());
-  writer->String(JSON_QOP); writer->String(qop.c_str());
-  writer->String(JSON_HA1); writer->String(ha1.c_str());
+  ImpiStore::AuthChallenge::write_json(writer, expiry_in_ms);
+  writer->String(JSON_REALM); writer->String(_realm.c_str());
+  writer->String(JSON_QOP); writer->String(_qop.c_str());
+  writer->String(JSON_HA1); writer->String(_ha1.c_str());
 }
 
 ImpiStore::DigestAuthChallenge* ImpiStore::DigestAuthChallenge::from_json(rapidjson::Value* json)
 {
   // Construct a DigestAuthChallenge and fill it in.
   ImpiStore::DigestAuthChallenge* auth_challenge = new DigestAuthChallenge();
-  JSON_SAFE_GET_STRING_MEMBER(*json, JSON_REALM, auth_challenge->realm);
-  JSON_SAFE_GET_STRING_MEMBER(*json, JSON_QOP, auth_challenge->qop);
-  JSON_SAFE_GET_STRING_MEMBER(*json, JSON_HA1, auth_challenge->ha1);
+  JSON_SAFE_GET_STRING_MEMBER(*json, JSON_REALM, auth_challenge->_realm);
+  JSON_SAFE_GET_STRING_MEMBER(*json, JSON_QOP, auth_challenge->_qop);
+  JSON_SAFE_GET_STRING_MEMBER(*json, JSON_HA1, auth_challenge->_ha1);
 
   // Check we have the realm, qop and ha1 - otherwise drop the record.
-  if (auth_challenge->realm == "")
+  if (auth_challenge->_realm == "")
   {
     TRC_WARNING("No \"%s\" field in JSON authentication challenge - dropping",
                 JSON_REALM);
     delete auth_challenge; auth_challenge = NULL;
   }
-  else if (auth_challenge->qop == "")
+  else if (auth_challenge->_qop == "")
   {
     TRC_WARNING("No \"%s\" field in JSON authentication challenge - dropping",
                 JSON_QOP);
     delete auth_challenge; auth_challenge = NULL;
   }
-  else if (auth_challenge->ha1 == "")
+  else if (auth_challenge->_ha1 == "")
   {
     TRC_WARNING("No \"%s\" field in JSON authentication challenge - dropping",
                 JSON_HA1);
@@ -209,22 +238,23 @@ ImpiStore::DigestAuthChallenge* ImpiStore::DigestAuthChallenge::from_json(rapidj
   return auth_challenge;
 }
 
-void ImpiStore::AKAAuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer)
+void ImpiStore::AKAAuthChallenge::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer,
+                                             bool expiry_in_ms)
 {
   // Write all the AKAAuthChallenge fields to JSON, in IMPI format.  We call
   // into the superclass to write base AuthChallenges fields.
-  ImpiStore::AuthChallenge::write_json(writer);
-  writer->String(JSON_RESPONSE); writer->String(response.c_str());
+  ImpiStore::AuthChallenge::write_json(writer, expiry_in_ms);
+  writer->String(JSON_RESPONSE); writer->String(_response.c_str());
 }
 
 ImpiStore::AKAAuthChallenge* ImpiStore::AKAAuthChallenge::from_json(rapidjson::Value* json)
 {
   // Construct an AKAAuthChallenge and fill it in.
   ImpiStore::AKAAuthChallenge* auth_challenge = new AKAAuthChallenge();
-  JSON_SAFE_GET_STRING_MEMBER(*json, JSON_RESPONSE, auth_challenge->response);
+  JSON_SAFE_GET_STRING_MEMBER(*json, JSON_RESPONSE, auth_challenge->_response);
 
   // Check we have the response field - otherwise drop the record.
-  if (auth_challenge->response == "")
+  if (auth_challenge->_response == "")
   {
     TRC_WARNING("No \"response\" field in JSON authentication challenge - dropping");
     delete auth_challenge; auth_challenge = NULL;
@@ -243,90 +273,6 @@ ImpiStore::Impi::~Impi()
   }
 }
 
-std::string ImpiStore::Impi::to_json()
-{
-  // Build a writer, serialize the IMPI to it and return the result.
-  rapidjson::StringBuffer buffer;
-  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-  writer.StartObject();
-  {
-    write_json(&writer);
-  }
-  writer.EndObject();
-  return buffer.GetString();
-}
-
-void ImpiStore::Impi::write_json(rapidjson::Writer<rapidjson::StringBuffer>* writer)
-{
-  // Write a JSON array, and then write each of the AuthChallenges into it.
-  int now = time(NULL);
-  writer->String(JSON_AUTH_CHALLENGES);
-  writer->StartArray();
-  {
-    for (std::vector<ImpiStore::AuthChallenge*>::iterator it = auth_challenges.begin();
-         it != auth_challenges.end();
-         it++)
-    {
-      if ((*it)->expires > now)
-      {
-        writer->StartObject();
-        {
-          (*it)->write_json(writer);
-        }
-        writer->EndObject();
-      }
-    }
-  }
-  writer->EndArray();
-  // The private ID itself is part of the key, so isn't stored in the JSON itself.
-}
-
-ImpiStore::Impi* ImpiStore::Impi::from_json(const std::string& impi, const std::string& json)
-{
-  // Simply parse the string to JSON, and then call through to the
-  // deserialization function.
-  ImpiStore::Impi* impi_obj = NULL;
-  rapidjson::Document* json_obj = json_from_string(json);
-  if (json_obj != NULL)
-  {
-    impi_obj = ImpiStore::Impi::from_json(impi, json_obj);
-  }
-  delete json_obj;
-  return impi_obj;
-}
-
-ImpiStore::Impi* ImpiStore::Impi::from_json(const std::string& impi, rapidjson::Value* json)
-{
-  ImpiStore::Impi* impi_obj = NULL;
-  if (json->IsObject())
-  {
-    // Construct an Impi, and then look for an "authChallenges" array.
-    impi_obj = new ImpiStore::Impi(impi);
-    if ((json->HasMember(JSON_AUTH_CHALLENGES)) &&
-        ((*json)[JSON_AUTH_CHALLENGES].IsArray()))
-    {
-      // Spin through the array, trying to parse as AuthChallenges.
-      rapidjson::Value* array = &((*json)[JSON_AUTH_CHALLENGES]);
-      for (unsigned int ii = 0; ii < array->Size(); ii++)
-      {
-        ImpiStore::AuthChallenge* auth_challenge = ImpiStore::AuthChallenge::from_json(&((*array)[ii]));
-        if (auth_challenge != NULL)
-        {
-          // Got an AuthChallenge, so add it to our array and also add its
-          // nonce to the array of nonces we retrieved from the server (so that
-          // we can spot when the user deletes AuthChallenges).
-          impi_obj->auth_challenges.push_back(auth_challenge);
-        }
-      }
-    }
-  }
-  else
-  {
-    TRC_WARNING("JSON IMPI is not an object - dropping");
-  }
-  return impi_obj;
-}
-
 int ImpiStore::Impi::get_expires()
 {
   // Spin through the AuthChallenges, finding the latest expires time.
@@ -335,131 +281,23 @@ int ImpiStore::Impi::get_expires()
        it != auth_challenges.end();
        it++)
   {
-    expires = std::max(expires, (*it)->expires);
+    expires = std::max(expires, (*it)->_expires);
   }
   return expires;
-}
-
-ImpiStore::ImpiStore(Store* data_store) :
-  _data_store(data_store)
-{
 }
 
 ImpiStore::~ImpiStore()
 {
 }
 
-Store::Status ImpiStore::set_impi(Impi* impi,
-                                  SAS::TrailId trail)
-{
-  int now = time(NULL);
-
-  // First serialize the IMPI and set it in the store.
-  std::string data = impi->to_json();
-  TRC_DEBUG("Storing IMPI for %s\n%s", impi->impi.c_str(), data.c_str());
-  Store::Status status = _data_store->set_data(TABLE_IMPI,
-                                               impi->impi,
-                                               data,
-                                               impi->_cas,
-                                               impi->get_expires() - now,
-                                               trail);
-  if (status == Store::Status::OK)
-  {
-    SAS::Event event(trail, SASEvent::IMPISTORE_IMPI_SET_SUCCESS, 0);
-    event.add_var_param(impi->impi);
-    SAS::report_event(event);
-  }
-  else
-  {
-    // LCOV_EXCL_START
-    if (status != Store::Status::DATA_CONTENTION)
-    {
-      TRC_ERROR("Failed to write IMPI for private_id %s", impi->impi.c_str());
-    }
-
-    SAS::Event event(trail, SASEvent::IMPISTORE_IMPI_SET_FAILURE, 0);
-    event.add_var_param(impi->impi);
-    SAS::report_event(event);
-    // LCOV_EXCL_STOP
-  }
-
-  return status;
-}
-
-ImpiStore::Impi* ImpiStore::get_impi(const std::string& impi,
-                                     SAS::TrailId trail)
-{
-  // Get the IMPI data from the store and deserialize it.
-  ImpiStore::Impi* impi_obj = NULL;
-  std::string data;
-  uint64_t cas;
-  Store::Status status = _data_store->get_data(TABLE_IMPI, impi, data, cas, trail);
-  if (status == Store::Status::OK)
-  {
-    TRC_DEBUG("Retrieved IMPI for %s\n%s", impi.c_str(), data.c_str());
-    SAS::Event event(trail, SASEvent::IMPISTORE_IMPI_GET_SUCCESS, 0);
-    event.add_var_param(impi);
-    SAS::report_event(event);
-
-    impi_obj = ImpiStore::Impi::from_json(impi, data);
-    if (impi_obj == NULL)
-    {
-      // IMPI was corrupt. Create a new one.
-      impi_obj = new Impi(impi);
-    }
-
-    // By this point we've got an IMPI.  Fill in the CAS.
-    impi_obj->_cas = cas;
-  }
-  else if (status == Store::Status::NOT_FOUND)
-  {
-    impi_obj = new Impi(impi);
-  }
-  else
-  {
-    SAS::Event event(trail, SASEvent::IMPISTORE_IMPI_GET_FAILURE, 0);
-    event.add_var_param(impi);
-    SAS::report_event(event);
-  }
-  return impi_obj;
-}
-
-Store::Status ImpiStore::delete_impi(Impi* impi,
-                                     SAS::TrailId trail)
-{
-  // First, delete the IMPI data from the store.
-  TRC_DEBUG("Deleting IMPI for %s", impi->impi.c_str());
-  Store::Status status = _data_store->delete_data(TABLE_IMPI,
-                                                  impi->impi,
-                                                  trail);
-  if (status == Store::Status::OK)
-  {
-    SAS::Event event(trail, SASEvent::IMPISTORE_IMPI_DELETE_SUCCESS, 0);
-    event.add_var_param(impi->impi);
-    SAS::report_event(event);
-  }
-  else
-  {
-    // LCOV_EXCL_START
-    TRC_ERROR("Failed to delete IMPI for private_id %s", impi->impi.c_str());
-    SAS::Event event(trail, SASEvent::IMPISTORE_IMPI_DELETE_FAILURE, 0);
-    event.add_var_param(impi->impi);
-    event.add_static_param(status);
-    SAS::report_event(event);
-    // LCOV_EXCL_STOP
-  }
-
-  return status;
-}
-
 void correlate_trail_to_challenge(ImpiStore::AuthChallenge* auth_challenge,
                                   SAS::TrailId trail)
 {
   // Report the correlator as a SAS marker, if it exists.
-  if (auth_challenge->correlator != "")
+  if (auth_challenge->get_correlator() != "")
   {
     SAS::Marker via_marker(trail, MARKER_ID_VIA_BRANCH_PARAM, 1u);
-    via_marker.add_var_param(auth_challenge->correlator);
+    via_marker.add_var_param(auth_challenge->get_correlator());
     SAS::report_marker(via_marker, SAS::Marker::Scope::Trace);
   }
   else

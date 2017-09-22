@@ -607,8 +607,8 @@ void SipTest::register_uri(SubscriberDataManager* sdm,
   {
     hss->set_impu_result(uri, "call", RegDataXMLUtils::STATE_REGISTERED, "");
   }
-  SubscriberDataManager::AoRPair* aor = sdm->get_aor_data(uri, 0);
-  SubscriberDataManager::AoR::Binding* binding = aor->get_current()->get_binding(contact);
+  AoRPair* aor = sdm->get_aor_data(uri, 0);
+  AoR::Binding* binding = aor->get_current()->get_binding(contact);
   binding->_uri = contact;
   binding->_cid = "1";
   binding->_cseq = 1;
@@ -621,7 +621,7 @@ void SipTest::register_uri(SubscriberDataManager* sdm,
   }
   AssociatedURIs associated_uris = {};
   associated_uris.add_uri(uri, false);
-  bool ret = sdm->set_aor_data(uri, &associated_uris, aor, 0);
+  bool ret = sdm->set_aor_data(uri, aor, 0);
   delete aor;
   EXPECT_TRUE(ret);
 };
@@ -882,6 +882,17 @@ void MsgMatcher::matches(pjsip_msg* msg)
     int n = msg->body->print_body(msg->body, buf, sizeof(buf));
     string body(buf, n);
     EXPECT_EQ(_expected_body, body) << PjMsg(msg);
+  }
+}
+
+void MsgMatcher::body_regex_matches(pjsip_msg* msg)
+{
+  if (_body_regex != "")
+  {    
+    char buf[16384];
+    int n = msg->body->print_body(msg->body, buf, sizeof(buf));
+    string body(buf, n);
+    EXPECT_THAT(body, testing::MatchesRegex(_body_regex));
   }
 }
 

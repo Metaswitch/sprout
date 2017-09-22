@@ -140,6 +140,7 @@ struct options
   bool                                 reject_if_no_matching_ifcs;
   std::string                          dummy_app_server;
   bool                                 http_acr_logging;
+  int                                  homestead_timeout;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be

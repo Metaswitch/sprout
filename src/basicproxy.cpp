@@ -352,9 +352,10 @@ int BasicProxy::verify_request(pjsip_rx_data *rdata)
   // This would have been checked by transport layer.
 
   // 2. URI scheme.
-  // We support "sip:" and "tel:" URI schemes in this simple proxy.
+  // We support "sip:", "tel:" and "urn:" URI schemes in this simple proxy.
   if (!(PJSIP_URI_SCHEME_IS_SIP(rdata->msg_info.msg->line.req.uri) ||
-        PJSIP_URI_SCHEME_IS_TEL(rdata->msg_info.msg->line.req.uri)))
+        PJSIP_URI_SCHEME_IS_TEL(rdata->msg_info.msg->line.req.uri) ||
+        PJSIP_URI_SCHEME_IS_URN(rdata->msg_info.msg->line.req.uri)))
   {
     return PJSIP_SC_UNSUPPORTED_URI_SCHEME;
   }
@@ -2078,7 +2079,7 @@ bool BasicProxy::UACTsx::retry_request()
     pjsip_transaction* retry_tsx;
 
     // In congestion cases, the old tdata might still be held by PjSIP's
-    // trasport layer waiting to be sent.  Therefore it's not safe to re-send
+    // transport layer waiting to be sent.  Therefore it's not safe to re-send
     // the same tdata, so we should clone it first.
     // LCOV_EXCL_START - No congestion in UTs.
     if (_tdata->is_pending)

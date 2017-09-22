@@ -444,18 +444,17 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 
   // Write to the local store, checking the remote stores if there is no entry locally.
   bool all_bindings_expired;
-  SubscriberDataManager::AoRPair* aor_pair =
-                                 write_to_store(_registrar->_sdm,
-                                                aor,
-                                                &associated_uris,
-                                                req,
-                                                now,
-                                                expiry,
-                                                is_initial_registration,
-                                                NULL,
-                                                _registrar->_remote_sdms,
-                                                private_id_for_binding,
-                                                all_bindings_expired);
+  AoRPair* aor_pair = write_to_store(_registrar->_sdm,
+                                     aor,
+                                     &associated_uris,
+                                     req,
+                                     now,
+                                     expiry,
+                                     is_initial_registration,
+                                     NULL,
+                                     _registrar->_remote_sdms,
+                                     private_id_for_binding,
+                                     all_bindings_expired);
 
   if (all_bindings_expired)
   {
@@ -482,18 +481,17 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
       {
         int tmp_expiry = 0;
         bool ignored;
-        SubscriberDataManager::AoRPair* remote_aor_pair =
-          write_to_store(*it,
-                         aor,
-                         &associated_uris,
-                         req,
-                         now,
-                         tmp_expiry,
-                         ignored,
-                         aor_pair,
-                         {},
-                         private_id_for_binding,
-                         ignored);
+        AoRPair* remote_aor_pair = write_to_store(*it,
+                                                  aor,
+                                                  &associated_uris,
+                                                  req,
+                                                  now,
+                                                  tmp_expiry,
+                                                  ignored,
+                                                  aor_pair,
+                                                  {},
+                                                  private_id_for_binding,
+                                                  ignored);
         delete remote_aor_pair;
       }
     }
@@ -618,12 +616,11 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
   pjsip_msg_add_hdr(rsp, (pjsip_hdr*)gen_hdr);
 
   // Add contact headers for all active bindings.
-  for (SubscriberDataManager::AoR::Bindings::const_iterator i =
-          aor_pair->get_current()->bindings().begin();
+  for (AoR::Bindings::const_iterator i = aor_pair->get_current()->bindings().begin();
        i != aor_pair->get_current()->bindings().end();
        ++i)
   {
-    SubscriberDataManager::AoR::Binding* binding = i->second;
+    AoR::Binding* binding = i->second;
     if (binding->_expires > now)
     {
       // The binding hasn't expired.  Parse the Contact URI from the store,
@@ -876,7 +873,7 @@ void RegistrarSproutletTsx::process_register_request(pjsip_msg *req)
 /// primary SDM, we will either use the backup_aor or we will try and look up
 /// the AoR pair in the backup SDMs. Therefore either the backup_aor should be
 /// NULL, or backup_sdms should be empty.
-SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
+AoRPair* RegistrarSproutletTsx::write_to_store(
                    SubscriberDataManager* primary_sdm,         ///<store to write to
                    std::string aor,                            ///<address of record to write to
                    AssociatedURIs* associated_uris,
@@ -885,7 +882,7 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
                    int now,                                    ///<time now
                    int& expiry,                                ///<[out] longest expiry time
                    bool& out_is_initial_registration,
-                   SubscriberDataManager::AoRPair* backup_aor, ///<backup data if no entry in store
+                   AoRPair* backup_aor, ///<backup data if no entry in store
                    std::vector<SubscriberDataManager*> backup_sdms,
                                                                ///<backup stores to read from if no entry in store and no backup data
                    std::string private_id,                     ///<private id that the binding was registered with
@@ -901,7 +898,7 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
   // The registration service uses optimistic locking to avoid concurrent
   // updates to the same AoR conflicting.  This means we have to loop
   // reading, updating and writing the AoR until the write is successful.
-  SubscriberDataManager::AoRPair* aor_pair = NULL;
+  AoRPair* aor_pair = NULL;
   bool backup_aor_alloced = false;
   bool is_initial_registration = true;
   bool all_bindings_expired = false;
@@ -938,7 +935,7 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
       else
       {
         std::vector<SubscriberDataManager*>::iterator it = backup_sdms.begin();
-        SubscriberDataManager::AoRPair* local_backup_aor = NULL;
+        AoRPair* local_backup_aor = NULL;
 
         while ((it != backup_sdms.end()) && (!found_binding))
         {
@@ -973,7 +970,7 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
 
       if (found_binding)
       {
-        aor_pair->get_current()->copy_subscriptions_and_bindings(backup_aor->get_current());
+        aor_pair->get_current()->copy_aor(backup_aor->get_current());
       }
     }
 
@@ -1019,7 +1016,7 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
         TRC_DEBUG("Binding identifier for contact = %s", binding_id.c_str());
 
         // Find the appropriate binding in the bindings list for this AoR.
-        SubscriberDataManager::AoR::Binding* binding = aor_pair->get_current()->get_binding(binding_id);
+        AoR::Binding* binding = aor_pair->get_current()->get_binding(binding_id);
 
         if ((cid != binding->_cid) ||
             (cseq > binding->_cseq))
@@ -1097,13 +1094,13 @@ SubscriberDataManager::AoRPair* RegistrarSproutletTsx::write_to_store(
     }
 
     // Set the S-CSCF URI on the AoR.
-    SubscriberDataManager::AoR* aor_data = aor_pair->get_current();
+    AoR* aor_data = aor_pair->get_current();
     aor_data->_scscf_uri = _scscf_uri;
 
     if (changed_bindings > 0)
     {
+      aor_pair->get_current()->_associated_uris = *associated_uris;
       set_rc = primary_sdm->set_aor_data(aor,
-                                         associated_uris,
                                          aor_pair,
                                          trail(),
                                          all_bindings_expired);
@@ -1214,15 +1211,14 @@ std::string RegistrarSproutletTsx::get_binding_id(pjsip_contact_hdr *contact)
 }
 
 void RegistrarSproutletTsx::log_bindings(const std::string& aor_name,
-                                         SubscriberDataManager::AoR* aor_data)
+                                         AoR* aor_data)
 {
   TRC_DEBUG("Bindings for %s, timer ID %s", aor_name.c_str(), aor_data->_timer_id.c_str());
-  for (SubscriberDataManager::AoR::Bindings::const_iterator i =
-         aor_data->bindings().begin();
+  for (AoR::Bindings::const_iterator i = aor_data->bindings().begin();
        i != aor_data->bindings().end();
        ++i)
   {
-    SubscriberDataManager::AoR::Binding* binding = i->second;
+    AoR::Binding* binding = i->second;
     TRC_DEBUG("  %s URI=%s expires=%d q=%d from=%s cseq=%d private_id=%s emergency_registration=%s",
               i->first.c_str(),
               binding->_uri.c_str(),

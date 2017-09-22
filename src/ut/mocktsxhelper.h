@@ -18,7 +18,8 @@
 class MockSproutletTsxHelper : public SproutletTsxHelper
 {
 public:
-  MockSproutletTsxHelper() {}
+  MockSproutletTsxHelper();
+  ~MockSproutletTsxHelper();
 
   const std::string& dialog_id() const {return _dialog_id;}
   std::string _dialog_id;

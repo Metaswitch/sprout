@@ -33,7 +33,8 @@ FakeHSSConnection::FakeHSSConnection(MockHSSConnection* hss_connection_observer)
                 &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
                 &SNMP::FAKE_EVENT_ACCUMULATOR_TABLE,
                 NULL,
-                NULL)
+                NULL,
+                0)
 {
   _hss_connection_observer = hss_connection_observer;
 }
@@ -187,10 +188,6 @@ long FakeHSSConnection::get_xml_object(const std::string& path,
     catch (rapidxml::parse_error& err)
     {
       // report to the user the failure and their locations in the document.
-      printf("Failed to parse Homestead response:\n %s\n %s\n %s\n",
-             path.c_str(),
-             i->second.c_str(),
-             err.what());
       TRC_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s",
                 path.c_str(),
                 i->second.c_str(),

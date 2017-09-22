@@ -130,24 +130,30 @@ bool SCSCFSproutlet::init()
 
   if (_scscf_cluster_uri == NULL)
   {
+    // LCOV_EXCL_START - Don't test pjsip URI failures in the S-CSCF UTs
     TRC_ERROR("Invalid S-CSCF cluster %s", _scscf_cluster_uri_str.c_str());
     init_success = false;
+    // LCOV_EXCL_STOP
   }
 
   _scscf_node_uri = PJUtils::uri_from_string(_scscf_node_uri_str, stack_data.pool, false);
 
   if (_scscf_node_uri == NULL)
   {
+    // LCOV_EXCL_START - Don't test pjsip URI failures in the S-CSCF UTs
     TRC_ERROR("Invalid S-CSCF node URI %s", _scscf_node_uri_str.c_str());
     init_success = false;
+    // LCOV_EXCL_STOP
   }
 
   _bgcf_uri = PJUtils::uri_from_string(_bgcf_uri_str, stack_data.pool, false);
 
   if (_bgcf_uri == NULL)
   {
+    // LCOV_EXCL_START - Don't test pjsip URI failures in the S-CSCF UTs
     TRC_ERROR("Invalid BGCF URI %s", _bgcf_uri_str.c_str());
     init_success = false;
+    // LCOV_EXCL_STOP
   }
 
   if (_icscf_uri_str != "")
@@ -156,8 +162,10 @@ bool SCSCFSproutlet::init()
 
     if (_icscf_uri == NULL)
     {
+      // LCOV_EXCL_START - Don't test pjsip URI failures in the S-CSCF UTs
       TRC_ERROR("Invalid I-CSCF URI %s", _icscf_uri_str.c_str());
       init_success = false;
+      // LCOV_EXCL_STOP
     }
   }
 
@@ -165,16 +173,20 @@ bool SCSCFSproutlet::init()
 
   if (_mmf_cluster_uri == NULL)
   {
+    // LCOV_EXCL_START - Don't test pjsip URI failures in the S-CSCF UTs
     TRC_ERROR("Invalid MMF cluster URI %s", _mmf_cluster_uri_str.c_str());
     init_success = false;
+    // LCOV_EXCL_STOP
   }
 
   _mmf_node_uri = PJUtils::uri_from_string(_mmf_node_uri_str, stack_data.pool, false);
 
   if (_mmf_node_uri == NULL)
   {
+    // LCOV_EXCL_START - Don't test pjsip URI failures in the S-CSCF UTs
     TRC_ERROR("Invalid MMF node URI %s", _mmf_node_uri_str.c_str());
     init_success = false;
+    // LCOV_EXCL_STOP
   }
 
   // Create an AS Chain table for maintaining the mapping from ODI tokens to
@@ -272,7 +284,7 @@ IFCConfiguration SCSCFSproutlet::ifc_configuration() const
 /// Gets all bindings for the specified Address of Record from the local or
 /// remote registration stores.
 void SCSCFSproutlet::get_bindings(const std::string& aor,
-                                  SubscriberDataManager::AoRPair** aor_pair,
+                                  AoRPair** aor_pair,
                                   SAS::TrailId trail)
 {
   // Look up the target in the registration data store.
@@ -363,14 +375,14 @@ long SCSCFSproutlet::read_hss_data(const std::string& public_id,
     // Get the default URI. This should always succeed.
     associated_uris.get_default_impu(default_uri, true);
 
-    // We may want to route to bindings that are barred (in case of an emergency),
-    // so get all the URIs.
+    // We may want to route to bindings that are barred (in case of an
+    // emergency), so get all the URIs.
     uris = associated_uris.get_all_uris();
     registered = (regstate == RegDataXMLUtils::STATE_REGISTERED);
     barred = associated_uris.is_impu_barred(public_id);
   }
 
-  return (http_code);
+  return http_code;
 }
 
 
@@ -497,7 +509,7 @@ SCSCFSproutletTsx::~SCSCFSproutletTsx()
 
   if (_liveness_timer != 0)
   {
-    cancel_timer(_liveness_timer);
+    cancel_timer(_liveness_timer); //LCOV_EXCL_LINE - can't be hit in production
   }
 
   // If the ACR was stored locally, destroy it now.
@@ -568,19 +580,10 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     }
   }
 
-  // Construct the S-CSCF URI for this transaction. Use the configured S-CSCF
-  // URI as a starting point.
-  pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), _scscf->_scscf_cluster_uri);
-pjsip_sip_uri* routing_uri = get_routing_uri(req);
-  SCSCFUtils::get_scscf_uri(get_pool(req),
-                            get_local_hostname(routing_uri),
-                            get_local_hostname(scscf_uri),
-                            scscf_uri);
-  _scscf_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)scscf_uri);
-
   // Determine the session case and the served user.  This will link to
   // an AsChain object (creating it if necessary), if we need to provide
   // services.
+  // It will also set the S-CSCF URI
   status_code = determine_served_user(req);
 
   // Pass the received request to the ACR.
@@ -617,7 +620,7 @@ pjsip_sip_uri* routing_uri = get_routing_uri(req);
       {
         // The bindings are keyed off the default IMPU.
         std::string aor = _default_uri;
-        SubscriberDataManager::AoRPair* aor_pair = NULL;
+        AoRPair* aor_pair = NULL;
         _scscf->get_bindings(aor, &aor_pair, trail());
 
         if ((aor_pair != NULL) &&
@@ -625,12 +628,12 @@ pjsip_sip_uri* routing_uri = get_routing_uri(req);
         {
           if (!aor_pair->get_current()->bindings().empty())
           {
-            const SubscriberDataManager::AoR::Bindings bindings = aor_pair->get_current()->bindings();
+            const AoR::Bindings bindings = aor_pair->get_current()->bindings();
 
             // Loop over the bindings. If any binding has an emergency registration,
             // let the request through. When routing to UEs, we will make sure we
             // only route the request to the bindings that have an emergency registration.
-            for (SubscriberDataManager::AoR::Bindings::const_iterator binding = bindings.begin();
+            for (AoR::Bindings::const_iterator binding = bindings.begin();
                  binding != bindings.end();
                  ++binding)
             {
@@ -1103,6 +1106,9 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
 
   if (_as_chain_link.is_set())
   {
+    // Set the S-CSCF URI to the one we stored in the AsChain
+    _scscf_uri = _as_chain_link.scscf_uri();
+
     bool retargeted = false;
     std::string served_user = served_user_from_msg(req);
 
@@ -1271,6 +1277,16 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         }
       }
 
+      // Before looking up the iFCs, calculate the S-CSCF URI to use for this
+      // transaction, using the configured S-CSCF URI as a starting point.
+      pjsip_sip_uri* scscf_uri = (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), _scscf->_scscf_cluster_uri);
+      pjsip_sip_uri* routing_uri = get_routing_uri(req);
+      SCSCFUtils::get_scscf_uri(get_pool(req),
+                                get_local_hostname(routing_uri),
+                                get_local_hostname(scscf_uri),
+                                scscf_uri);
+      _scscf_uri = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)scscf_uri);
+
       TRC_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
 
       Ifcs ifcs;
@@ -1365,13 +1381,13 @@ std::string SCSCFSproutletTsx::served_user_from_msg(pjsip_msg* msg)
   {
     URIClass uri_class = URIClassifier::classify_uri(uri);
 
-    if ((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
+    if (((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
         ((uri_class == NODE_LOCAL_SIP_URI) ||
-         (uri_class == HOME_DOMAIN_SIP_URI)))
-    {
-      user = PJUtils::public_id_from_uri(uri);
-    }
-    else if (PJSIP_URI_SCHEME_IS_TEL(uri))
+         (uri_class == HOME_DOMAIN_SIP_URI) ||
+         (uri_class == LOCAL_PHONE_NUMBER) ||
+         (uri_class == GLOBAL_PHONE_NUMBER)
+         ))
+        || (PJSIP_URI_SCHEME_IS_TEL(uri)))
     {
       user = PJUtils::public_id_from_uri(uri);
     }
@@ -1391,10 +1407,6 @@ AsChainLink SCSCFSproutletTsx::create_as_chain(Ifcs ifcs,
                                                ACR*& acr,
                                                SAS::TrailId chain_trail)
 {
-  if (served_user.empty())
-  {
-    TRC_WARNING("create_as_chain called with an empty served_user");
-  }
   bool is_registered = is_user_registered(served_user);
 
   AsChainLink ret = AsChainLink::create_as_chain(_scscf->as_chain_table(),
@@ -1405,7 +1417,8 @@ AsChainLink SCSCFSproutletTsx::create_as_chain(Ifcs ifcs,
                                                  ifcs,
                                                  acr,
                                                  _scscf->fifcservice(),
-                                                 _scscf->ifc_configuration());
+                                                 _scscf->ifc_configuration(),
+                                                 _scscf_uri);
   acr = NULL;
   TRC_DEBUG("S-CSCF sproutlet transaction %p linked to AsChain %s",
             this, ret.to_string().c_str());
@@ -1535,8 +1548,7 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
     send_response(rsp);
     free_msg(req);
   }
-
-  if (!server_name.empty())
+  else if (!server_name.empty())
   {
     // We've should have identified an application server to be invoked, so
     // encode the app server hop and the return hop in Route headers.
@@ -1738,7 +1750,9 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     {
       if (!schedule_timer(NULL, _liveness_timer, timeout))
       {
+        // LCOV_EXCL_START - Don't test pjsip failures in the S-CSCF UTs
         TRC_WARNING("Failed to start liveness timer");
+        // LCOV_EXCL_STOP
       }
     }
   }
@@ -1800,26 +1814,10 @@ void SCSCFSproutletTsx::route_to_bgcf(pjsip_msg* req)
   send_request(req);
 }
 
-
-/// Route the request to the terminating side S-CSCF.
-void SCSCFSproutletTsx::route_to_term_scscf(pjsip_msg* req)
-{
-  TRC_INFO("Routing to terminating S-CSCF %s",
-           PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                  _scscf->scscf_cluster_uri()).c_str());
-  PJUtils::add_route_header(req,
-                            (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req),
-                                                            _scscf->scscf_cluster_uri()),
-                            get_pool(req));
-  send_request(req);
-}
-
-
 /// Route the request to the appropriate onward target.
 void SCSCFSproutletTsx::route_to_target(pjsip_msg* req)
 {
   pjsip_uri* req_uri = req->line.req.uri;
-  URIClass uri_class = URIClassifier::classify_uri(req_uri);
 
   if ((PJSIP_URI_SCHEME_IS_SIP(req_uri) &&
       ((pjsip_sip_uri*)req_uri)->maddr_param.slen))
@@ -1831,18 +1829,11 @@ void SCSCFSproutletTsx::route_to_target(pjsip_msg* req)
              ((pjsip_sip_uri*)req_uri)->maddr_param.ptr);
     send_request(req);
   }
-  else if (uri_class == OFFNET_SIP_URI)
-  {
-    // The Request-URI indicates an non-home domain, so forward the request
-    // to the domain in the Request-URI unchanged.
-    TRC_INFO("Route request to Request-URI %s",
-             PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req_uri).c_str());
-    send_request(req);
-  }
   else
   {
-    // The Request-URI is a SIP URI local to us, or a tel: URI that would only have reached this
-    // point if it was owned by us, so look it up in the registration store.
+    // The Request-URI is a SIP URI local to us, or a tel: URI that would only
+    // have reached this point if it was owned by us, so look it up in the
+    // registration store.
     TRC_INFO("Route request to registered UE bindings");
     route_to_ue_bindings(req);
   }
@@ -1902,7 +1893,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
     }
 
     // Get the bindings from the store and filter/sort them for the request.
-    SubscriberDataManager::AoRPair* aor_pair = NULL;
+    AoRPair* aor_pair = NULL;
     _scscf->get_bindings(aor, &aor_pair, trail());
 
     if ((aor_pair != NULL) &&
@@ -1919,7 +1910,6 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
                                  targets,
                                  _barred,
                                  trail());
-      delete aor_pair; aor_pair = NULL;
     }
     else
     {
@@ -1932,6 +1922,8 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       event.add_var_param(public_id);
       SAS::report_event(event);
     }
+
+    delete aor_pair; aor_pair = NULL;
   }
   else
   {
@@ -2032,19 +2024,10 @@ long SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
 
 
 /// Look up the registration state for the given public ID, using the
-/// per-transaction cache if possible (and caching them and the iFC otherwise).
+/// per-transaction cache, which will be present at this point
 bool SCSCFSproutletTsx::is_user_registered(std::string public_id)
 {
-  long http_code = get_data_from_hss(public_id);
-  if (http_code == HTTP_OK)
-  {
-    return _registered;
-  }
-  else
-  {
-    TRC_ERROR("Connection to Homestead failed, treating user as unregistered");
-    return false;
-  }
+  return _registered;
 }
 
 
@@ -2216,6 +2199,7 @@ bool SCSCFSproutletTsx::get_billing_role(ACR::NodeRole &role)
     pjsip_sip_uri* uri = (pjsip_sip_uri*)route->name_addr.uri;
     pjsip_param* param = pjsip_param_find(&uri->other_param,
                                           &STR_BILLING_ROLE);
+
     if (param != NULL)
     {
       if (!pj_strcmp(&param->value, &STR_CHARGE_NONE))

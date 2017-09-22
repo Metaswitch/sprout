@@ -23,12 +23,13 @@ extern "C" {
 #include "stack.h"
 #include "analyticslogger.h"
 #include "localstore.h"
-#include "impistore.h"
+#include "astaire_impistore.h"
 #include "sproutletproxy.h"
 #include "hssconnection.h"
 #include "authenticationsproutlet.h"
 #include "fakehssconnection.hpp"
 #include "fakechronosconnection.hpp"
+#include "mock_chronos_connection.h"
 #include "test_interposer.hpp"
 #include "md5.h"
 #include "fakesnmp.hpp"
@@ -57,11 +58,10 @@ public:
     SipTest::SetUpTestCase();
 
     _local_data_store = new LocalStore();
-    _impi_store = new ImpiStore(_local_data_store);
+    _impi_store = new AstaireImpiStore(_local_data_store);
     _remote_data_stores.push_back(new LocalStore());
-    _remote_impi_stores.push_back(new ImpiStore(_remote_data_stores[0]));
+    _remote_impi_stores.push_back(new AstaireImpiStore(_remote_data_stores[0]));
     _hss_connection = new FakeHSSConnection();
-    _chronos_connection = new FakeChronosConnection();
     _analytics = new AnalyticsLogger();
     _acr_factory = new ACRFactory();
   }
@@ -70,7 +70,6 @@ public:
   {
     delete _acr_factory;
     delete _hss_connection;
-    delete _chronos_connection;
     delete _analytics;
     delete _impi_store;
     delete _local_data_store;
@@ -111,6 +110,7 @@ public:
                             stack_data.scscf_port,
                             "0.0.0.0",
                             5060);
+
   }
 
   void TearDown()
@@ -148,6 +148,9 @@ public:
     ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.sip_digest_auth_tbl)->reset_count();
     ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.ims_aka_auth_tbl)->reset_count();
     ((SNMP::FakeSuccessFailCountTable*)SNMP::FAKE_AUTHENTICATION_STATS_TABLES.non_register_auth_tbl)->reset_count();
+
+    // Make sure the fake connections have their results cleaned out.
+    _hss_connection->flush_all();
 
     // All the AKA tests use the same challenge so flush the data store after
     // each test to avoid tests interacting.
@@ -241,7 +244,6 @@ protected:
   static ImpiStore* _impi_store;
   static ACRFactory* _acr_factory;
   static FakeHSSConnection* _hss_connection;
-  static FakeChronosConnection* _chronos_connection;
   static AnalyticsLogger* _analytics;
   static int _current_cseq;
   static std::vector<LocalStore*> _remote_data_stores;
@@ -256,27 +258,27 @@ LocalStore* BaseAuthenticationTest::_local_data_store;
 ImpiStore* BaseAuthenticationTest::_impi_store;
 ACRFactory* BaseAuthenticationTest::_acr_factory;
 FakeHSSConnection* BaseAuthenticationTest::_hss_connection;
-FakeChronosConnection* BaseAuthenticationTest::_chronos_connection;
 AnalyticsLogger* BaseAuthenticationTest::_analytics;
 int BaseAuthenticationTest::_current_cseq;
 std::vector<LocalStore*> BaseAuthenticationTest::_remote_data_stores;
 std::vector<ImpiStore*> BaseAuthenticationTest::_remote_impi_stores;
 
-
 /// A test fixture that is templated over a configuration class. This allows the
 /// authentication sproutlet to be set up in different ways without lots of
 /// boilerplate code.
-template<class C>
+template<class C, class ChronosHelper>
 class AuthenticationTestTemplate : public BaseAuthenticationTest
 {
   static void SetUpTestCase()
   {
+    ChronosHelper::create_chronos_connection();
     BaseAuthenticationTest::SetUpTestCase();
   }
 
   static void TearDownTestCase()
   {
     BaseAuthenticationTest::TearDownTestCase();
+    ChronosHelper::destroy_chronos_connection();
   }
 
   AuthenticationSproutlet* create_auth_sproutlet()
@@ -291,7 +293,7 @@ class AuthenticationTestTemplate : public BaseAuthenticationTest
                                   _impi_store,
                                   _remote_impi_stores,
                                   _hss_connection,
-                                  _chronos_connection,
+                                  ChronosHelper::get_chronos_connection(),
                                   _acr_factory,
                                   C::non_reg_auth(),
                                   _analytics,
@@ -302,6 +304,57 @@ class AuthenticationTestTemplate : public BaseAuthenticationTest
     return auth_sproutlet;
   }
 };
+
+class FakeChronosConnectionHelper
+{
+  static void create_chronos_connection()
+  {
+    _chronos_connection = new FakeChronosConnection();
+    // Set up the basic expected results
+    _chronos_connection->set_result("", HTTP_OK);
+    _chronos_connection->set_result("post_identity", HTTP_OK);
+  }
+
+  static ChronosConnection* get_chronos_connection()
+  {
+    return _chronos_connection;
+  }
+
+  static void destroy_chronos_connection()
+  {
+    _chronos_connection->flush_all();
+    delete _chronos_connection;
+  }
+
+protected:
+  static FakeChronosConnection* _chronos_connection;
+};
+
+/// Test fixture for the timer tests. This is the same as the Authenticaiton
+/// tests, but we want to use a MockChronosConnection, not a FakeChronosConnection
+class MockChronosConnectionHelper
+{
+  static void create_chronos_connection()
+  {
+    _mock_chronos_connection = new MockChronosConnection("localhost");
+  }
+
+  static MockChronosConnection* get_chronos_connection()
+  {
+    return _mock_chronos_connection;
+  }
+
+  static void destroy_chronos_connection()
+  {
+    delete _mock_chronos_connection;
+  }
+
+protected:
+  static MockChronosConnection* _mock_chronos_connection;
+};
+
+FakeChronosConnection* FakeChronosConnectionHelper::_chronos_connection;
+MockChronosConnection* MockChronosConnectionHelper::_mock_chronos_connection;
 
 /// Templated configuration class for use with the above fixture.
 template<uint32_t A, bool N>
@@ -553,7 +606,8 @@ string AuthenticationMessage::get()
 /// Test fixture for these tests. This is just a typedef of the test template +
 /// a particular configuration.
 typedef AuthenticationTestTemplate<
-  AuthenticationTestConfig<NonRegisterAuthentication::NEVER, true>
+  AuthenticationTestConfig<NonRegisterAuthentication::NEVER, true>,
+  FakeChronosConnectionHelper
 > AuthenticationTest;
 
 
@@ -2279,7 +2333,8 @@ typedef ::testing::Types <
 > PxyAuthHdrTypes;
 
 // Need to define a new type so the parameterization works.
-template <class T> using AuthenticationPxyAuthHdrTest = AuthenticationTestTemplate<T>;
+template <class T> using AuthenticationPxyAuthHdrTest = AuthenticationTestTemplate<T,
+                                                         FakeChronosConnectionHelper>;
 TYPED_TEST_CASE(AuthenticationPxyAuthHdrTest, PxyAuthHdrTypes);
 
 TYPED_TEST(AuthenticationPxyAuthHdrTest, ProxyAuthorizationSuccess)
@@ -2564,7 +2619,8 @@ TYPED_TEST(AuthenticationPxyAuthHdrTest, NoProxyAuthorization)
 //
 
 typedef AuthenticationTestTemplate<
-  AuthenticationTestConfig<NonRegisterAuthentication::NEVER, false>
+  AuthenticationTestConfig<NonRegisterAuthentication::NEVER, false>,
+  FakeChronosConnectionHelper
 > AuthenticationNonceCountDisabledTest;
 
 TEST_F(AuthenticationNonceCountDisabledTest, DigestAuthSuccessWithNonceCount)
@@ -2769,6 +2825,174 @@ TEST_F(AuthenticationTest, DigestAuthFailureWithSetError)
   RespMatcher(500).matches(tdata->msg);
 }
 
+//
+// Tests for auth_challenge timer creation and deletion
+//
+
+/// Test fixture for these tests. This is just a typedef of the test template +
+/// a particular configuration.
+typedef AuthenticationTestTemplate<
+  AuthenticationTestConfig<NonRegisterAuthentication::NEVER, true>,
+  MockChronosConnectionHelper
+> AuthenticationTimerTest;
+
+
+// Basic Authentication flow, but checking that we create and delete the timer correctly.
+TEST_F(AuthenticationTimerTest, AuthSuccessTimerDelete)
+{
+  pjsip_tx_data* tdata;
+  // Set up the HSS response for the AV query using a default private user identity.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Check we're sending a timer out, and return a timer id
+  EXPECT_CALL(*MockChronosConnectionHelper::get_chronos_connection(), send_post(_,_,"/authentication-timeout",_,_,_))
+              .WillOnce(DoAll(SetArgReferee<0>("timer-id"),
+                              Return(HTTP_OK)));
+
+  // Send in a REGISTER request with no authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = false;
+  inject_msg(msg1.get());
+
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
+  std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  parse_www_authenticate(auth, auth_params);
+  EXPECT_NE("", auth_params["nonce"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("MD5", auth_params["algorithm"]);
+  free_txdata();
+
+  // Check that we delete the timer id we were given earlier.
+  EXPECT_CALL(*MockChronosConnectionHelper::get_chronos_connection(), send_delete("timer-id",_))
+              .WillOnce(Return(HTTP_OK));
+
+  // Send a new REGISTER request with an authentication header including the
+  // response.
+  AuthenticationMessage msg2("REGISTER");
+  msg2._algorithm = "MD5";
+  msg2._key = "12345678123456781234567812345678";
+  msg2._nonce = auth_params["nonce"];
+  msg2._opaque = auth_params["opaque"];
+  msg2._nc = "00000001";
+  msg2._cnonce = "8765432187654321";
+  msg2._qop = "auth";
+  msg2._integ_prot = "ip-assoc-pending";
+  inject_msg(msg2.get());
+
+  // The authentication module lets the request through.
+  auth_sproutlet_allows_request();
+
+  // Verify the chronos_connection expectations here, as otherwise they wait until the test class is deleted
+  testing::Mock::VerifyAndClear(MockChronosConnectionHelper::get_chronos_connection());
+  // clean up
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
+}
+
+// Assert that we don't send a delete if the timer creation failed.
+TEST_F(AuthenticationTimerTest, AuthSuccessTimerCreationFail)
+{
+
+  pjsip_tx_data* tdata;
+  // Set up the HSS response for the AV query using a default private user identity.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Set up the timer creation to return an error, simulating timer creation failure.
+  EXPECT_CALL(*MockChronosConnectionHelper::get_chronos_connection(), send_post(_,_,"/authentication-timeout",_,_,_))
+              .WillOnce(Return(HTTP_BAD_REQUEST));
+
+  // Send in a REGISTER request with no authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = false;
+  inject_msg(msg1.get());
+
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
+  std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  parse_www_authenticate(auth, auth_params);
+  EXPECT_NE("", auth_params["nonce"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("MD5", auth_params["algorithm"]);
+  free_txdata();
+
+  // Assert that we do not attempt to delete any timers, as we didn't create one
+  EXPECT_CALL(*MockChronosConnectionHelper::get_chronos_connection(), send_delete(_,_)).Times(0);
+
+  // Send a new REGISTER request with an authentication header including the
+  // response.
+  AuthenticationMessage msg2("REGISTER");
+  msg2._algorithm = "MD5";
+  msg2._key = "12345678123456781234567812345678";
+  msg2._nonce = auth_params["nonce"];
+  msg2._opaque = auth_params["opaque"];
+  msg2._nc = "00000001";
+  msg2._cnonce = "8765432187654321";
+  msg2._qop = "auth";
+  msg2._integ_prot = "ip-assoc-pending";
+  inject_msg(msg2.get());
+
+  // The authentication module lets the request through.
+  auth_sproutlet_allows_request();
+
+  // Verify the chronos_connection expectations here, as otherwise they wait until the test class is deleted
+  testing::Mock::VerifyAndClear(MockChronosConnectionHelper::get_chronos_connection());
+  // clean up
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
+}
+
+// Check that we attempt to delete the timer if the auth_challenge store failed.
+TEST_F(AuthenticationTimerTest, AuthStoreFailTimerDeleted)
+{
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Check that we create the timer, but then delete it following the failure
+  // to set the auth_challenge into the store.
+
+  EXPECT_CALL(*MockChronosConnectionHelper::get_chronos_connection(), send_post(_,_,"/authentication-timeout",_,_,_))
+              .WillOnce(DoAll(SetArgReferee<0>("timer-id"),
+                              Return(HTTP_OK)));
+
+  EXPECT_CALL(*MockChronosConnectionHelper::get_chronos_connection(), send_delete("timer-id",_))
+              .WillOnce(Return(HTTP_OK));
+
+  // Force an error on the SET.  This means that we'll respond with a 500
+  // Server Internal Error.
+  _local_data_store->force_error();
+
+  // Send in a REGISTER request with no authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = false;
+  inject_msg(msg1.get());
+
+  // Expect a 500 Server Internal Error response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(500).matches(tdata->msg);
+
+  // Verify the chronos_connection expectations here, as otherwise they wait until the test class is deleted
+  testing::Mock::VerifyAndClear(MockChronosConnectionHelper::get_chronos_connection());
+  // clean up
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&server-name=sip%3Ascscf.sprout.homedomain%3A5058%3Btransport%3DTCP");
+}
 
 //
 // Tests for authenticating non-REGISTER messages from a UE that authenticates
@@ -2785,18 +3009,18 @@ typedef ::testing::Types<
 > DigestUEsTypes;
 
 template <class T>
-class AuthenticationDigestUEsTest : public AuthenticationTestTemplate<T>
+class AuthenticationDigestUEsTest : public AuthenticationTestTemplate<T, FakeChronosConnectionHelper>
 {
 public:
   std::map<std::string, std::string> _reg_auth_params;
 
-  static void SetUpTestCase() { AuthenticationTestTemplate<T>::SetUpTestCase(); }
-  static void TearDownTestCase() { AuthenticationTestTemplate<T>::TearDownTestCase(); }
+  static void SetUpTestCase() { AuthenticationTestTemplate<T, FakeChronosConnectionHelper>::SetUpTestCase(); }
+  static void TearDownTestCase() { AuthenticationTestTemplate<T, FakeChronosConnectionHelper>::TearDownTestCase(); }
 
   // Start this test with a subscriber registered.
   virtual void SetUp()
   {
-    AuthenticationTestTemplate<T>::SetUp();
+    AuthenticationTestTemplate<T, FakeChronosConnectionHelper>::SetUp();
 
     // Test a successful SIP Digest authentication flow.
     pjsip_tx_data* tdata;

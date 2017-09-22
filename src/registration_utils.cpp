@@ -563,6 +563,33 @@ static void send_register_to_as(SubscriberDataManager* sdm,
   // Set the SAS trail on the request.
   set_trail(tdata, trail);
 
+  if (Log::enabled(Log::VERBOSE_LEVEL))
+  {
+    char buf[PJSIP_MAX_PKT_LEN];
+    pj_ssize_t size;
+
+    // Serialise the message in a separate buffer using the function
+    // exposed by PJSIP.  In principle we could use tdata's own
+    // serialisation buffer structure for this, but then we'd need to
+    // explicitly invalidate it afterwards to avoid accidentally sending
+    // the wrong data over SIP at some future point.  Safer to use a local
+    // buffer.
+    size = pjsip_msg_print(tdata->msg, buf, sizeof(buf));
+
+    // Defensively set size to zero if pjsip_msg_print failed
+    size = std::max(0L, size);
+
+    TRC_VERBOSE("Routing %s (%d bytes) to 3rd party AS %s:\n"
+                "--start msg--\n\n"
+                "%.*s\n"
+                "--end msg--",
+                pjsip_tx_data_get_info(tdata),
+                size,
+                as.server_name.c_str(),
+                (int)size,
+                buf);
+  }
+
   // Allocate a temporary structure to record the default handling for this
   // REGISTER, and send it statefully.
   ThirdPartyRegData* tsxdata = new ThirdPartyRegData;
@@ -603,7 +630,7 @@ static bool expire_bindings(SubscriberDataManager *sdm,
 
   do
   {
-    SubscriberDataManager::AoRPair* aor_pair = sdm->get_aor_data(aor, trail);
+    AoRPair* aor_pair = sdm->get_aor_data(aor, trail);
 
     if ((aor_pair == NULL) || (aor_pair->get_current() == NULL))
     {
@@ -611,7 +638,7 @@ static bool expire_bindings(SubscriberDataManager *sdm,
     }
 
     // Get the S-CSCF URI off the AoR to put on the SAR to the HSS.
-    SubscriberDataManager::AoR* aor_data = aor_pair->get_current();
+    AoR* aor_data = aor_pair->get_current();
     scscf_uri = aor_data->_scscf_uri;
 
     if (binding_id == "*")
@@ -628,7 +655,8 @@ static bool expire_bindings(SubscriberDataManager *sdm,
                                                            // single binding (flow failed).
     }
 
-    set_rc = sdm->set_aor_data(aor, associated_uris, aor_pair, trail, all_bindings_expired);
+    aor_pair->get_current()->_associated_uris = *associated_uris;
+    set_rc = sdm->set_aor_data(aor, aor_pair, trail, all_bindings_expired);
     delete aor_pair; aor_pair = NULL;
 
     // We can only say for sure that the bindings were expired if we were able
