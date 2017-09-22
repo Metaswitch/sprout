@@ -2272,12 +2272,18 @@ void BasicProxy::UACTsx::timer_expired(pj_timer_heap_t *timer_heap,
 /// made.
 bool BasicProxy::UACTsx::get_next_server()
 {
-  // Decrement the number of attempts left.
-  --_num_attempts_left;
+  if (_num_attempts_left > 0)
+  {
+    // Decrement the number of attempts left.
+    --_num_attempts_left;
 
-  // Stores the next server in _current_server and incrementes _servers_iter.
-  // next returns true if there was another server to return, so this function
-  // will return true only if there was another server and the maximum number of
-  // attempts have not yet been made.
-  return _servers_iter->next(_current_server) && (_num_attempts_left >= 0);
+    // Stores the next server in _current_server and incrementes _servers_iter.
+    // next returns true if there was another server to return.
+    return _servers_iter->next(_current_server);
+  }
+  else
+  {
+    // Maximum number of attempts have been made.
+    return false;
+  }
 }

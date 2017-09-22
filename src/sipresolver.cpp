@@ -54,7 +54,7 @@ void SIPResolver::resolve(const std::string& name,
                           int allowed_host_state,
                           SAS::TrailId trail)
 {
-  BaseAddrIterator* targets_iter=resolve_iter(name, af, port, transport, allowed_host_state, trail);
+  BaseAddrIterator* targets_iter = resolve_iter(name, af, port, transport, allowed_host_state, trail);
   targets = targets_iter->take(retries);
   delete targets_iter; targets_iter = nullptr;
 }
