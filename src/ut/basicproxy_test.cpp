@@ -3010,16 +3010,6 @@ TEST_F(BasicProxyTest, StopsRetryingAfterManyFailures)
       ADD_FAILURE_AT(__FILE__, __LINE__) << "Unexpected server address " << server1;
     }
 
-    // Check the RequestURI, Route and Record-Route headers.
-    EXPECT_EQ("sip:bob@awaydomain", str_uri(tdata->msg->line.req.uri));
-    EXPECT_EQ("Route: <sip:proxy-x.awaydomain;transport=TCP;lr>",
-              get_headers(tdata->msg, "Route"));
-    EXPECT_EQ("", get_headers(tdata->msg, "Record-Route"));
-
-    // Check no Record-Route headers have been added.
-    string rr = get_headers(tdata->msg, "Record-Route");
-    EXPECT_EQ("", rr);
-
     // Kill the transport the request was sent on.
     fake_tcp_init_shutdown((fake_tcp_transport*)tdata->tp_info.transport, PJ_EEOF);
     free_txdata();
@@ -3113,16 +3103,6 @@ TEST_F(BasicProxyTest, StopsRetryingIfFewAddresses)
     {
       ADD_FAILURE_AT(__FILE__, __LINE__) << "Unexpected server address " << server1;
     }
-
-    // Check the RequestURI, Route and Record-Route headers.
-    EXPECT_EQ("sip:bob@awaydomain", str_uri(tdata->msg->line.req.uri));
-    EXPECT_EQ("Route: <sip:proxy-x.awaydomain;transport=TCP;lr>",
-              get_headers(tdata->msg, "Route"));
-    EXPECT_EQ("", get_headers(tdata->msg, "Record-Route"));
-
-    // Check no Record-Route headers have been added.
-    string rr = get_headers(tdata->msg, "Record-Route");
-    EXPECT_EQ("", rr);
 
     // Kill the transport the request was sent on.
     fake_tcp_init_shutdown((fake_tcp_transport*)tdata->tp_info.transport, PJ_EEOF);
