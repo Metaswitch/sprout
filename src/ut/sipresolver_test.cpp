@@ -152,7 +152,7 @@ public:
     if (targets_iter->next(record))
     {
       // Successful, so render AddrInfo as a string.
-      output = addrinfo_to_string(record);
+      output = record.to_string();
     }
 
     delete targets_iter; targets_iter = nullptr;
