@@ -2951,7 +2951,7 @@ TEST_F(BasicProxyTest, StopsRetryingAfterManyFailures)
   pjsip_tx_data* tdata;
 
   // Add a host mapping for proxy-x.awaydomain to six IP addresses.
-  add_host_mapping("proxy-x.awaydomain", "10.10.10.100,10.10.10.101,10.10.10.102,10.10.10.103,10.10.10.104,10.10.10.105,10.10.10.106,10.10.10.107,10.10.10.108,10.10.10.109,10.10.10.110");
+  add_host_mapping("proxy-x.awaydomain", "10.10.10.100,10.10.10.101,10.10.10.102,10.10.10.103,10.10.10.104,10.10.10.105,10.10.10.106,10.10.10.107,10.10.10.108,10.10.10.109");
 
   // Create a TCP connection to the listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
@@ -2995,20 +2995,7 @@ TEST_F(BasicProxyTest, StopsRetryingAfterManyFailures)
     EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
     EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
     string server1 = str_pj(tdata->tp_info.transport->remote_name.host);
-    if ((server1 != "10.10.10.100") &&
-        (server1 != "10.10.10.101") &&
-        (server1 != "10.10.10.102") &&
-        (server1 != "10.10.10.103") &&
-        (server1 != "10.10.10.104") &&
-        (server1 != "10.10.10.105") &&
-        (server1 != "10.10.10.106") &&
-        (server1 != "10.10.10.107") &&
-        (server1 != "10.10.10.108") &&
-        (server1 != "10.10.10.109") &&
-        (server1 != "10.10.10.110"))
-    {
-      ADD_FAILURE_AT(__FILE__, __LINE__) << "Unexpected server address " << server1;
-    }
+    EXPECT_THAT(server1, MatchesRegex("10.10.10.10[0-9]")) << "Unexpected server address " << server1;
 
     // Kill the transport the request was sent on.
     fake_tcp_init_shutdown((fake_tcp_transport*)tdata->tp_info.transport, PJ_EEOF);
