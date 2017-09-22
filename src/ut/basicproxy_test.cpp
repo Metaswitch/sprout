@@ -23,7 +23,6 @@
 #include "fakehssconnection.hpp"
 #include "faketransport_tcp.hpp"
 #include "test_interposer.hpp"
-#include "testingcommon.h"
 
 using namespace std;
 using testing::StrEq;
@@ -291,6 +290,163 @@ public:
     pjsip_tsx_layer_instance()->start();
   }
 
+  class Message
+  {
+  public:
+    string _method;
+    string _requri; //< overrides toscheme:to@todomain
+    string _toscheme;
+    string _fromscheme;
+    string _status;
+    string _from;
+    string _fromdomain;
+    string _to;
+    string _todomain;
+    string _content_type;
+    string _body;
+    string _extra;
+    int _forwards;
+    int _unique; //< unique to this dialog; inserted into Call-ID
+    string _via;
+    string _route;
+    int _cseq;
+
+    Message() :
+      _method("INVITE"),
+      _toscheme("sip"),
+      _fromscheme("pres"),
+      _status("200 OK"),
+      _from("6505551000"),
+      _fromdomain("homedomain"),
+      _to("6505551234"),
+      _todomain("homedomain"),
+      _content_type("application/sdp"),
+      _forwards(68),
+      _via("10.83.18.38:36530"),
+      _cseq(16567)
+    {
+      static int unique = 1042;
+      _unique = unique;
+      unique += 10; // leave room for manual increments
+    }
+
+    void set_route(pjsip_msg* msg)
+    {
+      string route = get_headers(msg, "Record-Route");
+      if (route != "")
+      {
+        // Convert to a Route set by replacing all instances of Record-Route: with Route:
+        for (size_t n = 0; (n = route.find("Record-Route:", n)) != string::npos;)
+        {
+          route.replace(n, 13, "Route:");
+        }
+      }
+      _route = route;
+    }
+
+    string get_request()
+    {
+      char buf[16384];
+
+      // The remote target.
+      string target = _toscheme + ":" + _to;
+      if (!_todomain.empty())
+      {
+        target += "@" + _todomain;
+      }
+
+      string from = _fromscheme + ":" + _from;
+      string requri = _requri.empty() ? target : _requri;
+      string route = _route.empty() ? "" : _route + "\r\n";
+
+      int n = snprintf(buf, sizeof(buf),
+                       "%1$s %9$s SIP/2.0\r\n"
+                       "Via: SIP/2.0/TCP %12$s;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY%11$04dSPI\r\n"
+                       "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
+                       "To: <%10$s>\r\n"
+                       "Max-Forwards: %8$d\r\n"
+                       "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%11$04dohntC@10.114.61.213\r\n"
+                       "CSeq: %14$d %1$s\r\n"
+                       "User-Agent: Accession 2.0.0.0\r\n"
+                       "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
+                       "%4$s"
+                       "%7$s"
+                       "%13$s"
+                       "Content-Length: %5$d\r\n"
+                       "\r\n"
+                       "%6$s",
+                       /*  1 */ _method.c_str(),
+                       /*  2 */ from.c_str(),
+                       /*  3 */ _fromdomain.c_str(),
+                       /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
+                       /*  5 */ (int)_body.length(),
+                       /*  6 */ _body.c_str(),
+                       /*  7 */ _extra.empty() ? "" : string(_extra).append("\r\n").c_str(),
+                       /*  8 */ _forwards,
+                       /*  9 */ requri.c_str(),
+                       /* 10 */ target.c_str(),
+                       /* 11 */ _unique,
+                       /* 12 */ _via.c_str(),
+                       /* 13 */ route.c_str(),
+                       /* 14 */ _cseq
+        );
+
+      EXPECT_LT(n, (int)sizeof(buf));
+
+      string ret(buf, n);
+      // cout << ret <<endl;
+      return ret;
+    }
+
+    string get_response()
+    {
+      char buf[16384];
+
+      string to = _toscheme + ":" + _to;
+      if (!_todomain.empty())
+      {
+        to += "@" + _todomain;
+      }
+
+      string from = _fromscheme + ":" + _from;
+      string route = _route.empty() ? "" : _route + "\r\n";
+
+      int n = snprintf(buf, sizeof(buf),
+                       "SIP/2.0 %8$s\r\n"
+                       "Via: SIP/2.0/TCP %12$s;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY%10$04dSPI\r\n"
+                       "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
+                       "To: <sip:%7$s>\r\n"
+                       "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%10$04dohntC@10.114.61.213\r\n"
+                       "CSeq: %11$d %1$s\r\n"
+                       "User-Agent: Accession 2.0.0.0\r\n"
+                       "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
+                       "%4$s"
+                       "%9$s"
+                       "Content-Length: %5$d\r\n"
+                       "\r\n"
+                       "%6$s",
+                       /*  1 */ _method.c_str(),
+                       /*  2 */ from.c_str(),
+                       /*  3 */ _fromdomain.c_str(),
+                       /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
+                       /*  5 */ (int)_body.length(),
+                       /*  6 */ _body.c_str(),
+                       /*  7 */ to.c_str(),
+                       /*  8 */ _status.c_str(),
+                       /*  9 */ _extra.empty() ? "" : string(_extra).append("\r\n").c_str(),
+                       /* 10 */ _unique,
+                       /* 11 */ _cseq,
+                       /* 12 */ _via.c_str()
+        );
+
+      EXPECT_LT(n, (int)sizeof(buf));
+
+      string ret(buf, n);
+      // cout << ret <<endl;
+      return ret;
+    }
+  };
+
 protected:
   static BasicProxyUT* _basic_proxy;
 
@@ -336,7 +492,6 @@ public:
 protected:
 };
 
-using TestingCommon::Message;
 
 TEST_F(BasicProxyTest, RouteOnRouteHeaders)
 {
@@ -353,7 +508,6 @@ TEST_F(BasicProxyTest, RouteOnRouteHeaders)
   // Inject a request with a Route header not referencing this node or the
   // home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@awaydomain";
   msg1._from = "alice";
@@ -403,7 +557,6 @@ TEST_F(BasicProxyTest, RouteOnRouteHeaders)
   // Inject a request with two Route headers, the first refering to the
   // home domain and the second refering to an external domain.
   Message msg2;
-  msg2._first_hop = true;
   msg2._method = "INVITE";
   msg2._requri = "sip:bob@awaydomain";
   msg2._from = "alice";
@@ -468,7 +621,6 @@ TEST_F(BasicProxyTest, RouteOnRouteHeadersWithTelURI)
   // Inject a request with a Route header not referencing this node or the
   // home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "tel:1231231231";
   msg1._from = "alice";
@@ -534,7 +686,6 @@ TEST_F(BasicProxyTest, RouteOnRequestURIDomain)
   // Inject a request with no Route headers and a RequestURI with an external
   // node.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@proxy1.awaydomain;transport=TCP";
   msg1._from = "alice";
@@ -602,7 +753,6 @@ TEST_F(BasicProxyTest, RouteToHomeURINoPathTransport)
   // Inject a request with a Route header referring to this node and a
   // RequestURI with a URI in the home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@homedomain;transport=TCP";
   msg1._from = "alice";
@@ -677,7 +827,6 @@ TEST_F(BasicProxyTest, RouteToHomeURIWithPath)
   // Inject a request with a Route header referring to this node and a
   // RequestURI with a URI in the home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@homedomain;transport=TCP";
   msg1._from = "alice";
@@ -757,7 +906,6 @@ TEST_F(BasicProxyTest, RouteToHomeURIWithTransport)
   // Inject a request with a Route header referring to this node and a
   // RequestURI with a URI in the home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@homedomain;transport=TCP";
   msg1._from = "alice";
@@ -838,7 +986,6 @@ TEST_F(BasicProxyTest, RouteToHomeURITransportCancel)
   // Inject a request with a Route header referring to this node and a
   // RequestURI with a URI in the home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@homedomain;transport=TCP";
   msg1._from = "alice";
@@ -874,7 +1021,6 @@ TEST_F(BasicProxyTest, RouteToHomeURITransportCancel)
 
   // Send a CANCEL from the originator.
   Message msg2;
-  msg2._first_hop = true;
   msg2._method = "CANCEL";
   msg2._requri = "sip:bob@homedomain;transport=TCP";
   msg2._from = "alice";
@@ -960,7 +1106,6 @@ TEST_F(BasicProxyTest, ForkedRequestSuccess)
   // Inject a request with a Route header referring to this node and a
   // RequestURI with a URI in the home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@homedomain;transport=TCP";
   msg1._from = "alice";
@@ -1140,7 +1285,6 @@ TEST_F(BasicProxyTest, ForkedRequestFail)
   // Inject a request with a Route header referring to this node and a
   // RequestURI with a URI in the home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@homedomain;transport=TCP";
   msg1._from = "alice";
@@ -1277,7 +1421,6 @@ TEST_F(BasicProxyTest, ForkedRequestConnFail)
   // Inject a request with a Route header referring to this node and a
   // RequestURI with a URI in the home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@homedomain;transport=TCP";
   msg1._from = "alice";
@@ -1370,7 +1513,6 @@ TEST_F(BasicProxyTest, ForkedRequestCancel)
   // Inject a request with a Route header referring to this node and a
   // RequestURI with a URI in the home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@homedomain;transport=TCP";
   msg1._from = "alice";
@@ -1436,7 +1578,6 @@ TEST_F(BasicProxyTest, ForkedRequestCancel)
 
   // Send a CANCEL from the originator.
   Message msg2;
-  msg2._first_hop = true;
   msg2._method = "CANCEL";
   msg2._requri = "sip:bob@homedomain;transport=TCP";
   msg2._from = "alice";
@@ -1535,7 +1676,6 @@ TEST_F(BasicProxyTest, ForkedRequest6xx)
   // Inject a request with a Route header referring to this node and a
   // RequestURI with a URI in the home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@homedomain;transport=TCP";
   msg1._from = "alice";
@@ -1656,7 +1796,6 @@ TEST_F(BasicProxyTest, RouteToHomeURINotFound)
   // Inject a request with a Route header referring to this node and a
   // RequestURI with a URI in the home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@homedomain;transport=TCP";
   msg1._from = "alice";
@@ -1704,7 +1843,6 @@ TEST_F(BasicProxyTest, StrictRouterUpstream)
   // indicating the onward Route.  This is the expected request if the
   // upstream proxy is a strict router.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:127.0.0.1";
   msg1._from = "alice";
@@ -1754,7 +1892,6 @@ TEST_F(BasicProxyTest, StrictRouterUpstream)
   // indicating an onward Route.  This is the expected request if the
   // upstream proxy is a strict router.
   Message msg2;
-  msg2._first_hop = true;
   msg2._method = "INVITE";
   msg2._requri = "sip:127.0.0.1";
   msg2._from = "alice";
@@ -1806,7 +1943,6 @@ TEST_F(BasicProxyTest, StrictRouterDownstream)
   // Route header.  This is the form of request expected if the downstream
   // proxy is a strict router.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@awaydomain";
   msg1._from = "alice";
@@ -1877,7 +2013,6 @@ TEST_F(BasicProxyTest, StrictRouterTelUri)
   // Route header.  This is the form of request expected if the downstream
   // proxy is a strict router.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "tel:+1234";
   msg1._from = "alice";
@@ -1945,7 +2080,6 @@ TEST_F(BasicProxyTest, StatelessForwardResponse)
   // Inject a request with a Route header not referencing this node or the
   // home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@awaydomain";
   msg1._from = "alice";
@@ -2027,7 +2161,6 @@ TEST_F(BasicProxyTest, StatelessForwardACK)
   // Inject a request with a Route header not referencing this node or the
   // home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@awaydomain";
   msg1._from = "alice";
@@ -2077,7 +2210,6 @@ TEST_F(BasicProxyTest, StatelessForwardACK)
   // Send an ACK with Route headers traversing the proxy.  (This wouldn't
   // normally happen since the BasicProxy does not RecordRoute itself.)
   Message msg2;
-  msg2._first_hop = true;
   msg2._method = "ACK";
   msg2._requri = "sip:bob@awaydomain";
   msg2._from = "alice";
@@ -2123,7 +2255,6 @@ TEST_F(BasicProxyTest, StatelessForwardLargeACK)
   // Send an ACK with Route headers traversing the proxy, with a large message
   // body.  The second Route header specifies UDP transport.
   Message msg;
-  msg._first_hop = true;
   msg._method = "ACK";
   msg._requri = "sip:bob@awaydomain";
   msg._from = "alice";
@@ -2198,7 +2329,6 @@ TEST_F(BasicProxyTest, StatelessForwardLargeACKNoUplift)
   // Send an ACK with Route headers traversing the proxy, with a large message
   // body.  The second Route header specifies UDP transport.
   Message msg;
-  msg._first_hop = true;
   msg._method = "ACK";
   msg._requri = "sip:bob@awaydomain";
   msg._from = "alice";
@@ -2273,7 +2403,6 @@ TEST_F(BasicProxyTest, LateCancel)
   // Inject a request with a Route header referring to this node and a
   // RequestURI with a URI in the home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@homedomain;transport=TCP";
   msg1._from = "alice";
@@ -2323,7 +2452,6 @@ TEST_F(BasicProxyTest, LateCancel)
 
   // Send a CANCEL from the originator.
   Message msg2;
-  msg2._first_hop = true;
   msg2._method = "CANCEL";
   msg2._requri = "sip:bob@homedomain;transport=TCP";
   msg2._from = "alice";
@@ -2362,7 +2490,6 @@ TEST_F(BasicProxyTest, RequestErrors)
 
   // Inject a INVITE request with a tel: RequestURI.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._toscheme = "sips";
   msg1._from = "alice";
@@ -2384,7 +2511,6 @@ TEST_F(BasicProxyTest, RequestErrors)
 
   // Inject an INVITE request with Max-Forwards <= 1.
   Message msg2;
-  msg2._first_hop = true;
   msg2._method = "INVITE";
   msg2._requri = "sip:bob@awaydomain";
   msg2._from = "alice";
@@ -2413,7 +2539,6 @@ TEST_F(BasicProxyTest, RequestErrors)
   pjsip_transport_shutdown(tp->transport());
 
   Message msg3;
-  msg3._first_hop = true;
   msg3._method = "INVITE";
   msg3._requri = "sip:bob@awaydomain";
   msg3._from = "alice";
@@ -2453,7 +2578,6 @@ TEST_F(BasicProxyTest, ResponseErrors)
   // Inject a request with a Route header not referencing this node or the
   // home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@awaydomain";
   msg1._from = "alice";
@@ -2600,7 +2724,6 @@ TEST_F(BasicProxyTest, DnsResolutionFailure)
   // home domain, and with a domain name in the top route which is not
   // configured in DNS.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@awaydomain";
   msg1._from = "alice";
@@ -2651,7 +2774,6 @@ TEST_F(BasicProxyTest, DontRetryOnTimeout)
   // Inject a request with a Route header not referencing this node or the
   // home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@awaydomain";
   msg1._from = "alice";
@@ -2733,7 +2855,6 @@ TEST_F(BasicProxyTest, RetryOnTransportError)
   // Inject a request with a Route header not referencing this node or the
   // home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@awaydomain";
   msg1._from = "alice";
@@ -2830,8 +2951,7 @@ TEST_F(BasicProxyTest, StopsRetryingAfterManyFailures)
   pjsip_tx_data* tdata;
 
   // Add a host mapping for proxy-x.awaydomain to six IP addresses.
-  add_host_mapping("proxy-x.awaydomain",
-                   "10.10.10.100,10.10.10.101,10.10.10.102,10.10.10.103,10.10.10.104,10.10.10.105,10.10.106,10.10.10.107,10.10.10.108,10.10.10.109");
+  add_host_mapping("proxy-x.awaydomain", "10.10.10.100,10.10.10.101,10.10.10.102,10.10.10.103,10.10.10.104,10.10.10.105,10.10.10.106,10.10.10.107,10.10.10.108,10.10.10.109,10.10.10.110");
 
   // Create a TCP connection to the listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
@@ -2875,14 +2995,37 @@ TEST_F(BasicProxyTest, StopsRetryingAfterManyFailures)
     EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
     EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
     string server1 = str_pj(tdata->tp_info.transport->remote_name.host);
-    EXPECT_THAT(server1, MatchesRegex("10.10.10.10[0-9]")) << "Unexpected server address " << server1;
+    if ((server1 != "10.10.10.100") &&
+        (server1 != "10.10.10.101") &&
+        (server1 != "10.10.10.102") &&
+        (server1 != "10.10.10.103") &&
+        (server1 != "10.10.10.104") &&
+        (server1 != "10.10.10.105") &&
+        (server1 != "10.10.10.106") &&
+        (server1 != "10.10.10.107") &&
+        (server1 != "10.10.10.108") &&
+        (server1 != "10.10.10.109") &&
+        (server1 != "10.10.10.110"))
+    {
+      ADD_FAILURE_AT(__FILE__, __LINE__) << "Unexpected server address " << server1;
+    }
+
+    // Check the RequestURI, Route and Record-Route headers.
+    EXPECT_EQ("sip:bob@awaydomain", str_uri(tdata->msg->line.req.uri));
+    EXPECT_EQ("Route: <sip:proxy-x.awaydomain;transport=TCP;lr>",
+              get_headers(tdata->msg, "Route"));
+    EXPECT_EQ("", get_headers(tdata->msg, "Record-Route"));
+
+    // Check no Record-Route headers have been added.
+    string rr = get_headers(tdata->msg, "Record-Route");
+    EXPECT_EQ("", rr);
 
     // Kill the transport the request was sent on.
     fake_tcp_init_shutdown((fake_tcp_transport*)tdata->tp_info.transport, PJ_EEOF);
     free_txdata();
     poll();
 
-    if (ii < 4)
+    if (ii<4)
     {
       // There are attempts left, so check that the request has been redirected
       // to another server.
@@ -2897,89 +3040,13 @@ TEST_F(BasicProxyTest, StopsRetryingAfterManyFailures)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(408).matches(tdata->msg); // Response is a 408 Timeout.
-
-  free_txdata();
-
-  delete tp;
-}
-
-
-TEST_F(BasicProxyTest, StopsRetryingIfFewAddresses)
-{
-  // Tests that if there are fewer than 5 addresses, the BasicProxy stops
-  // retrying once it rusn out of targets and reports that the request has
-  // failed.
-
-  pjsip_tx_data* tdata;
-
-  // Add a host mapping for proxy-x.awaydomain to six IP addresses.
-  add_host_mapping("proxy-x.awaydomain",
-                   "10.10.10.100,10.10.10.101,10.10.10.102,10.10.10.103");
-
-  // Create a TCP connection to the listening port.
-  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.scscf_port,
-                                        "1.2.3.5",
-                                        49152);
-
-  // Inject a request with a Route header not referencing this node or the
-  // home domain.
-  Message msg1;
-  msg1._method = "INVITE";
-  msg1._requri = "sip:bob@awaydomain";
-  msg1._from = "alice";
-  msg1._to = "bob";
-  msg1._todomain = "awaydomain";
-  msg1._via = tp->to_string(false);
-  msg1._route = "Route: <sip:proxy-x.awaydomain;transport=TCP;lr>";
-  inject_msg(msg1.get_request(), tp);
-
-  // Expecting 100 Trying and forwarded INVITE.
-
-  // Check the 100 Trying.
-  ASSERT_EQ(2, txdata_count());
-  tdata = current_txdata();
-  RespMatcher(100).matches(tdata->msg);
-  tp->expect_target(tdata);
-  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
-  free_txdata();
-
-  // Request is forwarded to the node in the top Route header.
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  ReqMatcher("INVITE").matches(tdata->msg);
-
-  // Try to send the request 4 times, and have the request fail after each
-  // attempt due to a transport error. Verify that after there stops being any
-  // addresses left to try, the request fails and this is reported.
-  for (int ii = 0; ii < 4; ++ii)
+  EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
+  EXPECT_EQ(49152, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
+  string server1 = str_pj(tdata->tp_info.transport->remote_name.host);
+  if (server1 != "1.2.3.5")
   {
-    // Check that it was sent to one of the server addresses.
-    EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
-    EXPECT_EQ(5060, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
-    string server1 = str_pj(tdata->tp_info.transport->remote_name.host);
-    EXPECT_THAT(server1, MatchesRegex("10.10.10.10[0-3]")) << "Unexpected server address " << server1;
-
-    // Kill the transport the request was sent on.
-    fake_tcp_init_shutdown((fake_tcp_transport*)tdata->tp_info.transport, PJ_EEOF);
-    free_txdata();
-    poll();
-
-    if (ii < 3)
-    {
-      // There are addresses left, so check that the request has been redirected
-      // to another server.
-      ASSERT_EQ(1, txdata_count());
-      tdata = current_txdata();
-      ReqMatcher("INVITE").matches(tdata->msg);
-    }
+    ADD_FAILURE_AT(__FILE__, __LINE__) << "Unexpected server address " << server1;
   }
-
-  // There are no addresses left, so check that the request is not retried
-  // again, and its failure is reported.
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  RespMatcher(408).matches(tdata->msg); // Response is a 408 Timeout.
 
   free_txdata();
 
@@ -3005,7 +3072,6 @@ TEST_F(BasicProxyTest, RetryOn5xx)
   // Inject a request with a Route header not referencing this node or the
   // home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@awaydomain";
   msg1._from = "alice";
@@ -3116,7 +3182,6 @@ TEST_F(BasicProxyTest, RetryFailed)
   // Inject a request with a Route header not referencing this node or the
   // home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@awaydomain";
   msg1._from = "alice";
@@ -3226,7 +3291,6 @@ TEST_F(BasicProxyTest, NonInvite100Trying)
   // Inject a request with a Route header not referencing this node or the
   // home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "REGISTER";
   msg1._requri = "sip:bob@awaydomain";
   msg1._from = "alice";
@@ -3263,7 +3327,6 @@ TEST_F(BasicProxyTest, NonInvite100Trying)
   free_txdata();
 
   Message msg2;
-  msg2._first_hop = true;
   msg2._method = "REGISTER";
   msg2._requri = "sip:bob@awaydomain";
   msg2._from = "alice";
@@ -3335,7 +3398,6 @@ TEST_F(BasicProxyTest, ContentHeaders)
   // and check it comes out the other side with only one Content-Length
   // header and no Content-Type header.
   Message msg;
-  msg._first_hop = true;
   msg._method = "ACK";
   msg._requri = "sip:bob@awaydomain";
   msg._from = "alice";
@@ -3426,7 +3488,6 @@ TEST_F(BasicProxyTest, InviteTimerCExpiryCancelled)
   // Inject a request with a Route header referring to this node and a
   // RequestURI with a URI in the home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@homedomain;transport=TCP";
   msg1._from = "alice";
@@ -3513,7 +3574,6 @@ TEST_F(BasicProxyTest, InviteTimerCExpiryRace)
   // Inject a request with a Route header referring to this node and a
   // RequestURI with a URI in the home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@homedomain;transport=TCP";
   msg1._from = "alice";
@@ -3608,7 +3668,6 @@ TEST_F(BasicProxyTest, InviteTimerCExpiryCancelTimeout)
   // Inject a request with a Route header referring to this node and a
   // RequestURI with a URI in the home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@homedomain;transport=TCP";
   msg1._from = "alice";
@@ -3708,7 +3767,6 @@ TEST_F(BasicProxyTest, BlacklistOnTimeout)
   // Inject a request with a Route header not referencing this node or the
   // home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@awaydomain";
   msg1._from = "alice";
@@ -3983,7 +4041,6 @@ TEST_F(BasicProxyTest, StatelessProxyNoBlacklistOnTimeout)
   // Inject a request with a Route header not referencing this node or the
   // home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@awaydomain";
   msg1._from = "alice";
@@ -4081,7 +4138,6 @@ TEST_F(BasicProxyTest, TransportFailureWithCancelPending)
   // Inject a request with a Route header referring to this node and a
   // RequestURI with a URI in the home domain.
   Message msg1;
-  msg1._first_hop = true;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@homedomain;transport=TCP";
   msg1._from = "alice";
