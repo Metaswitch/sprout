@@ -3030,13 +3030,6 @@ TEST_F(BasicProxyTest, StopsRetryingAfterManyFailures)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher(408).matches(tdata->msg); // Response is a 408 Timeout.
-  EXPECT_STREQ("TCP", tdata->tp_info.transport->type_name) << "Wrong transport type";
-  EXPECT_EQ(49152, tdata->tp_info.transport->remote_name.port) << "Wrong transport port";
-  string server1 = str_pj(tdata->tp_info.transport->remote_name.host);
-  if (server1 != "1.2.3.5")
-  {
-    ADD_FAILURE_AT(__FILE__, __LINE__) << "Unexpected server address " << server1;
-  }
 
   free_txdata();
 
