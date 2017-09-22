@@ -39,6 +39,7 @@
 #include "testingcommon.h"
 
 using namespace std;
+using namespace TestingCommon;
 using testing::StrEq;
 using testing::ElementsAre;
 using testing::MatchesRegex;
@@ -49,6 +50,7 @@ using testing::NiceMock;
 using testing::HasSubstr;
 using ::testing::Return;
 using ::testing::AtLeast;
+using ::testing::SaveArg;
 
 // TODO - make this class more consistent with the
 // TestingCommon::SubscriptionBuilder class (ie. have function "set_route",
@@ -394,7 +396,6 @@ public:
   }
 };
 
-using namespace TestingCommon;
 
 void SCSCFTestBase::doFourAppServerFlow(std::string record_route_regex, bool app_servers_record_route)
 {
@@ -9885,8 +9886,6 @@ protected:
 MockRalfProcessor* SCSCFTestWithRalf::_ralf_processor;
 RalfACRFactory* SCSCFTestWithRalf::_ralf_acr_factory;
 
-using ::testing::SaveArg;
-using ::testing::Sequence;
 // Test complete mainline call flow and check ralf processor for sending right
 // ACR in sequence.
 TEST_F(SCSCFTestWithRalf, MainlineBilling)

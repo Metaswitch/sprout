@@ -423,12 +423,15 @@ protected:
 
 };
 
+// Tests mainline Rf message generation for a successful registration transaction
+// through SCSCF
 TEST_F(ACRTest, SCSCFRegister)
 {
   pj_time_val ts;
   ACR* acr;
   std::string acr_message;
 
+  // Create a Ralf ACR factory for S-CSCF ACRs and get an ACR instance.
   RalfACRFactory f(NULL, ACR::SCSCF);
   acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_ORIGINATING);
 
@@ -453,12 +456,15 @@ TEST_F(ACRTest, SCSCFRegister)
   delete acr;
 }
 
+// Tests mainline Rf message generation for a successful Subscribe & Notify
+// transaction
 TEST_F(ACRTest, SCSCFSubscribeNotify)
 {
   pj_time_val ts;
   ACR* acr;
   std::string acr_message;
 
+  // Create a Ralf ACR factory for S-CSCF ACRs and get an ACR instance.
   RalfACRFactory f(NULL, ACR::SCSCF);
   acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_ORIGINATING);
 
@@ -492,7 +498,7 @@ TEST_F(ACRTest, SCSCFSubscribeNotify)
   ts.msec = 10;
   acr->rx_request(parse_msg(sub.get()), ts);
 
-  // Receive Subscrible with Expires=0 for end of dialog.
+  // Receive Subscribe with Expires=0 for end of dialog.
   SIPRequest end("SUBSCRIBE");
   end._requri = "sip:homedomain";
   end._routes = "Route: <sip:sprout.homedomain:5054;transport=TCP;orig;lr>\r\n";
@@ -505,16 +511,18 @@ TEST_F(ACRTest, SCSCFSubscribeNotify)
 
   // Build and checked the resulting Rf ACR message.
   acr_message = acr->get_message(ts);
-  //EXPECT_TRUE(compare_acr(acr_message, "acr_scscfsubscribe.json"));
+  EXPECT_TRUE(compare_acr(acr_message, "acr_scscfsubscribe.json"));
   delete acr;
 }
 
+// Tests mainline Rf message generation for a successful cancel transaction
 TEST_F(ACRTest, SCSCFCancelCall)
 {
   pj_time_val ts;
   ACR* acr;
   std::string acr_message;
 
+  // Create a Ralf ACR factory for S-CSCF ACRs and get an ACR instance.
   RalfACRFactory f(NULL, ACR::SCSCF);
   acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_ORIGINATING);
   acr->set_default_ccf("192.1.1.1");
@@ -546,7 +554,6 @@ TEST_F(ACRTest, SCSCFCancelCall)
   cancel200ok._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
   ts.msec = 15;
   acr->tx_response(parse_msg(cancel200ok.get()), ts);
-  //acr->cancel();
 
   // Send 487 Response (ie.request terminated) for the Invite sequence.
   SIPResponse invite487terminated(487, "INVITE");
@@ -564,18 +571,19 @@ TEST_F(ACRTest, SCSCFCancelCall)
 
   // Build and checked the resulting Rf ACR message.
   acr_message = acr->get_message(ts);
-  //EXPECT_TRUE(compare_acr(acr_message, "acr_scscfcancel.json"));
+  EXPECT_TRUE(compare_acr(acr_message, "acr_scscfcancel.json"));
   delete acr;
 }
 
+// Tests mainline Rf message generation for a successful originating call 
+// through S-CSCF.
 TEST_F(ACRTest, SCSCFOrigCall)
 {
-  // Tests mainline Rf message generation for a successful originating call
-  // through a S-CSCF.
   pj_time_val ts;
   ACR* acr;
   std::string acr_message;
 
+  // Create a Ralf ACR factory for S-CSCF ACRs and get an ACR instance.
   RalfACRFactory f(NULL, ACR::SCSCF);
   acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_ORIGINATING);
   acr->set_default_ccf("192.1.1.1");
@@ -738,18 +746,16 @@ TEST_F(ACRTest, SCSCFOrigCall)
   delete acr;
 }
 
+// Tests mainline Rf message generation for a successful terminating call
+// through a S-CSCF.
 TEST_F(ACRTest, SCSCFTermCall)
 {
-  // Tests mainline Rf message generation for a successful terminating call
-  // through a S-CSCF.
   pj_time_val ts;
   ACR* acr;
   std::string acr_message;
 
-  // Create a Ralf ACR factory for S-CSCF ACRs.
+  // Create a Ralf ACR factory for S-CSCF ACRs and get an ACR instance.
   RalfACRFactory f(NULL, ACR::SCSCF);
-
-  // Create an ACR instance for the test.
   acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_TERMINATING);
 
   // Build the original INVITE request.
@@ -1071,12 +1077,15 @@ TEST_F(ACRTest, SCSCFTermCall)
   delete acr;
 }
 
+// Tests mainline Rf message generation for a successful registration transaction
+// through ICSCF
 TEST_F(ACRTest, ICSCFRegister)
 {
   pj_time_val ts;
   ACR* acr;
   std::string acr_message;
 
+  // Create a Ralf ACR factory for I-CSCF ACRs and get an ACR instance.
   RalfACRFactory f(NULL, ACR::ICSCF);
   acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_ORIGINATING);
 
@@ -1121,14 +1130,14 @@ TEST_F(ACRTest, ICSCFRegister)
   delete acr;
 }
 
+// Tests mainline Rf message generation for a successful publish transaction
 TEST_F(ACRTest, SCSCFPublish)
 {
-  // Tests mainline Rf message generation for a successful publish transaction (with body)
-  // at the S-CSCF.
   pj_time_val ts;
   ACR* acr;
   std::string acr_message;
 
+  // Create a Ralf ACR factory for S-CSCF ACRs and get an ACR instance.
   RalfACRFactory f(NULL, ACR::SCSCF);
   acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_ORIGINATING);
 
@@ -1142,7 +1151,7 @@ TEST_F(ACRTest, SCSCFPublish)
   pub._extra_hdrs += "Expires: 300\r\n";
   pub._extra_hdrs += "P-Charging-Vector: icid-value=1234bc9876e;icid-generated-at=10.83.18.28;orig-ioi=homedomain\r\n";
   pub._extra_hdrs += "P-Charging-Function-Addresses: ccf=192.1.1.1;ccf=192.1.1.2;ecf=192.1.1.3;ecf=192.1.1.4\r\n";
-  pub._extra_hdrs += "Content-Type: text/plain\r\n";
+  pub._extra_hdrs += "Content-Type: text/plain\r\n";     // for testing body
   pub._body = "Hello world!";
 
   // Pass the request to the ACR as a received request.
@@ -1157,7 +1166,7 @@ TEST_F(ACRTest, SCSCFPublish)
 
   // Build and checked the resulting Rf ACR message.
   acr_message = acr->get_message(ts);
-  //EXPECT_TRUE(compare_acr(acr_message, "acr_scscfpublish.json"));
+  EXPECT_TRUE(compare_acr(acr_message, "acr_scscfpublish.json"));
   delete acr;
 }
 
@@ -1169,6 +1178,7 @@ TEST_F(ACRTest, SCSCFPublishTrivial)
   ACR* acr;
   std::string acr_message;
 
+  // Create a Ralf ACR factory for S-CSCF ACRs and get an ACR instance.
   RalfACRFactory f(NULL, ACR::SCSCF);
   acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_ORIGINATING);
 
@@ -1192,18 +1202,16 @@ TEST_F(ACRTest, SCSCFPublishTrivial)
 
 }
 
+// Tests mainline Rf message generation for a successful terminating call
+// through a S-CSCF.
 TEST_F(ACRTest, SCSCFTermChangeCallId)
 {
-  // Tests mainline Rf message generation for a successful terminating call
-  // through a S-CSCF.
   pj_time_val ts;
   ACR* acr;
   std::string acr_message;
 
-  // Create a Ralf ACR factory for S-CSCF ACRs.
+  // Create a Ralf ACR factory for S-CSCF ACRs and get an ACR instance.
   RalfACRFactory f(NULL, ACR::SCSCF);
-
-  // Create an ACR instance for the test.
   acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_TERMINATING);
 
   // Build the original INVITE request.
@@ -1334,6 +1342,7 @@ TEST_F(ACRTest, PCSCFOption)
   ACR* acr;
   std::string acr_message;
 
+  // Create a Ralf ACR factory for P-CSCF ACRs and get an ACR instance.
   RalfACRFactory f(NULL, ACR::PCSCF);
   acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_ORIGINATING);
 
@@ -1349,19 +1358,23 @@ TEST_F(ACRTest, PCSCFOption)
   ts.msec = 0;
   acr->rx_request(parse_msg(options.get()), ts);
 
+  // Cancel the ACR and check the resulting Rf ACR message.
   acr->cancel();
-
-  // Build resulting Rf ACR message without checking.
-  string rf_acr = acr->get_message(ts);
+  acr_message = acr->get_message(ts);
+  EXPECT_EQ(acr_message, "Cancelled ACR");
+  
   delete acr;
 }
 
+// Tests mainline Rf message generation for a successful registration transaction
+// through PCSCF
 TEST_F(ACRTest, PCSCFRegister)
 {
   pj_time_val ts;
   ACR* acr;
   std::string acr_message;
 
+  // Create a Ralf ACR factory for P-CSCF ACRs and get an ACR instance.
   RalfACRFactory f(NULL, ACR::PCSCF);
   acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_ORIGINATING);
 
@@ -1378,11 +1391,9 @@ TEST_F(ACRTest, PCSCFRegister)
   ts.msec = 0;
   acr->rx_request(parse_msg(reg.get()), ts);
 
-  // Now build a 200 OK response.
+  // Send 200 OK response.
   SIPResponse reg200ok(200, "REGISTER");
   reg200ok._extra_hdrs = "P-Associated-URI: <sip:6505550000@homedomain>, <tel:6505550000>\r\n";
-
-  // Pass the response to ACR as a transmitted response.
   ts.msec = 25;
   acr->tx_response(parse_msg(reg200ok.get()), ts);
 
@@ -1392,12 +1403,15 @@ TEST_F(ACRTest, PCSCFRegister)
   delete acr;
 }
 
+// Tests mainline Rf message generation for a successful registration transaction
+// through AS
 TEST_F(ACRTest, ASRegister)
 {
   pj_time_val ts;
   ACR* acr;
   std::string acr_message;
 
+  // Create a Ralf ACR factory for AS ACRs and get an ACR instance.
   RalfACRFactory f(NULL, ACR::AS);
   // Currently the only test for callee as initiator
   acr = f.get_acr(0, ACR::CALLED_PARTY, ACR::NODE_ROLE_ORIGINATING);
@@ -1428,17 +1442,20 @@ TEST_F(ACRTest, ASRegister)
 
   // Check the resulting Rf ACR message.
   acr_message = acr->get_message(ts);
-  //EXPECT_TRUE(compare_acr(acr_message, "acr_asregister.json"));
+  EXPECT_TRUE(compare_acr(acr_message, "acr_asregister.json"));
   delete acr;
 }
 
 
+// Tests mainline Rf message generation for a successful terminating call
+// through a IBCF.
 TEST_F(ACRTest, IBCFTermCall)
 {
   pj_time_val ts;
   ACR* acr;
   std::string acr_message;
 
+  // Create a Ralf ACR factory for IBCF ACRs and get an ACR instance.
   RalfACRFactory f(NULL, ACR::IBCF);
   acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_ORIGINATING);
 
@@ -1485,11 +1502,12 @@ TEST_F(ACRTest, IBCFTermCall)
   ts.msec = 30;
   acr->as_info("sip:as1.homedomain:5060;transport=TCP",
                "sip:6505559999@homedomain",
-               512,
+               512,                 // Test AS error code in 5xx
                false);
   acr->tx_response(parse_msg(r200ok.get()), ts);
 
-  // Receive ACK request with SDP body.
+  // Receive ACK request with SDP body. Currently code for handling this is not
+  // being successfully hit and commented out for coverage.
   SIPRequest ack("ACK");
   ack._requri = "sip:6505559999@10.83.18.50:12345;transport=TCP";
   ack._routes = "Route: <sip:sprout.homedomain:5054;transport=TCP;orig;lr>\r\n";
@@ -1512,16 +1530,19 @@ TEST_F(ACRTest, IBCFTermCall)
 
   //Build and checked the resulting Rf ACR message.
   string rf_acr = acr->get_message(ts);
-  //EXPECT_TRUE(compare_acr(rf_acr, "acr_scscftermcall_start.json"));
+  EXPECT_TRUE(compare_acr(rf_acr, "acr_ibcftermcall_start.json"));
   delete acr;
 }
 
+// Tests mainline Rf message generation for a successful originating call 
+// through BGCF.
 TEST_F(ACRTest, BGCFOrigCallStart)
 {
   pj_time_val ts;
   ACR* acr;
   std::string acr_message;
 
+  // Create a Ralf ACR factory for BGCF ACRs and get an ACR instance.
   RalfACRFactory f(NULL, ACR::BGCF);
   acr = f.get_acr(0, ACR::CALLING_PARTY, ACR::NODE_ROLE_ORIGINATING);
 
@@ -1579,6 +1600,6 @@ TEST_F(ACRTest, BGCFOrigCallStart)
 
   // Build and checked the resulting Rf ACR message.
   acr_message = acr->get_message(ts);
-  //EXPECT_TRUE(compare_acr(acr_message, "acr_ibcforigcall_start.json"));
+  EXPECT_TRUE(compare_acr(acr_message, "acr_bgcforigcall_start.json"));
   delete acr;
 }

@@ -5,34 +5,33 @@
   },
   "event":{
     "Accounting-Record-Type":1,
+    "Acct-Interim-Interval":600,
     "Event-Timestamp":1,
     "Service-Information":{
       "IMS-Information":{
         "Event-Type":{
-          "SIP-Method":"PUBLISH"
+          "SIP-Method":"INVITE"
         },
         "Role-Of-Node":0,
-        "Node-Functionality":0,
+        "Node-Functionality":5,
         "User-Session-Id":"0123456789abcdef-10.83.18.38",
-        "Requested-Party-Address":"sip:homedomain",
+        "Calling-Party-Address":[
+          "sip:6505550000@homedomain",
+          "tel:6505550000"
+          ],
         "Time-Stamps":{
           "SIP-Request-Timestamp":1,
           "SIP-Request-Timestamp-Fraction":0,
           "SIP-Response-Timestamp":1,
-          "SIP-Response-Timestamp-Fraction":25
+          "SIP-Response-Timestamp-Fraction":30
         },
         "Inter-Operator-Identifier":[{
-          "Originating-IOI":"homedomain"
+          "Originating-IOI":"homedomain",
+          "Terminating-IOI":"homedomain"
         }],
         "IMS-Charging-Identifier":"1234bc9876e",
-        "Message-Body":[{
-          "Content-Type":"text/plain",
-          "Content-Length":12,
-          "Content-Disposition":"render",
-          "Originator":0
-        }],
         "Cause-Code":-1,
-        "From-Address":"\"6505550000\" <sip:6505550000@homedomain>",
+        "From-Address":"\"6505550000\" <sip:6505550000@homedomain>;tag=12345678",
         "Route-Header-Received":"<sip:sprout.homedomain:5054;transport=TCP;lr;orig>",
         "Instance-Id":"<urn:uuid:00000000-0000-0000-0000-b665231f1213>"
       }

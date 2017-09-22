@@ -105,7 +105,7 @@ std::string ACR::node_name(Node node_functionality)
     case IBCF:
       return "IBCF";
 
-    // LCOV_EXCL_START - functionality is ENUM and should be covered in cases
+    // LCOV_EXCL_START - logic errors not covered in UTs
     default:
       return "Unknown";
     // LCOV_EXCL_STOP
@@ -122,7 +122,7 @@ std::string ACR::node_role_str(NodeRole role)
     case NODE_ROLE_TERMINATING:
       return "Terminating";
 
-    // LCOV_EXCL_START - node role is ENUM and should be covered in cases
+    // LCOV_EXCL_START - logic errors not covered in UTs
     default:
       return "Unknown";
     // LCOV_EXCL_STOP
@@ -263,11 +263,9 @@ void RalfACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
       }
     }
 
-    if (
-        (req->line.req.method.id == PJSIP_REGISTER_METHOD) || 
+    if ((req->line.req.method.id == PJSIP_REGISTER_METHOD) || 
         ( (req->line.req.method.id == PJSIP_OTHER_METHOD) &&
-          (pj_strcmp2(&(req->line.req.method.name), "SUBSCRIBE") == 0) )   
-       )
+          (pj_strcmp2(&(req->line.req.method.name), "SUBSCRIBE") == 0)))
     {
       PJUtils::get_max_expires(req, -1, _expires);
     }
@@ -373,7 +371,6 @@ void RalfACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
 
     // In the originating case we always take SDP and other message bodies
     // from the original request.
-
     if (_node_role == NODE_ROLE_ORIGINATING)
     {
       // Store media description if present.
