@@ -270,6 +270,7 @@ public:
                    const std::string& sproutlet_alias,
                    pjsip_tx_data* req,
                    pjsip_transport* original_transport,
+                   const SproutletWrapper* upstream_wrapper,
                    SAS::TrailId trail_id);
 
   /// Virtual destructor.
@@ -310,6 +311,7 @@ public:
                               const pjsip_sip_uri* base_uri,
                               pj_pool_t* pool) const;
   std::string get_local_hostname(const pjsip_sip_uri* uri) const;
+  bool is_nf_boundary() const;
 
 private:
   void rx_request(pjsip_tx_data* req);
@@ -353,6 +355,12 @@ private:
 
   // Immutable reference to the transport used by the original request.
   pjsip_transport* _original_transport;
+
+  // The name of the Network Function of the upstream Sproutlet (if any).
+  // This is used to detect transitions between Network Functions, so that we
+  // can perform SIP-entity-level operations like sending 100 Trying responses
+  // and decrementing the Max-Forwards counter.
+  std::string _upstream_nf;
 
   typedef std::unordered_map<const pjsip_msg*, pjsip_tx_data*> Packets;
   Packets _packets;

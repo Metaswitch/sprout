@@ -683,6 +683,7 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
                                    alias,
                                    _req,
                                    _original_transport,
+                                   NULL,
                                    trail());
     }
   }
@@ -914,6 +915,7 @@ void SproutletProxy::UASTsx::schedule_requests()
                                                             alias,
                                                             req.req,
                                                             _original_transport,
+                                                            req.upstream.first,
                                                             trail());
 
         // Set up the mappings.
@@ -923,7 +925,7 @@ void SproutletProxy::UASTsx::schedule_requests()
           _umap[(void*)downstream] = req.upstream;
         }
 
-        if (// TODO - HJS - if should send 100 Trying &&
+        if (downstream->is_nf_boundary() &&
             (req.req->msg->line.req.method.id == PJSIP_INVITE_METHOD))
         {
           // Send an immediate 100 Trying response to the upstream
@@ -1230,6 +1232,7 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
                                    const std::string& sproutlet_alias,
                                    pjsip_tx_data* req,
                                    pjsip_transport* original_transport,
+                                   const SproutletWrapper* upstream_wrapper,
                                    SAS::TrailId trail_id) :
   _proxy(proxy),
   _proxy_tsx(proxy_tsx),
@@ -1240,6 +1243,7 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _req(req),
   _req_type(),
   _original_transport(original_transport),
+  _upstream_nf("EXTERNAL"),
   _packets(),
   _send_requests(),
   _send_responses(),
@@ -1289,6 +1293,13 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
     {
       _sproutlet->_incoming_sip_transactions_tbl->increment_successes(_req_type);
     }
+  }
+
+  // Record the Network Function name of the previous Sproutlet (if there was
+  // one).  This allows us to detect transitions between Network Functions.
+  if (upstream_wrapper != NULL)
+  {
+    _upstream_nf = upstream_wrapper->_sproutlet_tsx->get_network_function();
   }
 
   // Construct a unique identifier for this Sproutlet.
@@ -1786,9 +1797,9 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
   // Keep an immutable reference to the request.
   _req = req;
 
-  if (true) // TODO - HJS - if should decrement max forwards
+  if (is_nf_boundary())
   {
-    // Decrement Max-Forwards if present.
+    // Decrement Max-Forwards when transitioning between network functions.
     pjsip_max_fwd_hdr* mf_hdr = (pjsip_max_fwd_hdr*)
                       pjsip_msg_find_hdr(req->msg, PJSIP_H_MAX_FORWARDS, NULL);
     if (mf_hdr != NULL)
@@ -2078,7 +2089,7 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
 
   if (status_code == 100)
   {
-    if (true) // TODO - HJS - if didn't send 100 Trying
+    if (is_nf_boundary())
     {
       // We will already have sent a locally generated 100 Trying response, so
       // don't forward this one.
@@ -2300,4 +2311,21 @@ void SproutletWrapper::log_inter_sproutlet(pjsip_tx_data* tdata,
               _service_name.c_str(),
               (int)size,
               buf);
+}
+
+bool SproutletWrapper::is_nf_boundary() const
+{
+  bool nf_boundary = true;
+  std::string this_nf = "UNKNOWN";
+
+  if (_sproutlet_tsx != NULL)
+  {
+    this_nf =_sproutlet_tsx->get_network_function();
+    nf_boundary = (this_nf != _upstream_nf);
+  }
+
+  TRC_DEBUG("Network function boundary: %s ('%s'->'%s')",
+            nf_boundary ? "yes" : "no", this_nf.c_str(), _upstream_nf.c_str());
+
+  return nf_boundary;
 }
