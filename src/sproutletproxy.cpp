@@ -923,7 +923,8 @@ void SproutletProxy::UASTsx::schedule_requests()
           _umap[(void*)downstream] = req.upstream;
         }
 
-        if (req.req->msg->line.req.method.id == PJSIP_INVITE_METHOD)
+        if (// TODO - HJS - if should send 100 Trying &&
+            (req.req->msg->line.req.method.id == PJSIP_INVITE_METHOD))
         {
           // Send an immediate 100 Trying response to the upstream
           // Sproutlet.
@@ -1785,12 +1786,15 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
   // Keep an immutable reference to the request.
   _req = req;
 
-  // Decrement Max-Forwards if present.
-  pjsip_max_fwd_hdr* mf_hdr = (pjsip_max_fwd_hdr*)
-                      pjsip_msg_find_hdr(req->msg, PJSIP_H_MAX_FORWARDS, NULL);
-  if (mf_hdr != NULL)
+  if (true) // TODO - HJS - if should decrement max forwards
   {
-    --mf_hdr->ivalue;
+    // Decrement Max-Forwards if present.
+    pjsip_max_fwd_hdr* mf_hdr = (pjsip_max_fwd_hdr*)
+                      pjsip_msg_find_hdr(req->msg, PJSIP_H_MAX_FORWARDS, NULL);
+    if (mf_hdr != NULL)
+    {
+      --mf_hdr->ivalue;
+    }
   }
 
   // Clone the request to get a mutable copy to pass to the Sproutlet.
@@ -2074,16 +2078,24 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
 
   if (status_code == 100)
   {
-    // We will already have sent a locally generated 100 Trying response, so
-    // don't forward this one.
-    TRC_DEBUG("Discard 100/INVITE response (%s)", rsp->obj_name);
-    deregister_tdata(rsp);
-    pjsip_tx_data_dec_ref(rsp);
-    return;
+    if (true) // TODO - HJS - if didn't send 100 Trying
+    {
+      // We will already have sent a locally generated 100 Trying response, so
+      // don't forward this one.
+      TRC_DEBUG("Discard 100/INVITE response (%s)", rsp->obj_name);
+      deregister_tdata(rsp);
+      pjsip_tx_data_dec_ref(rsp);
+    }
+    else
+    {
+      // This Sproutlet does not automatically send 100 Trying responses.  Pass
+      // this one through now.
+      TRC_DEBUG("Forward 100 Trying response");
+      tx_response(rsp);
+    }
   }
-
-  if ((status_code > 100) &&
-      (status_code < 199))
+  else if ((status_code > 100) &&
+           (status_code < 199))
   {
     // Forward all provisional responses to INVITEs.
     TRC_DEBUG("Forward 1xx response");

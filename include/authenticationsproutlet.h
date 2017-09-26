@@ -30,7 +30,7 @@ extern "C" {
 #include "analyticslogger.h"
 #include "snmp_success_fail_count_table.h"
 #include "cfgoptions.h"
-#include "forwardingsproutlet.h"
+#include "compositesproutlet.h"
 
 typedef std::function<int(pjsip_contact_hdr*, pjsip_expires_hdr*)> get_expiry_for_binding_fn;
 
@@ -90,8 +90,9 @@ public:
   AuthenticationSproutlet(const std::string& name,
                           int port,
                           const std::string& uri,
-                          const std::string& next_hop_service,
                           const std::list<std::string>& aliases,
+                          const std::string& network_function,
+                          const std::string& next_hop_service,
                           const std::string& realm_name,
                           ImpiStore* impi_store,
                           std::vector<ImpiStore*> remote_impi_stores,
@@ -208,7 +209,7 @@ private:
 };
 
 
-class AuthenticationSproutletTsx : public ForwardingSproutletTsx
+class AuthenticationSproutletTsx : public CompositeSproutletTsx
 {
 public:
   AuthenticationSproutletTsx(AuthenticationSproutlet* authentication,

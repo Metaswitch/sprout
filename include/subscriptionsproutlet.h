@@ -26,7 +26,7 @@
 #include "snmp_counter_table.h"
 #include "session_expires_helper.h"
 #include "as_communication_tracker.h"
-#include "forwardingsproutlet.h"
+#include "compositesproutlet.h"
 
 class SubscriptionSproutletTsx;
 
@@ -36,6 +36,7 @@ public:
   SubscriptionSproutlet(const std::string& name,
                         int port,
                         const std::string& uri,
+                        const std::string& network_function,
                         const std::string& next_hop_service,
                         SubscriberDataManager* sdm,
                         std::vector<SubscriberDataManager*> remote_sdms,
@@ -83,7 +84,7 @@ private:
 };
 
 
-class SubscriptionSproutletTsx : public ForwardingSproutletTsx
+class SubscriptionSproutletTsx : public CompositeSproutletTsx
 {
 public:
   SubscriptionSproutletTsx(SubscriptionSproutlet* subscription,
