@@ -106,16 +106,17 @@ AoRPair* SubscriberDataManager::get_aor_data(const std::string& aor_id,
 bool SubscriberDataManager::unused_bool = false;
 
 Store::Status SubscriberDataManager::set_aor_data(
-                                     const std::string& aor_id,
-                                     AoRPair* aor_pair,
-                                     SAS::TrailId trail,
-                                     bool& all_bindings_expired)
+                                   const std::string& aor_id,
+                                   AoRPair* aor_pair,
+                                   SAS::TrailId trail,
+                                   bool& all_bindings_expired,
+                                   const bool admin_dereg)
 {
-  // The ordering of this function is quite important.
-  //
-  // 1. Expire any old bindings/subscriptions.
-  // 2. Log removed or shortened bindings
-  // 3. Send any Chronos timer requests
+// The ordering of this function is quite important.
+//
+// 1. Expire any old bindings/subscriptions.
+// 2. Log removed or shortened bindings
+// 3. Send any Chronos timer requests
   // 4. Write the data to memcached. If this fails, bail out here
   // 5. Log new or extended bindings
   // 6. Send any messages we were asked to by the caller
@@ -206,7 +207,7 @@ Store::Status SubscriberDataManager::set_aor_data(
     }
 
     // 6. Send any NOTIFYs
-    _notify_sender->send_notifys(aor_id, aor_pair, now, trail);
+    _notify_sender->send_notifys(aor_id, aor_pair, now, admin_dereg, trail);
   }
 
   delete_bindings(classified_bindings);
@@ -561,28 +562,28 @@ void SubscriberDataManager::NotifySender::send_notifys(
                                const std::string& aor_id,
                                AoRPair* aor_pair,
                                int now,
+                               bool admin_dereg,
                                SAS::TrailId trail)
 {
-  std::vector<std::string> expired_binding_uris;
+  std::vector<std::string> deleted_binding_uris;
   ClassifiedBindings binding_info_to_notify;
   bool bindings_changed = false;
   bool associated_uris_changed = false;
 
   // Iterate over the bindings in the original AoR. Find any that aren't in the current
-  // AoR and mark those as expired.
+  // AoR and mark those as deleted.
   for (std::pair<std::string, AoR::Binding*> aor_orig_b :
          aor_pair->get_orig()->bindings())
   {
     AoR::Binding* binding = aor_orig_b.second;
     std::string b_id = aor_orig_b.first;
 
-    // Compare the original and current lists to see whether this binding has expired.
     // Emergency bindings are excluded from notifications.
     if ((!binding->_emergency_registration) &&
         (aor_pair->get_current()->bindings().find(b_id) == aor_pair->get_current()->bindings().end()))
     {
-      TRC_DEBUG("Binding %s has expired", b_id.c_str());
-      expired_binding_uris.push_back(binding->_uri);
+      TRC_DEBUG("Binding %s has been deleted", b_id.c_str());
+      deleted_binding_uris.push_back(binding->_uri);
       NotifyUtils::BindingNotifyInformation* bni =
                new NotifyUtils::BindingNotifyInformation(b_id,
                                                          binding,
@@ -657,8 +658,9 @@ void SubscriberDataManager::NotifySender::send_notifys(
   send_notifys_for_expired_subscriptions(aor_id,
                                          aor_pair,
                                          binding_info_to_notify,
-                                         expired_binding_uris,
+                                         deleted_binding_uris,
                                          now,
+                                         admin_dereg,
                                          trail);
 
   // Iterate over the subscriptions in the current AoR and send NOTIFYs.
@@ -753,8 +755,9 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
                                const std::string& aor_id,
                                AoRPair* aor_pair,
                                ClassifiedBindings binding_info_to_notify,
-                               std::vector<std::string> expired_binding_uris,
+                               std::vector<std::string> deleted_binding_uris,
                                int now,
+                               bool admin_dereg,
                                SAS::TrailId trail)
 {
   // The registration state to send is ACTIVE if we have at least one active binding,
@@ -763,9 +766,12 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
     NotifyUtils::RegistrationState::ACTIVE :
     NotifyUtils::RegistrationState::TERMINATED;
 
-  // expired_binding_uris lists bindings which have expired - we no longer have a valid connection to
-  // these endpoints, so shouldn't send a NOTIFY to them (even to say that their subscription is
-  // terminated).
+  // Deleted_binding_uris lists bindings which no longer exists in AoR. 
+  // They may be deleted by administrative deregistration from Sprout/HSS, and 
+  // corresponding endpoints need to be NOTIFYed of their termination.
+  // Or they may be deleted by endpoint de-register or Chronos expiry, and we 
+  // no longer have a valid connection to these endpoints. Don't send a NOTIFY
+  // in this case.
   //
   // Note that we can't just check whether a binding exists before sending a NOTIFY - a SUBSCRIBE
   // may have come from a P-CSCF or AS, which wouldn't match a binding.
@@ -780,9 +786,13 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
     AoR::Subscription* s = aor_orig_s->second;
     std::string s_id = aor_orig_s->first;
 
-    if (std::find(expired_binding_uris.begin(), expired_binding_uris.end(), s->_req_uri) !=
-      expired_binding_uris.end())
+    if (
+        ((std::find(deleted_binding_uris.begin(), deleted_binding_uris.end(), s->_req_uri) 
+          != deleted_binding_uris.end())) 
+        && (admin_dereg == false)
+        )
     {
+      // Binding has been deleted, and not due to admin deregister.
       // This NOTIFY would go to a binding which no longer exists - skip it.
       continue;
     }

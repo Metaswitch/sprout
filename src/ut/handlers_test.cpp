@@ -126,7 +126,7 @@ class DeregistrationTaskTest : public SipTest
       if (aors[ii] != NULL)
       {
         // Write the information to the local store
-        EXPECT_CALL(*_subscriber_data_manager, set_aor_data(aor_ids[ii], _, _, _)).WillOnce(Return(Store::OK));
+        EXPECT_CALL(*_subscriber_data_manager, set_aor_data(aor_ids[ii], _, _, _, _)).WillOnce(Return(Store::OK));
       }
     }
   }
@@ -337,8 +337,8 @@ TEST_F(DeregistrationTaskTest, SubscriberDataManagerWritesFail)
   AoR* aor = new AoR("sip:6505550231@homedomain");
   AoR* aor2 = new AoR(*aor);
   AoRPair* aor_pair = new AoRPair(aor, aor2);
-  EXPECT_CALL(*_subscriber_data_manager, get_aor_data(_,  _)).WillOnce(Return(aor_pair));
-  EXPECT_CALL(*_subscriber_data_manager, set_aor_data(_, _, _, _)).WillOnce(Return(Store::ERROR));
+  EXPECT_CALL(*_subscriber_data_manager, get_aor_data(_, _)).WillOnce(Return(aor_pair));
+  EXPECT_CALL(*_subscriber_data_manager, set_aor_data(_, _, _, _, _)).WillOnce(Return(Store::ERROR));
 
   // Run the task
   EXPECT_CALL(*_httpstack, send_reply(_, 500, _));
@@ -991,7 +991,7 @@ TEST_F(DeleteImpuTaskTest, Mainline)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, EmptyAoR(), _, _))
+      EXPECT_CALL(*store, set_aor_data(impu, EmptyAoR(), _, _, _))
         .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings are expired.
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(impu, _, "dereg-admin", "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _))
@@ -1014,7 +1014,7 @@ TEST_F(DeleteImpuTaskTest, StoreFailure)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, _, _))
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _))
         .WillOnce(DoAll(SetArgReferee<3>(false), // Fail to expire bindings.
                         Return(Store::ERROR)));
       EXPECT_CALL(*stack, send_reply(_, 500, _));
@@ -1035,7 +1035,8 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith404)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, _, _))
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _))
+
         .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(impu, _, _, "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _))
@@ -1058,7 +1059,7 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith5xx)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, _, _))
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _))
         .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(impu, _, _, "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _))
@@ -1081,7 +1082,7 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith4xx)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, _, _, _))
+      EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _))
         .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(impu, _, _, "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _))
@@ -1105,14 +1106,14 @@ TEST_F(DeleteImpuTaskTest, WritingToRemoteStores)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, EmptyAoR(), _, _))
+      EXPECT_CALL(*store, set_aor_data(impu, EmptyAoR(), _, _, _))
         .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(impu, _, _, "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _))
         .WillOnce(Return(200));
 
       EXPECT_CALL(*remote_store1, get_aor_data(impu, _)).WillOnce(Return(remote_aor));
-      EXPECT_CALL(*remote_store1, set_aor_data(impu, EmptyAoR(), _, _))
+      EXPECT_CALL(*remote_store1, set_aor_data(impu, EmptyAoR(), _, _, _))
         .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
                         Return(Store::OK)));
 
@@ -1215,7 +1216,7 @@ TEST_F(PushProfileTaskTest, MainlineTest)
   build_pushprofile_request(body, default_uri);
 
   EXPECT_CALL(*store, get_aor_data(default_uri, _)).WillOnce(Return(aor_pair));
-  EXPECT_CALL(*store, set_aor_data(default_uri, aor_pair, _, _)).WillOnce(Return(Store::OK));
+  EXPECT_CALL(*store, set_aor_data(default_uri, aor_pair, _, _, _)).WillOnce(Return(Store::OK));
   EXPECT_CALL(*stack, send_reply(_, 200, _));
   task->run();
 }
@@ -1346,7 +1347,7 @@ TEST_F(PushProfileTaskTest, SubscriberDataManagerWriteFails)
   build_pushprofile_request(body, default_uri);
 
   EXPECT_CALL(*store, get_aor_data(default_uri, _)).WillOnce(Return(aor_pair));
-  EXPECT_CALL(*store, set_aor_data(default_uri, aor_pair, _, _)).WillOnce(Return(Store::ERROR));
+  EXPECT_CALL(*store, set_aor_data(default_uri, aor_pair, _, _, _)).WillOnce(Return(Store::ERROR));
   EXPECT_CALL(*stack, send_reply(_, 500, _));
   task->run();
 }
@@ -1366,7 +1367,7 @@ TEST_F(PushProfileTaskTest, AllBindingExpired)
   build_pushprofile_request(body, default_uri);
 
   EXPECT_CALL(*store, get_aor_data(default_uri, _)).WillOnce(Return(aor_pair));
-  EXPECT_CALL(*store, set_aor_data(default_uri, aor_pair, _, _))
+  EXPECT_CALL(*store, set_aor_data(default_uri, aor_pair, _, _, _))
     .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings are expired.
                     Return(Store::OK)));
   EXPECT_CALL(*mock_hss, update_registration_state(default_uri, _, "dereg-timeout", "", 0))

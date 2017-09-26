@@ -1103,7 +1103,8 @@ AoRPair* RegistrarSproutletTsx::write_to_store(
       set_rc = primary_sdm->set_aor_data(aor,
                                          aor_pair,
                                          trail(),
-                                         all_bindings_expired);
+                                         all_bindings_expired,
+                                         false);
     }
     else
     {

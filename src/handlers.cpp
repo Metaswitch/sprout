@@ -145,7 +145,8 @@ static AoRPair* get_and_set_local_aor_data(
     set_rc = current_sdm->set_aor_data(aor_id,
                                        aor_pair,
                                        trail,
-                                       all_bindings_expired);
+                                       all_bindings_expired,
+                                       false);
     if (set_rc != Store::OK)
     {
       delete aor_pair; aor_pair = NULL;
@@ -521,6 +522,7 @@ AoRPair* DeregistrationTask::deregister_bindings(
 {
   AoRPair* aor_pair = NULL;
   bool all_bindings_expired = false;
+  bool admin_dereg = false;
   bool got_ifcs;
   Store::Status set_rc;
   std::vector<std::string> impis_to_dereg;
@@ -576,7 +578,9 @@ AoRPair* DeregistrationTask::deregister_bindings(
     set_rc = current_sdm->set_aor_data(aor_id,
                                        aor_pair,
                                        trail(),
-                                       all_bindings_expired);
+                                       all_bindings_expired,
+                                       admin_dereg);
+
     if (set_rc != Store::OK)
     {
       delete aor_pair; aor_pair = NULL;
@@ -808,6 +812,7 @@ void DeleteImpuTask::run()
 
   HTTPCode hss_sc;
   int sc;
+  const bool admin_dereg = false;
 
   // Expire all the bindings. This will handle deregistering with the HSS and
   // sending NOTIFYs and 3rd party REGISTERs.
@@ -821,7 +826,8 @@ void DeleteImpuTask::run()
                                        "*",
                                        HSSConnection::DEREG_ADMIN,
                                        trail(),
-                                       &hss_sc);
+                                       &hss_sc,
+                                       admin_dereg);
 
   // Work out what status code to return.
   if (all_bindings_expired)

@@ -622,7 +622,8 @@ static bool expire_bindings(SubscriberDataManager *sdm,
                             AssociatedURIs* associated_uris,
                             const std::string& binding_id,
                             std::string& scscf_uri,
-                            SAS::TrailId trail)
+                            SAS::TrailId trail,
+                            const bool admin_dereg)
 {
   // We need the retry loop to handle the store's compare-and-swap.
   bool all_bindings_expired = false;
@@ -656,7 +657,7 @@ static bool expire_bindings(SubscriberDataManager *sdm,
     }
 
     aor_pair->get_current()->_associated_uris = *associated_uris;
-    set_rc = sdm->set_aor_data(aor, aor_pair, trail, all_bindings_expired);
+    set_rc = sdm->set_aor_data(aor, aor_pair, trail, all_bindings_expired, admin_dereg);
     delete aor_pair; aor_pair = NULL;
 
     // We can only say for sure that the bindings were expired if we were able
@@ -678,7 +679,8 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
                                         const std::string& binding_id,
                                         const std::string& dereg_type,
                                         SAS::TrailId trail,
-                                        HTTPCode* hss_status_code)
+                                        HTTPCode* hss_status_code,
+                                        const bool admin_dereg)
 {
   TRC_INFO("Remove binding(s) %s from IMPU %s", binding_id.c_str(), aor.c_str());
   bool all_bindings_expired = false;
@@ -712,7 +714,7 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
 
   std::string scscf_uri;
 
-  if (expire_bindings(sdm, aor, &associated_uris, binding_id, scscf_uri, trail))
+  if (expire_bindings(sdm, aor, &associated_uris, binding_id, scscf_uri, trail, admin_dereg))
   {
     // All bindings have been expired, so do deregistration processing for the
     // IMPU.
@@ -760,7 +762,7 @@ bool RegistrationUtils::remove_bindings(SubscriberDataManager* sdm,
        remote_sdm != remote_sdms.end();
        ++remote_sdm)
   {
-    (void) expire_bindings(*remote_sdm, aor, &associated_uris, binding_id, scscf_uri, trail);
+    (void) expire_bindings(*remote_sdm, aor, &associated_uris, binding_id, scscf_uri, trail, admin_dereg);
   }
 
   return all_bindings_expired;

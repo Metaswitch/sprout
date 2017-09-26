@@ -106,6 +106,7 @@ public:
     void send_notifys(const std::string& aor_id,
                       AoRPair* aor_pair,
                       int now,
+                      bool admin_dereg,
                       SAS::TrailId trail);
 
     /// SubscriberDataManager is the only class that can use NotifySender
@@ -128,8 +129,9 @@ public:
                                    const std::string& aor_id,
                                    AoRPair* aor_pair,
                                    ClassifiedBindings binding_info_to_notify,
-                                   std::vector<std::string> expired_binding_uris,
+                                   std::vector<std::string> deleted_binding_uris,
                                    int now,
+                                   bool admin_dereg,
                                    SAS::TrailId trail);
   };
 
@@ -177,10 +179,12 @@ public:
   /// @param trail                SAS trail
   /// @param all_bindings_expired Whether all bindings have expired
   ///                             as a result of the set
+
   virtual Store::Status set_aor_data(const std::string& aor_id,
                                      AoRPair* aor_pair,
                                      SAS::TrailId trail,
-                                     bool& all_bindings_expired = unused_bool);
+                                     bool& all_bindings_expired = unused_bool,
+                                     const bool admin_dereg = false);
 
 private:
   // Expire any out of date bindings in the current AoR
