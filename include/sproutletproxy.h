@@ -27,20 +27,25 @@ class SproutletWrapper;
 class SproutletProxy : public BasicProxy, SproutletHelper
 {
 public:
+  static const int DEFAULT_MAX_SPROUTLET_DEPTH = 50;
+
   /// Constructor.
   ///
-  /// @param  endpt             - The pjsip endpoint to associate with.
-  /// @param  priority          - The pjsip priority to load at.
-  /// @param  host_aliases      - The IP addresses/domains that refer to this proxy.
-  /// @param  sproutlets        - Sproutlets to load in this proxy.
-  /// @param  stateless_proxies - A set of next-hops that are considered to be
-  ///                             stateless proxies.
+  /// @param  endpt               - The pjsip endpoint to associate with.
+  /// @param  priority            - The pjsip priority to load at.
+  /// @param  host_aliases        - The IP addresses/domains that refer to this proxy.
+  /// @param  sproutlets          - Sproutlets to load in this proxy.
+  /// @param  stateless_proxies   - A set of next-hops that are considered to be
+  ///                               stateless proxies.
+  /// @param  max_sproutlet_depth - The maximum number of Sproutlets that can be
+  ///                               invoked in a row before we break the loop.
   SproutletProxy(pjsip_endpoint* endpt,
                  int priority,
                  const std::string& root_uri,
                  const std::unordered_set<std::string>& host_aliases,
                  const std::list<Sproutlet*>& sproutlets,
-                 const std::set<std::string>& stateless_proxies);
+                 const std::set<std::string>& stateless_proxies,
+                 int max_sproutlet_depth=DEFAULT_MAX_SPROUTLET_DEPTH);
 
   /// Destructor.
   virtual ~SproutletProxy();
@@ -252,6 +257,8 @@ protected:
 
   std::list<Sproutlet*> _sproutlets;
 
+  const int _max_sproutlet_depth;
+
   static const pj_str_t STR_SERVICE;
 
   friend class UASTsx;
@@ -312,6 +319,7 @@ public:
                               pj_pool_t* pool) const;
   std::string get_local_hostname(const pjsip_sip_uri* uri) const;
   bool is_nf_boundary() const;
+  int get_depth() const { return _depth; };
 
 private:
   void rx_request(pjsip_tx_data* req);
@@ -361,6 +369,9 @@ private:
   // can perform SIP-entity-level operations like sending 100 Trying responses
   // and decrementing the Max-Forwards counter.
   std::string _upstream_nf;
+
+  // The depth of this wrapper in the transaction tree.  Used to detect loops.
+  int _depth;
 
   typedef std::unordered_map<const pjsip_msg*, pjsip_tx_data*> Packets;
   Packets _packets;

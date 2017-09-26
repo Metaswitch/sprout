@@ -119,6 +119,7 @@ struct options
   int                                  session_continued_timeout_ms;
   int                                  session_terminated_timeout_ms;
   std::set<std::string>                stateless_proxies;
+  int                                  max_sproutlet_depth;
   std::string                          pbxes;
   std::string                          pbx_service_route;
   uint32_t                             non_register_auth_mode;

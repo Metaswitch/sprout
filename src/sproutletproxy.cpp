@@ -35,7 +35,8 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
                                const std::string& root_uri,
                                const std::unordered_set<std::string>& host_aliases,
                                const std::list<Sproutlet*>& sproutlets,
-                               const std::set<std::string>& stateless_proxies) :
+                               const std::set<std::string>& stateless_proxies,
+                               int max_sproutlet_depth) :
   BasicProxy(endpt,
              "mod-sproutlet-controller",
              priority,
@@ -43,7 +44,8 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
              stateless_proxies),
   _root_uri(NULL),
   _host_aliases(host_aliases),
-  _sproutlets(sproutlets)
+  _sproutlets(sproutlets),
+  _max_sproutlet_depth(max_sproutlet_depth)
 {
   /// Store the URI of this SproutletProxy - this is used for Record-Routing.
   TRC_DEBUG("Root Record-Route URI = %s", root_uri.c_str());
@@ -873,11 +875,25 @@ void SproutletProxy::UASTsx::schedule_requests()
     // Reject the request if the Max-Forwards value has dropped to zero.
     pjsip_max_fwd_hdr* mf_hdr = (pjsip_max_fwd_hdr*)
                   pjsip_msg_find_hdr(req.req->msg, PJSIP_H_MAX_FORWARDS, NULL);
-    if ((mf_hdr != NULL) &&
-        (mf_hdr->ivalue <= 0))
+    bool loop_detected = false;
+
+    if ((mf_hdr != NULL) && (mf_hdr->ivalue <= 0))
     {
-      // Max-Forwards has decayed to zero, so either reject the request or
-      // discard it if it's an ACK.
+      // Max-Forwards has decayed to zero - we've detected a loop.
+      TRC_DEBUG("Max-Forwards too low");
+      loop_detected = true;
+    }
+    else if (req.upstream.first->get_depth() <= 0)
+    {
+      // Maximum recursion depth for Sproutlets reached - it's a loop.
+      TRC_ERROR("Exceeded maximum Sproulet tree depth - coding error");
+      loop_detected = true;
+    }
+
+    if (loop_detected)
+    {
+      // We've detected a loop, so either reject the request or discard it if
+      // it's an ACK.
       if (req.req->msg->line.req.method.id != PJSIP_ACK_METHOD)
       {
         TRC_INFO("Loop detected - rejecting request with 483 status code");
@@ -1244,6 +1260,7 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _req_type(),
   _original_transport(original_transport),
   _upstream_nf("EXTERNAL"),
+  _depth(proxy->_max_sproutlet_depth),
   _packets(),
   _send_requests(),
   _send_responses(),
@@ -1297,9 +1314,11 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
 
   // Record the Network Function name of the previous Sproutlet (if there was
   // one).  This allows us to detect transitions between Network Functions.
+  // Also track the nesting depth, to detect loops.
   if (upstream_wrapper != NULL)
   {
     _upstream_nf = upstream_wrapper->_sproutlet_tsx->get_network_function();
+    _depth = upstream_wrapper->get_depth() - 1;
   }
 
   // Construct a unique identifier for this Sproutlet.
