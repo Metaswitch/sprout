@@ -2831,7 +2831,7 @@ TEST_F(BasicProxyTest, StopsRetryingAfterManyFailures)
 
   // Add a host mapping for proxy-x.awaydomain to six IP addresses.
   add_host_mapping("proxy-x.awaydomain",
-                   "10.10.10.100,10.10.10.101,10.10.10.102,10.10.10.103,10.10.10.104,10.10.10.105,10.10.106,10.10.10.107,10.10.10.108,10.10.10.109");
+                   "10.10.10.100,10.10.10.101,10.10.10.102,10.10.10.103,10.10.10.104,10.10.10.105,10.10.10.106,10.10.10.107,10.10.10.108,10.10.10.109");
 
   // Create a TCP connection to the listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
