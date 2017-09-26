@@ -1,6 +1,7 @@
 {
   "event": {
     "Accounting-Record-Type": 1,
+    "User-Name":"Alice",
     "Event-Timestamp": 1,
     "Service-Information": {
       "IMS-Information": {
@@ -22,6 +23,7 @@
             "Originating-IOI": "homedomain"
           }
         ],
+        "Transit-IOI-List":["transitdomain"],
         "Node-Functionality": 0,
         "Requested-Party-Address" : "sip:homedomain",
         "Role-Of-Node": 0,
