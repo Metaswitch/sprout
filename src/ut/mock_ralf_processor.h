@@ -19,9 +19,8 @@
 class MockRalfProcessor : public RalfProcessor 
 {
 public:
-    MockRalfProcessor() : RalfProcessor(new MockHttpConnection(),
-                                        NULL,
-                                        2){};
+    MockRalfProcessor(HttpConnection* ralf_connection) : 
+      RalfProcessor(ralf_connection, NULL, 2){};
 
     virtual ~MockRalfProcessor(){};
 

@@ -9795,14 +9795,16 @@ class SCSCFTestWithRalf : public SCSCFTestBase
   static void SetUpTestCase()
   {
     SCSCFTestBase::SetUpTestCase();
-    _ralf_processor = new NiceMock<MockRalfProcessor>();
+    _ralf_connection = new NiceMock<MockHttpConnection>();
+    _ralf_processor = new NiceMock<MockRalfProcessor>(_ralf_connection);
     _ralf_acr_factory = new RalfACRFactory(_ralf_processor, ACR::SCSCF);
   }
   static void TearDownTestCase()
   {
-    SCSCFTestBase::TearDownTestCase();
     delete _ralf_acr_factory; _ralf_acr_factory = NULL;
     delete _ralf_processor; _ralf_processor = NULL;
+    delete _ralf_connection; _ralf_connection = NULL;
+    SCSCFTestBase::TearDownTestCase();
   }
 
   SCSCFTestWithRalf() : SCSCFTestBase()
@@ -9879,10 +9881,12 @@ class SCSCFTestWithRalf : public SCSCFTestBase
   {
   }
 protected:
+  static MockHttpConnection* _ralf_connection;
   static MockRalfProcessor* _ralf_processor;
   static RalfACRFactory* _ralf_acr_factory;
 
 };
+MockHttpConnection* SCSCFTestWithRalf::_ralf_connection;
 MockRalfProcessor* SCSCFTestWithRalf::_ralf_processor;
 RalfACRFactory* SCSCFTestWithRalf::_ralf_acr_factory;
 
@@ -9902,8 +9906,7 @@ TEST_F(SCSCFTestWithRalf, MainlineBilling)
   EXPECT_CALL(*_ralf_processor, send_request_to_ralf(_))
     .WillOnce(SaveArg<0>(&ralf_request_1))
     .WillOnce(SaveArg<0>(&ralf_request_2))
-    .WillOnce(SaveArg<0>(&ralf_request_3))
-    .RetiresOnSaturation();
+    .WillOnce(SaveArg<0>(&ralf_request_3));
 
   // Complete call flow with ACK and BYE.
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
@@ -9950,12 +9953,19 @@ TEST_F(SCSCFTestWithRalf, ExpiredChain)
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
-  // Save first and last ralf request being sent out.
+  // Save Ralf request for checking and manual deletion as mock ralf processor
+  // will not free up the request autimatically.
   RalfProcessor::RalfRequest* ralf_request;
   RalfProcessor::RalfRequest* ralf_request_1;
+  RalfProcessor::RalfRequest* ralf_request_2;
+  RalfProcessor::RalfRequest* ralf_request_3;
+  RalfProcessor::RalfRequest* ralf_request_4;
   EXPECT_CALL(*_ralf_processor, send_request_to_ralf(_))
     .WillOnce(SaveArg<0>(&ralf_request))
-    .WillRepeatedly(SaveArg<0>(&ralf_request_1));
+    .WillOnce(SaveArg<0>(&ralf_request_1))
+    .WillOnce(SaveArg<0>(&ralf_request_2))
+    .WillOnce(SaveArg<0>(&ralf_request_3))
+    .WillOnce(SaveArg<0>(&ralf_request_4));
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -10008,15 +10018,6 @@ TEST_F(SCSCFTestWithRalf, ExpiredChain)
   msg._cseq++;
   free_txdata();
 
-  // Check first ralf request and delete it.
-  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"Accounting-Record-Type\":1.*")); // EVENT_RECORD
-  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"Role-Of-Node\":0.*"));  // NODE_ROLE_ORIGINATING
-  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"SIP-Method\":\"INVITE\".*"));
-  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"Application-Server\":\"sip:1.2.3.4:56789;transport=UDP\".*"));
-  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"Status-Code\":0.*"));
-  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"Cause-Code\":404.*"));
-  delete ralf_request; ralf_request = NULL;
-
   // ---------- Send ACK from bono
   SCOPED_TRACE("ACK");
   msg._method = "ACK";
@@ -10040,8 +10041,20 @@ TEST_F(SCSCFTestWithRalf, ExpiredChain)
   pj_ssize_t len = pjsip_msg_print(saved, buf, sizeof(buf));
   doAsOriginated(string(buf, len), true);
 
-  // Check last ralf request and delete it.
-  EXPECT_THAT(ralf_request_1->message,MatchesRegex(".*\"Accounting-Record-Type\":2.*")); // START_RECORD
-  EXPECT_THAT(ralf_request_1->message,MatchesRegex(".*\"SIP-Method\":\"INVITE\".*"));
+  // Check first ralf request.
+  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"Accounting-Record-Type\":1.*")); // EVENT_RECORD
+  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"Role-Of-Node\":0.*"));  // NODE_ROLE_ORIGINATING
+  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"SIP-Method\":\"INVITE\".*"));
+  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"Application-Server\":\"sip:1.2.3.4:56789;transport=UDP\".*"));
+  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"Status-Code\":0.*"));
+  EXPECT_THAT(ralf_request->message,MatchesRegex(".*\"Cause-Code\":404.*"));
+
+  delete ralf_request; ralf_request = NULL;
   delete ralf_request_1; ralf_request_1 = NULL;
+  delete ralf_request_2; ralf_request_2 = NULL;
+  delete ralf_request_3; ralf_request_3 = NULL;
+  delete ralf_request_4; ralf_request_4 = NULL;
+
 }
+
+
