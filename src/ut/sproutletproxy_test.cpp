@@ -2099,6 +2099,9 @@ TEST_F(SproutletProxyTest, SproutletChain)
 TEST_F(SproutletProxyTest, LoopDetection)
 {
   // Test loop detection of requests passing through a chain of sproutlets.
+  // We use two sproutlets that return different network function namse,
+  // otherwise they'll be treated as a single entity, and only decrement the
+  // Max-Forwards count once.
   pjsip_tx_data* tdata;
 
   // Create a TCP connection to the listening port.
@@ -2115,7 +2118,7 @@ TEST_F(SproutletProxyTest, LoopDetection)
   msg1._from = "sip:alice@homedomain";
   msg1._to = "sip:bob@awaydomain";
   msg1._via = tp->to_string(false) + "1111";
-  msg1._route = "Route: <sip:fwd.proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:fwd.proxy1.homedomain;transport=TCP;lr>";
+  msg1._route = "Route: <sip:fwd.proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:fwdrr.proxy1.homedomain;transport=TCP;lr>";
   msg1._forwards = 2;
   inject_msg(msg1.get_request(), tp);
 
@@ -2129,7 +2132,7 @@ TEST_F(SproutletProxyTest, LoopDetection)
   EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
-  // Check the 486 Loop Detected.
+  // Check the 483 Loop Detected.
   tdata = current_txdata();
   RespMatcher(483).matches(tdata->msg);
   tp->expect_target(tdata);
@@ -2143,7 +2146,7 @@ TEST_F(SproutletProxyTest, LoopDetection)
   msg2._from = "sip:alice@homedomain";
   msg2._to = "sip:bob@awaydomain";
   msg2._via = tp->to_string(false) + "2222";
-  msg2._route = "Route: <sip:fwd.proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:fwd.proxy1.homedomain;transport=TCP;lr>";
+  msg2._route = "Route: <sip:fwd.proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:fwdrr.proxy1.homedomain;transport=TCP;lr>";
   msg2._forwards = 2;
   inject_msg(msg2.get_request(), tp);
 

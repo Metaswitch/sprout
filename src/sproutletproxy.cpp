@@ -685,7 +685,8 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
                                    alias,
                                    _req,
                                    _original_transport,
-                                   NULL,
+                                   "EXTERNAL",
+                                   _sproutlet_proxy->_max_sproutlet_depth,
                                    trail());
     }
   }
@@ -861,6 +862,8 @@ void SproutletProxy::UASTsx::tx_request(SproutletWrapper* upstream,
   pr.req = req.tx_data;
   pr.upstream = std::make_pair(upstream, fork_id);
   pr.allowed_host_state = req.allowed_host_state;
+  pr.sproutlet_depth = upstream->get_depth();
+  pr.upstream_nf = upstream->get_network_function();
   _pending_req_q.push(pr);
 }
 
@@ -883,10 +886,10 @@ void SproutletProxy::UASTsx::schedule_requests()
       TRC_DEBUG("Max-Forwards too low");
       loop_detected = true;
     }
-    else if (req.upstream.first->get_depth() <= 0)
+    else if (req.sproutlet_depth <= 0)
     {
       // Maximum recursion depth for Sproutlets reached - it's a loop.
-      TRC_ERROR("Exceeded maximum Sproulet tree depth - coding error");
+      TRC_ERROR("Exceeded maximum Sproutlet tree depth - coding error");
       loop_detected = true;
     }
 
@@ -931,7 +934,8 @@ void SproutletProxy::UASTsx::schedule_requests()
                                                             alias,
                                                             req.req,
                                                             _original_transport,
-                                                            req.upstream.first,
+                                                            req.upstream_nf,
+                                                            req.sproutlet_depth,
                                                             trail());
 
         // Set up the mappings.
@@ -1248,7 +1252,8 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
                                    const std::string& sproutlet_alias,
                                    pjsip_tx_data* req,
                                    pjsip_transport* original_transport,
-                                   const SproutletWrapper* upstream_wrapper,
+                                   const std::string& upstream_nf,
+                                   int depth,
                                    SAS::TrailId trail_id) :
   _proxy(proxy),
   _proxy_tsx(proxy_tsx),
@@ -1259,8 +1264,9 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _req(req),
   _req_type(),
   _original_transport(original_transport),
-  _upstream_nf("EXTERNAL"),
-  _depth(proxy->_max_sproutlet_depth),
+  _this_nf(""),
+  _upstream_nf(upstream_nf),
+  _depth(depth),
   _packets(),
   _send_requests(),
   _send_responses(),
@@ -1296,6 +1302,11 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
     // We haven't been supplied a tsx, so create a default SproutletTsx to
     // handle the request.
     _sproutlet_tsx = new SproutletTsx(NULL);
+    _this_nf = _service_name;
+  }
+  else
+  {
+    _this_nf = _sproutlet_tsx->get_network_function();
   }
 
   // Initialize the Tsx
@@ -1309,22 +1320,6 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
     if (_req_type == SNMP::SIPRequestTypes::ACK)
     {
       _sproutlet->_incoming_sip_transactions_tbl->increment_successes(_req_type);
-    }
-  }
-
-  // Record the Network Function name of the previous Sproutlet (if there was
-  // one).  This allows us to detect transitions between Network Functions.
-  // Also track the nesting depth, to detect loops.
-  if (upstream_wrapper != NULL)
-  {
-    // Keep track of the depth of the Sproutlet tree, so we can spot loops.
-    _depth = upstream_wrapper->get_depth() - 1;
-
-    if (upstream_wrapper->_sproutlet_tsx != NULL)
-    {
-      // Save off the name of the Network Function that the upstream Sproutlet
-      // is part of, so that we can detect Network Function transitions.
-      _upstream_nf = upstream_wrapper->_sproutlet_tsx->get_network_function();
     }
   }
 
@@ -1855,9 +1850,10 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
   }
 
   // We consider an ACK transaction to be complete immediately after the
-  // sproutlet's actions have been processed, regardless of whether the
-  // sproutlet forwarded the ACK (some sproutlets are unable to in certain
-  // situations).
+  // sproutlet's actions have been processed, as we won't receive any response,
+  // so won't get another opportunity to tidy up the transaction state.
+  // We do this regardless of whether the sproutlet forwarded the ACK (some
+  // sproutlets are unable to in certain situations).
   bool complete_after_actions = (req->msg->line.req.method.id == PJSIP_ACK_METHOD);
   process_actions(complete_after_actions);
 }
@@ -2341,17 +2337,10 @@ void SproutletWrapper::log_inter_sproutlet(pjsip_tx_data* tdata,
 
 bool SproutletWrapper::is_nf_boundary() const
 {
-  bool nf_boundary = true;
-  std::string this_nf = "UNKNOWN";
-
-  if (_sproutlet_tsx != NULL)
-  {
-    this_nf =_sproutlet_tsx->get_network_function();
-    nf_boundary = (this_nf != _upstream_nf);
-  }
+  bool nf_boundary = (_this_nf != _upstream_nf);
 
   TRC_DEBUG("Network function boundary: %s ('%s'->'%s')",
-            nf_boundary ? "yes" : "no", this_nf.c_str(), _upstream_nf.c_str());
+            nf_boundary ? "yes" : "no", _upstream_nf.c_str(), _this_nf.c_str());
 
   return nf_boundary;
 }

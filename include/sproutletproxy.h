@@ -225,6 +225,8 @@ protected:
       pjsip_tx_data* req;
       std::pair<SproutletWrapper*, int> upstream;
       int allowed_host_state;
+      int sproutlet_depth;
+      std::string upstream_nf;
     } PendingRequest;
     std::queue<PendingRequest> _pending_req_q;
 
@@ -277,7 +279,8 @@ public:
                    const std::string& sproutlet_alias,
                    pjsip_tx_data* req,
                    pjsip_transport* original_transport,
-                   const SproutletWrapper* upstream_wrapper,
+                   const std::string& upstream_nf,
+                   int depth,
                    SAS::TrailId trail_id);
 
   /// Virtual destructor.
@@ -320,6 +323,7 @@ public:
   std::string get_local_hostname(const pjsip_sip_uri* uri) const;
   bool is_nf_boundary() const;
   int get_depth() const { return _depth; };
+  const std::string& get_network_function() const { return _this_nf; };
 
 private:
   void rx_request(pjsip_tx_data* req);
@@ -363,6 +367,9 @@ private:
 
   // Immutable reference to the transport used by the original request.
   pjsip_transport* _original_transport;
+
+  // The name of the Network function of this Sproutlet.
+  std::string _this_nf;
 
   // The name of the Network Function of the upstream Sproutlet (if any).
   // This is used to detect transitions between Network Functions, so that we
