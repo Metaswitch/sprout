@@ -101,7 +101,7 @@ private:
   /// A URI which routes to the BGCF.
   pjsip_uri* _bgcf_uri;
 
-  const std::string& _next_hop_service;
+  const std::string _next_hop_service;
 
   HSSConnection* _hss;
 

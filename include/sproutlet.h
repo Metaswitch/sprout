@@ -483,7 +483,7 @@ public:
   /// transaction belongs.  By default, this is just the service name of the
   /// owning Sproutlet.
   virtual std::string get_network_function()
-    { return _sproutlet->network_function(); }
+    { return (_sproutlet != NULL) ? _sproutlet->network_function() : "noop"; }
 
 protected:
 

@@ -34,7 +34,7 @@ protected:
   int send_request(pjsip_msg*& req,
                    int allowed_host_state=BaseResolver::ALL_LISTS) override;
 
-  std::string _next_hop_service;
+  const std::string _next_hop_service;
 };
 
 #endif

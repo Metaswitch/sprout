@@ -1317,8 +1317,15 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   // Also track the nesting depth, to detect loops.
   if (upstream_wrapper != NULL)
   {
-    _upstream_nf = upstream_wrapper->_sproutlet_tsx->get_network_function();
+    // Keep track of the depth of the Sproutlet tree, so we can spot loops.
     _depth = upstream_wrapper->get_depth() - 1;
+
+    if (upstream_wrapper->_sproutlet_tsx != NULL)
+    {
+      // Save off the name of the Network Function that the upstream Sproutlet
+      // is part of, so that we can detect Network Function transitions.
+      _upstream_nf = upstream_wrapper->_sproutlet_tsx->get_network_function();
+    }
   }
 
   // Construct a unique identifier for this Sproutlet.
