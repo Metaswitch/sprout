@@ -862,7 +862,7 @@ void SproutletProxy::UASTsx::tx_request(SproutletWrapper* upstream,
   pr.req = req.tx_data;
   pr.upstream = std::make_pair(upstream, fork_id);
   pr.allowed_host_state = req.allowed_host_state;
-  pr.sproutlet_depth = upstream->get_depth();
+  pr.sproutlet_depth = upstream->get_depth() - 1;
   pr.upstream_nf = upstream->get_network_function();
   _pending_req_q.push(pr);
 }
