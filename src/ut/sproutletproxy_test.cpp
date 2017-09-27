@@ -2136,6 +2136,7 @@ TEST_F(SproutletProxyTest, CompositeNetworkFunction)
   msg1._to = "sip:bob@awaydomain";
   msg1._via = tp->to_string(false);
   msg1._route = "Route: <sip:composite1.proxy1.homedomain;transport=TCP;lr>";
+  msg1._forwards = "100";
   inject_msg(msg1.get_request(), tp);
 
   // Expecting 100 Trying and forwarded INVITEs.
@@ -2149,13 +2150,16 @@ TEST_F(SproutletProxyTest, CompositeNetworkFunction)
   free_txdata();
 
   // Check the INVITE and send a 100 Trying.
+  // We sent in an initial Max-Forwards count of 100.  We've been through three
+  // sproutlets, but two of them were part of the same network function, so we
+  // expect the counter to have gone down by two (not three).
   pjsip_tx_data* req = pop_txdata();
   expect_target("TCP", "10.10.20.1", 5060, req);
   ReqMatcher("INVITE").matches(req->msg);
   EXPECT_EQ("sip:bob@proxy1.awaydomain:5060;transport=TCP",
             str_uri(req->msg->line.req.uri));
+  EXPECT_EQ("Max-Forwards: 98", get_headers(req->msg, "Max-Forwards"));
   EXPECT_EQ("", get_headers(req->msg, "Route"));
-  EXPECT_EQ("", get_headers(req->msg, "Record-Route"));
   inject_msg(respond_to_txdata(req, 100));
 
   // Send a 200 OK response.
