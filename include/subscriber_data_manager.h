@@ -106,7 +106,7 @@ public:
     void send_notifys(const std::string& aor_id,
                       AoRPair* aor_pair,
                       int now,
-                      bool admin_dereg,
+                      const bool admin_dereg,
                       SAS::TrailId trail);
 
     /// SubscriberDataManager is the only class that can use NotifySender
@@ -131,7 +131,7 @@ public:
                                    ClassifiedBindings binding_info_to_notify,
                                    std::vector<std::string> deleted_binding_uris,
                                    int now,
-                                   bool admin_dereg,
+                                   const bool admin_dereg,
                                    SAS::TrailId trail);
   };
 

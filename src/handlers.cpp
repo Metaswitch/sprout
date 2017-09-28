@@ -522,7 +522,7 @@ AoRPair* DeregistrationTask::deregister_bindings(
 {
   AoRPair* aor_pair = NULL;
   bool all_bindings_expired = false;
-  bool admin_dereg = false;
+  bool admin_dereg = true;
   bool got_ifcs;
   Store::Status set_rc;
   std::vector<std::string> impis_to_dereg;
@@ -812,7 +812,7 @@ void DeleteImpuTask::run()
 
   HTTPCode hss_sc;
   int sc;
-  const bool admin_dereg = false;
+  const bool admin_dereg = true;
 
   // Expire all the bindings. This will handle deregistering with the HSS and
   // sending NOTIFYs and 3rd party REGISTERs.

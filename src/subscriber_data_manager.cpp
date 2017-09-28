@@ -562,7 +562,7 @@ void SubscriberDataManager::NotifySender::send_notifys(
                                const std::string& aor_id,
                                AoRPair* aor_pair,
                                int now,
-                               bool admin_dereg,
+                               const bool admin_dereg,
                                SAS::TrailId trail)
 {
   std::vector<std::string> deleted_binding_uris;
@@ -757,7 +757,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
                                ClassifiedBindings binding_info_to_notify,
                                std::vector<std::string> deleted_binding_uris,
                                int now,
-                               bool admin_dereg,
+                               const bool admin_dereg,
                                SAS::TrailId trail)
 {
   // The registration state to send is ACTIVE if we have at least one active binding,
@@ -794,9 +794,11 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
     {
       // Binding has been deleted, and not due to admin deregister.
       // This NOTIFY would go to a binding which no longer exists - skip it.
+      printf("skip");
       continue;
     }
 
+    printf("sending");
     // Is this subscription present in the new AoR?
     AoR::Subscriptions::const_iterator aor_current =
       aor_pair->get_current()->subscriptions().find(s_id);
