@@ -1,5 +1,5 @@
 /**
- * @file subscriptionsproutlet.h Definition of the Subscription Sproutlet
+ * @file subscriptiontsx.h Definition of the Subscription Tsx
  *                               classes, implementing S-CSCF specific
  *                               Subscription functions.
  *
@@ -11,8 +11,8 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-#ifndef SUBSCRIPTIONSPROUTLET_H__
-#define SUBSCRIPTIONSPROUTLET_H__
+#ifndef SUBSCRIPTIONTSX_H__
+#define SUBSCRIPTIONTSX_H__
 
 #include <vector>
 #include <unordered_map>
@@ -28,25 +28,20 @@
 #include "as_communication_tracker.h"
 #include "forwardingsproutlet.h"
 
-class SubscriptionSproutletTsx;
+class SubscriptionTsx;
 
-class SubscriptionSproutlet : public Sproutlet
+class SubscriptionProvider
 {
 public:
-  SubscriptionSproutlet(const std::string& name,
-                        int port,
-                        const std::string& uri,
-                        const std::string& next_hop_service,
-                        SubscriberDataManager* sdm,
-                        std::vector<SubscriberDataManager*> remote_sdms,
-                        HSSConnection* hss_connection,
-                        ACRFactory* acr_factory,
-                        AnalyticsLogger* analytics_logger,
-                        int cfg_max_expires);
-  ~SubscriptionSproutlet();
+  SubscriptionProvider(SubscriberDataManager* sdm,
+                       std::vector<SubscriberDataManager*> remote_sdms,
+                       HSSConnection* hss_connection,
+                       ACRFactory* acr_factory,
+                       AnalyticsLogger* analytics_logger,
+                       int cfg_max_expires);
+  ~SubscriptionProvider();
 
-  bool init();
-
+  bool init() override;
   SproutletTsx* get_tsx(SproutletHelper* helper,
                         const std::string& alias,
                         pjsip_msg* req,
@@ -58,7 +53,7 @@ private:
   bool handle_request(pjsip_msg* req,
                       SAS::TrailId trail);
 
-  friend class SubscriptionSproutletTsx;
+  friend class SubscriptionTsx;
 
   SubscriberDataManager* _sdm;
   std::vector<SubscriberDataManager*> _remote_sdms;
@@ -76,19 +71,15 @@ private:
 
   /// Default value for a subscription expiry. RFC3860 has this as 3761 seconds.
   static const int DEFAULT_SUBSCRIPTION_EXPIRES = 3761;
-
-  // The next service to route requests onto if the sproutlet does not handle
-  // them itself.
-  std::string _next_hop_service;
 };
 
 
-class SubscriptionSproutletTsx : public ForwardingSproutletTsx
+class SubscriptionTsx : public SproutletTsx
 {
 public:
-  SubscriptionSproutletTsx(SubscriptionSproutlet* subscription,
+  SubscriptionTsx(SubscriptionProvider* subscription,
                            const std::string& next_hop_service);
-  ~SubscriptionSproutletTsx();
+  ~SubscriptionTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req) override;
   virtual void on_rx_in_dialog_request(pjsip_msg* req) override;
@@ -116,7 +107,7 @@ protected:
   void log_subscriptions(const std::string& aor_name,
                          AoR* aor_data);
 
-  SubscriptionSproutlet* _subscription;
+  SubscriptionProvider* _subscription;
 };
 
 #endif

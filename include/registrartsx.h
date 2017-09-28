@@ -1,5 +1,5 @@
 /**
- * @file registrarsproutlet.h Initialization/Termination functions for
+ * @file registrartsx.h Initialization/Termination functions for
  *                            Sprout's Registrar sproutlet.
  *
  * Copyright (C) Metaswitch Networks 2017
@@ -10,8 +10,8 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-#ifndef REGISTRARSPROUTLET_H__
-#define REGISTRARSPROUTLET_H__
+#ifndef REGISTRARTSX_H__
+#define REGISTRARTSX_H__
 
 #include <vector>
 #include <unordered_map>
@@ -29,30 +29,24 @@
 #include "as_communication_tracker.h"
 #include "forwardingsproutlet.h"
 
-class RegistrarSproutletTsx;
+class RegistrarTsx;
 
-class RegistrarSproutlet : public Sproutlet
+class RegistrarProvider : public TsxProvider
 {
 public:
-  RegistrarSproutlet(const std::string& name,
-                     int port,
-                     const std::string& uri,
-                     const std::string& next_hop_service,
-                     const std::list<std::string>& aliases,
-                     SubscriberDataManager* reg_sdm,
-                     std::vector<SubscriberDataManager*> reg_remote_sdms,
-                     HSSConnection* hss_connection,
-                     ACRFactory* rfacr_factory,
-                     int cfg_max_expires,
-                     bool force_original_register_inclusion,
-                     SNMP::RegistrationStatsTables* reg_stats_tbls,
-                     SNMP::RegistrationStatsTables* third_party_reg_stats_tbls,
-                     FIFCService* fifcservice,
-                     IFCConfiguration ifc_configuration);
-  ~RegistrarSproutlet();
+  RegistrarProvider(SubscriberDataManager* reg_sdm,
+                    std::vector<SubscriberDataManager*> reg_remote_sdms,
+                    HSSConnection* hss_connection,
+                    ACRFactory* rfacr_factory,
+                    int cfg_max_expires,
+                    bool force_original_register_inclusion,
+                    SNMP::RegistrationStatsTables* reg_stats_tbls,
+                    SNMP::RegistrationStatsTables* third_party_reg_stats_tbls,
+                    FIFCService* fifcservice,
+                    IFCConfiguration ifc_configuration);
+  ~RegistrarProvider();
 
-  bool init();
-
+  bool init() override;
   SproutletTsx* get_tsx(SproutletHelper* helper,
                         const std::string& alias,
                         pjsip_msg* req,
@@ -64,7 +58,7 @@ public:
                          pjsip_expires_hdr* expires);
 
 private:
-  friend class RegistrarSproutletTsx;
+  friend class RegistrarTsx;
 
   SubscriberDataManager* _sdm;
   std::vector<SubscriberDataManager*> _remote_sdms;
@@ -89,21 +83,17 @@ private:
   // Fallback IFCs service
   FIFCService* _fifc_service;
   IFCConfiguration _ifc_configuration;
-
-  // The next service to route requests onto if the sproutlet does not handle
-  // them itself.
-  std::string _next_hop_service;
 };
 
 
-class RegistrarSproutletTsx : public ForwardingSproutletTsx
+class RegistrarTsx : public SproutletTsx
 {
 public:
-  RegistrarSproutletTsx(RegistrarSproutlet* registrar,
-                        const std::string& next_hop_service,
-                        FIFCService* fifc_service,
-                        IFCConfiguration ifc_configuration);
-  ~RegistrarSproutletTsx();
+  RegistrarTsx(RegistrarProvider* registrar,
+               const std::string& next_hop_service,
+               FIFCService* fifc_service,
+               IFCConfiguration ifc_configuration);
+  ~RegistrarTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req);
 
@@ -127,7 +117,7 @@ protected:
   std::string get_binding_id(pjsip_contact_hdr *contact);
   void log_bindings(const std::string& aor_name, AoR* aor_data);
 
-  RegistrarSproutlet* _registrar;
+  RegistrarProvider* _registrar;
 
   // The S-CSCF URI for this transaction. This is used on any SAR that is sent
   // to the HSS. This field should not be changed once it has been set by the

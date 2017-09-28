@@ -1,5 +1,5 @@
 /**
- * @file authenticationsproutlet.h
+ * @file auth_middleware.h  Authentication middleware class definition.
  *
  * Copyright (C) Metaswitch Networks 2017
  * If license terms are provided to you in a COPYING file in the root directory
@@ -9,32 +9,22 @@
  * Metaswitch Networks in a separate written agreement.
  */
 
-#ifndef AUTHENTICATIONSPROUTLET_H__
-#define AUTHENTICATIONSPROUTLET_H__
+#ifndef AUTH_MIDDLEWARE_H__
+#define AUTH_MIDDLEWARE_H__
 
 extern "C" {
 #include <pjsip.h>
-#include <pjlib-util.h>
-#include <pjlib.h>
-#include <stdint.h>
 }
 
-#include "pjutils.h"
-#include "stack.h"
-#include "acr.h"
-#include "sproutlet.h"
+#include "middleware.h"
 #include "impistore.h"
 #include "hssconnection.h"
 #include "chronosconnection.h"
 #include "acr.h"
 #include "analyticslogger.h"
 #include "snmp_success_fail_count_table.h"
-#include "cfgoptions.h"
-#include "forwardingsproutlet.h"
 
 typedef std::function<int(pjsip_contact_hdr*, pjsip_expires_hdr*)> get_expiry_for_binding_fn;
-
-class AuthenticationSproutletTsx;
 
 // Classes representing authentication vectors. This allows most of the
 // authentication module to be agnostic with respect to where the AV came from
@@ -84,30 +74,25 @@ public:
   int akaversion;
 };
 
-class AuthenticationSproutlet : public Sproutlet
+class AuthenticationProvider : public MiddlewareProvider
 {
 public:
-  AuthenticationSproutlet(const std::string& name,
-                          int port,
-                          const std::string& uri,
-                          const std::string& next_hop_service,
-                          const std::list<std::string>& aliases,
-                          const std::string& realm_name,
-                          ImpiStore* impi_store,
-                          std::vector<ImpiStore*> remote_impi_stores,
-                          HSSConnection* hss_connection,
-                          ChronosConnection* chronos_connection,
-                          ACRFactory* rfacr_factory,
-                          uint32_t non_register_auth_mode_param,
-                          AnalyticsLogger* analytics_logger,
-                          SNMP::AuthenticationStatsTables* auth_stats_tbls,
-                          bool nonce_count_supported_arg,
-                          get_expiry_for_binding_fn get_expiry_for_binding_arg);
-  ~AuthenticationSproutlet();
+  AuthenticationProvider(const std::string& realm_name,
+                         ImpiStore* impi_store,
+                         std::vector<ImpiStore*> remote_impi_stores,
+                         HSSConnection* hss_connection,
+                         ChronosConnection* chronos_connection,
+                         ACRFactory* rfacr_factory,
+                         uint32_t non_register_auth_mode_param,
+                         AnalyticsLogger* analytics_logger,
+                         SNMP::AuthenticationStatsTables* auth_stats_tbls,
+                         bool nonce_count_supported_arg,
+                         get_expiry_for_binding_fn get_expiry_for_binding_arg);
+  ~AuthenticationProvider();
 
-  bool init();
-
-  SproutletTsx* get_tsx(SproutletHelper* helper,
+  bool init() override;
+  SproutletTsx* get_tsx(SproutletTsx* sproutlet_tsx,
+                        SproutletHelper* helper,
                         const std::string& alias,
                         pjsip_msg* req,
                         pjsip_sip_uri*& next_hop,
@@ -162,7 +147,7 @@ private:
                                          ImpiStore::Impi* impi_obj,
                                          SAS::TrailId trail);
 
-  friend class AuthenticationSproutletTsx;
+  friend class AuthenticationMiddleware;
 
   // Realm to use on AKA challenges.
   pj_str_t _aka_realm;
@@ -201,25 +186,34 @@ private:
   // Controls when to challenge non-REGISTER messages.  This is a bitmask with
   // values taken from NonRegisterAuthentication.
   uint32_t _non_register_auth_mode;
-
-  // The next service to route requests onto if the sproutlet does not handle them
-  // itself.
-  std::string _next_hop_service;
 };
 
-
-class AuthenticationSproutletTsx : public ForwardingSproutletTsx
+/// The AuthenticationMiddleware class is responsible for applying
+/// authentication to requests before they reach the SproutletTsx.  Requests
+/// that cannot be authenticated are rejected before they are notified up to
+/// the SproutletTsx.
+class AuthenticationMiddleware : public Middleware
 {
 public:
-  AuthenticationSproutletTsx(AuthenticationSproutlet* authentication,
-                             const std::string& next_hop_service);
-  ~AuthenticationSproutletTsx();
+  /// Constructor.
+  AuthenticationMiddleware(Sproutlet* sproutlet,
+                           SproutletTsx* sproutlet_tsx,
+                           AuthenticationProvider* authentication) :
+    Middleware(sproutlet, sproutlet_tsx),
+    _authentication(authentication),
+    _authenticated_using_sip_digest(false),
+    _scscf_uri()
+  {
+  }
+
+  /// Virtual destructor
+  virtual ~AuthenticationMiddleware() {}
 
   virtual void on_rx_initial_request(pjsip_msg* req) override;
   virtual void on_rx_response(pjsip_msg* rsp, int fork_id) override;
 
 protected:
-  friend class AuthenticationSproutlet;
+  friend class AuthenticationProvider;
 
   void create_challenge(pjsip_digest_credential* credentials,
                         pj_bool_t stale,
@@ -238,7 +232,7 @@ protected:
                                           const std::string& nonce,
                                           ImpiStore::Impi** out_impi_obj);
 
-  AuthenticationSproutlet* _authentication;
+  AuthenticationProvider* _authentication;
 
   // Fields holding the nonce and the IMPI used for this authentication attempt.
   // These are only stored once the user has been successfully authenticated.
@@ -255,4 +249,3 @@ protected:
 };
 
 #endif
-

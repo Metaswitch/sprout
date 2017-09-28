@@ -733,6 +733,8 @@ protected:
             const std::string& uri,
             const std::string& service_host="",
             const std::list<std::string> aliases={},
+            const std::list<TsxProvider> tsx_providers={},
+            const std::list<MiddlewareProvider> middleware_providers={},
             SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl = NULL,
             SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl = NULL) :
     _incoming_sip_transactions_tbl(incoming_sip_transactions_tbl),
@@ -741,8 +743,77 @@ protected:
     _port(port),
     _uri(uri),
     _service_host(service_host),
-    _aliases(aliases)
+    _aliases(aliases),
+    _tsx_providers(tsx_providers),
+    _middleware_providers(middleware_providers)
   {
+  }
+
+  /// Helper function to offer a request to each of the configured TsxProviders
+  /// in turn, until one of them accpets it, or we reach the end of the list.
+  /// Sproutlets that are composed from multiple TsxProviders should call this
+  /// method from their get_tsx() method.
+  SproutletTsx* tsx_from_providers(SproutletHelper* helper,
+                                   const std::string& alias,
+                                   pjsip_msg* req,
+                                   pjsip_sip_uri*& next_hop,
+                                   pj_pool_t* pool,
+                                   SAS::TrailId trail)
+  {
+    SproutletTsx* tsx = NULL;
+
+    for (const auto& provider : _tsx_providers)
+    {
+      tsx = provider.get_tsx(helper, alias, req, next_hop, pool, trail);
+      if (tsx != NULL)
+      {
+        break;
+      }
+    }
+
+    return tsx;
+  }
+
+  /// Helper function to wrap a SproutletTsx object in a middleware object, for
+  /// each MiddlewareProvider configured.  Sproutlets that want to add
+  /// Middleware layers should call this from their get_tsx() method, after a
+  /// SproutletTsx has been selected.
+  SproutletTsx* add_middleware(SproutletTsx* real_tsx,
+                               SproutletHelper* helper,
+                               const std::string& alias,
+                               pjsip_msg* req,
+                               pjsip_sip_uri*& next_hop,
+                               pj_pool_t* pool,
+                               SAS::TrailId trail)
+  {
+    SproutletTsx* tsx = real_tsx;
+
+    if (tsx != NULL)
+    {
+      // The Sproutlet is handling this request.  Wrap the SproutletTsx in
+      // Middleware layers.
+      for (const auto& provider : _middleware_providers)
+      {
+        tsx = provider.get_tsx(tsx, helper, alias, req, next_hop, pool, trail);
+      }
+    }
+
+    return tsx;
+  }
+
+  /// Default implementation of init() - just calls init() on all supplied
+  /// TsxProvidrs and MiddlewareProviders.
+  virtual void init()
+  {
+    for (const auto& provider : _tsx_providers)
+    {
+      provider.init();
+    }
+
+    for (const auto& provider : _middleware_providers)
+    {
+      provider.init();
+    }
   }
 
 private:
@@ -760,6 +831,42 @@ private:
 
   /// The aliases for this service
   const std::list<std::string> _aliases;
+
+  /// A list of objects capable of returning a SproutletTsx for this Sproutlet.
+  const std::list<TsxProvider> _tsx_providers;
+
+  /// A list of objects capable of returning a Middleware transaction object
+  /// for this Sproutlet.
+  const std::list<MiddlewareProvider> _middleware_providers;
+};
+
+/// Abstract base class for objects capable of providing a SproutletTsx
+/// object.
+class TsxProvider
+{
+  virtual ~TsxProvider() {};
+  virtual void init() = 0;
+  virtual SproutletTsx* get_tsx(SproutletHelper* helper,
+                                const std::string& alias,
+                                pjsip_msg* req,
+                                pjsip_sip_uri*& next_hop,
+                                pj_pool_t* pool,
+                                SAS::TrailId trail) = 0;
+};
+
+/// Abstract base class for objects capable of providing a Middleware
+/// transaction object.
+class MiddlewareProvider
+{
+  virtual ~MiddlewareProvider() {};
+  virtual void init() = 0;
+  virtual SproutletTsx* get_tsx(SproutletTsx* sproutlet_tsx,
+                                SproutletHelper* helper,
+                                const std::string& alias,
+                                pjsip_msg* req,
+                                pjsip_sip_uri*& next_hop,
+                                pj_pool_t* pool,
+                                SAS::TrailId trail) = 0;
 };
 
 #endif
