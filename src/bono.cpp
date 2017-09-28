@@ -989,18 +989,6 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
       pj_strdup2(tdata->pool, &orig_param->value, "");
       pj_list_insert_after(&upstream_uri->other_param, orig_param);
     }
-
-    // Select a transport for the request.
-    if (upstream_conn_pool != NULL)
-    {
-      target_p->transport = upstream_conn_pool->get_connection();
-      if (target_p->transport != NULL)
-      {
-        pj_memcpy(&target_p->remote_addr,
-                  &target_p->transport->key.rem_addr,
-                  sizeof(pj_sockaddr));
-      }
-    }
   }
 
   TRC_INFO("Route request to upstream proxy %s",
@@ -3258,24 +3246,6 @@ pj_status_t init_stateful_proxy(SubscriberDataManager* reg_sdm,
 
   // Create a dialog tracker to count dialogs on each flow
   dialog_tracker = new DialogTracker(flow_table);
-
-  // Create a connection pool to the upstream proxy.
-  if (upstream_proxy_connections > 0)
-  {
-    pjsip_host_port pool_target;
-    pool_target.host = pj_strdup3(stack_data.pool, upstream_proxy_arg.c_str());
-    pool_target.port = upstream_proxy_port;
-    sprout_ip_tbl = SNMP::IPCountTable::create("bono_connected_sprouts",
-                                               ".1.2.826.0.1.1578918.9.2.3.1");
-    upstream_conn_pool = new SIPConnectionPool(&pool_target,
-        upstream_proxy_connections,
-        upstream_proxy_recycle,
-        stack_data.pool,
-        stack_data.endpt,
-        stack_data.pcscf_trusted_tcp_factory,
-        sprout_ip_tbl);
-    upstream_conn_pool->init();
-  }
 
   ibcf = enable_ibcf;
   if (ibcf)
