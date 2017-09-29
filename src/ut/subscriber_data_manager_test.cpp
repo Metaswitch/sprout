@@ -206,7 +206,7 @@ TEST_F(BasicSubscriberDataManagerTest, BindingTests)
   EXPECT_EQ(0, b1->_priority);
   delete aor_data1; aor_data1 = NULL;
 
-  // Remove a binding.
+  // Remove a binding by admin dereg.
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
   EXPECT_EQ(1u, aor_data1->get_current()->bindings().size());
