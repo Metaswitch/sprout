@@ -38,6 +38,8 @@ ICSCFSproutlet::ICSCFSproutlet(const std::string& icscf_name,
                                const std::string& bgcf_uri,
                                int port,
                                const std::string& uri,
+                               const std::string& network_function,
+                               const std::string& next_hop_service,
                                HSSConnection* hss,
                                ACRFactory* acr_factory,
                                SCSCFSelector* scscf_selector,
@@ -45,8 +47,16 @@ ICSCFSproutlet::ICSCFSproutlet(const std::string& icscf_name,
                                SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
                                SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
                                bool override_npdi) :
-  Sproutlet(icscf_name, port, uri, "", {}, incoming_sip_transactions_tbl, outgoing_sip_transactions_tbl),
+  Sproutlet(icscf_name,
+            port,
+            uri,
+            "",
+            {},
+            incoming_sip_transactions_tbl,
+            outgoing_sip_transactions_tbl,
+            network_function),
   _bgcf_uri(NULL),
+  _next_hop_service(next_hop_service),
   _hss(hss),
   _scscf_selector(scscf_selector),
   _acr_factory(acr_factory),
@@ -99,11 +109,12 @@ SproutletTsx* ICSCFSproutlet::get_tsx(SproutletHelper* helper,
 {
   if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
   {
-    return (SproutletTsx*)new ICSCFSproutletRegTsx(this);
+    return (SproutletTsx*)new ICSCFSproutletRegTsx(this, _next_hop_service);
   }
   else
   {
     return (SproutletTsx*)new ICSCFSproutletTsx(this,
+                                                _next_hop_service,
                                                 req->line.req.method.id);
   }
 }
@@ -135,8 +146,9 @@ void ICSCFSproutlet::translate_request_uri(pjsip_msg* req,
 /*****************************************************************************/
 
 /// Individual Tsx constructor for REGISTER requests.
-ICSCFSproutletRegTsx::ICSCFSproutletRegTsx(ICSCFSproutlet* icscf) :
-  SproutletTsx(icscf),
+ICSCFSproutletRegTsx::ICSCFSproutletRegTsx(ICSCFSproutlet* icscf,
+                                           const std::string& next_hop_service) :
+  CompositeSproutletTsx(icscf, next_hop_service),
   _icscf(icscf),
   _acr(NULL),
   _router(NULL)
@@ -409,8 +421,9 @@ void ICSCFSproutletRegTsx::on_tx_response(pjsip_msg* rsp)
 
 /// Individual Tsx constructor for non-REGISTER requests.
 ICSCFSproutletTsx::ICSCFSproutletTsx(ICSCFSproutlet* icscf,
+                                     const std::string& next_hop_service,
                                      pjsip_method_e req_type) :
-  SproutletTsx(icscf),
+  CompositeSproutletTsx(icscf, next_hop_service),
   _icscf(icscf),
   _acr(NULL),
   _router(NULL),

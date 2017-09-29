@@ -38,6 +38,7 @@ extern "C" {
 SubscriptionSproutlet::SubscriptionSproutlet(const std::string& name,
                                              int port,
                                              const std::string& uri,
+                                             const std::string& network_function,
                                              const std::string& next_hop_service,
                                              SubscriberDataManager* sdm,
                                              std::vector<SubscriberDataManager*> remote_sdms,
@@ -45,7 +46,7 @@ SubscriptionSproutlet::SubscriptionSproutlet(const std::string& name,
                                              ACRFactory* acr_factory,
                                              AnalyticsLogger* analytics_logger,
                                              int cfg_max_expires) :
-  Sproutlet(name, port, uri),
+  Sproutlet(name, port, uri, "", {}, NULL, NULL, network_function),
   _sdm(sdm),
   _remote_sdms(remote_sdms),
   _hss(hss_connection),
@@ -178,7 +179,7 @@ bool SubscriptionSproutlet::handle_request(pjsip_msg* req,
 
 SubscriptionSproutletTsx::SubscriptionSproutletTsx(SubscriptionSproutlet* subscription,
                                                    const std::string& next_hop_service) :
-  ForwardingSproutletTsx(subscription, next_hop_service),
+  CompositeSproutletTsx(subscription, next_hop_service),
   _subscription(subscription)
 {
   TRC_DEBUG("Subscription Transaction (%p) created", this);

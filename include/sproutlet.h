@@ -42,6 +42,118 @@ struct ForkState
   ForkErrorState error_state;
 };
 
+
+/// The Sproutlet class is a base class on which SIP services can be
+/// built.
+///
+/// Derived classes are instantiated during system initialization and
+/// register a service name with Sprout.  Sprout calls the create_tsx method
+/// on an Sproutlet derived class when the ServiceManager determines that
+/// the next hop for a request contains a hostname of the form
+/// &lt;service_name&gt;.&lt;homedomain&gt;.  This may happen if:
+///
+/// -  an initial request is received with a top route header/ReqURI indicating
+///    this service.
+/// -  an initial request has been forwarded by some earlier service instance
+///    to this service.
+/// -  an in-dialog request is received for a dialog on which the service
+///    previously called add_to_dialog.
+///
+class Sproutlet
+{
+public:
+  /// Virtual destructor.
+  virtual ~Sproutlet() {}
+
+  SNMP::SuccessFailCountByRequestTypeTable* _incoming_sip_transactions_tbl;
+  SNMP::SuccessFailCountByRequestTypeTable* _outgoing_sip_transactions_tbl;
+
+  /// Called when the system determines the service should be invoked for a
+  /// received request.  The Sproutlet can either return NULL indicating it
+  /// does not want to process the request, or create a suitable object
+  /// derived from the SproutletTsx class to process the request.
+  ///
+  /// @param  proxy         - The Sproutlet proxy.
+  /// @param  alias         - The alias of this Sproutlet that matched the
+  ///                         incoming request.
+  /// @param  req           - The received request message.
+  /// @param  next_hop      - The Sproutlet can use this field to specify a
+  ///                         next hop URI when it returns a NULL Tsx. Filling
+  ///                         in this field is optional.
+  /// @param  pool          - The pool for creating the next_hop uri.
+  /// @param  trail         - The SAS trail id for the message.
+  virtual SproutletTsx* get_tsx(SproutletHelper* proxy,
+                                const std::string& alias,
+                                pjsip_msg* req,
+                                pjsip_sip_uri*& next_hop,
+                                pj_pool_t* pool,
+                                SAS::TrailId trail) = 0;
+
+  /// Returns the name of this service.
+  const std::string service_name() const { return _service_name; }
+
+  /// Returns the URI of this service (as a string)
+  const std::string uri_as_str() const { return _uri; }
+
+  /// Returns the name of the Network Function that this Sproutlet is part of.
+  const std::string network_function() const { return _network_function; }
+
+  /// Returns the API version required by this Sproutlet.
+  int api_version() const { return API_VERSION; }
+
+  /// Returns the default port for this service.
+  int port() const { return _port; }
+
+  /// Returns the host name of this service.
+  const std::string service_host() const { return _service_host; }
+
+  /// Returns the aliases of this service.
+  virtual const std::list<std::string> aliases() const
+    { return _aliases; }
+
+protected:
+  /// Constructor.
+  Sproutlet(const std::string& service_name,
+            int port,
+            const std::string& uri,
+            const std::string& service_host="",
+            const std::list<std::string> aliases={},
+            SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl = NULL,
+            SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl = NULL,
+            const std::string& network_function="") :
+    _incoming_sip_transactions_tbl(incoming_sip_transactions_tbl),
+    _outgoing_sip_transactions_tbl(outgoing_sip_transactions_tbl),
+    _service_name(service_name),
+    _port(port),
+    _uri(uri),
+    _service_host(service_host),
+    _aliases(aliases),
+    _network_function(network_function.empty() ? service_name : network_function)
+  {
+  }
+
+private:
+  /// The name of this service.
+  const std::string _service_name;
+
+  /// The default port for this service (0 if no default).
+  const int _port;
+
+  /// The URI of this service.
+  const std::string _uri;
+
+  /// The host name of this service.
+  const std::string _service_host;
+
+  /// The aliases for this service
+  const std::list<std::string> _aliases;
+
+  /// The name of the Network Function that this Sproutlet is part of (e.g.
+  /// I-CSCF, S-CSCF, etc.).
+  const std::string _network_function;
+};
+
+
 /// The SproutletTsxHelper class handles the underlying service-related processing of
 /// a single transaction.  Once a service has been triggered as part of handling
 /// a transaction, the related SproutletTsxHelper is inspected to determine what should
@@ -306,7 +418,7 @@ public:
   /// otherwise the request will be rejected with a 503 Server Internal
   /// Error:
   ///
-  /// * forward_request() - May be called multiple times
+  /// * send_request() - May be called multiple times
   /// * reject()
   /// * defer_request()
   ///
@@ -319,7 +431,7 @@ public:
   /// otherwise the request will be rejected with a 503 Server Internal
   /// Error:
   ///
-  /// * forward_request()
+  /// * send_request()
   /// * reject()
   /// * defer_request()
   ///
@@ -327,8 +439,8 @@ public:
   virtual void on_rx_in_dialog_request(pjsip_msg* req) { send_request(req); }
 
   /// Called when a request has been transmitted on the transaction (usually
-  /// because the service has previously called forward_request() with the
-  /// request message.
+  /// because the service has previously called send_request() with the request
+  /// message.
   ///
   /// @param req           - The transmitted request
   /// @param fork_id       - The identity of the downstream fork on which the
@@ -367,6 +479,12 @@ public:
   /// @param  context      - The context parameter specified when the timer
   ///                        was scheduled.
   virtual void on_timer_expiry(void* context) {}
+
+  /// Called to determine the name of the Network Function to which this
+  /// transaction belongs.  By default, this is just the service name of the
+  /// owning Sproutlet.
+  virtual std::string get_network_function()
+    { return (_sproutlet != NULL) ? _sproutlet->network_function() : "noop"; }
 
 protected:
 
@@ -479,8 +597,8 @@ protected:
   ///                        Permitted state of hosts when resolving
   ///                        addresses. Values are defined in BaseResolver.
   ///
-  int send_request(pjsip_msg*& req,
-                   int allowed_host_state=BaseResolver::ALL_LISTS)
+  virtual int send_request(pjsip_msg*& req,
+                           int allowed_host_state=BaseResolver::ALL_LISTS)
     {return _helper->send_request(req, allowed_host_state);}
 
   /// Indicate that the response should be forwarded following standard routing
@@ -658,108 +776,6 @@ public:
   virtual bool is_uri_reflexive(const pjsip_uri* uri,
                                 Sproutlet* sproutlet,
                                 SAS::TrailId trail) = 0;
-};
-
-
-/// The Sproutlet class is a base class on which SIP services can be
-/// built.
-///
-/// Derived classes are instantiated during system initialization and
-/// register a service name with Sprout.  Sprout calls the create_tsx method
-/// on an Sproutlet derived class when the ServiceManager determines that
-/// the next hop for a request contains a hostname of the form
-/// &lt;service_name&gt;.&lt;homedomain&gt;.  This may happen if:
-///
-/// -  an initial request is received with a top route header/ReqURI indicating
-///    this service.
-/// -  an initial request has been forwarded by some earlier service instance
-///    to this service.
-/// -  an in-dialog request is received for a dialog on which the service
-///    previously called add_to_dialog.
-///
-class Sproutlet
-{
-public:
-  /// Virtual destructor.
-  virtual ~Sproutlet() {}
-
-  SNMP::SuccessFailCountByRequestTypeTable* _incoming_sip_transactions_tbl;
-  SNMP::SuccessFailCountByRequestTypeTable* _outgoing_sip_transactions_tbl;
-
-  /// Called when the system determines the service should be invoked for a
-  /// received request.  The Sproutlet can either return NULL indicating it
-  /// does not want to process the request, or create a suitable object
-  /// derived from the SproutletTsx class to process the request.
-  ///
-  /// @param  proxy         - The Sproutlet proxy.
-  /// @param  alias         - The alias of this Sproutlet that matched the
-  ///                         incoming request.
-  /// @param  req           - The received request message.
-  /// @param  next_hop      - The Sproutlet can use this field to specify a
-  ///                         next hop URI when it returns a NULL Tsx. Filling
-  ///                         in this field is optional.
-  /// @param  pool          - The pool for creating the next_hop uri.
-  /// @param  trail         - The SAS trail id for the message.
-  virtual SproutletTsx* get_tsx(SproutletHelper* proxy,
-                                const std::string& alias,
-                                pjsip_msg* req,
-                                pjsip_sip_uri*& next_hop,
-                                pj_pool_t* pool,
-                                SAS::TrailId trail) = 0;
-
-  /// Returns the name of this service.
-  const std::string service_name() const { return _service_name; }
-
-  /// Returns the URI of this service (as a string)
-  const std::string uri_as_str() const { return _uri; }
-
-  /// Returns the API version required by this Sproutlet.
-  int api_version() const { return API_VERSION; }
-
-  /// Returns the default port for this service.
-  int port() const { return _port; }
-
-  /// Returns the host name of this service.
-  const std::string service_host() const { return _service_host; }
-
-  /// Returns the aliases of this service.
-  virtual const std::list<std::string> aliases() const
-    { return _aliases; }
-
-protected:
-  /// Constructor.
-  Sproutlet(const std::string& service_name,
-            int port,
-            const std::string& uri,
-            const std::string& service_host="",
-            const std::list<std::string> aliases={},
-            SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl = NULL,
-            SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl = NULL) :
-    _incoming_sip_transactions_tbl(incoming_sip_transactions_tbl),
-    _outgoing_sip_transactions_tbl(outgoing_sip_transactions_tbl),
-    _service_name(service_name),
-    _port(port),
-    _uri(uri),
-    _service_host(service_host),
-    _aliases(aliases)
-  {
-  }
-
-private:
-  /// The name of this service.
-  const std::string _service_name;
-
-  /// The default port for this service (0 if no default).
-  const int _port;
-
-  /// The URI of this service.
-  const std::string _uri;
-
-  /// The host name of this service.
-  const std::string _service_host;
-
-  /// The aliases for this service
-  const std::list<std::string> _aliases;
 };
 
 #endif

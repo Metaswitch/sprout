@@ -46,8 +46,9 @@ std::string unhex(std::string hexstr)
 AuthenticationSproutlet::AuthenticationSproutlet(const std::string& name,
                                                  int port,
                                                  const std::string& uri,
-                                                 const std::string& next_hop_service,
                                                  const std::list<std::string>& aliases,
+                                                 const std::string& network_function,
+                                                 const std::string& next_hop_service,
                                                  const std::string& realm_name,
                                                  ImpiStore* _impi_store,
                                                  std::vector<ImpiStore*> remote_impi_stores,
@@ -59,7 +60,7 @@ AuthenticationSproutlet::AuthenticationSproutlet(const std::string& name,
                                                  SNMP::AuthenticationStatsTables* auth_stats_tbls,
                                                  bool nonce_count_supported_arg,
                                                  get_expiry_for_binding_fn get_expiry_for_binding_arg) :
-  Sproutlet(name, port, uri, "", aliases),
+  Sproutlet(name, port, uri, "", aliases, NULL, NULL, network_function),
   _aka_realm((realm_name != "") ?
     pj_strdup3(stack_data.pool, realm_name.c_str()) :
     stack_data.local_host),
@@ -269,7 +270,7 @@ bool AuthenticationSproutlet::needs_authentication(pjsip_msg* req,
 
 AuthenticationSproutletTsx::AuthenticationSproutletTsx(AuthenticationSproutlet* authentication,
                                                        const std::string& next_hop_service) :
-  ForwardingSproutletTsx(authentication, next_hop_service),
+  CompositeSproutletTsx(authentication, next_hop_service),
   _authentication(authentication),
   _authenticated_using_sip_digest(false),
   _scscf_uri()
@@ -1165,7 +1166,7 @@ void AuthenticationSproutletTsx::on_rx_initial_request(pjsip_msg* req)
           // Free off the IMPI object before returning.
           delete impi_obj;
 
-          forward_request(req); return;
+          send_request(req); return;
         }
       }
     }

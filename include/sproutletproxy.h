@@ -27,20 +27,25 @@ class SproutletWrapper;
 class SproutletProxy : public BasicProxy, SproutletHelper
 {
 public:
+  static const int DEFAULT_MAX_SPROUTLET_DEPTH = 50;
+
   /// Constructor.
   ///
-  /// @param  endpt             - The pjsip endpoint to associate with.
-  /// @param  priority          - The pjsip priority to load at.
-  /// @param  host_aliases      - The IP addresses/domains that refer to this proxy.
-  /// @param  sproutlets        - Sproutlets to load in this proxy.
-  /// @param  stateless_proxies - A set of next-hops that are considered to be
-  ///                             stateless proxies.
+  /// @param  endpt               - The pjsip endpoint to associate with.
+  /// @param  priority            - The pjsip priority to load at.
+  /// @param  host_aliases        - The IP addresses/domains that refer to this proxy.
+  /// @param  sproutlets          - Sproutlets to load in this proxy.
+  /// @param  stateless_proxies   - A set of next-hops that are considered to be
+  ///                               stateless proxies.
+  /// @param  max_sproutlet_depth - The maximum number of Sproutlets that can be
+  ///                               invoked in a row before we break the loop.
   SproutletProxy(pjsip_endpoint* endpt,
                  int priority,
                  const std::string& root_uri,
                  const std::unordered_set<std::string>& host_aliases,
                  const std::list<Sproutlet*>& sproutlets,
-                 const std::set<std::string>& stateless_proxies);
+                 const std::set<std::string>& stateless_proxies,
+                 int max_sproutlet_depth=DEFAULT_MAX_SPROUTLET_DEPTH);
 
   /// Destructor.
   virtual ~SproutletProxy();
@@ -220,6 +225,8 @@ protected:
       pjsip_tx_data* req;
       std::pair<SproutletWrapper*, int> upstream;
       int allowed_host_state;
+      int sproutlet_depth;
+      std::string upstream_network_func;
     } PendingRequest;
     std::queue<PendingRequest> _pending_req_q;
 
@@ -252,6 +259,8 @@ protected:
 
   std::list<Sproutlet*> _sproutlets;
 
+  const int _max_sproutlet_depth;
+
   static const pj_str_t STR_SERVICE;
 
   friend class UASTsx;
@@ -270,6 +279,8 @@ public:
                    const std::string& sproutlet_alias,
                    pjsip_tx_data* req,
                    pjsip_transport* original_transport,
+                   const std::string& upstream_network_func,
+                   int depth,
                    SAS::TrailId trail_id);
 
   /// Virtual destructor.
@@ -310,6 +321,9 @@ public:
                               const pjsip_sip_uri* base_uri,
                               pj_pool_t* pool) const;
   std::string get_local_hostname(const pjsip_sip_uri* uri) const;
+  bool is_network_func_boundary() const;
+  int get_depth() const { return _depth; };
+  const std::string& get_network_function() const { return _this_network_func; };
 
 private:
   void rx_request(pjsip_tx_data* req);
@@ -353,6 +367,18 @@ private:
 
   // Immutable reference to the transport used by the original request.
   pjsip_transport* _original_transport;
+
+  // The name of the Network Function of this Sproutlet.
+  std::string _this_network_func;
+
+  // The name of the Network Function of the upstream Sproutlet (if any).
+  // This is used to detect transitions between Network Functions, so that we
+  // can perform SIP-entity-level operations like sending 100 Trying responses
+  // and decrementing the Max-Forwards counter.
+  std::string _upstream_network_func;
+
+  // The depth of this wrapper in the transaction tree.  Used to detect loops.
+  int _depth;
 
   typedef std::unordered_map<const pjsip_msg*, pjsip_tx_data*> Packets;
   Packets _packets;
