@@ -118,9 +118,7 @@ static ACRFactory* icscf_acr_factory;
 
 static bool edge_proxy;
 static pjsip_uri* upstream_proxy;
-static SIPConnectionPool* upstream_conn_pool = NULL;
 
-static SNMP::IPCountTable* sprout_ip_tbl = NULL;
 static SNMP::U32Scalar* flow_count = NULL;
 
 static FlowTable* flow_table;
@@ -3331,10 +3329,6 @@ pj_status_t init_stateful_proxy(SubscriberDataManager* reg_sdm,
 void destroy_stateful_proxy()
 {
   assert(edge_proxy);
-  // Destroy the upstream connection pool.  This will quiesce all the TCP
-  // connections.
-  delete upstream_conn_pool; upstream_conn_pool = NULL;
-  delete sprout_ip_tbl; sprout_ip_tbl = NULL;
 
   // Destroy the flow table.
   delete flow_count;
