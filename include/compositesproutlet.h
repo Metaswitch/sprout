@@ -17,14 +17,15 @@
 ///
 /// A Sproutlet TSX that is part of a more complicated Network Function.  When
 /// it sends outbound standalone or dialog-creating requests, they are routed
-/// to the next Sproutlet in the Network Function.
+/// to the next Sproutlet in the Network Function.  In-dialog requests are
+/// routed using standard SIP routing (Record-Route headers).
 ///
 
 class CompositeSproutletTsx : public SproutletTsx
 {
 public:
   CompositeSproutletTsx(Sproutlet* sproutlet,
-                         const std::string& next_hop_service);
+                        const std::string& next_hop_service);
   virtual ~CompositeSproutletTsx() {}
 
   void on_rx_initial_request(pjsip_msg* req) override { send_request(req); }

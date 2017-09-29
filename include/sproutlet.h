@@ -95,7 +95,7 @@ public:
   /// Returns the URI of this service (as a string)
   const std::string uri_as_str() const { return _uri; }
 
-  /// Returns the name of the network function that this Sproutlet is part of.
+  /// Returns the name of the Network Function that this Sproutlet is part of.
   const std::string network_function() const { return _network_function; }
 
   /// Returns the API version required by this Sproutlet.
@@ -148,7 +148,8 @@ private:
   /// The aliases for this service
   const std::list<std::string> _aliases;
 
-  /// The name of the network function that this Sproutlet is part of
+  /// The name of the Network Function that this Sproutlet is part of (e.g.
+  /// I-CSCF, S-CSCF, etc.).
   const std::string _network_function;
 };
 
@@ -479,7 +480,7 @@ public:
   ///                        was scheduled.
   virtual void on_timer_expiry(void* context) {}
 
-  /// Called to determine the name of the network function to which this
+  /// Called to determine the name of the Network Function to which this
   /// transaction belongs.  By default, this is just the service name of the
   /// owning Sproutlet.
   virtual std::string get_network_function()

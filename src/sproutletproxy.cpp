@@ -863,7 +863,7 @@ void SproutletProxy::UASTsx::tx_request(SproutletWrapper* upstream,
   pr.upstream = std::make_pair(upstream, fork_id);
   pr.allowed_host_state = req.allowed_host_state;
   pr.sproutlet_depth = upstream->get_depth() - 1;
-  pr.upstream_nf = upstream->get_network_function();
+  pr.upstream_network_func = upstream->get_network_function();
   _pending_req_q.push(pr);
 }
 
@@ -889,7 +889,7 @@ void SproutletProxy::UASTsx::schedule_requests()
     else if (req.sproutlet_depth <= 0)
     {
       // Maximum recursion depth for Sproutlets reached - it's a loop.
-      TRC_ERROR("Exceeded maximum Sproutlet tree depth - coding error");
+      TRC_ERROR("Exceeded maximum Sproutlet tree depth");
       loop_detected = true;
     }
 
@@ -934,7 +934,7 @@ void SproutletProxy::UASTsx::schedule_requests()
                                                             alias,
                                                             req.req,
                                                             _original_transport,
-                                                            req.upstream_nf,
+                                                            req.upstream_network_func,
                                                             req.sproutlet_depth,
                                                             trail());
 
@@ -945,7 +945,7 @@ void SproutletProxy::UASTsx::schedule_requests()
           _umap[(void*)downstream] = req.upstream;
         }
 
-        if (downstream->is_nf_boundary() &&
+        if (downstream->is_network_func_boundary() &&
             (req.req->msg->line.req.method.id == PJSIP_INVITE_METHOD))
         {
           // Send an immediate 100 Trying response to the upstream
@@ -1252,7 +1252,7 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
                                    const std::string& sproutlet_alias,
                                    pjsip_tx_data* req,
                                    pjsip_transport* original_transport,
-                                   const std::string& upstream_nf,
+                                   const std::string& upstream_network_func,
                                    int depth,
                                    SAS::TrailId trail_id) :
   _proxy(proxy),
@@ -1264,8 +1264,8 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _req(req),
   _req_type(),
   _original_transport(original_transport),
-  _this_nf(""),
-  _upstream_nf(upstream_nf),
+  _this_network_func(""),
+  _upstream_network_func(upstream_network_func),
   _depth(depth),
   _packets(),
   _send_requests(),
@@ -1302,11 +1302,11 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
     // We haven't been supplied a tsx, so create a default SproutletTsx to
     // handle the request.
     _sproutlet_tsx = new SproutletTsx(NULL);
-    _this_nf = _service_name;
+    _this_network_func = _service_name;
   }
   else
   {
-    _this_nf = _sproutlet_tsx->get_network_function();
+    _this_network_func = _sproutlet_tsx->get_network_function();
   }
 
   // Initialize the Tsx
@@ -1818,9 +1818,9 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
   // Keep an immutable reference to the request.
   _req = req;
 
-  if (is_nf_boundary())
+  if (is_network_func_boundary())
   {
-    // Decrement Max-Forwards when transitioning between network functions.
+    // Decrement Max-Forwards when transitioning between Network Functions.
     pjsip_max_fwd_hdr* mf_hdr = (pjsip_max_fwd_hdr*)
                       pjsip_msg_find_hdr(req->msg, PJSIP_H_MAX_FORWARDS, NULL);
     if (mf_hdr != NULL)
@@ -2111,7 +2111,7 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
 
   if (status_code == 100)
   {
-    if (is_nf_boundary())
+    if (is_network_func_boundary())
     {
       // We will already have sent a locally generated 100 Trying response, so
       // don't forward this one.
@@ -2335,12 +2335,14 @@ void SproutletWrapper::log_inter_sproutlet(pjsip_tx_data* tdata,
               buf);
 }
 
-bool SproutletWrapper::is_nf_boundary() const
+bool SproutletWrapper::is_network_func_boundary() const
 {
-  bool nf_boundary = (_this_nf != _upstream_nf);
+  bool network_func_boundary = (_this_network_func != _upstream_network_func);
 
   TRC_DEBUG("Network function boundary: %s ('%s'->'%s')",
-            nf_boundary ? "yes" : "no", _upstream_nf.c_str(), _this_nf.c_str());
+            network_func_boundary ? "yes" : "no",
+            _upstream_network_func.c_str(),
+            _this_network_func.c_str());
 
-  return nf_boundary;
+  return network_func_boundary;
 }

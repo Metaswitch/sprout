@@ -2117,7 +2117,7 @@ TEST_F(SproutletProxyTest, SproutletChain)
 
 TEST_F(SproutletProxyTest, CompositeNetworkFunction)
 {
-  // Tests passing a request through a network function composed of multiple
+  // Tests passing a request through a Network Function composed of multiple
   // sproutlets.
   pjsip_tx_data* tdata;
 
@@ -2151,7 +2151,7 @@ TEST_F(SproutletProxyTest, CompositeNetworkFunction)
 
   // Check the INVITE and send a 100 Trying.
   // We sent in an initial Max-Forwards count of 100.  We've been through three
-  // sproutlets, but two of them were part of the same network function, so we
+  // sproutlets, but two of them were part of the same Network Function, so we
   // expect the counter to have gone down by two (not three).
   pjsip_tx_data* req = pop_txdata();
   expect_target("TCP", "10.10.20.1", 5060, req);
@@ -2201,7 +2201,7 @@ TEST_F(SproutletProxyTest, CompositeNetworkFunction)
 TEST_F(SproutletProxyTest, LoopDetectionMaxForwards)
 {
   // Test loop detection of requests passing through a chain of sproutlets.
-  // We use two sproutlets that return different network function namse,
+  // We use two sproutlets that return different Network Function names,
   // otherwise they'll be treated as a single entity, and only decrement the
   // Max-Forwards count once.
   pjsip_tx_data* tdata;
@@ -2264,9 +2264,9 @@ TEST_F(SproutletProxyTest, LoopDetectionMaxForwards)
 TEST_F(SproutletProxyTest, LoopDetectionSproutletDepth)
 {
   // Test loop detection when a request is sent around in a loop between
-  // sproutlets that are all part of the same network function.  In such cases,
+  // sproutlets that are all part of the same Network Function.  In such cases,
   // Max-Forwards won't help us, as it will only be decremented once by the
-  // network function, rather than once per sproutlet.
+  // Network Function, rather than once per sproutlet.
   pjsip_tx_data* tdata;
 
   // Create a TCP connection to the listening port.
