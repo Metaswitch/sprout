@@ -126,7 +126,8 @@ class DeregistrationTaskTest : public SipTest
       if (aors[ii] != NULL)
       {
         // Write the information to the local store
-        EXPECT_CALL(*_subscriber_data_manager, set_aor_data(aor_ids[ii], _, _, _, true)).WillOnce(Return(Store::OK));
+        bool admin_dereg = true;
+        EXPECT_CALL(*_subscriber_data_manager, set_aor_data(aor_ids[ii], _, _, _, admin_dereg)).WillOnce(Return(Store::OK));
       }
     }
   }
@@ -983,6 +984,7 @@ TEST_F(DeleteImpuTaskTest, Mainline)
 {
   std::string impu = "sip:6505550231@homedomain";
   std::string impu_escaped =  "sip%3A6505550231%40homedomain";
+  bool admin_dereg = true;
 
   AoRPair* aor = build_aor(impu, false);
   build_task(impu_escaped);
@@ -991,7 +993,7 @@ TEST_F(DeleteImpuTaskTest, Mainline)
     InSequence s;
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
-      EXPECT_CALL(*store, set_aor_data(impu, EmptyAoR(), _, _, true))
+      EXPECT_CALL(*store, set_aor_data(impu, EmptyAoR(), _, _, admin_dereg))
         .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings are expired.
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(impu, _, "dereg-admin", "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _))
@@ -1036,7 +1038,6 @@ TEST_F(DeleteImpuTaskTest, HomesteadFailsWith404)
       // Neither store has any bindings so the backup store is checked.
       EXPECT_CALL(*store, get_aor_data(impu, _)).WillOnce(Return(aor));
       EXPECT_CALL(*store, set_aor_data(impu, _, _, _, _))
-
         .WillOnce(DoAll(SetArgReferee<3>(true), // All bindings expired
                         Return(Store::OK)));
       EXPECT_CALL(*mock_hss, update_registration_state(impu, _, _, "sip:scscf.sprout.homedomain:5058;transport=TCP", _, _, _))

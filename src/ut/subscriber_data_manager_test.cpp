@@ -35,6 +35,7 @@ using ::testing::_;
 using ::testing::DoAll;
 using ::testing::Return;
 using ::testing::SetArgReferee;
+using ::testing::NiceMock;
 
 /// Fixture for BasicSubscriberDataManagerTest.
 class BasicSubscriberDataManagerTest : public SipTest
@@ -54,7 +55,7 @@ class BasicSubscriberDataManagerTest : public SipTest
     _chronos_connection = new FakeChronosConnection();
     _datastore = new LocalStore();
     _aor_store = new AstaireAoRStore(_datastore);
-    _analytics_logger = new MockAnalyticsLogger();
+    _analytics_logger = new NiceMock<MockAnalyticsLogger>();
     _store = new SubscriberDataManager(_aor_store,
                                        _chronos_connection,
                                        _analytics_logger,
@@ -206,7 +207,7 @@ TEST_F(BasicSubscriberDataManagerTest, BindingTests)
   EXPECT_EQ(0, b1->_priority);
   delete aor_data1; aor_data1 = NULL;
 
-  // Remove a binding by admin dereg.
+  // Remove a binding.
   aor_data1 = this->_store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
   EXPECT_EQ(1u, aor_data1->get_current()->bindings().size());
@@ -443,6 +444,141 @@ TEST_F(BasicSubscriberDataManagerTest, AssociatedURIsTests)
   EXPECT_EQ(0u, au.get_barred_uris().size());
 
   delete aor_data1; aor_data1 = NULL;
+}
+
+// Use log to check that Admin Deregistration will send a final NOTIFY, while
+// expiry of an endpoint that subscribe to its own registration state will skip
+// such NOTIFY.
+TEST_F(BasicSubscriberDataManagerTest, NotifyExpiredSubscription)
+{
+  CapturingTestLogger log;
+  AoRPair* aor_data1;
+  AoR::Binding* b0;
+  AoR::Binding* b1;
+  AoR::Binding* b2;
+  AoR::Subscription* s0;
+  AoR::Subscription* s1;
+  AssociatedURIs associated_uris = {};
+  bool rc;
+  int now;
+  bool all_bindings_expired = false;
+
+  // Get an initial empty AoR record.
+  now = time(NULL);
+  aor_data1 = this->_store->get_aor_data(std::string("5102175691@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+  aor_data1->get_current()->_timer_id = "AoRtimer";
+  aor_data1->get_current()->_associated_uris = associated_uris;
+  EXPECT_EQ(0u, aor_data1->get_current()->bindings().size());
+
+  // Add a binding and corresponding subscription. URI has to be exact match as the code assumes so.
+  b1 = aor_data1->get_current()->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  b1->_uri = std::string("<sip:5102175691@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_priority = 0;
+  b1->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
+  b1->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
+  b1->_private_id = "5102175691@cw-ngv.com";
+  b1->_emergency_registration = false;
+
+  s1 = aor_data1->get_current()->get_subscription("1234");
+  s1->_req_uri = std::string("<sip:5102175691@192.91.191.29:59934;transport=tcp;ob>");
+  s1->_from_uri = std::string("<sip:5102175691@cw-ngv.com>");
+  s1->_from_tag = std::string("4321");
+  s1->_to_uri = std::string("<sip:5102175691@cw-ngv.com>");
+  s1->_to_tag = std::string("1234");
+  s1->_cid = std::string("xyzabc@192.91.191.29");
+  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s1->_expires = now + 300;
+
+  // Add another pair of binding and subscription.
+  b0 = aor_data1->get_current()->get_binding(std::string("urn:uuid:0-0000-0000-0000-b4dd32817622:1"));
+  b0->_uri = std::string("sip:5678@5678");
+  b0->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b0->_cseq = 17038;
+  b0->_expires = now + 300;
+  b0->_priority = 0;
+  b0->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
+  b0->_path_headers.push_back(std::string("\"Bob\" <sip:abcdefgh@bono-1.cw-ngv.com;lr>;tag=6ht7"));
+  b0->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b0->_params["reg-id"] = "1";
+  b0->_params["+sip.ice"] = "";
+  b0->_private_id = "5102175691@cw-ngv.com";
+  b0->_emergency_registration = false;
+
+  s0 = aor_data1->get_current()->get_subscription("5678");
+  s0->_req_uri = std::string("sip:5678@5678");
+  s0->_from_uri = std::string("<sip:5102175691@cw-ngv.com>");
+  s0->_from_tag = std::string("4321");
+  s0->_to_uri = std::string("<sip:5102175691@cw-ngv.com>");
+  s0->_to_tag = std::string("5678");
+  s0->_cid = std::string("xyzabc@192.91.191.29");
+  s0->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s0->_expires = now + 300;
+
+  // Add another binding so that when the other twos are removed, the AoR is not
+  // void.
+  b2 = aor_data1->get_current()->get_binding(std::string("urn:uuid:111111-0000-0000-0000-b4dd32817622:1"));
+  b2->_uri = std::string("<sip:111111@192.91.191.29:59934;transport=tcp;ob>");
+  b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b2->_cseq = 17038;
+  b2->_expires = now + 300;
+  b2->_priority = 0;
+  b2->_path_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
+  b2->_path_headers.push_back(std::string("\"Bob\" <sip:leftbinding@bono-1.cw-ngv.com;lr>;tag=6ht7"));
+  b2->_params["+sip.instance"] = "\"<urn:uuid:111111-0000-0000-0000-b4dd32817622>\"";
+  b2->_params["reg-id"] = "1";
+  b2->_params["+sip.ice"] = "";
+  b2->_private_id = "111111@cw-ngv.com";
+  b2->_emergency_registration = false;
+
+  // Write AoR record back to store.
+  std::string aor1 = "5102175691@cw-ngv.com";
+  rc = this->_store->set_aor_data(aor1, aor_data1, 0);
+  EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
+  EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 1234: reason(s) bindings_changed subscription_created"));
+
+  // Get AoR record, remove first pair of binding and subscription at the same
+  // time.
+  aor_data1 = this->_store->get_aor_data(aor1, 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+  aor_data1->get_current()->remove_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  aor_data1->get_current()->remove_subscription(std::string("1234"));
+
+  // Write AoR record back to store admin_dereg=true. This would simulate the 
+  // behaviour of admin deregistration via Sprout/HSS.
+  rc = this->_store->set_aor_data(aor1, aor_data1, 0, all_bindings_expired, true);
+  EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
+
+  // Check a NOTIFY has been sent to the removed binding about its
+  // deregitration.
+  EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 1234: reason(s) bindings_changed"));
+  EXPECT_TRUE(log.contains("The subscription 1234 has been terminated, send final NOTIFY"));
+
+  // Get AoR record, remove second pair of binding and subscription at the same
+  // time.
+  aor_data1 = this->_store->get_aor_data(aor1, 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+  aor_data1->get_current()->remove_binding(std::string("urn:uuid:0-0000-0000-0000-b4dd32817622:1"));
+  aor_data1->get_current()->remove_subscription(std::string("5678"));
+
+  // Write AoR record back to store admin_dereg=false. This would simulate the 
+  // behaviour of an expired binding that subscribed to its own registration.
+  rc = this->_store->set_aor_data(aor1, aor_data1, 0, all_bindings_expired, false);
+  EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
+
+  // Check a NOTIFY has been sent to the removed binding about its
+  // deregitration.
+  EXPECT_TRUE(log.contains("Sending NOTIFY for subscription 5678: reason(s) bindings_changed"));
+  EXPECT_TRUE(log.contains("Skip expired subscription 5678 as the binding sip:5678@5678 has expired"));
 }
 
 TEST_F(BasicSubscriberDataManagerTest, CopyTests)

@@ -106,17 +106,17 @@ AoRPair* SubscriberDataManager::get_aor_data(const std::string& aor_id,
 bool SubscriberDataManager::unused_bool = false;
 
 Store::Status SubscriberDataManager::set_aor_data(
-                                   const std::string& aor_id,
-                                   AoRPair* aor_pair,
-                                   SAS::TrailId trail,
-                                   bool& all_bindings_expired,
-                                   const bool admin_dereg)
-{
-// The ordering of this function is quite important.
-//
-// 1. Expire any old bindings/subscriptions.
-// 2. Log removed or shortened bindings
-// 3. Send any Chronos timer requests
+                                     const std::string& aor_id,
+                                     AoRPair* aor_pair,
+                                     SAS::TrailId trail,
+                                     bool& all_bindings_expired,
+                                     const bool admin_dereg)
+  {
+  // The ordering of this function is quite important.
+  //
+  // 1. Expire any old bindings/subscriptions.
+  // 2. Log removed or shortened bindings
+  // 3. Send any Chronos timer requests
   // 4. Write the data to memcached. If this fails, bail out here
   // 5. Log new or extended bindings
   // 6. Send any messages we were asked to by the caller
@@ -578,6 +578,8 @@ void SubscriberDataManager::NotifySender::send_notifys(
     AoR::Binding* binding = aor_orig_b.second;
     std::string b_id = aor_orig_b.first;
 
+    // Compare the original and current lists to see whether this binding has
+    // been deleted.
     // Emergency bindings are excluded from notifications.
     if ((!binding->_emergency_registration) &&
         (aor_pair->get_current()->bindings().find(b_id) == aor_pair->get_current()->bindings().end()))
@@ -786,19 +788,17 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
     AoR::Subscription* s = aor_orig_s->second;
     std::string s_id = aor_orig_s->first;
 
-    if (
-        ((std::find(deleted_binding_uris.begin(), deleted_binding_uris.end(), s->_req_uri) 
+    if (((std::find(deleted_binding_uris.begin(), deleted_binding_uris.end(), s->_req_uri) 
           != deleted_binding_uris.end())) 
-        && (admin_dereg == false)
-        )
+        && (admin_dereg == false))
     {
       // Binding has been deleted, and not due to admin deregister.
       // This NOTIFY would go to a binding which no longer exists - skip it.
-      printf("skip");
+      TRC_DEBUG("Skip expired subscription %s as the binding %s has expired", 
+                s_id.c_str(), (s->_req_uri).c_str());
       continue;
     }
 
-    printf("sending");
     // Is this subscription present in the new AoR?
     AoR::Subscriptions::const_iterator aor_current =
       aor_pair->get_current()->subscriptions().find(s_id);
@@ -807,7 +807,7 @@ void SubscriberDataManager::NotifySender::send_notifys_for_expired_subscriptions
     // about the state of the bindings in the original AoR
     if (aor_current == aor_pair->get_current()->subscriptions().end())
     {
-      TRC_DEBUG("The subscription (%s) has been terminated", s_id.c_str());
+      TRC_DEBUG("The subscription %s has been terminated, send final NOTIFY", s_id.c_str());
 
       pjsip_tx_data* tdata_notify = NULL;
 

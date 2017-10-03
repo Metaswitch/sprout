@@ -145,8 +145,7 @@ static AoRPair* get_and_set_local_aor_data(
     set_rc = current_sdm->set_aor_data(aor_id,
                                        aor_pair,
                                        trail,
-                                       all_bindings_expired,
-                                       false);
+                                       all_bindings_expired);
     if (set_rc != Store::OK)
     {
       delete aor_pair; aor_pair = NULL;
@@ -522,7 +521,7 @@ AoRPair* DeregistrationTask::deregister_bindings(
 {
   AoRPair* aor_pair = NULL;
   bool all_bindings_expired = false;
-  bool admin_dereg = true;
+  const bool admin_dereg = true;
   bool got_ifcs;
   Store::Status set_rc;
   std::vector<std::string> impis_to_dereg;

@@ -25,7 +25,7 @@ public:
                                       SAS::TrailId trail));
   MOCK_METHOD5(set_aor_data, Store::Status(const std::string& aor_id,
                                            AoRPair* data,
-                                           SAS::TrailId traili,
+                                           SAS::TrailId trail,
                                            bool& all_bindings_expired,
                                            bool admin_dereg));
   MOCK_METHOD0(has_servers, bool());
