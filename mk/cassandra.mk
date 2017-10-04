@@ -20,7 +20,7 @@ LD_FLAGS := -shared -Wl,-soname,${LIB_FILE}
 ${CASSANDRA_BUILD_DIR}:
 	mkdir -p ${CASSANDRA_BUILD_DIR}
 
-${CASSANDRA_BUILD_DIR}/interface/thrift:
+${CASSANDRA_THRIFT_DIR}:
 	mkdir -p ${CASSANDRA_BUILD_DIR}/interface/thrift
 
 cassandra: ${LIB_PATH}
