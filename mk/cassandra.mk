@@ -32,11 +32,10 @@ ${CASSANDRA_CPP_SENTINEL} : ${CASSANDRA_DIR}/interface/cassandra.thrift ${CASSAN
 
 ${C_PATHS}: ${CASSANDRA_CPP_SENTINEL}
 
-${CASSANDRA_GEN_DIR}/%.d: ${CASSANDRA_GEN_DIR}/%.cpp
-	g++ -MM ${CPP_FLAGS} $< > $@
-
 ${CASSANDRA_GEN_DIR}/%.o: ${CASSANDRA_GEN_DIR}/%.cpp
 	g++ -c -o $@ ${CPP_FLAGS} $<
+	g++ -MM ${CPP_FLAGS} $< > ${patsubst %.o,%.d,$@}
+
 
 ${LIB_PATH}: ${O_PATHS}
 	g++ -o ${LIB_PATH} ${LD_FLAGS} ${CPP_FLAGS} $+
@@ -49,6 +48,6 @@ cassandra_clean:
 cassandra_distclean:
 	rm -rf ${CASSANDRA_BUILD_DIR}
 
-include ${D_PATHS}
+-include ${D_PATHS}
 
 .PHONY: cassandra cassandra_test cassandra_clean cassandra_distclean
