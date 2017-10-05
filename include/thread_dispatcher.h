@@ -33,43 +33,53 @@ pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
 void unregister_thread_dispatcher(void);
 
 pj_status_t start_worker_threads();
-pj_status_t stop_worker_threads();
+void stop_worker_threads(); // TODO: Should this return its status?
+
+struct MessageEvent
+{
+  // The received message
+  pjsip_rx_data* rdata;
+
+  // A stop watch for tracking SIP message latency
+  Utils::StopWatch stop_watch;
+};
+
+// An Event on the queue is either a SIP message or a callback
+enum EventType { MESSAGE, CALLBACK };
+
+union Event
+{
+  PJUtils::Callback* callback;
+  MessageEvent* message;
+};
+
 
 // Add a Callback object to the queue, to be run on a worker thread.
 // This MUST be called from the main PJSIP transport thread.
 void add_callback_to_queue(PJUtils::Callback*);
 
-struct rxDataQueueInfo
+struct EventInfo
 {
-  pjsip_rx_data* rdata; // TODO: Import correct header
+  // The type of the event
+  EventType type;
 
-  // The priority of the data pointed to by rdata.
-  int priority_value;
+  // The event itself
+  Event event;
 
-  // The time at which the struct is to be queued.
+  // The priority of the event
+  int priority;
+
+  // The time at which the event is to be queued
   int queue_start_time; // TODO: Proper time type
 
-  // The type used for comparison in a std::priority_queue must be default
-  // constructable.
-  rxDataQueueInfo() {}
-
-  rxDataQueueInfo(pjsip_rx_data* rdata,
-                  int priority_value,
-                  int queue_start_time) :
-                  rdata(rdata),
-                  priority_value(priority_value),
-                  queue_start_time(queue_start_time)
-  {
-  }
-
-  // Compares two rxDataQueueInfo structs. Higher priority structs (i.e. structs
-  // with a lower priority_value) are returned first, and structs are returned
+  // Compares two EventInfo structs. Higher priority structs (i.e. structs with
+  // a lower value of priority) are returned first, and structs are returned
   // oldest to newest within each priority level.
-  bool operator()(const rxDataQueueInfo& lhs, const rxDataQueueInfo& rhs)
+  bool operator()(const EventInfo& lhs, const EventInfo& rhs)
   {
-    if (lhs.priority_value != rhs.priority_value)
+    if (lhs.priority != rhs.priority)
     {
-      return lhs.priority_value < rhs.priority_value;
+      return lhs.priority < rhs.priority;
     }
     else
     {
@@ -78,14 +88,14 @@ struct rxDataQueueInfo
   }
 };
 
-class rxDataPriorityQueueBackend : eventq<rxDataQueueInfo>::Backend
+class PriorityEventQueueBackend : eventq<EventInfo>::Backend
 {
 public:
 
-  rxDataPriorityQueueBackend() : _queue() {}
-  virtual ~rxDataPriorityQueueBackend() {}
+  PriorityEventQueueBackend() : _queue() {}
+  virtual ~PriorityEventQueueBackend() {}
 
-  virtual const rxDataQueueInfo& front()
+  virtual const EventInfo& front()
   {
     return _queue.top();
   }
@@ -100,7 +110,7 @@ public:
     return _queue.size();
   }
 
-  virtual void push(const rxDataQueueInfo& value)
+  virtual void push(const EventInfo& value)
   {
     _queue.push(value);
   }
@@ -112,9 +122,9 @@ public:
 
 private:
 
-  std::priority_queue<rxDataQueueInfo,
-                      std::deque<rxDataQueueInfo>,
-                      rxDataQueueInfo > _queue;
+  std::priority_queue<EventInfo,
+                      std::deque<EventInfo>,
+                      EventInfo > _queue;
 };
 
 #endif

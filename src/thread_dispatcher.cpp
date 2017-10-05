@@ -46,38 +46,12 @@ extern "C" {
 #include "exception_handler.h"
 #include "snmp_event_accumulator_table.h"
 #include "snmp_event_accumulator_by_scope_table.h"
+#include "thread_dispatcher.h"
 
 static std::vector<pj_thread_t*> worker_threads;
 
-struct MessageEvent
-{
-  // The received message
-  pjsip_rx_data* rdata;
-
-  // A stop watch for tracking SIP message latency
-  Utils::StopWatch stop_watch;
-};
-
-// An Event on the queue is either a SIP message or a callback
-enum EventType { MESSAGE, CALLBACK };
-
-union Event
-{
-  PJUtils::Callback* callback;
-  MessageEvent* message;
-};
-
-struct worker_thread_qe
-{
-  // The type of the event
-  EventType type;
-
-  // The event itself
-  Event event;
-};
-
 // Queue for incoming events.
-eventq<struct worker_thread_qe> worker_thread_q;
+eventq<struct EventInfo> event_q;
 
 // Deadlock detection threshold for the message queue (in milliseconds).  This
 // is set to roughly twice the expected maximum service time for each message
@@ -131,9 +105,9 @@ static int worker_thread(void* p)
 
   TRC_DEBUG("Worker thread started");
 
-  struct worker_thread_qe qe = { MESSAGE };
+  struct EventInfo qe = { MESSAGE };
 
-  while (worker_thread_q.pop(qe))
+  while (event_q.pop(qe))
   {
     if (qe.type == MESSAGE)
     {
@@ -230,7 +204,7 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   SAS::report_event(event);
 
   // Check that the worker threads are not all deadlocked.
-  if (worker_thread_q.is_deadlocked())
+  if (event_q.is_deadlocked())
   {
     // The queue has not been serviced for sufficiently long to imply that
     // all the worker threads are deadlock, so exit the process so it will be
@@ -269,11 +243,11 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   me->rdata = clone_rdata;
   Event queue_event;
   queue_event.message = me;
-  struct worker_thread_qe qe = { MESSAGE, queue_event };
+  struct EventInfo qe = { MESSAGE, queue_event };
 
   // Track the current queue size
-  queue_size_table->accumulate(worker_thread_q.size());
-  worker_thread_q.push(qe);
+  queue_size_table->accumulate(event_q.size());
+  event_q.push(qe);
 
   // return TRUE to flag that we have absorbed the incoming message.
   return PJ_TRUE;
@@ -290,7 +264,7 @@ pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
   worker_threads.resize(num_worker_threads_arg);
 
   // Enable deadlock detection on the message queue.
-  worker_thread_q.set_deadlock_threshold(MSG_Q_DEADLOCK_TIME);
+  event_q.set_deadlock_threshold(MSG_Q_DEADLOCK_TIME);
 
   num_worker_threads = num_worker_threads_arg;
   latency_table = latency_table_arg;
@@ -330,7 +304,7 @@ void stop_worker_threads()
 {
   // Now it is safe to signal the worker threads to exit via the queue and to
   // wait for them to terminate.
-  worker_thread_q.terminate();
+  event_q.terminate();
   for (std::vector<pj_thread_t*>::iterator i = worker_threads.begin();
        i != worker_threads.end();
        ++i)
@@ -351,11 +325,11 @@ void add_callback_to_queue(PJUtils::Callback* cb)
   // Create an Event to hold the Callback
   Event queue_event;
   queue_event.callback = cb;
-  worker_thread_qe qe = { CALLBACK, queue_event };
+  EventInfo qe = { CALLBACK, queue_event };
 
   // Track the current queue size
-  queue_size_table->accumulate(worker_thread_q.size());
+  queue_size_table->accumulate(event_q.size());
 
   // Add the Event
-  worker_thread_q.push(qe);
+  event_q.push(qe);
 }

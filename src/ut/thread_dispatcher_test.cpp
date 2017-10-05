@@ -14,29 +14,42 @@
 
 #include "thread_dispatcher.h"
 
-TEST(rxDataQueueInfoTest, PriorityOrdering)
+class EventInfoTest : public ::testing::Test
 {
-  rxDataQueueInfo r1(nullptr, 0, 0);
-  rxDataQueueInfo r2(nullptr, 1, 0);
-  EXPECT_TRUE(r1(r1, r2));
-  EXPECT_TRUE(r2(r1, r2));
-  EXPECT_FALSE(r1(r2, r1));
-  EXPECT_FALSE(r2(r2, r1));
+public:
+  virtual void SetUp()
+  {
+    Event event;
+    struct EventInfo event_info = {MESSAGE, event, 0, 0};
+    e1 = event_info;
+    e2 = event_info;
+  }
+
+  EventInfo e1;
+  EventInfo e2;
+};
+
+TEST_F(EventInfoTest, PriorityOrdering)
+{
+  e2.priority = 1;
+  EXPECT_TRUE(e1(e1, e2));
+  EXPECT_TRUE(e2(e1, e2));
+  EXPECT_FALSE(e1(e2, e1));
+  EXPECT_FALSE(e2(e2, e1));
 }
 
-TEST(rxDataQueueInfoTest, TimeOrdering)
+TEST_F(EventInfoTest, TimeOrdering)
 {
-  rxDataQueueInfo r1(nullptr, 0, 0);
-  rxDataQueueInfo r2(nullptr, 0, 1);
-  EXPECT_TRUE(r1(r1, r2));
-  EXPECT_TRUE(r2(r1, r2));
-  EXPECT_FALSE(r1(r2, r1));
-  EXPECT_FALSE(r2(r2, r1));
+  e2.queue_start_time = 1;
+  EXPECT_TRUE(e1(e1, e2));
+  EXPECT_TRUE(e2(e1, e2));
+  EXPECT_FALSE(e1(e2, e1));
+  EXPECT_FALSE(e2(e2, e1));
 }
 
-TEST(rxDataQueueInfoTest, PriorityBeforeTimeOrdering)
+TEST_F(EventInfoTest, PriorityBeforeTimeOrdering)
 {
-  rxDataQueueInfo r1(nullptr, 0, 1);
-  rxDataQueueInfo r2(nullptr, 1, 0);
-  EXPECT_TRUE(r1(r1, r2));
+  e2.priority = 1;
+  e1.queue_start_time = 1;
+  EXPECT_TRUE(e1(e1, e2));
 }
