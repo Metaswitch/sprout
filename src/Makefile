@@ -340,6 +340,7 @@ include ../modules/cpp-common/makefiles/alarm-utils.mk
 	$< -j "../sprout-base.root/usr/share/clearwater/infrastructure/alarms/sprout_alarms.json" -n "sprout"
 	mv sprout_alarmdefinition.h $@
 ${sprout_OBJECT_DIR}/main.o : ../usr/include/sprout_alarmdefinition.h
+${sprout_scscf.so_OBJECT_DIR}/scscfplugin.o : ../usr/include/sprout_alarmdefinition.h
 CLEANS += ../usr/include/sprout_alarmdefinition.h
 
 ../usr/include/memento_as_alarmdefinition.h : $(BUILD_DIR)/bin/alarm_header ../memento-as.root/usr/share/clearwater/infrastructure/alarms/memento_as_alarms.json

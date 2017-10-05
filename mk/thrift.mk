@@ -14,14 +14,14 @@ ${THRIFT_MAKEFILE}: ${THRIFT_CONFIGURE}
 thrift: ${INSTALL_DIR}/bin/thrift
 
 ${INSTALL_DIR}/bin/thrift: ${THRIFT_MAKEFILE}
-	${MAKE} -C ${THRIFT_DIR}
-	${MAKE} -C ${THRIFT_DIR} install
+	${MAKE} -j1 -C ${THRIFT_DIR}
+	${MAKE} -j1 -C ${THRIFT_DIR} install
 
 thrift_test: ${THRIFT_MAKEFILE}
-	${MAKE} -C ${THRIFT_DIR} test
+	${MAKE} -j1 -C ${THRIFT_DIR} test
 
 thrift_clean: ${THRIFT_MAKEFILE}
-	${MAKE} -C ${THRIFT_DIR} clean
+	${MAKE} -j1 -C ${THRIFT_DIR} clean
 
 thrift_distclean:
 	# The following doesn't seem to work, so use git clean instead
