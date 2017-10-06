@@ -232,14 +232,9 @@ AoR* AstaireAoRStore::JsonSerializerDeserializer::
     }
 
     JSON_GET_INT_MEMBER(doc, JSON_NOTIFY_CSEQ, aor->_notify_cseq);
-    aor->_timer_id =
-         ((doc.HasMember(JSON_TIMER_ID)) && ((doc[JSON_TIMER_ID]).IsString()) ?
-                                             (doc[JSON_TIMER_ID].GetString()) :
-                                              "");
-    aor->_scscf_uri =
-         ((doc.HasMember(JSON_SCSCF_URI)) && ((doc[JSON_SCSCF_URI]).IsString()) ?
-                                                (doc[JSON_SCSCF_URI].GetString()) :
-                                                 "");
+
+    JSON_SAFE_GET_STRING_MEMBER(doc, JSON_TIMER_ID, aor->_timer_id);
+    JSON_SAFE_GET_STRING_MEMBER(doc, JSON_SCSCF_URI, aor->_scscf_uri);
   }
   catch(JsonFormatError err)
   {
