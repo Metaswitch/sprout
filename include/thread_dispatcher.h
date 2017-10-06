@@ -58,7 +58,7 @@ union Event
 // This MUST be called from the main PJSIP transport thread.
 void add_callback_to_queue(PJUtils::Callback*);
 
-struct EventInfo
+struct worker_thread_qe
 {
   // The type of the event
   EventType type;
@@ -72,10 +72,10 @@ struct EventInfo
   // The time at which the event is to be queued
   int queue_start_time; // TODO: Proper time type
 
-  // Compares two EventInfo structs. Higher priority structs (i.e. structs with
+  // Compares two worker_thread_qe structs. Higher priority structs (i.e. structs with
   // a lower value of priority) are returned first, and structs are returned
   // oldest to newest within each priority level.
-  bool operator()(const EventInfo& lhs, const EventInfo& rhs)
+  bool operator()(const worker_thread_qe& lhs, const worker_thread_qe& rhs)
   {
     if (lhs.priority != rhs.priority)
     {
@@ -88,14 +88,14 @@ struct EventInfo
   }
 };
 
-class PriorityEventQueueBackend : eventq<EventInfo>::Backend
+class PriorityEventQueueBackend : eventq<worker_thread_qe>::Backend
 {
 public:
 
   PriorityEventQueueBackend() : _queue() {}
   virtual ~PriorityEventQueueBackend() {}
 
-  virtual const EventInfo& front()
+  virtual const worker_thread_qe& front()
   {
     return _queue.top();
   }
@@ -110,7 +110,7 @@ public:
     return _queue.size();
   }
 
-  virtual void push(const EventInfo& value)
+  virtual void push(const worker_thread_qe& value)
   {
     _queue.push(value);
   }
@@ -122,9 +122,9 @@ public:
 
 private:
 
-  std::priority_queue<EventInfo,
-                      std::deque<EventInfo>,
-                      EventInfo > _queue;
+  std::priority_queue<worker_thread_qe,
+                      std::deque<worker_thread_qe>,
+                      worker_thread_qe > _queue;
 };
 
 #endif

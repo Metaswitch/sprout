@@ -51,7 +51,7 @@ extern "C" {
 static std::vector<pj_thread_t*> worker_threads;
 
 // Queue for incoming events.
-eventq<struct EventInfo> event_q;
+eventq<struct worker_thread_qe> event_q;
 
 // Deadlock detection threshold for the message queue (in milliseconds).  This
 // is set to roughly twice the expected maximum service time for each message
@@ -105,7 +105,7 @@ static int worker_thread(void* p)
 
   TRC_DEBUG("Worker thread started");
 
-  struct EventInfo qe = { MESSAGE };
+  struct worker_thread_qe qe = { MESSAGE };
 
   while (event_q.pop(qe))
   {
@@ -243,7 +243,7 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   me->rdata = clone_rdata;
   Event queue_event;
   queue_event.message = me;
-  struct EventInfo qe = { MESSAGE, queue_event };
+  struct worker_thread_qe qe = { MESSAGE, queue_event };
 
   // Track the current queue size
   queue_size_table->accumulate(event_q.size());
@@ -325,7 +325,7 @@ void add_callback_to_queue(PJUtils::Callback* cb)
   // Create an Event to hold the Callback
   Event queue_event;
   queue_event.callback = cb;
-  EventInfo qe = { CALLBACK, queue_event };
+  worker_thread_qe qe = { CALLBACK, queue_event };
 
   // Track the current queue size
   queue_size_table->accumulate(event_q.size());

@@ -14,22 +14,22 @@
 
 #include "thread_dispatcher.h"
 
-class EventInfoTest : public ::testing::Test
+class worker_thread_qeTest : public ::testing::Test
 {
 public:
   virtual void SetUp()
   {
     Event event;
-    struct EventInfo event_info = {MESSAGE, event, 0, 0};
+    struct worker_thread_qe event_info = {MESSAGE, event, 0, 0};
     e1 = event_info;
     e2 = event_info;
   }
 
-  EventInfo e1;
-  EventInfo e2;
+  worker_thread_qe e1;
+  worker_thread_qe e2;
 };
 
-TEST_F(EventInfoTest, PriorityOrdering)
+TEST_F(worker_thread_qeTest, PriorityOrdering)
 {
   e2.priority = 1;
   EXPECT_TRUE(e1(e1, e2));
@@ -38,7 +38,7 @@ TEST_F(EventInfoTest, PriorityOrdering)
   EXPECT_FALSE(e2(e2, e1));
 }
 
-TEST_F(EventInfoTest, TimeOrdering)
+TEST_F(worker_thread_qeTest, TimeOrdering)
 {
   e2.queue_start_time = 1;
   EXPECT_TRUE(e1(e1, e2));
@@ -47,7 +47,7 @@ TEST_F(EventInfoTest, TimeOrdering)
   EXPECT_FALSE(e2(e2, e1));
 }
 
-TEST_F(EventInfoTest, PriorityBeforeTimeOrdering)
+TEST_F(worker_thread_qeTest, PriorityBeforeTimeOrdering)
 {
   e2.priority = 1;
   e1.queue_start_time = 1;
