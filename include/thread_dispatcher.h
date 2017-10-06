@@ -35,52 +35,70 @@ void unregister_thread_dispatcher(void);
 pj_status_t start_worker_threads();
 void stop_worker_threads(); // TODO: Should this return its status?
 
-struct SipMessageEvent
-{
-  // The received message
-  pjsip_rx_data* rdata;
-
-  // A stop watch for tracking SIP message latency
-  Utils::StopWatch stop_watch;
-};
-
 // A SipEvent on the queue is either a SIP message or a callback
 enum SipEventType { MESSAGE, CALLBACK };
 
-union SipEvent
+union SipEventData
 {
+  pjsip_rx_data* rdata;
   PJUtils::Callback* callback;
-  SipMessageEvent* message;
 };
 
+struct SipEvent
+{
+  // The type of the event
+  SipEventType type;
+
+  // The event's priority - a lower value corresponds to a higher priority level
+  int priority;
+
+  // A stop watch for tracking latency and determining the length of time the
+  // message has been on the queue
+  Utils::StopWatch stop_watch;
+
+  // The event itself
+  SipEventData event_data;
+
+  // Compares two SipEvents. 'larger' SipEvents are returned sooner by the
+  // priority queue.
+  bool operator()(SipEvent lhs, SipEvent rhs)
+  {
+    if (lhs.priority != rhs.priority)
+    {
+      // SipEvents with a lower priority level are 'larger'
+      return lhs.priority > rhs.priority;
+    }
+    else
+    {
+      // At the same priority level, older SipEvents are 'larger'
+      unsigned long lhs_us;
+      unsigned long rhs_us;
+
+      if (!lhs.stop_watch.read(lhs_us) || !rhs.stop_watch.read(rhs_us))
+      {
+        TRC_ERROR("Failed to read stopwatch.");
+        return false; // TODO: Check this behaviour
+      }
+
+      return lhs_us < rhs_us;
+    }
+  }
+};
 
 // Add a Callback object to the queue, to be run on a worker thread.
 // This MUST be called from the main PJSIP transport thread.
 void add_callback_to_queue(PJUtils::Callback*);
 
-struct WorkerThreadQe
-{
-  // The type of the event
-  SipEventType type;
-
-  // The event itself
-  SipEvent event;
-
-  // The priority of the event
-  int priority;
-
-};
-
-class PriorityEventQueueBackend : public eventq<WorkerThreadQe>::Backend
+class PriorityEventQueueBackend : public eventq<SipEvent>::Backend
 {
 public:
 
   PriorityEventQueueBackend() : _queue() {}
   virtual ~PriorityEventQueueBackend() {}
 
-  virtual const WorkerThreadQe& front()
+  virtual const SipEvent& front()
   {
-    return _queue.top().qe;
+    return _queue.top();
   }
 
   virtual bool empty()
@@ -93,12 +111,9 @@ public:
     return _queue.size();
   }
 
-  virtual void push(const WorkerThreadQe& value)
+  virtual void push(const SipEvent& value)
   {
-    QeInfo value_info;
-    value_info.qe = value;
-    value_info.queue_start_time_us = 0; // TODO: Set time
-    _queue.push(value_info);
+    _queue.push(value);
   }
 
   virtual void pop()
@@ -106,34 +121,7 @@ public:
     _queue.pop();
   }
 
-private:
-
-  struct QeInfo
-  {
-    WorkerThreadQe qe;
-
-    // The time at which the event is to be queued
-    unsigned long queue_start_time_us;
-
-    // Compares two qe_info structs. 'larger' structs are returned sooner by the
-    // priority queue. Higher priority structs, that is, those with a lower
-    // value of the priority variable, are 'larger'; within each priority level,
-    // older structs are 'larger'.
-    bool operator<(const QeInfo& rhs) const
-    {
-      if (qe.priority != rhs.qe.priority)
-      {
-        return qe.priority > rhs.qe.priority;
-      }
-      else
-      {
-        return queue_start_time_us > rhs.queue_start_time_us;
-      }
-    }
-
-  };
-
-  std::priority_queue<QeInfo, std::deque<QeInfo> > _queue;
+  std::priority_queue<SipEvent, std::deque<SipEvent>, SipEvent> _queue;
 };
 
 #endif
