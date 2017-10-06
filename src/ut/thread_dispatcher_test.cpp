@@ -11,6 +11,7 @@
  */
 
 #include "gtest/gtest.h"
+#include "test_interposer.hpp"
 
 #include "thread_dispatcher.h"
 
@@ -32,10 +33,14 @@ public:
 
     PriorityEventQueueBackend* q_backend = new PriorityEventQueueBackend();
     q = new eventq<struct SipEvent>(0, true, q_backend);
+
+    cwtest_completely_control_time();
   }
 
   virtual void TearDown()
   {
+    cwtest_reset_time();
+
     delete q;
     q = nullptr;
   }
@@ -49,24 +54,49 @@ public:
   eventq<struct SipEvent>* q;
 };
 
-// Test that the queue is FIFO at each priority level.
-TEST_F(SipEventQueueTest, TimeTest)
+// Test that higher priority SipEvents are 'larger' than lower priority ones.
+TEST_F(SipEventQueueTest, PriorityOrdering)
 {
-  q->push(e1);
-  q->push(e2);
+  // Lower the priority of e2
+  e2.priority = 1;
 
-  SipEvent e;
-
-  q->pop(e);
-  EXPECT_EQ(e1.event_data.rdata, e.event_data.rdata);
-
-  q->pop(e);
-  EXPECT_EQ(e2.type, e.type);
+  // e1 should be 'larger' than e2
+  EXPECT_TRUE(e1(e2, e1));
+  EXPECT_TRUE(e2(e2, e1));
 }
 
-// Test that higher priority elements are returned before lower priority ones,
-// regardless of order added.
-TEST_F(SipEventQueueTest, PriorityTest)
+// Test that older SipEvents are 'larger' than newer ones at the same priority
+// level.
+TEST_F(SipEventQueueTest, TimeOrdering)
+{
+  // Set e1 to be older than e2
+  e1.stop_watch.start();
+  cwtest_advance_time_ms(1);
+  e2.stop_watch.start();
+
+  // e1 should be 'larger' than e2
+  EXPECT_TRUE(e1(e2, e1));
+  EXPECT_TRUE(e2(e2, e1));
+}
+
+// Test that SipEvents are ordered by priority before time.
+TEST_F(SipEventQueueTest, PriorityAndTimeOrdering)
+{
+  // Lower the priority of e2
+  e2.priority = 1;
+
+  // Set e2 to be older than e1
+  e1.stop_watch.start();
+  cwtest_advance_time_ms(1);
+  e2.stop_watch.start();
+
+  // e1 should be 'larger' than e2
+  EXPECT_TRUE(e1(e2, e1));
+  EXPECT_TRUE(e2(e2, e1));
+}
+
+// Test that higher priority SipEvents are returned before lower priority ones.
+TEST_F(SipEventQueueTest, QueuePriorityOrdering)
 {
   // Lower the priority of e2
   e2.priority = 1;
@@ -76,9 +106,56 @@ TEST_F(SipEventQueueTest, PriorityTest)
 
   SipEvent e;
 
+  // e1 is higher priority, so should be returned first
   q->pop(e);
-  EXPECT_EQ(e1.priority, e.priority);
+  EXPECT_EQ(e1.event_data.rdata, e.event_data.rdata);
 
   q->pop(e);
   EXPECT_EQ(e2.priority, e.priority);
+}
+
+// Test that older SipEvents are returned before newer ones at the same priority
+// level.
+TEST_F(SipEventQueueTest, QueueTimeOrdering)
+{
+  // Set e1 to be older than e2
+  e1.stop_watch.start();
+  cwtest_advance_time_ms(1);
+  e2.stop_watch.start();
+
+  q->push(e2);
+  q->push(e1);
+
+  SipEvent e;
+
+  // e1 is older, so should be returned first
+  q->pop(e);
+  EXPECT_EQ(e1.event_data.rdata, e.event_data.rdata);
+
+  q->pop(e);
+  EXPECT_EQ(e2.event_data.rdata, e.event_data.rdata);
+}
+
+// Test that SipEvents are returned from the queue in priority, then time, order
+TEST_F(SipEventQueueTest, QueuePriorityAndTimeOrdering)
+{
+  // Lower the priority of e2
+  e2.priority = 1;
+
+  // Set e2 to be older than e1
+  e1.stop_watch.start();
+  cwtest_advance_time_ms(1);
+  e2.stop_watch.start();
+
+  q->push(e2);
+  q->push(e1);
+
+  SipEvent e;
+
+  // e1 is higher priority, so should be returned first despite e2 being older
+  q->pop(e);
+  EXPECT_EQ(e1.event_data.rdata, e.event_data.rdata);
+
+  q->pop(e);
+  EXPECT_EQ(e2.event_data.rdata, e.event_data.rdata);
 }

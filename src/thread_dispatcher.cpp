@@ -202,6 +202,7 @@ static int worker_thread(void* p)
 
 static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
 {
+  // TODO: Check load monitor
   // SAS log the start of processing by this module
   SAS::Event event(get_trail(rdata), SASEvent::BEGIN_THREAD_DISPATCHER, 0);
   SAS::report_event(event);
@@ -245,6 +246,7 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   TRC_DEBUG("Queuing cloned received message %p for worker threads", clone_rdata);
   qe.event_data.rdata = clone_rdata;
   qe.type = MESSAGE;
+  // TODO: Set priority
 
   // Track the current queue size
   queue_size_table->accumulate(sip_event_queue.size());
@@ -327,6 +329,7 @@ void add_callback_to_queue(PJUtils::Callback* cb)
   SipEvent qe;
   qe.type = CALLBACK;
   qe.event_data.callback = cb;
+  // TODO: Set priority
 
   // Track the current queue size
   queue_size_table->accumulate(sip_event_queue.size());

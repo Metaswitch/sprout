@@ -56,8 +56,10 @@ struct SipEvent
   // message has been on the queue
   Utils::StopWatch stop_watch;
 
-  // The event itself
+  // The event data itself
   SipEventData event_data;
+
+  SipEvent() : priority(0) {}
 
   // Compares two SipEvents. 'larger' SipEvents are returned sooner by the
   // priority queue.
@@ -89,6 +91,7 @@ struct SipEvent
 // This MUST be called from the main PJSIP transport thread.
 void add_callback_to_queue(PJUtils::Callback*);
 
+// Implements eventq::Backend as a std::priority_queue of SipEvent structs.
 class PriorityEventQueueBackend : public eventq<SipEvent>::Backend
 {
 public:
@@ -121,6 +124,7 @@ public:
     _queue.pop();
   }
 
+  // SipEvents are compared using operator()
   std::priority_queue<SipEvent, std::deque<SipEvent>, SipEvent> _queue;
 };
 
