@@ -369,7 +369,8 @@ public:
                                           _enum_service,
                                           &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
                                           &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
-                                          false
+                                          false,
+                                          5059
                                           );
     _icscf_sproutlet->init();
 
@@ -9635,7 +9636,8 @@ class SCSCFTestWithoutICSCF : public SCSCFTestBase
                                           _enum_service,
                                           &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
                                           &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
-                                          false
+                                          false,
+                                          5059
                                           );
     _icscf_sproutlet->init();
 
@@ -9747,7 +9749,8 @@ class SCSCFTestWithRemoteSDM : public SCSCFTestBase
                                           _enum_service,
                                           &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
                                           &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
-                                          false
+                                          false,
+                                          5059
                                           );
     _icscf_sproutlet->init();
 
@@ -9881,7 +9884,8 @@ class SCSCFTestWithRalf : public SCSCFTestBase
                                           _enum_service,
                                           &SNMP::FAKE_INCOMING_SIP_TRANSACTIONS_TABLE,
                                           &SNMP::FAKE_OUTGOING_SIP_TRANSACTIONS_TABLE,
-                                          false
+                                          false,
+                                          5059
                                           );
     _icscf_sproutlet->init();
 

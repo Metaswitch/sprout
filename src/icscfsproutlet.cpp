@@ -46,7 +46,8 @@ ICSCFSproutlet::ICSCFSproutlet(const std::string& icscf_name,
                                EnumService* enum_service,
                                SNMP::SuccessFailCountByRequestTypeTable* incoming_sip_transactions_tbl,
                                SNMP::SuccessFailCountByRequestTypeTable* outgoing_sip_transactions_tbl,
-                               bool override_npdi) :
+                               bool override_npdi,
+                               int network_function_port) :
   Sproutlet(icscf_name,
             port,
             uri,
