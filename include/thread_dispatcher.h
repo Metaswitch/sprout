@@ -35,7 +35,7 @@ void unregister_thread_dispatcher(void);
 pj_status_t start_worker_threads();
 void stop_worker_threads(); // TODO: Should this return its status?
 
-struct MessageEvent
+struct SipMessageEvent
 {
   // The received message
   pjsip_rx_data* rdata;
@@ -44,13 +44,13 @@ struct MessageEvent
   Utils::StopWatch stop_watch;
 };
 
-// An Event on the queue is either a SIP message or a callback
-enum EventType { MESSAGE, CALLBACK };
+// A SipEvent on the queue is either a SIP message or a callback
+enum SipEventType { MESSAGE, CALLBACK };
 
-union Event
+union SipEvent
 {
   PJUtils::Callback* callback;
-  MessageEvent* message;
+  SipMessageEvent* message;
 };
 
 
@@ -61,34 +61,17 @@ void add_callback_to_queue(PJUtils::Callback*);
 struct worker_thread_qe
 {
   // The type of the event
-  EventType type;
+  SipEventType type;
 
   // The event itself
-  Event event;
+  SipEvent event;
 
   // The priority of the event
   int priority;
 
-  // The time at which the event is to be queued
-  int queue_start_time; // TODO: Proper time type
-
-  // Compares two worker_thread_qe structs. Higher priority structs (i.e. structs with
-  // a lower value of priority) are returned first, and structs are returned
-  // oldest to newest within each priority level.
-  bool operator()(const worker_thread_qe& lhs, const worker_thread_qe& rhs)
-  {
-    if (lhs.priority != rhs.priority)
-    {
-      return lhs.priority < rhs.priority;
-    }
-    else
-    {
-      return lhs.queue_start_time < rhs.queue_start_time;
-    }
-  }
 };
 
-class PriorityEventQueueBackend : eventq<worker_thread_qe>::Backend
+class PriorityEventQueueBackend : public eventq<worker_thread_qe>::Backend
 {
 public:
 
@@ -97,7 +80,7 @@ public:
 
   virtual const worker_thread_qe& front()
   {
-    return _queue.top();
+    return _queue.top().qe;
   }
 
   virtual bool empty()
@@ -112,7 +95,10 @@ public:
 
   virtual void push(const worker_thread_qe& value)
   {
-    _queue.push(value);
+    qe_info value_info;
+    value_info.qe = value;
+    value_info.queue_start_time_us = 0; // TODO: Set time
+    _queue.push(value_info);
   }
 
   virtual void pop()
@@ -122,9 +108,32 @@ public:
 
 private:
 
-  std::priority_queue<worker_thread_qe,
-                      std::deque<worker_thread_qe>,
-                      worker_thread_qe > _queue;
+  struct qe_info
+  {
+    worker_thread_qe qe;
+
+    // The time at which the event is to be queued
+    unsigned long queue_start_time_us; // TODO: Proper time type
+
+    // Compares two qe_info structs. 'larger' structs are returned sooner by the
+    // priority queue. Higher priority structs, that is, those with a lower
+    // value of the priority variable, are 'larger'; within each priority level,
+    // older structs are 'larger'.
+    bool operator<(const qe_info& rhs) const
+    {
+      if (qe.priority != rhs.qe.priority)
+      {
+        return qe.priority > rhs.qe.priority;
+      }
+      else
+      {
+        return queue_start_time_us > rhs.queue_start_time_us;
+      }
+    }
+
+  };
+
+  std::priority_queue<qe_info, std::deque<qe_info> > _queue;
 };
 
 #endif

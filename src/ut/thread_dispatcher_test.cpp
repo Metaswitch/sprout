@@ -19,37 +19,33 @@ class worker_thread_qeTest : public ::testing::Test
 public:
   virtual void SetUp()
   {
-    Event event;
-    struct worker_thread_qe event_info = {MESSAGE, event, 0, 0};
+    SipEvent event;
+    struct worker_thread_qe event_info = {MESSAGE, event, 0};
     e1 = event_info;
     e2 = event_info;
+    PriorityEventQueueBackend* q_backend = new PriorityEventQueueBackend();
+    q = new eventq<struct worker_thread_qe>(0, true, q_backend);
+  }
+
+  virtual void TearDown()
+  {
+    delete q;
+    q = nullptr;
   }
 
   worker_thread_qe e1;
   worker_thread_qe e2;
+  eventq<struct worker_thread_qe>* q;
 };
 
-TEST_F(worker_thread_qeTest, PriorityOrdering)
+TEST_F(worker_thread_qeTest, PriorityTest)
 {
   e2.priority = 1;
-  EXPECT_TRUE(e1(e1, e2));
-  EXPECT_TRUE(e2(e1, e2));
-  EXPECT_FALSE(e1(e2, e1));
-  EXPECT_FALSE(e2(e2, e1));
-}
-
-TEST_F(worker_thread_qeTest, TimeOrdering)
-{
-  e2.queue_start_time = 1;
-  EXPECT_TRUE(e1(e1, e2));
-  EXPECT_TRUE(e2(e1, e2));
-  EXPECT_FALSE(e1(e2, e1));
-  EXPECT_FALSE(e2(e2, e1));
-}
-
-TEST_F(worker_thread_qeTest, PriorityBeforeTimeOrdering)
-{
-  e2.priority = 1;
-  e1.queue_start_time = 1;
-  EXPECT_TRUE(e1(e1, e2));
+  q->push(e2);
+  q->push(e1);
+  worker_thread_qe e;
+  q->pop(e);
+  EXPECT_EQ(e1.priority, e.priority);
+  q->pop(e);
+  EXPECT_EQ(e2.priority, e.priority);
 }

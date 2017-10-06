@@ -51,7 +51,11 @@ extern "C" {
 static std::vector<pj_thread_t*> worker_threads;
 
 // Queue for incoming events.
-eventq<struct worker_thread_qe> event_q;
+PriorityEventQueueBackend* worker_thread_q_backend = new PriorityEventQueueBackend();
+eventq<struct worker_thread_qe> worker_thread_q(0,
+                                                true,
+                                                worker_thread_q_backend);
+// TODO: Should these be static?
 
 // Deadlock detection threshold for the message queue (in milliseconds).  This
 // is set to roughly twice the expected maximum service time for each message
@@ -107,11 +111,11 @@ static int worker_thread(void* p)
 
   struct worker_thread_qe qe = { MESSAGE };
 
-  while (event_q.pop(qe))
+  while (worker_thread_q.pop(qe))
   {
     if (qe.type == MESSAGE)
     {
-      MessageEvent* me = qe.event.message;
+      SipMessageEvent* me = qe.event.message;
       pjsip_rx_data* rdata = me->rdata;
 
       if (rdata)
@@ -204,7 +208,7 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   SAS::report_event(event);
 
   // Check that the worker threads are not all deadlocked.
-  if (event_q.is_deadlocked())
+  if (worker_thread_q.is_deadlocked())
   {
     // The queue has not been serviced for sufficiently long to imply that
     // all the worker threads are deadlock, so exit the process so it will be
@@ -216,7 +220,7 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
 
   // Before we start, get a timestamp.  This will track the time from
   // receiving a message to forwarding it on (or rejecting it).
-  MessageEvent* me = new MessageEvent();
+  SipMessageEvent* me = new SipMessageEvent();
   me->stop_watch.start();
 
   // Clone the message and queue it to a scheduler thread.
@@ -241,13 +245,13 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
 
   TRC_DEBUG("Queuing cloned received message %p for worker threads", clone_rdata);
   me->rdata = clone_rdata;
-  Event queue_event;
+  SipEvent queue_event;
   queue_event.message = me;
   struct worker_thread_qe qe = { MESSAGE, queue_event };
 
   // Track the current queue size
-  queue_size_table->accumulate(event_q.size());
-  event_q.push(qe);
+  queue_size_table->accumulate(worker_thread_q.size());
+  worker_thread_q.push(qe);
 
   // return TRUE to flag that we have absorbed the incoming message.
   return PJ_TRUE;
@@ -264,7 +268,7 @@ pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
   worker_threads.resize(num_worker_threads_arg);
 
   // Enable deadlock detection on the message queue.
-  event_q.set_deadlock_threshold(MSG_Q_DEADLOCK_TIME);
+  worker_thread_q.set_deadlock_threshold(MSG_Q_DEADLOCK_TIME);
 
   num_worker_threads = num_worker_threads_arg;
   latency_table = latency_table_arg;
@@ -304,7 +308,7 @@ void stop_worker_threads()
 {
   // Now it is safe to signal the worker threads to exit via the queue and to
   // wait for them to terminate.
-  event_q.terminate();
+  worker_thread_q.terminate();
   for (std::vector<pj_thread_t*>::iterator i = worker_threads.begin();
        i != worker_threads.end();
        ++i)
@@ -322,14 +326,14 @@ void unregister_thread_dispatcher(void)
 
 void add_callback_to_queue(PJUtils::Callback* cb)
 {
-  // Create an Event to hold the Callback
-  Event queue_event;
+  // Create a SipEvent to hold the Callback
+  SipEvent queue_event;
   queue_event.callback = cb;
   worker_thread_qe qe = { CALLBACK, queue_event };
 
   // Track the current queue size
-  queue_size_table->accumulate(event_q.size());
+  queue_size_table->accumulate(worker_thread_q.size());
 
-  // Add the Event
-  event_q.push(qe);
+  // Add the SipEvent
+  worker_thread_q.push(qe);
 }
