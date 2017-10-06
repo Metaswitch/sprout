@@ -63,7 +63,8 @@ ICSCFSproutlet::ICSCFSproutlet(const std::string& icscf_name,
   _acr_factory(acr_factory),
   _enum_service(enum_service),
   _override_npdi(override_npdi),
-  _bgcf_uri_str(bgcf_uri)
+  _bgcf_uri_str(bgcf_uri),
+  _network_function_port(network_function_port)
 {
   _session_establishment_tbl = SNMP::SuccessFailCountTable::create("icscf_session_establishment",
                                                                    "1.2.826.0.1.1578918.9.3.36");
