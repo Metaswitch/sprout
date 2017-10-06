@@ -58,7 +58,7 @@ union SipEvent
 // This MUST be called from the main PJSIP transport thread.
 void add_callback_to_queue(PJUtils::Callback*);
 
-struct worker_thread_qe
+struct WorkerThreadQe
 {
   // The type of the event
   SipEventType type;
@@ -71,14 +71,14 @@ struct worker_thread_qe
 
 };
 
-class PriorityEventQueueBackend : public eventq<worker_thread_qe>::Backend
+class PriorityEventQueueBackend : public eventq<WorkerThreadQe>::Backend
 {
 public:
 
   PriorityEventQueueBackend() : _queue() {}
   virtual ~PriorityEventQueueBackend() {}
 
-  virtual const worker_thread_qe& front()
+  virtual const WorkerThreadQe& front()
   {
     return _queue.top().qe;
   }
@@ -93,9 +93,9 @@ public:
     return _queue.size();
   }
 
-  virtual void push(const worker_thread_qe& value)
+  virtual void push(const WorkerThreadQe& value)
   {
-    qe_info value_info;
+    QeInfo value_info;
     value_info.qe = value;
     value_info.queue_start_time_us = 0; // TODO: Set time
     _queue.push(value_info);
@@ -108,18 +108,18 @@ public:
 
 private:
 
-  struct qe_info
+  struct QeInfo
   {
-    worker_thread_qe qe;
+    WorkerThreadQe qe;
 
     // The time at which the event is to be queued
-    unsigned long queue_start_time_us; // TODO: Proper time type
+    unsigned long queue_start_time_us;
 
     // Compares two qe_info structs. 'larger' structs are returned sooner by the
     // priority queue. Higher priority structs, that is, those with a lower
     // value of the priority variable, are 'larger'; within each priority level,
     // older structs are 'larger'.
-    bool operator<(const qe_info& rhs) const
+    bool operator<(const QeInfo& rhs) const
     {
       if (qe.priority != rhs.qe.priority)
       {
@@ -133,7 +133,7 @@ private:
 
   };
 
-  std::priority_queue<qe_info, std::deque<qe_info> > _queue;
+  std::priority_queue<QeInfo, std::deque<QeInfo> > _queue;
 };
 
 #endif

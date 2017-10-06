@@ -14,17 +14,21 @@
 
 #include "thread_dispatcher.h"
 
-class worker_thread_qeTest : public ::testing::Test
+class WorkerThreadQeTest : public ::testing::Test
 {
 public:
   virtual void SetUp()
   {
+    // We can distinguish e1 and e2 by the value of en.event.message
     SipEvent event;
-    struct worker_thread_qe event_info = {MESSAGE, event, 0};
-    e1 = event_info;
-    e2 = event_info;
+    event.message = &event_msg_1;
+    e1 = {MESSAGE, event, 0};
+
+    event.message = &event_msg_2;
+    e2 = {MESSAGE, event, 0};
+
     PriorityEventQueueBackend* q_backend = new PriorityEventQueueBackend();
-    q = new eventq<struct worker_thread_qe>(0, true, q_backend);
+    q = new eventq<struct WorkerThreadQe>(0, true, q_backend);
   }
 
   virtual void TearDown()
@@ -33,19 +37,45 @@ public:
     q = nullptr;
   }
 
-  worker_thread_qe e1;
-  worker_thread_qe e2;
-  eventq<struct worker_thread_qe>* q;
+  WorkerThreadQe e1;
+  WorkerThreadQe e2;
+
+  SipMessageEvent event_msg_1;
+  SipMessageEvent event_msg_2;
+
+  eventq<struct WorkerThreadQe>* q;
 };
 
-TEST_F(worker_thread_qeTest, PriorityTest)
+// Test that the queue is FIFO at each priority level.
+TEST_F(WorkerThreadQeTest, TimeTest)
 {
+  q->push(e1);
+  q->push(e2);
+
+  WorkerThreadQe e;
+
+  q->pop(e);
+  EXPECT_EQ(e1.event.message, e.event.message);
+
+  q->pop(e);
+  EXPECT_EQ(e2.type, e.type);
+}
+
+// Test that higher priority elements are returned before lower priority ones,
+// regardless of order added.
+TEST_F(WorkerThreadQeTest, PriorityTest)
+{
+  // Lower the priority of e2
   e2.priority = 1;
+
   q->push(e2);
   q->push(e1);
-  worker_thread_qe e;
+
+  WorkerThreadQe e;
+
   q->pop(e);
   EXPECT_EQ(e1.priority, e.priority);
+
   q->pop(e);
   EXPECT_EQ(e2.priority, e.priority);
 }

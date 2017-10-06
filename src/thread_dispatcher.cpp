@@ -52,7 +52,7 @@ static std::vector<pj_thread_t*> worker_threads;
 
 // Queue for incoming events.
 PriorityEventQueueBackend* worker_thread_q_backend = new PriorityEventQueueBackend();
-eventq<struct worker_thread_qe> worker_thread_q(0,
+eventq<struct WorkerThreadQe> worker_thread_q(0,
                                                 true,
                                                 worker_thread_q_backend);
 // TODO: Should these be static?
@@ -109,7 +109,7 @@ static int worker_thread(void* p)
 
   TRC_DEBUG("Worker thread started");
 
-  struct worker_thread_qe qe = { MESSAGE };
+  struct WorkerThreadQe qe = { MESSAGE };
 
   while (worker_thread_q.pop(qe))
   {
@@ -247,7 +247,7 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   me->rdata = clone_rdata;
   SipEvent queue_event;
   queue_event.message = me;
-  struct worker_thread_qe qe = { MESSAGE, queue_event };
+  struct WorkerThreadQe qe = { MESSAGE, queue_event };
 
   // Track the current queue size
   queue_size_table->accumulate(worker_thread_q.size());
@@ -329,7 +329,7 @@ void add_callback_to_queue(PJUtils::Callback* cb)
   // Create a SipEvent to hold the Callback
   SipEvent queue_event;
   queue_event.callback = cb;
-  worker_thread_qe qe = { CALLBACK, queue_event };
+  WorkerThreadQe qe = { CALLBACK, queue_event };
 
   // Track the current queue size
   queue_size_table->accumulate(worker_thread_q.size());
