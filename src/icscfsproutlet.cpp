@@ -270,7 +270,7 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
                                             _icscf->get_scscf_selector(),
                                             trail(),
                                             _acr,
-                                            _icscf->port(),
+                                            _icscf->network_function_port(),
                                             impi,
                                             impu,
                                             visited_network,
@@ -553,7 +553,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
                                             _icscf->get_scscf_selector(),
                                             trail(),
                                             _acr,
-                                            _icscf->port(),
+                                            _icscf->network_function_port(),
                                             impu,
                                             _originating);
 
