@@ -1528,7 +1528,7 @@ BasicProxy::UACTsx::UACTsx(BasicProxy* proxy,
   _tsx(NULL),
   _tdata(NULL),
   _servers_iter(NULL),
-  _no_servers(true),
+  _current_server(),
   _cancel_tsx(NULL),
   _timer_c(),
   _trail(0),
@@ -1683,16 +1683,12 @@ void BasicProxy::UACTsx::send_request()
   }
   else
   {
-    // Stores the first element of servers_iter as _current_server and moves the
-    // iterator along by 1. get_next_server returns true if there is at least
-    // one valid server.
-    _no_servers = !(get_next_server());
-
-    if (!_no_servers)
+    // Get the next server from the address iterator.
+    if (get_next_server())
     {
       // We have resolved servers to try, so set up the destination information
       // in the request.
-      PJUtils::set_dest_info(_tdata, _current_server);
+      PJUtils::set_dest_info(_tdata, _current_server.address());
     }
     else
     {
@@ -1752,9 +1748,9 @@ void BasicProxy::UACTsx::send_request()
       // case the request is used to build an error response.
       PJUtils::remove_top_via(_tdata);
 
-      ForkErrorState fork_error = (_no_servers) ?
-                                    ForkErrorState::NO_ADDRESSES :
-                                    ForkErrorState::TRANSPORT_ERROR;
+      ForkErrorState fork_error = (_current_server.is_set()) ?
+                                    ForkErrorState::TRANSPORT_ERROR :
+                                    ForkErrorState::NO_ADDRESSES;
 
       _uas_tsx->on_client_not_responding(this, fork_error);
     }
@@ -1864,10 +1860,6 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
   // terminated or been cancelled).
   TRC_DEBUG("%s - uac_tsx = %p, uas_tsx = %p", name(), this, _uas_tsx);
 
-  // Boolean to ensure that if this server doesn't get blacklisted by this
-  // function call, the request gets reported as successful.
-  bool blacklisted_server = false;
-
   // Check that the event is on the current UAC transaction (we may have
   // created a new one for a retry) and is still connected to the UAS
   // transaction.
@@ -1886,7 +1878,7 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
       stop_timer_c();
     }
 
-    if (!_no_servers)
+    if (_current_server.is_set())
     {
       // Check to see if the destination server has failed so we can blacklist
       // it and retry to an alternative if possible.
@@ -1895,8 +1887,7 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
       {
         // Failed to connect to the selected server, or failed so blacklist it.
         TRC_DEBUG("Failed to connected to server so add to blacklist");
-        PJUtils::blacklist(_current_server);
-        blacklisted_server = true;
+        _current_server.failed();
 
         // Attempt a retry.
         retrying = retry_request();
@@ -1914,8 +1905,7 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
           // avoid blacklisting them due to an unresponsive server further
           // downstream.
           TRC_DEBUG("Next hop is NOT a stateless-proxy - blacklist");
-          PJUtils::blacklist(_current_server);
-          blacklisted_server = true;
+          _current_server.failed();
         }
 
         // Don't retry - if we've waited for a SIP transaction to time out,
@@ -1930,13 +1920,14 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
         // The server returned a 503 error.  We don't blacklist in this case
         // as it may indicated a transient overload condition, but we can
         // retry to an alternate server if one is available.
-        TRC_DEBUG("Server return 503 error");
+        TRC_DEBUG("Server returned a 503 error");
+       _current_server.succeeded();
         retrying = retry_request();
       }
-
-      if (!blacklisted_server)
+      else if (event->body.tsx_state.type == PJSIP_EVENT_RX_MSG)
       {
-        PJUtils::success(_current_server);
+        TRC_DEBUG("Server sent a response");
+        _current_server.succeeded();
       }
     }
 
@@ -2117,7 +2108,7 @@ bool BasicProxy::UACTsx::retry_request()
 
       // Copy across the destination information for a retry and try to
       // resend the request.
-      PJUtils::set_dest_info(_tdata, _current_server);
+      PJUtils::set_dest_info(_tdata, _current_server.address());
       status = pjsip_tsx_send_msg(_tsx, _tdata);
 
       if (status == PJ_SUCCESS)
@@ -2278,13 +2269,93 @@ bool BasicProxy::UACTsx::get_next_server()
     // Decrement the number of attempts left.
     --_num_attempts_left;
 
-    // Stores the next server in _current_server and incrementes _servers_iter.
+    // Stores the next server in _current_server and increments _servers_iter.
     // next returns true if there was another server to return.
-    return _servers_iter->next(_current_server);
+    AddrInfo addr;
+    if (_servers_iter->next(addr))
+    {
+      _current_server.set(addr, _stateless_proxy);
+      return true;
+    }
+    else
+    {
+      return false;
+    }
   }
   else
   {
     // Maximum number of attempts have been made.
     return false;
+  }
+}
+
+//
+// Methods for BasicProxy::UACTsx::Target
+//
+
+BasicProxy::UACTsx::Target::Target() :
+  _addr(), _is_set(false), _health_known(false), _stateless_proxy(false)
+{}
+
+BasicProxy::UACTsx::Target::~Target()
+{
+  unset();
+}
+
+void BasicProxy::UACTsx::Target::set(AddrInfo& addr, bool stateless_proxy)
+{
+  // A new address is being set, so unset the current one.
+  unset();
+
+  _addr = addr;
+  _is_set = true;
+  _health_known = false;
+  _stateless_proxy = stateless_proxy;
+}
+
+bool BasicProxy::UACTsx::Target::is_set() { return _is_set; }
+const AddrInfo& BasicProxy::UACTsx::Target::address() { return _addr; }
+
+void BasicProxy::UACTsx::Target::failed()
+{
+  if (_is_set && !_health_known)
+  {
+    PJUtils::blacklist(_addr);
+    _health_known = true;
+  }
+}
+
+void BasicProxy::UACTsx::Target::succeeded()
+{
+  if (_is_set && !_health_known)
+  {
+    PJUtils::success(_addr);
+    _health_known = true;
+  }
+}
+
+void BasicProxy::UACTsx::Target::unset()
+{
+  if (_is_set && !_health_known)
+  {
+    // We have a target already and we don't know its health (because the caller
+    // hasn't told us). However we need to call success or blacklist on the
+    // address.
+    //
+    // For stateful proxies, the most likely thing is that the host has failed
+    // in some weird way that the BasicProxy doesn't cope with, so the best
+    // thing to do is blacklist the host.
+    //
+    // State*less* proxies are only blacklisted on transport failures. These are
+    // easy to spot, so it is unlikely the BasicProxy didn't spot this, and the
+    // best thing to do is mark the host as successful.
+    if (_stateless_proxy)
+    {
+      PJUtils::success(_addr);
+    }
+    else
+    {
+      PJUtils::blacklist(_addr);
+    }
   }
 }

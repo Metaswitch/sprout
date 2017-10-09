@@ -280,6 +280,50 @@ protected:
                               struct pj_timer_entry *entry);
 
   protected:
+    /// Helper class to make sure that targets are blacklisted or whitelisted,
+    /// even in the event the calling code does not make a definitive decision.
+    class Target
+    {
+    public:
+      Target();
+      ~Target();
+
+      /// Tell the Target about an address and whether it represents a stateless
+      /// proxy.
+      /// @param addr            - The address in question.
+      /// @param stateless_proxy - Whether the address is for a stateless proxy.
+      void set(AddrInfo& addr, bool stateless_proxy);
+
+      /// Helper method to check if the Target had been initialized with an
+      /// address.
+      /// @param - Whether the Target has an address.
+      bool is_set();
+
+      /// Helper method to access the address of the target.
+      /// @return - A reference to the address.
+      const AddrInfo& address();
+
+      /// Mark this target as having definitively failed.
+      void failed();
+
+      /// Mark this target as having definitively succeeded.
+      void succeeded();
+
+    protected:
+      AddrInfo _addr;
+      bool _is_set;
+      bool _health_known;
+      bool _stateless_proxy;
+
+      // This class is not copyable or moveable. If it were, the semantics of
+      Target(const Target& rhs) = delete;
+      Target(Target&& rhs) = delete;
+
+      // Unset the address in the target. If the address has not already been
+      // blacklisted or whitelisted, this method will do that.
+      void unset();
+    };
+
     /// Returns the SAS trail identifier attached to the transaction.
     SAS::TrailId trail() const { return _trail; }
 
@@ -324,10 +368,7 @@ protected:
     BaseAddrIterator* _servers_iter;
 
     /// Current server target.
-    AddrInfo _current_server;
-
-    /// Boolean to track whether _servers_iter was initially an empty iterator.
-    bool _no_servers;
+    Target _current_server;
 
     /// Pointer to the associated PJSIP UAC transaction used to send a
     /// CANCEL request.  NULL if no CANCEL has been sent.
