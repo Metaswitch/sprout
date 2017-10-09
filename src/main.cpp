@@ -2311,13 +2311,13 @@ int main(int argc, char* argv[])
 
   init_common_sip_processing(load_monitor,
                              requests_counter,
-                             overload_counter,
                              hc);
 
   init_thread_dispatcher(opt.worker_threads,
                          latency_table,
                          queue_size_table,
                          load_monitor,
+                         overload_counter,
                          exception_handler);
 
   // Create worker threads first as they take work from the PJSIP threads so

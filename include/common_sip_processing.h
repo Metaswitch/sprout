@@ -28,7 +28,6 @@ extern "C" {
 pj_status_t
 init_common_sip_processing(LoadMonitor* load_monitor_arg,
                            SNMP::CounterByScopeTable* requests_counter_arg,
-                           SNMP::CounterByScopeTable* overload_counter_arg,
                            HealthChecker* health_checker_arg);
 
 void unregister_common_processing_module(void);

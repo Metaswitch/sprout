@@ -64,9 +64,14 @@ static eventq<struct SipEvent> sip_event_queue(0,
 static const int MSG_Q_DEADLOCK_TIME = 4000;
 
 static int num_worker_threads = 1;
+
 static SNMP::EventAccumulatorByScopeTable* latency_table = NULL;
-static LoadMonitor* load_monitor = NULL;
 static SNMP::EventAccumulatorByScopeTable* queue_size_table = NULL;
+
+static LoadMonitor* load_monitor = NULL;
+
+static SNMP::CounterByScopeTable* overload_counter = NULL;
+
 static ExceptionHandler* exception_handler = NULL;
 
 static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata);
@@ -200,12 +205,86 @@ static int worker_thread(void* p)
   return 0;
 }
 
+// Returns true if the SIP message should always be processed, regardless of
+// overload, and false otherwise.
+static bool ignore_overload(pjsip_rx_data* rdata)
+{
+  // The type of a message is either REQUEST or RESPONSE; we only check the load
+  // monitor for REQUEST messages
+  if (rdata->msg_info.msg->type != PJSIP_REQUEST_MSG)
+  {
+    return true;
+  }
+
+  // Always accept ACK and OPTIONS requests
+  pjsip_method_e method_id = rdata->msg_info.msg->line.req.method.id;
+  if (method_id == PJSIP_ACK_METHOD || method_id == PJSIP_OPTIONS_METHOD)
+  {
+    return true;
+  }
+
+  return false;
+}
+
+// Reject a SIP message with a 503 Service Unavailable
+static void reject_rx_msg_overload(pjsip_rx_data* rdata, SAS::TrailId trail)
+{
+  // Respond statelessly with a 503 Service Unavailable, including a
+  // Retry-After header with a zero length timeout.
+  TRC_DEBUG("Rejected request due to overload");
+
+  // LCOV_EXCL_START - can't meaningfully verify SAS in UT
+  SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
+  SAS::report_marker(start_marker);
+
+  SAS::Event event(trail, SASEvent::SIP_OVERLOAD, 0);
+  event.add_static_param(load_monitor->get_target_latency());
+  event.add_static_param(load_monitor->get_current_latency());
+  event.add_static_param(load_monitor->get_rate_limit());
+  SAS::report_event(event);
+
+  SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
+  SAS::report_marker(end_marker);
+
+  // LCOV_EXCL_STOP
+
+  pjsip_retry_after_hdr* retry_after = pjsip_retry_after_hdr_create(rdata->tp_info.pool, 0);
+  PJUtils::respond_stateless(stack_data.endpt,
+                             rdata,
+                             PJSIP_SC_SERVICE_UNAVAILABLE,
+                             NULL,
+                             (pjsip_hdr*)retry_after,
+                             NULL);
+
+  // We no longer terminate TCP connections on overload as the shutdown has
+  // to wait for existing transactions to end and therefore it takes too
+  // long to get feedback to the downstream node.  We expect downstream nodes
+  // to rebalance load if possible triggered by receipt of the 503 responses.
+
+  overload_counter->increment();
+}
+
+static int get_rx_msg_priority(pjsip_rx_data* rdata)
+{
+  // TODO: Determine priority from message
+  // TODO: SAS log priority
+  return 4;
+}
+
 static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
 {
-  // TODO: Check load monitor
+  SAS::TrailId trail = get_trail(rdata);
+
   // SAS log the start of processing by this module
-  SAS::Event event(get_trail(rdata), SASEvent::BEGIN_THREAD_DISPATCHER, 0);
+  SAS::Event event(trail, SASEvent::BEGIN_THREAD_DISPATCHER, 0);
   SAS::report_event(event);
+
+  // Check whether the request should be rejected due to overload
+  if (!ignore_overload(rdata) && !(load_monitor->admit_request(trail)))
+  {
+    reject_rx_msg_overload(rdata, trail);
+    return PJ_TRUE;
+  }
 
   // Check that the worker threads are not all deadlocked.
   if (sip_event_queue.is_deadlocked())
@@ -230,12 +309,13 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   if (status != PJ_SUCCESS)
   {
     // Failed to clone the message, so drop it.
-    TRC_ERROR("Failed to clone incoming message (%s)", PJUtils::pj_status_to_string(status).c_str());
+    TRC_ERROR("Failed to clone incoming message (%s)",
+              PJUtils::pj_status_to_string(status).c_str());
     return PJ_TRUE;
   }
 
   // Make sure the trail identifier is passed across.
-  set_trail(clone_rdata, get_trail(rdata));
+  set_trail(clone_rdata, trail);
 
   // @TODO - need to think about back-pressure mechanisms.  For example,
   // should we have a maximum depth of queue and drop messages after that?
@@ -243,10 +323,18 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   // will force back pressure on the particular TCP connection.  Or should we
   // have a queue per transport and round-robin them?
 
-  TRC_DEBUG("Queuing cloned received message %p for worker threads", clone_rdata);
+  // Set up a SipEvent struct
   qe.event_data.rdata = clone_rdata;
   qe.type = MESSAGE;
-  // TODO: Set priority
+
+  // Set the message priority and log to SAS
+  qe.priority = get_rx_msg_priority(clone_rdata);
+  TRC_DEBUG("Queuing cloned received message %p for worker threads with priority %d",
+            clone_rdata, qe.priority);
+  SAS::Event priority_event(trail, SASEvent::THREAD_DISPATCHER_SET_PRIORITY_LEVEL, 0);
+  std::string priority_str = std::to_string(qe.priority);
+  priority_event.add_var_param(priority_str);
+  SAS::report_event(priority_event);
 
   // Track the current queue size
   queue_size_table->accumulate(sip_event_queue.size());
@@ -260,6 +348,7 @@ pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
                                    SNMP::EventAccumulatorByScopeTable* latency_table_arg,
                                    SNMP::EventAccumulatorByScopeTable* queue_size_table_arg,
                                    LoadMonitor* load_monitor_arg,
+                                   SNMP::CounterByScopeTable* overload_counter_arg,
                                    ExceptionHandler* exception_handler_arg)
 {
   // Set up the vectors of threads.  The threads don't get created until
@@ -273,6 +362,7 @@ pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
   latency_table = latency_table_arg;
   queue_size_table = queue_size_table_arg;
   load_monitor = load_monitor_arg;
+  overload_counter = overload_counter_arg;
   exception_handler = exception_handler_arg;
 
   // Register the PJSIP module.

@@ -22,12 +22,14 @@ extern "C" {
 #include "snmp_event_accumulator_table.h"
 #include "snmp_event_accumulator_by_scope_table.h"
 #include "exception_handler.h"
+#include "snmp_counter_by_scope_table.h"
 #include "eventq.h"
 
 pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
                                    SNMP::EventAccumulatorByScopeTable* latency_tbl_arg,
                                    SNMP::EventAccumulatorByScopeTable* queue_size_tbl_arg,
                                    LoadMonitor* load_monitor_arg,
+                                   SNMP::CounterByScopeTable* overload_counter_arg,
                                    ExceptionHandler* exception_handler_arg);
 
 void unregister_thread_dispatcher(void);

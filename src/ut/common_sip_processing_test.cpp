@@ -67,7 +67,7 @@ public:
 
     _health_checker = new HealthChecker();
 
-    init_common_sip_processing(_lm, _requests_counter, _overload_counter, _health_checker);
+    init_common_sip_processing(_lm, _requests_counter, _health_checker);
   }
 
   ~CommonProcessingTest()
@@ -196,30 +196,6 @@ TEST_F(CommonProcessingTest, RequestAllowed)
   ASSERT_EQ(0, txdata_count());
 }
 
-TEST_F(CommonProcessingTest, RequestRejectedWithOverload)
-{
-  // Tests that, when there is no token in the load monitor's bucket, a
-  // request is rejected with 503 Service Unavailable.
-
-  pjsip_tx_data* tdata;
-
-  // Consume the only token in the bucket.
-  _lm->admit_request(0);
-
-  // Inject a request.
-  Message msg1;
-  msg1._first_hop = true;
-  inject_msg(msg1.get_request(), _tp);
-
-  // Expect a 503 response code.
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  RespMatcher r1(503);
-  r1.matches(tdata->msg);
-
-  free_txdata();
-}
-
 TEST_F(CommonProcessingTest, AckRequestAlwaysAllowed)
 {
   // Tests that, even when there is no token in the load monitor's bucket, an
@@ -320,7 +296,7 @@ TEST_F(CommonProcessingTest, SupportedHeaderWithCommas)
   // Set up a new Load monitor with enough tokens for each test.
   delete(_lm);
   _lm = new LoadMonitor(0, headers.size(), 0, 0);
-  init_common_sip_processing(_lm, _requests_counter, _overload_counter, _health_checker);
+  init_common_sip_processing(_lm, _requests_counter, _health_checker);
 
   pjsip_endpt_register_module(stack_data.endpt, &mod_ok);
 
