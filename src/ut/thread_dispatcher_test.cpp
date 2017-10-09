@@ -12,9 +12,109 @@
 
 #include "gtest/gtest.h"
 #include "test_interposer.hpp"
+#include "mock_load_monitor.h"
+#include "mock_pjsip_module.h"
+#include "custom_headers.h"
+#include "stack.h"
+#include "testingcommon.h"
 
 #include "thread_dispatcher.h"
 
+class ThreadDispatcherTest : public ::testing::Test
+{
+public:
+  virtual void SetUp()
+  {
+    init_test_pjsip();
+  }
+
+  virtual pj_status_t init_test_pjsip()
+  {
+    pj_status_t status;
+
+    status = pj_init();
+    PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+
+    status = pjlib_util_init();
+    PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+
+    pj_caching_pool_init(&cp, &pj_pool_factory_default_policy, 0);
+
+    status = pjsip_endpt_create(&cp.factory, NULL, &endpt);
+    PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+
+    //status = pjsip_tsx_layer_init_module(endpt);
+
+    pool = pj_pool_create(&cp.factory,
+                          "sprout-bono",
+                          4000,
+                          4000,
+                          NULL);
+
+    status = register_custom_headers();
+    PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+
+    PJUtils::init();
+
+    mod_mock = new MockPJSipModule(endpt,
+                                   "test-module",
+                                   PJSIP_MOD_PRIORITY_TRANSPORT_LAYER);
+    init_thread_dispatcher(1, NULL, NULL, &load_monitor, NULL, NULL);
+    pjsip_process_rdata_param_default(&entry_point);
+    entry_point.start_mod = get_mod_thread_dispatcher();
+
+    return status;
+  }
+
+  virtual void inject_msg(const string& msg)
+  {
+    pjsip_rx_data* rdata = PJ_POOL_ZALLOC_T(pool, pjsip_rx_data);
+
+    rdata->pkt_info.packet = (char*)pj_pool_alloc(pool, strlen(msg.data()) + 1);
+    strcpy(rdata->pkt_info.packet, msg.data());
+    rdata->pkt_info.len = msg.length();
+
+    pjsip_endpt_process_rx_data(endpt, rdata, &entry_point, NULL);
+  }
+
+  virtual void term_test_pjsip()
+  {
+    PJUtils::term();
+    //pjsip_tsx_layer_destroy();
+    pjsip_endpt_destroy(endpt);
+    pj_pool_release(pool);
+    pj_caching_pool_destroy(&cp);
+    pj_shutdown();
+  }
+
+  virtual void Teardown()
+  {
+    delete mod_mock;
+    mod_mock = nullptr;
+    term_test_pjsip();
+  }
+
+  MockPJSipModule* mod_mock;
+  MockLoadMonitor load_monitor;
+  pjsip_process_rdata_param entry_point;
+
+protected:
+  pj_caching_pool cp;
+  pj_pool_t* pool;
+  pjsip_endpoint* endpt;
+};
+
+TEST_F(ThreadDispatcherTest, NullTest)
+{
+  TestingCommon::Message msg;
+  msg._first_hop = true;
+  msg._method = "INVITE";
+  msg._requri = "sip:bob@awaydomain";
+  msg._from = "alice";
+  msg._to = "bob";
+  msg._todomain = "awaydomain";
+  inject_msg(msg.get_request());
+}
 
 class SipEventQueueTest : public ::testing::Test
 {

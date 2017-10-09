@@ -374,6 +374,11 @@ pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
   return PJ_SUCCESS;
 }
 
+pjsip_module* get_mod_thread_dispatcher()
+{
+  return &mod_thread_dispatcher;
+}
+
 
 pj_status_t start_worker_threads()
 {

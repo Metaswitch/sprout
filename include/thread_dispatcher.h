@@ -37,6 +37,8 @@ void unregister_thread_dispatcher(void);
 pj_status_t start_worker_threads();
 void stop_worker_threads(); // TODO: Should this return its status?
 
+pjsip_module* get_mod_thread_dispatcher();
+
 // A SipEvent on the queue is either a SIP message or a callback
 enum SipEventType { MESSAGE, CALLBACK };
 
